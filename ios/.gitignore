@@ -1,0 +1,14 @@
+# Xcode per-user state — never shared
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+.DS_Store
+
+# Build output
+build/
+DerivedData/
+.flowdeck/
+
+# SwiftPM
+.swiftpm/xcode/package.xcworkspace/
+.build/
