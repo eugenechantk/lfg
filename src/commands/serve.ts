@@ -64,12 +64,15 @@ import {
 } from "../tmux.ts";
 import { addManaged, removeManaged } from "../managed.ts";
 import { PtyBridge, termSessionName } from "../pty.ts";
-import { capturePaneScroll, capturePaneEscaped, paneWidth } from "../tmux.ts";
+import { capturePaneScroll, capturePaneEscaped, paneWidth, ensureFolderTrusted } from "../tmux.ts";
+import { rootDir, inboxDir, setInbox, createDir } from "../dirs.ts";
 import { detectUrls } from "../links.ts";
 import type { ServerWebSocket } from "bun";
 import { appendCmd as appendAisdkCmd, removeEntry as removeAisdkEntry, readEntry as readAisdkEntry, findEntryByAnyId as findAisdkEntryByAnyId } from "../aisdk-registry.ts";
 import { markClosed } from "../closing.ts";
 import { assignUser, userRoster } from "../users.ts";
+import { registerDevice, unregisterDevice, deviceCount } from "../push/store.ts";
+import { startPushWatcher, pushConfigured } from "../push/watcher.ts";
 
 // Where the user keeps the repos lfg can launch agents into. Scanned for git
 // repos at runtime; defaults to ~/repos. The lfg repo itself (PATHS.root) is
@@ -991,6 +994,59 @@ export async function cmdServe() {
         return json({ repos: await listRepos() });
       }
 
+      // Directories for new sessions: scanned repos + the root and inbox
+      // fallbacks. Create a new directory or reconfigure the inbox.
+      if (path === "/api/dirs") {
+        return json({ root: rootDir(), inbox: inboxDir(), repos: await listRepos() });
+      }
+      if (path === "/api/dirs/new" && req.method === "POST") {
+        const b = (await req.json().catch(() => null)) as { name?: string } | null;
+        if (!b?.name?.trim()) return err(400, "name required");
+        const dir = createDir(b.name);
+        if (!dir) return err(400, "invalid directory name");
+        ensureFolderTrusted(dir.cwd);
+        return json({ ok: true, ...dir });
+      }
+      if (path === "/api/dirs/inbox" && req.method === "POST") {
+        const b = (await req.json().catch(() => null)) as { path?: string } | null;
+        if (!b?.path?.trim()) return err(400, "path required");
+        const inbox = setInbox(b.path);
+        ensureFolderTrusted(inbox);
+        return json({ ok: true, inbox });
+      }
+
+      // Serve an agent-produced file (image/video/pdf/md/…) by absolute path so
+      // the client can render it inline. Scoped to a few roots and hardened
+      // against traversal via realpath containment. Read-only GET. Same
+      // unauthenticated-behind-Tailscale posture as the rest of the API (the
+      // terminal already grants full shell, so this adds no new exposure).
+      if (path === "/api/file") {
+        const raw = url.searchParams.get("path");
+        if (!raw) return err(400, "path query param required");
+        let real: string;
+        try {
+          real = await realpath(raw);
+        } catch {
+          return err(404, "file not found");
+        }
+        const rootCandidates = [REPOS_ROOT, SELF_REPO, join(tmpdir(), "lfg-uploads"), homedir()];
+        const roots = await Promise.all(
+          rootCandidates.map(async (r) => {
+            try { return await realpath(r); } catch { return r; }
+          }),
+        );
+        if (!roots.some((r) => real === r || real.startsWith(r + "/")))
+          return err(403, "path outside allowed roots");
+        const f = Bun.file(real);
+        if (!(await f.exists())) return err(404, "file not found");
+        return new Response(f, {
+          headers: {
+            "Content-Type": f.type || "application/octet-stream",
+            "Cache-Control": "private, max-age=60",
+          },
+        });
+      }
+
       if (path === "/api/sessions") {
         return json({ sessions: await listSessions() });
       }
@@ -1028,6 +1084,35 @@ export async function cmdServe() {
         } catch (e) {
           return err(502, e instanceof Error ? e.message : String(e));
         }
+      }
+
+      // ---- push notifications (APNs device registry) ----
+      // The iOS app registers its APNs device token here so the background
+      // watcher can notify it when a session finishes a turn or needs input.
+      if (path === "/api/push/register" && req.method === "POST") {
+        const body = (await req.json().catch(() => null)) as {
+          token?: string;
+          env?: string;
+          owner?: string | null;
+        } | null;
+        const token = body?.token?.trim();
+        if (!token || !/^[0-9a-fA-F]{8,}$/.test(token)) return err(400, "invalid token");
+        const env = body?.env === "production" ? "production" : "sandbox";
+        const device = await registerDevice({ token, env, owner: body?.owner ?? null });
+        // A device just arrived — make sure the watcher is running (it self-skips
+        // when push isn't configured, so this is a no-op without APNs creds).
+        startPushWatcher((l) => console.log(l));
+        return json({ ok: true, env: device.env });
+      }
+      if (path === "/api/push/unregister" && req.method === "POST") {
+        const body = (await req.json().catch(() => null)) as { token?: string } | null;
+        const token = body?.token?.trim();
+        if (!token) return err(400, "missing token");
+        await unregisterDevice(token);
+        return json({ ok: true });
+      }
+      if (path === "/api/push/health" && req.method === "GET") {
+        return json({ configured: pushConfigured(), devices: await deviceCount() });
       }
 
       // Tag a session to a user (or clear with user:null). Keyed server-side by
@@ -1151,9 +1236,17 @@ export async function cmdServe() {
         // lfg-sessions skill is installed user-level (~/.claude/skills) so the
         // voice/orchestrator agent gets it regardless of cwd.
         const requestedCwd = body?.cwd?.trim() || SELF_REPO;
-        const repo = (await listRepos()).find((r) => r.cwd === requestedCwd);
-        if (!repo) return err(400, "unknown repo");
-        const cwd = repo.cwd;
+        // Accept a scanned repo, the root/inbox fallbacks, or any existing
+        // directory (so newly-created dirs work). Pre-trust it so claude's
+        // folder-trust dialog doesn't hang startup.
+        let cwd = (await listRepos()).find((r) => r.cwd === requestedCwd)?.cwd ?? null;
+        if (!cwd) {
+          try {
+            if (statSync(requestedCwd).isDirectory()) cwd = requestedCwd;
+          } catch {}
+        }
+        if (!cwd) return err(400, "directory not found");
+        ensureFolderTrusted(cwd);
         const tmuxName = `lfg-${randomBytes(3).toString("hex")}`;
         // For the voice orchestrator, append a live snapshot of every OTHER
         // session (built before this one spawns, so it's not in the list) so its
@@ -1586,6 +1679,12 @@ export async function cmdServe() {
         }
       }
 
+      // How recently a bare CLI session's transcript must have been written for
+      // it to count as "running" when there's no pane to scrape. Bigger than the
+      // 1s poll interval so brief gaps between streamed lines don't flicker it
+      // off; small enough that it clears within a few seconds of a turn ending.
+      const BARE_BUSY_WINDOW_MS = 4000;
+
       // Multiplexed live stream: one connection tails many transcripts and
       // polls many panes. The per-session /stream endpoint opens one HTTP
       // connection each, so >6 open panes blow past the browser's per-host
@@ -1664,11 +1763,29 @@ export async function cmdServe() {
                 // codex-aisdk session the sid may be the threadId rather than the
                 // control-plane key, so look it up by either.
                 const entry = findAisdkEntryByAnyId(p.sid);
-                if (!entry) return;
-                const bsig = entry.busy ? "1" : "0";
+                let busy: boolean;
+                if (entry) {
+                  busy = entry.busy;
+                } else {
+                  // Bare CLI session whose pane lfg couldn't resolve (e.g. a
+                  // `claude`/`codex` launched outside lfg and not wrapped in a
+                  // discoverable tmux pane). There's no pane to scrape, so
+                  // approximate "running" from transcript freshness: a CLI agent
+                  // appends to its .jsonl as it streams, so a recently-touched
+                  // transcript means it's mid-turn. Best-effort — it goes stale
+                  // (→ idle) a few seconds after the turn ends, and can read idle
+                  // during a long silent tool call. Wrap launches via the cy/
+                  // codexy tmux aliases to get accurate pane-scraped busy instead.
+                  try {
+                    busy = Date.now() - statSync(p.tp).mtimeMs < BARE_BUSY_WINDOW_MS;
+                  } catch {
+                    busy = false;
+                  }
+                }
+                const bsig = busy ? "1" : "0";
                 if (bsig !== (lastBusy.get(p.sid) ?? "0")) {
                   lastBusy.set(p.sid, bsig);
-                  send(`event: busy\ndata: ${JSON.stringify({ sid: p.sid, busy: entry.busy })}\n\n`);
+                  send(`event: busy\ndata: ${JSON.stringify({ sid: p.sid, busy })}\n\n`);
                 }
                 return;
               }
@@ -1867,6 +1984,8 @@ export async function cmdServe() {
   });
 
   startAutoScheduler((l) => console.log(l));
+  // Background push watcher — no-op unless APNs is configured (LFG_APNS_*).
+  startPushWatcher((l) => console.log(l));
 
   console.log(`lfg web → http://${server.hostname}:${server.port}`);
   console.log(`  agents dir: ${AGENTS_DIR}`);
