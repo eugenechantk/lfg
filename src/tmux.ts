@@ -3,6 +3,7 @@
 // its parent chain to the pane's top process, and `send-keys` into that pane.
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
+import { ppidOf as procPpidOf } from "./procinfo";
 
 // Known-good Claude model alias to launch with when a caller doesn't specify
 // one. Never launch a managed `claude` bare — see spawnManagedSession. Opus is
@@ -102,18 +103,10 @@ function paneMap(): Map<number, string> {
   return m;
 }
 
+// Parent pid for the pane→proc parent-chain walk. Platform branch (Linux /proc,
+// macOS ps) lives in ./procinfo.
 function ppidOf(pid: number): number | null {
-  try {
-    // /proc/<pid>/stat: "pid (comm) state ppid ..." — comm can contain spaces
-    // and parens, so split after the last ')'.
-    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
-    const rparen = stat.lastIndexOf(")");
-    const rest = stat.slice(rparen + 2).split(" ");
-    const ppid = Number(rest[1]);
-    return Number.isFinite(ppid) ? ppid : null;
-  } catch {
-    return null;
-  }
+  return procPpidOf(pid);
 }
 
 export function tmuxTargetForPid(pid: number | null): string | null {

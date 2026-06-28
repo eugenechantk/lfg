@@ -1,8 +1,9 @@
 // Running Claude Code sessions: enumerate live `claude` processes and tail
 // their on-disk transcripts (~/.claude/projects/<proj>/<sessionId>.jsonl).
-import { readdir, readlink } from "node:fs/promises";
-import { statSync, readFileSync } from "node:fs";
+import { readdir } from "node:fs/promises";
+import { statSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, basename } from "node:path";
+import { tmpdir } from "node:os";
 import { tmuxTargetForPid } from "./tmux";
 import { isManagedName } from "./managed";
 import {
@@ -15,6 +16,13 @@ import { isClosing } from "./closing";
 import { userAssignments } from "./users";
 import { PATHS } from "./config";
 import { homedir } from "node:os";
+import {
+  listProcs,
+  cwdOf,
+  startTimeMsOf,
+  procStartMatches,
+  ppidOf as procPpidOf,
+} from "./procinfo";
 
 const HOME = process.env.HOME ?? homedir();
 const PROJECTS_DIR = join(HOME, ".claude", "projects");
@@ -129,47 +137,15 @@ function computeStatus(
 
 const UUID = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
 
+// Live `claude` / `codex` processes with their full command line. Platform
+// details (pgrep on Linux, ps on macOS) live in ./procinfo; the include gate
+// (argv[0] basename must be the tool) is identical across platforms.
 function listClaudeProcs(): { pid: number; cmd: string }[] {
-  let out = "";
-  try {
-    const r = Bun.spawnSync(["pgrep", "-af", "claude"]);
-    out = new TextDecoder().decode(r.stdout);
-  } catch {
-    return [];
-  }
-  const procs: { pid: number; cmd: string }[] = [];
-  for (const line of out.split("\n")) {
-    const m = line.match(/^(\d+)\s+(.*)$/);
-    if (!m) continue;
-    const pid = Number(m[1]);
-    const cmd = m[2].trim();
-    const first = cmd.split(/\s+/)[0] ?? "";
-    // Only real `claude` invocations — not editors/greps that mention "claude".
-    if (basename(first) !== "claude") continue;
-    procs.push({ pid, cmd });
-  }
-  return procs;
+  return listProcs("claude");
 }
 
 function listCodexProcs(): { pid: number; cmd: string }[] {
-  let out = "";
-  try {
-    const r = Bun.spawnSync(["pgrep", "-af", "codex"]);
-    out = new TextDecoder().decode(r.stdout);
-  } catch {
-    return [];
-  }
-  const procs: { pid: number; cmd: string }[] = [];
-  for (const line of out.split("\n")) {
-    const m = line.match(/^(\d+)\s+(.*)$/);
-    if (!m) continue;
-    const pid = Number(m[1]);
-    const cmd = m[2].trim();
-    const first = cmd.split(/\s+/)[0] ?? "";
-    if (basename(first) !== "codex") continue;
-    procs.push({ pid, cmd });
-  }
-  return procs;
+  return listProcs("codex");
 }
 
 // Authoritative pid→session map. Claude writes ~/.claude/sessions/<pid>.json
@@ -190,13 +166,10 @@ function readPidSession(
       procStart?: string;
     };
     if (!j.sessionId) return null;
-    if (j.procStart) {
-      // /proc/<pid>/stat field 22 = starttime; comm (field 2) may hold spaces
-      // and parens, so index off the last ')'.
-      const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
-      const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
-      if (fields[19] && fields[19] !== j.procStart) return null;
-    }
+    // Reject a recycled pid's leftover json: the live process's start time must
+    // match the one claude stamped. Platform/encoding differences (Linux clock
+    // ticks vs macOS UTC-vs-local lstart) are handled inside procStartMatches.
+    if (j.procStart && !procStartMatches(pid, j.procStart)) return null;
     return { sessionId: j.sessionId, cwd: j.cwd ?? null };
   } catch {
     return null;
@@ -531,6 +504,22 @@ function blockId(id: string | null, idx: number): string | null {
   return idx === 0 ? id : `${id}#${idx}`;
 }
 
+// File extension for an attached content block's MIME type (best-effort).
+function extForMediaType(mediaType: string | undefined, blockType: string | undefined): string {
+  const map: Record<string, string> = {
+    "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/gif": "gif",
+    "image/webp": "webp", "image/heic": "heic", "image/bmp": "bmp", "image/tiff": "tiff",
+    "application/pdf": "pdf", "text/plain": "txt", "text/markdown": "md", "text/csv": "csv",
+    "application/json": "json", "application/zip": "zip",
+    "video/mp4": "mp4", "video/quicktime": "mov",
+  };
+  const mt = (mediaType || "").toLowerCase();
+  if (map[mt]) return map[mt];
+  const sub = mt.split("/")[1]?.replace(/[^a-z0-9]/gi, "").slice(0, 5);
+  if (sub) return sub;
+  return blockType === "document" ? "pdf" : blockType === "image" ? "png" : "bin";
+}
+
 function describeInput(input: unknown): string {
   if (input == null) return "";
   if (typeof input === "string") return input;
@@ -665,6 +654,16 @@ function normalizeLineUnsafe(line: string): SessionMsg[] {
       content?: unknown;
     }>;
     const msgs: SessionMsg[] = [];
+    // If a text block in this turn already references a file path (e.g. a client
+    // appended an upload path), skip the duplicate base64 attachment block.
+    const hasFilePathInText = arr.some(
+      (c) =>
+        c.type === "text" &&
+        !!c.text &&
+        /\/[^\s)]+\.(png|jpe?g|gif|webp|pdf|mov|mp4|m4v|md|txt|csv|json|zip|docx?|xlsx?|pptx?)\b/i.test(
+          c.text,
+        ),
+    );
     arr.forEach((c, idx) => {
       if (c.type === "text" && c.text) {
         const text = role === "user" ? stripHumanPrefix(c.text) : c.text;
@@ -700,6 +699,42 @@ function normalizeLineUnsafe(line: string): SessionMsg[] {
           text: extractText(c.content) || "(result)",
           ts,
         });
+        return;
+      }
+      // Any attached file (image, PDF/document, …) pasted or sent through the
+      // CLI on the box. The transcript stores it as a base64 content block;
+      // persist it once to a served location and surface it as a markdown link
+      // so every client renders it as a tappable file attachment (fetchable via
+      // /api/file). Skipped when a sibling text block already carries the path
+      // (avoids a duplicate attachment for clients that upload-then-reference).
+      if ((c.type === "image" || c.type === "document" || c.type === "file") && !hasFilePathInText) {
+        const blk = c as { source?: { type?: string; data?: string; media_type?: string; path?: string }; name?: string };
+        const src = blk.source;
+        let path: string | null = null;
+        let label: string | null = null;
+        if (typeof src?.path === "string" && src.path) {
+          path = src.path;
+          label = basename(src.path);
+        } else if (src?.type === "base64" && src.data) {
+          const ext = extForMediaType(src.media_type, c.type);
+          const dir = join(tmpdir(), "lfg-uploads");
+          const safeId = (id || "blk").replace(/[^a-zA-Z0-9-]/g, "");
+          const fp = join(dir, `blk-${safeId}-${idx}.${ext}`);
+          try {
+            if (!existsSync(fp)) {
+              mkdirSync(dir, { recursive: true });
+              writeFileSync(fp, Buffer.from(src.data, "base64"));
+            }
+            path = fp;
+            label = typeof blk.name === "string" && blk.name ? blk.name : `attachment.${ext}`;
+          } catch {
+            path = null;
+          }
+        }
+        if (path) {
+          msgs.push({ id: blockId(id, idx), role, kind: "text", text: `[${label || basename(path)}](${path})`, ts });
+        }
+        return;
       }
     });
     return msgs;
@@ -805,14 +840,8 @@ export async function listSessions(): Promise<Session[]> {
   );
   const enriched = await Promise.all(
     claudeProcs.map(async (p) => {
-      let cwd: string | null = null;
-      let startedAt: number | null = null;
-      try {
-        cwd = await readlink(`/proc/${p.pid}/cwd`);
-      } catch {}
-      try {
-        startedAt = statSync(`/proc/${p.pid}`).ctimeMs;
-      } catch {}
+      let cwd: string | null = await cwdOf(p.pid);
+      let startedAt: number | null = startTimeMsOf(p.pid);
       // Prefer the authoritative ~/.claude/sessions/<pid>.json; the --resume
       // arg is stale and the newest-unclaimed heuristic can't disambiguate
       // multiple concurrent sessions sharing one cwd.
@@ -941,14 +970,8 @@ export async function listSessions(): Promise<Session[]> {
     // phantom alongside the registry-driven codex-aisdk entry.
     if (/\bapp-server\b/.test(p.cmd)) continue;
 
-    let cwd: string | null = null;
-    let startedAt: number | null = null;
-    try {
-      cwd = await readlink(`/proc/${p.pid}/cwd`);
-    } catch {}
-    try {
-      startedAt = statSync(`/proc/${p.pid}`).ctimeMs;
-    } catch {}
+    let cwd: string | null = await cwdOf(p.pid);
+    let startedAt: number | null = startTimeMsOf(p.pid);
     let sessionId = p.cmd.match(new RegExp(`(?:resume|fork)\\s+(${UUID.source})`))?.[1] ?? null;
     let thread = sessionId ? codex.find((t) => t.id === sessionId) : null;
     const prompt = codexPromptFromCmd(p.cmd);
@@ -1061,10 +1084,7 @@ export async function listSessions(): Promise<Session[]> {
     if (!title && transcriptPath)
       title = await firstPromptTitle(transcriptPath).catch(() => null);
     if (!title) title = e.title || (e.cwd ? basename(e.cwd) : project);
-    let startedAt: number | null = e.createdAt;
-    try {
-      startedAt = statSync(`/proc/${e.harnessPid}`).ctimeMs;
-    } catch {}
+    let startedAt: number | null = startTimeMsOf(e.harnessPid) ?? e.createdAt;
     out.push({
       agent: isCodex ? "codex-aisdk" : isOpencode ? "opencode" : "aisdk",
       pid: e.harnessPid,
@@ -1131,17 +1151,10 @@ function isHeadless(cmd: string): boolean {
   return /(^|\s)(-p|--print)(\s|$)/.test(cmd);
 }
 
-// Parent pid from /proc/<pid>/stat (4th field, after the parenthesized comm
-// which may itself contain spaces/parens — so split on the LAST ')'.).
+// Parent pid (Linux: /proc/<pid>/stat field 4; macOS: ps -o ppid=). The
+// platform branch lives in ./procinfo.
 function ppidOf(pid: number): number | null {
-  try {
-    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
-    const after = stat.slice(stat.lastIndexOf(")") + 2); // skip ") " then state
-    const fields = after.split(" ");
-    return Number(fields[1]); // state, ppid, ...
-  } catch {
-    return null;
-  }
+  return procPpidOf(pid);
 }
 
 export async function resolveTranscript(sessionId: string): Promise<string | null> {
