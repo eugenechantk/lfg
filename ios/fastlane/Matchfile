@@ -1,0 +1,10 @@
+# Used only by the CI (Phase 2) lanes. Local TestFlight uploads use automatic
+# signing and do not need match.
+storage_mode("git")
+git_url(ENV["MATCH_GIT_URL"]) if ENV["MATCH_GIT_URL"]
+git_branch(ENV.fetch("MATCH_GIT_BRANCH", "main"))
+
+type("appstore")
+readonly(true)
+app_identifier(ENV["APP_IDENTIFIER"]) if ENV["APP_IDENTIFIER"]
+team_id(ENV["DEVELOPER_TEAM_ID"]) if ENV["DEVELOPER_TEAM_ID"]

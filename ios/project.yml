@@ -28,24 +28,35 @@ targets:
         product: MarkdownUI
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.omg.lfg
+        PRODUCT_BUNDLE_IDENTIFIER: com.eugenechan.lfg
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 39GJBP8V5A
         SUPPORTS_MACCATALYST: false
+      configs:
+        # APNs environment is build-config driven so archives default to the
+        # production APNs environment that TestFlight/App Store require, while
+        # local Debug builds keep using the sandbox.
+        Debug:
+          APS_ENVIRONMENT: development
+        Release:
+          APS_ENVIRONMENT: production
     entitlements:
       path: LFG/LFG.entitlements
       properties:
-        # Sandbox APNs for Debug/dev builds. Archiving for TestFlight/App Store
-        # needs this set to "production" (or an xcconfig-driven value).
-        aps-environment: development
+        # Driven by APS_ENVIRONMENT (Debug=development, Release=production) so the
+        # archived TestFlight/App Store build uses the production APNs environment.
+        aps-environment: $(APS_ENVIRONMENT)
     info:
       path: LFG/Info.plist
       properties:
         CFBundleDisplayName: lfg
-        UILaunchScreen:
-          UIColorName: AccentColor
+        # App uses only standard HTTPS/TLS -> exempt from export compliance.
+        # Baked in so TestFlight uploads don't pause for the encryption question.
+        ITSAppUsesNonExemptEncryption: false
+        # Launch screen: black background + centered mark (LaunchScreen.storyboard).
+        UILaunchStoryboardName: LaunchScreen
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown

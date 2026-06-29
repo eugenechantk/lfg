@@ -12,3 +12,19 @@ data/
 dist/
 .flowdeck/
 .build/
+
+# Fastlane (iOS TestFlight) — .env.local is already covered by .env.* above
+ios/fastlane/report.xml
+ios/fastlane/Preview.html
+ios/fastlane/screenshots/
+ios/fastlane/test_output/
+ios/build/
+ios/**/*.ipa
+ios/**/*.dSYM.zip
+ios/vendor/bundle/
+ios/.bundle/
+
+# Debug screenshot dumps (large, throwaway)
+.claude/shots/
+# Provisioning profiles (fastlane regenerates per deploy)
+*.mobileprovision

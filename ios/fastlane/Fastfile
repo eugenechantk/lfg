@@ -1,0 +1,196 @@
+default_platform(:ios)
+
+PROJECT = "LFG.xcodeproj".freeze
+TARGET = "LFG".freeze
+
+def required_env(name)
+  value = ENV[name]
+  UI.user_error!("Missing required environment variable: #{name}") if value.nil? || value.strip.empty?
+  value
+end
+
+def boolean_env(name, default)
+  value = ENV[name]
+  return default if value.nil? || value.strip.empty?
+
+  %w[1 true yes y].include?(value.downcase)
+end
+
+# Hong Kong is UTC+8 year-round (no DST), so a fixed offset is safe regardless
+# of the CI runner timezone.
+HONG_KONG_UTC_OFFSET = "+08:00".freeze
+
+def hong_kong_now
+  Time.now.getlocal(HONG_KONG_UTC_OFFSET)
+end
+
+def timestamp_build_number
+  return ENV["BUILD_NUMBER"].strip unless ENV["BUILD_NUMBER"].to_s.strip.empty?
+
+  # CFBundleVersion must be digits/dots only -> YYYYMMDDHHMM.
+  hong_kong_now.strftime("%Y%m%d%H%M")
+end
+
+def testflight_changelog
+  stamp = "#{hong_kong_now.strftime('%Y-%m-%d %H:%M')} (HKT)"
+  changelog = ENV["TESTFLIGHT_CHANGELOG"].to_s.strip
+  changelog = sh("git log -1 --pretty=%B", log: false).strip if changelog.empty?
+  changelog.empty? ? stamp : "#{stamp}\n\n#{changelog}"
+end
+
+def app_store_connect_key
+  app_store_connect_api_key(
+    key_id: required_env("APP_STORE_CONNECT_API_KEY_ID"),
+    issuer_id: required_env("APP_STORE_CONNECT_API_ISSUER_ID"),
+    key_content: required_env("APP_STORE_CONNECT_API_KEY_BASE64"),
+    is_key_content_base64: true,
+    duration: 1200
+  )
+end
+
+def sync_appstore_signing(readonly:)
+  match(
+    type: "appstore",
+    readonly: readonly,
+    app_identifier: required_env("APP_IDENTIFIER"),
+    git_url: required_env("MATCH_GIT_URL"),
+    git_branch: ENV.fetch("MATCH_GIT_BRANCH", "main"),
+    team_id: required_env("DEVELOPER_TEAM_ID"),
+    api_key: app_store_connect_key
+  )
+end
+
+def app_store_record_exists?(app_identifier)
+  app_store_connect_key
+  !Spaceship::ConnectAPI::App.find(app_identifier).nil?
+end
+
+platform :ios do
+  desc "Verify the App Store Connect app record exists"
+  lane :verify_app_store_record do
+    app_identifier = required_env("APP_IDENTIFIER")
+    unless app_store_record_exists?(app_identifier)
+      UI.user_error!("No App Store Connect app record for #{app_identifier}. Run `fastlane ios create_app_record` first.")
+    end
+    UI.success("App Store Connect record found for #{app_identifier}.")
+  end
+
+  desc "Register the App ID and create the App Store Connect app record (headless, API-key only)"
+  lane :create_app_record do
+    app_store_connect_key # sets the global Spaceship::ConnectAPI token
+    app_identifier = required_env("APP_IDENTIFIER")
+    app_name = required_env("APP_NAME")
+
+    # 1. Register the App ID (bundle identifier) on the developer portal if missing.
+    bundle = Spaceship::ConnectAPI::BundleId.all.find { |b| b.identifier == app_identifier }
+    if bundle.nil?
+      bundle = Spaceship::ConnectAPI::BundleId.create(
+        name: app_name.gsub(/[^A-Za-z0-9 ]/, ""),
+        identifier: app_identifier,
+        platform: "IOS"
+      )
+      UI.success("Registered App ID #{app_identifier}")
+    else
+      UI.message("App ID #{app_identifier} already registered")
+    end
+
+    # 2. Create the App Store Connect app record if missing.
+    if Spaceship::ConnectAPI::App.find(app_identifier)
+      UI.success("App Store Connect record already exists for #{app_identifier}")
+    else
+      Spaceship::ConnectAPI::App.create(
+        name: app_name,
+        version_string: "0.1.0",
+        sku: app_identifier,
+        primary_locale: "en-US",
+        bundle_id: bundle.id,
+        platforms: ["IOS"]
+      )
+      UI.success("Created App Store Connect record '#{app_name}' for #{app_identifier}")
+    end
+  end
+
+  desc "Create or refresh App Store signing assets in the match repo (Phase 2 / CI)"
+  lane :bootstrap_match do
+    sync_appstore_signing(readonly: false)
+  end
+
+  desc "Build a signed Release archive and upload it to TestFlight"
+  lane :deploy_testflight do
+    is_ci = !ENV["CI"].to_s.strip.empty?
+    setup_ci if is_ci
+
+    app_identifier = required_env("APP_IDENTIFIER")
+    developer_team_id = required_env("DEVELOPER_TEAM_ID")
+    api_key = app_store_connect_key
+
+    unless app_store_record_exists?(app_identifier)
+      UI.user_error!("No App Store Connect app record for #{app_identifier}. Run `fastlane ios create_app_record` first.")
+    end
+
+    increment_build_number(
+      xcodeproj: PROJECT,
+      build_number: timestamp_build_number
+    )
+
+    if is_ci
+      # CI: deterministic manual signing via match.
+      sync_appstore_signing(readonly: true)
+      update_code_signing_settings(
+        use_automatic_signing: false,
+        path: PROJECT,
+        targets: [TARGET],
+        team_id: developer_team_id,
+        code_sign_identity: "Apple Distribution",
+        profile_name: "match AppStore #{app_identifier}"
+      )
+      export_options = {
+        signingStyle: "manual",
+        provisioningProfiles: { app_identifier => "match AppStore #{app_identifier}" }
+      }
+    else
+      # Local: create/download an App Store distribution profile via the API key
+      # (no match needed) and sign manually with it. The local keychain already
+      # holds an "Apple Distribution" certificate for the team.
+      # No development:/adhoc: flags -> sigh defaults to an App Store profile.
+      get_provisioning_profile(
+        app_identifier: app_identifier,
+        api_key: api_key,
+        force: true
+      )
+      profile_name = lane_context[SharedValues::SIGH_NAME]
+      update_code_signing_settings(
+        use_automatic_signing: false,
+        path: PROJECT,
+        targets: [TARGET],
+        team_id: developer_team_id,
+        code_sign_identity: "Apple Distribution",
+        profile_name: profile_name
+      )
+      export_options = {
+        signingStyle: "manual",
+        provisioningProfiles: { app_identifier => profile_name }
+      }
+    end
+
+    build_app(
+      project: PROJECT,
+      scheme: ENV.fetch("FASTLANE_SCHEME", "LFG"),
+      configuration: "Release",
+      destination: "generic/platform=iOS",
+      clean: true,
+      export_method: "app-store",
+      output_directory: "build/fastlane",
+      output_name: "LFG.ipa",
+      export_options: export_options
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      ipa: "build/fastlane/LFG.ipa",
+      changelog: testflight_changelog,
+      uses_non_exempt_encryption: false,
+      skip_waiting_for_build_processing: !boolean_env("TESTFLIGHT_WAIT_FOR_PROCESSING", true)
+    )
+  end
+end

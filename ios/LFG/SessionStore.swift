@@ -165,6 +165,16 @@ import LFGCore
             sessions = fresh + optimisticSessions.filter { o in
                 !fresh.contains { $0.sessionId == o.sessionId }
             }
+            // Seed busy from the REST baseline for sessions the live SSE stream
+            // doesn't cover (outside the 24-id window). Streamed sessions keep
+            // their accurate pane-scraped SSE busy as an override. Without this,
+            // a session that finished after dropping out of the stream window
+            // keeps a stale busy=true forever and stays stuck under "Working".
+            let streamed = Set(streamedIDs)
+            for s in fresh {
+                guard let sid = s.sessionId, let b = s.busy, !streamed.contains(sid) else { continue }
+                busy[sid] = b
+            }
             // Snapshot the focused session while it's live so its detail view
             // survives the session later dropping out of the live list (see
             // `focusedSnapshot` / `session(_:)`). Clear it once the carried-

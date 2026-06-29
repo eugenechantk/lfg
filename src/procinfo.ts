@@ -25,6 +25,48 @@ function spawnText(cmd: string[]): string | null {
   }
 }
 
+// macOS perf shim. listSessions() enriches dozens of procs and each Darwin
+// helper here shells out to `ps`/`lsof` synchronously — and Bun.spawnSync
+// blocks the single event loop, so hundreds of per-pid spawns freeze ALL HTTP
+// (including sends) for seconds. Two caches collapse that storm:
+//   - ppidMap(): ONE `ps -axo pid=,ppid=` snapshot (TTL) instead of one
+//     `ps -o ppid=` per pid (the parent-chain walk did up to 12 per session).
+//   - pidValueCache: cwd and start-time are immutable for a process's lifetime,
+//     so memoize them per pid (a long TTL guards against pid reuse).
+// Linux paths read /proc directly (no subprocess) and are left untouched.
+const PPID_TTL_MS = 1000;
+let ppidSnap: { at: number; map: Map<number, number> } | null = null;
+function ppidMap(): Map<number, number> {
+  const now = Date.now();
+  if (ppidSnap && now - ppidSnap.at < PPID_TTL_MS) return ppidSnap.map;
+  const map = new Map<number, number>();
+  const out = spawnText(["ps", "-axo", "pid=,ppid="]);
+  if (out) {
+    for (const line of out.split("\n")) {
+      const m = line.match(/^\s*(\d+)\s+(\d+)/);
+      if (m) map.set(Number(m[1]), Number(m[2]));
+    }
+  }
+  ppidSnap = { at: now, map };
+  return map;
+}
+
+const PID_VALUE_TTL_MS = 30_000;
+const cwdCache = new Map<number, { at: number; val: string | null }>();
+const startCache = new Map<number, { at: number; val: number | null }>();
+function cachedPid<T>(
+  store: Map<number, { at: number; val: T }>,
+  pid: number,
+  compute: () => T,
+): T {
+  const now = Date.now();
+  const hit = store.get(pid);
+  if (hit && now - hit.at < PID_VALUE_TTL_MS) return hit.val;
+  const val = compute();
+  store.set(pid, { at: now, val });
+  return val;
+}
+
 // Processes whose command line contains `nameFilter`, with the FULL command
 // line. Mirrors the include logic the old listClaudeProcs/listCodexProcs used:
 // keep only procs whose argv[0] basename === nameFilter (so editors/greps that
@@ -69,14 +111,18 @@ export function listProcs(nameFilter: string): { pid: number; cmd: string }[] {
 // Absolute cwd of a pid, or null.
 export async function cwdOf(pid: number): Promise<string | null> {
   if (IS_DARWIN) {
-    // `lsof -a -p <pid> -d cwd -Fn` emits field lines; the `n`-prefixed one is
-    // the cwd path. (There's also a `p<pid>` and `fcwd` line.)
-    const out = spawnText(["lsof", "-a", "-p", String(pid), "-d", "cwd", "-Fn"]);
-    if (!out) return null;
-    for (const line of out.split("\n")) {
-      if (line.startsWith("n")) return line.slice(1).trim() || null;
-    }
-    return null;
+    // cwd is fixed for a process's lifetime → cache per pid (lsof is the single
+    // most expensive call in the enrichment storm, ~30–80ms each).
+    return cachedPid(cwdCache, pid, () => {
+      // `lsof -a -p <pid> -d cwd -Fn` emits field lines; the `n`-prefixed one is
+      // the cwd path. (There's also a `p<pid>` and `fcwd` line.)
+      const out = spawnText(["lsof", "-a", "-p", String(pid), "-d", "cwd", "-Fn"]);
+      if (!out) return null;
+      for (const line of out.split("\n")) {
+        if (line.startsWith("n")) return line.slice(1).trim() || null;
+      }
+      return null;
+    });
   }
   try {
     return await readlink(`/proc/${pid}/cwd`);
@@ -91,12 +137,15 @@ export async function cwdOf(pid: number): Promise<string | null> {
 // orders processes by age the same way, which is all the heuristics need.
 export function startTimeMsOf(pid: number): number | null {
   if (IS_DARWIN) {
-    const out = spawnText(["ps", "-o", "lstart=", "-p", String(pid)]);
-    if (!out) return null;
-    const s = out.trim();
-    if (!s) return null;
-    const t = Date.parse(s);
-    return Number.isFinite(t) ? t : null;
+    // Start time is immutable per pid → cache (avoids a `ps` spawn per pass).
+    return cachedPid(startCache, pid, () => {
+      const out = spawnText(["ps", "-o", "lstart=", "-p", String(pid)]);
+      if (!out) return null;
+      const s = out.trim();
+      if (!s) return null;
+      const t = Date.parse(s);
+      return Number.isFinite(t) ? t : null;
+    });
   }
   try {
     return statSync(`/proc/${pid}`).ctimeMs;
@@ -150,10 +199,9 @@ export function procStartMatches(pid: number, procStart: string): boolean {
 // Parent pid of a pid, or null.
 export function ppidOf(pid: number): number | null {
   if (IS_DARWIN) {
-    const out = spawnText(["ps", "-o", "ppid=", "-p", String(pid)]);
-    if (!out) return null;
-    const ppid = Number(out.trim());
-    return Number.isFinite(ppid) ? ppid : null;
+    // Batched snapshot lookup — see ppidMap(). Replaces a per-pid `ps` spawn.
+    const ppid = ppidMap().get(pid);
+    return ppid != null && Number.isFinite(ppid) ? ppid : null;
   }
   try {
     // /proc/<pid>/stat: "pid (comm) state ppid ..." — split after the last ')'.

@@ -11,12 +11,15 @@
 // dropped type, and only marks a message failed when it truly never landed.
 
 import { randomBytes } from "node:crypto";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import {
   capturePane,
   parsePrompt,
   questionSelectorOpen,
   inputBoxText,
   tmuxType,
+  tmuxPaste,
   tmuxEnter,
   tmuxClearInput,
   tmuxInterrupt,
@@ -24,6 +27,7 @@ import {
   tmuxDismissFeedback,
 } from "./tmux.ts";
 import { listSessions, resolveTranscript, recentMessages } from "./sessions.ts";
+import { PATHS } from "./config.ts";
 
 export type QueuedMsg = {
   id: string;
@@ -158,6 +162,42 @@ function boxHasNeedle(target: string, needle: string): boolean | null {
   return norm(box).includes(needle);
 }
 
+// Whether our pending draft is currently sitting in the composer. For a typed
+// (single-line) send that's the needle verbatim; for a pasted (multi-line) send
+// Claude collapses the draft to a "[Pasted text +N lines]" chip, so the needle
+// never appears — match that marker instead. null = composer not visible.
+function composerHoldsInput(target: string, needle: string): boolean | null {
+  const box = inputBoxText(target);
+  if (box == null) return null;
+  const n = norm(box);
+  return n.includes(needle) || /pasted text/i.test(n);
+}
+
+// Append a delivery failure (reason + a tail of the pane) to data/sendq.log so a
+// stuck send is diagnosable after the fact instead of only by catching it live.
+function logDeliverFailure(sessionId: string, msg: QueuedMsg, target: string | null): void {
+  try {
+    mkdirSync(PATHS.data, { recursive: true });
+    const tail = target
+      ? (capturePane(target) ?? "").split("\n").slice(-16).join("\n")
+      : "(no target)";
+    appendFileSync(
+      join(PATHS.data, "sendq.log"),
+      JSON.stringify({
+        t: new Date().toISOString(),
+        sessionId,
+        id: msg.id,
+        attempts: msg.attempts,
+        error: msg.error,
+        text: msg.text.slice(0, 120),
+      }) +
+        "\n" +
+        tail +
+        "\n---\n",
+    );
+  } catch {}
+}
+
 async function transcriptUserMatchCount(
   transcriptPath: string | null,
   needle: string,
@@ -275,31 +315,37 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<void> {
   }
 
   const MAX_ATTEMPTS = 3;
+  // Multi-line messages must be pasted, not typed: send-keys -l transmits each
+  // embedded newline as an Enter, so a typed multi-line message submits/fragments
+  // at the first newline and the full text never lands as one draft. Bracketed
+  // paste makes the TUI take the newlines as newlines.
+  const multiline = /[\r\n]/.test(msg.text);
   while (msg.attempts < MAX_ATTEMPTS) {
     msg.attempts++;
     msg.updatedAt = Date.now();
 
-    // Only type when our text isn't already sitting in the box (a previous
-    // attempt may have typed it but failed to submit — retyping would double it).
-    if (boxHasNeedle(target, needle) !== true) {
+    // Only (re)insert when our draft isn't already sitting in the box (a previous
+    // attempt may have inserted it but failed to submit — reinserting doubles it).
+    if (composerHoldsInput(target, needle) !== true) {
       // Wipe any foreign draft first. The composer may already hold text the
-      // user (or a stranded earlier send) left there; tmuxType appends, so
-      // without this our message fuses onto it and the merged line submits as
-      // one garbled message. Ctrl-U on an empty box is a harmless no-op.
+      // user (or a stranded earlier send) left there; insertion appends, so
+      // without this our message fuses onto it. Ctrl-U on an empty box is a
+      // harmless no-op.
       tmuxClearInput(target);
       await sleep(120);
-      tmuxType(target, msg.text);
+      if (multiline) tmuxPaste(target, msg.text);
+      else tmuxType(target, msg.text);
       let settled = false;
       for (let i = 0; i < 20; i++) {
         await sleep(150);
-        if (boxHasNeedle(target, needle) === true) {
+        if (composerHoldsInput(target, needle) === true) {
           settled = true;
           break;
         }
       }
       if (!settled) {
-        // Typing didn't register (cold TUI, lost keys). Clear any partial and
-        // loop to retry from scratch.
+        // Insertion didn't register (cold TUI, lost keys, dropped paste). Clear
+        // any partial and loop to retry from scratch.
         tmuxClearInput(target);
         await sleep(200);
         continue;
@@ -310,44 +356,48 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<void> {
     // submit; clear it again so this Enter isn't swallowed.
     if (clearFeedbackPrompt(target)) await sleep(300);
 
-    // Submit, then confirm acceptance. Claude clears the composer when it
-    // accepts a message. Codex keeps the submitted `› ...` prompt visible while
-    // it works, so transcript growth is also an accept signal.
+    // Submit, then confirm acceptance. We do NOT require the composer scrape to
+    // re-find our needle: a busy Claude swallows the text straight into its own
+    // queue and clears the composer, and the pane redraws while streaming, so a
+    // needle re-match is unreliable and used to strand the send ("never left the
+    // box") even though it had landed. The authority is instead:
+    //   (a) the text surfacing as a new user turn in the transcript — idle path,
+    //       delivered; or
+    //   (b) the composer clearing — the draft left the box into Claude's queue,
+    //       busy path → "queued"; reconcileQueued promotes it once it surfaces.
     tmuxEnter(target);
     for (let i = 0; i < 24; i++) {
       await sleep(150);
-      const inBox = boxHasNeedle(target, needle);
+      const held = composerHoldsInput(target, needle);
       const transcriptMatchesNow = await transcriptUserMatchCount(transcriptPath, needle);
       if (transcriptMatchesNow > transcriptMatchesBefore) {
         msg.status = "delivered";
         msg.error = undefined;
         return;
       }
-      // inBox === false: the composer is visible and our text is gone.
-      // inBox === null: the composer vanished entirely — a selector/overlay
-      //   opened right after our Enter (the message triggered a permission
-      //   prompt, or the rating overlay surfaced). Either way the text is no
-      //   longer sitting pending in the box, so the submit landed. Only
-      //   inBox === true (text still there) means the Enter didn't take.
-      if (inBox === false || inBox === null) {
-        // Accepted. A slash command (/clear, /compact, …) executes immediately
-        // and never surfaces as a user-text turn — /clear even wipes the
-        // transcript — so the transcript probe would never confirm it and it
-        // would hang at "queued" forever. Treat it as delivered the moment it
-        // leaves the box. Otherwise it may be queued behind the current turn
-        // (reconcileQueued promotes it once it surfaces).
+      // held === false: composer visible and our draft is gone.
+      // held === null: composer vanished — a selector/overlay opened right after
+      //   Enter (the message triggered a permission prompt, or the rating overlay
+      //   surfaced). Either way the draft is no longer pending in the box, so the
+      //   submit landed. Only held === true (draft still there) means Enter
+      //   didn't take.
+      if (held === false || held === null) {
+        // A slash command (/clear, /compact, …) executes immediately and never
+        // surfaces as a user-text turn — /clear even wipes the transcript — so
+        // the transcript probe would never confirm it. Treat it delivered the
+        // moment it leaves the box. Otherwise it may be queued behind the current
+        // turn (reconcileQueued promotes it once it surfaces).
         const isCommand = msg.text.trimStart().startsWith("/");
-        msg.status = isCommand
-          ? "delivered"
-          : "queued";
+        msg.status = isCommand ? "delivered" : "queued";
         msg.error = undefined;
         return;
       }
     }
-    // Still in the box → the Enter didn't submit. Loop: we'll skip retyping
-    // (needle present) and press Enter again.
+    // Still in the box → the Enter didn't submit. Loop: we'll skip re-inserting
+    // (draft present) and press Enter again.
   }
 
   msg.status = "failed";
   msg.error = "message never left the input box after retries";
+  logDeliverFailure(sessionId, msg, target);
 }

@@ -81,7 +81,21 @@ function reposRoot(): string {
   return process.env.LFG_REPOS_ROOT ?? `${homedir()}/repos`;
 }
 
+// listSessions() resolves a tmux target for every live proc, and each call used
+// to rebuild the whole pane map with a fresh `tmux list-panes -a` spawn — dozens
+// of redundant subprocess spawns per pass, all blocking the single event loop.
+// Memoize the map for a short TTL so one pass shares one snapshot.
+const PANE_MAP_TTL_MS = 1000;
+let paneMapSnap: { at: number; map: Map<number, string> } | null = null;
 function paneMap(): Map<number, string> {
+  const now = Date.now();
+  if (paneMapSnap && now - paneMapSnap.at < PANE_MAP_TTL_MS) return paneMapSnap.map;
+  const m = buildPaneMap();
+  paneMapSnap = { at: now, map: m };
+  return m;
+}
+
+function buildPaneMap(): Map<number, string> {
   const m = new Map<number, string>();
   try {
     const r = Bun.spawnSync([
@@ -676,6 +690,25 @@ export async function dismissPrompt(
 
 export function tmuxType(target: string, text: string): boolean {
   return Bun.spawnSync(["tmux", "send-keys", "-t", target, "-l", text]).exitCode === 0;
+}
+
+// Insert text into the composer via bracketed paste instead of literal keys.
+// `send-keys -l` transmits the string byte-for-byte, so an embedded `\n` reaches
+// the TUI as an Enter and a multi-line message submits (or fragments) at the
+// first newline — the whole text never lands as one draft. Loading it into a
+// tmux buffer and pasting with `-p` (bracketed paste) makes the TUI receive the
+// newlines as newlines; Claude collapses the blob to a "[Pasted text +N lines]"
+// chip and submits it whole on the next Enter. `-d` drops the buffer after.
+export function tmuxPaste(target: string, text: string): boolean {
+  const buf = "lfg-send";
+  const load = Bun.spawnSync(["tmux", "load-buffer", "-b", buf, "-"], {
+    stdin: new TextEncoder().encode(text),
+  });
+  if (load.exitCode !== 0) return false;
+  return (
+    Bun.spawnSync(["tmux", "paste-buffer", "-b", buf, "-t", target, "-p", "-d"])
+      .exitCode === 0
+  );
 }
 
 export function tmuxEnter(target: string): boolean {

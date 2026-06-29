@@ -21,9 +21,11 @@ struct TranscriptMessageView: View {
 private struct TextBubble: View {
     let message: SessionMessage
     private var isUser: Bool { message.role == "user" }
-    // User bubbles render attachments as cards (incl. inline images, since the
-    // bubble text isn't markdown); assistant prose keeps inline markdown images.
-    private var media: [MediaRef] { MediaScanner.scan(message.text, includeInlineImages: isUser) }
+    // Always surface inline images as refs so they render as compact, tappable
+    // file cards (below) rather than full-width inline previews — for both user
+    // bubbles and assistant prose. Keeps long, screenshot-heavy transcripts
+    // scannable instead of a wall of images.
+    private var media: [MediaRef] { MediaScanner.scan(message.text, includeInlineImages: true) }
 
     var body: some View {
         if isUser {
@@ -47,7 +49,7 @@ private struct TextBubble: View {
         } else {
             // Assistant turns are full-width markdown — no bubble.
             VStack(alignment: .leading, spacing: 6) {
-                ProseView(text: message.text)
+                ProseView(text: prose)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if !media.isEmpty { MediaAttachmentsView(refs: media) }
                 if message.apiError == true {
@@ -56,6 +58,21 @@ private struct TextBubble: View {
                 }
             }
         }
+    }
+
+    /// Assistant prose with inline image markdown removed — each image now shows
+    /// as a compact file card below, so leaving `![alt](path)` in the markdown
+    /// would double-render it full-width. Links and all other text are untouched
+    /// (links stay tappable inline AND get a card, as before).
+    private var prose: String {
+        var t = message.text
+        for ref in media where ref.kind == .image {
+            let escaped = NSRegularExpression.escapedPattern(for: ref.raw)
+            if let re = try? NSRegularExpression(pattern: "!\\[[^\\]]*\\]\\(\\s*" + escaped + "\\s*\\)") {
+                t = re.stringByReplacingMatches(in: t, range: NSRange(t.startIndex..., in: t), withTemplate: "")
+            }
+        }
+        return t.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// For user bubbles, hide attachment references (shown as cards below):

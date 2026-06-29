@@ -1,0 +1,2072 @@
+=== HIT 19:12:17 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+      5 set -u
+      6 BASE=http://localhost:8766
+      7 OUT=/Users/eugenechan/dev/personal/lfg/.claude/send-fail-capture.
+      8 : > "$OUT"
+      9 echo "watching… reproduce a failing send now" >&2
+     … +44 lines
+
+  Running 1 shell command…
+  ⎿  $ cd /Users/eugenechan/dev/personal/lfg; chmod +x
+     .claude/watch-send-fail.sh; nohup bash .claude/watch-send-fail.sh >
+     .claude/watch-send-fail.log 2>&1 &
+     echo "watcher PID $!"; sleep 2; cat .claude/watch-send-fail.log
+
+✶ Doodling… (4m 47s · ↓ 14.2k tokens)
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:17 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+⏺ Now I understand the client contract. I'll build a tiny mock server that
+  serves one session and an SSE prompt event with full descriptions, then point
+  the app at it. Let me confirm the SSE event decoding shape and the Session
+  fields.
+
+  Running 2 shell commands…
+  ⎿  $ cd /Users/eugenechan/dev/personal/lfg; grep -n "struct Session\b\|struct
+     SessionsResponse\|struct MessagesResponse\|struct SessionMessage\b\|struct
+     QueueResponse\|public var\|public let\|CodingKeys\|case "
+     ios/LFGCore/Sources/LFGCore/Models.swift | sed -n '1,80p'
+
+✳ Canoodling… (3m 47s · ↓ 14.6k tokens · thought for 19s)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous
+     point in time
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:21 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  the instant a send goes pending/sending/failed, dumps the exact error string +
+  a snapshot of that session's tmux pane to .claude/send-fail-capture.txt.
+
+  Please reproduce one failing send now — send a message to any session and let
+  it go pending → failed (retry it a couple times too, that's useful). Tell me
+  when you've done it and I'll read the capture.
+
+  Here's my read of the situation while you do that:
+
+  What's confirmed (static analysis):
+
+  - Your sessions are raw Claude-in-tmux, so every send goes through
+  sendq.ts:deliver() → types via tmux send-keys, then screen-scrapes the pane to
+  confirm before pressing Enter.
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:21 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  Ran 2 shell commands
+
+⏺ I have the full client contract. Let me build a mock server that serves one
+  blocked session and an SSE prompt event with full descriptions, then drive the
+  real app against it. First, get the bundle id.
+
+  Running 1 shell command…
+  ⎿  $ cd /Users/eugenechan/dev/personal/lfg/ios; grep -rn
+     "PRODUCT_BUNDLE_IDENTIFIER\|bundleId\|com.eugenechan" project.yml
+     LFG.xcodeproj/project.pbxproj 2>/dev/null | head -5
+
+✳ Canoodling… (3m 51s · ↑ 14.9k tokens)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous
+     point in time
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:24 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  sendq.ts:deliver() → types via tmux send-keys, then screen-scrapes the pane to
+  confirm before pressing Enter.
+  - The "keeps failing on retry" symptom means a deterministic condition, and
+  the most likely one is that deliver() never reaches the Enter press because
+  inputBoxText() can't parse the composer in the current TUI state → fails with
+  "message never left the input box after retries."
+
+  Why I want the literal error first: there are three distinct failed branches,
+  and the correct fix differs for each:
+
+  1. "session is not in a tmux pane" → a session-resolution / target-dedup bug
+  (two sessions sharing a pane both get tmuxTarget = null).
+  2. "a prompt/selector wouldn't dismiss" → an undetected permission/question
+  dialog blocking the composer.
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:24 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+
+  Ran 2 shell commands
+
+⏺ I have the full client contract. Let me build a mock server that serves one
+  blocked session and an SSE prompt event with full descriptions, then drive the
+  real app against it. First, get the bundle id.
+
+  Ran 1 shell command
+
+⏺ Now the mock server:
+
+✽ Canoodling… (3m 55s · ↓ 15.0k tokens)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous
+     point in time
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:28 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Why I want the literal error first: there are three distinct failed branches,
+  and the correct fix differs for each:
+  1. "session is not in a tmux pane" → a session-resolution / target-dedup bug
+  (two sessions sharing a pane both get tmuxTarget = null).
+  2. "a prompt/selector wouldn't dismiss" → an undetected permission/question
+  dialog blocking the composer.
+  3. "message never left the input box after retries" → the brittle
+  scrape-confirm I described.
+
+  The capture will tell us which, plus the pane state shows why the scrape
+  failed. Then I fix precisely rather than shipping a blind change that could
+  turn "stuck pending" into "silently dropped." Standing by for your repro.
+
+✻ Baked for 4m 55s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:28 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+
+  Ran 2 shell commands
+
+⏺ I have the full client contract. Let me build a mock server that serves one
+  blocked session and an SSE prompt event with full descriptions, then drive the
+  real app against it. First, get the bundle id.
+
+  Ran 1 shell command
+
+⏺ Now the mock server:
+
+✻ Canoodling… (3m 59s · ↓ 15.3k tokens)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous
+     point in time
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:31 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Why I want the literal error first: there are three distinct failed branches,
+  and the correct fix differs for each:
+  1. "session is not in a tmux pane" → a session-resolution / target-dedup bug
+  (two sessions sharing a pane both get tmuxTarget = null).
+  2. "a prompt/selector wouldn't dismiss" → an undetected permission/question
+  dialog blocking the composer.
+  3. "message never left the input box after retries" → the brittle
+  scrape-confirm I described.
+
+  The capture will tell us which, plus the pane state shows why the scrape
+  failed. Then I fix precisely rather than shipping a blind change that could
+  turn "stuck pending" into "silently dropped." Standing by for your repro.
+
+✻ Baked for 4m 55s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ just sent one, check the capture
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:31 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+
+  Ran 2 shell commands
+
+⏺ I have the full client contract. Let me build a mock server that serves one
+  blocked session and an SSE prompt event with full descriptions, then drive the
+  real app against it. First, get the bundle id.
+
+  Ran 1 shell command
+
+⏺ Now the mock server:
+
+✶ Canoodling… (4m 1s · ↓ 15.5k tokens)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous
+     point in time
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:35 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Why I want the literal error first: there are three distinct failed branches,
+  and the correct fix differs for each:
+  1. "session is not in a tmux pane" → a session-resolution / target-dedup bug
+  (two sessions sharing a pane both get tmuxTarget = null).
+  2. "a prompt/selector wouldn't dismiss" → an undetected permission/question
+  dialog blocking the composer.
+  3. "message never left the input box after retries" → the brittle
+  scrape-confirm I described.
+
+  The capture will tell us which, plus the pane state shows why the scrape
+  failed. Then I fix precisely rather than shipping a blind change that could
+  turn "stuck pending" into "silently dropped." Standing by for your repro.
+
+✻ Baked for 4m 55s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ just sent one, check the capture
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:35 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+         to render a
+         escriptions).
+       3 const SID = "mock-postgres-1";
+       4
+       6   question: "Which database would you like to use for the new se
+         rvice?",
+       7   detail: null,
+       9   multiSelect: false,
+      10   options: [
+     … +80 lines
+
+✢ Canoodling… (4m 4s · ↑ 15.7k tokens)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous
+     point in time
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:39 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Why I want the literal error first: there are three distinct failed branches,
+  and the correct fix differs for each:
+  1. "session is not in a tmux pane" → a session-resolution / target-dedup bug
+  (two sessions sharing a pane both get tmuxTarget = null).
+  2. "a prompt/selector wouldn't dismiss" → an undetected permission/question
+  dialog blocking the composer.
+  3. "message never left the input box after retries" → the brittle
+  scrape-confirm I described.
+
+  The capture will tell us which, plus the pane state shows why the scrape
+  failed. Then I fix precisely rather than shipping a blind change that could
+  turn "stuck pending" into "silently dropped." Standing by for your repro.
+
+✻ Baked for 4m 55s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ just sent one, check the capture
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:39 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+       7   detail: null,
+       9   multiSelect: false,
+      10   options: [
+     … +80 lines
+
+⏺ Running 1 shell command…
+  ⎿  $ cd /Users/eugenechan/dev/personal/lfg; bun /tmp/lfg_mock.ts
+
+✳ Canoodling… (4m 9s · ↑ 16.3k tokens)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous
+     point in time
+
+  ❯ We don’t need that just modify the component to display all the
+    properties
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ Press up to edit queued messages
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on · 1 shell · esc to interrupt · ↓ to manage
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:43 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Why I want the literal error first: there are three distinct failed branches,
+  and the correct fix differs for each:
+  1. "session is not in a tmux pane" → a session-resolution / target-dedup bug
+  (two sessions sharing a pane both get tmuxTarget = null).
+  2. "a prompt/selector wouldn't dismiss" → an undetected permission/question
+  dialog blocking the composer.
+  3. "message never left the input box after retries" → the brittle
+  scrape-confirm I described.
+
+  The capture will tell us which, plus the pane state shows why the scrape
+  failed. Then I fix precisely rather than shipping a blind change that could
+  turn "stuck pending" into "silently dropped." Standing by for your repro.
+
+✻ Baked for 4m 55s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ just sent one, check the capture
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:44 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+         rvice?",
+       7   detail: null,
+       9   multiSelect: false,
+      10   options: [
+     … +80 lines
+
+  Running 2 shell commands…
+  ⎿  $ sleep 1; curl -s -m2 http://127.0.0.1:8765/api/sessions | head -c 400
+
+❯ We don’t need that just modify the component to display all the properties
+
+· Canoodling… (4m 14s · ↓ 16.5k tokens · thinking with medium effort)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous
+     point in time
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on · 1 shell · esc to interrupt · ↓ to manage
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:49 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Why I want the literal error first: there are three distinct failed branches,
+  and the correct fix differs for each:
+  1. "session is not in a tmux pane" → a session-resolution / target-dedup bug
+  (two sessions sharing a pane both get tmuxTarget = null).
+  2. "a prompt/selector wouldn't dismiss" → an undetected permission/question
+  dialog blocking the composer.
+  3. "message never left the input box after retries" → the brittle
+  scrape-confirm I described.
+
+  The capture will tell us which, plus the pane state shows why the scrape
+  failed. Then I fix precisely rather than shipping a blind change that could
+  turn "stuck pending" into "silently dropped." Standing by for your repro.
+
+✻ Baked for 4m 55s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ just sent one, check the capture
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:49 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+     … +80 lines
+
+  Ran 2 shell commands
+
+❯ We don’t need that just modify the component to display all the properties
+
+⏺ Understood — skipping the live harness. Let me kill the mock and just make
+  sure the component renders every property.
+
+⏺ Running 1 shell command…
+
+✽ Canoodling… (4m 19s · ↓ 16.8k tokens · thought for 5s)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous
+     point in time
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on · 1 shell · esc to interrupt · ↓ to manage
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:53 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Why I want the literal error first: there are three distinct failed branches,
+  and the correct fix differs for each:
+  1. "session is not in a tmux pane" → a session-resolution / target-dedup bug
+  (two sessions sharing a pane both get tmuxTarget = null).
+  2. "a prompt/selector wouldn't dismiss" → an undetected permission/question
+  dialog blocking the composer.
+  3. "message never left the input box after retries" → the brittle
+  scrape-confirm I described.
+
+  The capture will tell us which, plus the pane state shows why the scrape
+  failed. Then I fix precisely rather than shipping a blind change that could
+  turn "stuck pending" into "silently dropped." Standing by for your repro.
+
+✻ Baked for 4m 55s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ just sent one, check the capture
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:53 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+
+  Ran 1 shell command
+
+⏺ Background command "Start mock lfg server in background" failed with exit code
+144
+
+⏺ Mock stopped. Let me review the current component to confirm every property of
+  AgentPrompt and PromptOption is rendered.
+
+  Reading 1 file…
+
+✻ Canoodling… (4m 23s · ↓ 17.0k tokens)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous
+     point in time
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:56 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Why I want the literal error first: there are three distinct failed branches,
+  and the correct fix differs for each:
+  1. "session is not in a tmux pane" → a session-resolution / target-dedup bug
+  (two sessions sharing a pane both get tmuxTarget = null).
+  2. "a prompt/selector wouldn't dismiss" → an undetected permission/question
+  dialog blocking the composer.
+  3. "message never left the input box after retries" → the brittle
+  scrape-confirm I described.
+
+  The capture will tell us which, plus the pane state shows why the scrape
+  failed. Then I fix precisely rather than shipping a blind change that could
+  turn "stuck pending" into "silently dropped." Standing by for your repro.
+
+✻ Baked for 4m 55s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ just sent one, check the capture
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:12:56 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Background command "Start mock lfg server in background" failed with exit code
+144
+
+⏺ Mock stopped. Let me review the current component to confirm every property of
+  AgentPrompt and PromptOption is rendered.
+
+⏺ Reading 1 file…
+  ⎿  LFG/Components.swift
+
+✽ Canoodling… (4m 27s · ↓ 17.1k tokens · thinking with medium effort)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous
+     point in time
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:01 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  dialog blocking the composer.
+  3. "message never left the input box after retries" → the brittle
+  scrape-confirm I described.
+
+  The capture will tell us which, plus the pane state shows why the scrape
+  failed. Then I fix precisely rather than shipping a blind change that could
+  turn "stuck pending" into "silently dropped." Standing by for your repro.
+
+✻ Baked for 4m 55s
+
+❯ This is a message that will with
+
+✶ Crunching…
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:01 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Background command "Start mock lfg server in background" failed with exit code
+144
+
+⏺ Mock stopped. Let me review the current component to confirm every property of
+  AgentPrompt and PromptOption is rendered.
+
+⏺ Reading 1 file…
+  ⎿  LFG/Components.swift
+
+✳ Canoodling… (4m 31s · ↓ 17.2k tokens · thinking with medium effort)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous
+     point in time
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:05 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+
+❯ This is a message that will with
+
+⏺ Looks like your message got cut off ("This is a message that will with"). Let
+  me check whether the watcher caught your repro.
+
+  Running 1 shell command…
+  ⎿  $ cd /Users/eugenechan/dev/personal/lfg; echo "=== capture ==="; cat
+     .claude/send-fail-capture.txt 2>/dev/null; echo "=== watcher log ==="; tail
+     -5 .claude/watch-send-fail.log; echo "=== watcher alive? ==="; ps -p 48409
+     >/dev/null && echo "yes" || echo "no"
+
+✻ Crunching… (6s · ↑ 324 tokens · thought for 1s)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:05 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+      206 +                        if option.selected == true {
+      207 +                            Image(systemName: "checkmark.circl
+          +e.fill")
+      208 +                                .font(.caption).foregroundStyl
+          +e(.blue)
+      209 +                        }
+      210                          if answering == option.index { Progres
+           sView().controlSize(.small) }
+      211                      }
+      212                      .padding(10)
+
+✳ Canoodling… (4m 35s · ↑ 17.7k tokens)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous
+     point in time
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:09 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+
+❯ This is a message that will with
+
+⏺ Looks like your message got cut off ("This is a message that will with"). Let
+  me check whether the watcher caught your repro.
+
+⏺ Running 1 shell command…
+  ⎿  $ cd /Users/eugenechan/dev/personal/lfg; echo "=== capture ==="; cat
+     .claude/send-fail-capture.txt 2>/dev/null; echo "=== watcher log ==="; tail
+     -5 .claude/watch-send-fail.log; echo "=== watcher alive? ==="; ps -p 48409
+     >/dev/null && echo "yes" || echo "no"
+
+· Crunching… (10s · ↓ 480 tokens · thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:09 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+      209 +                        }
+      210                          if answering == option.index { Progres
+           sView().controlSize(.small) }
+      211                      }
+      212                      .padding(10)
+
+⏺ Now build the app target to confirm it compiles:
+
+⏺ Running 1 shell command…
+  ⎿  $ flowdeck build -S "lfg-0b16631f" 2>&1 | tail -8
+
+· Canoodling… (4m 40s · ↓ 17.8k tokens)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous
+     point in time
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:14 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+⏺ Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✻ Crunching… (15s · ↑ 903 tokens)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:14 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+      208 +                                .font(.caption).foregroundStyl
+          +e(.blue)
+      209 +                        }
+      210                          if answering == option.index { Progres
+           sView().controlSize(.small) }
+      211                      }
+      212                      .padding(10)
+
+⏺ Now build the app target to confirm it compiles:
+
+  Ran 1 shell command
+  ⎿  Found 1 new diagnostic issue in 1 file (ctrl+o to expand)
+
+⏺ Build passes. The PromptPanelView now displays every property of the prompt:
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:20 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+⏺ Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✳ Crunching… (21s · ↓ 1.1k tokens · thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:20 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  The description-as-subtext was already there; I added the header chip,
+  multiSelect hint, and selected checkmark so nothing in the model goes
+  unrendered, plus .fixedSize so long text never clips. The LFGCore SourceKit
+  warning is just standalone indexing — the FlowDeck app-target build (which
+  resolves LFGCore via the Xcode project) compiles clean.
+
+  ---Actions:
+  - Added option.selected checkmark so all AgentPrompt/PromptOption properties
+  render
+  - Reverted the live-mock approach per your steer; verified via app-target
+  build
+  Files: ios/LFG/Components.swift
+
+✻ Cooked for 4m 50s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:24 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+  Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✶ Crunching… (25s · ↓ 1.3k tokens · thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:24 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  The description-as-subtext was already there; I added the header chip,
+  multiSelect hint, and selected checkmark so nothing in the model goes
+  unrendered, plus .fixedSize so long text never clips. The LFGCore SourceKit
+  warning is just standalone indexing — the FlowDeck app-target build (which
+  resolves LFGCore via the Xcode project) compiles clean.
+
+  ---Actions:
+  - Added option.selected checkmark so all AgentPrompt/PromptOption properties
+  render
+  - Reverted the live-mock approach per your steer; verified via app-target
+  build
+  Files: ios/LFG/Components.swift
+
+✻ Cooked for 4m 50s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ install it and show me the panel
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:27 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+⏺ Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✢ Crunching… (28s · ↓ 1.6k tokens · still thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:27 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  The description-as-subtext was already there; I added the header chip,
+  multiSelect hint, and selected checkmark so nothing in the model goes
+  unrendered, plus .fixedSize so long text never clips. The LFGCore SourceKit
+  warning is just standalone indexing — the FlowDeck app-target build (which
+  resolves LFGCore via the Xcode project) compiles clean.
+
+  ---Actions:
+  - Added option.selected checkmark so all AgentPrompt/PromptOption properties
+  render
+  - Reverted the live-mock approach per your steer; verified via app-target
+  build
+  Files: ios/LFG/Components.swift
+
+✻ Cooked for 4m 50s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ install it and show me the panel
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:31 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+⏺ Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✢ Crunching… (32s · ↓ 1.9k tokens · still thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:31 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  The description-as-subtext was already there; I added the header chip,
+  multiSelect hint, and selected checkmark so nothing in the model goes
+  unrendered, plus .fixedSize so long text never clips. The LFGCore SourceKit
+  warning is just standalone indexing — the FlowDeck app-target build (which
+  resolves LFGCore via the Xcode project) compiles clean.
+
+  ---Actions:
+  - Added option.selected checkmark so all AgentPrompt/PromptOption properties
+  render
+  - Reverted the live-mock approach per your steer; verified via app-target
+  build
+  Files: ios/LFG/Components.swift
+
+✻ Cooked for 4m 50s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ install it and show me the panel
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:35 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+⏺ Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✻ Crunching… (35s · ↓ 2.2k tokens · still thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:35 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  The description-as-subtext was already there; I added the header chip,
+  multiSelect hint, and selected checkmark so nothing in the model goes
+  unrendered, plus .fixedSize so long text never clips. The LFGCore SourceKit
+  warning is just standalone indexing — the FlowDeck app-target build (which
+  resolves LFGCore via the Xcode project) compiles clean.
+
+  ---Actions:
+  - Added option.selected checkmark so all AgentPrompt/PromptOption properties
+  render
+  - Reverted the live-mock approach per your steer; verified via app-target
+  build
+  Files: ios/LFG/Components.swift
+
+✻ Cooked for 4m 50s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ install it and show me the panel
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:39 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+  Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✽ Crunching… (39s · ↓ 2.5k tokens · thinking more with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:39 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  The description-as-subtext was already there; I added the header chip,
+  multiSelect hint, and selected checkmark so nothing in the model goes
+  unrendered, plus .fixedSize so long text never clips. The LFGCore SourceKit
+  warning is just standalone indexing — the FlowDeck app-target build (which
+  resolves LFGCore via the Xcode project) compiles clean.
+
+  ---Actions:
+  - Added option.selected checkmark so all AgentPrompt/PromptOption properties
+  render
+  - Reverted the live-mock approach per your steer; verified via app-target
+  build
+  Files: ios/LFG/Components.swift
+
+✻ Cooked for 4m 50s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ install it and show me the panel
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:43 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+  Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✽ Crunching… (43s · ↓ 2.7k tokens · thinking more with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:43 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  The description-as-subtext was already there; I added the header chip,
+  multiSelect hint, and selected checkmark so nothing in the model goes
+  unrendered, plus .fixedSize so long text never clips. The LFGCore SourceKit
+  warning is just standalone indexing — the FlowDeck app-target build (which
+  resolves LFGCore via the Xcode project) compiles clean.
+
+  ---Actions:
+  - Added option.selected checkmark so all AgentPrompt/PromptOption properties
+  render
+  - Reverted the live-mock approach per your steer; verified via app-target
+  build
+  Files: ios/LFG/Components.swift
+
+✻ Cooked for 4m 50s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ install it and show me the panel
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:48 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+  Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✳ Crunching… (49s · ↓ 3.1k tokens · thinking some more with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:48 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  The description-as-subtext was already there; I added the header chip,
+  multiSelect hint, and selected checkmark so nothing in the model goes
+  unrendered, plus .fixedSize so long text never clips. The LFGCore SourceKit
+  warning is just standalone indexing — the FlowDeck app-target build (which
+  resolves LFGCore via the Xcode project) compiles clean.
+
+  ---Actions:
+  - Added option.selected checkmark so all AgentPrompt/PromptOption properties
+  render
+  - Reverted the live-mock approach per your steer; verified via app-target
+  build
+  Files: ios/LFG/Components.swift
+
+✻ Cooked for 4m 50s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ install it and show me the panel
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:51 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+⏺ Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+· Crunching… (52s · ↓ 3.3k tokens · thinking some more with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:51 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  The description-as-subtext was already there; I added the header chip,
+  multiSelect hint, and selected checkmark so nothing in the model goes
+  unrendered, plus .fixedSize so long text never clips. The LFGCore SourceKit
+  warning is just standalone indexing — the FlowDeck app-target build (which
+  resolves LFGCore via the Xcode project) compiles clean.
+
+  ---Actions:
+  - Added option.selected checkmark so all AgentPrompt/PromptOption properties
+  render
+  - Reverted the live-mock approach per your steer; verified via app-target
+  build
+  Files: ios/LFG/Components.swift
+
+✻ Cooked for 4m 50s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ install it and show me the panel
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:56 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+⏺ Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✢ Crunching… (56s · ↓ 3.6k tokens · thinking some more with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:56 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  The description-as-subtext was already there; I added the header chip,
+  multiSelect hint, and selected checkmark so nothing in the model goes
+  unrendered, plus .fixedSize so long text never clips. The LFGCore SourceKit
+  warning is just standalone indexing — the FlowDeck app-target build (which
+  resolves LFGCore via the Xcode project) compiles clean.
+
+  ---Actions:
+  - Added option.selected checkmark so all AgentPrompt/PromptOption properties
+  render
+  - Reverted the live-mock approach per your steer; verified via app-target
+  build
+  Files: ios/LFG/Components.swift
+
+✻ Cooked for 4m 50s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ install it and show me the panel
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:59 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+⏺ Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+· Crunching… (1m 0s · ↓ 3.9k tokens · thinking some more with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:13:59 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  The description-as-subtext was already there; I added the header chip,
+  multiSelect hint, and selected checkmark so nothing in the model goes
+  unrendered, plus .fixedSize so long text never clips. The LFGCore SourceKit
+  warning is just standalone indexing — the FlowDeck app-target build (which
+  resolves LFGCore via the Xcode project) compiles clean.
+
+  ---Actions:
+  - Added option.selected checkmark so all AgentPrompt/PromptOption properties
+  render
+  - Reverted the live-mock approach per your steer; verified via app-target
+  build
+  Files: ios/LFG/Components.swift
+
+✻ Cooked for 4m 50s
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ install it and show me the panel
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:04 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+  Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✳ Crunching… (1m 5s · almost done thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:04 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  resolves LFGCore via the Xcode project) compiles clean.
+
+  ---Actions:
+  - Added option.selected checkmark so all AgentPrompt/PromptOption properties
+  render
+  - Reverted the live-mock approach per your steer; verified via app-target
+  build
+  Files: ios/LFG/Components.swift
+
+✻ Cooked for 4m 50s
+
+❯ Ok push to TestFlight
+
+✻ Moonwalking…
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:07 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+⏺ Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✢ Crunching… (1m 8s · almost done thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:07 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  resolves LFGCore via the Xcode project) compiles clean.
+
+  ---Actions:
+  - Added option.selected checkmark so all AgentPrompt/PromptOption properties
+  render
+  - Reverted the live-mock approach per your steer; verified via app-target
+  build
+  Files: ios/LFG/Components.swift
+
+✻ Cooked for 4m 50s
+
+❯ Ok push to TestFlight
+
+✢ Moonwalking… (4s · ↓ 49 tokens · thinking with medium effort)
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:11 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+⏺ Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✽ Crunching… (1m 12s · almost done thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:11 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  render
+  - Reverted the live-mock approach per your steer; verified via app-target
+  build
+  Files: ios/LFG/Components.swift
+
+✻ Cooked for 4m 50s
+
+❯ Ok push to TestFlight
+
+⏺ Running 1 shell command…
+  ⎿  $ cd /Users/eugenechan/dev/personal/lfg/ios; ls fastlane/ 2>/dev/null; echo
+     "=== Fastfile ==="; cat fastlane/Fastfile 2>/dev/null | head -120
+
+✽ Moonwalking… (7s · ↑ 385 tokens)
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:14 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+  Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+· Crunching… (1m 15s · almost done thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:14 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  render
+  - Reverted the live-mock approach per your steer; verified via app-target
+  build
+  Files: ios/LFG/Components.swift
+
+✻ Cooked for 4m 50s
+
+❯ Ok push to TestFlight
+
+⏺ Running 2 shell commands…
+  ⎿  $ cd /Users/eugenechan/dev/personal/lfg/ios; sed -n '120,220p'
+     fastlane/Fastfile
+
+✳ Moonwalking… (10s · ↑ 508 tokens)
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:19 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+  Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+· Crunching… (1m 21s · almost done thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:20 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+❯ Ok push to TestFlight
+
+  Ran 2 shell commands
+
+⏺ There's a deploy_testflight lane. Let me check how credentials are provided
+  locally and whether there's a CI workflow or .env.
+
+  Running 1 shell command…
+  ⎿  $ cd /Users/eugenechan/dev/personal/lfg; echo "=== fastlane README ===";
+     sed -n '1,60p' ios/fastlane/README.md 2>/dev/null; echo "===
+     testflight-setup.md ==="; sed -n '1,80p' .claude/testflight-setup.md
+     2>/dev/null
+
+· Moonwalking… (16s · ↑ 854 tokens)
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:23 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+  Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✢ Crunching… (1m 24s · almost done thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:23 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+❯ Ok push to TestFlight
+
+  Ran 2 shell commands
+
+⏺ There's a deploy_testflight lane. Let me check how credentials are provided
+  locally and whether there's a CI workflow or .env.
+
+  Running 1 shell command…
+  ⎿  $ cd /Users/eugenechan/dev/personal/lfg; echo "=== fastlane README ===";
+     sed -n '1,60p' ios/fastlane/README.md 2>/dev/null; echo "===
+     testflight-setup.md ==="; sed -n '1,80p' .claude/testflight-setup.md
+     2>/dev/null
+
+· Moonwalking… (20s · ↓ 982 tokens · thinking with medium effort)
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:27 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+⏺ Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✽ Crunching… (1m 28s · almost done thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:27 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+❯ Ok push to TestFlight
+
+  Ran 2 shell commands
+
+⏺ There's a deploy_testflight lane. Let me check how credentials are provided
+  locally and whether there's a CI workflow or .env.
+
+  Running 1 shell command…
+  ⎿  $ cd /Users/eugenechan/dev/personal/lfg; echo "=== fastlane README ===";
+     sed -n '1,60p' ios/fastlane/README.md 2>/dev/null; echo "===
+     testflight-setup.md ==="; sed -n '1,80p' .claude/testflight-setup.md
+     2>/dev/null
+
+✽ Moonwalking… (23s · ↓ 1.3k tokens · thought for 4s)
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:29 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+  Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+· Crunching… (1m 31s · almost done thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:30 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+
+  Ran 1 shell command
+
+⏺ The documented flow: source fastlane/.env.local, run deploy_testflight. The
+  build uses the working tree, so my uncommitted Q&A changes will be included.
+  Let me verify the env file and tooling exist first.
+
+  Running 1 shell command…
+  ⎿  $ cd /Users/eugenechan/dev/personal/lfg/ios; ls -la fastlane/.env.local
+     2>&1; echo "=== keys present (names only) ==="; grep -o '^[A-Z_]*='
+     fastlane/.env.local 2>/dev/null; echo "=== tooling ==="; which bundle ruby;
+     ruby -v; bundle exec fastlane --version 2>&1 | tail -3
+
+· Moonwalking… (26s · ↑ 1.6k tokens)
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:33 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+⏺ Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✽ Crunching… (1m 34s · almost done thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:33 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+
+  Ran 1 shell command
+
+⏺ The documented flow: source fastlane/.env.local, run deploy_testflight. The
+  build uses the working tree, so my uncommitted Q&A changes will be included.
+  Let me verify the env file and tooling exist first.
+
+  Running 1 shell command…
+  ⎿  $ cd /Users/eugenechan/dev/personal/lfg/ios; ls -la fastlane/.env.local
+     2>&1; echo "=== keys present (names only) ==="; grep -o '^[A-Z_]*='
+     fastlane/.env.local 2>/dev/null; echo "=== tooling ==="; which bundle ruby;
+     ruby -v; bundle exec fastlane --version 2>&1 | tail -3
+
+✶ Moonwalking… (29s · ↓ 1.7k tokens · thinking with medium effort)
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:36 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+  Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+✻ Crunching… (1m 37s · almost done thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:37 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+  build uses the working tree, so my uncommitted Q&A changes will be included.
+  Let me verify the env file and tooling exist first.
+
+  Ran 1 shell command
+
+⏺ System Ruby (2.6) is wrong — the setup used rbenv Ruby 3.2.7. Let me find it.
+
+  Running 1 shell command…
+  ⎿  $ cd /Users/eugenechan/dev/personal/lfg/ios; which rbenv; ls
+     ~/.rbenv/versions 2>/dev/null; cat .ruby-version 2>/dev/null; echo "---";
+     rbenv versions 2>/dev/null; echo "--- gemfile ruby ---"; grep -i ruby
+     Gemfile 2>/dev/null
+
+✽ Moonwalking… (33s · ↑ 2.0k tokens)
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:40 ===
+session: dcf2f0bb-afce-4050-9e5d-bcdbab765045
+target:  lfg-760635:0.0
+queue:   failed|3|message never left the input box after retries|Most of the time it is stuck at pending
+
+Very occasionally it will fail, and whe
+--- capture-pane tail ---
+  Ran 1 shell command
+
+⏺ Caught it. Both hits show the same error: "message never left the input box
+  after retries" (attempts=3) — branch #3, the brittle scrape-confirm, exactly
+  as predicted. Let me read the full pane snapshots to see why the scrape
+  failed.
+
+  Reading 1 file…
+  ⎿  .claude/send-fail-capture.txt
+
+❯ This is a pending message in queue
+
+· Crunching… (1m 41s · almost done thinking with medium effort)
+  ⎿  Tip: Share Claude Code and earn $20 in usage credits · /passes
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===
+=== HIT 19:14:40 ===
+session: d27af0a2-1dc9-41a8-a47e-1bf0c6b83725
+target:  lfg-d1c508:0.0
+queue:   failed|3|message never left the input box after retries|The question and label is there
+
+But there is no description there for each opti
+--- capture-pane tail ---
+⏺ The documented flow: source fastlane/.env.local, run deploy_testflight. The
+  build uses the working tree, so my uncommitted Q&A changes will be included.
+  Let me verify the env file and tooling exist first.
+
+  Ran 1 shell command
+
+⏺ System Ruby (2.6) is wrong — the setup used rbenv Ruby 3.2.7. Let me find it.
+
+⏺ Running 2 shell commands…
+  ⎿  $ cd /Users/eugenechan/dev/personal/lfg/ios; export
+     PATH="$HOME/.rbenv/shims:$PATH"; ruby -v; bundle exec fastlane --version
+     2>&1 | tail -3
+
+· Moonwalking… (36s · ↑ 2.1k tokens)
+                         Update available! Run: brew upgrade claude-code@latest
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+                                                          Remote Control active
+=== END ===

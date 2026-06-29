@@ -22,6 +22,10 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     public var tmuxTarget: String?
     public var tmuxName: String?
     public var managed: Bool?
+    /// Best-effort "mid-turn" baseline from the REST list. Used to correct a
+    /// stale "Working" badge for sessions the live SSE stream doesn't cover (or
+    /// whose busy delta was missed across a reconnect). nil on older servers.
+    public var busy: Bool?
 
     public var id: String { sessionId ?? tmuxName ?? title }
 
@@ -36,7 +40,8 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         status: String? = nil, statusReason: String? = nil, statusDetail: String? = nil,
         assignedUser: String? = nil, lastUserText: String? = nil,
         startedAt: Double? = nil, lastActivityAt: Double? = nil,
-        tmuxTarget: String? = nil, tmuxName: String? = nil, managed: Bool? = nil
+        tmuxTarget: String? = nil, tmuxName: String? = nil, managed: Bool? = nil,
+        busy: Bool? = nil
     ) {
         self.sessionId = sessionId; self.title = title; self.agent = agent
         self.model = model; self.project = project; self.cwd = cwd
@@ -44,6 +49,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         self.assignedUser = assignedUser; self.lastUserText = lastUserText
         self.startedAt = startedAt; self.lastActivityAt = lastActivityAt
         self.tmuxTarget = tmuxTarget; self.tmuxName = tmuxName; self.managed = managed
+        self.busy = busy
     }
 
     public init(from decoder: Decoder) throws {
@@ -64,6 +70,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         tmuxTarget = try c.decodeIfPresent(String.self, forKey: .tmuxTarget)
         tmuxName = try c.decodeIfPresent(String.self, forKey: .tmuxName)
         managed = try c.decodeIfPresent(Bool.self, forKey: .managed)
+        busy = try c.decodeIfPresent(Bool.self, forKey: .busy)
     }
 }
 

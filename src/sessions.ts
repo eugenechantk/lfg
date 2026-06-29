@@ -60,6 +60,15 @@ export type Session = {
   startedAt: number | null;
   transcriptPath: string | null;
   lastActivityAt: number | null;
+  // Best-effort "is this session mid-turn" baseline carried on the REST list so
+  // the client can correct a stale "Working" badge for sessions outside the live
+  // SSE window (or whose busy delta was missed across a stream reconnect). For
+  // pane sessions it's approximated from transcript freshness (a CLI agent
+  // appends to its .jsonl as it streams); for headless aisdk/codex harnesses it
+  // comes from the accurate registry `busy`. The SSE pane-scraped busy remains
+  // the authoritative signal for streamed sessions and overrides this. See the
+  // multiplexed live stream's per-connection delta caveat in serve.ts.
+  busy: boolean;
   last: SessionMsg | null;
   tmuxTarget: string | null;
   // tmux session name (the `name` in `name:0.0`) when targetable, and whether
@@ -391,6 +400,14 @@ function promptStartsWithTitle(prompt: string | null, title: string | null | und
 // almost certainly a stale, unrelated session and must NOT be guess-bound.
 const FALLBACK_FRESHNESS_MS = 10 * 60_000;
 
+// How recently a transcript must have been written for the REST `busy` baseline
+// to read a pane session as mid-turn. Wider than the SSE poll cadence so a brief
+// pause in output (a silent tool call) doesn't flap a non-streamed session to
+// idle; small enough that a finished session reliably reads idle within seconds.
+// Only used for sessions NOT covered by the live SSE busy (the client overrides
+// with pane-scraped busy for streamed ones), so a little slack here is harmless.
+const REST_BUSY_WINDOW_MS = 12_000;
+
 async function newestUnclaimedInCwd(
   cwd: string,
   claimed: Set<string>,
@@ -623,6 +640,7 @@ function normalizeLineUnsafe(line: string): SessionMsg[] {
     timestamp?: string;
     uuid?: string;
     isApiErrorMessage?: boolean;
+    isMeta?: boolean;
     message?: { role?: string; content?: unknown };
   };
   try {
@@ -632,6 +650,13 @@ function normalizeLineUnsafe(line: string): SessionMsg[] {
   }
   if (x.type !== "assistant" && x.type !== "user" && x.type !== "system")
     return [];
+  // Skip system-injected turns. Claude Code stamps `isMeta: true` on the
+  // user-role lines it synthesizes — the full body of a launched skill, an
+  // expanded slash command, the "Caveat:" preamble, local-command stdout. These
+  // aren't conversation; surfacing them dumped the entire SKILL.md into the
+  // client as a giant user bubble (and polluted the "last message" preview).
+  // The canonical Claude UI hides them; match that.
+  if (x.isMeta === true) return [];
   const m = x.message;
   if (!m) return [];
   const ts = x.timestamp ? Date.parse(x.timestamp) : null;
@@ -832,7 +857,30 @@ async function previewLast(path: string): Promise<SessionMsg | null> {
   return null;
 }
 
-export async function listSessions(): Promise<Session[]> {
+// Coalesce + briefly cache the session scan. The whole enrichment pass is a
+// burst of synchronous `ps`/`lsof`/`tmux` spawns that freeze the single event
+// loop; every poll AND every mutating route (send/resume/model) triggers it.
+// Without coalescing, an in-flight poll and a concurrent send each launch the
+// storm and pile up — the send's HTTP round-trip blows past the client timeout
+// and the message appears to hang ("can't send to an idle session"). This
+// returns the in-flight promise to concurrent callers and reuses a fresh result
+// for a short window, so overlapping requests share one scan.
+const LIST_TTL_MS = 600;
+let listCache: { at: number; promise: Promise<Session[]> } | null = null;
+export function listSessions(): Promise<Session[]> {
+  const now = Date.now();
+  if (listCache && now - listCache.at < LIST_TTL_MS) return listCache.promise;
+  const promise = listSessionsUncached();
+  listCache = { at: now, promise };
+  // A rejected scan must not be served stale for the whole TTL — drop it so the
+  // next caller retries.
+  promise.catch(() => {
+    if (listCache?.promise === promise) listCache = null;
+  });
+  return promise;
+}
+
+async function listSessionsUncached(): Promise<Session[]> {
   // Drop just-closed sessions up front (see closing.ts): /close kills the
   // process but it lingers for a poll or two, so without this a stopped session
   // flickers back into the list until pgrep stops seeing it.
@@ -938,6 +986,7 @@ export async function listSessions(): Promise<Session[]> {
       startedAt: e.startedAt,
       transcriptPath,
       lastActivityAt,
+      busy: lastActivityAt != null && Date.now() - lastActivityAt < REST_BUSY_WINDOW_MS,
       last,
       // A headless `claude -p` (the report runner, or a dispatched agent
       // before it moved to its own tmux session) is a *descendant* of
@@ -1031,6 +1080,7 @@ export async function listSessions(): Promise<Session[]> {
       startedAt,
       transcriptPath,
       lastActivityAt,
+      busy: lastActivityAt != null && Date.now() - lastActivityAt < REST_BUSY_WINDOW_MS,
       last,
       tmuxTarget,
       tmuxName,
@@ -1109,6 +1159,8 @@ export async function listSessions(): Promise<Session[]> {
       startedAt,
       transcriptPath,
       lastActivityAt,
+      // Headless harness: the registry tracks an accurate per-turn busy flag.
+      busy: e.busy,
       last,
       // No pane I/O — but keep the supervisor name so kill + managed badge work.
       tmuxTarget: null,

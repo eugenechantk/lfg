@@ -1,5 +1,6 @@
 import SwiftUI
 import LFGCore
+import UIKit
 
 struct SessionDetailView: View {
     let session: Session
@@ -231,6 +232,21 @@ struct SessionDetailView: View {
                 Button { newTitle = session.title; renaming = true } label: {
                     Label("Rename", systemImage: "pencil")
                 }
+
+                // Debug: surface the underlying ids; tapping copies to clipboard.
+                Section("Debug — tap to copy") {
+                    if let tmux = session.tmuxName ?? session.tmuxTarget, !tmux.isEmpty {
+                        Button { copyToClipboard(tmux) } label: {
+                            Label("tmux · \(tmux)", systemImage: "terminal")
+                        }
+                    }
+                    if !sid.isEmpty {
+                        Button { copyToClipboard(sid) } label: {
+                            Label("\(agentIdLabel) · \(sid)", systemImage: "number")
+                        }
+                    }
+                }
+
                 Divider()
                 Button(role: .destructive) { confirmEnd = true } label: {
                     Label("End session", systemImage: "xmark.circle")
@@ -241,6 +257,20 @@ struct SessionDetailView: View {
 
     private var modelOptions: [String] {
         AgentKind(rawValue: session.agent)?.models ?? AgentKind.aisdk.models
+    }
+
+    /// Human label for the agent's own session id (used in the Debug menu).
+    private var agentIdLabel: String {
+        switch session.agent {
+        case "claude", "aisdk": return "Claude id"
+        case "codex", "codex-aisdk": return "Codex id"
+        default: return "Session id"
+        }
+    }
+
+    private func copyToClipboard(_ value: String) {
+        UIPasteboard.general.string = value
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 }
 

@@ -220,7 +220,10 @@ struct MediaAttachmentsView: View {
                     fileCard(ref)
                 } else {
                     switch ref.kind {
-                    case .image: imageView(ref)
+                    // Images render as compact tappable cards (open full-size in
+                    // the viewer sheet) rather than full-width inline previews,
+                    // to keep image-heavy transcripts scannable.
+                    case .image: fileCard(ref)
                     case .video: videoView(ref)
                     case .pdf, .markdown, .other: fileCard(ref)
                     }
@@ -229,20 +232,6 @@ struct MediaAttachmentsView: View {
         }
         .sheet(item: $viewing) { ref in
             FileViewerSheet(ref: ref, url: hostFiles?.resolve(rawPath: ref.raw))
-        }
-    }
-
-    @ViewBuilder private func imageView(_ ref: MediaRef) -> some View {
-        if let url = hostFiles?.resolve(rawPath: ref.raw) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let img): img.resizable().scaledToFit()
-                case .failure: fileCard(ref)
-                default: ProgressView().frame(height: 120)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
 
@@ -323,7 +312,7 @@ struct FileViewerSheet: View {
         switch ref.kind {
         case .image:
             if let img = UIImage(data: data) {
-                ScrollView([.horizontal, .vertical]) { Image(uiImage: img).resizable().scaledToFit() }
+                ZoomableImageView(image: img).ignoresSafeArea(edges: .bottom)
             } else {
                 ContentUnavailableView("Not an image", systemImage: "photo")
             }
@@ -360,6 +349,111 @@ struct PDFDataView: UIViewRepresentable {
         return v
     }
     func updateUIView(_ view: PDFView, context: Context) {}
+}
+
+/// Pinch-to-zoom image viewer backed by `UIScrollView`. Opens fit-to-width,
+/// pinches in for detail, and zooms out to fit the whole image. Double-tap
+/// toggles between fit-to-width and a 2.5x detail zoom centered on the tap.
+struct ZoomableImageView: UIViewRepresentable {
+    let image: UIImage
+
+    func makeUIView(context: Context) -> ZoomableScrollView {
+        let scrollView = ZoomableScrollView()
+        scrollView.delegate = context.coordinator
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.bouncesZoom = true
+        scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.backgroundColor = .clear
+
+        let imageView = UIImageView(image: image)
+        imageView.contentMode = .scaleAspectFit
+        scrollView.imageView = imageView
+        scrollView.addSubview(imageView)
+
+        let doubleTap = UITapGestureRecognizer(
+            target: context.coordinator, action: #selector(Coordinator.handleDoubleTap(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        scrollView.addGestureRecognizer(doubleTap)
+
+        context.coordinator.scrollView = scrollView
+        return scrollView
+    }
+
+    func updateUIView(_ uiView: ZoomableScrollView, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator: NSObject, UIScrollViewDelegate {
+        weak var scrollView: ZoomableScrollView?
+
+        func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+            (scrollView as? ZoomableScrollView)?.imageView
+        }
+
+        func scrollViewDidZoom(_ scrollView: UIScrollView) {
+            (scrollView as? ZoomableScrollView)?.centerImage()
+        }
+
+        @objc func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
+            guard let scrollView, let imageView = scrollView.imageView else { return }
+            if scrollView.zoomScale > scrollView.fitWidthScale * 1.01 {
+                scrollView.setZoomScale(scrollView.fitWidthScale, animated: true)
+            } else {
+                let target = min(scrollView.maximumZoomScale, scrollView.fitWidthScale * 2.5)
+                let point = gesture.location(in: imageView)
+                let size = CGSize(width: scrollView.bounds.width / target,
+                                  height: scrollView.bounds.height / target)
+                scrollView.zoom(to: CGRect(x: point.x - size.width / 2,
+                                           y: point.y - size.height / 2,
+                                           width: size.width, height: size.height),
+                                animated: true)
+            }
+        }
+    }
+}
+
+/// `UIScrollView` subclass laying out a single image: fit-to-width as the
+/// initial zoom, fit-whole as the minimum (so tall images can be zoomed out to
+/// see entirely), and keeps the image centered while zoomed.
+final class ZoomableScrollView: UIScrollView {
+    var imageView: UIImageView?
+    private(set) var fitWidthScale: CGFloat = 1
+    private var hasConfigured = false
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        configureIfNeeded()
+        centerImage()
+    }
+
+    private func configureIfNeeded() {
+        guard !hasConfigured, let imageView, let image = imageView.image,
+              bounds.width > 0, bounds.height > 0,
+              image.size.width > 0, image.size.height > 0 else { return }
+        hasConfigured = true
+
+        imageView.frame = CGRect(origin: .zero, size: image.size)
+        contentSize = image.size
+
+        let widthScale = bounds.width / image.size.width
+        let heightScale = bounds.height / image.size.height
+        let fitWhole = min(widthScale, heightScale)
+
+        fitWidthScale = widthScale
+        minimumZoomScale = min(fitWhole, widthScale)   // zoom out to whole image
+        maximumZoomScale = max(widthScale, fitWhole) * 4
+        zoomScale = widthScale                          // open fit-to-width
+    }
+
+    func centerImage() {
+        guard let imageView else { return }
+        let boundsSize = bounds.size
+        var frame = imageView.frame
+        frame.origin.x = frame.width < boundsSize.width ? (boundsSize.width - frame.width) / 2 : 0
+        frame.origin.y = frame.height < boundsSize.height ? (boundsSize.height - frame.height) / 2 : 0
+        imageView.frame = frame
+    }
 }
 
 /// QuickLook preview for arbitrary file types, backed by a temp file written

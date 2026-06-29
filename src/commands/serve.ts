@@ -1876,6 +1876,15 @@ export async function cmdServe() {
                 offsets.set(p.sid, Bun.file(p.tp).size);
                 lastSig.set(p.sid, " ");
                 lastQ.set(p.sid, "[]");
+                // Force the first poll to emit an explicit busy snapshot. busy is
+                // a delta-only signal (emitted on change vs lastBusy, default
+                // "0"=idle), so without this an already-idle session sends NO
+                // busy event on connect — and since the client churns/reopens
+                // this stream constantly (its id set is reranked by activity and
+                // capped at 24), a session that finished while the client held a
+                // stale busy=true would never receive the false and stay stuck on
+                // "Working". Seeding a sentinel makes both "0" and "1" differ.
+                lastBusy.set(p.sid, "init");
                 pollOne(p);
                 queueOne(p);
               }
