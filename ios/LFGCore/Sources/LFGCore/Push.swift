@@ -15,19 +15,41 @@ public enum PushEventKind: String, Sendable, Equatable {
 public struct PushNotification: Sendable, Equatable {
     public let sid: String
     public let kind: PushEventKind?
+    /// Compact session snapshot the server embeds so the app can render the
+    /// session screen the instant the notification is tapped, before the
+    /// reconnect + refresh completes. Nil for older/foreign payloads.
+    public let session: Session?
 
-    public init(sid: String, kind: PushEventKind?) {
+    public init(sid: String, kind: PushEventKind?, session: Session? = nil) {
         self.sid = sid
         self.kind = kind
+        self.session = session
     }
 
-    /// Parse the `sid` (and optional `kind`) out of a notification's userInfo.
-    /// Returns nil when there's no usable session id — a foreign/malformed push
-    /// shouldn't drive navigation.
+    /// Parse the `sid` (and optional `kind` + `session`) out of a notification's
+    /// userInfo. Returns nil when there's no usable session id — a foreign/
+    /// malformed push shouldn't drive navigation.
     public init?(userInfo: [AnyHashable: Any]) {
         guard let sid = userInfo["sid"] as? String, !sid.isEmpty else { return nil }
         self.sid = sid
         self.kind = (userInfo["kind"] as? String).flatMap(PushEventKind.init(rawValue:))
+        self.session = Self.parseSession(userInfo["session"], sid: sid)
+    }
+
+    private static func parseSession(_ raw: Any?, sid: String) -> Session? {
+        guard let d = raw as? [AnyHashable: Any],
+              let id = d["id"] as? String, id == sid else { return nil }
+        let activity = (d["lastActivityAt"] as? NSNumber)?.doubleValue ?? (d["lastActivityAt"] as? Double)
+        return Session(
+            sessionId: id,
+            title: (d["title"] as? String) ?? "",
+            agent: (d["agent"] as? String) ?? "claude",
+            model: d["model"] as? String,
+            project: d["project"] as? String,
+            cwd: d["cwd"] as? String,
+            status: d["status"] as? String,
+            lastActivityAt: activity
+        )
     }
 }
 

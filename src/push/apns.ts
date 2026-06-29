@@ -13,11 +13,26 @@ export type ApnsConfig = {
   topic: string; // bundle id, e.g. dev.omg.lfg
 };
 
+// A compact snapshot of the session, carried in the push so the client can
+// render the session screen instantly on tap — before the (re)connect + refresh
+// round-trip completes. Small text fields only; APNs caps the payload at 4KB.
+export type ApnsPayloadSession = {
+  id: string;
+  title?: string;
+  project?: string | null;
+  cwd?: string | null;
+  agent?: string;
+  model?: string | null;
+  status?: string | null;
+  lastActivityAt?: number | null;
+};
+
 export type ApnsPayload = {
   title: string;
   body: string;
   sid: string; // session id, for deep-linking + thread grouping
   kind: "needs-input" | "finished";
+  session?: ApnsPayloadSession;
 };
 
 export type ApnsResult = { ok: boolean; status: number; reason?: string };
@@ -150,6 +165,8 @@ export function apnsBody(payload: ApnsPayload): string {
     },
     sid: payload.sid,
     kind: payload.kind,
+    // Compact session snapshot for instant-render on tap (omitted when absent).
+    ...(payload.session ? { session: payload.session } : {}),
   });
 }
 

@@ -21,6 +21,7 @@ import {
   sendApns,
   type ApnsConfig,
   type ApnsPayload,
+  type ApnsPayloadSession,
   type ApnsTransport,
 } from "./apns.ts";
 import { unregisterDevice } from "./store.ts";
@@ -98,20 +99,53 @@ const clip = (t: string, n: number): string => {
   return c.length > n ? c.slice(0, n - 1).trimEnd() + "…" : c;
 };
 
+// A session as seen by buildPayload — a subset of the full Session that carries
+// just what the client needs to render the session screen on tap.
+export type PayloadSessionInput = {
+  sessionId?: string | null;
+  title?: string | null;
+  tmuxName?: string | null;
+  project?: string | null;
+  cwd?: string | null;
+  agent?: string | null;
+  model?: string | null;
+  status?: string | null;
+  lastActivityAt?: number | null;
+};
+
+// Compact session snapshot embedded in the push so the client can render the
+// session instantly on tap instead of waiting for the reconnect + refresh.
+function snapshot(s: PayloadSessionInput): ApnsPayloadSession | undefined {
+  const id = s.sessionId ?? "";
+  if (!id) return undefined;
+  return {
+    id,
+    title: s.title ? clip(s.title, 80) : undefined,
+    project: s.project ?? null,
+    cwd: s.cwd ?? null,
+    agent: s.agent ?? undefined,
+    model: s.model ?? null,
+    status: s.status ?? null,
+    lastActivityAt: s.lastActivityAt ?? null,
+  };
+}
+
 /** Build the user-facing APNs payload for a session + event. Pure. */
 export function buildPayload(
-  session: { sessionId?: string | null; title?: string | null; tmuxName?: string | null },
+  session: PayloadSessionInput,
   kind: PushKind,
   question?: string | null,
 ): ApnsPayload {
   const sid = session.sessionId ?? "";
   const name = clip(session.title || session.tmuxName || sid.slice(0, 8) || "Session", 48);
+  const snap = snapshot(session);
   if (kind === "needs-input") {
     return {
       title: `Needs you — ${name}`,
       body: question ? clip(question, 140) : "An agent is waiting for your input.",
       sid,
       kind,
+      session: snap,
     };
   }
   return {
@@ -119,6 +153,7 @@ export function buildPayload(
     body: "The agent finished its turn.",
     sid,
     kind,
+    session: snap,
   };
 }
 
@@ -145,12 +180,11 @@ async function observeSession(s: {
 
 export type TickDeps = {
   sessions: () => Promise<
-    Array<{
-      sessionId?: string | null;
-      title?: string | null;
-      tmuxName?: string | null;
-      tmuxTarget?: string | null;
-    }>
+    Array<
+      PayloadSessionInput & {
+        tmuxTarget?: string | null;
+      }
+    >
   >;
   observe: (s: { sessionId?: string | null; tmuxTarget?: string | null }) => Promise<SessionState>;
   devices: () => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;

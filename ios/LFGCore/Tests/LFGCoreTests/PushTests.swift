@@ -27,6 +27,42 @@ final class PushTests: XCTestCase {
         XCTAssertNil(PushNotification(userInfo: ["sid": ""]))
     }
 
+    func testParseNotificationExtractsEmbeddedSessionSnapshot() {
+        let userInfo: [AnyHashable: Any] = [
+            "sid": "abc-123",
+            "kind": "finished",
+            "session": [
+                "id": "abc-123",
+                "title": "Fix the bug",
+                "project": "lfg",
+                "cwd": "/Users/x/dev/lfg",
+                "agent": "claude",
+                "model": "sonnet",
+                "status": "ok",
+                "lastActivityAt": 1782700000000,
+            ],
+        ]
+        let note = PushNotification(userInfo: userInfo)
+        XCTAssertEqual(note?.session?.sessionId, "abc-123")
+        XCTAssertEqual(note?.session?.title, "Fix the bug")
+        XCTAssertEqual(note?.session?.cwd, "/Users/x/dev/lfg")
+        XCTAssertEqual(note?.session?.model, "sonnet")
+        XCTAssertEqual(note?.session?.lastActivityAt, 1782700000000)
+    }
+
+    func testParseNotificationWithoutSessionLeavesSnapshotNil() {
+        let note = PushNotification(userInfo: ["sid": "s1", "kind": "finished"])
+        XCTAssertNil(note?.session)
+    }
+
+    func testParseNotificationIgnoresMismatchedSessionId() {
+        let note = PushNotification(userInfo: [
+            "sid": "abc-123",
+            "session": ["id": "different", "title": "X"],
+        ])
+        XCTAssertNil(note?.session)
+    }
+
     // MARK: token formatting
 
     func testTokenHexEncoding() {
