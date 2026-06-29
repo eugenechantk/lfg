@@ -136,9 +136,24 @@ public struct AgentPrompt: Codable, Sendable, Hashable {
     public var question: String
     public var options: [PromptOption]
     public var detail: String?
+    /// Short category chip the agent attaches to each question (AskUserQuestion
+    /// `header`, e.g. "Auth method"). Nil for pane-scraped prompts, which carry
+    /// no header. Surfaced so the panel can label what the question is about.
+    public var header: String?
+    /// True when the question accepts multiple answers. Carried so the panel can
+    /// signal it; single-tap answering still applies (multi-select toggling is
+    /// not yet wired through the answer path).
+    public var multiSelect: Bool?
 
-    public init(question: String, options: [PromptOption], detail: String? = nil) {
+    public init(
+        question: String,
+        options: [PromptOption],
+        detail: String? = nil,
+        header: String? = nil,
+        multiSelect: Bool? = nil
+    ) {
         self.question = question; self.options = options; self.detail = detail
+        self.header = header; self.multiSelect = multiSelect
     }
 }
 

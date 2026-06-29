@@ -145,11 +145,26 @@ struct PromptPanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Needs your input", systemImage: "questionmark.bubble.fill")
-                .font(.caption.weight(.semibold)).foregroundStyle(.blue)
-            Text(prompt.question).font(.subheadline.weight(.semibold))
+            HStack(spacing: 6) {
+                Label("Needs your input", systemImage: "questionmark.bubble.fill")
+                    .font(.caption.weight(.semibold)).foregroundStyle(.blue)
+                if let header = prompt.header, !header.isEmpty {
+                    Text(header.uppercased())
+                        .font(.caption2.weight(.bold)).foregroundStyle(.blue)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(.blue.opacity(0.15), in: Capsule())
+                }
+            }
+            Text(prompt.question)
+                .font(.subheadline.weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
             if let detail = prompt.detail, !detail.isEmpty {
                 Text(detail).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if prompt.multiSelect == true {
+                Text("Multiple answers allowed — tap the one to send back")
+                    .font(.caption2).foregroundStyle(.tertiary)
             }
             ForEach(prompt.options) { option in
                 Button {
@@ -163,11 +178,18 @@ struct PromptPanelView: View {
                             .background(.blue.opacity(0.15), in: Circle())
                         VStack(alignment: .leading, spacing: 2) {
                             Text(option.label).font(.subheadline.weight(.medium))
+                                .fixedSize(horizontal: false, vertical: true)
                             if let d = option.description, !d.isEmpty {
                                 Text(d).font(.caption).foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
+                        .multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
+                        if option.selected == true {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.caption).foregroundStyle(.blue)
+                        }
                         if answering == option.index { ProgressView().controlSize(.small) }
                     }
                     .padding(10)
