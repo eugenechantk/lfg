@@ -9,7 +9,6 @@ struct SessionDetailView: View {
     @State private var renaming = false
     @State private var newTitle = ""
     @State private var confirmEnd = false
-    @State private var sending = false
     @State private var isAtBottom = true
     @State private var bottomDebounce: Task<Void, Never>?
     @State private var scrollProxy: ScrollViewProxy?
@@ -20,17 +19,39 @@ struct SessionDetailView: View {
     private var pending: [SessionStore.PendingSend] { store.pendingSends[sid] ?? [] }
     private var isBusy: Bool { store.busy[sid] == true }
 
+    /// Optimistic "sent" bubbles whose real user turn hasn't landed in the
+    /// transcript yet. Computed from `messages`, so the instant the real turn
+    /// appears the matching placeholder drops out of the same render pass — no
+    /// visible duplicate. Mirrors the store's reconcile matching.
+    private var unmatchedSentBubbles: [SessionStore.PendingSend] {
+        let userTurns = messages
+            .filter { $0.role == "user" && $0.kind == "text" }
+            .map { Self.normForMatch($0.text) }
+        return pending.filter { p in
+            guard p.showSent else { return false }
+            let needle = Self.normForMatch(p.matchText)
+            guard needle.count >= 3 else { return true }
+            let key = String(needle.prefix(80))
+            return !userTurns.contains { $0.contains(key) }
+        }
+    }
+
+    private static func normForMatch(_ s: String) -> String {
+        s.lowercased().split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+    }
+
     var body: some View {
         transcript
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 8) {
                     PendingStripView(sessionID: sid, items: pending.filter { !$0.showSent }).padding(.horizontal, 16)
-                    MessageComposer(text: $draft, sending: sending) { text, atts in
-                        sending = true
-                        Task {
-                            await store.sendWithAttachments(sid, text: text, attachments: atts)
-                            sending = false
-                        }
+                    MessageComposer(text: $draft, sending: false) { text, atts in
+                        // Hand the send to the store, which owns it for the app's
+                        // lifetime (under a background-task assertion). Leaving
+                        // this view or backgrounding the app no longer drops the
+                        // message — the optimistic bubble + pending strip already
+                        // give immediate feedback, so no view-owned spinner.
+                        store.dispatchSend(sid, text: text, attachments: atts)
                     }
                 }
             }
@@ -91,7 +112,12 @@ struct SessionDetailView: View {
 
                     // Kickoff sends show as a finished user bubble right away
                     // (no pending bar), until the real user turn reconciles them.
-                    ForEach(pending.filter { $0.showSent }) { OptimisticUserBubble(sessionID: sid, pending: $0) }
+                    // Filtered against the live transcript so the placeholder
+                    // disappears in the SAME render pass that the real user turn
+                    // appears — otherwise the two overlap for a beat (the
+                    // "momentary duplicate") until the store's reconcile mutates
+                    // pendingSends a tick later.
+                    ForEach(unmatchedSentBubbles) { OptimisticUserBubble(sessionID: sid, pending: $0) }
 
                     // "Running" now lives in the nav-bar header (below the title),
                     // not inline in the transcript.

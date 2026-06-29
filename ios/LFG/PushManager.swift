@@ -120,7 +120,7 @@ final class PushManager {
     /// Takes an already-parsed (Sendable) `PushNotification` so the delegate can
     /// extract it off the main actor before hopping here.
     func handleTap(_ note: PushNotification) {
-        store?.requestSelection(note.sid)
+        store?.openFromNotification(note.sid, snapshot: note.session)
     }
 
     private func apply(_ event: PushRegistrationEvent) {

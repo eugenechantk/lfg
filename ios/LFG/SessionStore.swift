@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import LFGCore
 
 /// The single source of truth for live session state. Reduces `GET /api/sessions`
@@ -35,6 +36,13 @@ import LFGCore
         /// muted "Sending…" bar. Used for a session's kickoff message, which is
         /// already committed (it created the session) so a pending state is noise.
         var showSent: Bool = false
+        /// Whether the backend has accepted this send yet. `true` for the normal
+        /// path (the agent picks an idle/live session up instantly, so the bubble
+        /// reads as sent immediately). `false` for a wake-up send to a session
+        /// whose pane was reaped: the server has to resume the conversation first
+        /// (a real 1–6s round-trip), so the bubble renders muted/gray until the
+        /// send returns, then animates to the confirmed accent color.
+        var confirmed: Bool = true
     }
 
     /// Client-created sessions shown before the server has assigned a real id.
@@ -71,6 +79,52 @@ import LFGCore
     /// Ask the UI to open a session (driven by a tapped push notification).
     func requestSelection(_ sid: String) { requestedSelection = sid }
     func clearRequestedSelection() { requestedSelection = nil }
+
+    /// Route a tapped push notification to its session. A tap frequently
+    /// cold-launches the app (or wakes it from suspension) with no live session
+    /// list yet — the old path just set the selection and the detail view flashed
+    /// "No session selected" because nothing was loaded. So we ALSO actively
+    /// reconnect and resolve the session here: refresh the live list, and if the
+    /// session has since closed (pane reaped), pull it from the resumable list so
+    /// its transcript still opens (sending revives it via the server auto-resume).
+    func openFromNotification(_ sid: String, snapshot: Session? = nil) {
+        // Defer onto the next main-actor turn. A notification tap calls this from
+        // *inside* UIKit's launch / CATransaction-commit while it's snapshotting
+        // for state restoration; setting `requestedSelection` synchronously there
+        // drives a NavigationSplitView selection change mid-transaction, and UIKit
+        // throws an NSException during the snapshot (the app "opens then quits").
+        // Hopping a runloop turn lets the navigation update happen in a clean
+        // context — exactly like an in-app tap.
+        Task { [weak self] in
+            guard let self else { return }
+            // Seed the detail from the push's embedded snapshot so the session
+            // screen renders instantly on tap, before the reconnect + refresh.
+            // `resolveDeepLink`'s refresh swaps in the authoritative live copy.
+            if let snapshot, snapshot.sessionId == sid, self.session(sid) == nil {
+                self.deepLinkSession = snapshot
+            }
+            self.requestedSelection = sid
+            await self.resolveDeepLink(sid)
+        }
+    }
+
+    private func resolveDeepLink(_ sid: String) async {
+        await refresh()                       // reconnect + load the live list
+        if session(sid) != nil { return }     // live — detail can bind immediately
+        guard let client else { return }
+        // Closed session: synthesize a display copy from the resumable list so the
+        // detail view + transcript open; `session(_:)` returns it as a fallback.
+        if let list = try? await client.resumable(limit: 80),
+           let r = list.first(where: { $0.sessionId == sid }) {
+            deepLinkSession = Session(
+                sessionId: r.sessionId,
+                title: r.title ?? "Session",
+                agent: r.agent ?? "claude",
+                project: r.project,
+                cwd: r.cwd,
+                lastActivityAt: r.mtime)
+        }
+    }
 
     var isConnected: Bool { reachability == .ok }
 
@@ -119,6 +173,11 @@ import LFGCore
                 focusedSnapshot = live
             } else if focusedID == nil {
                 focusedSnapshot = nil
+            }
+            // Drop the deep-link fallback once its session is live in the list
+            // (e.g. a send revived it) so the authoritative copy takes over.
+            if let dl = deepLinkSession, fresh.contains(where: { $0.sessionId == dl.sessionId }) {
+                deepLinkSession = nil
             }
             reachability = .ok
             lastError = nil
@@ -284,9 +343,14 @@ import LFGCore
     /// copy. Not added to `sessions`, so it never shows as a stale list card.
     private var focusedSnapshot: Session?
 
+    /// See `openFromNotification`: a closed session a notification deep-linked to,
+    /// resolved from the resumable list so its detail view can still open.
+    private var deepLinkSession: Session?
+
     func session(_ id: String) -> Session? {
         if let s = sessions.first(where: { $0.sessionId == id }) { return s }
         if id == focusedID, let snap = focusedSnapshot, snap.sessionId == id { return snap }
+        if let dl = deepLinkSession, dl.sessionId == id { return dl }
         return nil
     }
 
@@ -437,6 +501,7 @@ import LFGCore
                 let resp = try await client.sendMessage(sid, text: pending.matchText)
                 applyResume(from: sid, resp)
                 let eff = (resp.resumed == true ? resp.sessionId : nil) ?? sid
+                mutatePending(eff, pending.id) { $0.confirmed = true }
                 await refresh(); reconcilePending(eff)
             } catch { mutatePending(sid, pending.id) { $0.failed = true } }
         }
@@ -467,6 +532,32 @@ import LFGCore
         } catch { lastError = "Send failed: \(error.localizedDescription)" }
     }
 
+    // Sends in flight, keyed so the store retains them. A send must outlive the
+    // view that started it: leaving the session view, popping the nav stack, or
+    // backgrounding the app must NOT drop the message mid-delivery.
+    private var inflightSends: [UUID: Task<Void, Never>] = [:]
+
+    /// Fire a send that is owned by the store (app-lifetime), not the calling
+    /// view. The work is retained in `inflightSends` so leaving the session view
+    /// or popping the nav stack can't cancel it. Crucially, the background-task
+    /// assertion is taken SYNCHRONOUSLY here — before this returns and before the
+    /// app can be suspended — so pressing Home the instant after tapping send
+    /// still grants the in-flight POST a grace period to finish. (Taking it
+    /// inside the async Task would race the suspension and lose the message.)
+    func dispatchSend(_ id: String, text: String, attachments: [ComposerAttachment]) {
+        let app = UIApplication.shared
+        var bg: UIBackgroundTaskIdentifier = .invalid
+        bg = app.beginBackgroundTask(withName: "lfg.send") {
+            if bg != .invalid { app.endBackgroundTask(bg); bg = .invalid }
+        }
+        let key = UUID()
+        inflightSends[key] = Task { [weak self] in
+            await self?.sendWithAttachments(id, text: text, attachments: attachments)
+            self?.inflightSends[key] = nil
+            if bg != .invalid { app.endBackgroundTask(bg); bg = .invalid }
+        }
+    }
+
     /// Upload any image attachments, then send the text with their paths appended
     /// (Claude Code reads local image paths as image input). The message shows as
     /// an optimistic user bubble immediately — before uploads or the network
@@ -483,6 +574,15 @@ import LFGCore
         //    would just flicker. A busy session genuinely queues the message
         //    behind the running turn, so there we keep the pending bar.
         let idle = prompts[id] == nil && busy[id] != true
+        // A wake-up send: the target isn't in the live list — it's a closed
+        // session whose detail we're carrying forward, either because its pane
+        // was reaped while focused (`focusedSnapshot`) or it was opened straight
+        // from a tapped push notification (`deepLinkSession`). Either way this
+        // message has to resume the conversation server-side first (a real
+        // round-trip), so show it as a bubble (showSent) but unconfirmed/muted
+        // until the send returns, rather than instantly-blue as if received.
+        let isWakeUp = !sessions.contains { $0.sessionId == id }
+            && (focusedSnapshot?.sessionId == id || deepLinkSession?.sessionId == id)
         let pid = UUID().uuidString
         let nowMs = Date().timeIntervalSince1970 * 1000
         pendingSends[id, default: []].append(
@@ -490,7 +590,8 @@ import LFGCore
                         displayText: typed.isEmpty ? "📎 Attachment" : typed,
                         matchText: typed,
                         ts: nowMs,
-                        showSent: idle))
+                        showSent: idle || isWakeUp,
+                        confirmed: !isWakeUp))
 
         // 2) Upload attachments, then assemble the full text the agent will record.
         var paths: [String] = []
@@ -507,6 +608,10 @@ import LFGCore
             let resp = try await client.sendMessage(id, text: full)
             applyResume(from: id, resp)
             let eff = (resp.resumed == true ? resp.sessionId : nil) ?? id
+            // The backend accepted it (and, for a wake-up, finished resuming) —
+            // flip the muted bubble to its confirmed accent color before the
+            // refresh, then let reconcile hand it off to the real user turn.
+            mutatePending(eff, pid) { $0.confirmed = true }
             await refresh()
             reconcilePending(eff)
         } catch {

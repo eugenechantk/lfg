@@ -9,6 +9,7 @@ struct RootView: View {
     @State private var showSettings = false
     @State private var showNewSession = false
     @State private var columnVisibility = NavigationSplitViewVisibility.automatic
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -19,9 +20,18 @@ struct RootView: View {
                                     showNewSession: $showNewSession)
                         .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 460)
                 } detail: {
-                    if let selection, let session = store.session(selection) {
-                        SessionDetailView(session: session)
-                            .id(selection)
+                    if let selection {
+                        if let session = store.session(selection) {
+                            SessionDetailView(session: session)
+                                .id(selection)
+                        } else {
+                            // Selected (often via a notification tap) but not
+                            // resolved yet — the live list is still loading or the
+                            // session is being pulled from the resumable list.
+                            // Show progress instead of the "nothing selected" empty
+                            // state, which read as "session lost".
+                            DetailLoading()
+                        }
                     } else {
                         DetailPlaceholder()
                     }
@@ -43,10 +53,31 @@ struct RootView: View {
             // Register for push once we have a host to register against.
             await PushManager.shared.requestAuthorizationIfNeeded()
         }
+        .task {
+            // Apply a selection requested *before* this view's observers were
+            // watching — the cold-launch-from-notification case, where the tap is
+            // routed during app startup. This runs AFTER the first render, so it
+            // never mutates `selection` (which drives the NavigationSplitView)
+            // during a view update — doing that is undefined behavior and renders
+            // a blank/black screen. The plain onChange below covers taps that
+            // arrive while the app is already running.
+            if let pending = store.requestedSelection {
+                selection = pending
+                store.clearRequestedSelection()
+            }
+        }
         .onChange(of: store.requestedSelection) { _, requested in
             guard let requested else { return }
             selection = requested
             store.clearRequestedSelection()
+        }
+        // Reconnect the instant the app returns to the foreground (a notification
+        // tap, or the app switcher) — iOS can't hold the connection while
+        // suspended, so refresh immediately rather than waiting for the next poll.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, settings.hasConfiguredHost {
+                Task { await store.refresh() }
+            }
         }
     }
 }
@@ -58,6 +89,20 @@ struct DetailPlaceholder: View {
             systemImage: "sparkles",
             description: Text("Pick a session from the list, or start a new one.")
         )
+    }
+}
+
+/// Shown while a deep-linked (e.g. notification-tapped) session is still being
+/// resolved — the live list is loading or the session is being pulled from the
+/// resumable list. Avoids the "No session selected" flash that read as a lost
+/// session.
+struct DetailLoading: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text("Opening session…").font(.subheadline).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

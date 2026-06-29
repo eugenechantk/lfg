@@ -276,6 +276,10 @@ struct OptimisticUserBubble: View {
     let pending: SessionStore.PendingSend
     @Environment(SessionStore.self) private var store
 
+    // Awaiting the backend: a wake-up send to a reaped session that's still
+    // resuming server-side. Render muted/gray until it's confirmed (then blue).
+    private var awaitingResume: Bool { !pending.confirmed && !pending.failed }
+
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
             HStack {
@@ -283,14 +287,22 @@ struct OptimisticUserBubble: View {
                 Text(pending.displayText)
                     .textSelection(.enabled)
                     .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
-                    .foregroundStyle(.white)
+                    .background(awaitingResume ? Color(.secondarySystemFill) : Color.accentColor,
+                                in: RoundedRectangle(cornerRadius: 14))
+                    .foregroundStyle(awaitingResume ? Color.primary : Color.white)
                     .opacity(pending.failed ? 0.5 : 1)
             }
+            .animation(.easeInOut(duration: 0.25), value: pending.confirmed)
             // The happy path shows no spinner — the bubble reads as sent the
-            // instant the user hits send. Only a genuine send failure surfaces
-            // an affordance, since this bubble bypasses the pending bar's Retry.
-            if pending.failed {
+            // instant the user hits send. A wake-up send shows a quiet "Waking…"
+            // note while the session resumes; a genuine failure surfaces Retry
+            // (this bubble bypasses the pending bar's own Retry).
+            if awaitingResume {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.mini)
+                    Text("Waking session…").font(.caption2).foregroundStyle(.secondary)
+                }
+            } else if pending.failed {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red)
                     Text("Not sent").font(.caption2).foregroundStyle(.secondary)
