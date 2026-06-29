@@ -41,6 +41,7 @@ import {
   pendingToolPrompt,
   listResumable,
   cwdForTranscript,
+  modelAliasForTranscript,
   type PendingPrompt,
 } from "../sessions.ts";
 import {
@@ -88,6 +89,55 @@ const CLAUDE_MODELS = ["fable", "opus", "sonnet", "haiku"];
 // Models the "aisdk" session kind accepts (the provider maps these aliases).
 const AISDK_MODELS = ["opus", "sonnet", "haiku"];
 import { enqueueMessage, listQueue, retryMessage, clearResolved, reconcileQueued, getMessage } from "../sendq.ts";
+
+// Relaunch a closed claude session via `claude --resume <id>` in a fresh managed
+// tmux pane, preserving the full conversation. Shared by the explicit
+// /api/sessions/resume endpoint and the auto-resume-on-send path (a send to a
+// session whose pane was reaped while idle — box reboot, host restart, manual
+// close). Claude continues into a NEW sessionId/transcript, which we resolve
+// from the pidfile (like /new) and hand back so the client can re-point at it.
+type ResumeOutcome =
+  | { ok: true; tmuxName: string; cwd: string; newId: string | null; alreadyLive?: boolean }
+  | { ok: false; status: number; error: string };
+
+async function resumeClosedSession(opts: {
+  sessionId: string;
+  model?: string;
+  user?: string;
+  prompt?: string;
+}): Promise<ResumeOutcome> {
+  const sessionId = opts.sessionId.trim();
+  if (!sessionId) return { ok: false, status: 400, error: "sessionId required" };
+  if (opts.model && !CLAUDE_MODELS.includes(opts.model))
+    return { ok: false, status: 400, error: `unknown model "${opts.model}"` };
+  // Already running? Don't double-spawn — point the caller at the live one.
+  const live = (await listSessions()).find((s) => s.sessionId === sessionId);
+  if (live)
+    return { ok: true, tmuxName: live.tmuxName ?? "", cwd: live.cwd ?? "", newId: sessionId, alreadyLive: true };
+  const transcript = await resolveTranscript(sessionId);
+  if (!transcript) return { ok: false, status: 404, error: "no transcript found for that session" };
+  // claude-only: resume drives the claude CLI, and codex/aisdk rollouts don't
+  // live under ~/.claude/projects. Reject those with a clear message.
+  if (!transcript.includes("/.claude/projects/"))
+    return { ok: false, status: 400, error: "only claude sessions can be resumed" };
+  const cwd = (await cwdForTranscript(transcript)) ?? SELF_REPO;
+  // Relaunch on the model the conversation was last using (read from the
+  // transcript) so a resume doesn't silently bump the session to opus.
+  const model = opts.model || (await modelAliasForTranscript(transcript)) || undefined;
+  const tmuxName = `lfg-${randomBytes(3).toString("hex")}`;
+  const r = spawnManagedSession({ name: tmuxName, cwd, model, resume: sessionId, prompt: opts.prompt });
+  if (!r.ok) return { ok: false, status: 502, error: r.error || "failed to resume session" };
+  addManaged({ tmuxName, cwd, createdAt: Date.now(), agent: "claude" });
+  if (opts.user) assignUser(tmuxName, opts.user);
+  // Claude resumes into a fresh sessionId/transcript — wait for the pidfile.
+  let newId: string | null = null;
+  for (let i = 0; i < 12 && !newId; i++) {
+    await new Promise((res) => setTimeout(res, 500));
+    const pid = panePidForSession(tmuxName);
+    if (pid) newId = sessionIdForPid(pid);
+  }
+  return { ok: true, tmuxName, cwd, newId };
+}
 
 const PORT = Number(process.env.LFG_PORT ?? 8766);
 // Bind to loopback by default — the UI is meant to be reached over Tailscale
@@ -1161,32 +1211,11 @@ export async function cmdServe() {
         const sessionId = body?.sessionId?.trim();
         if (!sessionId) return err(400, "sessionId required");
         const model = body?.model?.trim() || undefined;
-        if (model && !CLAUDE_MODELS.includes(model))
-          return err(400, `unknown model "${model}" (expected one of ${CLAUDE_MODELS.join(", ")})`);
-        // Already running? Don't double-spawn — point the client at the live one.
-        const live = (await listSessions()).find((s) => s.sessionId === sessionId);
-        if (live)
-          return json({ ok: true, tmuxName: live.tmuxName, cwd: live.cwd, sessionId, alreadyLive: true, agent: "claude" });
-        const transcript = await resolveTranscript(sessionId);
-        if (!transcript) return err(404, "no transcript found for that session");
-        // claude-only: resume drives the claude CLI, and codex rollouts (under
-        // ~/.codex) carry no claude `cwd` line. Reject those with a clear message.
-        if (!transcript.includes("/.claude/projects/"))
-          return err(400, "only claude sessions can be resumed");
-        const cwd = (await cwdForTranscript(transcript)) ?? SELF_REPO;
-        const tmuxName = `lfg-${randomBytes(3).toString("hex")}`;
-        const r = spawnManagedSession({ name: tmuxName, cwd, model, resume: sessionId, prompt: body?.prompt });
-        if (!r.ok) return err(502, r.error || "failed to resume session");
-        addManaged({ tmuxName, cwd, createdAt: Date.now(), agent: "claude" });
-        if (body?.user) assignUser(tmuxName, body.user);
-        // Claude resumes into a fresh sessionId/transcript — wait for the pidfile.
-        let newId: string | null = null;
-        for (let i = 0; i < 12 && !newId; i++) {
-          await new Promise((res) => setTimeout(res, 500));
-          const pid = panePidForSession(tmuxName);
-          if (pid) newId = sessionIdForPid(pid);
-        }
-        return json({ ok: true, tmuxName, cwd, sessionId: newId, resumedFrom: sessionId, agent: "claude" });
+        const out = await resumeClosedSession({ sessionId, model, user: body?.user, prompt: body?.prompt });
+        if (!out.ok) return err(out.status, out.error);
+        if (out.alreadyLive)
+          return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId, alreadyLive: true, agent: "claude" });
+        return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId: out.newId, resumedFrom: sessionId, agent: "claude" });
       }
 
       if (path === "/api/sessions/new" && req.method === "POST") {
@@ -1388,7 +1417,31 @@ export async function cmdServe() {
           const text = body?.text?.trim();
           if (!text) return err(400, "expected { text }");
           const sess = (await listSessions()).find((s) => s.sessionId === m[1]);
-          if (!sess) return err(404, "session not found");
+          // The session's pane is gone — it was reaped while idle (box reboot,
+          // host restart, the user closing it) but its transcript survives on
+          // disk. Rather than fail the send (the old "session not found" 404
+          // that stranded every message to a since-closed session), resume the
+          // conversation with this message as the kickoff prompt. Claude
+          // continues into a NEW sessionId, which we hand back so the client can
+          // re-point at the revived session. claude-only: resumeClosedSession
+          // rejects non-claude transcripts, so codex/aisdk closed sessions still
+          // 404 here (they have their own lifecycles).
+          if (!sess) {
+            const transcript = await resolveTranscript(m[1]);
+            if (!transcript || !transcript.includes("/.claude/projects/"))
+              return err(404, "session not found");
+            const out = await resumeClosedSession({ sessionId: m[1], prompt: text });
+            if (!out.ok) return err(out.status, out.error);
+            return json({
+              ok: true,
+              resumed: true,
+              sessionId: out.newId,
+              resumedFrom: m[1],
+              tmuxName: out.tmuxName,
+              cwd: out.cwd,
+              msg: { id: randomBytes(8).toString("hex"), text, status: "delivered" },
+            });
+          }
           // aisdk / codex-aisdk sessions have no pane — push the turn through the
           // harness's command file instead of the tmux send-keys queue. The new
           // user turn surfaces in the transcript (and thus the live view) once

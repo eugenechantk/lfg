@@ -111,6 +111,15 @@ import LFGCore
             sessions = fresh + optimisticSessions.filter { o in
                 !fresh.contains { $0.sessionId == o.sessionId }
             }
+            // Snapshot the focused session while it's live so its detail view
+            // survives the session later dropping out of the live list (see
+            // `focusedSnapshot` / `session(_:)`). Clear it once the carried-
+            // forward session comes back live or focus moves elsewhere.
+            if let f = focusedID, let live = fresh.first(where: { $0.sessionId == f }) {
+                focusedSnapshot = live
+            } else if focusedID == nil {
+                focusedSnapshot = nil
+            }
             reachability = .ok
             lastError = nil
             ensureStream()
@@ -266,7 +275,20 @@ import LFGCore
         }
     }
 
-    func session(_ id: String) -> Session? { sessions.first { $0.sessionId == id } }
+    /// Last live copy of the focused session, retained so its detail view +
+    /// composer survive the session dropping out of the live list (its pane was
+    /// reaped while idle — box reboot, host restart). Without this the detail
+    /// snaps to "No session selected" the instant the session closes and the
+    /// user can't send. A send to this carried-forward session auto-resumes the
+    /// conversation server-side and the next refresh replaces it with the live
+    /// copy. Not added to `sessions`, so it never shows as a stale list card.
+    private var focusedSnapshot: Session?
+
+    func session(_ id: String) -> Session? {
+        if let s = sessions.first(where: { $0.sessionId == id }) { return s }
+        if id == focusedID, let snap = focusedSnapshot, snap.sessionId == id { return snap }
+        return nil
+    }
 
     // MARK: Steering actions (optimistic where useful, then refresh)
 
@@ -411,8 +433,12 @@ import LFGCore
         if let qid = pending.serverQueueID {
             await retry(sid, qid)
         } else if let client {
-            do { try await client.sendMessage(sid, text: pending.matchText); await refresh(); reconcilePending(sid) }
-            catch { mutatePending(sid, pending.id) { $0.failed = true } }
+            do {
+                let resp = try await client.sendMessage(sid, text: pending.matchText)
+                applyResume(from: sid, resp)
+                let eff = (resp.resumed == true ? resp.sessionId : nil) ?? sid
+                await refresh(); reconcilePending(eff)
+            } catch { mutatePending(sid, pending.id) { $0.failed = true } }
         }
     }
 
@@ -423,7 +449,23 @@ import LFGCore
         catch { lastError = "\(label) failed: \(error.localizedDescription)"; return false }
     }
 
-    func send(_ id: String, _ text: String) async { await run("Send") { try await $0.sendMessage(id, text: text) } }
+    /// If a send auto-resumed a session whose pane had been reaped (the server
+    /// revived it and may have handed back a new id), re-point all per-session
+    /// keyed state at the new id. No-op in the common case — the resumed id is
+    /// almost always identical, and a normal live send sets `resumed` nil.
+    private func applyResume(from old: String, _ resp: SendResponse) {
+        guard resp.resumed == true, let new = resp.sessionId, !new.isEmpty, new != old else { return }
+        remap(from: old, to: new)
+    }
+
+    func send(_ id: String, _ text: String) async {
+        guard let client else { return }
+        do {
+            let resp = try await client.sendMessage(id, text: text)
+            applyResume(from: id, resp)
+            await refresh()
+        } catch { lastError = "Send failed: \(error.localizedDescription)" }
+    }
 
     /// Upload any image attachments, then send the text with their paths appended
     /// (Claude Code reads local image paths as image input). The message shows as
@@ -462,9 +504,11 @@ import LFGCore
         // 3) Send. On failure mark the bubble failed (Retry); on success let the
         //    queue/transcript reconcile it.
         do {
-            try await client.sendMessage(id, text: full)
+            let resp = try await client.sendMessage(id, text: full)
+            applyResume(from: id, resp)
+            let eff = (resp.resumed == true ? resp.sessionId : nil) ?? id
             await refresh()
-            reconcilePending(id)
+            reconcilePending(eff)
         } catch {
             lastError = "Send failed: \(error.localizedDescription)"
             mutatePending(id, pid) { $0.failed = true }

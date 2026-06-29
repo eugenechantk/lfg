@@ -811,6 +811,14 @@ async function lastAssistantModel(path: string): Promise<string | null> {
   return null;
 }
 
+// The short model alias (opus/sonnet/…) a now-closed session last ran on, read
+// straight from its transcript. Used when auto-resuming a session on a send so
+// it relaunches on the same model the conversation was using rather than the
+// opus default. null when the transcript has no assistant turn yet.
+export async function modelAliasForTranscript(path: string): Promise<string | null> {
+  return modelAlias(await lastAssistantModel(path));
+}
+
 async function previewLast(path: string): Promise<SessionMsg | null> {
   const file = Bun.file(path);
   const size = file.size;

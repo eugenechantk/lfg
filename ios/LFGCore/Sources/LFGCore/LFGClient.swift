@@ -203,8 +203,13 @@ public struct LFGClient: Sendable {
 
     // MARK: Steering
 
-    public func sendMessage(_ id: String, text: String) async throws {
-        _ = try await send("POST", "api/sessions/\(id)/send", json: ["text": text])
+    @discardableResult
+    public func sendMessage(_ id: String, text: String) async throws -> SendResponse {
+        let data = try await send("POST", "api/sessions/\(id)/send", json: ["text": text])
+        // Best-effort decode: a plain `{ ok, msg }` still decodes (resumed stays
+        // nil). Tolerate a body that doesn't fit (return an empty response) so a
+        // successful send never throws just because the shape drifted.
+        return (try? JSONDecoder().decode(SendResponse.self, from: data)) ?? SendResponse()
     }
 
     public func answer(_ id: String, index: Int) async throws {

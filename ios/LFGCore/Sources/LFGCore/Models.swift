@@ -276,6 +276,17 @@ public struct NewSessionResponse: Codable, Sendable {
     public var alreadyLive: Bool?
 }
 
+/// Response to POST /api/sessions/{id}/send. Normally just `{ ok, msg }`, but if
+/// the target session's pane had been reaped while idle the server resumes the
+/// conversation and returns `resumed: true` plus the (possibly new) `sessionId`
+/// the revived session now lives under — so the client can re-point at it.
+public struct SendResponse: Codable, Sendable {
+    public var ok: Bool?
+    public var resumed: Bool?
+    public var sessionId: String?
+    public var resumedFrom: String?
+}
+
 // MARK: - Live SSE event
 
 public enum LiveEvent: Sendable, Equatable {
