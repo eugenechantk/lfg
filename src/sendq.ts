@@ -156,12 +156,6 @@ const norm = (s: string) => s.replace(/\s+/g, " ").trim();
 // would never match.
 const NEEDLE_LEN = 48;
 
-function boxHasNeedle(target: string, needle: string): boolean | null {
-  const box = inputBoxText(target);
-  if (box == null) return null; // composer not visible (modal up, or unknown)
-  return norm(box).includes(needle);
-}
-
 // Whether our pending draft is currently sitting in the composer. For a typed
 // (single-line) send that's the needle verbatim; for a pasted (multi-line) send
 // Claude collapses the draft to a "[Pasted text +N lines]" chip, so the needle

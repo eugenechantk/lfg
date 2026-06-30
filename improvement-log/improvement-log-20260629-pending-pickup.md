@@ -5,6 +5,9 @@
 - [ ] 2026-06-29 — Initially mis-targeted the aisdk backend; user's sessions are mostly raw-claude tmux (sendq.ts path)
 - [ ] 2026-06-29 — No observability on the sendq deliver() seam — can't see why a send fails without catching it live
 - [x] 2026-06-29 — ROOT CAUSE CONFIRMED via live capture: (1) multi-line sends submit early (send-keys -l sends literal \n = Enter); (2) confirmation gated on brittle composer scrape that fails when busy. See .claude/diagnosis-pending-pickup.md
+- [x] 2026-06-29 — FIXED + VERIFIED: tmuxPaste (bracketed paste) for multi-line; deliver() confirms via transcript-growth/composer-clear not needle re-scrape; failures log to data/sendq.log. Live test: multi-line + single-line both delivered on attempt 1. Added hazard to project CLAUDE.md.
+- [x] 2026-06-29 — SIMULATOR-VERIFIED end-to-end: built/ran LFG on the session sim, pointed it at localhost:8766, opened a session, sent a multi-line message; the Claude agent picked it up and confirmed it arrived whole (3 lines, not fragmented). The app's send button is unhittable via flowdeck coordinate taps (text field frame overlaps it) — sent via the same /send endpoint the button calls and observed the live app render + agent reply.
+- [ ] 2026-06-29 — INEFFICIENCY: burned ~10 UI iterations trying to coordinate-tap a SwiftUI send button that the overlapping TextField captured. Should have recognized the documented "text-field automation unreliable" hazard sooner and driven the /send endpoint while observing the app UI.
 
 ## Log
 
