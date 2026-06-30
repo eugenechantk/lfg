@@ -571,14 +571,24 @@ export function questionSelectorOpen(pane: string): boolean {
 
 // Claude is mid-turn when the TUI pins its live spinner meter just above the
 // composer, e.g. "✢ Cerebrating… (2m 34s · ↓ 9.7k tokens)". That meter is
-// present for the whole turn (the verb is random, but the "(<elapsed> · …
-// tokens)" shape is stable), and a finished turn collapses it to a past-tense
-// summary with no parens ("✻ Baked for 18m 45s"). We previously relied solely
-// on the "esc to interrupt" footer hint, but that footer rotates through other
-// hints mid-turn ("← for agents", "PR #96", tips…), so the hint blinks in and
-// out and the busy state flickered. Match the meter as the primary signal and
-// keep the hint as a fallback (covers the first frame before tokens render).
-const BUSY_METER = /\(\d+m?\s?\d*s\b[^)]*\btokens?\b/i;
+// present for the whole turn (the verb is random) and a finished turn collapses
+// it to a past-tense summary with no parens ("✻ Baked for 18m 45s").
+//
+// The STABLE part of the meter is the live "(<elapsed> · …" clock — an open
+// paren, an elapsed time ("4m 37s", "45s", "0s"), then a "·" separator. The
+// detail after the "·" varies by phase:
+//   • normal work:      "(4m 37s · ↓ 14.4k tokens)"
+//   • extended thinking: "(5m 56s · still thinking with medium effort)"  ← no "tokens"!
+// We previously matched on the literal word "tokens", so during thinking phases
+// the meter didn't match and isBusy fell back to the "esc to interrupt" footer
+// hint alone. But that footer ROTATES through other hints mid-turn ("← for
+// agents", "PR #96", tips…), so when a thinking phase coincided with the hint
+// rotating away, isBusy read FALSE while the agent was genuinely running — which
+// fired a spurious "Finished" push every dedupe window. Matching the elapsed
+// clock + "·" (instead of "tokens") keeps busy true through thinking phases.
+// The "esc to interrupt" hint stays as a fallback for the first frame, before
+// the clock renders.
+const BUSY_METER = /\((?:\d+h\s+)?(?:\d+m\s+)?\d+s\b[^)]*·/;
 export function isBusy(pane: string): boolean {
   return BUSY_METER.test(pane) || /esc to interrupt/i.test(pane);
 }
