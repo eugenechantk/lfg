@@ -954,17 +954,34 @@ async function previewLast(path: string): Promise<SessionMsg | null> {
 // for a short window, so overlapping requests share one scan.
 const LIST_TTL_MS = 600;
 let listCache: { at: number; promise: Promise<Session[]> } | null = null;
+// Last successful scan. The enrichment fans out dozens of synchronous
+// `Bun.spawnSync` calls (ps/lsof/tmux), and under a spawn storm — many SSE
+// pollers + a list request landing on the single event loop at once — spawnSync
+// can throw `RangeError: Maximum call stack size exceeded`. At the stack limit
+// that error escapes the inner try/catch in spawnText(), so the whole scan
+// rejects. Serving the last good result (rather than propagating) keeps the
+// list view from flashing a 500 during a transient storm; the next poll, a few
+// hundred ms later, almost always succeeds.
+let lastGood: Session[] | null = null;
 export function listSessions(): Promise<Session[]> {
   const now = Date.now();
   if (listCache && now - listCache.at < LIST_TTL_MS) return listCache.promise;
-  const promise = listSessionsUncached();
-  listCache = { at: now, promise };
-  // A rejected scan must not be served stale for the whole TTL — drop it so the
-  // next caller retries.
-  promise.catch(() => {
-    if (listCache?.promise === promise) listCache = null;
-  });
-  return promise;
+  // A rejected scan must not be served stale for the whole TTL — drop the cache
+  // so the next caller retries — but don't surface the throw to the client if we
+  // have a recent good result to fall back to. The cache holds this guarded
+  // promise so overlapping callers within the TTL share the same fallback.
+  const guarded: Promise<Session[]> = listSessionsUncached()
+    .then((sessions) => {
+      lastGood = sessions;
+      return sessions;
+    })
+    .catch((e) => {
+      if (listCache?.promise === guarded) listCache = null;
+      if (lastGood) return lastGood;
+      throw e;
+    });
+  listCache = { at: now, promise: guarded };
+  return guarded;
 }
 
 async function listSessionsUncached(): Promise<Session[]> {

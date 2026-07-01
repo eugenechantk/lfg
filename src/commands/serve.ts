@@ -535,6 +535,17 @@ export async function cmdServe() {
         bridge?.close();
       },
     },
+    // Backstop for any uncaught throw in fetch(). Without this Bun returns a
+    // bare, unstructured 500 (the flakey list-view 500s traced to a spawn-storm
+    // RangeError escaping listSessions()). Return structured JSON instead so the
+    // client sees a real error shape, and log it for diagnosis.
+    error(e: Error) {
+      console.error(`[serve] unhandled fetch error: ${e?.stack ?? e}`);
+      return new Response(JSON.stringify({ error: "internal error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
     async fetch(req, server) {
       const url = new URL(req.url);
       const path = url.pathname;

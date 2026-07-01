@@ -170,10 +170,13 @@ export function startTimeMsOf(pid: number): number | null {
 //     compare both interpretations and accept if either lands within tolerance.
 export function procStartMatches(pid: number, procStart: string): boolean {
   if (IS_DARWIN) {
-    const out = spawnText(["ps", "-o", "lstart=", "-p", String(pid)]);
-    const live = out?.trim();
-    if (!live) return true; // can't read it — don't reject
-    const liveMs = Date.parse(live);
+    // Reuse the cached start time instead of spawning a fresh `ps -o lstart=`
+    // per pid on every list pass — startTimeMsOf() already memoizes exactly this
+    // (Date.parse of the pid's lstart). readPidSession() calls this for every
+    // claude proc each scan, so the redundant spawn was a top contributor to the
+    // synchronous spawn storm that overflows Bun.spawnSync's stack.
+    const liveMs = startTimeMsOf(pid);
+    if (liveMs == null) return true; // can't read it — don't reject
     const storedMs = Date.parse(procStart);
     if (!Number.isFinite(liveMs) || !Number.isFinite(storedMs)) return true;
     // Same wall-clock instant: live(local) === stored(UTC). Date.parse treats
