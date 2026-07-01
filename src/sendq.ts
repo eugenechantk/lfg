@@ -15,6 +15,7 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   capturePane,
+  isBusy,
   parsePrompt,
   questionSelectorOpen,
   inputBoxText,
@@ -32,15 +33,24 @@ import { PATHS } from "./config.ts";
 export type QueuedMsg = {
   id: string;
   text: string;
-  // pending: waiting behind earlier sends. sending: actively being typed +
-  // confirmed. delivered: accepted by Claude (left the input box). queued:
-  // accepted while Claude was mid-turn — it's in Claude's own queue, not yet in
-  // the transcript. failed: never left the box after retries.
+  // pending: held in lfg's own queue — either behind an earlier send, or because
+  // the agent is busy (hold-in-lfg: we do NOT push into Claude's native queue
+  // while it's mid-turn; we deliver when it goes idle). sending: actively being
+  // typed + confirmed right now. delivered: surfaced as a real user turn.
+  // queued: legacy/edge — the agent flipped busy mid-delivery so the draft landed
+  // in Claude's own queue; reconcileQueued promotes or re-drives it. failed:
+  // delivery genuinely failed after retries.
   status: "pending" | "sending" | "delivered" | "queued" | "failed";
   error?: string;
   attempts: number;
   createdAt: number;
   updatedAt: number;
+  // How many times we've re-driven this message because it landed in Claude's
+  // own queue (status "queued") but never surfaced and the agent then went idle
+  // (Claude dropped it, or our Enter stranded it as an unsubmitted composer
+  // draft). Capped so a message that genuinely can't land eventually fails
+  // instead of looping. Optional/back-compat: absent === 0.
+  redeliveries?: number;
 };
 
 type SessionQueue = { msgs: QueuedMsg[]; running: boolean };
@@ -122,9 +132,26 @@ function pruneTerminal(s: SessionQueue) {
   s.msgs = s.msgs.filter((m) => !drop.has(m));
 }
 
+async function sessionTarget(sessionId: string): Promise<string | null> {
+  return (await listSessions()).find((s) => s.sessionId === sessionId)?.tmuxTarget ?? null;
+}
+
+// hold-in-lfg gate: hold a pending message (don't type it yet) ONLY when the
+// agent is confirmably busy. If the pane is gone or unreadable we do NOT hold —
+// we let deliver() run so it either delivers or fails fast (a held-forever
+// message would be worse than a clean failure). Idle ⇒ deliver now.
+async function agentBusy(sessionId: string): Promise<boolean> {
+  const target = await sessionTarget(sessionId);
+  if (!target) return false;
+  const pane = capturePane(target);
+  if (pane == null) return false;
+  return isBusy(pane);
+}
+
 function kick(sessionId: string) {
   const s = q(sessionId);
   if (s.running) return;
+  if (!s.msgs.some((m) => m.status === "pending")) return;
   s.running = true;
   (async () => {
     try {
@@ -132,6 +159,11 @@ function kick(sessionId: string) {
       while (true) {
         const next = s.msgs.find((m) => m.status === "pending");
         if (!next) break;
+        // hold-in-lfg: while the agent is mid-turn, leave the message pending in
+        // our queue rather than pushing it into Claude's native queue. The pump
+        // re-kicks once the agent goes idle. This keeps the message fully under
+        // lfg's control so it can be removed/edited/sent-now from the client.
+        if (await agentBusy(sessionId)) break;
         next.status = "sending";
         next.updatedAt = Date.now();
         try {
@@ -148,6 +180,59 @@ function kick(sessionId: string) {
   })();
 }
 
+// Client-independent background pump: the held-in-lfg queue only drains when the
+// agent is idle, and a message may be queued while no client SSE stream is open
+// (app closed). So a server-owned ticker drives delivery + reconciliation for
+// every session with outstanding work, regardless of who's watching. Started
+// once from serve.ts at boot.
+let pumpTimer: ReturnType<typeof setInterval> | null = null;
+export function startQueuePump(intervalMs = 1000): void {
+  if (pumpTimer) return;
+  pumpTimer = setInterval(() => {
+    for (const [sid, s] of queues) {
+      if (s.running) continue;
+      if (s.msgs.some((m) => m.status === "pending")) kick(sid);
+      else if (s.msgs.some((m) => m.status === "queued")) void reconcileQueued(sid);
+    }
+  }, intervalMs);
+}
+export function stopQueuePump(): void {
+  if (pumpTimer) clearInterval(pumpTimer);
+  pumpTimer = null;
+}
+
+// Remove a message that hasn't been delivered yet. Because we hold messages in
+// lfg's own queue (not Claude's) until the agent is idle, a pending message can
+// be yanked cleanly — it was never in Claude. A message that's actively being
+// typed ("sending") can't be safely pulled mid-keystroke, and a terminal one is
+// nothing to cancel. Returns true if it was removed.
+export function removeMessage(sessionId: string, id: string): boolean {
+  const s = queues.get(sessionId);
+  if (!s) return false;
+  const m = s.msgs.find((x) => x.id === id);
+  if (!m || m.status === "sending" || m.status === "delivered") return false;
+  s.msgs = s.msgs.filter((x) => x.id !== id);
+  return true;
+}
+
+// "Send now + interrupt": stop the current turn and run this message next. Move
+// it to the head of the queue, interrupt the agent (so it idles), and kick — the
+// pump/kick delivers it the moment the Escape lands. A message that already
+// reached Claude's own queue (status "queued") is run by the interrupt directly.
+export async function sendNow(sessionId: string, id: string): Promise<boolean> {
+  const s = queues.get(sessionId);
+  if (!s) return false;
+  const m = s.msgs.find((x) => x.id === id);
+  if (!m || (m.status !== "pending" && m.status !== "queued")) return false;
+  // promote to the front of the pending order
+  s.msgs = s.msgs.filter((x) => x.id !== id);
+  s.msgs.unshift(m);
+  const target = await sessionTarget(sessionId);
+  if (target) tmuxInterrupt(target); // stop the current turn so the agent idles
+  kick(sessionId);
+  return true;
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const norm = (s: string) => s.replace(/\s+/g, " ").trim();
 
@@ -155,6 +240,21 @@ const norm = (s: string) => s.replace(/\s+/g, " ").trim();
 // wraps long input across lines, so a full-string compare against the capture
 // would never match.
 const NEEDLE_LEN = 48;
+
+// How long a message may sit "queued" (in Claude's own queue) while the session
+// is idle before we re-drive it. A queued message normally surfaces as a
+// transcript turn the instant Claude drains its queue, so if the session is idle
+// and the message still hasn't surfaced after this grace window, Claude did NOT
+// auto-run it — it was dropped (Escape/interrupt, the user edited it away, a
+// later turn superseded it) or our Enter stranded it as an unsubmitted composer
+// draft. Either way the agent is now ready and the message needs to be (re)sent.
+// The grace guards the brief idle blip between deliver() returning and Claude
+// auto-running the message (which happens sub-second when it does happen).
+const ORPHAN_IDLE_GRACE_MS = 10_000;
+
+// Re-drive an unsurfaced "queued" message at most this many times before giving
+// up and failing it, so a message that genuinely can't land doesn't loop forever.
+const MAX_REDELIVERIES = 2;
 
 // Whether our pending draft is currently sitting in the composer. For a typed
 // (single-line) send that's the needle verbatim; for a pasted (multi-line) send
@@ -207,12 +307,68 @@ async function transcriptUserMatchCount(
   }
 }
 
+// Pure core of reconcileQueued, split out so the promote/redeliver logic is unit
+// testable without tmux/transcript IO. Mutates `msgs` in place and returns
+// { changed, kick }: `changed` if any status moved (caller re-emits), `kick` if
+// any message was reset to "pending" (caller must re-run the delivery loop).
+//
+// Three transitions for a "queued" message (one that left the composer into
+// Claude's own queue while busy):
+//   - surfaced  → "delivered": its text now appears as a real user turn.
+//   - unsurfaced + agent idle → "pending" (re-drive): Claude did not auto-run it
+//     within the grace window, so it was dropped (Escape/interrupt, edited away,
+//     superseded) or our Enter stranded it as an unsubmitted composer draft. The
+//     agent is now ready, so re-drive deliver() — it submits the stranded draft
+//     or re-types, then confirms via transcript growth. Capped by redeliveries.
+//   - re-drive cap exhausted → "failed": surface a Retry instead of looping.
+// idleConfirmed is the authority: only an idle Claude has provably drained its
+// queue, so a still-"queued" message there is genuinely not going to self-run.
+export function reconcileQueuedCore(
+  msgs: QueuedMsg[],
+  recentUserTexts: string[],
+  opts: { idleConfirmed: boolean; now: number; graceMs?: number },
+): { changed: boolean; kick: boolean } {
+  const grace = opts.graceMs ?? ORPHAN_IDLE_GRACE_MS;
+  const normedTurns = recentUserTexts.map(norm);
+  let changed = false;
+  let kick = false;
+  for (const m of msgs) {
+    if (m.status !== "queued") continue;
+    const needle = norm(m.text).slice(0, NEEDLE_LEN);
+    if (normedTurns.some((t) => t.includes(needle))) {
+      m.status = "delivered";
+      m.updatedAt = opts.now;
+      changed = true;
+    } else if (opts.idleConfirmed && opts.now - m.updatedAt > grace) {
+      if ((m.redeliveries ?? 0) < MAX_REDELIVERIES) {
+        // Re-drive on the now-idle agent. Reset attempts so deliver()'s per-call
+        // retry budget starts fresh; bump redeliveries to bound the outer loop.
+        m.redeliveries = (m.redeliveries ?? 0) + 1;
+        m.attempts = 0;
+        m.error = undefined;
+        m.status = "pending";
+        m.updatedAt = opts.now;
+        changed = true;
+        kick = true;
+      } else {
+        m.status = "failed";
+        m.error = "the agent never picked this up after retries — resend";
+        m.updatedAt = opts.now;
+        changed = true;
+      }
+    }
+  }
+  return { changed, kick };
+}
+
 // A "queued" message left the input box while Claude was busy, so it sat in
 // Claude's own queue rather than the transcript — deliver() can't wait for it
 // to surface without blocking the per-session queue behind a turn that may run
 // for minutes. So we reconcile lazily: whenever the UI polls, promote any
 // queued message that has since shown up in the transcript to "delivered" (the
-// UI then drops it). Returns true if anything changed so the caller re-emits.
+// UI then drops it), or — when the agent has gone idle without it surfacing —
+// re-drive it so it actually gets picked up now that the agent is ready (see
+// reconcileQueuedCore). Returns true if anything changed so the caller re-emits.
 export async function reconcileQueued(sessionId: string): Promise<boolean> {
   const s = queues.get(sessionId);
   if (!s) return false;
@@ -226,18 +382,31 @@ export async function reconcileQueued(sessionId: string): Promise<boolean> {
   } catch {
     return false;
   }
-  let changed = false;
-  for (const m of pending) {
-    const needle = norm(m.text).slice(0, NEEDLE_LEN);
-    const found = recent.some(
-      (r) => r.role === "user" && r.kind === "text" && norm(r.text).includes(needle),
-    );
-    if (found) {
-      m.status = "delivered";
-      m.updatedAt = Date.now();
-      changed = true;
-    }
+  const recentUserTexts = recent
+    .filter((r) => r.role === "user" && r.kind === "text")
+    .map((r) => r.text);
+
+  // We can only re-drive a queued message once we've confirmed the session is
+  // idle — a busy Claude may still be mid-turn with the message legitimately
+  // waiting in its queue, so re-driving then would double-send. If we can't read
+  // the pane, treat it as not-idle (leave the message queued) rather than risk
+  // it. Probe the pane only when there's an aged candidate to re-drive.
+  const now = Date.now();
+  const hasAged = pending.some((m) => now - m.updatedAt > ORPHAN_IDLE_GRACE_MS);
+  let idleConfirmed = false;
+  if (hasAged) {
+    const target = (await listSessions()).find((x) => x.sessionId === sessionId)?.tmuxTarget;
+    const pane = target ? capturePane(target) : null;
+    idleConfirmed = pane != null && !isBusy(pane);
   }
+
+  const { changed, kick: needsKick } = reconcileQueuedCore(s.msgs, recentUserTexts, {
+    idleConfirmed,
+    now,
+  });
+  // A re-driven message is back to "pending"; run the delivery loop so it's
+  // actually (re)submitted to the now-idle agent. kick() no-ops if already busy.
+  if (needsKick) kick(sessionId);
   return changed;
 }
 

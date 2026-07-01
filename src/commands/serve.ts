@@ -88,7 +88,7 @@ const SELF_REPO = PATHS.root;
 const CLAUDE_MODELS = ["fable", "opus", "sonnet", "haiku"];
 // Models the "aisdk" session kind accepts (the provider maps these aliases).
 const AISDK_MODELS = ["opus", "sonnet", "haiku"];
-import { enqueueMessage, listQueue, retryMessage, clearResolved, reconcileQueued, getMessage } from "../sendq.ts";
+import { enqueueMessage, listQueue, retryMessage, clearResolved, reconcileQueued, getMessage, removeMessage, sendNow, startQueuePump } from "../sendq.ts";
 
 // Relaunch a closed claude session via `claude --resume <id>` in a fresh managed
 // tmux pane, preserving the full conversation. Shared by the explicit
@@ -1517,6 +1517,10 @@ export async function cmdServe() {
       {
         const m = path.match(/^\/api\/sessions\/([0-9a-fA-F-]{36})\/queue$/);
         if (m && req.method === "GET") {
+          // Reconcile before snapshotting so the client's poll safety-net (used
+          // when its SSE stream stalled) also promotes surfaced messages and
+          // retires orphaned-queued ones, rather than echoing a stuck "queued".
+          await reconcileQueued(m[1]);
           return json({ id: m[1], queue: listQueue(m[1]) });
         }
         if (m && req.method === "DELETE") {
@@ -1568,6 +1572,31 @@ export async function cmdServe() {
           const msg = retryMessage(m[1], m[2]);
           if (!msg) return err(404, "queued message not found");
           return json({ ok: true, msg });
+        }
+      }
+
+      // Remove a not-yet-delivered queued message. Clean because we hold it in
+      // lfg's own queue (not Claude's) until the agent is idle — see sendq.ts.
+      {
+        const m = path.match(
+          /^\/api\/sessions\/([0-9a-fA-F-]{36})\/queue\/([0-9a-f]+)$/,
+        );
+        if (m && req.method === "DELETE") {
+          if (!removeMessage(m[1], m[2]))
+            return err(409, "message already delivered or in-flight");
+          return json({ ok: true });
+        }
+      }
+
+      // "Send now + interrupt": stop the current turn and run this message next.
+      {
+        const m = path.match(
+          /^\/api\/sessions\/([0-9a-fA-F-]{36})\/queue\/([0-9a-f]+)\/send-now$/,
+        );
+        if (m && req.method === "POST") {
+          if (!(await sendNow(m[1], m[2])))
+            return err(409, "message already delivered or in-flight");
+          return json({ ok: true });
         }
       }
 
@@ -2048,6 +2077,9 @@ export async function cmdServe() {
   startAutoScheduler((l) => console.log(l));
   // Background push watcher — no-op unless APNs is configured (LFG_APNS_*).
   startPushWatcher((l) => console.log(l));
+  // Client-independent queue pump: drains the hold-in-lfg outbound queue when
+  // each agent goes idle (held messages must deliver even with the app closed).
+  startQueuePump();
 
   console.log(`lfg web → http://${server.hostname}:${server.port}`);
   console.log(`  agents dir: ${AGENTS_DIR}`);
