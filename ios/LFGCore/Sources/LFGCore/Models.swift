@@ -151,16 +151,23 @@ public struct AgentPrompt: Codable, Sendable, Hashable {
     /// signal it; single-tap answering still applies (multi-select toggling is
     /// not yet wired through the answer path).
     public var multiSelect: Bool?
+    /// The assistant prose shown directly above the selector — the explanation
+    /// the model wrote right before asking. Scraped from the pane because
+    /// AskUserQuestion's turn isn't flushed to the transcript until answered, so
+    /// this is the only context the user has while the question is live. Nil when
+    /// the agent asked with no preamble. Rendered above the question in the panel.
+    public var context: String?
 
     public init(
         question: String,
         options: [PromptOption],
         detail: String? = nil,
         header: String? = nil,
-        multiSelect: Bool? = nil
+        multiSelect: Bool? = nil,
+        context: String? = nil
     ) {
         self.question = question; self.options = options; self.detail = detail
-        self.header = header; self.multiSelect = multiSelect
+        self.header = header; self.multiSelect = multiSelect; self.context = context
     }
 }
 

@@ -172,6 +172,16 @@ struct PromptPanelView: View {
                         .background(.blue.opacity(0.15), in: Capsule())
                 }
             }
+            // The model's explanation, written right before it asked. It isn't in
+            // the transcript yet while the question is live (Claude flushes that
+            // turn only after it's answered), so the panel is the only place the
+            // user can read the context needed to choose.
+            if let context = prompt.context, !context.isEmpty {
+                Text(context)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Text(prompt.question)
                 .font(.subheadline.weight(.semibold))
                 .fixedSize(horizontal: false, vertical: true)

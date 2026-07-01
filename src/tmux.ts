@@ -499,7 +499,55 @@ export function paneWidth(target: string): number | null {
 }
 
 export type PromptOption = { index: number; label: string; selected: boolean };
-export type PanePrompt = { question: string; options: PromptOption[] };
+export type PanePrompt = {
+  question: string;
+  options: PromptOption[];
+  // The assistant prose shown directly above the selector — the explanation the
+  // model wrote right before asking. AskUserQuestion's containing turn is NOT
+  // flushed to the transcript JSONL until the user answers, so this pane scrape
+  // is the ONLY live source of that context; without it the client shows a bare
+  // question and the explanation "appears only after the question is answered".
+  context?: string;
+};
+
+// A separator line the Claude TUI draws to box an interactive selector (a run of
+// ─ / ╌ / — / = / _). Used to bound the option box and locate the assistant
+// prose above it.
+const SELECTOR_SEP_RE = /^[╌─—_=-]{5,}$/;
+
+// The assistant message bullet the Claude TUI prints ("⏺ <text>"), with 2-space
+// -indented continuation lines for wrapped prose.
+const ASSISTANT_BULLET = "⏺";
+
+// Scrape the assistant prose block sitting directly above a selector's top
+// separator (`sepIdx`). Claude renders it as "⏺ <text>" plus indented wrap
+// continuations; we walk up from the separator, collect the block, and stop at
+// the bullet (inclusive). Bails to undefined on a blank gap, another separator,
+// a user "❯" marker, or if the bullet is too far up (not this turn's preamble).
+function contextAbovePrompt(lines: string[], sepIdx: number): string | undefined {
+  let i = sepIdx - 1;
+  // A single blank line commonly sits between the bullet block and the box.
+  while (i >= 0 && !lines[i].trim()) i--;
+  const block: string[] = [];
+  let foundBullet = false;
+  for (let scanned = 0; i >= 0 && scanned < 8; i--, scanned++) {
+    const trimmed = lines[i].trim();
+    if (!trimmed) break; // blank gap ends the block
+    if (SELECTOR_SEP_RE.test(trimmed)) break; // another separator
+    if (trimmed.startsWith("❯") || trimmed.startsWith("›")) break; // user / composer
+    block.unshift(trimmed);
+    if (trimmed.startsWith(ASSISTANT_BULLET)) {
+      foundBullet = true;
+      break;
+    }
+  }
+  if (!foundBullet) return undefined;
+  const text = block
+    .join(" ")
+    .replace(new RegExp(`^${ASSISTANT_BULLET}\\s*`), "")
+    .trim();
+  return text || undefined;
+}
 
 // Detect a Claude Code interactive selector in a pane capture (permission /
 // plan-approval / trust dialogs AND AskUserQuestion). They render as numbered
@@ -556,7 +604,17 @@ export function parsePrompt(pane: string): PanePrompt | null {
     question = t;
     break;
   }
-  return { question, options };
+  // The assistant preamble lives above the selector's TOP separator (the box's
+  // opening rule, itself above the header/question). Find that separator, then
+  // scrape the "⏺ …" prose block above it.
+  let context: string | undefined;
+  for (let i = start - 1; i >= 0 && i >= start - 8; i--) {
+    if (SELECTOR_SEP_RE.test(lines[i].trim())) {
+      context = contextAbovePrompt(lines, i);
+      break;
+    }
+  }
+  return { question, options, context };
 }
 
 // True when an AskUserQuestion selector is open in the pane, even when its
