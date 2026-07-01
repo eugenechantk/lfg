@@ -20,6 +20,7 @@ import {
   listProcs,
   cwdOf,
   primeCwds,
+  primeProcSnapshot,
   startTimeMsOf,
   procStartMatches,
   ppidOf as procPpidOf,
@@ -993,6 +994,10 @@ async function listSessionsUncached(): Promise<Session[]> {
   // child `claude` process via the SDK, which pgrep would otherwise surface as a
   // phantom duplicate session — filter those out by parent pid (and, as a
   // backstop, by the aisdk sessionId) so only the single aisdk session shows.
+  // Refresh the ps snapshot off the event loop before anything reads it (the
+  // ppidOf filter below, then listProcs/startTimeMsOf/commOf). Keeps the one
+  // per-scan `ps` from blocking HTTP while a cold scan runs under load.
+  await primeProcSnapshot();
   const aisdkEntries = listAisdkEntries().filter((e) => isPidAlive(e.harnessPid));
   const harnessPids = new Set(aisdkEntries.map((e) => e.harnessPid));
   const aisdkSessionIds = new Set(aisdkEntries.map((e) => e.sessionId));

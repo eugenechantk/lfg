@@ -25,6 +25,22 @@ function spawnText(cmd: string[]): string | null {
   }
 }
 
+// Non-blocking counterpart to spawnText. Used by the prime* helpers so the two
+// heavy per-scan spawns (the ps snapshot and the batched lsof) run off the event
+// loop — a cold scan under a concurrent request pile-up otherwise blocks all HTTP
+// for the child's lifetime. Same null-on-failure contract.
+async function spawnTextAsync(cmd: string[]): Promise<string | null> {
+  try {
+    const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "ignore" });
+    const text = await new Response(proc.stdout).text();
+    const code = await proc.exited;
+    if (code !== 0 && !text) return null;
+    return text;
+  } catch {
+    return null;
+  }
+}
+
 // macOS perf shim. listSessions() enriches dozens of procs and each Darwin
 // helper here shells out to `ps`/`lsof` synchronously — and Bun.spawnSync
 // blocks the single event loop AND, at a deep reentrant stack, throws a
@@ -47,11 +63,8 @@ interface ProcRow {
 }
 let procSnap: { at: number; rows: Map<number, ProcRow> } | null = null;
 const LSTART = /^\s*(\d+)\s+(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+\d{2}:\d{2}:\d{2}\s+\d{4})\s+(.*)$/;
-function psSnapshot(): Map<number, ProcRow> {
-  const now = Date.now();
-  if (procSnap && now - procSnap.at < PROC_SNAP_TTL_MS) return procSnap.rows;
+function parsePsRows(out: string | null): Map<number, ProcRow> {
   const rows = new Map<number, ProcRow>();
-  const out = spawnText(["ps", "-axo", "pid=,ppid=,lstart=,command="]);
   if (out) {
     for (const line of out.split("\n")) {
       const m = line.match(LSTART);
@@ -64,8 +77,33 @@ function psSnapshot(): Map<number, ProcRow> {
       });
     }
   }
+  return rows;
+}
+
+// Synchronous read of the ps snapshot. On the session-scan path it's a pure
+// cache read — primeProcSnapshot() (async, non-blocking) refreshes the cache up
+// front. The sync spawn here is only a cold-cache fallback for the rare non-scan
+// caller that reads a pid's ppid/start/comm outside a primed scan.
+function psSnapshot(): Map<number, ProcRow> {
+  const now = Date.now();
+  if (procSnap && now - procSnap.at < PROC_SNAP_TTL_MS) return procSnap.rows;
+  const rows = parsePsRows(spawnText(["ps", "-axo", "pid=,ppid=,lstart=,command="]));
   procSnap = { at: now, rows };
   return rows;
+}
+
+// Refresh the ps snapshot with a NON-BLOCKING spawn. Call this (awaited) at the
+// top of a session scan before anything reads psSnapshot(), so the one ps that
+// feeds ppidOf/startTimeMsOf/commOf/listProcs runs off the event loop instead of
+// freezing all HTTP for its duration. psSnapshot() then just reads the cache.
+export async function primeProcSnapshot(): Promise<void> {
+  if (!IS_DARWIN) return;
+  const now = Date.now();
+  if (procSnap && now - procSnap.at < PROC_SNAP_TTL_MS) return;
+  const rows = parsePsRows(
+    await spawnTextAsync(["ps", "-axo", "pid=,ppid=,lstart=,command="]),
+  );
+  procSnap = { at: Date.now(), rows };
 }
 
 // Batch-prime the cwd cache for many pids with ONE `lsof -a -p p1,p2,… -d cwd
@@ -81,7 +119,7 @@ export async function primeCwds(pids: number[]): Promise<void> {
     return !(hit && now - hit.at < PID_VALUE_TTL_MS);
   });
   if (missing.length === 0) return;
-  const out = spawnText(["lsof", "-a", "-p", missing.join(","), "-d", "cwd", "-Fn"]);
+  const out = await spawnTextAsync(["lsof", "-a", "-p", missing.join(","), "-d", "cwd", "-Fn"]);
   if (!out) return;
   let cur: number | null = null;
   for (const line of out.split("\n")) {
