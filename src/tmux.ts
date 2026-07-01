@@ -519,33 +519,61 @@ const SELECTOR_SEP_RE = /^[╌─—_=-]{5,}$/;
 // -indented continuation lines for wrapped prose.
 const ASSISTANT_BULLET = "⏺";
 
-// Scrape the assistant prose block sitting directly above a selector's top
-// separator (`sepIdx`). Claude renders it as "⏺ <text>" plus indented wrap
-// continuations; we walk up from the separator, collect the block, and stop at
-// the bullet (inclusive). Bails to undefined on a blank gap, another separator,
-// a user "❯" marker, or if the bullet is too far up (not this turn's preamble).
+// Scrape the assistant prose shown directly above a selector's top separator
+// (`sepIdx`) — the explanation the model wrote right before asking. Claude
+// renders it as "⏺ <text>" with wrap-continuation lines and blank-line
+// paragraph breaks.
+//
+// IMPORTANT: Claude's TUI is a full-screen (alternate-screen) app — tmux keeps
+// NO scrollback for it, so `capture-pane` only ever yields the visible rows. A
+// response taller than the pane has its top scrolled off and is unrecoverable
+// here (and the whole turn is buffered out of the transcript until answered).
+// So we surface whatever is ON SCREEN: the tail of the response, which is where
+// the actual ask lives. We do NOT require the "⏺" bullet to be visible — when
+// it scrolled off we still return the visible block rather than nothing.
+//
+// Walking up from the separator, we collect lines until a boundary: the "⏺"
+// bullet (top of the turn, inclusive), the user/composer "❯"/"›" marker, another
+// separator, two consecutive blanks, the pane top, or a hard line cap. Single
+// blank lines are kept as paragraph breaks. Wrapped lines within a paragraph are
+// re-joined with spaces so the client doesn't render mid-sentence hard breaks.
 function contextAbovePrompt(lines: string[], sepIdx: number): string | undefined {
+  const collected: string[] = []; // bottom-to-top; reversed below
   let i = sepIdx - 1;
-  // A single blank line commonly sits between the bullet block and the box.
-  while (i >= 0 && !lines[i].trim()) i--;
-  const block: string[] = [];
-  let foundBullet = false;
-  for (let scanned = 0; i >= 0 && scanned < 8; i--, scanned++) {
+  while (i >= 0 && !lines[i].trim()) i--; // skip blanks adjacent to the box
+  let consecutiveBlank = 0;
+  for (let scanned = 0; i >= 0 && scanned < 40; i--, scanned++) {
     const trimmed = lines[i].trim();
-    if (!trimmed) break; // blank gap ends the block
-    if (SELECTOR_SEP_RE.test(trimmed)) break; // another separator
-    if (trimmed.startsWith("❯") || trimmed.startsWith("›")) break; // user / composer
-    block.unshift(trimmed);
-    if (trimmed.startsWith(ASSISTANT_BULLET)) {
-      foundBullet = true;
-      break;
+    if (!trimmed) {
+      if (++consecutiveBlank >= 2) break; // a real gap ends the block
+      collected.push(""); // single blank = paragraph break, keep it
+      continue;
     }
+    consecutiveBlank = 0;
+    if (SELECTOR_SEP_RE.test(trimmed)) break; // another selector box
+    if (trimmed.startsWith("❯") || trimmed.startsWith("›")) break; // user / composer
+    const isBullet = trimmed.startsWith(ASSISTANT_BULLET);
+    collected.push(
+      isBullet ? trimmed.replace(new RegExp(`^${ASSISTANT_BULLET}\\s*`), "") : trimmed,
+    );
+    if (isBullet) break; // reached the top of the assistant turn
   }
-  if (!foundBullet) return undefined;
-  const text = block
-    .join(" ")
-    .replace(new RegExp(`^${ASSISTANT_BULLET}\\s*`), "")
-    .trim();
+  const ordered = collected.reverse();
+  while (ordered.length && !ordered[0]) ordered.shift();
+  while (ordered.length && !ordered[ordered.length - 1]) ordered.pop();
+  if (!ordered.length) return undefined;
+  // Group consecutive non-blank lines into paragraphs (join wrap with spaces);
+  // separate paragraphs with a blank line.
+  const paragraphs: string[] = [];
+  let current: string[] = [];
+  for (const line of ordered) {
+    if (!line) {
+      if (current.length) paragraphs.push(current.join(" "));
+      current = [];
+    } else current.push(line);
+  }
+  if (current.length) paragraphs.push(current.join(" "));
+  const text = paragraphs.join("\n\n").trim();
   return text || undefined;
 }
 

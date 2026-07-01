@@ -66,4 +66,34 @@ describe("parsePrompt context scrape", () => {
     expect(p).not.toBeNull();
     expect(p!.context).toBeUndefined();
   });
+
+  // A long response whose top (and the "⏺" bullet) scrolled off the full-screen
+  // TUI. We can't recover the off-screen top, but we must still surface the
+  // VISIBLE tail (multi-paragraph, wrap-joined) rather than returning nothing.
+  test("bullet scrolled off → captures the visible multi-paragraph tail", () => {
+    const pane = [
+      "  error-prone at scale, impossible to automate, and offers no audit trail, so it",
+      "  doesn't scale to frequent releases or teams.",
+      "",
+      "  My recommendation: prove signing locally with Fastlane first, then lift the",
+      "  exact same lanes into GitHub Actions. Which path do you want to start with?",
+      "────────────────────────────────────────────────────────────────────────────────",
+      " ☐ Deploy",
+      "",
+      "Which deployment path?",
+      "",
+      "❯ 1. Local Fastlane",
+      "     prove signing locally",
+      "  2. GitHub Actions",
+      "     remote CI",
+      "────────────────────────────────────────────────────────────────────────────────",
+      "  3. Chat about this",
+      "Enter to select · ↑/↓ to navigate · Esc to cancel",
+    ].join("\n");
+    const p = parsePrompt(pane);
+    expect(p).not.toBeNull();
+    expect(p!.context).toBe(
+      "error-prone at scale, impossible to automate, and offers no audit trail, so it doesn't scale to frequent releases or teams.\n\nMy recommendation: prove signing locally with Fastlane first, then lift the exact same lanes into GitHub Actions. Which path do you want to start with?",
+    );
+  });
 });
