@@ -546,7 +546,11 @@ const ASSISTANT_BULLET = "⏺";
 // separator, two consecutive blanks, the pane top, or a hard line cap. Single
 // blank lines are kept as paragraph breaks; wrapped lines within a paragraph are
 // re-joined with spaces so the client doesn't render mid-sentence hard breaks.
-function contextAbovePrompt(lines: string[], sepIdx: number): string | undefined {
+function contextAbovePrompt(
+  lines: string[],
+  sepIdx: number,
+  lastUserText?: string,
+): string | undefined {
   const collected: string[] = []; // bottom-to-top; reversed below
   let i = sepIdx - 1;
   while (i >= 0 && !lines[i].trim()) i--; // skip blanks adjacent to the box
@@ -571,7 +575,6 @@ function contextAbovePrompt(lines: string[], sepIdx: number): string | undefined
       break; // reached the top of the assistant turn
     }
   }
-  if (!foundBullet) return undefined; // can't confirm it's assistant prose
   const ordered = collected.reverse();
   while (ordered.length && !ordered[0]) ordered.shift();
   while (ordered.length && !ordered[ordered.length - 1]) ordered.pop();
@@ -588,7 +591,20 @@ function contextAbovePrompt(lines: string[], sepIdx: number): string | undefined
   }
   if (current.length) paragraphs.push(current.join(" "));
   const text = paragraphs.join("\n\n").trim();
-  return text || undefined;
+  if (!text) return undefined;
+  // The bullet confirms this is the assistant's prose — safe to surface.
+  if (foundBullet) return text;
+  // No bullet in view: the block is either a scrolled-off assistant preamble OR
+  // the user's own scrolled-off prompt (both render as bare wrapped lines). If
+  // we know the last user turn and this block is part of it, it's the prompt —
+  // don't echo it back as "context". Otherwise it's the assistant's preamble
+  // (bullet scrolled off above a long response) — surface the visible tail.
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!lastUserText) return undefined; // can't disambiguate → stay safe
+  const b = norm(text);
+  if (b.length < 12) return undefined; // too short to attribute confidently
+  if (norm(lastUserText).includes(b)) return undefined; // it's the user's prompt
+  return text;
 }
 
 // Detect a Claude Code interactive selector in a pane capture (permission /
@@ -604,7 +620,7 @@ function contextAbovePrompt(lines: string[], sepIdx: number): string | undefined
 // carries the cursor.
 const OPT_RE = /^\s*(❯|›)?\s*(\d+)\.\s+(\S.*?)\s*$/;
 
-export function parsePrompt(pane: string): PanePrompt | null {
+export function parsePrompt(pane: string, lastUserText?: string): PanePrompt | null {
   const lines = pane.replace(/\s+$/, "").split("\n");
   type Hit = { line: number; index: number; label: string; selected: boolean };
   const hits: Hit[] = [];
@@ -680,7 +696,7 @@ export function parsePrompt(pane: string): PanePrompt | null {
   let context: string | undefined;
   for (let i = start - 1; i >= 0 && i >= start - 8; i--) {
     if (SELECTOR_SEP_RE.test(lines[i].trim())) {
-      context = contextAbovePrompt(lines, i);
+      context = contextAbovePrompt(lines, i, lastUserText);
       break;
     }
   }

@@ -39,6 +39,7 @@ import {
   setSessionTitle,
   sessionIdForPid,
   pendingToolPrompt,
+  lastUserPromptText,
   listResumable,
   cwdForTranscript,
   modelAliasForTranscript,
@@ -437,7 +438,11 @@ async function resolveSessionPrompt(
     const pending = await pendingToolPrompt(tp);
     if (pending) return pending;
   }
-  return pane ? parsePrompt(pane) : null;
+  if (!pane) return null;
+  // Pass the last user turn so the pane scraper can tell a scrolled-off assistant
+  // preamble apart from the user's own scrolled-off prompt when surfacing context.
+  const lastUser = tp ? await lastUserPromptText(tp).catch(() => null) : null;
+  return parsePrompt(pane, lastUser ?? undefined);
 }
 
 function sseHeaders(): Record<string, string> {
@@ -1079,7 +1084,20 @@ export async function cmdServe() {
         } catch {
           return err(404, "file not found");
         }
-        const rootCandidates = [REPOS_ROOT, SELF_REPO, join(tmpdir(), "lfg-uploads"), homedir()];
+        // Roots the client may fetch from. homedir() already covers ~everything
+        // under the user's home; the temp dirs are added because codex (unlike
+        // Claude Code, which is instructed to write into cwd/home) saves
+        // screenshots to /tmp and $TMPDIR/.../T and presents those paths in its
+        // messages — without these they render as file cards that 404 on tap.
+        // Adding /tmp is strictly less exposure than the already-served homedir.
+        const rootCandidates = [
+          REPOS_ROOT,
+          SELF_REPO,
+          homedir(),
+          tmpdir(), // $TMPDIR — on macOS /var/folders/.../T
+          "/tmp",
+          "/private/tmp", // macOS /tmp realpaths here
+        ];
         const roots = await Promise.all(
           rootCandidates.map(async (r) => {
             try { return await realpath(r); } catch { return r; }
@@ -1089,12 +1107,45 @@ export async function cmdServe() {
           return err(403, "path outside allowed roots");
         const f = Bun.file(real);
         if (!(await f.exists())) return err(404, "file not found");
-        return new Response(f, {
-          headers: {
-            "Content-Type": f.type || "application/octet-stream",
-            "Cache-Control": "private, max-age=60",
-          },
-        });
+        const size = f.size;
+        const baseHeaders: Record<string, string> = {
+          "Content-Type": f.type || "application/octet-stream",
+          "Cache-Control": "private, max-age=60",
+          // iOS AVPlayer streams remote video with Range requests and refuses
+          // to play a source that answers 200-with-the-whole-file. Advertise
+          // range support so it issues a 206-based progressive load.
+          "Accept-Ranges": "bytes",
+        };
+        // Honor a single byte-range (bytes=start-end | bytes=start- | bytes=-suffix).
+        const rangeHeader = req.headers.get("range");
+        const m = rangeHeader && /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+        if (m) {
+          let start = m[1] === "" ? NaN : parseInt(m[1], 10);
+          let end = m[2] === "" ? NaN : parseInt(m[2], 10);
+          if (Number.isNaN(start)) {
+            // suffix range: last N bytes
+            start = Math.max(0, size - end);
+            end = size - 1;
+          } else if (Number.isNaN(end)) {
+            end = size - 1;
+          }
+          if (start < 0 || start >= size || start > end) {
+            return new Response(null, {
+              status: 416,
+              headers: { "Content-Range": `bytes */${size}`, "Accept-Ranges": "bytes" },
+            });
+          }
+          end = Math.min(end, size - 1);
+          return new Response(f.slice(start, end + 1), {
+            status: 206,
+            headers: {
+              ...baseHeaders,
+              "Content-Range": `bytes ${start}-${end}/${size}`,
+              "Content-Length": String(end - start + 1),
+            },
+          });
+        }
+        return new Response(f, { headers: baseHeaders });
       }
 
       if (path === "/api/sessions") {

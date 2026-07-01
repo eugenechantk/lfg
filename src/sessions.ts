@@ -851,6 +851,41 @@ async function lastUserText(path: string): Promise<string | null> {
   return null;
 }
 
+// The full (untruncated) text of the last genuine user turn, whitespace-collapsed.
+// Used to disambiguate the pane-scraped prompt "context": when the assistant
+// preamble's "⏺" bullet has scrolled off, the block above the selector could be
+// the preamble OR the user's own scrolled-off prompt — matching it against this
+// tells them apart. Returns null when there's no user turn to compare.
+export async function lastUserPromptText(path: string): Promise<string | null> {
+  try {
+    const file = Bun.file(path);
+    const size = file.size;
+    const start = Math.max(0, size - 256 * 1024);
+    const text = await file.slice(start).text();
+    const lines = text.split("\n").filter(Boolean);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      let x: { type?: string; isMeta?: boolean; message?: { content?: unknown } };
+      try {
+        x = JSON.parse(lines[i]);
+      } catch {
+        continue;
+      }
+      const cm = normalizeCodexLine(lines[i]);
+      if (cm?.role === "user" && cm.kind === "text") {
+        const t = stripConversationPrefix(cm.text).trim().replace(/\s+/g, " ");
+        if (t && !t.startsWith("<")) return t;
+      }
+      if (x.type !== "user" || x.isMeta) continue;
+      let t = extractText(x.message?.content);
+      if (!t) continue;
+      t = stripHumanPrefix(t.trim().replace(/\s+/g, " "));
+      if (!t || t.startsWith("<")) continue;
+      return t;
+    }
+  } catch {}
+  return null;
+}
+
 // Collapse a full model id (e.g. "claude-opus-4-8", "claude-3-5-haiku-...") to
 // the short alias lfg uses everywhere (the same tokens the `/model` command
 // and the model picker speak). Returns the raw value if it matches no family.

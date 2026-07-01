@@ -112,14 +112,11 @@ describe("parsePrompt context scrape", () => {
     expect(p!.context).toBeUndefined();
   });
 
-  // When the "⏺" bullet has scrolled off, the indented lines above the box are
-  // ambiguous — they could be a scrolled-off assistant preamble OR the user's
-  // own (scrolled-off) prompt. We must NOT surface them as context, or the panel
-  // echoes the user's prompt back as fake "explanation". Require the bullet.
-  test("bullet scrolled off → context undefined (never echo the user prompt)", () => {
-    const pane = [
-      '  ...options (1) label "Local Fastlane first" description "prove signing',
-      '  locally", (2) label "GitHub Actions now". Wait for my answer.',
+  // When the "⏺" bullet has scrolled off, the block above the box is ambiguous:
+  // a scrolled-off assistant preamble OR the user's own scrolled-off prompt.
+  const scrolledOffPane = (topTwoLines: string[]) =>
+    [
+      ...topTwoLines,
       "────────────────────────────────────────────────────────────────────────────────",
       " ☐ Deploy",
       "",
@@ -133,8 +130,40 @@ describe("parsePrompt context scrape", () => {
       "  3. Chat about this",
       "Enter to select · ↑/↓ to navigate · Esc to cancel",
     ].join("\n");
-    const p = parsePrompt(pane);
-    expect(p).not.toBeNull();
+
+  test("bullet scrolled off, no user text → undefined (stay safe)", () => {
+    const p = parsePrompt(
+      scrolledOffPane([
+        "  locally on your Mac before adding remote CI. Which do you want to start with?",
+      ]),
+    );
     expect(p!.context).toBeUndefined();
+  });
+
+  test("bullet scrolled off, block IS the user's prompt → undefined (no echo)", () => {
+    const userPrompt =
+      'Do NOT run any tools. Immediately call AskUserQuestion, options (1) "Local Fastlane first" description "prove signing locally", (2) "GitHub Actions now". Wait for my answer.';
+    const p = parsePrompt(
+      scrolledOffPane([
+        '  AskUserQuestion, options (1) "Local Fastlane first" description "prove',
+        '  signing locally", (2) "GitHub Actions now". Wait for my answer.',
+      ]),
+      userPrompt,
+    );
+    expect(p!.context).toBeUndefined();
+  });
+
+  test("bullet scrolled off, block is NOT the user's prompt → surface the preamble tail", () => {
+    const userPrompt = "Set up TestFlight for the app and pick a signing approach.";
+    const p = parsePrompt(
+      scrolledOffPane([
+        "  locally on your Mac before adding remote CI. My recommendation: prove signing",
+        "  locally with Fastlane first. Which path do you want to start with?",
+      ]),
+      userPrompt,
+    );
+    expect(p!.context).toBe(
+      "locally on your Mac before adding remote CI. My recommendation: prove signing locally with Fastlane first. Which path do you want to start with?",
+    );
   });
 });
