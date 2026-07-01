@@ -46,7 +46,7 @@ import {
   type PendingPrompt,
 } from "../sessions.ts";
 import {
-  capturePane,
+  capturePaneAsync,
   parsePrompt,
   type PanePrompt,
   answerPrompt,
@@ -397,7 +397,7 @@ async function voiceStatusSnapshot(): Promise<string> {
     let status = "IDLE";
     let detail = "";
     if (s.tmuxTarget) {
-      const pane = capturePane(s.tmuxTarget);
+      const pane = await capturePaneAsync(s.tmuxTarget);
       const tp = s.sessionId ? await resolveTranscript(s.sessionId) : null;
       const prompt = await resolveSessionPrompt(tp, pane);
       if (prompt) {
@@ -1933,7 +1933,7 @@ export async function cmdServe() {
                 }
                 return;
               }
-              const pane = capturePane(p.target);
+              const pane = await capturePaneAsync(p.target);
               const prompt = await resolveSessionPrompt(p.tp, pane);
               if (closed) return;
               const sig = prompt ? JSON.stringify(prompt) : "";
@@ -2069,7 +2069,7 @@ export async function cmdServe() {
                 let lastBusy = "0";
                 const pollPrompt = async () => {
                   if (closed) return;
-                  const pane = capturePane(target);
+                  const pane = await capturePaneAsync(target);
                   const prompt = await resolveSessionPrompt(tp, pane);
                   if (closed) return;
                   const sig = prompt ? JSON.stringify(prompt) : "";

@@ -454,6 +454,50 @@ export function capturePane(target: string): string | null {
   }
 }
 
+// Minimal counting semaphore: bounds how many async child processes run at once
+// so a burst of pollers can't fork an unbounded number of `tmux` children.
+class Semaphore {
+  private active = 0;
+  private waiters: Array<() => void> = [];
+  constructor(private readonly max: number) {}
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.active >= this.max) {
+      await new Promise<void>((res) => this.waiters.push(res));
+    }
+    this.active++;
+    try {
+      return await fn();
+    } finally {
+      this.active--;
+      this.waiters.shift()?.();
+    }
+  }
+}
+
+// The SSE poll loop scrapes every pane on a 700ms/1s tick, for every connected
+// client. Doing that with the synchronous capturePane() blocks the single event
+// loop for the child's lifetime — dozens of clients × panes stalls all HTTP.
+// The async variant uses non-blocking Bun.spawn behind a small concurrency cap,
+// so pane scrapes overlap with (and never freeze) HTTP. Same null-on-failure
+// contract as capturePane(). Use this on the hot poll path; keep the sync
+// capturePane() for the one-shot send/confirm flows where ordering matters.
+const captureLimiter = new Semaphore(6);
+export function capturePaneAsync(target: string): Promise<string | null> {
+  return captureLimiter.run(async () => {
+    try {
+      const proc = Bun.spawn(["tmux", "capture-pane", "-t", target, "-p"], {
+        stdout: "pipe",
+        stderr: "ignore",
+      });
+      const text = await new Response(proc.stdout).text();
+      const code = await proc.exited;
+      return code === 0 ? text : null;
+    } catch {
+      return null;
+    }
+  });
+}
+
 // Capture a pane (no line-join) with some scrollback. We deliberately do NOT
 // pass -J: long URLs are often broken by the app's own hard wrap, not tmux
 // auto-wrap, so -J can't rejoin them — link reconstruction handles the joining

@@ -13,7 +13,7 @@ import {
   pendingToolPrompt,
   type PendingPrompt,
 } from "../sessions.ts";
-import { capturePane, isBusy, parsePrompt, type PanePrompt } from "../tmux.ts";
+import { capturePaneAsync, isBusy, parsePrompt, type PanePrompt } from "../tmux.ts";
 import { findEntryByAnyId } from "../aisdk-registry.ts";
 import { listDevices } from "./store.ts";
 import {
@@ -170,7 +170,7 @@ async function observeSession(s: {
     const entry = s.sessionId ? findEntryByAnyId(s.sessionId) : null;
     return { busy: entry ? entry.busy : false, promptPresent: false };
   }
-  const pane = capturePane(s.tmuxTarget);
+  const pane = await capturePaneAsync(s.tmuxTarget);
   const tp = s.sessionId ? await resolveTranscript(s.sessionId) : null;
   let prompt: PendingPrompt | PanePrompt | null = tp ? await pendingToolPrompt(tp) : null;
   if (!prompt && pane) prompt = parsePrompt(pane);
