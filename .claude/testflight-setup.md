@@ -20,9 +20,13 @@
 ## How to ship a build (local)
 ```bash
 cd ios
+eval "$(rbenv init - zsh)"   # REQUIRED: system Ruby 2.6 fails w/ "Could not find bundler 2.4.19"; rbenv 3.2.7 has it
 set -a; . fastlane/.env.local; set +a
 bundle exec fastlane ios deploy_testflight
 ```
+The build archives from the **working tree** (not a commit), so uncommitted
+changes ship. Override the changelog (defaults to last commit msg) with
+`TESTFLIGHT_CHANGELOG=`.
 Build number is an auto HKT timestamp (YYYYMMDDHHMM); changelog defaults to the last git commit message. Override with `BUILD_NUMBER=` / `TESTFLIGHT_CHANGELOG=`.
 
 ## Signing model (local)
