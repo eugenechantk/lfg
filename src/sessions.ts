@@ -385,6 +385,58 @@ function samePrompt(a: string | null, b: string | null): boolean {
   return clean(a) === clean(b);
 }
 
+// How far a rollout's createdAt may precede the process startedAt and still be
+// trusted as that process's session (clock skew / rollout-before-first-poll).
+const CODEX_BIND_SKEW_MS = 30_000;
+// For a promptless (interactive) codex, the launch rollout is written within
+// seconds of the process; anything created much later in the same cwd belongs to
+// a different, later session and must NOT be guess-bound.
+const CODEX_BIND_WINDOW_MS = 120_000;
+
+// Bind a running tmux `codex` process to its rollout transcript. Two modes:
+//   1. prompt — the process was launched with an inline `-- <prompt>`; match the
+//      unclaimed same-cwd thread whose first user text equals it (freshest wins).
+//   2. promptless — an interactive `codex` / `codex --yolo` has no prompt and no
+//      resume id, so it is bound to the unclaimed same-cwd thread whose createdAt
+//      is nearest the process startedAt (codex writes its rollout at launch). This
+//      is the ONLY binding path for an interactive codex; without it sessionId
+//      stays null and the client can never load the transcript (spins forever).
+// Both require createdAt >= startedAt - CODEX_BIND_SKEW_MS so a stale unrelated
+// rollout in the same cwd is never guess-bound. Promptless additionally caps the
+// upper bound so a newer session's rollout can't be stolen.
+export function pickCodexThread(
+  proc: { cwd: string | null; startedAt: number | null; prompt: string | null },
+  threads: CodexThread[],
+  claimed: Set<string>,
+): CodexThread | null {
+  const { cwd, startedAt, prompt } = proc;
+  if (!cwd) return null;
+  const minTime = (startedAt ?? 0) - CODEX_BIND_SKEW_MS;
+  const inCwd = threads.filter(
+    (t) => t.cwd === cwd && !claimed.has(t.id) && (t.createdAt ?? 0) >= minTime,
+  );
+  if (inCwd.length === 0) return null;
+  if (prompt) {
+    return (
+      inCwd
+        .filter((t) => samePrompt(t.firstUserText, prompt))
+        .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0] ?? null
+    );
+  }
+  // Promptless: require a real startedAt (else "nearest to 0" is meaningless) and
+  // bind the thread whose createdAt is closest to launch, within the window.
+  if (startedAt == null) return null;
+  return (
+    inCwd
+      .filter((t) => (t.createdAt ?? 0) <= startedAt + CODEX_BIND_WINDOW_MS)
+      .sort(
+        (a, b) =>
+          Math.abs((a.createdAt ?? 0) - startedAt) -
+          Math.abs((b.createdAt ?? 0) - startedAt),
+      )[0] ?? null
+  );
+}
+
 function promptStartsWithTitle(prompt: string | null, title: string | null | undefined): boolean {
   if (!prompt || !title) return false;
   const clean = (s: string) => stripConversationPrefix(s).replace(/\s+/g, " ").trim();
@@ -1032,18 +1084,8 @@ async function listSessionsUncached(): Promise<Session[]> {
     let sessionId = p.cmd.match(new RegExp(`(?:resume|fork)\\s+(${UUID.source})`))?.[1] ?? null;
     let thread = sessionId ? codex.find((t) => t.id === sessionId) : null;
     const prompt = codexPromptFromCmd(p.cmd);
-    if (!thread && cwd && prompt) {
-      const minTime = (startedAt ?? 0) - 30_000;
-      thread =
-        codex
-          .filter(
-            (t) =>
-              t.cwd === cwd &&
-              !claimedCodex.has(t.id) &&
-              (t.createdAt ?? 0) >= minTime &&
-              samePrompt(t.firstUserText, prompt),
-          )
-          .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0] ?? null;
+    if (!thread) {
+      thread = pickCodexThread({ cwd, startedAt, prompt }, codex, claimedCodex);
       if (thread) sessionId = thread.id;
     }
     if (thread) {
