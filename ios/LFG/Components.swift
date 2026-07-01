@@ -278,6 +278,8 @@ struct PausedBannerView: View {
 struct PendingStripView: View {
     let sessionID: String
     let items: [SessionStore.PendingSend]
+    /// Tapping an in-flight (not-failed) message surfaces remove / edit / send-now.
+    var onTap: (SessionStore.PendingSend) -> Void = { _ in }
     @Environment(SessionStore.self) private var store
 
     var body: some View {
@@ -296,10 +298,15 @@ struct PendingStripView: View {
                         if item.failed {
                             Button("Retry") { Task { await store.retryPending(sessionID, item) } }
                                 .font(.caption2).buttonStyle(.bordered).controlSize(.mini)
+                        } else {
+                            // Affordance hint that the queued message is tappable.
+                            Image(systemName: "ellipsis.circle").font(.caption).foregroundStyle(.tertiary)
                         }
                     }
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(.quaternary.opacity(0.4), in: Capsule())
+                    .contentShape(Capsule())
+                    .onTapGesture { if !item.failed { onTap(item) } }
                 }
             }
         }

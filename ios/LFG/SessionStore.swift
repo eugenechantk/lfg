@@ -621,13 +621,46 @@ import LFGCore
             // The backend accepted it (and, for a wake-up, finished resuming) —
             // flip the muted bubble to its confirmed accent color before the
             // refresh, then let reconcile hand it off to the real user turn.
-            mutatePending(eff, pid) { $0.confirmed = true }
+            mutatePending(eff, pid) {
+                $0.confirmed = true
+                // Link to the server queue id right away so the message can be
+                // removed / edited / sent-now while it's still pending.
+                if let qid = resp.msg?.id { $0.serverQueueID = qid }
+            }
             await refresh()
             reconcilePending(eff)
         } catch {
             lastError = "Send failed: \(error.localizedDescription)"
             mutatePending(id, pid) { $0.failed = true }
         }
+    }
+
+    // MARK: Queued-message actions (hold-in-lfg)
+
+    /// Remove a still-pending queued message so it never runs. Drops the server
+    /// queue entry (held in lfg's queue, so this is clean) and the local bubble.
+    func removeQueued(_ sid: String, _ pending: PendingSend) async {
+        if let qid = pending.serverQueueID {
+            await run("Remove") { try await $0.removeQueued(sid, qid) }
+        }
+        removePending(sid, pending.id)
+    }
+
+    /// Pull a queued message back to edit: remove it server-side + locally and
+    /// return its text so the caller can repopulate the composer.
+    @discardableResult
+    func editQueued(_ sid: String, _ pending: PendingSend) async -> String {
+        if let qid = pending.serverQueueID {
+            await run("Edit") { try await $0.removeQueued(sid, qid) }
+        }
+        removePending(sid, pending.id)
+        return pending.displayText
+    }
+
+    /// Interrupt the current turn and deliver this queued message immediately.
+    func sendQueuedNow(_ sid: String, _ pending: PendingSend) async {
+        guard let qid = pending.serverQueueID else { return }
+        await run("Send now") { try await $0.sendQueuedNow(sid, qid) }
     }
     func answer(_ id: String, _ index: Int) async { await run("Answer") { try await $0.answer(id, index: index) } }
     func dismissPrompt(_ id: String) async { await run("Dismiss") { try await $0.dismiss(id) } }

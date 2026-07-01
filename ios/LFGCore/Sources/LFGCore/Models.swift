@@ -307,6 +307,10 @@ public struct SendResponse: Codable, Sendable {
     public var resumed: Bool?
     public var sessionId: String?
     public var resumedFrom: String?
+    /// The server's queue entry for this send (id/text/status), so the client can
+    /// correlate the optimistic bubble to a server queue id immediately — used to
+    /// drive remove / edit / send-now actions on the still-pending message.
+    public var msg: QueueItem?
 }
 
 // MARK: - Live SSE event

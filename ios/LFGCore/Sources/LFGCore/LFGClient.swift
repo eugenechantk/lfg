@@ -224,6 +224,16 @@ public struct LFGClient: Sendable {
         _ = try await send("POST", "api/sessions/\(id)/interrupt")
     }
 
+    /// Remove a not-yet-delivered queued message (held in lfg's queue).
+    public func removeQueued(_ id: String, _ msgID: String) async throws {
+        _ = try await send("DELETE", "api/sessions/\(id)/queue/\(msgID)")
+    }
+
+    /// Interrupt the current turn and deliver this queued message immediately.
+    public func sendQueuedNow(_ id: String, _ msgID: String) async throws {
+        _ = try await send("POST", "api/sessions/\(id)/queue/\(msgID)/send-now")
+    }
+
     public func setModel(_ id: String, model: String) async throws {
         _ = try await send("POST", "api/sessions/\(id)/model", json: ["model": model])
     }

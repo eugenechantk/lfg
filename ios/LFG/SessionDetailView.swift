@@ -10,9 +10,15 @@ struct SessionDetailView: View {
     @State private var renaming = false
     @State private var newTitle = ""
     @State private var confirmEnd = false
+    /// The queued message the user tapped (drives the remove / edit / send-now sheet).
+    @State private var queueAction: SessionStore.PendingSend?
     @State private var isAtBottom = true
     @State private var bottomDebounce: Task<Void, Never>?
     @State private var scrollProxy: ScrollViewProxy?
+    // True while the open-at-bottom pin loop is force-scrolling. Guards the
+    // BOTTOM-anchor debounce from mistaking a still-loading transcript for a
+    // deliberate scroll-up and freezing auto-follow before the view settles.
+    @State private var pinningToBottom = false
 
     private var sid: String { session.sessionId ?? "" }
     private var messages: [SessionMessage] { store.transcripts[sid] ?? [] }
@@ -45,7 +51,10 @@ struct SessionDetailView: View {
         transcript
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 8) {
-                    PendingStripView(sessionID: sid, items: pending.filter { !$0.showSent }).padding(.horizontal, 16)
+                    PendingStripView(sessionID: sid, items: pending.filter { !$0.showSent }) { tapped in
+                        queueAction = tapped
+                    }
+                    .padding(.horizontal, 16)
                     MessageComposer(text: $draft, sending: false) { text, atts in
                         // Hand the send to the store, which owns it for the app's
                         // lifetime (under a background-task assertion). Leaving
@@ -53,6 +62,12 @@ struct SessionDetailView: View {
                         // message — the optimistic bubble + pending strip already
                         // give immediate feedback, so no view-owned spinner.
                         store.dispatchSend(sid, text: text, attachments: atts)
+                        // Sending is an explicit "follow me to the latest" intent:
+                        // re-arm auto-follow even if the user had scrolled up. The
+                        // onChange(of: pending.count) below does the actual scroll
+                        // once the optimistic bubble has laid out.
+                        isAtBottom = true
+                        scrollProxy?.scrollTo("BOTTOM", anchor: .bottom)
                     }
                 }
             }
@@ -74,16 +89,31 @@ struct SessionDetailView: View {
             // or one gated on `isAtBottom`, lands mid-transcript. Force-pin to the
             // bottom across the load window instead; afterwards the isAtBottom-gated
             // follow below takes over (and respects a manual scroll-up).
+            pinningToBottom = true
             for _ in 0..<16 {
                 try? await Task.sleep(for: .milliseconds(110))
                 scrollProxy?.scrollTo("BOTTOM", anchor: .bottom)
             }
+            pinningToBottom = false
             isAtBottom = true
         }
         .alert("Rename session", isPresented: $renaming) {
             TextField("Title", text: $newTitle)
             Button("Cancel", role: .cancel) {}
             Button("Save") { Task { await store.rename(sid, newTitle) } }
+        }
+        .confirmationDialog(
+            "Queued message",
+            isPresented: Binding(get: { queueAction != nil }, set: { if !$0 { queueAction = nil } }),
+            titleVisibility: .visible,
+            presenting: queueAction
+        ) { item in
+            Button("Send now (interrupt)") { Task { await store.sendQueuedNow(sid, item) } }
+            Button("Edit") { Task { draft = await store.editQueued(sid, item) } }
+            Button("Remove", role: .destructive) { Task { await store.removeQueued(sid, item) } }
+            Button("Cancel", role: .cancel) {}
+        } message: { item in
+            Text(item.displayText)
         }
         .confirmationDialog("End this session?", isPresented: $confirmEnd, titleVisibility: .visible) {
             Button("End session", role: .destructive) { Task { await store.close(sid) } }
@@ -147,7 +177,7 @@ struct SessionDetailView: View {
                             bottomDebounce?.cancel()
                             bottomDebounce = Task {
                                 try? await Task.sleep(for: .milliseconds(350))
-                                if !Task.isCancelled { isAtBottom = false }
+                                if !Task.isCancelled && !pinningToBottom { isAtBottom = false }
                             }
                         }
                 }
@@ -155,6 +185,10 @@ struct SessionDetailView: View {
             }
             .onChange(of: messages.count) { _, _ in if isAtBottom { withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) } } }
             .onChange(of: prompt) { _, _ in if isAtBottom { withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) } } }
+            // Optimistic sent bubbles and the pending strip live outside `messages`,
+            // so a fresh send changes neither `messages.count` nor `prompt`. Track
+            // the pending count too, or submitting a message wouldn't scroll down.
+            .onChange(of: pending.count) { _, _ in if isAtBottom { withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) } } }
             .onAppear {
                 scrollProxy = proxy                      // shared with .task's open-at-bottom pin
                 proxy.scrollTo("BOTTOM", anchor: .bottom)
