@@ -19,6 +19,7 @@ import { homedir } from "node:os";
 import {
   listProcs,
   cwdOf,
+  primeCwds,
   startTimeMsOf,
   procStartMatches,
   ppidOf as procPpidOf,
@@ -998,6 +999,15 @@ async function listSessionsUncached(): Promise<Session[]> {
   const claudeProcs = listClaudeProcs().filter(
     (p) => !isClosing(p.pid) && !harnessPids.has(ppidOf(p.pid) ?? -1),
   );
+  // Batch-prime every candidate proc's cwd with a single `lsof` so the per-pid
+  // cwdOf() calls in the claude + codex enrichment below hit the cache instead
+  // of each spawning their own lsof — the largest single contributor to the
+  // synchronous spawn storm. Codex pids are cheap to enumerate here (they read
+  // the shared ps snapshot, no extra spawn).
+  await primeCwds([
+    ...claudeProcs.map((p) => p.pid),
+    ...listCodexProcs().map((p) => p.pid),
+  ]);
   const enriched = await Promise.all(
     claudeProcs.map(async (p) => {
       let cwd: string | null = await cwdOf(p.pid);

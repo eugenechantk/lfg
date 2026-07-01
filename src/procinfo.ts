@@ -27,28 +27,70 @@ function spawnText(cmd: string[]): string | null {
 
 // macOS perf shim. listSessions() enriches dozens of procs and each Darwin
 // helper here shells out to `ps`/`lsof` synchronously — and Bun.spawnSync
-// blocks the single event loop, so hundreds of per-pid spawns freeze ALL HTTP
-// (including sends) for seconds. Two caches collapse that storm:
-//   - ppidMap(): ONE `ps -axo pid=,ppid=` snapshot (TTL) instead of one
-//     `ps -o ppid=` per pid (the parent-chain walk did up to 12 per session).
-//   - pidValueCache: cwd and start-time are immutable for a process's lifetime,
-//     so memoize them per pid (a long TTL guards against pid reuse).
+// blocks the single event loop AND, at a deep reentrant stack, throws a
+// `RangeError: Maximum call stack size exceeded` that even escapes the try/catch
+// in spawnText (and occasionally segfaults). The cure is to spawn FEWER, LARGER
+// commands: one `ps` snapshot of every proc, one batched `lsof` for the cwds of
+// all candidate pids. The per-pid accessors below then read from these instead
+// of spawning once each — collapsing a ~26-spawn-per-scan storm to ~2.
 // Linux paths read /proc directly (no subprocess) and are left untouched.
-const PPID_TTL_MS = 1000;
-let ppidSnap: { at: number; map: Map<number, number> } | null = null;
-function ppidMap(): Map<number, number> {
+
+// ONE `ps -axo pid=,ppid=,lstart=,command=` snapshot of every process: pid →
+// {ppid, startMs, cmd}. lstart is the last-but-one column (fixed token shape
+// "Dow Mon DD HH:MM:SS YYYY"); command is the free-form remainder. Replaces the
+// old per-pid `ps -o ppid=` / `ps -o lstart=` spawns and the separate ppidMap.
+const PROC_SNAP_TTL_MS = 600;
+interface ProcRow {
+  ppid: number;
+  startMs: number | null;
+  cmd: string;
+}
+let procSnap: { at: number; rows: Map<number, ProcRow> } | null = null;
+const LSTART = /^\s*(\d+)\s+(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+\d{2}:\d{2}:\d{2}\s+\d{4})\s+(.*)$/;
+function psSnapshot(): Map<number, ProcRow> {
   const now = Date.now();
-  if (ppidSnap && now - ppidSnap.at < PPID_TTL_MS) return ppidSnap.map;
-  const map = new Map<number, number>();
-  const out = spawnText(["ps", "-axo", "pid=,ppid="]);
+  if (procSnap && now - procSnap.at < PROC_SNAP_TTL_MS) return procSnap.rows;
+  const rows = new Map<number, ProcRow>();
+  const out = spawnText(["ps", "-axo", "pid=,ppid=,lstart=,command="]);
   if (out) {
     for (const line of out.split("\n")) {
-      const m = line.match(/^\s*(\d+)\s+(\d+)/);
-      if (m) map.set(Number(m[1]), Number(m[2]));
+      const m = line.match(LSTART);
+      if (!m) continue;
+      const startMs = Date.parse(m[3]);
+      rows.set(Number(m[1]), {
+        ppid: Number(m[2]),
+        startMs: Number.isFinite(startMs) ? startMs : null,
+        cmd: m[4].trim(),
+      });
     }
   }
-  ppidSnap = { at: now, map };
-  return map;
+  procSnap = { at: now, rows };
+  return rows;
+}
+
+// Batch-prime the cwd cache for many pids with ONE `lsof -a -p p1,p2,… -d cwd
+// -Fn` (output is a `p<pid>` block per pid, each with an `n<path>` line) instead
+// of one lsof per pid. Called once at the top of a session scan; cwdOf() then
+// finds every pid already cached and never spawns. Best-effort — any pid lsof
+// omits just stays uncached and falls back to its own lazy spawn.
+export async function primeCwds(pids: number[]): Promise<void> {
+  if (!IS_DARWIN || pids.length === 0) return;
+  const now = Date.now();
+  const missing = pids.filter((pid) => {
+    const hit = cwdCache.get(pid);
+    return !(hit && now - hit.at < PID_VALUE_TTL_MS);
+  });
+  if (missing.length === 0) return;
+  const out = spawnText(["lsof", "-a", "-p", missing.join(","), "-d", "cwd", "-Fn"]);
+  if (!out) return;
+  let cur: number | null = null;
+  for (const line of out.split("\n")) {
+    if (line.startsWith("p")) {
+      cur = Number(line.slice(1)) || null;
+    } else if (line.startsWith("n") && cur != null) {
+      cwdCache.set(cur, { at: now, val: line.slice(1).trim() || null });
+    }
+  }
 }
 
 const PID_VALUE_TTL_MS = 30_000;
@@ -74,16 +116,12 @@ function cachedPid<T>(
 // filters (e.g. dropping `app-server`) on top, exactly as before.
 export function listProcs(nameFilter: string): { pid: number; cmd: string }[] {
   if (IS_DARWIN) {
-    // `ps -axo pid=,command=` → "<pid> <full argv>" per line. No `=`-less
-    // headers because of the trailing `=` on each column.
-    const out = spawnText(["ps", "-axo", "pid=,command="]);
-    if (!out) return [];
+    // Read the shared ps snapshot (one spawn, TTL-cached) rather than spawning a
+    // dedicated `ps -axo pid=,command=` here — so listClaudeProcs + listCodexProcs
+    // in one scan share a single ps, not two.
     const procs: { pid: number; cmd: string }[] = [];
-    for (const line of out.split("\n")) {
-      const m = line.match(/^\s*(\d+)\s+(.*)$/);
-      if (!m) continue;
-      const pid = Number(m[1]);
-      const cmd = m[2].trim();
+    for (const [pid, row] of psSnapshot()) {
+      const cmd = row.cmd;
       if (!cmd.includes(nameFilter)) continue;
       const first = cmd.split(/\s+/)[0] ?? "";
       // Same gate as the Linux path: argv[0] must actually BE the tool.
@@ -137,7 +175,11 @@ export async function cwdOf(pid: number): Promise<string | null> {
 // orders processes by age the same way, which is all the heuristics need.
 export function startTimeMsOf(pid: number): number | null {
   if (IS_DARWIN) {
-    // Start time is immutable per pid → cache (avoids a `ps` spawn per pass).
+    // Prefer the shared ps snapshot (already holds lstart for every live pid).
+    // Fall back to a per-pid `ps -o lstart=` only for a pid the snapshot missed
+    // (e.g. a proc that started after the snapshot's TTL window began).
+    const snap = psSnapshot().get(pid);
+    if (snap) return snap.startMs;
     return cachedPid(startCache, pid, () => {
       const out = spawnText(["ps", "-o", "lstart=", "-p", String(pid)]);
       if (!out) return null;
@@ -202,8 +244,8 @@ export function procStartMatches(pid: number, procStart: string): boolean {
 // Parent pid of a pid, or null.
 export function ppidOf(pid: number): number | null {
   if (IS_DARWIN) {
-    // Batched snapshot lookup — see ppidMap(). Replaces a per-pid `ps` spawn.
-    const ppid = ppidMap().get(pid);
+    // Shared ps-snapshot lookup — no per-pid spawn.
+    const ppid = psSnapshot().get(pid)?.ppid;
     return ppid != null && Number.isFinite(ppid) ? ppid : null;
   }
   try {
@@ -223,10 +265,12 @@ export function ppidOf(pid: number): number | null {
 // yields the full path) and basename-normalizes it to match Linux semantics.
 export function commOf(pid: number): string | null {
   if (IS_DARWIN) {
-    const out = spawnText(["ps", "-o", "comm=", "-p", String(pid)]);
-    if (!out) return null;
-    const s = out.trim();
-    return s ? basename(s) : null;
+    // argv[0] from the shared ps snapshot, basename-normalized to match Linux
+    // comm semantics — no per-pid spawn.
+    const cmd = psSnapshot().get(pid)?.cmd;
+    if (!cmd) return null;
+    const first = cmd.split(/\s+/)[0] ?? "";
+    return first ? basename(first) : null;
   }
   try {
     const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
