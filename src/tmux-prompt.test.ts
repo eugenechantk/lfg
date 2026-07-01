@@ -61,22 +61,65 @@ describe("parsePrompt context scrape", () => {
     );
   });
 
+  // Pane-fallback (used in the window before Claude flushes the tool call to the
+  // transcript) must capture the FULL wrapped question and each option's
+  // description — not just the last question line with bare labels.
+  test("captures a wrapped question and per-option descriptions", () => {
+    const pane = [
+      "  ...tail of the user prompt that scrolled up",
+      "────────────────────────────────────────────────────────────────────────────────",
+      " ☐ Deploy",
+      "",
+      "Given the current signing setup and the fact that we have not yet proven the",
+      "archive works locally, which end-to-end deployment approach do you want to",
+      "commit to for shipping this build to TestFlight today?",
+      "",
+      "❯ 1. Local Fastlane first, then wire up GitHub Actions CI later",
+      "     Prove signing and archive locally on your Mac before adding remote CI.",
+      "     Safest, easiest to debug.",
+      "  2. Full GitHub Actions CI now",
+      "     Go straight to remote CI with match. More moving parts and harder to debug",
+      "     the first run.",
+      "  3. Type something.",
+      "────────────────────────────────────────────────────────────────────────────────",
+      "  4. Chat about this",
+      "Enter to select · ↑/↓ to navigate · Esc to cancel",
+    ].join("\n");
+    const p = parsePrompt(pane);
+    expect(p).not.toBeNull();
+    expect(p!.question).toBe(
+      "Given the current signing setup and the fact that we have not yet proven the archive works locally, which end-to-end deployment approach do you want to commit to for shipping this build to TestFlight today?",
+    );
+    expect(p!.options[0]).toMatchObject({
+      index: 1,
+      label: "Local Fastlane first, then wire up GitHub Actions CI later",
+      description:
+        "Prove signing and archive locally on your Mac before adding remote CI. Safest, easiest to debug.",
+    });
+    expect(p!.options[1]).toMatchObject({
+      index: 2,
+      label: "Full GitHub Actions CI now",
+      description:
+        "Go straight to remote CI with match. More moving parts and harder to debug the first run.",
+    });
+    // The "Type something." affordance carries no description.
+    expect(p!.options[2].description).toBeUndefined();
+  });
+
   test("no preamble bullet → context undefined", () => {
     const p = parsePrompt(bareSelectorPane);
     expect(p).not.toBeNull();
     expect(p!.context).toBeUndefined();
   });
 
-  // A long response whose top (and the "⏺" bullet) scrolled off the full-screen
-  // TUI. We can't recover the off-screen top, but we must still surface the
-  // VISIBLE tail (multi-paragraph, wrap-joined) rather than returning nothing.
-  test("bullet scrolled off → captures the visible multi-paragraph tail", () => {
+  // When the "⏺" bullet has scrolled off, the indented lines above the box are
+  // ambiguous — they could be a scrolled-off assistant preamble OR the user's
+  // own (scrolled-off) prompt. We must NOT surface them as context, or the panel
+  // echoes the user's prompt back as fake "explanation". Require the bullet.
+  test("bullet scrolled off → context undefined (never echo the user prompt)", () => {
     const pane = [
-      "  error-prone at scale, impossible to automate, and offers no audit trail, so it",
-      "  doesn't scale to frequent releases or teams.",
-      "",
-      "  My recommendation: prove signing locally with Fastlane first, then lift the",
-      "  exact same lanes into GitHub Actions. Which path do you want to start with?",
+      '  ...options (1) label "Local Fastlane first" description "prove signing',
+      '  locally", (2) label "GitHub Actions now". Wait for my answer.',
       "────────────────────────────────────────────────────────────────────────────────",
       " ☐ Deploy",
       "",
@@ -92,8 +135,6 @@ describe("parsePrompt context scrape", () => {
     ].join("\n");
     const p = parsePrompt(pane);
     expect(p).not.toBeNull();
-    expect(p!.context).toBe(
-      "error-prone at scale, impossible to automate, and offers no audit trail, so it doesn't scale to frequent releases or teams.\n\nMy recommendation: prove signing locally with Fastlane first, then lift the exact same lanes into GitHub Actions. Which path do you want to start with?",
-    );
+    expect(p!.context).toBeUndefined();
   });
 });

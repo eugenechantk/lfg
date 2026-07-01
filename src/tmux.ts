@@ -498,7 +498,15 @@ export function paneWidth(target: string): number | null {
   }
 }
 
-export type PromptOption = { index: number; label: string; selected: boolean };
+export type PromptOption = {
+  index: number;
+  label: string;
+  selected: boolean;
+  // The option's description — the indented prose the AskUserQuestion TUI renders
+  // under each label. Scraped from the pane so it's available while the question
+  // is live (the structured version isn't in the transcript until answered).
+  description?: string;
+};
 export type PanePrompt = {
   question: string;
   options: PromptOption[];
@@ -524,24 +532,26 @@ const ASSISTANT_BULLET = "⏺";
 // renders it as "⏺ <text>" with wrap-continuation lines and blank-line
 // paragraph breaks.
 //
-// IMPORTANT: Claude's TUI is a full-screen (alternate-screen) app — tmux keeps
-// NO scrollback for it, so `capture-pane` only ever yields the visible rows. A
-// response taller than the pane has its top scrolled off and is unrecoverable
-// here (and the whole turn is buffered out of the transcript until answered).
-// So we surface whatever is ON SCREEN: the tail of the response, which is where
-// the actual ask lives. We do NOT require the "⏺" bullet to be visible — when
-// it scrolled off we still return the visible block rather than nothing.
+// We REQUIRE the "⏺" assistant bullet to be visible in the block: it is the only
+// reliable signal that this prose is the assistant's and not the user's own
+// prompt. Both render as 2-space-indented wrapped lines once their leading
+// marker scrolls off the full-screen (no-scrollback) TUI, so without the bullet
+// we cannot tell them apart — and guessing surfaced the user's own prompt as
+// fake "context". If a preamble is long enough that its bullet scrolled off, we
+// return nothing rather than risk echoing the user's prompt; the full turn shows
+// as a normal transcript bubble once Claude flushes it.
 //
-// Walking up from the separator, we collect lines until a boundary: the "⏺"
+// Walking up from the separator we collect lines until a boundary: the "⏺"
 // bullet (top of the turn, inclusive), the user/composer "❯"/"›" marker, another
 // separator, two consecutive blanks, the pane top, or a hard line cap. Single
-// blank lines are kept as paragraph breaks. Wrapped lines within a paragraph are
+// blank lines are kept as paragraph breaks; wrapped lines within a paragraph are
 // re-joined with spaces so the client doesn't render mid-sentence hard breaks.
 function contextAbovePrompt(lines: string[], sepIdx: number): string | undefined {
   const collected: string[] = []; // bottom-to-top; reversed below
   let i = sepIdx - 1;
   while (i >= 0 && !lines[i].trim()) i--; // skip blanks adjacent to the box
   let consecutiveBlank = 0;
+  let foundBullet = false;
   for (let scanned = 0; i >= 0 && scanned < 40; i--, scanned++) {
     const trimmed = lines[i].trim();
     if (!trimmed) {
@@ -556,8 +566,12 @@ function contextAbovePrompt(lines: string[], sepIdx: number): string | undefined
     collected.push(
       isBullet ? trimmed.replace(new RegExp(`^${ASSISTANT_BULLET}\\s*`), "") : trimmed,
     );
-    if (isBullet) break; // reached the top of the assistant turn
+    if (isBullet) {
+      foundBullet = true;
+      break; // reached the top of the assistant turn
+    }
   }
+  if (!foundBullet) return undefined; // can't confirm it's assistant prose
   const ordered = collected.reverse();
   while (ordered.length && !ordered[0]) ordered.shift();
   while (ordered.length && !ordered[ordered.length - 1]) ordered.pop();
@@ -615,23 +629,51 @@ export function parsePrompt(pane: string): PanePrompt | null {
     }
   }
   if (!group) return null;
-  const options: PromptOption[] = group.map((h) => ({
-    index: h.index,
-    label: h.label,
-    selected: h.selected,
-  }));
-  // Question = nearest meaningful line above the first option. Skip blank
-  // lines, separators, and the AskUserQuestion multi-question nav bar
-  // (e.g. "←  ☐ Multi-box future  ☐ Durability  ✔ Submit  →").
-  let question = "";
   const start = group[0].line;
-  for (let i = start - 1; i >= 0 && i >= start - 6; i--) {
-    const t = lines[i].trim();
-    if (!t || /^[╌─_=-]+$/.test(t)) continue;
-    if (t.startsWith("←") || /✔\s*Submit/.test(t)) continue;
-    question = t;
-    break;
+  // Each option's description = the indented prose the AskUserQuestion TUI draws
+  // between this option's numbered line and the next numbered line (of any
+  // group), minus box rules and the footer. Wrapped description lines are
+  // re-joined with spaces. (A very long LABEL that itself wrapped would leak its
+  // tail into the description here — unresolvable from the pane, but labels are
+  // usually short; the transcript path, preferred when available, has the exact
+  // split.)
+  const optionLines = new Set(hits.map((h) => h.line));
+  const options: PromptOption[] = group.map((h, gi) => {
+    const end = gi + 1 < group!.length ? group![gi + 1].line : lines.length;
+    const desc: string[] = [];
+    for (let j = h.line + 1; j < end; j++) {
+      const t = lines[j].trim();
+      if (!t) continue;
+      if (optionLines.has(j)) break; // next option's line
+      if (SELECTOR_SEP_RE.test(t)) break; // box rule
+      if (/Enter to select/i.test(t)) break; // footer
+      desc.push(t);
+    }
+    return {
+      index: h.index,
+      label: h.label,
+      selected: h.selected,
+      description: desc.join(" ") || undefined,
+    };
+  });
+  // Question = the FULL block of contiguous lines above the first option. Claude
+  // wraps a long question across several flush-left lines; grabbing only the
+  // nearest one (the old behavior) surfaced "just the end of it". Join the wrap;
+  // stop at the box header (☐ …), a separator, the multi-question nav bar
+  // (←  … ✔ Submit …), or a blank line.
+  const qLines: string[] = [];
+  {
+    let i = start - 1;
+    while (i >= 0 && !lines[i].trim()) i--; // skip blank(s) directly above options
+    for (; i >= 0; i--) {
+      const t = lines[i].trim();
+      if (!t) break;
+      if (SELECTOR_SEP_RE.test(t)) break;
+      if (t.startsWith("☐") || t.startsWith("←") || /✔\s*Submit/.test(t)) break;
+      qLines.unshift(t);
+    }
   }
+  const question = qLines.join(" ");
   // The assistant preamble lives above the selector's TOP separator (the box's
   // opening rule, itself above the header/question). Find that separator, then
   // scrape the "⏺ …" prose block above it.
