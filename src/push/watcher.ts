@@ -141,7 +141,7 @@ export function buildPayload(
   const snap = snapshot(session);
   if (kind === "needs-input") {
     return {
-      title: `Needs you — ${name}`,
+      title: `🙋 ${name}`,
       body: question ? clip(question, 140) : "An agent is waiting for your input.",
       sid,
       kind,
@@ -149,7 +149,7 @@ export function buildPayload(
     };
   }
   return {
-    title: `Finished — ${name}`,
+    title: `✅ ${name}`,
     body: "The agent finished its turn.",
     sid,
     kind,

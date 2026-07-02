@@ -69,7 +69,7 @@ describe("reduceTransition (SC3)", () => {
 describe("buildPayload", () => {
   test("needs-input uses the question text", () => {
     const p = buildPayload({ sessionId: "abc", title: "Fix the bug" }, "needs-input", "Which file?");
-    expect(p.title).toContain("Needs you");
+    expect(p.title).toContain("🙋");
     expect(p.body).toBe("Which file?");
     expect(p.kind).toBe("needs-input");
     expect(p.sid).toBe("abc");
@@ -77,7 +77,7 @@ describe("buildPayload", () => {
 
   test("finished has a generic body", () => {
     const p = buildPayload({ sessionId: "abc", title: "Fix the bug" }, "finished");
-    expect(p.title).toContain("Finished");
+    expect(p.title).toContain("✅");
     expect(p.kind).toBe("finished");
   });
 
