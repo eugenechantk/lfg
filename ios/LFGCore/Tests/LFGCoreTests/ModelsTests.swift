@@ -33,6 +33,45 @@ final class ModelsTests: XCTestCase {
         XCTAssertFalse(s1.hasPane)
     }
 
+    func testDecodeResumableSessionsFromServerFields() throws {
+        // Mirrors the real /api/sessions/resumable payload: the server sends
+        // `lastActivityAt` + `lastUserText` (not `mtime`), and no `agent`.
+        let json = """
+        {"sessions":[
+          {"sessionId":"d069","cwd":"/Users/e/dev/mac","project":"mac",
+           "title":"commit and install","lastActivityAt":1782958754589,
+           "lastUserText":"commit and install on my mac"},
+          {"sessionId":"8e71","cwd":"/Users/e/dev/lfg","project":"lfg",
+           "title":"end a session","lastActivityAt":1782958754492,"lastUserText":null}
+        ]}
+        """.data(using: .utf8)!
+        let resp = try JSONDecoder().decode(ResumableResponse.self, from: json)
+        XCTAssertEqual(resp.sessions.count, 2)
+        let r0 = resp.sessions[0]
+        XCTAssertEqual(r0.sessionId, "d069")
+        XCTAssertEqual(r0.mtime, 1782958754589)          // decoded from lastActivityAt
+        XCTAssertEqual(r0.lastUserText, "commit and install on my mac")
+        XCTAssertNil(resp.sessions[1].lastUserText)
+        // Legacy fallback: an older server that still sends `mtime`.
+        let legacy = """
+        {"sessions":[{"sessionId":"x","mtime":123.0}]}
+        """.data(using: .utf8)!
+        let l = try JSONDecoder().decode(ResumableResponse.self, from: legacy)
+        XCTAssertEqual(l.sessions[0].mtime, 123.0)
+    }
+
+    func testSessionClosedFlagDefaultsFalseAndSurvivesInit() throws {
+        // Server payloads never carry `closed` → defaults false.
+        let json = """
+        {"sessions":[{"agent":"claude","sessionId":"a","title":"t"}]}
+        """.data(using: .utf8)!
+        let resp = try JSONDecoder().decode(SessionsResponse.self, from: json)
+        XCTAssertFalse(resp.sessions[0].closed)
+        // Client-synthesized closed session.
+        let closed = Session(sessionId: "b", title: "t", agent: "claude", closed: true)
+        XCTAssertTrue(closed.closed)
+    }
+
     func testDecodeMessagesResponse() throws {
         let json = """
         {"id":"a2e5","messages":[

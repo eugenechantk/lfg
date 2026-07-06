@@ -22,7 +22,7 @@ struct RootView: View {
                 } detail: {
                     if let selection {
                         if let session = store.session(selection) {
-                            SessionDetailView(session: session)
+                            SessionDetailView(session: session, onEnded: { self.selection = nil })
                                 .id(selection)
                         } else {
                             // Selected (often via a notification tap) but not

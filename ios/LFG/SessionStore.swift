@@ -12,6 +12,17 @@ import LFGCore
     private(set) var reachability: Reachability?
     var lastError: String?
 
+    /// Consecutive failed polls since the last success. Used to debounce the
+    /// visible `reachability` so a single transient blip (the single-event-loop
+    /// Bun server documented to stall HTTP 20s+ under PTY load, a tailnet
+    /// reroute, an app-just-foregrounded gap) doesn't flip a healthy connection
+    /// to "Offline" — which then contradicts a fresh Settings ping. See
+    /// `.claude/diagnosis-settings-reachable-list-offline.md`.
+    private var consecutiveFailures = 0
+    /// Failed polls to tolerate before surfacing "not reachable" from a
+    /// currently-healthy state (~9s at the 3s poll interval).
+    private let failureThreshold = 3
+
     // Per-session live state, keyed by sessionId.
     private(set) var transcripts: [String: [SessionMessage]] = [:]
     private(set) var prompts: [String: AgentPrompt] = [:]
@@ -67,12 +78,35 @@ import LFGCore
     private(set) var usage: Usage?
 
     private var seen: [String: Set<String>] = [:]
+
+    /// Per-session "last time this viewer opened it" (epoch ms), persisted in
+    /// UserDefaults so unread marks survive relaunch. A completed (idle) session
+    /// whose `lastActivityAt` is newer than its entry here is shown as "Unread".
+    /// Populated on open (`focus`) and kept current for the session on screen as
+    /// it streams. See `ReadState.isUnread` for the predicate.
+    private var lastOpenedAt: [String: Double]
+    private static let lastOpenedKey = "lfg.lastOpenedAt"
+
     private var streamTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
     private var streamedIDs: [String] = []
     private var focusedID: String?
 
-    init(settings: AppSettings) { self.settings = settings }
+    /// Closed (resumable) sessions synthesized from `/api/sessions/resumable`,
+    /// merged into `sessions` each poll so ended sessions stay visible. Refreshed
+    /// on a slower cadence than the 3s live poll (see `resumeTick`) since the
+    /// resumable list changes rarely and each fetch reads transcript heads.
+    private var closedCache: [Session] = []
+    private var resumeTick = 0
+    /// Ids of closed sessions we've resumed this run. Claude resumes into a NEW
+    /// sessionId while the old transcript lingers on disk (so it keeps showing as
+    /// resumable) — suppress the stale closed card once we've revived it.
+    private var resumedIds: Set<String> = []
+
+    init(settings: AppSettings) {
+        self.settings = settings
+        lastOpenedAt = (UserDefaults.standard.dictionary(forKey: Self.lastOpenedKey) as? [String: Double]) ?? [:]
+    }
 
     var client: LFGClient? { settings.client }
 
@@ -150,7 +184,8 @@ import LFGCore
     func reconnect() {
         stop()
         sessions = []; transcripts = [:]; prompts = [:]; busy = [:]; queues = [:]; seen = [:]; pendingSends = [:]
-        reachability = nil; usage = nil; repos = []; users = []
+        closedCache = []; resumedIds = []; resumeTick = 0
+        reachability = nil; consecutiveFailures = 0; usage = nil; repos = []; users = []
         start()
     }
 
@@ -160,11 +195,28 @@ import LFGCore
         guard let client else { reachability = .badResponse("No host configured"); return }
         do {
             let fresh = try await client.sessions()
+            // Refresh the closed/resumable set on a slower cadence (first poll,
+            // then every ~12s) — it changes rarely and each fetch reads transcript
+            // heads. The cached copy is merged in every poll below.
+            resumeTick += 1
+            if resumeTick % 4 == 1, let r = try? await client.resumable(limit: 60) {
+                closedCache = r.map(Self.closedSession(from:))
+            }
+            let liveIds = Set(fresh.compactMap(\.sessionId))
             // Keep any not-yet-reconciled optimistic (placeholder-id) sessions so
             // a poll landing mid-create can't make the open session vanish.
-            sessions = fresh + optimisticSessions.filter { o in
-                !fresh.contains { $0.sessionId == o.sessionId }
+            let optimistic = optimisticSessions.filter { o in
+                guard let id = o.sessionId else { return true }
+                return !liveIds.contains(id)
             }
+            let optimisticIds = Set(optimistic.compactMap(\.sessionId))
+            // Merge closed sessions that aren't live, optimistic, or already
+            // resumed away this run, so ended sessions stay in the list.
+            let closed = closedCache.filter { c in
+                guard let cid = c.sessionId else { return false }
+                return !liveIds.contains(cid) && !optimisticIds.contains(cid) && !resumedIds.contains(cid)
+            }
+            sessions = fresh + optimistic + closed
             // Seed busy from the REST baseline for sessions the live SSE stream
             // doesn't cover (outside the 24-id window). Streamed sessions keep
             // their accurate pane-scraped SSE busy as an override. Without this,
@@ -190,15 +242,29 @@ import LFGCore
                 deepLinkSession = nil
             }
             reachability = .ok
+            consecutiveFailures = 0
             lastError = nil
             ensureStream()
             await reconcilePendingViaQueue()
         } catch let LFGError.notReachable(u) {
-            reachability = .hostUnreachable(u)
+            noteFailure(.hostUnreachable(u))
         } catch let LFGError.http(status, _) {
-            reachability = .badResponse("HTTP \(status)")
+            noteFailure(.badResponse("HTTP \(status)"))
         } catch {
-            reachability = .badResponse(error.localizedDescription)
+            noteFailure(.badResponse(error.localizedDescription))
+        }
+    }
+
+    /// Record a failed poll. Only surface the failure as the visible
+    /// `reachability` once we're either already not-healthy (keep the banner's
+    /// error detail current, incl. cold start where `reachability` is nil) or
+    /// have crossed `failureThreshold` from a healthy `.ok` state. This debounces
+    /// a single transient blip so it can't spuriously flip "Connected" → "Offline"
+    /// while the host is actually up.
+    private func noteFailure(_ pending: Reachability) {
+        consecutiveFailures += 1
+        if reachability != .ok || consecutiveFailures >= failureThreshold {
+            reachability = pending
         }
     }
 
@@ -235,9 +301,19 @@ import LFGCore
 
     /// Pin the currently-open session so it always receives live events.
     func focus(_ id: String?) {
+        if let id { markOpened(id) }
         guard focusedID != id else { return }
         focusedID = id
         ensureStream()
+    }
+
+    /// Stamp a session as seen "now" (epoch ms) and persist. Called when the
+    /// session is opened and as it streams while on screen, so it clears from the
+    /// "Unread" group. No-op for local placeholder ids (not real sessions yet).
+    private func markOpened(_ id: String) {
+        guard !id.hasPrefix("local-") else { return }
+        lastOpenedAt[id] = Date().timeIntervalSince1970 * 1000
+        UserDefaults.standard.set(lastOpenedAt, forKey: Self.lastOpenedKey)
     }
 
     private func ensureStream() {
@@ -245,6 +321,7 @@ import LFGCore
         // ones, so the session being viewed and any running sessions always get
         // live events even past the server's 24-id cap.
         var ordered = sessions
+            .filter { !$0.closed }                // closed sessions have no live pane to stream
             .sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
             .compactMap(\.sessionId)
             .filter { !$0.hasPrefix("local-") }   // placeholders aren't on the server yet
@@ -291,6 +368,10 @@ import LFGCore
             if set.contains(key) { return }
             set.insert(key); seen[sid] = set
             transcripts[sid, default: []].append(m)
+            // Keep the session on screen marked read as its output streams in, so
+            // a turn that completes while you're watching doesn't resurface it as
+            // unread when you leave the detail view.
+            if sid == focusedID { markOpened(sid) }
             // A real user turn just landed — drop any optimistic bubble it fulfils.
             if m.role == "user" { reconcilePending(sid) }
         case .prompt(let sid, let prompt):
@@ -308,21 +389,31 @@ import LFGCore
     // MARK: Derived view state
 
     enum Group: Int, CaseIterable {
-        case needsInput, blocked, working, idle
+        case needsInput, blocked, working, unread, idle, closed
         var title: String {
             switch self {
             case .needsInput: return "Needs you"
             case .blocked: return "Paused"
             case .working: return "Working"
+            case .unread: return "Unread"
             case .idle: return "Idle"
+            case .closed: return "Closed"
             }
         }
     }
 
     func group(for s: Session) -> Group {
+        if s.closed { return .closed }
         if let sid = s.sessionId, prompts[sid] != nil { return .needsInput }
         if s.isBlocked { return .blocked }
         if let sid = s.sessionId, busy[sid] == true { return .working }
+        // Completed (idle) but with output newer than the last time this device
+        // opened it → "Unread". The session on screen is excluded (you're reading
+        // it right now, even before its stream stamps it read).
+        if let sid = s.sessionId, sid != focusedID,
+           ReadState.isUnread(lastActivityAt: s.lastActivityAt, lastOpenedAt: lastOpenedAt[sid]) {
+            return .unread
+        }
         return .idle
     }
 
@@ -399,6 +490,21 @@ import LFGCore
     }
 
     // MARK: Optimistic sends
+
+    /// Build a display `Session` for a closed/resumable transcript. `closed` marks
+    /// it so `group(for:)` files it under "Closed" and the send path treats a
+    /// message to it as a wake-up (server auto-resumes on send).
+    private static func closedSession(from r: ResumableSession) -> Session {
+        Session(
+            sessionId: r.sessionId,
+            title: (r.title?.isEmpty == false ? r.title! : "Session"),
+            agent: r.agent ?? "claude",
+            project: r.project,
+            cwd: r.cwd,
+            lastUserText: r.lastUserText,
+            lastActivityAt: r.mtime,
+            closed: true)
+    }
 
     /// Normalize text for fuzzy matching an optimistic send against the user turn
     /// the agent eventually records (whitespace/case differences, wrapping).
@@ -530,7 +636,16 @@ import LFGCore
     /// almost always identical, and a normal live send sets `resumed` nil.
     private func applyResume(from old: String, _ resp: SendResponse) {
         guard resp.resumed == true, let new = resp.sessionId, !new.isEmpty, new != old else { return }
+        // Carry the just-resumed session forward under its new live id so the open
+        // detail doesn't blank out during the 1–6s the revived pane takes to
+        // appear in the live list. Cleared on the next refresh once it's live.
+        if var carried = session(old) {
+            carried.sessionId = new
+            carried.closed = false
+            deepLinkSession = carried
+        }
         remap(from: old, to: new)
+        requestSelection(new)   // move the open detail from the closed id to the live one
     }
 
     func send(_ id: String, _ text: String) async {
@@ -591,8 +706,12 @@ import LFGCore
         // message has to resume the conversation server-side first (a real
         // round-trip), so show it as a bubble (showSent) but unconfirmed/muted
         // until the send returns, rather than instantly-blue as if received.
-        let isWakeUp = !sessions.contains { $0.sessionId == id }
-            && (focusedSnapshot?.sessionId == id || deepLinkSession?.sessionId == id)
+        // A closed session shown in the list is also a wake-up: the send resumes
+        // it server-side (a real round-trip) before it's live.
+        let isClosed = session(id)?.closed == true
+        let isWakeUp = isClosed
+            || (!sessions.contains { $0.sessionId == id }
+                && (focusedSnapshot?.sessionId == id || deepLinkSession?.sessionId == id))
         let pid = UUID().uuidString
         let nowMs = Date().timeIntervalSince1970 * 1000
         pendingSends[id, default: []].append(
@@ -744,6 +863,9 @@ import LFGCore
     /// server-assigned id once an optimistic create lands, then drop the
     /// placeholder session so only the real one remains.
     private func remap(from old: String, to new: String) {
+        // A resumed closed session's old transcript lingers on disk; remember it
+        // so the merge in `refresh` doesn't re-add it as a stale "Closed" card.
+        resumedIds.insert(old)
         if let v = transcripts.removeValue(forKey: old) { transcripts[new] = v }
         if let v = prompts.removeValue(forKey: old) { prompts[new] = v }
         if let v = busy.removeValue(forKey: old) { busy[new] = v }
@@ -758,6 +880,7 @@ import LFGCore
         // the authoritative copy arrives on the next refresh.
         if let i = sessions.firstIndex(where: { $0.sessionId == old }) {
             sessions[i].sessionId = new
+            sessions[i].closed = false   // it's reviving — no longer a closed card
         }
         if focusedID == old { focus(new) }
     }
@@ -769,5 +892,17 @@ import LFGCore
             await refresh()
             return resp.sessionId
         } catch { lastError = "Resume failed: \(error.localizedDescription)"; return nil }
+    }
+
+    /// Fork a session into a new branch and return the new session's id (nil on
+    /// failure). The source is untouched; the caller focuses the returned id so
+    /// the detail view deep-links straight into the fork.
+    func fork(_ req: ForkRequest) async -> String? {
+        guard let client else { return nil }
+        do {
+            let resp = try await client.fork(req)
+            await refresh()
+            return resp.sessionId
+        } catch { lastError = "Fork failed: \(error.localizedDescription)"; return nil }
     }
 }

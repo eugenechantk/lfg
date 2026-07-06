@@ -4,12 +4,18 @@ import UIKit
 
 struct SessionDetailView: View {
     let session: Session
+    /// Called after the session is closed, so the owner (RootView) can clear the
+    /// navigation selection and pop back to the list. Without this the split view
+    /// keeps `selection` pointed at the now-deleted session and the detail column
+    /// gets stuck on `DetailLoading` ("Opening session…").
+    var onEnded: () -> Void = {}
     @Environment(SessionStore.self) private var store
 
     @State private var draft = ""
     @State private var renaming = false
     @State private var newTitle = ""
     @State private var confirmEnd = false
+    @State private var forking = false
     /// The queued message the user tapped (drives the remove / edit / send-now sheet).
     @State private var queueAction: SessionStore.PendingSend?
     @State private var isAtBottom = true
@@ -116,7 +122,7 @@ struct SessionDetailView: View {
             Text(item.displayText)
         }
         .confirmationDialog("End this session?", isPresented: $confirmEnd, titleVisibility: .visible) {
-            Button("End session", role: .destructive) { Task { await store.close(sid) } }
+            Button("End session", role: .destructive) { Task { await store.close(sid); onEnded() } }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("The agent's tmux session will be closed.")
@@ -238,6 +244,14 @@ struct SessionDetailView: View {
                             .foregroundStyle(.secondary)
                     }
                     .transition(.opacity.combined(with: .move(edge: .top)))
+                } else if let path = headerPath {
+                    // No status text while idle — surface the working path there
+                    // instead so it's clear which directory this session drives.
+                    Text(path)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.head)   // keep the meaningful tail visible
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: isBusy)
@@ -267,6 +281,19 @@ struct SessionDetailView: View {
                     Label("Rename", systemImage: "pencil")
                 }
 
+                // Fork branches this conversation into a new session (claude
+                // --resume --fork-session): the source is untouched, the fork
+                // carries the full history and lands at an empty composer. Only
+                // Claude-family transcripts (claude/aisdk) can be forked; the
+                // codex family isn't --resume-compatible, so hide it there.
+                if canFork {
+                    Button { Task { await forkSession() } } label: {
+                        Label(forking ? "Forking…" : "Fork session",
+                              systemImage: "arrow.triangle.branch")
+                    }
+                    .disabled(forking)
+                }
+
                 // Debug: surface the underlying ids; tapping copies to clipboard.
                 Section("Debug — tap to copy") {
                     if let tmux = session.tmuxName ?? session.tmuxTarget, !tmux.isEmpty {
@@ -291,6 +318,33 @@ struct SessionDetailView: View {
 
     private var modelOptions: [String] {
         AgentKind(rawValue: session.agent)?.models ?? AgentKind.aisdk.models
+    }
+
+    /// Only Claude-family sessions (claude CLI + aisdk) keep a claude-shaped
+    /// transcript under ~/.claude/projects that `claude --resume --fork-session`
+    /// understands. The codex family isn't resume-compatible, so hide Fork there.
+    private var canFork: Bool {
+        !sid.isEmpty && (session.agent == "claude" || session.agent == "aisdk" || session.agent == nil)
+    }
+
+    /// Branch this session and navigate into the fork. The store returns the new
+    /// session's id, which we hand to `requestSelection` so the split view opens
+    /// the fork directly (its history is already copied server-side).
+    private func forkSession() async {
+        guard !forking else { return }
+        forking = true
+        defer { forking = false }
+        let newId = await store.fork(ForkRequest(sessionId: sid))
+        if let newId { store.requestSelection(newId) }
+    }
+
+    /// The working path shown under the title when the session is idle (no
+    /// "Running" status text). Prefers the real working dir, falling back to the
+    /// friendly project name; nil when neither is known.
+    private var headerPath: String? {
+        if let cwd = session.cwd, !cwd.isEmpty { return cwd }
+        if let project = session.project, !project.isEmpty { return project }
+        return nil
     }
 
     /// Human label for the agent's own session id (used in the Debug menu).

@@ -201,6 +201,13 @@ public struct LFGClient: Sendable {
         return try JSONDecoder().decode(NewSessionResponse.self, from: data)
     }
 
+    public func fork(_ r: ForkRequest) async throws -> NewSessionResponse {
+        let data = try await send("POST", "api/sessions/fork", json: [
+            "sessionId": r.sessionId, "model": r.model, "user": r.user,
+        ])
+        return try JSONDecoder().decode(NewSessionResponse.self, from: data)
+    }
+
     // MARK: Steering
 
     @discardableResult

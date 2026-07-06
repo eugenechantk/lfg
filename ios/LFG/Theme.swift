@@ -25,7 +25,9 @@ enum Theme {
         case .needsInput: return .blue
         case .blocked: return .orange
         case .working: return .green
+        case .unread: return .purple
         case .idle: return .secondary
+        case .closed: return Color.secondary.opacity(0.45)
         }
     }
 }

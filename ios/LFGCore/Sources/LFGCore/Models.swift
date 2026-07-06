@@ -26,6 +26,11 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     /// stale "Working" badge for sessions the live SSE stream doesn't cover (or
     /// whose busy delta was missed across a reconnect). nil on older servers.
     public var busy: Bool?
+    /// Client-synthesized (never sent by the server): a closed/resumable session
+    /// whose live pane is gone but whose transcript survives on disk. Surfaced in
+    /// the list from `/api/sessions/resumable` so it stays visible; sending to it
+    /// auto-resumes the conversation server-side. See `SessionStore.refresh`.
+    public var closed: Bool
 
     public var id: String { sessionId ?? tmuxName ?? title }
 
@@ -41,7 +46,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         assignedUser: String? = nil, lastUserText: String? = nil,
         startedAt: Double? = nil, lastActivityAt: Double? = nil,
         tmuxTarget: String? = nil, tmuxName: String? = nil, managed: Bool? = nil,
-        busy: Bool? = nil
+        busy: Bool? = nil, closed: Bool = false
     ) {
         self.sessionId = sessionId; self.title = title; self.agent = agent
         self.model = model; self.project = project; self.cwd = cwd
@@ -49,7 +54,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         self.assignedUser = assignedUser; self.lastUserText = lastUserText
         self.startedAt = startedAt; self.lastActivityAt = lastActivityAt
         self.tmuxTarget = tmuxTarget; self.tmuxName = tmuxName; self.managed = managed
-        self.busy = busy
+        self.busy = busy; self.closed = closed
     }
 
     public init(from decoder: Decoder) throws {
@@ -71,6 +76,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         tmuxName = try c.decodeIfPresent(String.self, forKey: .tmuxName)
         managed = try c.decodeIfPresent(Bool.self, forKey: .managed)
         busy = try c.decodeIfPresent(Bool.self, forKey: .busy)
+        closed = (try c.decodeIfPresent(Bool.self, forKey: .closed)) ?? false
     }
 }
 
@@ -255,9 +261,16 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
     public var title: String?
     public var project: String?
     public var cwd: String?
+    /// Last-activity epoch millis. The server sends this as `lastActivityAt`
+    /// (older builds may send `mtime`); decode either.
     public var mtime: Double?
     public var agent: String?
+    public var lastUserText: String?
     public var id: String { sessionId }
+
+    enum CodingKeys: String, CodingKey {
+        case sessionId, title, project, cwd, mtime, agent, lastActivityAt, lastUserText
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -265,8 +278,26 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
         title = try c.decodeIfPresent(String.self, forKey: .title)
         project = try c.decodeIfPresent(String.self, forKey: .project)
         cwd = try c.decodeIfPresent(String.self, forKey: .cwd)
-        mtime = try c.decodeIfPresent(Double.self, forKey: .mtime)
+        if let la = try c.decodeIfPresent(Double.self, forKey: .lastActivityAt) {
+            mtime = la
+        } else {
+            mtime = try c.decodeIfPresent(Double.self, forKey: .mtime)
+        }
         agent = try c.decodeIfPresent(String.self, forKey: .agent)
+        lastUserText = try c.decodeIfPresent(String.self, forKey: .lastUserText)
+    }
+
+    // Manual encode: an explicit CodingKeys enum with an extra `lastActivityAt`
+    // case (no matching stored property) suppresses Encodable synthesis.
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(sessionId, forKey: .sessionId)
+        try c.encodeIfPresent(title, forKey: .title)
+        try c.encodeIfPresent(project, forKey: .project)
+        try c.encodeIfPresent(cwd, forKey: .cwd)
+        try c.encodeIfPresent(mtime, forKey: .lastActivityAt)
+        try c.encodeIfPresent(agent, forKey: .agent)
+        try c.encodeIfPresent(lastUserText, forKey: .lastUserText)
     }
 }
 
@@ -293,6 +324,19 @@ public struct ResumeRequest: Codable, Sendable {
     public var prompt: String?
     public init(sessionId: String, model: String? = nil, user: String? = nil, prompt: String? = nil) {
         self.sessionId = sessionId; self.model = model; self.user = user; self.prompt = prompt
+    }
+}
+
+/// Fork a session into a new branch (`claude --resume <id> --fork-session`). The
+/// source transcript is left untouched; the server mints a new sessionId for the
+/// branch and returns it in a `NewSessionResponse`. Unlike resume, no prompt —
+/// a fork lands at the composer carrying the copied history, ready to diverge.
+public struct ForkRequest: Codable, Sendable {
+    public var sessionId: String
+    public var model: String?
+    public var user: String?
+    public init(sessionId: String, model: String? = nil, user: String? = nil) {
+        self.sessionId = sessionId; self.model = model; self.user = user
     }
 }
 
