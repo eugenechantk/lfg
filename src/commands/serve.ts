@@ -140,6 +140,50 @@ async function resumeClosedSession(opts: {
   return { ok: true, tmuxName, cwd, newId };
 }
 
+// Fork a claude session into a new branch via `claude --resume <id>
+// --fork-session`. Unlike resume, this NEVER dedupes against a live session —
+// forking a running conversation is the whole point (branch off whatever's
+// flushed to the transcript, leaving the source untouched). Claude mints a new
+// sessionId/transcript for the branch, which we resolve from the pidfile and
+// hand back so the client can deep-link into the fork.
+type ForkOutcome =
+  | { ok: true; tmuxName: string; cwd: string; newId: string | null }
+  | { ok: false; status: number; error: string };
+
+async function forkSession(opts: {
+  sessionId: string;
+  model?: string;
+  user?: string;
+}): Promise<ForkOutcome> {
+  const sessionId = opts.sessionId.trim();
+  if (!sessionId) return { ok: false, status: 400, error: "sessionId required" };
+  if (opts.model && !CLAUDE_MODELS.includes(opts.model))
+    return { ok: false, status: 400, error: `unknown model "${opts.model}"` };
+  const transcript = await resolveTranscript(sessionId);
+  if (!transcript) return { ok: false, status: 404, error: "no transcript found for that session" };
+  // fork drives the claude CLI (`--resume ... --fork-session`), which only
+  // understands transcripts under ~/.claude/projects (claude + aisdk). Codex/
+  // opencode rollouts live elsewhere, so reject them with a clear message.
+  if (!transcript.includes("/.claude/projects/"))
+    return { ok: false, status: 400, error: "only claude sessions can be forked" };
+  const cwd = (await cwdForTranscript(transcript)) ?? SELF_REPO;
+  // Branch on the model the conversation was last using, unless overridden.
+  const model = opts.model || (await modelAliasForTranscript(transcript)) || undefined;
+  const tmuxName = `lfg-${randomBytes(3).toString("hex")}`;
+  const r = spawnManagedSession({ name: tmuxName, cwd, model, resume: sessionId, fork: true });
+  if (!r.ok) return { ok: false, status: 502, error: r.error || "failed to fork session" };
+  addManaged({ tmuxName, cwd, createdAt: Date.now(), agent: "claude" });
+  if (opts.user) assignUser(tmuxName, opts.user);
+  // The fork gets a fresh sessionId/transcript — wait for the pidfile.
+  let newId: string | null = null;
+  for (let i = 0; i < 12 && !newId; i++) {
+    await new Promise((res) => setTimeout(res, 500));
+    const pid = panePidForSession(tmuxName);
+    if (pid) newId = sessionIdForPid(pid);
+  }
+  return { ok: true, tmuxName, cwd, newId };
+}
+
 const PORT = Number(process.env.LFG_PORT ?? 8766);
 // Bind to loopback by default — the UI is meant to be reached over Tailscale
 // (via `tailscale serve`), never the public internet. Override LFG_HOST only
@@ -1278,6 +1322,24 @@ export async function cmdServe() {
         if (out.alreadyLive)
           return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId, alreadyLive: true, agent: "claude" });
         return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId: out.newId, resumedFrom: sessionId, agent: "claude" });
+      }
+
+      // Fork a claude session into a new branch: `claude --resume <id>
+      // --fork-session` mints a new sessionId from the source's history, leaving
+      // the original transcript untouched. Works on live sessions too (branch off
+      // whatever's flushed). Returns the new forked id so the client deep-links in.
+      if (path === "/api/sessions/fork" && req.method === "POST") {
+        const body = (await req.json().catch(() => null)) as {
+          sessionId?: string;
+          model?: string;
+          user?: string;
+        } | null;
+        const sessionId = body?.sessionId?.trim();
+        if (!sessionId) return err(400, "sessionId required");
+        const model = body?.model?.trim() || undefined;
+        const out = await forkSession({ sessionId, model, user: body?.user });
+        if (!out.ok) return err(out.status, out.error);
+        return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId: out.newId, forkedFrom: sessionId, agent: "claude" });
       }
 
       if (path === "/api/sessions/new" && req.method === "POST") {

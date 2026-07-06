@@ -227,6 +227,40 @@ export function spawnAgentSession(opts: {
 // first prompt is optional (omit it to land at an empty composer). The caller
 // resolves the new sessionId from panePidForSession(name) once claude writes
 // its pidfile.
+// Build the `tmux new-session … claude …` argv for a managed session. Pure and
+// side-effect-free (no spawn, no trust prompt) so the flag wiring — resume,
+// fork, model, prompt terminator — is unit-testable without launching anything.
+export function managedSessionArgv(opts: {
+  name: string;
+  cwd: string;
+  prompt?: string;
+  model?: string;
+  resume?: string;
+  fork?: boolean;
+}): string[] {
+  const argv = ["tmux", "new-session", "-d", "-s", opts.name, "-c", opts.cwd,
+    claudeBin(), "--dangerously-skip-permissions", "--add-dir", reposRoot()];
+  // Resume the prior conversation when asked. Placed before --model so the flags
+  // read like relaunchSessionWithModel's argv; order is irrelevant to claude.
+  if (opts.resume && opts.resume.trim()) {
+    argv.push("--resume", opts.resume.trim());
+    // Branch instead of revive: fork mints a new id from the resumed history.
+    if (opts.fork) argv.push("--fork-session");
+  }
+  // ALWAYS pin a model. A bare `claude` inherits Claude Code's saved global
+  // default, which can silently rot — when Anthropic retires/disables that
+  // model (e.g. the Fable off-switch), every inheriting session boots straight
+  // into "model unavailable" and freezes, replaying the error on every turn.
+  // An explicit --model is the only thing that overrides it. DEFAULT_MODEL is a
+  // known-good fallback when the caller didn't pick one.
+  argv.push("--model", opts.model || DEFAULT_MODEL);
+  // `--` terminates option parsing so the variadic --add-dir can't swallow the
+  // positional prompt as a second directory (which strands the new session at
+  // an empty composer — the first message never gets submitted).
+  if (opts.prompt && opts.prompt.trim()) argv.push("--", opts.prompt);
+  return argv;
+}
+
 export function spawnManagedSession(opts: {
   name: string;
   cwd: string;
@@ -239,26 +273,15 @@ export function spawnManagedSession(opts: {
   // sessionId/transcript, so the caller resolves the live id from the pidfile
   // afterwards (same as a fresh spawn). The full prior history is preserved.
   resume?: string;
+  // When set alongside `resume`, append `--fork-session` so claude mints a NEW
+  // session id from the resumed history instead of reusing the original — a
+  // branch, not a revive. The original transcript is left untouched, so the
+  // source session (live or closed) is unaffected. Ignored without `resume`.
+  fork?: boolean;
 }): { ok: boolean; error?: string } {
   const dec = new TextDecoder();
   ensureFolderTrusted(opts.cwd);
-  const argv = ["tmux", "new-session", "-d", "-s", opts.name, "-c", opts.cwd,
-    claudeBin(), "--dangerously-skip-permissions", "--add-dir", reposRoot()];
-  // Resume the prior conversation when asked. Placed before --model so the flags
-  // read like relaunchSessionWithModel's argv; order is irrelevant to claude.
-  if (opts.resume && opts.resume.trim()) argv.push("--resume", opts.resume.trim());
-  // ALWAYS pin a model. A bare `claude` inherits Claude Code's saved global
-  // default, which can silently rot — when Anthropic retires/disables that
-  // model (e.g. the Fable off-switch), every inheriting session boots straight
-  // into "model unavailable" and freezes, replaying the error on every turn.
-  // An explicit --model is the only thing that overrides it. DEFAULT_MODEL is a
-  // known-good fallback when the caller didn't pick one.
-  argv.push("--model", opts.model || DEFAULT_MODEL);
-  // `--` terminates option parsing so the variadic --add-dir can't swallow the
-  // positional prompt as a second directory (which strands the new session at
-  // an empty composer — the first message never gets submitted).
-  if (opts.prompt && opts.prompt.trim()) argv.push("--", opts.prompt);
-  const create = Bun.spawnSync(argv);
+  const create = Bun.spawnSync(managedSessionArgv(opts));
   if (create.exitCode !== 0)
     return { ok: false, error: dec.decode(create.stderr) || "new-session failed" };
   return { ok: true };
