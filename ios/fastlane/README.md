@@ -37,7 +37,7 @@ Register the App ID and create the App Store Connect app record (headless, API-k
 [bundle exec] fastlane ios bootstrap_match
 ```
 
-Create or refresh App Store signing assets in the match repo (Phase 2 / CI)
+Create or refresh App Store signing assets in the shared match repo (run once per app)
 
 ### ios deploy_testflight
 
@@ -46,6 +46,14 @@ Create or refresh App Store signing assets in the match repo (Phase 2 / CI)
 ```
 
 Build a signed Release archive and upload it to TestFlight
+
+### ios beta
+
+```sh
+[bundle exec] fastlane ios beta
+```
+
+Alias for deploy_testflight
 
 ----
 

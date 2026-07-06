@@ -233,9 +233,11 @@ GEM
 
 PLATFORMS
   arm64-darwin-23
+  arm64-darwin-24
 
 DEPENDENCIES
   fastlane
+  xcodeproj
 
 BUNDLED WITH
    2.4.19

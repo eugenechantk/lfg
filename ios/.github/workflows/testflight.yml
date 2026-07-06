@@ -1,0 +1,40 @@
+# Self-contained TestFlight workflow — each project owns its own copy of this file.
+# Byte-identical across apps: per-app config is read from the committed fastlane/.env;
+# secrets come from GitHub secrets (set per-repo, or once at the org level + inherit).
+# Managed by the `testflight-deploy` skill; edit the template + `scaffold sync --all`.
+name: TestFlight
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: testflight-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      DEVELOPER_TEAM_ID:                ${{ secrets.DEVELOPER_TEAM_ID }}
+      APP_STORE_CONNECT_API_KEY_ID:     ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID:  ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+      MATCH_GIT_URL:                    ${{ secrets.MATCH_GIT_URL }}
+      MATCH_PASSWORD:                   ${{ secrets.MATCH_PASSWORD }}
+      MATCH_GIT_BASIC_AUTHORIZATION:    ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+      MATCH_GIT_BRANCH:                 main
+      FASTLANE_SKIP_UPDATE_CHECK:       "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+      - name: Install XcodeGen if this app uses it
+        run: if grep -q '^USES_XCODEGEN=true' fastlane/.env 2>/dev/null; then brew install xcodegen; fi
+      # Per-app config (APP_IDENTIFIER, FASTLANE_PROJECT/TARGET/SCHEME, USES_XCODEGEN,
+      # APP_NAME) is read from the committed fastlane/.env by fastlane's dotenv.
+      - run: bundle exec fastlane ios deploy_testflight

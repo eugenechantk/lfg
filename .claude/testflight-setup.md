@@ -4,18 +4,17 @@
 - **Bundle ID:** `com.eugenechan.lfg` (was `dev.omg.lfg`; `omg` was upstream's naming).
 - **Team:** `39GJBP8V5A` (Eugene's own team — already used by Noto + most apps).
 - **API key:** reuse Noto's account-level App Store Connect API key (account-scoped, works for all apps). Stored git-ignored in `ios/fastlane/.env.local`.
-- **Mode:** Local Fastlane first (automatic signing, no match), then GitHub Actions + match later.
+- **Mode:** **Local-only.** `bundle exec fastlane ios deploy_testflight` on Eugene's machine. **No GitHub CI** — deliberately. (An earlier plan mirrored Noto's `testflight.yml`; dropped by decision 2026-07-01.)
+- **Signing:** **match** (Noto's pattern), assets in a dedicated private repo `github.com/eugenechantk/match-lfg`. Reuses Noto's `MATCH_PASSWORD`; separate repo keeps lfg's cert/profile isolated.
 - **APNs:** entitlement made config-driven — `development` (Debug) / `production` (Release/archive) via `$(APS_ENVIRONMENT)`.
 
-## Phase 1 — local upload (no match)
+## Setup (done)
 1. `project.yml`: bundle id → `com.eugenechan.lfg`; `aps-environment` → `$(APS_ENVIRONMENT)`; set `APS_ENVIRONMENT` per config. Regenerate via xcodegen.
-2. `ios/Gemfile` (fastlane), `ios/fastlane/{Appfile,Matchfile,Fastfile}`, `ios/fastlane/.env.local`.
+2. `ios/Gemfile` (fastlane), `ios/fastlane/{Appfile,Matchfile,Fastfile}`, `ios/fastlane/.env.local` (holds ASC API key + `MATCH_*`).
 3. `.gitignore`: ignore fastlane env/build artifacts.
-4. Register App ID + create App Store Connect app record (`fastlane produce`, with confirmation).
-5. `bundle exec fastlane ios deploy_testflight` locally (automatic signing) → TestFlight.
-
-## Phase 2 — CI (later)
-- Create `match-lfg` private repo, `bootstrap_match`, GitHub Actions `testflight.yml`, secrets. Mirror Noto.
+4. App ID registered + App Store Connect app record created (id 6785393158).
+5. `bundle exec fastlane ios bootstrap_match` — created + encrypted the `match AppStore com.eugenechan.lfg` profile into `match-lfg` (reuses the account's Apple Distribution cert).
+6. `bundle exec fastlane ios deploy_testflight` locally → TestFlight.
 
 ## How to ship a build (local)
 ```bash
@@ -29,8 +28,9 @@ changes ship. Override the changelog (defaults to last commit msg) with
 `TESTFLIGHT_CHANGELOG=`.
 Build number is an auto HKT timestamp (YYYYMMDDHHMM); changelog defaults to the last git commit message. Override with `BUILD_NUMBER=` / `TESTFLIGHT_CHANGELOG=`.
 
-## Signing model (local)
-- No match. `sigh` creates/installs the **`com.eugenechan.lfg AppStore`** profile via the API key; manual signing with the existing **Apple Distribution** cert in the keychain.
+## Signing model (local, match)
+- **match** (`type: appstore`, readonly in `deploy_testflight`). The `match AppStore com.eugenechan.lfg` profile + the account's **Apple Distribution** cert live encrypted in `match-lfg`; `deploy_testflight` fetches them and signs manually. Re-run `bootstrap_match` (readonly false) only to create/renew assets.
+- To sign on a fresh machine: clone nothing — just set `MATCH_*` in `.env.local` and run a lane; match pulls + decrypts from the repo.
 - App ID `com.eugenechan.lfg` has **Push Notifications** + In-App Purchase capabilities.
 - Release entitlement `aps-environment=production` (Debug=development) via `$(APS_ENVIRONMENT)`.
 - `ITSAppUsesNonExemptEncryption=false` baked into Info.plist (standard HTTPS only).
@@ -46,4 +46,5 @@ Build number is an auto HKT timestamp (YYYYMMDDHHMM); changelog defaults to the 
 - [x] First build uploaded to TestFlight (build 202606291446, distributed to Internal testers) ✅
 - [x] Real app icon (full-bleed 1024, derived from the supplied mark; build 202606291520) ✅
 - [x] Launch screen (LaunchScreen.storyboard: #080808 bg + centered mark; verified on sim; build 202606291620) ✅
-- [ ] Phase 2 CI (GitHub Actions + match-lfg repo)
+- [x] Switched local signing to **match** (private `match-lfg` repo, bootstrapped 2026-07-01); verified via build 202607011901 uploaded + distributed to Internal testers ✅
+- [x] Decision: **no GitHub CI** — deploy stays local (2026-07-01)
