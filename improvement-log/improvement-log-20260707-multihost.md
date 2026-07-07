@@ -8,6 +8,8 @@
 - [ ] 2026-07-07 — Claimed transfer "verified" from UI-exists screenshots; the real E2E found a race bug. Don't equate "button present" with "flow works."
 - [ ] 2026-07-07 — Burned time on stale background serves (pkill -f pattern missed → old unpatched procs kept the ports; new procs silently failed to bind). Kill by PORT, verify, before trusting a restart.
 - [ ] 2026-07-07 — FlowDeck nested-submenu tap by coordinates was flaky; tap by accessibility LABEL fired reliably.
+- [ ] 2026-07-07 — Long two-machine debug: guessed wrong causes 3× (TMUX-in-tmux, PATH, procStart) before isolating the real one (missing pidfile from synced ~/.claude/sessions). Should have gone straight to observing serve internals.
+- [ ] 2026-07-07 — Multi-host hazard: syncing ~/.claude/sessions/ collides pid-keyed files across machines → sessions non-authoritative → no tmux target → sends fail. Fix: /sessions in .stignore. (→ memory)
 
 ## Log
 

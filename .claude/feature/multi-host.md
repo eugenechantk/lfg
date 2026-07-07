@@ -96,6 +96,22 @@ Screenshots in `.claude/feature/`:
 
 **Not verified here (needs your hardware — Phase 5):** the actual close-on-A → resume-on-B transfer, which proves the load-bearing assumption that `claude --resume` works cross-host off a synced transcript. Do it on a throwaway session (not the agent's own) once both Macs are configured.
 
+## Phase 5 — FAITHFUL two-machine verification (DONE ✅)
+
+Ran across the two real Macs: A = `100.120.101.14` (macbook-pro), B = `100.75.162.40` (macbook-air), sim configured with both tailscale IPs.
+
+**Result: full end-to-end transfer works.**
+1. Created session on A in `~/dev/personal/lfg` → claude replied `HELLO-FROM-A2`.
+2. Transcript synced A→air over Syncthing (`~/.claude/projects/`), ~135s.
+3. Transfer via app (⋯ → Move to host → air): closed on A, resumed on the **air** as `lfg-149c31` (`managed=True`, `tmuxTarget=lfg-149c31:0.0`), correct cwd `/Users/eugenechan/dev/personal/lfg`, full history.
+4. Sent `Reply with exactly: NOW-ON-AIR-FINAL` from the app → routed to the air → claude **on the air** replied `NOW-ON-AIR-FINAL`. Evidence: `.claude/feature/tr-2machine-final.png`.
+
+### Two real bugs the faithful test surfaced (both fixed)
+
+1. **Transfer close→resume race** (code — fixed in `SessionStore.transfer`): resume dedupes against the still-dying source; retry on `alreadyLive`. See Bugs above.
+2. **cwd must exist identically on both machines**: the iCloud repo path (`~/Library/Mobile Documents/…/lfg`) doesn't exist on the air, so `claude --resume` fell back to `~`. Using a path present on both (`~/dev/personal/lfg`) fixes it. (Design prerequisite, now confirmed live.)
+3. **`~/.claude/sessions/` must NOT be synced across machines** (config — fixed via `.stignore`): those pidfiles are pid-keyed and machine-local; syncing them collides pids across Macs (sync-conflict files), so lfg marks the air's sessions non-authoritative and withholds the tmux target → **sends silently fail**. Fix: add `/sessions` to `~/.claude/.stignore` on **each** machine (Syncthing ignores are per-device). After that, each machine keeps its own pidfiles → sessions authoritative → tmux resolves → sends work. Sync only `~/.claude/projects/` (transcripts) — all transfer needs.
+
 ## Bugs
 
 ### [FIXED] Transfer close→resume race — resume no-ops on `alreadyLive`, session ends up dead
