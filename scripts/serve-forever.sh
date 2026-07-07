@@ -14,12 +14,10 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-# Bind to all interfaces so the server is reachable over the Tailscale tailnet
-# (the iOS client connects to each host at <tailnet-ip>:8766). The API's security
-# boundary is the tailnet — the same posture as the rest of lfg. Override by
-# exporting LFG_HOST before launch (e.g. LFG_HOST=127.0.0.1 for loopback-only +
-# `tailscale serve`).
-export LFG_HOST="${LFG_HOST:-0.0.0.0}"
+# lfg listens on loopback (LFG_HOST default 127.0.0.1) — expose it on the tailnet
+# with `tailscale serve --bg 127.0.0.1:8766` (tailnet-only HTTPS at the machine's
+# MagicDNS URL), NOT funnel (which is public). Point the iOS client at that URL.
+# For direct raw-IP access instead, export LFG_HOST=0.0.0.0 before launch.
 
 PIN="$(tr -d '[:space:]' < .bun-version 2>/dev/null || true)"
 CUR="$(bun --version 2>/dev/null || echo unknown)"
