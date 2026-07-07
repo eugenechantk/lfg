@@ -14,6 +14,13 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+# Bind to all interfaces so the server is reachable over the Tailscale tailnet
+# (the iOS client connects to each host at <tailnet-ip>:8766). The API's security
+# boundary is the tailnet — the same posture as the rest of lfg. Override by
+# exporting LFG_HOST before launch (e.g. LFG_HOST=127.0.0.1 for loopback-only +
+# `tailscale serve`).
+export LFG_HOST="${LFG_HOST:-0.0.0.0}"
+
 PIN="$(tr -d '[:space:]' < .bun-version 2>/dev/null || true)"
 CUR="$(bun --version 2>/dev/null || echo unknown)"
 if [ -n "$PIN" ] && [ "$PIN" != "$CUR" ]; then
