@@ -268,6 +268,14 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
     public var lastUserText: String?
     public var id: String { sessionId }
 
+    public init(sessionId: String, title: String? = nil, project: String? = nil,
+                cwd: String? = nil, mtime: Double? = nil, agent: String? = nil,
+                lastUserText: String? = nil) {
+        self.sessionId = sessionId; self.title = title; self.project = project
+        self.cwd = cwd; self.mtime = mtime; self.agent = agent
+        self.lastUserText = lastUserText
+    }
+
     enum CodingKeys: String, CodingKey {
         case sessionId, title, project, cwd, mtime, agent, lastActivityAt, lastUserText
     }
@@ -337,6 +345,24 @@ public struct ForkRequest: Codable, Sendable {
     public var user: String?
     public init(sessionId: String, model: String? = nil, user: String? = nil) {
         self.sessionId = sessionId; self.model = model; self.user = user
+    }
+}
+
+/// Response of `GET /api/info` — a host's identity for the multi-host client.
+/// `hostId` is the machine's stable uuid (dedupe key for the same machine
+/// reached via two URLs); `hostName` is its friendly hostname for display.
+public struct HostInfo: Codable, Sendable, Hashable {
+    public var hostId: String
+    public var hostName: String
+    public init(hostId: String, hostName: String) {
+        self.hostId = hostId; self.hostName = hostName
+    }
+
+    enum CodingKeys: String, CodingKey { case hostId, hostName }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        hostId = (try c.decodeIfPresent(String.self, forKey: .hostId)) ?? ""
+        hostName = (try c.decodeIfPresent(String.self, forKey: .hostName)) ?? ""
     }
 }
 

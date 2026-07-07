@@ -160,6 +160,12 @@ public struct LFGClient: Sendable {
         try await get("api/claude/usage", as: Usage.self)
     }
 
+    /// Host identity for the multi-host client — resolves this host's stable id
+    /// and friendly name so the session list can label + dedupe by machine.
+    public func info() async throws -> HostInfo {
+        try await get("api/info", as: HostInfo.self)
+    }
+
     public func resumable(limit: Int = 30) async throws -> [ResumableSession] {
         try await get("api/sessions/resumable",
                       query: [URLQueryItem(name: "limit", value: String(limit))],
