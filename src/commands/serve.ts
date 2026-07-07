@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { marked } from "marked";
 import { PATHS } from "../config.ts";
+import { hostInfo } from "../hostinfo.ts";
 import {
   AGENTS_DIR,
   listAgents,
@@ -1097,6 +1098,13 @@ export async function cmdServe() {
       // ---- multi-user (session tagging) ----
       if (path === "/api/users") {
         return json({ users: userRoster() });
+      }
+
+      // ---- host identity (multi-host) ----
+      // The iOS client fans out to every configured host and uses this to label
+      // sessions by machine and dedupe a host reached via two URLs.
+      if (path === "/api/info") {
+        return json(hostInfo());
       }
 
       // ---- running claude sessions ----
