@@ -19,6 +19,9 @@ struct NewSessionView: View {
     @State private var starting = false
     @State private var showImportDir = false
     @State private var importPath = ""
+    /// The host the session will be created on (multi-host). Defaults to the
+    /// default host, or a reachable one when the default is offline.
+    @State private var selectedHost: Host?
 
     var body: some View {
         NavigationStack {
@@ -60,6 +63,13 @@ struct NewSessionView: View {
                     cwd = store.inbox
                     cwdLabel = store.inbox.isEmpty ? "Directory" : "Inbox"
                 }
+                // Preselect the default host, falling back to a reachable one when
+                // the default is offline.
+                if selectedHost == nil {
+                    selectedHost = HostStore.defaultHost(settings.hosts) {
+                        store.reachabilityByHost[$0.id] == .ok
+                    } ?? settings.hosts.first { $0.isDefault } ?? settings.hosts.first
+                }
             }
         }
     }
@@ -93,6 +103,18 @@ struct NewSessionView: View {
                         }
                     }
                 } label: { pill("folder", cwdLabel) }
+
+                // Host picker — which machine to start on. Only shown with more
+                // than one configured host.
+                if settings.hosts.count > 1 {
+                    Menu {
+                        Picker("Host", selection: $selectedHost) {
+                            ForEach(settings.hosts) { host in
+                                Text(host.label + (host.isDefault ? " (default)" : "")).tag(Host?.some(host))
+                            }
+                        }
+                    } label: { pill("desktopcomputer", selectedHost?.label ?? "Host") }
+                }
             }
             .padding(.horizontal, 12)
         }
@@ -122,7 +144,7 @@ struct NewSessionView: View {
         // bubble and returns its temporary id immediately, firing the real create
         // in the background. We navigate to it right away — no waiting on the
         // network — and the store reconciles the placeholder to the server's id.
-        let placeholder = store.startOptimistic(req, attachments: attachments)
+        let placeholder = store.startOptimistic(req, on: selectedHost, attachments: attachments)
         onCreated(placeholder)
         dismiss()
     }

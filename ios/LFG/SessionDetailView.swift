@@ -10,12 +10,14 @@ struct SessionDetailView: View {
     /// gets stuck on `DetailLoading` ("Opening session…").
     var onEnded: () -> Void = {}
     @Environment(SessionStore.self) private var store
+    @Environment(AppSettings.self) private var settings
 
     @State private var draft = ""
     @State private var renaming = false
     @State private var newTitle = ""
     @State private var confirmEnd = false
     @State private var forking = false
+    @State private var transferring = false
     /// The queued message the user tapped (drives the remove / edit / send-now sheet).
     @State private var queueAction: SessionStore.PendingSend?
     @State private var isAtBottom = true
@@ -294,6 +296,24 @@ struct SessionDetailView: View {
                     .disabled(forking)
                 }
 
+                // Transfer: move a LIVE session to another host. Closes the pane
+                // on the current machine and resumes the (synced) transcript on the
+                // target — see `store.transfer`. Only for live sessions, and only
+                // when there's another host to move to.
+                if canTransfer {
+                    Menu {
+                        ForEach(transferTargets) { target in
+                            Button { Task { await transfer(to: target) } } label: {
+                                Label(target.label, systemImage: "desktopcomputer")
+                            }
+                        }
+                    } label: {
+                        Label(transferring ? "Moving…" : "Move to host",
+                              systemImage: "arrow.left.arrow.right")
+                    }
+                    .disabled(transferring)
+                }
+
                 // Debug: surface the underlying ids; tapping copies to clipboard.
                 Section("Debug — tap to copy") {
                     if let tmux = session.tmuxName ?? session.tmuxTarget, !tmux.isEmpty {
@@ -336,6 +356,29 @@ struct SessionDetailView: View {
         defer { forking = false }
         let newId = await store.fork(ForkRequest(sessionId: sid))
         if let newId { store.requestSelection(newId) }
+    }
+
+    /// Other configured hosts this live session can be moved to.
+    private var transferTargets: [Host] {
+        let current = store.host(forSession: sid)?.id
+        return settings.hosts.filter { $0.id != current }
+    }
+
+    /// Transfer is offered for a live (non-closed) session when its owning host is
+    /// known and at least one other host exists.
+    private var canTransfer: Bool {
+        !sid.isEmpty && !session.closed
+            && store.host(forSession: sid) != nil
+            && !transferTargets.isEmpty
+    }
+
+    /// Move this session to another host (close on source → resume on target).
+    /// `store.transfer` re-points navigation at the new live id itself.
+    private func transfer(to target: Host) async {
+        guard !transferring else { return }
+        transferring = true
+        defer { transferring = false }
+        _ = await store.transfer(sid, to: target)
     }
 
     /// The working path shown under the title when the session is idle (no

@@ -25,10 +25,15 @@ struct SessionListView: View {
         var idle = 0
     }
 
-    /// Sessions passing the user filter + search query.
+    /// Sessions passing the user filter + host filter + search query.
     private var matchingSessions: [Session] {
         let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         return store.filteredSessions.filter { s in
+            // Host filter (multi-host): keep the selected host's live sessions;
+            // closed sessions are host-agnostic, so they always pass.
+            if let hf = settings.hostFilter, !s.closed, store.hostBySession[s.id] != hf {
+                return false
+            }
             guard !q.isEmpty else { return true }
             return [s.title, s.project, s.lastUserText, s.model, s.assignedUser]
                 .compactMap { $0?.lowercased() }
@@ -190,6 +195,22 @@ struct SessionListView: View {
             ToolbarItem(placement: .topBarLeading) {
                 Button { showSettings = true } label: { Image(systemName: "gearshape") }
             }
+            if settings.hosts.count > 1 {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Picker("Host", selection: $settings.hostFilter) {
+                            Text("All hosts").tag(String?.none)
+                            ForEach(settings.hosts) { host in
+                                Text(host.label).tag(String?.some(host.id))
+                            }
+                        }
+                    } label: {
+                        Image(systemName: settings.hostFilter == nil
+                              ? "line.3.horizontal.decrease.circle"
+                              : "line.3.horizontal.decrease.circle.fill")
+                    }
+                }
+            }
             if !isPad {
                 ToolbarItem(placement: .principal) { StatusBadge() }
             }
@@ -242,8 +263,16 @@ private extension View {
 
 struct SessionRow: View {
     @Environment(SessionStore.self) private var store
+    @Environment(AppSettings.self) private var settings
     let session: Session
     let group: SessionStore.Group
+
+    /// Owning host's short label, shown only in multi-host setups for live
+    /// sessions (closed sessions are host-agnostic).
+    private var hostLabel: String? {
+        guard settings.hosts.count > 1 else { return nil }
+        return store.host(forSession: session.id)?.label
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -261,6 +290,14 @@ struct SessionRow: View {
                             .truncationMode(.head)   // ellipsis the start, keep the end visible
                     }
                     if let model = session.model { ModelBadge(model: model) }
+                    if let hostLabel {
+                        Text(hostLabel)
+                            .font(.caption2)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Color(.tertiarySystemFill), in: Capsule())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                     Spacer(minLength: 0)
                     if let at = session.lastActivityAt {
                         Text(at.asRelativeFromMillis).font(.caption2).foregroundStyle(.tertiary)

@@ -9,16 +9,25 @@ import LFGCore
     let settings: AppSettings
 
     private(set) var sessions: [Session] = []
+    /// Aggregate reachability: `.ok` if ANY configured host is reachable, else a
+    /// representative failure. The list/banner read this; per-host detail lives in
+    /// `reachabilityByHost`.
     private(set) var reachability: Reachability?
+    /// Per-host reachability, keyed by `Host.id` (url). Drives the Settings
+    /// per-host dots and the reachable-set for default-host placement.
+    private(set) var reachabilityByHost: [String: Reachability] = [:]
+    /// Routing table: session `id` → owning `Host.id` (url). Every per-session op
+    /// resolves the host's client through this. Rebuilt each refresh.
+    private(set) var hostBySession: [String: String] = [:]
     var lastError: String?
 
-    /// Consecutive failed polls since the last success. Used to debounce the
-    /// visible `reachability` so a single transient blip (the single-event-loop
-    /// Bun server documented to stall HTTP 20s+ under PTY load, a tailnet
-    /// reroute, an app-just-foregrounded gap) doesn't flip a healthy connection
-    /// to "Offline" — which then contradicts a fresh Settings ping. See
+    /// Consecutive failed polls since the last success, PER host. Used to debounce
+    /// the visible `reachability` so a single transient blip (the single-event-loop
+    /// Bun server documented to stall HTTP 20s+ under PTY load, a tailnet reroute,
+    /// an app-just-foregrounded gap) doesn't flip a healthy host to "Offline" —
+    /// which then contradicts a fresh Settings ping. See
     /// `.claude/diagnosis-settings-reachable-list-offline.md`.
-    private var consecutiveFailures = 0
+    private var failuresByHost: [String: Int] = [:]
     /// Failed polls to tolerate before surfacing "not reachable" from a
     /// currently-healthy state (~9s at the 3s poll interval).
     private let failureThreshold = 3
@@ -65,6 +74,9 @@ import LFGCore
     /// The create request behind each placeholder id, kept so a failed create
     /// can be retried straight from the optimistic kickoff bubble.
     private var pendingCreates: [String: NewSessionRequest] = [:]
+    /// The host each placeholder create targets, so a retry re-creates on the
+    /// same machine the user picked.
+    private var pendingCreateHost: [String: Host] = [:]
 
     /// A session a tapped push notification asked us to open. RootView observes
     /// this and drives its navigation selection, then clears it.
@@ -87,9 +99,11 @@ import LFGCore
     private var lastOpenedAt: [String: Double]
     private static let lastOpenedKey = "lfg.lastOpenedAt"
 
-    private var streamTask: Task<Void, Never>?
+    // Live SSE streams, one per host (each host has its own /api/live/stream and
+    // its own 24-id cap). Keyed by Host.id (url).
+    private var streamTasks: [String: Task<Void, Never>] = [:]
+    private var streamedIDsByHost: [String: [String]] = [:]
     private var pollTask: Task<Void, Never>?
-    private var streamedIDs: [String] = []
     private var focusedID: String?
 
     /// Closed (resumable) sessions synthesized from `/api/sessions/resumable`,
@@ -103,12 +117,38 @@ import LFGCore
     /// resumable) — suppress the stale closed card once we've revived it.
     private var resumedIds: Set<String> = []
 
+    /// Last successful live-session snapshot PER host (keyed by Host.id). A host
+    /// that blips (transiently unreachable) keeps contributing its last-known
+    /// sessions to the merged list rather than having them vanish for a poll —
+    /// the resilience the single-host path got from the server's `lastGood`.
+    private var lastSessionsByHost: [String: [Session]] = [:]
+
     init(settings: AppSettings) {
         self.settings = settings
         lastOpenedAt = (UserDefaults.standard.dictionary(forKey: Self.lastOpenedKey) as? [String: Double]) ?? [:]
     }
 
-    var client: LFGClient? { settings.client }
+    /// Host-agnostic client: the default host. Used for create-flow metadata
+    /// (dirs/users/usage) and resumable lookups (transcripts are synced, so any
+    /// host answers). Per-session ops must use `client(forSession:)` instead.
+    var client: LFGClient? { settings.defaultClient }
+
+    /// The host that currently owns a session (nil if unknown → falls back to
+    /// default). Used for op routing, the list host chip, and transfer targeting.
+    func host(forSession id: String) -> Host? {
+        guard let hid = hostBySession[id] else { return nil }
+        return settings.hosts.first { $0.id == hid }
+    }
+
+    /// The client for the host that owns `id`, falling back to the default host
+    /// (covers optimistic/placeholder sessions not yet in the routing table).
+    func client(forSession id: String) -> LFGClient? {
+        if let h = host(forSession: id), let c = settings.client(for: h) { return c }
+        return settings.defaultClient
+    }
+
+    /// Whether a host is currently reachable (for default-host placement).
+    private func isReachable(_ host: Host) -> Bool { reachabilityByHost[host.id] == .ok }
 
     /// Ask the UI to open a session (driven by a tapped push notification).
     func requestSelection(_ sid: String) { requestedSelection = sid }
@@ -176,95 +216,166 @@ import LFGCore
 
     func stop() {
         pollTask?.cancel(); pollTask = nil
-        streamTask?.cancel(); streamTask = nil
-        streamedIDs = []
+        for t in streamTasks.values { t.cancel() }
+        streamTasks = [:]
+        streamedIDsByHost = [:]
     }
 
-    /// Called when the user changes the host — wipe everything and reconnect.
+    /// Called when the host list changes — wipe everything and reconnect.
     func reconnect() {
         stop()
         sessions = []; transcripts = [:]; prompts = [:]; busy = [:]; queues = [:]; seen = [:]; pendingSends = [:]
         closedCache = []; resumedIds = []; resumeTick = 0
-        reachability = nil; consecutiveFailures = 0; usage = nil; repos = []; users = []
+        hostBySession = [:]; lastSessionsByHost = [:]; reachabilityByHost = [:]; failuresByHost = [:]
+        reachability = nil; usage = nil; repos = []; users = []
         start()
     }
 
     // MARK: Polling
 
-    func refresh() async {
-        guard let client else { reachability = .badResponse("No host configured"); return }
-        do {
-            let fresh = try await client.sessions()
-            // Refresh the closed/resumable set on a slower cadence (first poll,
-            // then every ~12s) — it changes rarely and each fetch reads transcript
-            // heads. The cached copy is merged in every poll below.
-            resumeTick += 1
-            if resumeTick % 4 == 1, let r = try? await client.resumable(limit: 60) {
-                closedCache = r.map(Self.closedSession(from:))
-            }
-            let liveIds = Set(fresh.compactMap(\.sessionId))
-            // Keep any not-yet-reconciled optimistic (placeholder-id) sessions so
-            // a poll landing mid-create can't make the open session vanish.
-            let optimistic = optimisticSessions.filter { o in
-                guard let id = o.sessionId else { return true }
-                return !liveIds.contains(id)
-            }
-            let optimisticIds = Set(optimistic.compactMap(\.sessionId))
-            // Merge closed sessions that aren't live, optimistic, or already
-            // resumed away this run, so ended sessions stay in the list.
-            let closed = closedCache.filter { c in
-                guard let cid = c.sessionId else { return false }
-                return !liveIds.contains(cid) && !optimisticIds.contains(cid) && !resumedIds.contains(cid)
-            }
-            sessions = fresh + optimistic + closed
-            // Seed busy from the REST baseline for sessions the live SSE stream
-            // doesn't cover (outside the 24-id window). Streamed sessions keep
-            // their accurate pane-scraped SSE busy as an override. Without this,
-            // a session that finished after dropping out of the stream window
-            // keeps a stale busy=true forever and stays stuck under "Working".
-            let streamed = Set(streamedIDs)
-            for s in fresh {
-                guard let sid = s.sessionId, let b = s.busy, !streamed.contains(sid) else { continue }
-                busy[sid] = b
-            }
-            // Snapshot the focused session while it's live so its detail view
-            // survives the session later dropping out of the live list (see
-            // `focusedSnapshot` / `session(_:)`). Clear it once the carried-
-            // forward session comes back live or focus moves elsewhere.
-            if let f = focusedID, let live = fresh.first(where: { $0.sessionId == f }) {
-                focusedSnapshot = live
-            } else if focusedID == nil {
-                focusedSnapshot = nil
-            }
-            // Drop the deep-link fallback once its session is live in the list
-            // (e.g. a send revived it) so the authoritative copy takes over.
-            if let dl = deepLinkSession, fresh.contains(where: { $0.sessionId == dl.sessionId }) {
-                deepLinkSession = nil
-            }
-            reachability = .ok
-            consecutiveFailures = 0
-            lastError = nil
-            ensureStream()
-            await reconcilePendingViaQueue()
-        } catch let LFGError.notReachable(u) {
-            noteFailure(.hostUnreachable(u))
-        } catch let LFGError.http(status, _) {
-            noteFailure(.badResponse("HTTP \(status)"))
-        } catch {
-            noteFailure(.badResponse(error.localizedDescription))
-        }
+    /// One host's live-session fetch result (Sendable so it crosses the task
+    /// group boundary).
+    private struct HostFetch: Sendable {
+        let host: Host
+        let sessions: [Session]?
+        let reach: Reachability
     }
 
-    /// Record a failed poll. Only surface the failure as the visible
-    /// `reachability` once we're either already not-healthy (keep the banner's
-    /// error detail current, incl. cold start where `reachability` is nil) or
-    /// have crossed `failureThreshold` from a healthy `.ok` state. This debounces
-    /// a single transient blip so it can't spuriously flip "Connected" → "Offline"
-    /// while the host is actually up.
-    private func noteFailure(_ pending: Reachability) {
-        consecutiveFailures += 1
-        if reachability != .ok || consecutiveFailures >= failureThreshold {
-            reachability = pending
+    /// Fan out `GET /api/sessions` to every configured host in parallel, returning
+    /// results in configured order (the task group completes out of order).
+    private func fetchSessionsAllHosts() async -> [HostFetch] {
+        let pairs: [(Host, LFGClient?)] = settings.hosts.map { ($0, settings.client(for: $0)) }
+        let results = await withTaskGroup(of: HostFetch.self) { group -> [HostFetch] in
+            for (h, c) in pairs {
+                group.addTask {
+                    guard let c else { return HostFetch(host: h, sessions: nil, reach: .badResponse("Invalid URL")) }
+                    do { return HostFetch(host: h, sessions: try await c.sessions(), reach: .ok) }
+                    catch let LFGError.notReachable(u) { return HostFetch(host: h, sessions: nil, reach: .hostUnreachable(u)) }
+                    catch let LFGError.http(status, _) { return HostFetch(host: h, sessions: nil, reach: .badResponse("HTTP \(status)")) }
+                    catch { return HostFetch(host: h, sessions: nil, reach: .badResponse("Bad response")) }
+                }
+            }
+            var out: [HostFetch] = []
+            for await r in group { out.append(r) }
+            return out
+        }
+        let order = Dictionary(uniqueKeysWithValues: settings.hosts.enumerated().map { ($1.id, $0) })
+        return results.sorted { (order[$0.host.id] ?? 0) < (order[$1.host.id] ?? 0) }
+    }
+
+    /// Fan out `GET /api/sessions/resumable` to the given (reachable) hosts, in
+    /// order. Because `~/.claude/projects` is synced these lists overlap heavily —
+    /// `MultiHost.reconcileResumable` dedupes + drops live ids.
+    private func fetchResumableAllHosts(_ hosts: [Host]) async -> [[ResumableSession]] {
+        let pairs: [(Int, LFGClient?)] = hosts.enumerated().map { ($0, settings.client(for: $1)) }
+        let results = await withTaskGroup(of: (Int, [ResumableSession]).self) { group -> [(Int, [ResumableSession])] in
+            for (i, c) in pairs {
+                group.addTask {
+                    guard let c else { return (i, []) }
+                    return (i, (try? await c.resumable(limit: 60)) ?? [])
+                }
+            }
+            var out: [(Int, [ResumableSession])] = []
+            for await r in group { out.append(r) }
+            return out
+        }
+        return results.sorted { $0.0 < $1.0 }.map(\.1)
+    }
+
+    func refresh() async {
+        guard !settings.hosts.isEmpty else {
+            reachability = .badResponse("No host configured"); return
+        }
+        let fetched = await fetchSessionsAllHosts()
+
+        // Per-host reachability with the transient-blip debounce, and cache each
+        // host's last good snapshot so a blip doesn't drop its sessions.
+        for f in fetched {
+            if f.reach == .ok {
+                reachabilityByHost[f.host.id] = .ok
+                failuresByHost[f.host.id] = 0
+                lastSessionsByHost[f.host.id] = f.sessions ?? []
+            } else {
+                let n = (failuresByHost[f.host.id] ?? 0) + 1
+                failuresByHost[f.host.id] = n
+                if reachabilityByHost[f.host.id] != .ok || n >= failureThreshold {
+                    reachabilityByHost[f.host.id] = f.reach
+                }
+            }
+        }
+        // Prune state for hosts removed from settings.
+        let hostIds = Set(settings.hosts.map(\.id))
+        reachabilityByHost = reachabilityByHost.filter { hostIds.contains($0.key) }
+        lastSessionsByHost = lastSessionsByHost.filter { hostIds.contains($0.key) }
+
+        let anyOK = fetched.contains { $0.reach == .ok }
+        reachability = anyOK ? .ok : (fetched.first { $0.reach != .ok }?.reach ?? .badResponse("No host configured"))
+        lastError = nil
+
+        // Merge each host's last-known live sessions (configured order → stable
+        // list + deterministic first-wins), building the session→host routing map.
+        let perHostLive = settings.hosts.map { (host: $0, sessions: lastSessionsByHost[$0.id] ?? []) }
+        let merged = MultiHost.mergeSessions(perHostLive)
+        let fresh = merged.sessions
+        hostBySession = merged.hostBySession
+        let liveIds = Set(fresh.compactMap(\.sessionId))
+
+        // Refresh the closed/resumable set on a slower cadence (first poll, then
+        // every ~12s), reconciled across hosts (dedupe synced transcripts + drop
+        // anything live on any host). The cached copy is merged in every poll.
+        resumeTick += 1
+        if resumeTick % 4 == 1 {
+            let okHosts = settings.hosts.filter { reachabilityByHost[$0.id] == .ok }
+            let perHostResumable = await fetchResumableAllHosts(okHosts)
+            let reconciled = MultiHost.reconcileResumable(perHost: perHostResumable, liveIds: liveIds)
+            closedCache = reconciled.map(Self.closedSession(from:))
+        }
+
+        // Keep any not-yet-reconciled optimistic (placeholder-id) sessions so
+        // a poll landing mid-create can't make the open session vanish.
+        let optimistic = optimisticSessions.filter { o in
+            guard let id = o.sessionId else { return true }
+            return !liveIds.contains(id)
+        }
+        let optimisticIds = Set(optimistic.compactMap(\.sessionId))
+        // Merge closed sessions that aren't live, optimistic, or already resumed
+        // away this run, so ended sessions stay in the list.
+        let closed = closedCache.filter { c in
+            guard let cid = c.sessionId else { return false }
+            return !liveIds.contains(cid) && !optimisticIds.contains(cid) && !resumedIds.contains(cid)
+        }
+        sessions = fresh + optimistic + closed
+        // Seed busy from the REST baseline for sessions the live SSE stream
+        // doesn't cover (outside the 24-id window). Streamed sessions keep their
+        // accurate pane-scraped SSE busy as an override.
+        let streamed = Set(streamedIDsByHost.values.flatMap { $0 })
+        for s in fresh {
+            guard let sid = s.sessionId, let b = s.busy, !streamed.contains(sid) else { continue }
+            busy[sid] = b
+        }
+        // Snapshot the focused session while it's live so its detail view survives
+        // the session later dropping out of the live list.
+        if let f = focusedID, let live = fresh.first(where: { $0.sessionId == f }) {
+            focusedSnapshot = live
+        } else if focusedID == nil {
+            focusedSnapshot = nil
+        }
+        // Drop the deep-link fallback once its session is live in the list.
+        if let dl = deepLinkSession, fresh.contains(where: { $0.sessionId == dl.sessionId }) {
+            deepLinkSession = nil
+        }
+        ensureStream()
+        await reconcilePendingViaQueue()
+    }
+
+    /// Resolve `/api/info` for any host missing its friendly name, folding the
+    /// identity back into settings (used for the host chip + dedupe).
+    func resolveHostIdentities() async {
+        for host in settings.hosts where (host.name ?? "").isEmpty {
+            guard let client = settings.client(for: host) else { continue }
+            if let info = try? await client.info() {
+                settings.updateHostInfo(host.id, info: info)
+            }
         }
     }
 
@@ -316,47 +427,53 @@ import LFGCore
         UserDefaults.standard.set(lastOpenedAt, forKey: Self.lastOpenedKey)
     }
 
+    /// Maintain one live SSE stream PER host (each host serves its own
+    /// `/api/live/stream` with its own 24-id cap). Within a host, prioritise the
+    /// focused session, then most-recently-active, so the viewed + running
+    /// sessions always get live events.
     private func ensureStream() {
-        // Prioritise the focused (open) session, then the most-recently-active
-        // ones, so the session being viewed and any running sessions always get
-        // live events even past the server's 24-id cap.
-        var ordered = sessions
-            .filter { !$0.closed }                // closed sessions have no live pane to stream
-            .sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
-            .compactMap(\.sessionId)
-            .filter { !$0.hasPrefix("local-") }   // placeholders aren't on the server yet
-        if let f = focusedID, !f.hasPrefix("local-") {
-            ordered.removeAll { $0 == f }
-            ordered.insert(f, at: 0)
+        let hosts = settings.hosts
+        let hostIds = Set(hosts.map(\.id))
+        // Tear down streams for hosts removed from settings.
+        for hid in Array(streamTasks.keys) where !hostIds.contains(hid) {
+            streamTasks[hid]?.cancel(); streamTasks[hid] = nil; streamedIDsByHost[hid] = nil
         }
-        let capped = Array(ordered.prefix(24))
-        let key = capped.sorted()
-        guard key != streamedIDs else { return }   // no change → keep current stream
-        streamedIDs = key
-        streamTask?.cancel()
-        guard let client, !capped.isEmpty else { streamTask = nil; return }
-        streamTask = Task { [weak self] in
-            do {
-                for try await event in client.liveStream(ids: capped) {
-                    if Task.isCancelled { return }
-                    self?.apply(event)
-                }
-            } catch {
-                // Thrown error (network blip). Fall through to the reconnect reset.
+        for host in hosts {
+            var ordered = sessions
+                .filter { !$0.closed && hostBySession[$0.id] == host.id }
+                .sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
+                .compactMap(\.sessionId)
+                .filter { !$0.hasPrefix("local-") }   // placeholders aren't on the server yet
+            if let f = focusedID, !f.hasPrefix("local-"), hostBySession[f] == host.id {
+                ordered.removeAll { $0 == f }
+                ordered.insert(f, at: 0)
             }
-            // The stream ended — either it threw, or (crucially) the server
-            // closed the connection cleanly (server restart, idle timeout, a
-            // proxy/Tailscale close that yields EOF, not an error). In the clean
-            // case the for-await loop just *completes*, so without this the
-            // `catch` never runs and `streamedIDs` stays populated — ensureStream
-            // then believes the stream is still live and never reconnects, so
-            // live updates silently stop until the session set changes or the app
-            // restarts (the user sees new messages only after leaving and
-            // re-opening a session, which refetches over HTTP). Reset streamedIDs
-            // so the 3s poll re-establishes the stream — unless this task was
-            // superseded by a newer ensureStream (cancelled), which already set
-            // the correct streamedIDs for the replacement stream.
-            if !Task.isCancelled { self?.streamedIDs = [] }
+            let capped = Array(ordered.prefix(24))
+            let key = capped.sorted()
+            if key == (streamedIDsByHost[host.id] ?? []) { continue }   // unchanged
+            streamedIDsByHost[host.id] = key
+            streamTasks[host.id]?.cancel()
+            guard let client = settings.client(for: host), !capped.isEmpty else {
+                streamTasks[host.id] = nil; continue
+            }
+            let hid = host.id
+            streamTasks[hid] = Task { [weak self] in
+                do {
+                    for try await event in client.liveStream(ids: capped) {
+                        if Task.isCancelled { return }
+                        self?.apply(event)
+                    }
+                } catch {
+                    // Thrown error (network blip). Fall through to the reset below.
+                }
+                // A clean close (server restart / idle EOF / proxy close) completes
+                // the for-await loop WITHOUT throwing; without resetting this host's
+                // streamedIDs, ensureStream would believe the stream is still live
+                // and never reconnect (live updates silently stop). Reset so the 3s
+                // poll re-establishes it — unless superseded (cancelled) by a newer
+                // ensureStream, which already set the correct ids for its stream.
+                if !Task.isCancelled { self?.streamedIDsByHost[hid] = [] }
+            }
         }
     }
 
@@ -479,7 +596,7 @@ import LFGCore
     /// prompts show even in long, tool-heavy sessions where they'd otherwise be
     /// older than the live-stream backfill window.
     func ensureHistory(_ id: String) async {
-        guard let client else { return }
+        guard let client = client(forSession: id) else { return }
         guard let msgs = try? await client.messages(id, limit: 5000, full: true) else { return }
         var byKey: [String: SessionMessage] = [:]
         for m in (transcripts[id] ?? []) { byKey[m.stableID] = m }
@@ -563,10 +680,10 @@ import LFGCore
     /// has actually picked the message up. Also refreshes the transcript for a
     /// session whose pending just cleared, so the real user bubble is present.
     private func reconcilePendingViaQueue() async {
-        guard let client else { return }
         let sids = Array(pendingSends.keys)
         for sid in sids {
             guard pendingSends[sid]?.isEmpty == false else { continue }
+            guard let client = client(forSession: sid) else { continue }
             guard let q = try? await client.queue(sid) else { continue }
             queues[sid] = q
             let had = pendingSends[sid]?.count ?? 0
@@ -606,13 +723,13 @@ import LFGCore
         if let req = pendingCreates[sid] {
             mutatePending(sid, pending.id) { $0.failed = false }
             busy[sid] = true
-            await attemptCreate(sid, req, attachments: [])
+            await attemptCreate(sid, req, on: pendingCreateHost[sid], attachments: [])
             return
         }
         mutatePending(sid, pending.id) { $0.failed = false }
         if let qid = pending.serverQueueID {
             await retry(sid, qid)
-        } else if let client {
+        } else if let client = client(forSession: sid) {
             do {
                 let resp = try await client.sendMessage(sid, text: pending.matchText)
                 applyResume(from: sid, resp)
@@ -623,9 +740,12 @@ import LFGCore
         }
     }
 
+    /// Run a per-session steering op against the host that OWNS the session, then
+    /// refresh. Routing through `client(forSession:)` is what makes every action
+    /// (send/close/interrupt/…) hit the right machine in a multi-host setup.
     @discardableResult
-    func run(_ label: String, _ op: @escaping (LFGClient) async throws -> Void) async -> Bool {
-        guard let client else { return false }
+    func run(_ label: String, for id: String, _ op: @escaping (LFGClient) async throws -> Void) async -> Bool {
+        guard let client = client(forSession: id) else { return false }
         do { try await op(client); await refresh(); return true }
         catch { lastError = "\(label) failed: \(error.localizedDescription)"; return false }
     }
@@ -649,7 +769,7 @@ import LFGCore
     }
 
     func send(_ id: String, _ text: String) async {
-        guard let client else { return }
+        guard let client = client(forSession: id) else { return }
         do {
             let resp = try await client.sendMessage(id, text: text)
             applyResume(from: id, resp)
@@ -688,7 +808,7 @@ import LFGCore
     /// an optimistic user bubble immediately — before uploads or the network
     /// round-trip — and is reconciled away once the agent records the real turn.
     func sendWithAttachments(_ id: String, text: String, attachments: [ComposerAttachment]) async {
-        guard let client else { return }
+        guard let client = client(forSession: id) else { return }
         let typed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !typed.isEmpty || !attachments.isEmpty else { return }
 
@@ -760,7 +880,7 @@ import LFGCore
     /// queue entry (held in lfg's queue, so this is clean) and the local bubble.
     func removeQueued(_ sid: String, _ pending: PendingSend) async {
         if let qid = pending.serverQueueID {
-            await run("Remove") { try await $0.removeQueued(sid, qid) }
+            await run("Remove", for: sid) { try await $0.removeQueued(sid, qid) }
         }
         removePending(sid, pending.id)
     }
@@ -770,7 +890,7 @@ import LFGCore
     @discardableResult
     func editQueued(_ sid: String, _ pending: PendingSend) async -> String {
         if let qid = pending.serverQueueID {
-            await run("Edit") { try await $0.removeQueued(sid, qid) }
+            await run("Edit", for: sid) { try await $0.removeQueued(sid, qid) }
         }
         removePending(sid, pending.id)
         return pending.displayText
@@ -779,18 +899,21 @@ import LFGCore
     /// Interrupt the current turn and deliver this queued message immediately.
     func sendQueuedNow(_ sid: String, _ pending: PendingSend) async {
         guard let qid = pending.serverQueueID else { return }
-        await run("Send now") { try await $0.sendQueuedNow(sid, qid) }
+        await run("Send now", for: sid) { try await $0.sendQueuedNow(sid, qid) }
     }
-    func answer(_ id: String, _ index: Int) async { await run("Answer") { try await $0.answer(id, index: index) } }
-    func dismissPrompt(_ id: String) async { await run("Dismiss") { try await $0.dismiss(id) } }
-    func interrupt(_ id: String) async { await run("Stop") { try await $0.interrupt(id) } }
-    func setModel(_ id: String, _ model: String) async { await run("Switch model") { try await $0.setModel(id, model: model) } }
-    func rename(_ id: String, _ title: String) async { await run("Rename") { try await $0.rename(id, title: title) } }
-    func assign(_ id: String, _ user: String?) async { await run("Assign") { try await $0.assign(id, user: user) } }
-    func close(_ id: String) async { await run("End session") { try await $0.close(id) } }
-    func retry(_ id: String, _ messageID: String) async { await run("Retry") { try await $0.retryQueued(id, messageID: messageID) } }
+    func answer(_ id: String, _ index: Int) async { await run("Answer", for: id) { try await $0.answer(id, index: index) } }
+    func dismissPrompt(_ id: String) async { await run("Dismiss", for: id) { try await $0.dismiss(id) } }
+    func interrupt(_ id: String) async { await run("Stop", for: id) { try await $0.interrupt(id) } }
+    func setModel(_ id: String, _ model: String) async { await run("Switch model", for: id) { try await $0.setModel(id, model: model) } }
+    func rename(_ id: String, _ title: String) async { await run("Rename", for: id) { try await $0.rename(id, title: title) } }
+    func assign(_ id: String, _ user: String?) async { await run("Assign", for: id) { try await $0.assign(id, user: user) } }
+    func close(_ id: String) async { await run("End session", for: id) { try await $0.close(id) } }
+    func retry(_ id: String, _ messageID: String) async { await run("Retry", for: id) { try await $0.retryQueued(id, messageID: messageID) } }
 
-    func create(_ req: NewSessionRequest) async -> String? {
+    /// Create a session on a specific host (defaults to the default host). The
+    /// chosen host is where the agent's pane spawns.
+    func create(_ req: NewSessionRequest, on host: Host? = nil) async -> String? {
+        let client = host.flatMap { settings.client(for: $0) } ?? settings.defaultClient
         guard let client else { return nil }
         do {
             let resp = try await client.newSession(req)
@@ -807,7 +930,7 @@ import LFGCore
     /// shows as a finished user bubble right away instead of waiting on the
     /// create round-trip.
     @discardableResult
-    func startOptimistic(_ req: NewSessionRequest, attachments: [ComposerAttachment] = []) -> String {
+    func startOptimistic(_ req: NewSessionRequest, on host: Host? = nil, attachments: [ComposerAttachment] = []) -> String {
         let placeholder = "local-" + UUID().uuidString
         let nowMs = Date().timeIntervalSince1970 * 1000
         let typed = req.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -826,16 +949,21 @@ import LFGCore
         optimisticSessions.append(optimistic)
         sessions.append(optimistic)
         pendingCreates[placeholder] = req
+        pendingCreateHost[placeholder] = host
+        // Route any early op on the placeholder to the chosen host (until refresh
+        // maps the real id).
+        if let host { hostBySession[placeholder] = host.id }
         busy[placeholder] = true            // the agent is spinning up on this prompt
         addPending(placeholder, text: typed)   // finished (showSent) kickoff bubble
-        Task { await attemptCreate(placeholder, req, attachments: attachments) }
+        Task { await attemptCreate(placeholder, req, on: host, attachments: attachments) }
         return placeholder
     }
 
     /// Run the real create for a placeholder, then remap all of its state to the
     /// server-assigned id and point navigation at it. On failure, surface the
     /// kickoff bubble's Retry (which re-enters here).
-    private func attemptCreate(_ placeholder: String, _ req: NewSessionRequest, attachments: [ComposerAttachment]) async {
+    private func attemptCreate(_ placeholder: String, _ req: NewSessionRequest, on host: Host?, attachments: [ComposerAttachment]) async {
+        let client = host.flatMap { settings.client(for: $0) } ?? settings.defaultClient
         guard let client else { return }
         do {
             let resp = try await client.newSession(req)
@@ -843,6 +971,7 @@ import LFGCore
                 throw LFGError.http(status: 0, body: "Create returned no session id")
             }
             pendingCreates[placeholder] = nil
+            pendingCreateHost[placeholder] = nil
             remap(from: placeholder, to: realId)
             requestSelection(realId)        // swap the open detail from placeholder → real
             await refresh()
@@ -885,7 +1014,10 @@ import LFGCore
         if focusedID == old { focus(new) }
     }
 
-    func resume(_ req: ResumeRequest) async -> String? {
+    /// Resume a closed session. Defaults to the default host; pass `on:` to revive
+    /// the (synced) transcript on a specific machine — the basis of transfer.
+    func resume(_ req: ResumeRequest, on host: Host? = nil) async -> String? {
+        let client = host.flatMap { settings.client(for: $0) } ?? settings.defaultClient
         guard let client else { return nil }
         do {
             let resp = try await client.resume(req)
@@ -896,13 +1028,72 @@ import LFGCore
 
     /// Fork a session into a new branch and return the new session's id (nil on
     /// failure). The source is untouched; the caller focuses the returned id so
-    /// the detail view deep-links straight into the fork.
+    /// the detail view deep-links straight into the fork. Routed to the source
+    /// session's host.
     func fork(_ req: ForkRequest) async -> String? {
-        guard let client else { return nil }
+        guard let client = client(forSession: req.sessionId) else { return nil }
         do {
             let resp = try await client.fork(req)
             await refresh()
             return resp.sessionId
         } catch { lastError = "Fork failed: \(error.localizedDescription)"; return nil }
+    }
+
+    /// Transfer a live session to another host: stop its pane on the SOURCE host,
+    /// then resume the (synced) transcript on the TARGET host, and point routing +
+    /// navigation at the new live id. Returns the new sessionId, or nil on failure
+    /// (the source close having already happened — the session is then resumable
+    /// on the target and can be retried). See `.claude/brainstorm/multi-host-plan.md`.
+    @discardableResult
+    func transfer(_ id: String, to target: Host) async -> String? {
+        guard let source = host(forSession: id) else {
+            lastError = "Transfer: unknown source host for session"; return nil
+        }
+        guard source.id != target.id else { return id }   // already there
+        guard let sourceClient = settings.client(for: source),
+              let targetClient = settings.client(for: target) else {
+            lastError = "Transfer: invalid host"; return nil
+        }
+        // 1) Stop the live pane on the source. The transcript survives (synced).
+        do { try await sourceClient.close(id) }
+        catch {
+            lastError = "Transfer: closing on \(source.label) failed: \(error.localizedDescription)"
+            return nil
+        }
+        // 1b) Give the source a moment to reap the pane before resuming.
+        for _ in 0..<8 {
+            try? await Task.sleep(for: .milliseconds(400))
+            let stillLive = (try? await sourceClient.sessions())?.contains { $0.sessionId == id } ?? false
+            if !stillLive { break }
+        }
+        // 2) Resume on the target. The server's resume dedupes against live
+        //    sessions ("already running → don't double-spawn"); right after the
+        //    close, the target can still observe the just-closed process while it
+        //    finishes dying, so resume comes back `alreadyLive` WITHOUT spawning —
+        //    and the session would end up dead, not transferred. Retry until the
+        //    source is fully gone and resume actually revives a pane. Claude
+        //    resumes off the copied history; re-point routing + selection at it.
+        do {
+            var resp = try await targetClient.resume(ResumeRequest(sessionId: id))
+            var attempts = 0
+            while resp.alreadyLive == true && attempts < 10 {
+                try? await Task.sleep(for: .milliseconds(700))
+                resp = try await targetClient.resume(ResumeRequest(sessionId: id))
+                attempts += 1
+            }
+            if resp.alreadyLive == true {
+                lastError = "Transfer: \(target.label) couldn't take over — source still busy. Try again."
+                return nil
+            }
+            let newId = resp.sessionId ?? id
+            if newId != id { remap(from: id, to: newId) }
+            hostBySession[newId] = target.id
+            await refresh()
+            requestSelection(newId)
+            return newId
+        } catch {
+            lastError = "Transfer: resuming on \(target.label) failed: \(error.localizedDescription)"
+            return nil
+        }
     }
 }

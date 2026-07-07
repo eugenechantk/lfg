@@ -11,6 +11,16 @@ struct RootView: View {
     @State private var columnVisibility = NavigationSplitViewVisibility.automatic
     @Environment(\.scenePhase) private var scenePhase
 
+    /// Host-file base URL for inline media: the open session's owning host when
+    /// known, else the default host. Lets files referenced by a session on the
+    /// non-default machine still resolve.
+    private var hostFilesForSelection: HostFiles? {
+        if let selection, let h = store.host(forSession: selection), let c = settings.client(for: h) {
+            return HostFiles(baseURL: c.baseURL)
+        }
+        return settings.defaultClient.map { HostFiles(baseURL: $0.baseURL) }
+    }
+
     var body: some View {
         Group {
             if settings.hasConfiguredHost {
@@ -41,14 +51,17 @@ struct RootView: View {
                 ConnectView()
             }
         }
-        .environment(\.hostFiles, settings.client.map { HostFiles(baseURL: $0.baseURL) })
+        // Inline host-file rendering resolves against the OPEN session's host
+        // (multi-host), falling back to the default host.
+        .environment(\.hostFiles, hostFilesForSelection)
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showNewSession) {
             NewSessionView { newID in selection = newID }
         }
-        .task(id: settings.baseURLString) {
+        .task(id: settings.hosts) {
             guard settings.hasConfiguredHost else { return }
             store.start()
+            await store.resolveHostIdentities()
             await store.loadCreateMetadata()
             // Register for push once we have a host to register against.
             await PushManager.shared.requestAuthorizationIfNeeded()

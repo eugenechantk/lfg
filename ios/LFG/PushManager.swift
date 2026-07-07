@@ -101,17 +101,26 @@ final class PushManager {
     }
 
     private func sendToServer(_ token: String) async {
-        guard let client = settings?.client else {
+        // Register the token with EVERY host so any machine can push to this
+        // device (multi-host). Accepted if at least one host takes it.
+        guard let settings, !settings.hosts.isEmpty else {
             // No host yet — keep the token; reregisterIfPossible() will retry.
             return
         }
-        do {
-            try await client.registerPush(token: token, env: apnsEnv, owner: settings?.defaultOwner)
-            apply(.serverAccepted(token: token))
-        } catch {
-            log.error("push register failed: \(error.localizedDescription)")
-            apply(.serverFailed(reason: error.localizedDescription))
+        var anyOK = false
+        var lastErr: String?
+        for host in settings.hosts {
+            guard let client = settings.client(for: host) else { continue }
+            do {
+                try await client.registerPush(token: token, env: apnsEnv, owner: settings.defaultOwner)
+                anyOK = true
+            } catch {
+                lastErr = error.localizedDescription
+                log.error("push register on \(host.label) failed: \(error.localizedDescription)")
+            }
         }
+        if anyOK { apply(.serverAccepted(token: token)) }
+        else { apply(.serverFailed(reason: lastErr ?? "no reachable host")) }
     }
 
     // MARK: Tap routing

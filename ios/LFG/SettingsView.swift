@@ -34,10 +34,13 @@ struct ConnectView: View {
             .disabled(draft.isEmpty || probing)
 
             Button("Save & continue") {
-                settings.baseURLString = draft.trimmingCharacters(in: .whitespaces)
+                settings.addHost(draft.trimmingCharacters(in: .whitespaces))
             }
             .buttonStyle(.borderedProminent)
             .disabled(draft.isEmpty)
+
+            Text("You can add a second host later in Settings to run and transfer sessions across machines.")
+                .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
 
             Spacer()
         }
@@ -66,17 +69,55 @@ struct SettingsView: View {
         @Bindable var settings = settings
         NavigationStack {
             Form {
-                Section("Host") {
-                    TextField("https://your-host.ts.net", text: $draft)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
+                Section {
+                    ForEach(settings.hosts) { host in
+                        Button {
+                            settings.setDefaultHost(host.id)
+                        } label: {
+                            HStack(spacing: 10) {
+                                ReachDot(reach: store.reachabilityByHost[host.id])
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(host.label).foregroundStyle(.primary)
+                                    Text(host.url).font(.caption).foregroundStyle(.secondary)
+                                        .lineLimit(1).truncationMode(.middle)
+                                }
+                                Spacer()
+                                if host.isDefault {
+                                    Text("Default").font(.caption2.weight(.semibold))
+                                        .padding(.horizontal, 6).padding(.vertical, 2)
+                                        .background(Color.accentColor.opacity(0.15))
+                                        .clipShape(Capsule())
+                                }
+                            }
+                        }
+                        .swipeActions {
+                            Button(role: .destructive) {
+                                settings.removeHost(host.id); store.reconnect()
+                            } label: { Label("Remove", systemImage: "trash") }
+                        }
+                    }
+                    HStack {
+                        TextField("host.ts.net:8766", text: $draft)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                        Button("Add") {
+                            settings.addHost(draft.trimmingCharacters(in: .whitespaces))
+                            draft = ""; probe = nil
+                            store.reconnect()
+                            Task { await store.resolveHostIdentities() }
+                        }
+                        .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
                     Button {
                         Task { probing = true; probe = await LFGClient(string: draft)?.ping() ?? .badResponse("Invalid URL"); probing = false }
                     } label: {
-                        HStack { Text("Test connection"); Spacer(); if probing { ProgressView() } }
+                        HStack { Text("Test"); Spacer(); if probing { ProgressView() } }
                     }
+                    .disabled(draft.isEmpty)
                     HostProbeRow(probe: probe, probing: probing)
+                } header: { Text("Hosts") } footer: {
+                    Text("The client shows sessions from every host and can transfer a session between them (⋯ menu). Tap a host to make it the default for new sessions; swipe to remove.")
                 }
 
                 Section("Sessions") {
@@ -125,19 +166,12 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        settings.baseURLString = draft.trimmingCharacters(in: .whitespaces)
-                        store.reconnect()
-                        dismiss()
-                    }.disabled(draft.isEmpty)
-                }
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
             .task {
-                draft = settings.baseURLString
                 if store.root.isEmpty { await store.loadCreateMetadata() }
                 inboxDraft = store.inbox
+                await store.resolveHostIdentities()
             }
         }
     }
@@ -171,6 +205,19 @@ struct NotificationStatusRow: View {
             Label("Not enabled yet", systemImage: "bell").font(.subheadline)
         }
     }
+}
+
+/// A small per-host reachability dot (green ok / gray unknown / orange down).
+struct ReachDot: View {
+    let reach: Reachability?
+    private var color: Color {
+        switch reach {
+        case .ok: return .green
+        case .none: return .secondary
+        default: return .orange
+        }
+    }
+    var body: some View { Circle().fill(color).frame(width: 9, height: 9) }
 }
 
 struct HostProbeRow: View {
