@@ -140,6 +140,8 @@ import LFGCore
     private var links: [String: HostLink] = [:]
     /// Throttle for "an event referenced a session we don't know" refreshes.
     private var unknownSessionRefresh: Task<Void, Never>?
+    /// Per-host delayed re-evaluation of the sustained-failure banner rule.
+    private var bannerRecheck: [String: Task<Void, Never>] = [:]
     /// Pending delayed teardown while backgrounded (grace window so a quick
     /// app-switch keeps every stream alive).
     private var backgroundStopTask: Task<Void, Never>?
@@ -363,15 +365,32 @@ import LFGCore
     /// flips the map — which is what the banner, the offline composer notice,
     /// and reachability-aware routing all key off. The 60s REST reconcile keeps
     /// feeding the same map through `applyHostFetch`; both writers converge.
+    ///
+    /// The sustained-failure flip cannot wait for the NEXT state-change
+    /// callback: during a black-holed stall those only arrive once per
+    /// watchdog cycle (~20-25s), so the 30s threshold would be crossed silently
+    /// and the banner could lag by most of a minute (caught live in the Phase 1
+    /// gate test). While unhealthy-but-graced, a re-check is scheduled for the
+    /// exact moment the grace expires.
     private func linkStateChanged(_ hostId: String) {
         guard let link = links[hostId] else { return }
+        bannerRecheck[hostId]?.cancel(); bannerRecheck[hostId] = nil
         if link.isHealthy {
             reachabilityByHost[hostId] = .ok
             failuresByHost[hostId] = 0
         } else if HostLinkPolicy.showUnreachable(unhealthySince: link.unhealthySince) {
             reachabilityByHost[hostId] = .hostUnreachable("Connection lost")
+        } else if let since = link.unhealthySince {
+            // Within the grace window — keep the previous value, but come back
+            // the moment the window closes.
+            let delay = HostLinkPolicy.bannerAfter - Date().timeIntervalSince(since) + 0.5
+            bannerRecheck[hostId] = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(max(delay, 0.5)))
+                guard !Task.isCancelled else { return }
+                self?.bannerRecheck[hostId] = nil
+                self?.linkStateChanged(hostId)
+            }
         }
-        // else: within the grace window — keep the previous value (usually .ok).
         reachability = HostHealth.aggregate(hostIds: settings.hosts.map(\.id),
                                             health: reachabilityByHost)
     }

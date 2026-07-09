@@ -105,7 +105,11 @@ final class HostLink {
                 try? await Task.sleep(for: .seconds(delay))
                 if Task.isCancelled { return }
             }
-            setState(attempt == 0 ? .connecting : .catchingUp)
+            // .connecting until BYTES actually flow — claiming .catchingUp on
+            // dial would read as healthy while hung against a black-holed host
+            // (caught live in the Phase-1 gate test: the banner re-check saw a
+            // "healthy" link that was really stuck awaiting response headers).
+            setState(.connecting)
             var receivedAny = false
             do {
                 for try await element in client.events(since: cursor) {

@@ -1139,6 +1139,9 @@ export async function cmdServe() {
       if (path === "/api/events") {
         const since = Number(url.searchParams.get("since") ?? "0");
         const cursor = Number.isFinite(since) && since >= 0 ? Math.floor(since) : 0;
+        // One line per connect: low-volume, and the observable that proves
+        // cursor-resume behavior in the field (client's since vs our head).
+        console.log(`[events] connect since=${cursor} head=${journal.head()}`);
         let unsub: (() => void) | null = null;
         let hb: ReturnType<typeof setInterval> | null = null;
         let closed = false;

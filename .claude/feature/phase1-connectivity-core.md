@@ -47,16 +47,75 @@ survives real network flaps invisibly (one lossless round-trip to recover), dete
 
 ## Tests
 
-_Populated during implementation._
+### Unit (all green: bun 79/79 incl. 14 new; swift 98/98 incl. 11 new)
+- `src/journal.test.ts` — append/since/head monotonicity, replay ordering + limits,
+  live subscription + throwing-subscriber isolation, **canServe resync boundaries**
+  (incl. the fully-pruned-idle-journal case that forced head onto the AUTOINCREMENT
+  counter), pump offsets, PumpDeltas first-sight/change/forget semantics.
+- `ios/LFGCore/Tests/LFGCoreTests/HostEventsTests.swift` — SSE `id:` capture with
+  last-event-id persistence, HostStreamDecoder (event-with-seq / heartbeat-with-head /
+  bare heartbeat / resync / unknown-event / missing-id), HostLinkPolicy reconnect
+  schedule + ≤20s stale target + 30s sustained-banner rule.
+
+### Live gates (real app in simulator ↔ real Phase-1 server; evidence in `phase1-evidence/`)
+- **SC1 ✅ zero rebuilds:** two session opens + backs, a real session created via API,
+  and a send — `connect-log.txt` shows exactly ONE `[events] connect` for the entire
+  churn. (Old code rebuilt the stream on every one of these.)
+- **SC2 ✅ zero loss:** server SIGKILLed mid-stream; a marker line written into a live
+  transcript during the outage; server restarted → app reconnected
+  `since=530 head=604` (cursor resume, not from-scratch) and the marker rendered in
+  the open transcript (`gate2-marker2.png` — "SC2-MARKER-PHOENIX-7741").
+- **SC3 ✅:** 26s SIGSTOP black-hole → invisible (no banner, stream resumed);
+  sustained stall recovered ≤13s after SIGCONT (`gateB2-after.png`).
+- **SC4 ✅ honest banner:** 26s stall → "Connected" throughout (`gate34-A-during.png`);
+  58s stall → "Offline · Host unreachable" by ~T+50 (`gateB2-during.png`), cleared on
+  recovery. First run FAILED and caught two real bugs (see Bugs).
+- **SC5 ✅** 10s server heartbeats observed; client keepalive wired (RTT sampled).
+- **SC7 ✅ restart-safe pump:** scratch-server restart delta = 65 events
+  (~32 sessions × 2 baseline re-states + 4 genuine restart-gap messages), zero
+  history reflood; pre-restart cursor stayed serviceable.
+- **SC8 ✅** full suites green; send path exercised live against the Phase-1 server.
 
 ## Implementation Details
 
-_Populated during implementation._
+Server: `src/journal.ts` (Journal + PumpDeltas), `src/journal-pump.ts` (one global
+pump; per-session offsets persisted; cross-host rule: sessions appearing mid-pump
+start at file end), `/api/events?since=` + `/api/ping` + connect logging in
+`src/commands/serve.ts`. Client: `LFGCore/HostEvents.swift` (HostStreamElement,
+decoder, HostLinkPolicy), `LFGClient.events(since:)` (18s idle `timeoutInterval`
+covering the header phase + 20s byte watchdog) + `keepalivePing()`,
+`LFG/HostLink.swift` (state machine), `SessionStore` rewiring (syncLinks diff,
+ingest→apply, 60s reconcile, link-driven reachability with scheduled banner
+re-check, enterBackground grace / enterForeground resume), `focus()` no longer
+touches any connection. Old `/api/live/stream` + `liveStream(ids:)` kept for
+back-compat (web client, old app builds); deleted from the app path.
 
 ## Residual Risks
 
-_Populated at the end._
+- **SC6 (Settings-edit link isolation) verified by code shape, not live UI**: 
+  `syncLinks` is a pure diff (only added/removed host ids are touched) and
+  `reconnect()` no longer calls `stop()`; driving the Settings URL-field UI under
+  automation wasn't attempted (documented flaky). Covered implicitly by SC1 (no
+  rebuilds when the host list is unchanged). Verify manually on first TestFlight run.
+- **A new session's first turns can precede the pump's first sighting** (offset
+  starts at file end) — the app covers via `loadHistory` on open, same as the old
+  40-message backfill did. Track B's outbox/acks make this exact.
+- **Transcripts dict now grows for ALL sessions on a healthy host** (no 24-id cap
+  bounding it). Bounded in practice by session count × activity; properly bounded by
+  the Track B store. Watch memory on TestFlight.
+- Keepalive pings run only while foregrounded and healthy — NAT warmth during
+  long-idle foreground is the target case; background is Phase 2's job.
 
-## Bugs
+## Bugs (found BY the gates, fixed, re-verified)
 
-_None yet._
+1. **Banner could lag ~55s past its 30s rule** — the sustained-failure flip only
+   evaluated on state-change callbacks, which arrive once per watchdog cycle during
+   a stall. Fix: `SessionStore.linkStateChanged` schedules a re-check for the exact
+   moment the grace window closes.
+2. **A black-holed connect was invisible to all watchdogs** — `events()` started its
+   stale watchdog only after response headers, but a SIGSTOPed/vanished server
+   accepts TCP and never sends headers, hanging the request forever; meanwhile
+   `HostLink` claimed `.catchingUp` (healthy) on dial, so the banner re-check reset
+   the host to `.ok`. Fix: 18s idle `timeoutInterval` (covers the header phase;
+   resets on every byte so 10s heartbeats never trip it) + `.connecting` until bytes
+   actually flow.

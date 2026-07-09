@@ -411,7 +411,15 @@ public struct LFGClient: Sendable {
             let task = Task {
                 var req = URLRequest(url: target)
                 req.httpMethod = "GET"
-                req.timeoutInterval = .infinity
+                // NOT .infinity: URLSession's timeoutInterval is an IDLE timeout
+                // (resets on every received byte), so with 10s server heartbeats
+                // a healthy stream never trips it — while a black-holed connect
+                // (TCP accepted by the kernel, headers never arriving — SIGSTOPed
+                // or vanished server) fails within 18s instead of hanging
+                // forever. The custom watchdog below can only start AFTER headers
+                // arrive; this covers the phase it can't. Caught live in the
+                // Phase-1 gate test.
+                req.timeoutInterval = 18
                 req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
                 do {
                     let (bytes, resp) = try await session.bytes(for: req)
