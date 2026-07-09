@@ -6,6 +6,8 @@ import { randomBytes } from "node:crypto";
 import { marked } from "marked";
 import { PATHS } from "../config.ts";
 import { hostInfo } from "../hostinfo.ts";
+import { Journal } from "../journal.ts";
+import { startJournalPump } from "../journal-pump.ts";
 import {
   AGENTS_DIR,
   listAgents,
@@ -518,6 +520,15 @@ function clampDim(raw: string | null, fallback: number): number {
 }
 
 export async function cmdServe() {
+  // Event journal + the one global session pump (replaces per-connection pump
+  // loops for /api/events consumers; /api/live/stream keeps its own for
+  // back-compat until old clients are gone). See src/journal.ts.
+  const journal = Journal.open(join(PATHS.data, "journal.db"));
+  startJournalPump(journal, {
+    renderMsg: (m) => msgWithHtml(m),
+    resolvePrompt: (tp, pane) => resolveSessionPrompt(tp, pane),
+  });
+
   const server = Bun.serve({
     port: PORT,
     hostname: HOST,
@@ -1105,6 +1116,97 @@ export async function cmdServe() {
       // sessions by machine and dedupe a host reached via two URLs.
       if (path === "/api/info") {
         return json(hostInfo());
+      }
+
+      // ---- keepalive ----
+      // Tiny 200 the client pings every ~10s per live host: keeps carrier-NAT
+      // mappings on the phone's cellular path warm (idle UDP bindings expire in
+      // ~30s and their expiry is what forces Tailscale re-punch flaps), doubles
+      // as an RTT sample, and detects a dead path in both directions fast.
+      if (path === "/api/ping") {
+        return json({ ok: true, seq: journal.head(), ts: Date.now() });
+      }
+
+      // ---- journaled event stream (cursor-resumable) ----
+      // GET /api/events?since=<seq>. Replays every journaled event after the
+      // client's cursor, then streams live — one stream covers ALL sessions on
+      // this host (no ids= selection, so nothing ever needs rebuilding when
+      // sessions open/close/transfer). SSE `id:` carries the seq; the client
+      // persists the last-applied seq per host and resumes losslessly. An
+      // unserviceable cursor (predates retention, or from a previous journal
+      // lifetime) gets `event: resync` — the client full-refreshes via REST and
+      // resets its cursor to the accompanying head.
+      if (path === "/api/events") {
+        const since = Number(url.searchParams.get("since") ?? "0");
+        const cursor = Number.isFinite(since) && since >= 0 ? Math.floor(since) : 0;
+        // One line per connect: low-volume, and the observable that proves
+        // cursor-resume behavior in the field (client's since vs our head).
+        console.log(`[events] connect since=${cursor} head=${journal.head()}`);
+        let unsub: (() => void) | null = null;
+        let hb: ReturnType<typeof setInterval> | null = null;
+        let closed = false;
+        const stream = new ReadableStream({
+          start(controller) {
+            const send = (s: string) => {
+              if (closed) return;
+              try {
+                controller.enqueue(s);
+              } catch {
+                closed = true;
+                if (unsub) unsub();
+                if (hb) clearInterval(hb);
+              }
+            };
+            const sendRow = (r: {
+              seq: number;
+              type: string;
+              payload: string;
+            }) => send(`id: ${r.seq}\nevent: ${r.type}\ndata: ${r.payload}\n\n`);
+
+            if (!journal.canServe(cursor)) {
+              send(`event: resync\ndata: ${JSON.stringify({ head: journal.head() })}\n\n`);
+            } else {
+              // Subscribe FIRST (buffering), then replay, then flush the buffer —
+              // an event appended mid-replay is neither lost nor duplicated.
+              let lastSent = cursor;
+              let replaying = true;
+              const buffered: { seq: number; type: string; payload: string }[] = [];
+              unsub = journal.subscribe((row) => {
+                if (replaying) buffered.push(row);
+                else if (row.seq > lastSent) {
+                  lastSent = row.seq;
+                  sendRow(row);
+                }
+              });
+              let at = cursor;
+              for (;;) {
+                const rows = journal.since(at, 1000);
+                if (rows.length === 0) break;
+                for (const r of rows) {
+                  sendRow(r);
+                  lastSent = r.seq;
+                }
+                at = lastSent;
+              }
+              for (const r of buffered) {
+                if (r.seq > lastSent) {
+                  lastSent = r.seq;
+                  sendRow(r);
+                }
+              }
+              replaying = false;
+            }
+            // 10s heartbeat carrying head seq: keepalive + a cheap gap detector
+            // (client compares against its cursor without waiting for events).
+            hb = setInterval(() => send(`: hb ${journal.head()}\n\n`), 10_000);
+          },
+          cancel() {
+            closed = true;
+            if (unsub) unsub();
+            if (hb) clearInterval(hb);
+          },
+        });
+        return new Response(stream, { headers: sseHeaders() });
       }
 
       // ---- running claude sessions ----

@@ -65,11 +65,14 @@ live, the conventions to keep, and the traps that have burned past sessions.
   `\n` yourself (`LFGClient.liveStream` does). And `\r\n` is a **single** Swift
   grapheme, so `firstIndex(of: "\n")` never matches CRLF — split on
   `unicodeScalars` (`SSEParser.feed` does).
-- **The live stream must reconnect on a *clean* close, not just on error.** A
-  server restart / idle timeout / proxy close completes the `for await` loop
-  without throwing; if you don't reset `streamedIDs` there, `ensureStream`
-  believes the stream is still live and updates silently stop. See the long
-  comment in `SessionStore.ensureStream`.
+- **Live delivery is `HostLink` (one per host) consuming `/api/events?since=`.**
+  There is no id-selected stream anymore — do NOT reintroduce per-session stream
+  subscriptions or tear a link down for session lifecycle/focus changes (that
+  was the old design's biggest self-inflicted-disconnect source). A clean close
+  AND a thrown error both land in `HostLink.run`'s retry loop; the cursor makes
+  every reconnect lossless. Watchdog subtlety: URLSession's `timeoutInterval`
+  (18s, idle-based) covers the response-header phase that the byte watchdog
+  can't — a black-holed host accepts TCP and never sends headers.
 - **Notification taps must defer the selection onto the next runloop turn.**
   Setting `requestedSelection` synchronously inside UIKit's launch/CATransaction
   snapshot drives a `NavigationSplitView` selection mid-transaction → UIKit throws

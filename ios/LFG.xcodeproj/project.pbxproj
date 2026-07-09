@@ -16,6 +16,7 @@
 		7254BB93C3886BB66A1304A2 /* LFGCore in Frameworks */ = {isa = PBXBuildFile; productRef = 672BDBCB9E1F5950E1DB7012 /* LFGCore */; };
 		85C03A175F9DF48F0DAF9D6E /* RichContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C22EA76E51E2B0A745EE8847 /* RichContent.swift */; };
 		8950528E1385EF07CB2814AD /* LFGApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909139FA5D9B976298B7AA3F /* LFGApp.swift */; };
+		8A8BAA0AADCD3A860CCA5B39 /* HostLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */; };
 		8D3E23D31117026A9BF00460 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 649DB6E8EC8E3C5852C813C8 /* LaunchScreen.storyboard */; };
 		A541589C33833A613D05AD8B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6461434AE6C2B0858AC679ED /* RootView.swift */; };
 		D34242B9518E03AED793C989 /* SessionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2641AAFED0A103CF2409D79C /* SessionListView.swift */; };
@@ -41,6 +42,7 @@
 		716A5CB7BF742B16562A7EF8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		847BA9F87A178565C0EEC901 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		909139FA5D9B976298B7AA3F /* LFGApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGApp.swift; sourceTree = "<group>"; };
+		9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostLink.swift; sourceTree = "<group>"; };
 		C22EA76E51E2B0A745EE8847 /* RichContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichContent.swift; sourceTree = "<group>"; };
 		F4C23B1D7493D21B0344531F /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		F63A269E91FBB297094BA544 /* LFGCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LFGCore; path = LFGCore; sourceTree = SOURCE_ROOT; };
@@ -73,6 +75,7 @@
 			children = (
 				36D7D08CD0B7C101A085BC11 /* Assets.xcassets */,
 				F4C23B1D7493D21B0344531F /* Components.swift */,
+				9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */,
 				716A5CB7BF742B16562A7EF8 /* Info.plist */,
 				649DB6E8EC8E3C5852C813C8 /* LaunchScreen.storyboard */,
 				5C0AF429850CD7F98D54334E /* LFG.entitlements */,
@@ -187,6 +190,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FDC78A1C6A82751D9F56E521 /* Components.swift in Sources */,
+				8A8BAA0AADCD3A860CCA5B39 /* HostLink.swift in Sources */,
 				8950528E1385EF07CB2814AD /* LFGApp.swift in Sources */,
 				50F6EF746AAEB80DB6229E05 /* MessageComposer.swift in Sources */,
 				680725D02451A3EEFF5A9F28 /* NewSessionView.swift in Sources */,
@@ -275,8 +279,8 @@
 				APS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
@@ -287,7 +291,6 @@
 				);
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -300,8 +303,8 @@
 				APS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
@@ -312,7 +315,6 @@
 				);
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
