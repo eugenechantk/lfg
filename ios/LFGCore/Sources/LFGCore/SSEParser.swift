@@ -5,9 +5,13 @@ public struct SSEFrame: Sendable, Equatable {
     public var event: String     // event name ("message" if unspecified)
     public var data: String      // joined data lines
     public var isComment: Bool   // a `:`-prefixed keep-alive line
+    /// Last-event-id in effect for this frame (SSE `id:` field). Per spec it
+    /// persists across frames until replaced; `/api/events` sets it to the
+    /// journal seq on every event, and it is the client's resume cursor.
+    public var id: String?
 
-    public init(event: String, data: String, isComment: Bool = false) {
-        self.event = event; self.data = data; self.isComment = isComment
+    public init(event: String, data: String, isComment: Bool = false, id: String? = nil) {
+        self.event = event; self.data = data; self.isComment = isComment; self.id = id
     }
 }
 
@@ -18,6 +22,7 @@ public struct SSEParser: Sendable {
     private var buffer = ""
     private var dataLines: [String] = []
     private var eventName = ""
+    private var lastEventId: String? = nil
 
     public init() {}
 
@@ -54,7 +59,8 @@ public struct SSEParser: Sendable {
             let frame = SSEFrame(
                 event: eventName.isEmpty ? "message" : eventName,
                 data: dataLines.joined(separator: "\n"),
-                isComment: false
+                isComment: false,
+                id: lastEventId
             )
             eventName = ""
             dataLines = []
@@ -68,7 +74,8 @@ public struct SSEParser: Sendable {
         switch field {
         case "event": eventName = value
         case "data": dataLines.append(value)
-        default: break   // id / retry / unknown fields: ignored for our purposes
+        case "id": if !value.contains("\0") { lastEventId = value }  // spec: NUL-bearing ids ignored
+        default: break   // retry / unknown fields: ignored for our purposes
         }
         return nil
     }

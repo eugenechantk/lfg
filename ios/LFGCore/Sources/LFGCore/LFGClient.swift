@@ -390,4 +390,81 @@ public struct LFGClient: Sendable {
             continuation.onTermination = { _ in task.cancel() }
         }
     }
+
+    // MARK: Journaled event stream (cursor-resumable, Phase 1)
+
+    /// Subscribe to `GET /api/events?since=<seq>` — the whole host's journaled
+    /// event stream. Unlike `liveStream(ids:)` there is no id selection and no
+    /// cap: nothing about the subscription changes when sessions open/close, so
+    /// the connection is never rebuilt for lifecycle reasons. On reconnect,
+    /// pass the last applied seq and the server replays exactly what was
+    /// missed (or emits `.resync` when the cursor is unserviceable).
+    ///
+    /// Byte handling mirrors `liveStream`: manual `\n` splitting (`.lines`
+    /// swallows SSE's blank dispatch boundaries) and a silent-stall watchdog —
+    /// at `HostLinkPolicy.staleTimeout` (20s ≈ two missed 10s heartbeats).
+    public func events(since: Int64) -> AsyncThrowingStream<HostStreamElement, Error> {
+        let target = url("api/events", query: [URLQueryItem(name: "since", value: String(since))])
+        let session = self.session
+        let staleTimeout = HostLinkPolicy.staleTimeout
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                var req = URLRequest(url: target)
+                req.httpMethod = "GET"
+                req.timeoutInterval = .infinity
+                req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                do {
+                    let (bytes, resp) = try await session.bytes(for: req)
+                    if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                        throw LFGError.http(status: http.statusCode, body: "")
+                    }
+                    let lastActivity = OSAllocatedUnfairLock(initialState: Date())
+                    let watchdog = Task {
+                        while !Task.isCancelled {
+                            try? await Task.sleep(for: .seconds(5))
+                            if Task.isCancelled { return }
+                            let last = lastActivity.withLock { $0 }
+                            if Date().timeIntervalSince(last) > staleTimeout {
+                                continuation.finish(throwing: LFGError.streamStalled)
+                                return
+                            }
+                        }
+                    }
+                    defer { watchdog.cancel() }
+
+                    var parser = SSEParser()
+                    var lineBytes = [UInt8]()
+                    lineBytes.reserveCapacity(256)
+                    for try await byte in bytes {
+                        if Task.isCancelled { break }
+                        if byte == 0x0A {
+                            lastActivity.withLock { $0 = Date() }
+                            var line = String(decoding: lineBytes, as: UTF8.self)
+                            if line.hasSuffix("\r") { line.removeLast() }
+                            lineBytes.removeAll(keepingCapacity: true)
+                            if let frame = parser.feedLine(line),
+                               let element = HostStreamDecoder.decode(frame) {
+                                continuation.yield(element)
+                            }
+                        } else {
+                            lineBytes.append(byte)
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// Keepalive: tiny GET whose round-trip keeps the cellular NAT mapping warm
+    /// and measures RTT. Returns the host's journal head (a cheap gap check).
+    public func ping(timeout: TimeInterval = 5) async throws -> (head: Int64, rtt: TimeInterval) {
+        struct P: Decodable { let seq: Int64? }
+        let started = Date()
+        let p = try await get("api/ping", timeout: timeout, as: P.self)
+        return (head: p.seq ?? 0, rtt: Date().timeIntervalSince(started))
+    }
 }
