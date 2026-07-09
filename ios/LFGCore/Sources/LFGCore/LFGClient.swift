@@ -461,7 +461,7 @@ public struct LFGClient: Sendable {
 
     /// Keepalive: tiny GET whose round-trip keeps the cellular NAT mapping warm
     /// and measures RTT. Returns the host's journal head (a cheap gap check).
-    public func ping(timeout: TimeInterval = 5) async throws -> (head: Int64, rtt: TimeInterval) {
+    public func keepalivePing(timeout: TimeInterval = 5) async throws -> (head: Int64, rtt: TimeInterval) {
         struct P: Decodable { let seq: Int64? }
         let started = Date()
         let p = try await get("api/ping", timeout: timeout, as: P.self)

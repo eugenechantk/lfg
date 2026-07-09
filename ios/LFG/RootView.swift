@@ -84,22 +84,24 @@ struct RootView: View {
             selection = requested
             store.clearRequestedSelection()
         }
-        // iOS can't hold an SSE stream while the process is suspended, so the app owns
-        // an explicit teardown/reconnect around backgrounding rather than letting
-        // orphaned tasks linger until their stale watchdog fires.
+        // iOS can't hold a socket while suspended, so the app owns an explicit
+        // linger/reconnect around backgrounding: `.background` holds every host
+        // link open through a ~25s background-task grace (a quick app-switch
+        // drops nothing), then tears down; `.active` cancels the grace and
+        // resumes — each link reconnects with its journal cursor, so the resume
+        // is one lossless round-trip per host.
         //
-        // Only `.background` tears down — `.inactive` also fires for the app switcher,
-        // Control Center and incoming calls, where the streams are still perfectly good.
+        // `.inactive` deliberately does nothing — it also fires for the app
+        // switcher, Control Center and incoming calls, where streams are fine.
         .onChange(of: scenePhase) { _, phase in
             guard settings.hasConfiguredHost else { return }
             switch phase {
             case .active:
-                store.start()                       // no-op if the poll loop is alive
-                Task { await store.refresh() }      // coalesces onto the loop's in-flight refresh
+                store.enterForeground()
             case .background:
-                store.stop()
+                store.enterBackground()
             default:
-                break                                // .inactive — transient, keep streaming
+                break
             }
         }
     }

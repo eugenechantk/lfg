@@ -133,8 +133,16 @@ import LFGCore
 
     // Live SSE streams, one per host (each host has its own /api/live/stream and
     // its own 24-id cap). Keyed by Host.id (url).
-    private var streamTasks: [String: Task<Void, Never>] = [:]
-    private var streamedIDsByHost: [String: [String]] = [:]
+    // One HostLink per configured host (Phase 1): each owns its cursor-resumable
+    // /api/events stream, keepalive, and reconnect loop. Replaces the old
+    // per-host liveStream(ids:) management (streamTasks/streamedIDsByHost),
+    // whose id-set rebuilds were a major source of self-inflicted disconnects.
+    private var links: [String: HostLink] = [:]
+    /// Throttle for "an event referenced a session we don't know" refreshes.
+    private var unknownSessionRefresh: Task<Void, Never>?
+    /// Pending delayed teardown while backgrounded (grace window so a quick
+    /// app-switch keeps every stream alive).
+    private var backgroundStopTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
     private var focusedID: String?
 
@@ -272,37 +280,133 @@ import LFGCore
     // MARK: Lifecycle
 
     func start() {
+        backgroundStopTask?.cancel(); backgroundStopTask = nil
+        syncLinks()
         guard pollTask == nil else { return }
+        // Slow reconcile only: live delivery is the links' job now. This loop
+        // is belt-and-braces (list membership, closed sessions, anything an
+        // unknown event type would have carried).
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()
-                try? await Task.sleep(for: .seconds(3))
+                try? await Task.sleep(for: .seconds(60))
             }
         }
     }
 
-    /// Tear down the poll loop and every live SSE stream. Called when the host list
-    /// changes and when the app backgrounds — iOS suspends the process anyway, but
-    /// cancelling explicitly stops a suspended-then-resumed stream task from lingering
-    /// until its 35s stale watchdog fires, and stops a half-finished refresh from
-    /// racing the one the foreground handler kicks off.
+    /// Tear down the poll loop and every host link. Called when the app has been
+    /// backgrounded past its grace window (iOS is about to suspend us anyway;
+    /// stopping explicitly prevents half-finished work racing the foreground
+    /// restart) — and never for host-list edits, which go through `syncLinks`.
     func stop() {
         pollTask?.cancel(); pollTask = nil
         refreshTask?.cancel(); refreshTask = nil
         autoResendTask?.cancel(); autoResendTask = nil
-        for t in streamTasks.values { t.cancel() }
-        streamTasks = [:]
-        streamedIDsByHost = [:]
+        backgroundStopTask?.cancel(); backgroundStopTask = nil
+        for l in links.values { l.stop() }
+        links = [:]
     }
 
-    /// Called when the host list changes — wipe everything and reconnect.
+    /// Called when the host list changes. NOT a teardown: only links for
+    /// added/removed/edited hosts are touched — editing one host in Settings
+    /// must never drop the other host's live stream (Phase 1 SC6). Per-session
+    /// state for removed hosts falls out on the next rebuild (it filters by the
+    /// configured host set).
     func reconnect() {
-        stop()
-        sessions = []; transcripts = [:]; prompts = [:]; busy = [:]; queues = [:]; seen = [:]; pendingSends = [:]
-        closedCache = []; resumedIds = []; resumeTick = 0; pollTick = 0; liveIds = []
-        hostBySession = [:]; lastSessionsByHost = [:]; reachabilityByHost = [:]; failuresByHost = [:]
-        reachability = nil; usage = nil; repos = []; users = []
+        syncLinks()
+        usage = nil; repos = []; users = []; metadataLoaded = false
+        Task { await refresh() }
+    }
+
+    /// Diff configured hosts against running links; start/stop only the delta.
+    private func syncLinks() {
+        let hosts = settings.hosts
+        let ids = Set(hosts.map(\.id))
+        for (id, link) in links where !ids.contains(id) {
+            link.stop()
+            links[id] = nil
+            reachabilityByHost[id] = nil
+        }
+        for host in hosts {
+            guard links[host.id] == nil, let client = settings.client(for: host) else { continue }
+            let link = HostLink(host: host, client: client)
+            let hid = host.id
+            link.onEvent = { [weak self] ev in self?.ingest(ev, from: hid) }
+            link.onResyncNeeded = { [weak self] in
+                Task { [weak self] in await self?.refresh() }
+            }
+            link.onStateChange = { [weak self] in self?.linkStateChanged(hid) }
+            links[hid] = link
+            link.start()
+        }
+    }
+
+    /// Live events from a host link. Same reducer as always (`apply`), plus:
+    /// an event referencing a session we don't know yet means the 60s reconcile
+    /// is behind reality (session just created / transferred here) — pull the
+    /// list forward now, throttled.
+    private func ingest(_ ev: LiveEvent, from hostId: String) {
+        if case .message(let sid, _) = ev,
+           session(sid) == nil, !sid.hasPrefix("local-"),
+           unknownSessionRefresh == nil {
+            unknownSessionRefresh = Task { [weak self] in
+                await self?.refresh()
+                try? await Task.sleep(for: .seconds(5))
+                self?.unknownSessionRefresh = nil
+            }
+        }
+        apply(ev)
+    }
+
+    /// Link state → per-host reachability. Healthy links (and blips shorter
+    /// than `HostLinkPolicy.bannerAfter`) read `.ok`; only SUSTAINED failure
+    /// flips the map — which is what the banner, the offline composer notice,
+    /// and reachability-aware routing all key off. The 60s REST reconcile keeps
+    /// feeding the same map through `applyHostFetch`; both writers converge.
+    private func linkStateChanged(_ hostId: String) {
+        guard let link = links[hostId] else { return }
+        if link.isHealthy {
+            reachabilityByHost[hostId] = .ok
+            failuresByHost[hostId] = 0
+        } else if HostLinkPolicy.showUnreachable(unhealthySince: link.unhealthySince) {
+            reachabilityByHost[hostId] = .hostUnreachable("Connection lost")
+        }
+        // else: within the grace window — keep the previous value (usually .ok).
+        reachability = HostHealth.aggregate(hostIds: settings.hosts.map(\.id),
+                                            health: reachabilityByHost)
+    }
+
+    /// Backgrounding: hold every link open through a short grace window under a
+    /// background-task assertion, so flipping to another app and straight back
+    /// never drops a stream. Past the grace (or on assertion expiry) tear down;
+    /// the cursor makes the eventual foreground reconnect lossless anyway.
+    func enterBackground() {
+        guard backgroundStopTask == nil else { return }
+        let app = UIApplication.shared
+        var bgTask: UIBackgroundTaskIdentifier = .invalid
+        bgTask = app.beginBackgroundTask(withName: "lfg.linger") { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.stop()
+                app.endBackgroundTask(bgTask)
+            }
+        }
+        backgroundStopTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(25))
+            guard !Task.isCancelled else {
+                if bgTask != .invalid { app.endBackgroundTask(bgTask) }
+                return
+            }
+            self?.backgroundStopTask = nil
+            self?.stop()
+            if bgTask != .invalid { app.endBackgroundTask(bgTask) }
+        }
+    }
+
+    /// Foregrounding: cancel any pending teardown, restart links (cursor resume
+    /// makes this one cheap round-trip per host), and reconcile immediately.
+    func enterForeground() {
         start()
+        Task { await refresh() }
     }
 
     // MARK: Polling
@@ -395,14 +499,13 @@ import LFGCore
                                    tick: pollTick, policy: probePolicy)
         }
 
-        // Apply each host's result AS IT ARRIVES: a healthy host's sessions render and
-        // its SSE stream reconnects immediately, even while a dead host is still hanging
-        // on its timeout. `ensureStream` is idempotent (it early-outs on unchanged ids).
+        // Apply each host's result AS IT ARRIVES: a healthy host's sessions render
+        // immediately, even while a dead host is still hanging on its timeout.
+        // (Live streaming is the HostLinks' job now — nothing to re-establish here.)
         await fetchSessionsStreaming(toProbe, timeout: probePolicy.pollTimeout) { [weak self] f in
             guard let self else { return }
             self.applyHostFetch(f)
             self.rebuildSessions()
-            self.ensureStream()
         }
 
         // Prune state for hosts removed from settings.
@@ -438,7 +541,6 @@ import LFGCore
         }
 
         rebuildSessions()
-        ensureStream()
         await reconcilePendingViaQueue()
 
         // A host just came back. Anything that failed to send while it was down is
@@ -554,12 +656,14 @@ import LFGCore
         // The session on screen is seen by definition — keep its mark current against
         // the fresh list even between stream events.
         if let f = focusedID { markOpened(f) }
-        // Seed busy from the REST baseline for sessions the live SSE stream
-        // doesn't cover (outside the 24-id window). Streamed sessions keep their
-        // accurate pane-scraped SSE busy as an override.
-        let streamed = Set(streamedIDsByHost.values.flatMap { $0 })
+        // Seed busy from the REST baseline only for sessions on hosts whose link
+        // isn't currently delivering (a healthy link streams pane-scraped busy
+        // for EVERY session on that host — there is no id window anymore, so
+        // the journal's value is strictly fresher than this snapshot's).
         for s in fresh {
-            guard let sid = s.sessionId, let b = s.busy, !streamed.contains(sid) else { continue }
+            guard let sid = s.sessionId, let b = s.busy else { continue }
+            let hid = hostBySession[s.id]
+            if let hid, links[hid]?.isHealthy == true { continue }
             busy[sid] = b
         }
         // Snapshot the focused session while it's live so its detail view survives
@@ -632,12 +736,15 @@ import LFGCore
 
     // MARK: Live stream
 
-    /// Pin the currently-open session so it always receives live events.
+    /// Track the currently-open session (read-marking + unread suppression).
+    /// Note what is ABSENT here: the old code rebuilt the host's SSE stream on
+    /// focus to force the opened session into the 24-id window — i.e. opening a
+    /// session could drop the live connection. HostLinks stream every session
+    /// on the host, so focusing is now pure bookkeeping (Phase 1 SC1).
     func focus(_ id: String?) {
         if let id { markOpened(id) }
         guard focusedID != id else { return }
         focusedID = id
-        ensureStream()
     }
 
     /// Mark a session's newest known message as seen, and persist. Called when the
@@ -700,69 +807,6 @@ import LFGCore
         persistSeen()
         UserDefaults.standard.set(true, forKey: Self.migratedKey)
         needsReadStateMigration = false
-    }
-
-    /// Maintain one live SSE stream PER host (each host serves its own
-    /// `/api/live/stream` with its own 24-id cap). Within a host, prioritise the
-    /// focused session, then most-recently-active, so the viewed + running
-    /// sessions always get live events.
-    private func ensureStream() {
-        let hosts = settings.hosts
-        let hostIds = Set(hosts.map(\.id))
-        // Tear down streams for hosts removed from settings.
-        for hid in Array(streamTasks.keys) where !hostIds.contains(hid) {
-            streamTasks[hid]?.cancel(); streamTasks[hid] = nil; streamedIDsByHost[hid] = nil
-        }
-        for host in hosts {
-            // Don't open a stream against a host we know is down. Connecting to a
-            // black-holed peer neither errors nor completes — the 35s
-            // `streamStaleTimeout` watchdog is the only thing that would eventually
-            // reap it, burning a task per cycle. Tear down what's there and clear the
-            // id key so the host re-establishes the moment it's reachable again.
-            guard reachabilityByHost[host.id] == .ok else {
-                if streamTasks[host.id] != nil || streamedIDsByHost[host.id] != nil {
-                    streamTasks[host.id]?.cancel()
-                    streamTasks[host.id] = nil
-                    streamedIDsByHost[host.id] = nil
-                }
-                continue
-            }
-            var ordered = sessions
-                .filter { !$0.closed && hostBySession[$0.id] == host.id }
-                .sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
-                .compactMap(\.sessionId)
-                .filter { !$0.hasPrefix("local-") }   // placeholders aren't on the server yet
-            if let f = focusedID, !f.hasPrefix("local-"), hostBySession[f] == host.id {
-                ordered.removeAll { $0 == f }
-                ordered.insert(f, at: 0)
-            }
-            let capped = Array(ordered.prefix(24))
-            let key = capped.sorted()
-            if key == (streamedIDsByHost[host.id] ?? []) { continue }   // unchanged
-            streamedIDsByHost[host.id] = key
-            streamTasks[host.id]?.cancel()
-            guard let client = settings.client(for: host), !capped.isEmpty else {
-                streamTasks[host.id] = nil; continue
-            }
-            let hid = host.id
-            streamTasks[hid] = Task { [weak self] in
-                do {
-                    for try await event in client.liveStream(ids: capped) {
-                        if Task.isCancelled { return }
-                        self?.apply(event)
-                    }
-                } catch {
-                    // Thrown error (network blip). Fall through to the reset below.
-                }
-                // A clean close (server restart / idle EOF / proxy close) completes
-                // the for-await loop WITHOUT throwing; without resetting this host's
-                // streamedIDs, ensureStream would believe the stream is still live
-                // and never reconnect (live updates silently stop). Reset so the 3s
-                // poll re-establishes it — unless superseded (cancelled) by a newer
-                // ensureStream, which already set the correct ids for its stream.
-                if !Task.isCancelled { self?.streamedIDsByHost[hid] = [] }
-            }
-        }
     }
 
     private func apply(_ event: LiveEvent) {
