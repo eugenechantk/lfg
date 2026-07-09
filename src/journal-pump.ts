@@ -167,19 +167,39 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
     }
     await refreshWatchSet();
 
-    const msgTimer = setInterval(() => {
+    // BACKPRESSURE IS LOAD-BEARING. The first version fired pollOne for every
+    // session in parallel on a fixed interval: on a machine where one tick's
+    // pane-scrapes take >1s, the next tick stacks MORE spawns on top of the
+    // still-running ones, unboundedly, until the single event loop drowns —
+    // this wedged the Air's server hard (TCP accepted via kernel backlog, HTTP
+    // never answered, for minutes). Serialized self-scheduling loops instead:
+    // a slow machine degrades to a slower cadence, never to a pileup.
+    let msgTimer: ReturnType<typeof setTimeout> | null = null;
+    const msgLoop = async () => {
       if (stopped) return;
-      for (const w of watched.values()) void tailOne(w);
-    }, MSG_TICK_MS);
-    const pollTimer = setInterval(() => {
-      if (stopped) return;
-      void refreshWatchSet();
       for (const w of watched.values()) {
-        void pollOne(w);
-        queueOne(w);
-        void reconcileQueued(w.sid).then((changed) => changed && queueOne(w));
+        if (stopped) return;
+        await tailOne(w);
       }
-    }, POLL_TICK_MS);
+      msgTimer = setTimeout(msgLoop, MSG_TICK_MS);
+    };
+    msgTimer = setTimeout(msgLoop, MSG_TICK_MS);
+
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+    const pollLoop = async () => {
+      if (stopped) return;
+      await refreshWatchSet();
+      for (const w of watched.values()) {
+        if (stopped) return;
+        try {
+          await pollOne(w);
+          queueOne(w);
+          if (await reconcileQueued(w.sid)) queueOne(w);
+        } catch {}
+      }
+      pollTimer = setTimeout(pollLoop, POLL_TICK_MS);
+    };
+    pollTimer = setTimeout(pollLoop, POLL_TICK_MS);
     const pruneTimer = setInterval(() => {
       if (!stopped) j.prune();
     }, 60 * 60 * 1000);
@@ -187,8 +207,8 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
 
     stop = () => {
       stopped = true;
-      clearInterval(msgTimer);
-      clearInterval(pollTimer);
+      if (msgTimer) clearTimeout(msgTimer);
+      if (pollTimer) clearTimeout(pollTimer);
       clearInterval(pruneTimer);
     };
     if (stopped) stop(); // stop() was requested before boot finished
