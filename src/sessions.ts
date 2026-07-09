@@ -1074,10 +1074,18 @@ async function listSessionsUncached(): Promise<Session[]> {
     let lastUser: string | null = null;
     let liveModel: string | null = null;
     if (transcriptPath) {
+      // lastActivityAt means CONVERSATION activity, so it comes from the last
+      // message's timestamp, not the file mtime. The transcript dir is synced
+      // between hosts and the sync daemon rewrites mtimes hourly with no
+      // content change (see .claude/diagnosis-idle-sessions-show-unread.md),
+      // which made idle sessions resurface as Unread and flash busy for 12s.
+      // mtime remains the fallback for a transcript with no parseable message.
+      let mtimeMs: number | null = null;
       try {
-        lastActivityAt = statSync(transcriptPath).mtimeMs;
+        mtimeMs = statSync(transcriptPath).mtimeMs;
       } catch {}
       last = await previewLast(transcriptPath).catch(() => null);
+      lastActivityAt = last?.ts ?? mtimeMs;
       lastUser = await lastUserText(transcriptPath).catch(() => null);
       liveModel = await lastAssistantModel(transcriptPath).catch(() => null);
     }
@@ -1165,10 +1173,14 @@ async function listSessionsUncached(): Promise<Session[]> {
     let lastActivityAt: number | null = null;
     let lastUser: string | null = null;
     if (transcriptPath) {
+      // Conversation activity from the last message's ts, mtime only as
+      // fallback — same rationale as the claude site above (synced mtimes lie).
+      let mtimeMs: number | null = null;
       try {
-        lastActivityAt = statSync(transcriptPath).mtimeMs;
+        mtimeMs = statSync(transcriptPath).mtimeMs;
       } catch {}
       last = await previewLast(transcriptPath).catch(() => null);
+      lastActivityAt = last?.ts ?? mtimeMs;
       lastUser = await lastUserText(transcriptPath).catch(() => null);
     }
     const project = projectName(cwd);
@@ -1237,13 +1249,17 @@ async function listSessionsUncached(): Promise<Session[]> {
     let lastActivityAt: number | null = null;
     let lastUser: string | null = null;
     if (transcriptPath) {
+      // Conversation activity from the last message's ts, mtime only as
+      // fallback — same rationale as the claude site above (synced mtimes lie).
+      let mtimeMs: number | null = null;
       try {
-        lastActivityAt = statSync(transcriptPath).mtimeMs;
+        mtimeMs = statSync(transcriptPath).mtimeMs;
       } catch {}
       // The transcript helpers handle BOTH claude JSONL and codex rollouts
       // (normalizeCodexLine is tried first inside each), so they're safe for a
       // codex rollout path too. Guarded with .catch — never throw out of here.
       last = await previewLast(transcriptPath).catch(() => null);
+      lastActivityAt = last?.ts ?? mtimeMs;
       lastUser = await lastUserText(transcriptPath).catch(() => null);
     }
     const project = projectName(e.cwd);
