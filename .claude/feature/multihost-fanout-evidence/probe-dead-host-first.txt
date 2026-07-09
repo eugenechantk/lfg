@@ -1,0 +1,35 @@
+[+ 8.23s] LFG pid 67117 first seen
+[+ 0.00s] NEW  100.120.101.14:8766      SYN_SENT     lport=57452
+[+ 0.00s] NEW  100.75.162.40:8766       ESTABLISHED  lport=57453
+[+ 0.28s] NEW  100.120.101.14:8766      SYN_SENT     lport=57454
+[+ 4.15s] NEW  100.75.162.40:8766       ESTABLISHED  lport=57458
+[+ 4.15s] NEW  100.75.162.40:8766       ESTABLISHED  lport=57459
+[+ 4.15s] NEW  100.75.162.40:8766       ESTABLISHED  lport=57460
+[+ 8.28s] NEW  100.120.101.14:8766      SYN_SENT     lport=57464
+[+15.40s] NEW  100.120.101.14:8766      SYN_SENT     lport=57471
+[+15.40s] NEW  100.120.101.14:8766      SYN_SENT     lport=57473
+[+15.40s] NEW  100.75.162.40:8766       ESTABLISHED  lport=57472
+[+22.35s] NEW  100.120.101.14:8766      SYN_SENT     lport=57478
+[+45.62s] NEW  100.120.101.14:8766      SYN_SENT     lport=57487
+[+82.53s] NEW  100.120.101.14:8766      SYN_SENT     lport=57507
+
+==============================================================================
+remote                      first_seen   lifetime  states
+------------------------------------------------------------------------------
+100.120.101.14:8766             +0.00s     15.12s  SYN_SENT
+100.75.162.40:8766              +0.00s     91.70s  ESTABLISHED
+100.120.101.14:8766             +0.28s      3.58s  SYN_SENT
+100.75.162.40:8766              +4.15s     87.55s  ESTABLISHED
+100.75.162.40:8766              +4.15s     10.98s  ESTABLISHED
+100.75.162.40:8766              +4.15s     56.29s  ESTABLISHED
+100.120.101.14:8766             +8.28s      3.57s  SYN_SENT
+100.120.101.14:8766            +15.40s      3.63s  SYN_SENT
+100.120.101.14:8766            +15.40s     14.76s  SYN_SENT
+100.75.162.40:8766             +15.40s     45.03s  ESTABLISHED
+100.120.101.14:8766            +22.35s      3.66s  SYN_SENT
+100.120.101.14:8766            +45.62s      3.90s  SYN_SENT
+100.120.101.14:8766            +82.53s      3.61s  SYN_SENT
+==============================================================================
+offline host configured + black-holed (SYN_SENT seen): True
+RESULT: SSE stream to healthy host established at +0.00s after app start
+        (dead host's timeout budget is 4.0s; pre-fix barrier was 15s)

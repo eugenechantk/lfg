@@ -84,12 +84,22 @@ struct RootView: View {
             selection = requested
             store.clearRequestedSelection()
         }
-        // Reconnect the instant the app returns to the foreground (a notification
-        // tap, or the app switcher) — iOS can't hold the connection while
-        // suspended, so refresh immediately rather than waiting for the next poll.
+        // iOS can't hold an SSE stream while the process is suspended, so the app owns
+        // an explicit teardown/reconnect around backgrounding rather than letting
+        // orphaned tasks linger until their stale watchdog fires.
+        //
+        // Only `.background` tears down — `.inactive` also fires for the app switcher,
+        // Control Center and incoming calls, where the streams are still perfectly good.
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active, settings.hasConfiguredHost {
-                Task { await store.refresh() }
+            guard settings.hasConfiguredHost else { return }
+            switch phase {
+            case .active:
+                store.start()                       // no-op if the poll loop is alive
+                Task { await store.refresh() }      // coalesces onto the loop's in-flight refresh
+            case .background:
+                store.stop()
+            default:
+                break                                // .inactive — transient, keep streaming
             }
         }
     }
@@ -119,9 +129,26 @@ struct DetailLoading: View {
     }
 }
 
-/// Reachability strip shown above the list when not healthy.
+/// Reachability strip shown above the list when not healthy. This only renders
+/// when the *aggregate* is unhealthy — meaning every configured host is down. In
+/// a multi-host setup `offlineHosts` names them so the copy says "all hosts",
+/// never a singular "host" that would misread one machine as the whole fleet.
 struct ConnectionBanner: View {
     let reachability: Reachability?
+    /// Labels of the down hosts, supplied only in multi-host setups (empty for a
+    /// single host). Drives the "all N hosts" pluralization + naming.
+    var offlineHosts: [String] = []
+
+    /// Prefix naming every down host when more than one is configured, so the
+    /// banner reads as a fleet-wide outage rather than a single machine.
+    private var multiHostPrefix: String {
+        guard offlineHosts.count > 1 else { return "" }
+        return "\(offlineHosts.joined(separator: ", ")) are all unreachable. "
+    }
+
+    private var unreachableTitle: String {
+        offlineHosts.count > 1 ? "All \(offlineHosts.count) hosts unreachable" : "Host unreachable"
+    }
 
     var body: some View {
         switch reachability {
@@ -129,8 +156,8 @@ struct ConnectionBanner: View {
             EmptyView()
         case .hostUnreachable(let detail):
             banner(icon: "wifi.exclamationmark", tint: .orange,
-                   title: "Host unreachable",
-                   detail: "Check that this device is on the same Tailscale tailnet and the host is running. \(detail)")
+                   title: unreachableTitle,
+                   detail: multiHostPrefix + "Check that this device is on the same Tailscale tailnet and the host is running. \(detail)")
         case .badResponse(let detail):
             banner(icon: "exclamationmark.triangle.fill", tint: .red,
                    title: "Connection problem", detail: detail)

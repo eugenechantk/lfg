@@ -60,9 +60,6 @@ struct SettingsView: View {
     @Environment(SessionStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
-    @State private var draft = ""
-    @State private var probe: Reachability?
-    @State private var probing = false
     @State private var inboxDraft = ""
 
     var body: some View {
@@ -71,8 +68,8 @@ struct SettingsView: View {
             Form {
                 Section {
                     ForEach(settings.hosts) { host in
-                        Button {
-                            settings.setDefaultHost(host.id)
+                        NavigationLink {
+                            HostEditView(mode: .edit(host))
                         } label: {
                             HStack(spacing: 10) {
                                 ReachDot(reach: store.reachabilityByHost[host.id])
@@ -96,28 +93,13 @@ struct SettingsView: View {
                             } label: { Label("Remove", systemImage: "trash") }
                         }
                     }
-                    HStack {
-                        TextField("host.ts.net:8766", text: $draft)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .keyboardType(.URL)
-                        Button("Add") {
-                            settings.addHost(draft.trimmingCharacters(in: .whitespaces))
-                            draft = ""; probe = nil
-                            store.reconnect()
-                            Task { await store.resolveHostIdentities() }
-                        }
-                        .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
-                    }
-                    Button {
-                        Task { probing = true; probe = await LFGClient(string: draft)?.ping() ?? .badResponse("Invalid URL"); probing = false }
+                    NavigationLink {
+                        HostEditView(mode: .add)
                     } label: {
-                        HStack { Text("Test"); Spacer(); if probing { ProgressView() } }
+                        Label("Add host", systemImage: "plus.circle")
                     }
-                    .disabled(draft.isEmpty)
-                    HostProbeRow(probe: probe, probing: probing)
                 } header: { Text("Hosts") } footer: {
-                    Text("The client shows sessions from every host and can transfer a session between them (⋯ menu). Tap a host to make it the default for new sessions; swipe to remove.")
+                    Text("The client shows sessions from every host and can transfer a session between them (⋯ menu). Tap a host to edit its name or address, test it, or make it the default for new sessions.")
                 }
 
                 Section("Sessions") {
@@ -174,6 +156,134 @@ struct SettingsView: View {
                 await store.resolveHostIdentities()
             }
         }
+    }
+}
+
+/// Add or edit a single host: change its friendly name and address, test the
+/// connection, set it as default, or remove it. Pushed from the Hosts section.
+struct HostEditView: View {
+    enum Mode { case add, edit(Host) }
+
+    let mode: Mode
+    @Environment(AppSettings.self) private var settings
+    @Environment(SessionStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var displayName: String
+    @State private var url: String
+    @State private var probe: Reachability?
+    @State private var probing = false
+    @State private var saveError: String?
+
+    init(mode: Mode) {
+        self.mode = mode
+        switch mode {
+        case .add:
+            _displayName = State(initialValue: "")
+            _url = State(initialValue: "")
+        case .edit(let h):
+            _displayName = State(initialValue: h.displayName ?? "")
+            _url = State(initialValue: h.url)
+        }
+    }
+
+    private var isAdd: Bool { if case .add = mode { return true }; return false }
+    private var trimmedURL: String { url.trimmingCharacters(in: .whitespaces) }
+
+    /// The live stored host (edit mode), so the default state reflects taps.
+    private var storedHost: Host? {
+        guard case .edit(let h) = mode else { return nil }
+        return settings.hosts.first(where: { $0.id == h.id })
+    }
+
+    /// Placeholder for the name field: the resolved machine hostname (so the
+    /// user sees what the pill falls back to), else a generic hint.
+    private var namePlaceholder: String {
+        if let n = storedHost?.name, !n.isEmpty { return n }
+        return "Friendly name (optional)"
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                TextField(namePlaceholder, text: $displayName)
+                    .autocorrectionDisabled()
+            } header: { Text("Name") } footer: {
+                Text("Shown as the host's pill on sessions. Leave blank to use the machine's own hostname.")
+            }
+            Section {
+                TextField("host.ts.net:8766", text: $url)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                    .onChange(of: url) { probe = nil; saveError = nil }
+            } header: { Text("Address") } footer: {
+                Text("A Tailscale MagicDNS https URL, or a loopback/LAN address on the same network.")
+            }
+
+            Section {
+                Button {
+                    Task { await test() }
+                } label: {
+                    HStack { Text("Test connection"); Spacer(); if probing { ProgressView() } }
+                }
+                .disabled(trimmedURL.isEmpty || probing)
+                HostProbeRow(probe: probe, probing: probing)
+            }
+
+            if let saveError {
+                Section {
+                    Label(saveError, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red).font(.subheadline)
+                }
+            }
+
+            if let host = storedHost {
+                Section {
+                    if host.isDefault {
+                        Label("Default host for new sessions", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    } else {
+                        Button("Set as default host") { settings.setDefaultHost(host.id) }
+                    }
+                }
+                Section {
+                    Button(role: .destructive) {
+                        settings.removeHost(host.id); store.reconnect(); dismiss()
+                    } label: { Text("Remove host") }
+                }
+            }
+        }
+        .navigationTitle(isAdd ? "Add host" : "Edit host")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") { save() }.disabled(trimmedURL.isEmpty)
+            }
+        }
+    }
+
+    private func test() async {
+        probing = true
+        probe = await LFGClient(string: trimmedURL)?.ping() ?? .badResponse("Invalid URL")
+        probing = false
+    }
+
+    private func save() {
+        let ok: Bool
+        switch mode {
+        case .add:
+            ok = settings.addHost(trimmedURL, displayName: displayName)
+        case .edit(let h):
+            ok = settings.updateHost(id: h.id, url: trimmedURL, displayName: displayName)
+        }
+        guard ok else {
+            saveError = "That address is blank or already configured on another host."
+            return
+        }
+        store.reconnect()
+        Task { await store.resolveHostIdentities() }
+        dismiss()
     }
 }
 

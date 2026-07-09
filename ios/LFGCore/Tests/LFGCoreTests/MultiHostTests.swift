@@ -62,9 +62,124 @@ final class MultiHostTests: XCTestCase {
         XCTAssertNil(HostStore.defaultHost(hosts) { _ in false })
     }
 
+    // MARK: Partial-outage routing (one host down, another up)
+
+    // `Host` must be qualified in *type* position: Foundation exports `NSHost` as
+    // `Host` on macOS, so a bare `Host` parameter is ambiguous (initializer
+    // position resolves fine, which is why the older tests above don't need this).
+    private static let hostA = LFGCore.Host(url: "a:1")                    // reachable
+    private static let hostB = LFGCore.Host(url: "b:2", isDefault: true)   // down, marked default
+    private static func upExceptB(_ h: LFGCore.Host) -> Bool { h.url != "b:2" }
+
+    func testRouteLiveSessionGoesToItsOwnerWhenReachable() {
+        let pick = MultiHost.routeHost(owner: Self.hostA, isClosed: false,
+                                       reachable: Self.upExceptB, agnostic: Self.hostA)
+        XCTAssertEqual(pick?.url, "a:1")
+    }
+
+    /// A live session's pane exists only on its own machine — never reroute it to a
+    /// healthy host, or the message lands on a different agent.
+    func testRouteLiveSessionStaysOnDownOwnerRatherThanRerouting() {
+        let pick = MultiHost.routeHost(owner: Self.hostB, isClosed: false,
+                                       reachable: Self.upExceptB, agnostic: Self.hostA)
+        XCTAssertEqual(pick?.url, "b:2", "live session must fail honestly, not reroute")
+    }
+
+    /// The reported bug: a closed session must restart on a reachable host even when
+    /// its owner (or the marked default) is down — transcripts are synced.
+    func testRouteClosedSessionRerouteToReachableHostWhenOwnerDown() {
+        let pick = MultiHost.routeHost(owner: Self.hostB, isClosed: true,
+                                       reachable: Self.upExceptB, agnostic: Self.hostA)
+        XCTAssertEqual(pick?.url, "a:1")
+    }
+
+    /// Closed sessions carry no owner (`reconcileResumable` drops host identity).
+    func testRouteUnknownOwnerUsesAgnosticHost() {
+        let pick = MultiHost.routeHost(owner: nil, isClosed: true,
+                                       reachable: Self.upExceptB, agnostic: Self.hostA)
+        XCTAssertEqual(pick?.url, "a:1")
+    }
+
+    func testRouteReturnsNilWhenNoOwnerAndNoReachableHost() {
+        XCTAssertNil(MultiHost.routeHost(owner: nil, isClosed: true,
+                                         reachable: { _ in false }, agnostic: nil))
+    }
+
+    func testIsOfflineOnlyForLiveSessionOnDownHost() {
+        // live on a down host → offline
+        XCTAssertTrue(MultiHost.isOffline(owner: Self.hostB, isClosed: false, reachable: Self.upExceptB))
+        // live on a healthy host → not offline
+        XCTAssertFalse(MultiHost.isOffline(owner: Self.hostA, isClosed: false, reachable: Self.upExceptB))
+        // closed on a down host → revivable elsewhere, so NOT offline
+        XCTAssertFalse(MultiHost.isOffline(owner: Self.hostB, isClosed: true, reachable: Self.upExceptB))
+        // no owner → not offline
+        XCTAssertFalse(MultiHost.isOffline(owner: nil, isClosed: false, reachable: Self.upExceptB))
+    }
+
+    /// End-to-end of the reported scenario: default host down, other host up.
+    /// Everything host-agnostic must resolve to the reachable host.
+    func testPartialOutageAgnosticWorkLandsOnReachableHost() {
+        let hosts = [Self.hostA, Self.hostB]
+        let agnostic = HostStore.defaultHost(hosts, reachable: Self.upExceptB)
+        XCTAssertEqual(agnostic?.url, "a:1", "create/metadata/resume must skip the down default")
+        // and a closed session routes there too
+        XCTAssertEqual(MultiHost.routeHost(owner: nil, isClosed: true,
+                                           reachable: Self.upExceptB, agnostic: agnostic)?.url, "a:1")
+    }
+
+    // MARK: Host recovery (resend what failed while a host was down)
+
+    func testRecoveredHostsDetectsDownToUpTransition() {
+        let before: [String: Reachability] = ["a:1": .hostUnreachable("timeout"), "b:2": .ok]
+        let after: [String: Reachability] = ["a:1": .ok, "b:2": .ok]
+        XCTAssertEqual(MultiHost.recoveredHosts(before: before, after: after), ["a:1"])
+    }
+
+    func testRecoveredHostsIgnoresStillUpAndStillDown() {
+        let before: [String: Reachability] = ["a:1": .ok, "b:2": .hostUnreachable("x")]
+        let after: [String: Reachability] = ["a:1": .ok, "b:2": .hostUnreachable("x")]
+        XCTAssertTrue(MultiHost.recoveredHosts(before: before, after: after).isEmpty)
+    }
+
+    /// Cold start: `reachabilityByHost` is empty, so every host first appears as
+    /// `.ok`. That must NOT count as a recovery or the resend sweep fires on launch.
+    func testRecoveredHostsTreatsFirstSightingAsNotARecovery() {
+        let after: [String: Reachability] = ["a:1": .ok, "b:2": .ok]
+        XCTAssertTrue(MultiHost.recoveredHosts(before: [:], after: after).isEmpty)
+    }
+
+    func testRecoveredHostsHandlesBothHostsComingBack() {
+        let before: [String: Reachability] = ["a:1": .hostUnreachable("x"), "b:2": .badResponse("HTTP 500")]
+        let after: [String: Reachability] = ["a:1": .ok, "b:2": .ok]
+        XCTAssertEqual(MultiHost.recoveredHosts(before: before, after: after), ["a:1", "b:2"])
+    }
+
+    /// A host that goes down does not count as recovered.
+    func testRecoveredHostsIgnoresUpToDownTransition() {
+        let before: [String: Reachability] = ["a:1": .ok]
+        let after: [String: Reachability] = ["a:1": .hostUnreachable("gone")]
+        XCTAssertTrue(MultiHost.recoveredHosts(before: before, after: after).isEmpty)
+    }
+
     func testHostLabelUsesFriendlyNameFirstComponentElseURL() {
         XCTAssertEqual(Host(url: "http://x:8766", name: "Mac-Studio.local").label, "Mac-Studio")
         XCTAssertEqual(Host(url: "http://mac-studio:8766").label, "mac-studio:8766")
+    }
+
+    func testHostLabelPrefersUserDisplayNameShownInFull() {
+        // User-set displayName wins over the resolved machine hostname and is
+        // shown in full (no dot-truncation).
+        let h = Host(url: "http://x:8766", name: "Mac-Studio.local", displayName: "Home Server v2.local")
+        XCTAssertEqual(h.label, "Home Server v2.local")
+        // Blank displayName falls back to the truncated machine hostname.
+        XCTAssertEqual(Host(url: "http://x:8766", name: "Mac-Studio.local", displayName: "").label, "Mac-Studio")
+    }
+
+    func testHostDisplayNameRoundTripsThroughCoding() {
+        let h = Host(url: "http://x:8766", name: "Mac.local", displayName: "My Box", isDefault: true)
+        let decoded = HostStore.decode(HostStore.encode([h]))
+        XCTAssertEqual(decoded.first?.displayName, "My Box")
+        XCTAssertEqual(decoded.first?.name, "Mac.local")
     }
 
     // MARK: MultiHost.mergeSessions (SC3, SC5 routing table)

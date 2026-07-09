@@ -30,7 +30,27 @@ import LFGCore
     private var failuresByHost: [String: Int] = [:]
     /// Failed polls to tolerate before surfacing "not reachable" from a
     /// currently-healthy state (~9s at the 3s poll interval).
+    ///
+    /// `HostProbePolicy.failureThreshold` (when a host goes cold and backs off) MUST
+    /// stay strictly above this — see the note on that property.
     private let failureThreshold = 3
+
+    /// Back-off policy for repeatedly-failing hosts. An offline Tailscale peer is a
+    /// black hole (packets dropped, no RST), so probing it costs a full timeout every
+    /// time. Cold hosts get a short timeout and are probed once per ~30s.
+    private let probePolicy = HostProbePolicy.default
+    /// Monotonic poll counter driving `HostHealth.shouldProbe`.
+    private var pollTick = 0
+    /// The in-flight refresh, so concurrent callers (the poll loop, the scenePhase
+    /// `.active` handler, a notification tap) coalesce onto one instead of racing to
+    /// assign `sessions`.
+    private var refreshTask: Task<Void, Never>?
+    /// The in-flight "a host came back — resend what failed while it was down" sweep.
+    /// Held so only one runs at a time: the sweep calls `refresh()` (via retry), and a
+    /// second sweep starting underneath it would resend the same bubble twice.
+    private var autoResendTask: Task<Void, Never>?
+    /// Ids currently live on some host — recomputed by `rebuildSessions`.
+    private var liveIds: Set<String> = []
 
     // Per-session live state, keyed by sessionId.
     private(set) var transcripts: [String: [SessionMessage]] = [:]
@@ -91,13 +111,25 @@ import LFGCore
 
     private var seen: [String: Set<String>] = [:]
 
-    /// Per-session "last time this viewer opened it" (epoch ms), persisted in
-    /// UserDefaults so unread marks survive relaunch. A completed (idle) session
-    /// whose `lastActivityAt` is newer than its entry here is shown as "Unread".
-    /// Populated on open (`focus`) and kept current for the session on screen as
-    /// it streams. See `ReadState.isUnread` for the predicate.
+    /// Per-session id of the newest transcript message this viewer has seen,
+    /// persisted in UserDefaults so read marks survive relaunch. A completed (idle)
+    /// session whose newest message (`Session.last?.id`) differs from its entry here
+    /// is shown as "Unread". Populated on open (`focus`) and kept current for the
+    /// session on screen as it streams. See `ReadState.isUnread` for the predicate.
+    ///
+    /// Keyed on message *identity*, not time: `lastActivityAt` is the transcript
+    /// file's mtime and advances on any touch of the file (a sync daemon rewriting
+    /// metadata, the harness appending a `mode`/`bridge-session` line), which used
+    /// to resurrect long-idle sessions as unread forever.
+    private var lastSeenMessageID: [String: String]
+    private static let lastSeenKey = "lfg.lastSeenMessageID"
+
+    /// Legacy per-session open times (epoch ms) from the old mtime-based scheme.
+    /// Read once to seed `lastSeenMessageID`, then unused. See `migrateReadState`.
     private var lastOpenedAt: [String: Double]
     private static let lastOpenedKey = "lfg.lastOpenedAt"
+    private static let migratedKey = "lfg.readStateMigratedToMessageID"
+    private var needsReadStateMigration: Bool
 
     // Live SSE streams, one per host (each host has its own /api/live/stream and
     // its own 24-id cap). Keyed by Host.id (url).
@@ -123,15 +155,37 @@ import LFGCore
     /// the resilience the single-host path got from the server's `lastGood`.
     private var lastSessionsByHost: [String: [Session]] = [:]
 
+    /// Whether `GET /api/dirs` has ever succeeded. The create-flow metadata is
+    /// loaded once at launch off the agnostic host; if EVERY host was down then, it
+    /// silently no-ops and New Session opens with no directories. `refresh` retries
+    /// the load the moment any host answers, so the create flow heals itself.
+    private var metadataLoaded = false
+
     init(settings: AppSettings) {
         self.settings = settings
-        lastOpenedAt = (UserDefaults.standard.dictionary(forKey: Self.lastOpenedKey) as? [String: Double]) ?? [:]
+        let d = UserDefaults.standard
+        let opened = (d.dictionary(forKey: Self.lastOpenedKey) as? [String: Double]) ?? [:]
+        lastSeenMessageID = (d.dictionary(forKey: Self.lastSeenKey) as? [String: String]) ?? [:]
+        lastOpenedAt = opened
+        needsReadStateMigration = !d.bool(forKey: Self.migratedKey) && !opened.isEmpty
     }
 
-    /// Host-agnostic client: the default host. Used for create-flow metadata
-    /// (dirs/users/usage) and resumable lookups (transcripts are synced, so any
-    /// host answers). Per-session ops must use `client(forSession:)` instead.
-    var client: LFGClient? { settings.defaultClient }
+    /// The host for HOST-AGNOSTIC work: create-flow metadata (dirs/users/usage),
+    /// resumable lookups, and creating/resuming when the caller named no host.
+    /// The marked default when it's reachable, else the first reachable host.
+    ///
+    /// Falling back to the marked default (even when it's down) matters for cold
+    /// start: before the first `refresh`, `reachabilityByHost` is empty and NOTHING
+    /// looks reachable — resolving to nil there would strand the create flow with
+    /// no directories on a perfectly healthy single-host setup.
+    var agnosticHost: Host? {
+        HostStore.defaultHost(settings.hosts, reachable: isReachable)
+            ?? settings.hosts.first { $0.isDefault } ?? settings.hosts.first
+    }
+
+    /// Host-agnostic client. Transcripts are synced across hosts, so any *reachable*
+    /// host answers. Per-session ops must use `client(forSession:)` instead.
+    var client: LFGClient? { agnosticHost.flatMap { settings.client(for: $0) } }
 
     /// The host that currently owns a session (nil if unknown → falls back to
     /// default). Used for op routing, the list host chip, and transfer targeting.
@@ -140,15 +194,28 @@ import LFGCore
         return settings.hosts.first { $0.id == hid }
     }
 
-    /// The client for the host that owns `id`, falling back to the default host
-    /// (covers optimistic/placeholder sessions not yet in the routing table).
+    /// The client for the host that owns `id`. Routing rules (and why) live in
+    /// `MultiHost.routeHost` — pure, and tested in `LFGCore`.
     func client(forSession id: String) -> LFGClient? {
-        if let h = host(forSession: id), let c = settings.client(for: h) { return c }
-        return settings.defaultClient
+        let target = MultiHost.routeHost(owner: host(forSession: id),
+                                         isClosed: isClosed(id),
+                                         reachable: isReachable,
+                                         agnostic: agnosticHost)
+        return target.flatMap { settings.client(for: $0) }
     }
 
     /// Whether a host is currently reachable (for default-host placement).
     private func isReachable(_ host: Host) -> Bool { reachabilityByHost[host.id] == .ok }
+
+    /// Whether `id` is a closed/resumable session (host-agnostic, revivable anywhere).
+    private func isClosed(_ id: String) -> Bool { session(id)?.closed == true }
+
+    /// Whether this session's work is currently unreachable: it is LIVE on a host
+    /// that is down. Drives the list's dimmed row treatment and the disabled
+    /// composer, so no steering action silently fails.
+    func isOffline(_ id: String) -> Bool {
+        MultiHost.isOffline(owner: host(forSession: id), isClosed: isClosed(id), reachable: isReachable)
+    }
 
     /// Ask the UI to open a session (driven by a tapped push notification).
     func requestSelection(_ sid: String) { requestedSelection = sid }
@@ -214,8 +281,15 @@ import LFGCore
         }
     }
 
+    /// Tear down the poll loop and every live SSE stream. Called when the host list
+    /// changes and when the app backgrounds — iOS suspends the process anyway, but
+    /// cancelling explicitly stops a suspended-then-resumed stream task from lingering
+    /// until its 35s stale watchdog fires, and stops a half-finished refresh from
+    /// racing the one the foreground handler kicks off.
     func stop() {
         pollTask?.cancel(); pollTask = nil
+        refreshTask?.cancel(); refreshTask = nil
+        autoResendTask?.cancel(); autoResendTask = nil
         for t in streamTasks.values { t.cancel() }
         streamTasks = [:]
         streamedIDsByHost = [:]
@@ -225,7 +299,7 @@ import LFGCore
     func reconnect() {
         stop()
         sessions = []; transcripts = [:]; prompts = [:]; busy = [:]; queues = [:]; seen = [:]; pendingSends = [:]
-        closedCache = []; resumedIds = []; resumeTick = 0
+        closedCache = []; resumedIds = []; resumeTick = 0; pollTick = 0; liveIds = []
         hostBySession = [:]; lastSessionsByHost = [:]; reachabilityByHost = [:]; failuresByHost = [:]
         reachability = nil; usage = nil; repos = []; users = []
         start()
@@ -241,26 +315,31 @@ import LFGCore
         let reach: Reachability
     }
 
-    /// Fan out `GET /api/sessions` to every configured host in parallel, returning
-    /// results in configured order (the task group completes out of order).
-    private func fetchSessionsAllHosts() async -> [HostFetch] {
-        let pairs: [(Host, LFGClient?)] = settings.hosts.map { ($0, settings.client(for: $0)) }
-        let results = await withTaskGroup(of: HostFetch.self) { group -> [HostFetch] in
+    /// Fan out `GET /api/sessions` to the given hosts in parallel, invoking `onResult`
+    /// with each host's result **the moment it lands** rather than collecting them all.
+    ///
+    /// This is the fix for the multi-host stall. The old version awaited the whole task
+    /// group before applying anything, which made the fan-out a barrier: one offline
+    /// host (an offline Tailscale peer black-holes packets — no RST, so the request
+    /// hangs for the entire timeout) delayed every healthy host's sessions AND the
+    /// `ensureStream()` call at the end of `refresh`, stalling every foreground and
+    /// notification tap. Streaming the results means a dead host costs nothing but its
+    /// own late callback.
+    private func fetchSessionsStreaming(_ hosts: [Host], timeout: TimeInterval,
+                                        onResult: (HostFetch) -> Void) async {
+        let pairs: [(Host, LFGClient?)] = hosts.map { ($0, settings.client(for: $0)) }
+        await withTaskGroup(of: HostFetch.self) { group in
             for (h, c) in pairs {
                 group.addTask {
                     guard let c else { return HostFetch(host: h, sessions: nil, reach: .badResponse("Invalid URL")) }
-                    do { return HostFetch(host: h, sessions: try await c.sessions(), reach: .ok) }
+                    do { return HostFetch(host: h, sessions: try await c.sessions(timeout: timeout), reach: .ok) }
                     catch let LFGError.notReachable(u) { return HostFetch(host: h, sessions: nil, reach: .hostUnreachable(u)) }
                     catch let LFGError.http(status, _) { return HostFetch(host: h, sessions: nil, reach: .badResponse("HTTP \(status)")) }
                     catch { return HostFetch(host: h, sessions: nil, reach: .badResponse("Bad response")) }
                 }
             }
-            var out: [HostFetch] = []
-            for await r in group { out.append(r) }
-            return out
+            for await f in group { onResult(f) }
         }
-        let order = Dictionary(uniqueKeysWithValues: settings.hosts.enumerated().map { ($1.id, $0) })
-        return results.sorted { (order[$0.host.id] ?? 0) < (order[$1.host.id] ?? 0) }
     }
 
     /// Fan out `GET /api/sessions/resumable` to the given (reachable) hosts, in
@@ -282,54 +361,179 @@ import LFGCore
         return results.sorted { $0.0 < $1.0 }.map(\.1)
     }
 
+    /// Refresh, coalescing concurrent callers onto one in-flight run.
+    ///
+    /// The poll loop, the `scenePhase == .active` handler and a notification tap can all
+    /// call this at once. Without coalescing, two refreshes interleave at their `await`
+    /// points and race to assign `sessions`.
     func refresh() async {
-        guard !settings.hosts.isEmpty else {
+        if let inFlight = refreshTask { await inFlight.value; return }
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.performRefresh()
+        }
+        refreshTask = task
+        await task.value
+        if refreshTask == task { refreshTask = nil }
+    }
+
+    private func performRefresh() async {
+        let hosts = settings.hosts
+        guard !hosts.isEmpty else {
             reachability = .badResponse("No host configured"); return
         }
-        let fetched = await fetchSessionsAllHosts()
+        pollTick &+= 1
+        // Snapshot health BEFORE this tick's probes so we can spot a host coming back
+        // (down → ok) and resend anything that failed while it was gone.
+        let healthBefore = reachabilityByHost
 
-        // Per-host reachability with the transient-blip debounce, and cache each
-        // host's last good snapshot so a blip doesn't drop its sessions.
-        for f in fetched {
-            if f.reach == .ok {
-                reachabilityByHost[f.host.id] = .ok
-                failuresByHost[f.host.id] = 0
-                lastSessionsByHost[f.host.id] = f.sessions ?? []
-            } else {
-                let n = (failuresByHost[f.host.id] ?? 0) + 1
-                failuresByHost[f.host.id] = n
-                if reachabilityByHost[f.host.id] != .ok || n >= failureThreshold {
-                    reachabilityByHost[f.host.id] = f.reach
-                }
-            }
+        // Probe healthy hosts every tick; a cold host (repeatedly failing) only every
+        // ~10th tick. An offline Tailscale peer black-holes packets, so each probe of
+        // one costs a full timeout — backing off keeps the common poll cheap.
+        let toProbe = hosts.filter {
+            HostHealth.shouldProbe(consecutiveFailures: failuresByHost[$0.id] ?? 0,
+                                   tick: pollTick, policy: probePolicy)
         }
+
+        // Apply each host's result AS IT ARRIVES: a healthy host's sessions render and
+        // its SSE stream reconnects immediately, even while a dead host is still hanging
+        // on its timeout. `ensureStream` is idempotent (it early-outs on unchanged ids).
+        await fetchSessionsStreaming(toProbe, timeout: probePolicy.pollTimeout) { [weak self] f in
+            guard let self else { return }
+            self.applyHostFetch(f)
+            self.rebuildSessions()
+            self.ensureStream()
+        }
+
         // Prune state for hosts removed from settings.
-        let hostIds = Set(settings.hosts.map(\.id))
+        let hostIds = Set(hosts.map(\.id))
         reachabilityByHost = reachabilityByHost.filter { hostIds.contains($0.key) }
         lastSessionsByHost = lastSessionsByHost.filter { hostIds.contains($0.key) }
+        failuresByHost = failuresByHost.filter { hostIds.contains($0.key) }
 
-        let anyOK = fetched.contains { $0.reach == .ok }
-        reachability = anyOK ? .ok : (fetched.first { $0.reach != .ok }?.reach ?? .badResponse("No host configured"))
+        // Derive the banner from the PERSISTED per-host health, not from this tick's
+        // results — a cold host skipped this tick still has a remembered state, and
+        // reading "no results" as "no host configured" would flash the wrong banner.
+        reachability = HostHealth.aggregate(hostIds: hosts.map(\.id), health: reachabilityByHost)
         lastError = nil
 
+        let anyOK = reachabilityByHost.values.contains(.ok)
+
+        // Heal the create flow: if the metadata load found no reachable host at
+        // launch, retry it as soon as one answers. Without this, a client that
+        // started while the default host was down keeps an empty directory list
+        // forever and New Session can't be used even after a host comes back.
+        if !metadataLoaded, anyOK { await loadCreateMetadata() }
+
+        // Refresh the closed/resumable set on a slower cadence (first poll, then
+        // every ~12s), reconciled across hosts (dedupe synced transcripts + drop
+        // anything live on any host). Only reachable hosts are queried, so this can't
+        // reintroduce a black-hole stall.
+        resumeTick += 1
+        if resumeTick % 4 == 1 {
+            let okHosts = hosts.filter { reachabilityByHost[$0.id] == .ok }
+            let perHostResumable = await fetchResumableAllHosts(okHosts)
+            let reconciled = MultiHost.reconcileResumable(perHost: perHostResumable, liveIds: liveIds)
+            closedCache = reconciled.map(Self.closedSession(from:))
+        }
+
+        rebuildSessions()
+        ensureStream()
+        await reconcilePendingViaQueue()
+
+        // A host just came back. Anything that failed to send while it was down is
+        // still sitting in `pendingSends` as a failed bubble waiting for a manual
+        // Retry — resend it automatically. Scheduled as a SEPARATE task, never
+        // awaited here: the sweep calls `refresh()`, and `refresh()` awaits
+        // `refreshTask` — which is the task we are currently running. Awaiting it
+        // from inside itself deadlocks the store.
+        let recovered = MultiHost.recoveredHosts(before: healthBefore, after: reachabilityByHost)
+        if !recovered.isEmpty { scheduleResendAfterRecovery(recovered) }
+    }
+
+    /// The host this session's next send would be routed to, if any.
+    private func routeHostId(forSession id: String) -> String? {
+        MultiHost.routeHost(owner: host(forSession: id), isClosed: isClosed(id),
+                            reachable: isReachable, agnostic: agnosticHost)?.id
+    }
+
+    private func scheduleResendAfterRecovery(_ recovered: Set<String>) {
+        guard autoResendTask == nil else { return }
+        guard pendingSends.values.contains(where: { $0.contains(where: \.failed) }) else { return }
+        autoResendTask = Task { [weak self] in
+            await self?.resendFailedSends(hostsBackOnline: recovered)
+            self?.autoResendTask = nil
+        }
+    }
+
+    /// Resend the messages that failed while a host was unreachable, now that it
+    /// answers again. Only sessions whose send would route to a just-recovered host
+    /// are swept.
+    ///
+    /// **The duplicate-delivery guard is the point of this function.** A send can
+    /// reach the server, be enqueued and even delivered to the agent, and only THEN
+    /// have the host drop before the HTTP response comes back — leaving a bubble
+    /// marked `failed` for a message that actually landed. Blindly resending would
+    /// post it to the agent twice. So before resending anything we reconcile against
+    /// authoritative server state, in two layers:
+    ///
+    ///   1. `reconcilePendingViaQueue` (already ran this tick, now that the host is
+    ///      `.ok`) correlates each bubble with the server's outbound queue. A bubble
+    ///      the server still holds gets its `serverQueueID`, so `retryPending` retries
+    ///      the *queued item* server-side instead of posting a new message.
+    ///   2. `ensureHistory` refetches the transcript and drops any bubble whose text
+    ///      now appears as a real user turn — i.e. it did land. What survives both
+    ///      layers genuinely never reached the agent, and is safe to resend.
+    ///
+    /// Residual exposure: layer 2 matches on normalized text, so a turn the agent
+    /// recorded reformatted/wrapped could fail to match and be resent. That is the
+    /// same matching weakness the manual Retry button has today (see
+    /// `correlatePending`), not a new one.
+    func resendFailedSends(hostsBackOnline recovered: Set<String>) async {
+        for sid in Array(pendingSends.keys) {
+            guard let hid = routeHostId(forSession: sid), recovered.contains(hid) else { continue }
+            guard pendingSends[sid]?.contains(where: \.failed) == true else { continue }
+
+            // Layer 2: authoritative transcript. `ensureHistory` calls
+            // `reconcilePending`, which drops any bubble that already landed.
+            await ensureHistory(sid)
+
+            // Re-read after the reconcile — the survivors are the real failures.
+            for p in (pendingSends[sid] ?? []).filter(\.failed) {
+                // The previous retry's refresh may have reconciled this one away.
+                guard pendingSends[sid]?.contains(where: { $0.id == p.id }) == true else { continue }
+                await retryPending(sid, p)
+            }
+        }
+    }
+
+    /// Fold one host's fetch into the per-host health + last-good snapshot. The
+    /// transient-blip debounce (`failureThreshold`) keeps a single blip from flipping a
+    /// healthy host to "Offline"; the cached snapshot keeps its sessions on screen.
+    private func applyHostFetch(_ f: HostFetch) {
+        if f.reach == .ok {
+            reachabilityByHost[f.host.id] = .ok
+            failuresByHost[f.host.id] = 0
+            lastSessionsByHost[f.host.id] = f.sessions ?? []
+        } else {
+            let n = (failuresByHost[f.host.id] ?? 0) + 1
+            failuresByHost[f.host.id] = n
+            if reachabilityByHost[f.host.id] != .ok || n >= failureThreshold {
+                reachabilityByHost[f.host.id] = f.reach
+            }
+        }
+    }
+
+    /// Rebuild the merged session list + routing table from each host's last-known
+    /// snapshot. Cheap and idempotent, so it can run once per arriving host result.
+    private func rebuildSessions() {
         // Merge each host's last-known live sessions (configured order → stable
         // list + deterministic first-wins), building the session→host routing map.
         let perHostLive = settings.hosts.map { (host: $0, sessions: lastSessionsByHost[$0.id] ?? []) }
         let merged = MultiHost.mergeSessions(perHostLive)
         let fresh = merged.sessions
         hostBySession = merged.hostBySession
-        let liveIds = Set(fresh.compactMap(\.sessionId))
-
-        // Refresh the closed/resumable set on a slower cadence (first poll, then
-        // every ~12s), reconciled across hosts (dedupe synced transcripts + drop
-        // anything live on any host). The cached copy is merged in every poll.
-        resumeTick += 1
-        if resumeTick % 4 == 1 {
-            let okHosts = settings.hosts.filter { reachabilityByHost[$0.id] == .ok }
-            let perHostResumable = await fetchResumableAllHosts(okHosts)
-            let reconciled = MultiHost.reconcileResumable(perHost: perHostResumable, liveIds: liveIds)
-            closedCache = reconciled.map(Self.closedSession(from:))
-        }
+        liveIds = Set(fresh.compactMap(\.sessionId))
 
         // Keep any not-yet-reconciled optimistic (placeholder-id) sessions so
         // a poll landing mid-create can't make the open session vanish.
@@ -345,6 +549,11 @@ import LFGCore
             return !liveIds.contains(cid) && !optimisticIds.contains(cid) && !resumedIds.contains(cid)
         }
         sessions = fresh + optimistic + closed
+        // First poll after upgrading: convert old open-times into seen-message ids.
+        migrateReadState()
+        // The session on screen is seen by definition — keep its mark current against
+        // the fresh list even between stream events.
+        if let f = focusedID { markOpened(f) }
         // Seed busy from the REST baseline for sessions the live SSE stream
         // doesn't cover (outside the 24-id window). Streamed sessions keep their
         // accurate pane-scraped SSE busy as an override.
@@ -364,18 +573,30 @@ import LFGCore
         if let dl = deepLinkSession, fresh.contains(where: { $0.sessionId == dl.sessionId }) {
             deepLinkSession = nil
         }
-        ensureStream()
-        await reconcilePendingViaQueue()
     }
 
     /// Resolve `/api/info` for any host missing its friendly name, folding the
     /// identity back into settings (used for the host chip + dedupe).
+    /// Fan out, never serialize. A sequential loop here made an unreachable host block
+    /// every host after it for a full 15s timeout — an offline Tailscale peer black-holes
+    /// packets rather than refusing, so `info()` against one hangs the whole loop and the
+    /// reachable machines' host chips stay unlabelled until it gives up.
     func resolveHostIdentities() async {
-        for host in settings.hosts where (host.name ?? "").isEmpty {
-            guard let client = settings.client(for: host) else { continue }
-            if let info = try? await client.info() {
-                settings.updateHostInfo(host.id, info: info)
+        let pending = settings.hosts.filter { ($0.name ?? "").isEmpty }
+        guard !pending.isEmpty else { return }
+        let resolved = await withTaskGroup(of: (String, HostInfo?).self) { group -> [(String, HostInfo?)] in
+            for host in pending {
+                guard let client = settings.client(for: host) else { continue }
+                let id = host.id
+                group.addTask { (id, try? await client.info()) }
             }
+            var out: [(String, HostInfo?)] = []
+            for await r in group { out.append(r) }
+            return out
+        }
+        for (id, info) in resolved {
+            guard let info else { continue }
+            settings.updateHostInfo(id, info: info)
         }
     }
 
@@ -386,6 +607,7 @@ import LFGCore
         async let g = try? client.usage()
         if let dirs = await d {
             repos = dirs.repos; root = dirs.root; inbox = dirs.inbox
+            metadataLoaded = true
         }
         users = (await u) ?? []
         usage = await g
@@ -418,13 +640,66 @@ import LFGCore
         ensureStream()
     }
 
-    /// Stamp a session as seen "now" (epoch ms) and persist. Called when the
+    /// Mark a session's newest known message as seen, and persist. Called when the
     /// session is opened and as it streams while on screen, so it clears from the
     /// "Unread" group. No-op for local placeholder ids (not real sessions yet).
+    ///
+    /// The newest known message is the tail of the loaded transcript if we have one
+    /// (the live stream runs ahead of the 3s list poll), else the list's `last`.
     private func markOpened(_ id: String) {
         guard !id.hasPrefix("local-") else { return }
-        lastOpenedAt[id] = Date().timeIntervalSince1970 * 1000
-        UserDefaults.standard.set(lastOpenedAt, forKey: Self.lastOpenedKey)
+        let newest = transcripts[id]?.last?.id
+            ?? sessions.first { $0.sessionId == id }?.last?.id
+        markSeen(id, messageID: newest)
+    }
+
+    /// Record `messageID` as the newest message seen for `id`. A nil id means the
+    /// session has no messages yet — nothing to mark, and `isUnread` already treats
+    /// that as read.
+    private func markSeen(_ id: String, messageID: String?) {
+        guard let messageID, !messageID.isEmpty else { return }
+        guard lastSeenMessageID[id] != messageID else { return }   // no redundant writes
+        lastSeenMessageID[id] = messageID
+        persistSeen()
+    }
+
+    private func persistSeen() {
+        UserDefaults.standard.set(lastSeenMessageID, forKey: Self.lastSeenKey)
+    }
+
+    /// Mark every currently-unread session's newest message as seen, clearing the
+    /// "Unread" group in one tap. Persists once. Drives the list's "Mark all read".
+    func markAllRead() {
+        var changed = false
+        for s in sessions where group(for: s) == .unread {
+            guard let sid = s.sessionId, let mid = s.last?.id, !mid.isEmpty else { continue }
+            lastSeenMessageID[sid] = mid
+            changed = true
+        }
+        if changed { persistSeen() }
+    }
+
+    /// One-shot migration off the old mtime-based read-state (`lfg.lastOpenedAt`).
+    ///
+    /// For each session the viewer had opened, decide read-ness the way the old
+    /// scheme *meant* to — comparing the last **message** timestamp against the open
+    /// time, not the transcript's mtime — and seed `lastSeenMessageID` accordingly.
+    /// Sessions that were genuinely unread stay unread; sessions that only looked
+    /// unread because their file was touched become read, which is the whole point.
+    /// Runs on the first refresh that has sessions, then never again.
+    private func migrateReadState() {
+        guard needsReadStateMigration, !sessions.isEmpty else { return }
+        for s in sessions {
+            guard let sid = s.sessionId, let opened = lastOpenedAt[sid] else { continue }
+            guard let mid = s.last?.id, !mid.isEmpty else { continue }
+            guard lastSeenMessageID[sid] == nil else { continue }   // never clobber
+            if !ReadState.isUnread(lastMessageAt: s.last?.ts, lastOpenedAt: opened) {
+                lastSeenMessageID[sid] = mid
+            }
+        }
+        persistSeen()
+        UserDefaults.standard.set(true, forKey: Self.migratedKey)
+        needsReadStateMigration = false
     }
 
     /// Maintain one live SSE stream PER host (each host serves its own
@@ -439,6 +714,19 @@ import LFGCore
             streamTasks[hid]?.cancel(); streamTasks[hid] = nil; streamedIDsByHost[hid] = nil
         }
         for host in hosts {
+            // Don't open a stream against a host we know is down. Connecting to a
+            // black-holed peer neither errors nor completes — the 35s
+            // `streamStaleTimeout` watchdog is the only thing that would eventually
+            // reap it, burning a task per cycle. Tear down what's there and clear the
+            // id key so the host re-establishes the moment it's reachable again.
+            guard reachabilityByHost[host.id] == .ok else {
+                if streamTasks[host.id] != nil || streamedIDsByHost[host.id] != nil {
+                    streamTasks[host.id]?.cancel()
+                    streamTasks[host.id] = nil
+                    streamedIDsByHost[host.id] = nil
+                }
+                continue
+            }
             var ordered = sessions
                 .filter { !$0.closed && hostBySession[$0.id] == host.id }
                 .sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
@@ -524,11 +812,11 @@ import LFGCore
         if let sid = s.sessionId, prompts[sid] != nil { return .needsInput }
         if s.isBlocked { return .blocked }
         if let sid = s.sessionId, busy[sid] == true { return .working }
-        // Completed (idle) but with output newer than the last time this device
-        // opened it → "Unread". The session on screen is excluded (you're reading
-        // it right now, even before its stream stamps it read).
+        // Completed (idle) but its newest message isn't the newest one this device
+        // has seen → "Unread". The session on screen is excluded (you're reading it
+        // right now, even before its stream stamps it read).
         if let sid = s.sessionId, sid != focusedID,
-           ReadState.isUnread(lastActivityAt: s.lastActivityAt, lastOpenedAt: lastOpenedAt[sid]) {
+           ReadState.isUnread(lastMessageID: s.last?.id, lastSeenMessageID: lastSeenMessageID[sid]) {
             return .unread
         }
         return .idle
@@ -683,6 +971,9 @@ import LFGCore
         let sids = Array(pendingSends.keys)
         for sid in sids {
             guard pendingSends[sid]?.isEmpty == false else { continue }
+            // Skip sessions whose owning host is down: this loop is sequential, and a
+            // black-holed host would stall every later session behind a full timeout.
+            if let owner = host(forSession: sid), reachabilityByHost[owner.id] != .ok { continue }
             guard let client = client(forSession: sid) else { continue }
             guard let q = try? await client.queue(sid) else { continue }
             queues[sid] = q
@@ -910,11 +1201,11 @@ import LFGCore
     func close(_ id: String) async { await run("End session", for: id) { try await $0.close(id) } }
     func retry(_ id: String, _ messageID: String) async { await run("Retry", for: id) { try await $0.retryQueued(id, messageID: messageID) } }
 
-    /// Create a session on a specific host (defaults to the default host). The
+    /// Create a session on a specific host (defaults to the reachable default —
+    /// see `agnosticHost`, which skips a marked-default host that is down). The
     /// chosen host is where the agent's pane spawns.
     func create(_ req: NewSessionRequest, on host: Host? = nil) async -> String? {
-        let client = host.flatMap { settings.client(for: $0) } ?? settings.defaultClient
-        guard let client else { return nil }
+        guard let client = (host ?? agnosticHost).flatMap({ settings.client(for: $0) }) else { return nil }
         do {
             let resp = try await client.newSession(req)
             await refresh()
@@ -931,6 +1222,10 @@ import LFGCore
     /// create round-trip.
     @discardableResult
     func startOptimistic(_ req: NewSessionRequest, on host: Host? = nil, attachments: [ComposerAttachment] = []) -> String {
+        // Resolve the landing host up front (skipping a down marked-default) so the
+        // placeholder's routing entry names the machine the pane will actually spawn
+        // on — otherwise an early op on the placeholder would target the dead host.
+        let host = host ?? agnosticHost
         let placeholder = "local-" + UUID().uuidString
         let nowMs = Date().timeIntervalSince1970 * 1000
         let typed = req.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -963,8 +1258,7 @@ import LFGCore
     /// server-assigned id and point navigation at it. On failure, surface the
     /// kickoff bubble's Retry (which re-enters here).
     private func attemptCreate(_ placeholder: String, _ req: NewSessionRequest, on host: Host?, attachments: [ComposerAttachment]) async {
-        let client = host.flatMap { settings.client(for: $0) } ?? settings.defaultClient
-        guard let client else { return }
+        guard let client = (host ?? agnosticHost).flatMap({ settings.client(for: $0) }) else { return }
         do {
             let resp = try await client.newSession(req)
             guard let realId = resp.sessionId else {
@@ -1014,11 +1308,11 @@ import LFGCore
         if focusedID == old { focus(new) }
     }
 
-    /// Resume a closed session. Defaults to the default host; pass `on:` to revive
-    /// the (synced) transcript on a specific machine — the basis of transfer.
+    /// Resume a closed session. Defaults to the reachable default host (so a closed
+    /// session still restarts while the marked default is down); pass `on:` to
+    /// revive the (synced) transcript on a specific machine — the basis of transfer.
     func resume(_ req: ResumeRequest, on host: Host? = nil) async -> String? {
-        let client = host.flatMap { settings.client(for: $0) } ?? settings.defaultClient
-        guard let client else { return nil }
+        guard let client = (host ?? agnosticHost).flatMap({ settings.client(for: $0) }) else { return nil }
         do {
             let resp = try await client.resume(req)
             await refresh()

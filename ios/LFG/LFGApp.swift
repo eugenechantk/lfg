@@ -90,10 +90,43 @@ struct LFGApp: App {
 
     /// Add a host from a URL string (no-op on blank/duplicate). Marked default
     /// when it's the first host.
-    func addHost(_ url: String) {
+    func addHost(_ url: String) { addHost(url, displayName: nil) }
+
+    /// Add a host with an optional user-set friendly name (no-op on blank/
+    /// duplicate). A blank name is stored as nil so the pill falls back to the
+    /// resolved machine hostname. Returns false when the url is blank or already
+    /// configured.
+    @discardableResult
+    func addHost(_ url: String, displayName: String?) -> Bool {
         let u = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !u.isEmpty, !hosts.contains(where: { $0.url == u }) else { return }
-        hosts = HostStore.normalized(hosts + [Host(url: u, isDefault: hosts.isEmpty)])
+        guard !u.isEmpty, !hosts.contains(where: { $0.url == u }) else { return false }
+        let n = (displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        hosts = HostStore.normalized(
+            hosts + [Host(url: u, displayName: n.isEmpty ? nil : n, isDefault: hosts.isEmpty)])
+        return true
+    }
+
+    /// Edit an existing host's address and/or friendly name. `id` is the current
+    /// (pre-edit) url. The friendly name is stored as the authoritative
+    /// `displayName`; blank clears it so the pill falls back to the resolved
+    /// machine hostname. Changing the url clears the resolved `hostId`/`name` so
+    /// identity re-resolves for the new machine. Returns false if the url is
+    /// blank or collides with a *different* configured host.
+    @discardableResult
+    func updateHost(id: String, url: String, displayName: String?) -> Bool {
+        let u = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !u.isEmpty else { return false }
+        guard let idx = hosts.firstIndex(where: { $0.id == id }) else { return false }
+        if hosts.contains(where: { $0.id == u && $0.id != id }) { return false }
+        let n = (displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        var h = hosts[idx]
+        if h.url != u { h.hostId = nil; h.name = nil }
+        h.url = u
+        h.displayName = n.isEmpty ? nil : n
+        var next = hosts
+        next[idx] = h
+        hosts = HostStore.normalized(next)
+        return true
     }
 
     func removeHost(_ id: String) {

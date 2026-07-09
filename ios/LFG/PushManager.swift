@@ -48,6 +48,10 @@ final class PushManager {
     /// registration. Safe to call on every launch — it reads the current
     /// authorization status first and won't re-prompt.
     func requestAuthorizationIfNeeded() async {
+        // Escape hatch for UI automation: launching with LFG_SKIP_PUSH set skips
+        // the system notification prompt (a modal SpringBoard alert that blocks
+        // in-app automation and can't be dismissed from the app process).
+        if ProcessInfo.processInfo.environment["LFG_SKIP_PUSH"] != nil { return }
         let center = UNUserNotificationCenter.current()
         let current = await center.notificationSettings()
         switch current.authorizationStatus {

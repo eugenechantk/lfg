@@ -1,0 +1,33 @@
+[+ 5.62s] LFG pid 57579 first seen
+[+ 0.00s] NEW  100.120.101.14:8766      SYN_SENT     lport=57242
+[+ 0.00s] NEW  100.120.101.14:8766      SYN_SENT     lport=57244
+[+ 0.00s] NEW  100.75.162.40:8766       ESTABLISHED  lport=57245
+[+ 4.13s] NEW  100.75.162.40:8766       ESTABLISHED  lport=57250
+[+ 4.13s] NEW  100.75.162.40:8766       ESTABLISHED  lport=57251
+[+ 4.13s] NEW  100.75.162.40:8766       ESTABLISHED  lport=57252
+[+ 8.08s] NEW  100.120.101.14:8766      SYN_SENT     lport=57259
+[+15.31s] NEW  100.120.101.14:8766      SYN_SENT     lport=57264
+[+22.34s] NEW  100.120.101.14:8766      SYN_SENT     lport=57267
+[+46.41s] NEW  100.120.101.14:8766      SYN_SENT     lport=57282
+[+83.06s] NEW  100.120.101.14:8766      SYN_SENT     lport=57303
+[+119.61s] NEW  100.120.101.14:8766      SYN_SENT     lport=57320
+
+==============================================================================
+remote                      first_seen   lifetime  states
+------------------------------------------------------------------------------
+100.120.101.14:8766             +0.00s     14.75s  SYN_SENT
+100.120.101.14:8766             +0.00s      3.85s  SYN_SENT
+100.75.162.40:8766              +0.00s    144.18s  ESTABLISHED
+100.75.162.40:8766              +4.13s    140.05s  ESTABLISHED
+100.75.162.40:8766              +4.13s     41.15s  ESTABLISHED
+100.75.162.40:8766              +4.13s     41.15s  ESTABLISHED
+100.120.101.14:8766             +8.08s      3.86s  SYN_SENT
+100.120.101.14:8766            +15.31s      3.67s  SYN_SENT
+100.120.101.14:8766            +22.34s      3.73s  SYN_SENT
+100.120.101.14:8766            +46.41s      3.68s  SYN_SENT
+100.120.101.14:8766            +83.06s      3.83s  SYN_SENT
+100.120.101.14:8766           +119.61s      3.58s  SYN_SENT
+==============================================================================
+offline host configured + black-holed (SYN_SENT seen): True
+RESULT: SSE stream to healthy host established at +0.00s after app start
+        (dead host's timeout budget is 4.0s; pre-fix barrier was 15s)

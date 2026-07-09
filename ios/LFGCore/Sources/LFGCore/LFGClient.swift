@@ -59,10 +59,18 @@ public struct LFGClient: Sendable {
 
     // MARK: Core request helpers
 
-    private func get<T: Decodable>(_ path: String, query: [URLQueryItem] = [], as type: T.Type) async throws -> T {
+    /// Default timeout for a user-initiated read. The poll loop overrides this with a
+    /// much shorter budget (`HostProbePolicy.pollTimeout`): an offline Tailscale peer
+    /// black-holes packets rather than refusing the connection, so a request to a dead
+    /// host hangs for the entire timeout instead of failing fast.
+    public static let readTimeout: TimeInterval = 15
+
+    private func get<T: Decodable>(_ path: String, query: [URLQueryItem] = [],
+                                   timeout: TimeInterval = LFGClient.readTimeout,
+                                   as type: T.Type) async throws -> T {
         var req = URLRequest(url: url(path, query: query))
         req.httpMethod = "GET"
-        req.timeoutInterval = 15
+        req.timeoutInterval = timeout
         return try await perform(req, as: T.self)
     }
 
@@ -120,8 +128,8 @@ public struct LFGClient: Sendable {
 
     // MARK: Reads
 
-    public func sessions() async throws -> [Session] {
-        try await get("api/sessions", as: SessionsResponse.self).sessions
+    public func sessions(timeout: TimeInterval = LFGClient.readTimeout) async throws -> [Session] {
+        try await get("api/sessions", timeout: timeout, as: SessionsResponse.self).sessions
     }
 
     public func repos() async throws -> [Repo] {
@@ -166,9 +174,11 @@ public struct LFGClient: Sendable {
         try await get("api/info", as: HostInfo.self)
     }
 
-    public func resumable(limit: Int = 30) async throws -> [ResumableSession] {
+    public func resumable(limit: Int = 30,
+                          timeout: TimeInterval = LFGClient.readTimeout) async throws -> [ResumableSession] {
         try await get("api/sessions/resumable",
                       query: [URLQueryItem(name: "limit", value: String(limit))],
+                      timeout: timeout,
                       as: ResumableResponse.self).sessions
     }
 

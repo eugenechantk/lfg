@@ -10,32 +10,43 @@ import Foundation
 public struct Host: Codable, Sendable, Hashable, Identifiable {
     public var url: String
     public var hostId: String?
+    /// The machine's own hostname, resolved from `GET /api/info`. Used as a
+    /// display fallback and to detect the same machine reached via two URLs.
     public var name: String?
+    /// A user-set friendly name (from the host editor). When present it is the
+    /// authoritative display label and is shown *in full* (no dot-truncation);
+    /// the resolved `name` is only a fallback.
+    public var displayName: String?
     /// The default host for *creating* new sessions (there is exactly one).
     public var isDefault: Bool
 
     public var id: String { url }
 
-    public init(url: String, hostId: String? = nil, name: String? = nil, isDefault: Bool = false) {
+    public init(url: String, hostId: String? = nil, name: String? = nil,
+                displayName: String? = nil, isDefault: Bool = false) {
         self.url = url
         self.hostId = hostId
         self.name = name
+        self.displayName = displayName
         self.isDefault = isDefault
     }
 
-    enum CodingKeys: String, CodingKey { case url, hostId, name, isDefault }
+    enum CodingKeys: String, CodingKey { case url, hostId, name, displayName, isDefault }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         url = (try c.decodeIfPresent(String.self, forKey: .url)) ?? ""
         hostId = try c.decodeIfPresent(String.self, forKey: .hostId)
         name = try c.decodeIfPresent(String.self, forKey: .name)
+        displayName = try c.decodeIfPresent(String.self, forKey: .displayName)
         isDefault = (try c.decodeIfPresent(Bool.self, forKey: .isDefault)) ?? false
     }
 
-    /// Short label for chips/pickers: the friendly hostname (first dotted
-    /// component, so `Mac-Studio.local` → `Mac-Studio`), else a compact URL.
+    /// Short label for chips/pickers. Priority: the user-set `displayName`
+    /// (shown in full), then the resolved machine hostname (first dotted
+    /// component, so `Mac-Studio.local` → `Mac-Studio`), then a compact URL.
     public var label: String {
+        if let displayName, !displayName.isEmpty { return displayName }
         if let name, !name.isEmpty {
             return String(name.split(separator: ".").first ?? Substring(name))
         }

@@ -21,6 +21,7 @@ struct SessionListView: View {
         let id: String
         let title: String
         let items: [Session]
+        var group: SessionStore.Group? = nil
         var running = 0
         var idle = 0
     }
@@ -51,7 +52,7 @@ struct SessionListView: View {
                 let items = base.filter { store.group(for: $0) == g }
                     .sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
                 return items.isEmpty ? nil
-                    : ListSection(id: "status-\(g.rawValue)", title: g.title, items: items)
+                    : ListSection(id: "status-\(g.rawValue)", title: g.title, items: items, group: g)
             }
         case .directory:
             let byDir = Dictionary(grouping: base) { Self.dirKey(for: $0) }
@@ -120,7 +121,14 @@ struct SessionListView: View {
             HStack {
                 Text(section.title.uppercased())
                 Spacer()
-                Text("\(section.items.count)").foregroundStyle(.tertiary)
+                if section.group == .unread {
+                    Button("Mark all read") { store.markAllRead() }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.tint)
+                        .textCase(nil)
+                } else {
+                    Text("\(section.items.count)").foregroundStyle(.tertiary)
+                }
             }
             .font(.caption2.weight(.semibold))
         }
@@ -156,9 +164,24 @@ struct SessionListView: View {
             .padding(.bottom, 8)
 
             List(selection: $selection) {
+                // The banner only appears when the AGGREGATE is unhealthy — i.e.
+                // every configured host is down. A single host being offline
+                // leaves the aggregate `.ok` (some host still answers), so this
+                // stays hidden and the app keeps working; the top-bar per-host
+                // chips carry the partial-outage story instead.
                 if store.reachability != .ok, store.reachability != nil {
-                    Section { ConnectionBanner(reachability: store.reachability).listRowInsets(EdgeInsets()) }
-                        .listRowBackground(Color.clear)
+                    Section {
+                        // Name only the hosts that are actually down. When the
+                        // aggregate is unhealthy that is every host — but deriving
+                        // it rather than assuming it keeps the banner honest if the
+                        // guard above ever loosens.
+                        ConnectionBanner(reachability: store.reachability,
+                                         offlineHosts: settings.hosts.count > 1
+                                            ? settings.hosts.filter { store.reachabilityByHost[$0.id] != .ok }.map(\.label)
+                                            : [])
+                            .listRowInsets(EdgeInsets())
+                    }
+                    .listRowBackground(Color.clear)
                 }
 
                 let sections = visibleSections
@@ -195,22 +218,6 @@ struct SessionListView: View {
             ToolbarItem(placement: .topBarLeading) {
                 Button { showSettings = true } label: { Image(systemName: "gearshape") }
             }
-            if settings.hosts.count > 1 {
-                ToolbarItem(placement: .topBarLeading) {
-                    Menu {
-                        Picker("Host", selection: $settings.hostFilter) {
-                            Text("All hosts").tag(String?.none)
-                            ForEach(settings.hosts) { host in
-                                Text(host.label).tag(String?.some(host.id))
-                            }
-                        }
-                    } label: {
-                        Image(systemName: settings.hostFilter == nil
-                              ? "line.3.horizontal.decrease.circle"
-                              : "line.3.horizontal.decrease.circle.fill")
-                    }
-                }
-            }
             if !isPad {
                 ToolbarItem(placement: .principal) { StatusBadge() }
             }
@@ -223,6 +230,16 @@ struct SessionListView: View {
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
     private var statusSubtitle: String {
+        // Multi-host: name which hosts are online vs offline (the iPad sidebar has
+        // no principal StatusBadge, so this subtitle carries the per-host status).
+        if settings.hosts.count > 1 {
+            let online = settings.hosts.filter { store.reachabilityByHost[$0.id] == .ok }
+            let offline = settings.hosts.filter { store.reachabilityByHost[$0.id] != .ok }
+            var parts: [String] = []
+            if !online.isEmpty { parts.append("\(online.map(\.label).joined(separator: ", ")) online") }
+            if !offline.isEmpty { parts.append("\(offline.map(\.label).joined(separator: ", ")) offline") }
+            return parts.joined(separator: " · ")
+        }
         guard store.isConnected else { return "Offline" }
         let n = store.runningCount
         return n > 0 ? "Connected · \(n) running" : "Connected"
@@ -274,6 +291,12 @@ struct SessionRow: View {
         return store.host(forSession: session.id)?.label
     }
 
+    /// Live on a host that is currently down — the session's agent is unreachable,
+    /// so the row is dimmed and its host chip goes orange. Without this the row
+    /// renders as a healthy Running session and tapping it opens a composer whose
+    /// sends can never land.
+    private var isOffline: Bool { store.isOffline(session.id) }
+
     var body: some View {
         HStack(spacing: 12) {
             AgentBadge(agent: session.agent)
@@ -291,12 +314,18 @@ struct SessionRow: View {
                     }
                     if let model = session.model { ModelBadge(model: model) }
                     if let hostLabel {
-                        Text(hostLabel)
-                            .font(.caption2)
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(Color(.tertiarySystemFill), in: Capsule())
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            if isOffline {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 8))
+                            }
+                            Text(hostLabel).lineLimit(1)
+                        }
+                        .font(.caption2)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(isOffline ? Color.orange.opacity(0.15) : Color(.tertiarySystemFill),
+                                    in: Capsule())
+                        .foregroundStyle(isOffline ? Color.orange : Color.secondary)
                     }
                     Spacer(minLength: 0)
                     if let at = session.lastActivityAt {
@@ -306,26 +335,62 @@ struct SessionRow: View {
             }
         }
         .padding(.vertical, 4)
+        // Dim the row so a stale (unreachable) session doesn't compete with live
+        // ones. The orange host chip dims with it, but stays the only warm-colored
+        // element in the row, so it still reads as the reason for the dimming.
+        .opacity(isOffline ? 0.55 : 1)
     }
 }
 
-/// Top-bar connection status + count of currently-running sessions.
+/// Top-bar connection status. Single host → a "Connected/Offline" badge plus the
+/// running count. Multiple hosts → one dot+label chip per host so you can see at
+/// a glance which host is online (green) and which is offline (orange).
 struct StatusBadge: View {
     @Environment(SessionStore.self) private var store
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(store.isConnected ? Color.green : Color.orange)
-                .frame(width: 7, height: 7)
-            Text(store.isConnected ? "Connected" : "Offline")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(store.isConnected ? Color.primary : Color.orange)
-            if store.runningCount > 0 {
-                Text("· \(store.runningCount) running")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        if settings.hosts.count > 1 {
+            HStack(spacing: 12) {
+                ForEach(settings.hosts) { host in
+                    HostStatusChip(host: host,
+                                   online: store.reachabilityByHost[host.id] == .ok)
+                }
             }
+        } else {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(store.isConnected ? Color.green : Color.orange)
+                    .frame(width: 7, height: 7)
+                Text(store.isConnected ? "Connected" : "Offline")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(store.isConnected ? Color.primary : Color.orange)
+                if store.runningCount > 0 {
+                    Text("· \(store.runningCount) running")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+}
+
+/// A single host's online/offline status: a colored dot (green online, orange
+/// offline) + the host's short label. Offline labels go orange so the down host
+/// stands out in the top bar.
+private struct HostStatusChip: View {
+    let host: Host
+    let online: Bool
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(online ? Color.green : Color.orange)
+                .frame(width: 7, height: 7)
+            Text(host.label)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(online ? Color.primary : Color.orange)
+                .lineLimit(1)
         }
     }
 }

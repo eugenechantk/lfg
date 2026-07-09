@@ -26,6 +26,13 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     /// stale "Working" badge for sessions the live SSE stream doesn't cover (or
     /// whose busy delta was missed across a reconnect). nil on older servers.
     public var busy: Bool?
+    /// The session's newest transcript message, as the server's `previewLast` sees
+    /// it — metadata lines (`mode`, `permission-mode`, `bridge-session`, `ai-title`)
+    /// and `isMeta` turns are already filtered out. Its `id` (the transcript line's
+    /// uuid) is what read-state keys off: unlike `lastActivityAt`, which is the
+    /// transcript file's mtime and advances whenever anything touches the file,
+    /// this only changes when the conversation does. See `ReadState.isUnread`.
+    public var last: SessionMessage?
     /// Client-synthesized (never sent by the server): a closed/resumable session
     /// whose live pane is gone but whose transcript survives on disk. Surfaced in
     /// the list from `/api/sessions/resumable` so it stays visible; sending to it
@@ -46,7 +53,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         assignedUser: String? = nil, lastUserText: String? = nil,
         startedAt: Double? = nil, lastActivityAt: Double? = nil,
         tmuxTarget: String? = nil, tmuxName: String? = nil, managed: Bool? = nil,
-        busy: Bool? = nil, closed: Bool = false
+        busy: Bool? = nil, last: SessionMessage? = nil, closed: Bool = false
     ) {
         self.sessionId = sessionId; self.title = title; self.agent = agent
         self.model = model; self.project = project; self.cwd = cwd
@@ -54,7 +61,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         self.assignedUser = assignedUser; self.lastUserText = lastUserText
         self.startedAt = startedAt; self.lastActivityAt = lastActivityAt
         self.tmuxTarget = tmuxTarget; self.tmuxName = tmuxName; self.managed = managed
-        self.busy = busy; self.closed = closed
+        self.busy = busy; self.last = last; self.closed = closed
     }
 
     public init(from decoder: Decoder) throws {
@@ -76,6 +83,8 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         tmuxName = try c.decodeIfPresent(String.self, forKey: .tmuxName)
         managed = try c.decodeIfPresent(Bool.self, forKey: .managed)
         busy = try c.decodeIfPresent(Bool.self, forKey: .busy)
+        // Never let a malformed preview line fail the whole session decode.
+        last = (try? c.decodeIfPresent(SessionMessage.self, forKey: .last)) ?? nil
         closed = (try c.decodeIfPresent(Bool.self, forKey: .closed)) ?? false
     }
 }

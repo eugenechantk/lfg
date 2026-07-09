@@ -105,12 +105,20 @@ struct NewSessionView: View {
                 } label: { pill("folder", cwdLabel) }
 
                 // Host picker — which machine to start on. Only shown with more
-                // than one configured host.
+                // than one configured host. Each row carries the host's live
+                // reachability so an offline host reads as offline here (and you
+                // don't unknowingly start a session on a down machine) — one host
+                // being offline says nothing about the others.
                 if settings.hosts.count > 1 {
                     Menu {
                         Picker("Host", selection: $selectedHost) {
                             ForEach(settings.hosts) { host in
-                                Text(host.label + (host.isDefault ? " (default)" : "")).tag(Host?.some(host))
+                                let online = store.reachabilityByHost[host.id] == .ok
+                                Label(host.label
+                                        + (host.isDefault ? " (default)" : "")
+                                        + (online ? "" : " — offline"),
+                                      systemImage: online ? "circle.fill" : "exclamationmark.circle")
+                                    .tag(Host?.some(host))
                             }
                         }
                     } label: { pill("desktopcomputer", selectedHost?.label ?? "Host") }

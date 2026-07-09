@@ -34,6 +34,13 @@ struct SessionDetailView: View {
     private var pending: [SessionStore.PendingSend] { store.pendingSends[sid] ?? [] }
     private var isBusy: Bool { store.busy[sid] == true }
 
+    /// Owning host's short label, shown as a pill in the title area in multi-host
+    /// setups (a single-host client has nothing to disambiguate).
+    private var hostLabel: String? {
+        guard settings.hosts.count > 1 else { return nil }
+        return store.host(forSession: session.id)?.label
+    }
+
     /// Optimistic "sent" bubbles whose real user turn hasn't landed in the
     /// transcript yet. Computed from `messages`, so the instant the real turn
     /// appears the matching placeholder drops out of the same render pass — no
@@ -63,19 +70,28 @@ struct SessionDetailView: View {
                         queueAction = tapped
                     }
                     .padding(.horizontal, 16)
-                    MessageComposer(text: $draft, sending: false) { text, atts in
-                        // Hand the send to the store, which owns it for the app's
-                        // lifetime (under a background-task assertion). Leaving
-                        // this view or backgrounding the app no longer drops the
-                        // message — the optimistic bubble + pending strip already
-                        // give immediate feedback, so no view-owned spinner.
-                        store.dispatchSend(sid, text: text, attachments: atts)
-                        // Sending is an explicit "follow me to the latest" intent:
-                        // re-arm auto-follow even if the user had scrolled up. The
-                        // onChange(of: pending.count) below does the actual scroll
-                        // once the optimistic bubble has laid out.
-                        isAtBottom = true
-                        scrollProxy?.scrollTo("BOTTOM", anchor: .bottom)
+                    // This session is LIVE on a host that is currently unreachable.
+                    // Its agent only exists on that machine, so a send here could
+                    // never land — swap the composer for an explanation rather than
+                    // accepting a message that would silently fail. The transcript
+                    // above stays readable.
+                    if store.isOffline(sid) {
+                        OfflineComposerNotice(hostLabel: store.host(forSession: sid)?.label ?? "This host")
+                    } else {
+                        MessageComposer(text: $draft, sending: false) { text, atts in
+                            // Hand the send to the store, which owns it for the app's
+                            // lifetime (under a background-task assertion). Leaving
+                            // this view or backgrounding the app no longer drops the
+                            // message — the optimistic bubble + pending strip already
+                            // give immediate feedback, so no view-owned spinner.
+                            store.dispatchSend(sid, text: text, attachments: atts)
+                            // Sending is an explicit "follow me to the latest" intent:
+                            // re-arm auto-follow even if the user had scrolled up. The
+                            // onChange(of: pending.count) below does the actual scroll
+                            // once the optimistic bubble has laid out.
+                            isAtBottom = true
+                            scrollProxy?.scrollTo("BOTTOM", anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -238,22 +254,29 @@ struct SessionDetailView: View {
                     .font(.headline)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                if isBusy {
-                    HStack(spacing: 5) {
+                HStack(spacing: 5) {
+                    if let host = hostLabel {
+                        Text(host)
+                            .font(.caption2)
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(Color(.tertiarySystemFill), in: Capsule())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    if isBusy {
                         ProgressView().controlSize(.mini)
                         Text("Running")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
+                    } else if let path = headerPath {
+                        // No status text while idle — surface the working path there
+                        // instead so it's clear which directory this session drives.
+                        Text(path)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.head)   // keep the meaningful tail visible
                     }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                } else if let path = headerPath {
-                    // No status text while idle — surface the working path there
-                    // instead so it's clear which directory this session drives.
-                    Text(path)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.head)   // keep the meaningful tail visible
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: isBusy)
@@ -402,6 +425,33 @@ struct SessionDetailView: View {
     private func copyToClipboard(_ value: String) {
         UIPasteboard.general.string = value
         UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+}
+
+/// Replaces the composer when the open session is live on an unreachable host.
+/// The agent's pane exists only on that machine, so there is no host that could
+/// accept a message for it — say so instead of taking input that would fail. The
+/// session reappears with a working composer as soon as the host answers a poll.
+struct OfflineComposerNotice: View {
+    let hostLabel: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "wifi.exclamationmark")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(hostLabel) is unreachable")
+                    .font(.subheadline.weight(.semibold))
+                Text("This session is running on \(hostLabel), so it can't take messages until that host is back. Its transcript above is up to date as of the last poll.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
     }
 }
 
