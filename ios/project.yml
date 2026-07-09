@@ -52,6 +52,13 @@ targets:
       path: LFG/Info.plist
       properties:
         CFBundleDisplayName: lfg
+        # Without these, xcodegen bakes static "1"/"1.0" into the generated
+        # Info.plist -- so the deploy lane's `xcargs CURRENT_PROJECT_VERSION=`
+        # build number never reached the binary, and App Store Connect
+        # SILENTLY DISCARDED every upload as a duplicate of build "1"
+        # ("Successfully uploaded" + build never appears in TestFlight).
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
         # App uses only standard HTTPS/TLS -> exempt from export compliance.
         # Baked in so TestFlight uploads don't pause for the encryption question.
         ITSAppUsesNonExemptEncryption: false
