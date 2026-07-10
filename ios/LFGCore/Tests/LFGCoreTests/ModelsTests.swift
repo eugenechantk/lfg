@@ -11,7 +11,7 @@ final class ModelsTests: XCTestCase {
            "title":"Audit the auth flow","lastUserText":"hi","sessionId":"a2e5",
            "startedAt":1.0,"transcriptPath":"/t","lastActivityAt":2.0,"last":null,
            "tmuxTarget":"lfg-x:0.0","tmuxName":"lfg-x","managed":true,
-           "assignedUser":"eugene","model":"sonnet","status":"ok",
+           "assignedUser":"eugene","parentSessionId":"parent-123","model":"sonnet","status":"ok",
            "statusReason":null,"statusDetail":null},
           {"agent":"claude","pid":2,"cmd":"y","cwd":null,"project":"p","title":"t2",
            "sessionId":null,"status":"blocked","statusReason":"model_unavailable",
@@ -24,12 +24,14 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(s0.sessionId, "a2e5")
         XCTAssertEqual(s0.model, "sonnet")
         XCTAssertEqual(s0.assignedUser, "eugene")
+        XCTAssertEqual(s0.parentSessionId, "parent-123")
         XCTAssertTrue(s0.hasPane)
         XCTAssertFalse(s0.isBlocked)
         let s1 = resp.sessions[1]
         XCTAssertTrue(s1.isBlocked)
         XCTAssertEqual(s1.statusReason, "model_unavailable")
         XCTAssertNil(s1.sessionId)
+        XCTAssertNil(s1.parentSessionId)
         XCTAssertFalse(s1.hasPane)
     }
 

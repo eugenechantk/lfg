@@ -10,26 +10,37 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { PATHS } from "./config.ts";
 
-const FILE = `${PATHS.data}/managed-sessions.json`;
-
 export type ManagedSession = {
   tmuxName: string;
   cwd: string;
   createdAt: number;
   agent?: "claude" | "codex" | "aisdk" | "codex-aisdk" | "opencode";
+  parentSessionId?: string;
 };
+
+function filePath(): string {
+  return `${process.env.LFG_DATA ?? PATHS.data}/managed-sessions.json`;
+}
 
 function readAll(): Record<string, ManagedSession> {
   try {
-    return JSON.parse(readFileSync(FILE, "utf8")) as Record<string, ManagedSession>;
+    return JSON.parse(readFileSync(filePath(), "utf8")) as Record<string, ManagedSession>;
   } catch {
     return {};
   }
 }
 
 function writeAll(all: Record<string, ManagedSession>): void {
-  mkdirSync(dirname(FILE), { recursive: true });
-  writeFileSync(FILE, JSON.stringify(all, null, 2));
+  const file = filePath();
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify(all, null, 2));
+}
+
+export function normalizeParentSessionId(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 64) return undefined;
+  return trimmed;
 }
 
 export function listManaged(): ManagedSession[] {
