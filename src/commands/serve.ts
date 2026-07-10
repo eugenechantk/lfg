@@ -77,6 +77,7 @@ import { appendCmd as appendAisdkCmd, removeEntry as removeAisdkEntry, readEntry
 import { markClosed } from "../closing.ts";
 import { assignUser, userRoster } from "../users.ts";
 import { registerDevice, unregisterDevice, deviceCount } from "../push/store.ts";
+import { upsertLiveActivityToken } from "../push/liveactivity-store.ts";
 import { startPushWatcher, pushConfigured } from "../push/watcher.ts";
 
 // Where the user keeps the repos lfg can launch agents into. Scanned for git
@@ -528,6 +529,12 @@ export async function cmdServe() {
     renderMsg: (m) => msgWithHtml(m),
     resolvePrompt: (tp, pane) => resolveSessionPrompt(tp, pane),
   });
+  const ensurePushWatcher = () =>
+    startPushWatcher((l) => console.log(l), {
+      head: () => journal.head(),
+      hostId: () => hostInfo().hostId,
+      hostName: () => hostInfo().hostName,
+    });
 
   const server = Bun.serve({
     port: PORT,
@@ -1391,11 +1398,40 @@ export async function cmdServe() {
         const device = await registerDevice({ token, env, owner: body?.owner ?? null });
         // A device just arrived — make sure the watcher is running (it self-skips
         // when push isn't configured, so this is a no-op without APNs creds).
-        startPushWatcher((l) => console.log(l), {
-          head: () => journal.head(),
-          hostId: () => hostInfo().hostId,
-        });
+        ensurePushWatcher();
         return json({ ok: true, env: device.env });
+      }
+      if (path === "/api/push/live-activity/start-token" && req.method === "POST") {
+        const body = (await req.json().catch(() => null)) as {
+          token?: string;
+          env?: string;
+        } | null;
+        const token = body?.token?.trim();
+        if (!token || !/^[0-9a-fA-F]{8,}$/.test(token)) return err(400, "invalid token");
+        const env = body?.env === "production" ? "production" : "sandbox";
+        const record = await upsertLiveActivityToken({ token, env, kind: "pushToStart" });
+        ensurePushWatcher();
+        return json({ ok: true, kind: record.kind, env: record.env });
+      }
+      if (path === "/api/push/live-activity/update-token" && req.method === "POST") {
+        const body = (await req.json().catch(() => null)) as {
+          token?: string;
+          env?: string;
+          sessionId?: string;
+        } | null;
+        const token = body?.token?.trim();
+        if (!token || !/^[0-9a-fA-F]{8,}$/.test(token)) return err(400, "invalid token");
+        const sessionId = body?.sessionId?.trim();
+        if (!sessionId) return err(400, "missing sessionId");
+        const env = body?.env === "production" ? "production" : "sandbox";
+        const record = await upsertLiveActivityToken({
+          token,
+          env,
+          kind: "activityUpdate",
+          sessionId,
+        });
+        ensurePushWatcher();
+        return json({ ok: true, kind: record.kind, env: record.env, sessionId: record.sessionId });
       }
       if (path === "/api/push/unregister" && req.method === "POST") {
         const body = (await req.json().catch(() => null)) as { token?: string } | null;
@@ -2337,10 +2373,7 @@ export async function cmdServe() {
 
   startAutoScheduler((l) => console.log(l));
   // Background push watcher — no-op unless APNs is configured (LFG_APNS_*).
-  startPushWatcher((l) => console.log(l), {
-    head: () => journal.head(),
-    hostId: () => hostInfo().hostId,
-  });
+  ensurePushWatcher();
   // Client-independent queue pump: drains the hold-in-lfg outbound queue when
   // each agent goes idle (held messages must deliver even with the app closed).
   startQueuePump();
