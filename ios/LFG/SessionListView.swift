@@ -198,6 +198,33 @@ struct SessionListView: View {
                                     SessionRow(session: session, group: store.group(for: session))
                                         .tag(session.sessionId ?? "")
                                 }
+                                if section.group == .closed, store.canLoadMoreClosed {
+                                    Button {
+                                        Task { await store.loadMoreClosed() }
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            if store.isLoadingMoreClosed {
+                                                ProgressView()
+                                                    .controlSize(.small)
+                                            } else {
+                                                Image(systemName: "chevron.down.circle")
+                                            }
+                                            Text(store.isLoadingMoreClosed ? "Loading more" : "Load more")
+                                            Spacer()
+                                        }
+                                        .foregroundStyle(.tint)
+                                        .padding(.vertical, 4)
+                                        // Hit-test the whole row, Spacer included: a
+                                        // plain button's default content shape skips
+                                        // transparent space, so taps there fell through
+                                        // to List selection with no valid tag (a stuck
+                                        // "Opening session…" push).
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(store.isLoadingMoreClosed)
+                                    .accessibilityIdentifier("loadMoreClosedButton")
+                                }
                             }
                         } header: {
                             sectionHeader(section)

@@ -175,11 +175,14 @@ public struct LFGClient: Sendable {
     }
 
     public func resumable(limit: Int = 30,
-                          timeout: TimeInterval = LFGClient.readTimeout) async throws -> [ResumableSession] {
-        try await get("api/sessions/resumable",
-                      query: [URLQueryItem(name: "limit", value: String(limit))],
-                      timeout: timeout,
-                      as: ResumableResponse.self).sessions
+                          before: Double? = nil,
+                          timeout: TimeInterval = LFGClient.readTimeout) async throws -> ResumableResponse {
+        var query = [URLQueryItem(name: "limit", value: String(limit))]
+        if let before { query.append(URLQueryItem(name: "before", value: String(before))) }
+        return try await get("api/sessions/resumable",
+                             query: query,
+                             timeout: timeout,
+                             as: ResumableResponse.self)
     }
 
     public func messages(_ id: String, limit: Int = 40, full: Bool = false) async throws -> [SessionMessage] {

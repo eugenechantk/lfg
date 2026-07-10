@@ -318,7 +318,10 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
-public struct ResumableResponse: Codable, Sendable { public var sessions: [ResumableSession] }
+public struct ResumableResponse: Codable, Sendable {
+    public var sessions: [ResumableSession]
+    public var nextBefore: Double?
+}
 
 // MARK: - Create / resume request + response
 

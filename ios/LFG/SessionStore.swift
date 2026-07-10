@@ -153,6 +153,13 @@ import LFGCore
     /// on a slower cadence than the 3s live poll (see `resumeTick`) since the
     /// resumable list changes rarely and each fetch reads transcript heads.
     private var closedCache: [Session] = []
+    private var closedFirstPageByHost: [String: [ResumableSession]] = [:]
+    private var closedExtraPagesByHost: [String: [ResumableSession]] = [:]
+    private var closedNextBeforeByHost: [String: Double] = [:]
+    private(set) var isLoadingMoreClosed = false
+    var canLoadMoreClosed: Bool {
+        settings.hosts.contains { reachabilityByHost[$0.id] == .ok && closedNextBeforeByHost[$0.id] != nil }
+    }
     private var resumeTick = 0
     /// Ids of closed sessions we've resumed this run. Claude resumes into a NEW
     /// sessionId while the old transcript lingers on disk (so it keeps showing as
@@ -265,8 +272,8 @@ import LFGCore
         guard let client else { return }
         // Closed session: synthesize a display copy from the resumable list so the
         // detail view + transcript open; `session(_:)` returns it as a fallback.
-        if let list = try? await client.resumable(limit: 80),
-           let r = list.first(where: { $0.sessionId == sid }) {
+        if let page = try? await client.resumable(limit: 80),
+           let r = page.sessions.first(where: { $0.sessionId == sid }) {
             deepLinkSession = Session(
                 sessionId: r.sessionId,
                 title: r.title ?? "Session",
@@ -485,6 +492,12 @@ import LFGCore
         let reach: Reachability
     }
 
+    private struct HostResumableFetch: Sendable {
+        let host: Host
+        let sessions: [ResumableSession]
+        let nextBefore: Double?
+    }
+
     /// Fan out `GET /api/sessions` to the given hosts in parallel, invoking `onResult`
     /// with each host's result **the moment it lands** rather than collecting them all.
     ///
@@ -512,23 +525,54 @@ import LFGCore
         }
     }
 
-    /// Fan out `GET /api/sessions/resumable` to the given (reachable) hosts, in
-    /// order. Because `~/.claude/projects` is synced these lists overlap heavily —
-    /// `MultiHost.reconcileResumable` dedupes + drops live ids.
-    private func fetchResumableAllHosts(_ hosts: [Host]) async -> [[ResumableSession]] {
+    /// Fan out `GET /api/sessions/resumable` to the given (reachable) hosts. Because
+    /// `~/.claude/projects` is synced these lists overlap heavily — the cache rebuild
+    /// path dedupes + drops live ids.
+    private func fetchResumablePages(_ hosts: [Host], beforeByHost: [String: Double?] = [:]) async -> [HostResumableFetch] {
         let pairs: [(Int, LFGClient?)] = hosts.enumerated().map { ($0, settings.client(for: $1)) }
-        let results = await withTaskGroup(of: (Int, [ResumableSession]).self) { group -> [(Int, [ResumableSession])] in
+        let results = await withTaskGroup(of: (Int, HostResumableFetch?).self) { group -> [(Int, HostResumableFetch?)] in
             for (i, c) in pairs {
+                let host = hosts[i]
+                let before = beforeByHost[host.id] ?? nil
                 group.addTask {
-                    guard let c else { return (i, []) }
-                    return (i, (try? await c.resumable(limit: 60)) ?? [])
+                    guard let c else { return (i, nil) }
+                    guard let page = try? await c.resumable(limit: 60, before: before) else { return (i, nil) }
+                    return (i, HostResumableFetch(host: host, sessions: page.sessions, nextBefore: page.nextBefore))
                 }
             }
-            var out: [(Int, [ResumableSession])] = []
+            var out: [(Int, HostResumableFetch?)] = []
             for await r in group { out.append(r) }
             return out
         }
-        return results.sorted { $0.0 < $1.0 }.map(\.1)
+        return results.sorted { $0.0 < $1.0 }.compactMap(\.1)
+    }
+
+    private func rebuildClosedCache(for hosts: [Host]) {
+        let perHost = hosts.map { host in
+            (closedFirstPageByHost[host.id] ?? []) + (closedExtraPagesByHost[host.id] ?? [])
+        }
+        let reconciled = MultiHost.reconcileResumable(perHost: perHost, liveIds: liveIds)
+        closedCache = reconciled.map(Self.closedSession(from:))
+    }
+
+    func loadMoreClosed() async {
+        guard !isLoadingMoreClosed else { return }
+        let hosts = settings.hosts.filter { reachabilityByHost[$0.id] == .ok && closedNextBeforeByHost[$0.id] != nil }
+        guard !hosts.isEmpty else { return }
+        isLoadingMoreClosed = true
+        defer { isLoadingMoreClosed = false }
+
+        let beforeByHost = Dictionary(uniqueKeysWithValues: hosts.compactMap { host in
+            closedNextBeforeByHost[host.id].map { (host.id, Optional($0)) }
+        })
+        let pages = await fetchResumablePages(hosts, beforeByHost: beforeByHost)
+        for page in pages {
+            closedExtraPagesByHost[page.host.id, default: []].append(contentsOf: page.sessions)
+            if let next = page.nextBefore { closedNextBeforeByHost[page.host.id] = next }
+            else { closedNextBeforeByHost[page.host.id] = nil }
+        }
+        rebuildClosedCache(for: settings.hosts.filter { reachabilityByHost[$0.id] == .ok })
+        rebuildSessions()
     }
 
     /// Refresh, coalescing concurrent callers onto one in-flight run.
@@ -579,6 +623,9 @@ import LFGCore
         reachabilityByHost = reachabilityByHost.filter { hostIds.contains($0.key) }
         lastSessionsByHost = lastSessionsByHost.filter { hostIds.contains($0.key) }
         failuresByHost = failuresByHost.filter { hostIds.contains($0.key) }
+        closedFirstPageByHost = closedFirstPageByHost.filter { hostIds.contains($0.key) }
+        closedExtraPagesByHost = closedExtraPagesByHost.filter { hostIds.contains($0.key) }
+        closedNextBeforeByHost = closedNextBeforeByHost.filter { hostIds.contains($0.key) }
 
         // Derive the banner from the PERSISTED per-host health, not from this tick's
         // results — a cold host skipped this tick still has a remembered state, and
@@ -601,9 +648,21 @@ import LFGCore
         resumeTick += 1
         if resumeTick % 4 == 1 {
             let okHosts = hosts.filter { reachabilityByHost[$0.id] == .ok }
-            let perHostResumable = await fetchResumableAllHosts(okHosts)
-            let reconciled = MultiHost.reconcileResumable(perHost: perHostResumable, liveIds: liveIds)
-            closedCache = reconciled.map(Self.closedSession(from:))
+            for page in await fetchResumablePages(okHosts) {
+                closedFirstPageByHost[page.host.id] = page.sessions
+                // Only (re)seed the cursor while "Load more" hasn't paged deeper:
+                // page 1's nextBefore points at page 2, so overwriting a deeper
+                // cursor would rewind pagination (taps refetch already-loaded
+                // pages and dedupe to a visible no-op) and resurrect an exhausted
+                // one (the row reappears after the last page). A deeper cursor
+                // stays valid across refreshes because new sessions only ever
+                // land at the top of page 1.
+                if closedExtraPagesByHost[page.host.id, default: []].isEmpty {
+                    if let next = page.nextBefore { closedNextBeforeByHost[page.host.id] = next }
+                    else { closedNextBeforeByHost[page.host.id] = nil }
+                }
+            }
+            rebuildClosedCache(for: okHosts)
         }
 
         rebuildSessions()
