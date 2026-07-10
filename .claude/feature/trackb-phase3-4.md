@@ -9,7 +9,7 @@ Worktree: `.claude/worktrees/track-b-reliability` (branch `worktree-track-b`).
 |---|---|---|---|
 | 3 | Server: sendq rows persisted in SQLite (journal db), `clientId` idempotency on POST /send, journaled `queue {clientId, delivered, userTurnId}` acks | Codex (brief: `.codex/delegate/brief-phase3-durable-sendq.md`) | delegated |
 | 4a | Client: `LFGStore` (GRDB in LFGCore) — schema, upsert ingestion, observation, migrations, tests. NO UI integration yet. | Codex (brief: `.codex/delegate/brief-phase4a-lfgstore.md`) | delegated |
-| 4b | SessionStore/UI renders from the store; cursors + read-state migrate off UserDefaults; airplane-mode cold launch gate | Claude-framed after 4a verified | pending |
+| 4b | SessionStore hydrates from + writes through the store; airplane-mode cold launch gate | Codex (brief: `.codex/delegate/brief-phase4b-store-hydration.md`) | ✅ done, gate passed live |
 | 5 | Outbox worker on the store driven by Phase 3 acks; delete reconcile-by-text stack | after 3+4 soak | pending |
 | 6 | Leases | after 5 | pending |
 | 7 | Legacy deletion sweep | last | pending |
@@ -51,3 +51,22 @@ Worktree: `.claude/worktrees/track-b-reliability` (branch `worktree-track-b`).
   non-deterministic JSON re-encoding breaking byte-level upsert idempotency (fixed with
   `.sortedKeys` — the idempotency test caught a real semantic requirement).
 - GRDB resolved at 7.11.1; dep confined to LFGCore; no app-target changes.
+
+## 4b gate evidence (2026-07-10, late)
+
+- **Airplane gate PASSED live on sim:** host killed → cold launch rendered the FULL
+  session list from `Application Support/lfg-store.sqlite` (39 sessions) with the honest
+  Offline pill + Host-unreachable banner; opening a previously-streamed session rendered
+  its complete rich transcript (thinking blocks, tool calls) from the store, with the
+  per-session "can't take messages until that host is back" notice. The transcript that
+  proved it was this very verification session's own — stream write-through had been
+  capturing it live, bounded at exactly 200 messages (cap verified in the table).
+- **Claude review additions:** write-through failures now log (`category: local-store`)
+  instead of vanishing in an empty catch — a silently rotting store is how offline launch
+  would quietly regress.
+- **Rig artifacts (not code bugs), for the record:** on a one-machine two-server rig,
+  both serves enumerate the same tmux, so a session row can be created attributed to
+  whichever host the app watched first; and a scratch-server restart drops freshly
+  created managed sessions from its list (the known macOS enumeration gap another
+  session is fixing). Prod (one serve per host) has neither.
+- swift test 115/115 after changes.

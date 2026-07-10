@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import Network
+import os
 import LFGCore
 
 /// The single source of truth for live session state. Reduces `GET /api/sessions`
@@ -8,6 +9,8 @@ import LFGCore
 /// observable per-session state the views render.
 @MainActor @Observable final class SessionStore {
     let settings: AppSettings
+    private let localStore: LFGStore?
+    private let localStoreIsDurable: Bool
 
     private(set) var sessions: [Session] = []
     /// Aggregate reachability: `.ok` if ANY configured host is reachable, else a
@@ -124,6 +127,7 @@ import LFGCore
     /// to resurrect long-idle sessions as unread forever.
     private var lastSeenMessageID: [String: String]
     private static let lastSeenKey = "lfg.lastSeenMessageID"
+    private static let storeReadStateSeededKey = "lfg.storeReadStateSeededFromUserDefaults"
 
     /// Legacy per-session open times (epoch ms) from the old mtime-based scheme.
     /// Read once to seed `lastSeenMessageID`, then unused. See `migrateReadState`.
@@ -159,6 +163,8 @@ import LFGCore
     private var backgroundStopTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
     private var focusedID: String?
+    private var storeHydrationTask: Task<Void, Never>?
+    private var storeHydrationCompleted = false
 
     /// Closed (resumable) sessions synthesized from `/api/sessions/resumable`,
     /// merged into `sessions` each poll so ended sessions stay visible. Refreshed
@@ -190,8 +196,10 @@ import LFGCore
     /// the load the moment any host answers, so the create flow heals itself.
     private var metadataLoaded = false
 
-    init(settings: AppSettings) {
+    init(settings: AppSettings, localStore: LFGStore? = nil, localStoreIsDurable: Bool = false) {
         self.settings = settings
+        self.localStore = localStore
+        self.localStoreIsDurable = localStoreIsDurable
         let d = UserDefaults.standard
         let opened = (d.dictionary(forKey: Self.lastOpenedKey) as? [String: Double]) ?? [:]
         lastSeenMessageID = (d.dictionary(forKey: Self.lastSeenKey) as? [String: String]) ?? [:]
@@ -306,12 +314,14 @@ import LFGCore
     func start() {
         backgroundStopTask?.cancel(); backgroundStopTask = nil
         startPathMonitor()
-        syncLinks()
         guard pollTask == nil else { return }
         // Slow reconcile only: live delivery is the links' job now. This loop
         // is belt-and-braces (list membership, closed sessions, anything an
         // unknown event type would have carried).
         pollTask = Task { [weak self] in
+            await self?.hydrateFromStoreIfNeeded()
+            guard !Task.isCancelled else { return }
+            self?.syncLinks()
             while !Task.isCancelled {
                 await self?.refresh()
                 try? await Task.sleep(for: .seconds(60))
@@ -336,6 +346,174 @@ import LFGCore
         links = [:]
         for task in bannerRecheck.values { task.cancel() }
         bannerRecheck = [:]
+    }
+
+    private func writeThrough(_ operation: @escaping @Sendable (LFGStore) async throws -> Void) {
+        guard let store = localStore else { return }
+        Task.detached(priority: .utility) {
+            do { try await operation(store) }
+            catch {
+                // Never blocks or breaks the UI, but a silently rotting local
+                // store is how offline launch quietly regresses — make failures
+                // visible in diagnostics.
+                Logger(subsystem: "dev.omg.lfg", category: "local-store")
+                    .error("write-through failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func hydrateFromStoreIfNeeded() async {
+        if storeHydrationCompleted { return }
+        if let task = storeHydrationTask {
+            await task.value
+            return
+        }
+        guard let store = localStore else {
+            storeHydrationCompleted = true
+            return
+        }
+
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.hydrateFromStore(store)
+        }
+        storeHydrationTask = task
+        await task.value
+        storeHydrationCompleted = true
+        storeHydrationTask = nil
+    }
+
+    private func hydrateFromStore(_ store: LFGStore) async {
+        await seedStoreReadStateIfNeeded(store)
+        do {
+            async let storedHostsSnapshot = store.hosts()
+            async let storedSessionsSnapshot = store.sessions()
+            let storedHosts = try await storedHostsSnapshot
+            let storedSessions = try await storedSessionsSnapshot
+            guard !storedSessions.isEmpty else { return }
+
+            var sawNewReadState = false
+            for stored in storedSessions {
+                guard let lastSeen = stored.lastSeenMessageId, !lastSeen.isEmpty else { continue }
+                guard lastSeenMessageID[stored.sessionId] == nil else { continue }
+                lastSeenMessageID[stored.sessionId] = lastSeen
+                sawNewReadState = true
+            }
+            if sawNewReadState { persistSeen() }
+
+            let configuredHostIDs = Set(settings.hosts.map(\.id))
+            let storedHostIDs = Set(storedHosts.map(\.id))
+            let hydratable = storedSessions.filter { stored in
+                configuredHostIDs.contains(stored.hostId)
+                    || (configuredHostIDs.isEmpty && storedHostIDs.contains(stored.hostId))
+            }
+            let byHost = Dictionary(grouping: hydratable, by: \.hostId)
+
+            var changed = false
+            for host in settings.hosts {
+                guard lastSessionsByHost[host.id] == nil, let stored = byHost[host.id] else { continue }
+                lastSessionsByHost[host.id] = stored.map(Self.session(from:))
+                changed = true
+            }
+            if changed { rebuildSessions() }
+        } catch {
+            return
+        }
+    }
+
+    private func seedStoreReadStateIfNeeded(_ store: LFGStore) async {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.storeReadStateSeededKey) else { return }
+        do {
+            let existingSessions = try await store.sessions()
+            guard existingSessions.isEmpty else {
+                if localStoreIsDurable { defaults.set(true, forKey: Self.storeReadStateSeededKey) }
+                return
+            }
+        } catch {
+            return
+        }
+
+        for (sessionID, messageID) in lastSeenMessageID where !sessionID.isEmpty && !messageID.isEmpty {
+            do {
+                if let openedAt = lastOpenedAt[sessionID] {
+                    try await store.markSeen(sessionId: sessionID, lastSeenMessageId: messageID, openedAt: openedAt)
+                } else {
+                    try await store.markSeen(sessionId: sessionID, lastSeenMessageId: messageID)
+                }
+            } catch { }
+        }
+        if localStoreIsDurable { defaults.set(true, forKey: Self.storeReadStateSeededKey) }
+    }
+
+    private func hydrateTranscriptFromStoreIfEmpty(_ id: String) async {
+        guard let store = localStore, transcripts[id]?.isEmpty ?? true else { return }
+        do {
+            let stored = try await store.messages(sessionId: id)
+            guard !stored.isEmpty, transcripts[id]?.isEmpty ?? true else { return }
+            let messages = stored.map(Self.message(from:))
+            transcripts[id] = messages
+            seen[id] = Set(messages.map(\.stableID))
+            reconcilePending(id)
+            if id == focusedID { markOpened(id) }
+        } catch {
+            return
+        }
+    }
+
+    private static func session(from stored: LFGStoredSession) -> Session {
+        let last: SessionMessage?
+        if stored.lastMessageId != nil || stored.lastMessagePreview != nil || stored.lastMessageRole != nil || stored.lastActivityAt != nil {
+            last = SessionMessage(
+                id: stored.lastMessageId,
+                role: stored.lastMessageRole ?? "assistant",
+                kind: "text",
+                text: stored.lastMessagePreview ?? "",
+                ts: stored.lastActivityAt
+            )
+        } else {
+            last = nil
+        }
+
+        return Session(
+            sessionId: stored.sessionId,
+            title: stored.title ?? "",
+            agent: stored.agent ?? "aisdk",
+            model: stored.model,
+            cwd: stored.cwd,
+            assignedUser: stored.assignedUser,
+            lastActivityAt: stored.lastActivityAt,
+            busy: stored.busy,
+            last: last,
+            closed: stored.closed
+        )
+    }
+
+    private static func message(from stored: LFGStoredMessage) -> SessionMessage {
+        stored.message ?? SessionMessage(
+            id: stored.id,
+            role: stored.role,
+            kind: stored.kind,
+            text: stored.text,
+            ts: stored.ts
+        )
+    }
+
+    private func mirrorReadState(sessionID: String, messageID: String) {
+        writeThrough { store in
+            try await store.markSeen(sessionId: sessionID, lastSeenMessageId: messageID)
+        }
+    }
+
+    private func mirrorCursor(hostID: String, seq: Int64) {
+        writeThrough { store in
+            try await store.setCursor(hostId: hostID, seq: seq)
+        }
+    }
+
+    private func persistCursor(_ cursor: Int64, for host: Host) {
+        UserDefaults.standard.set(String(cursor), forKey: HostLinkPolicy.cursorKey(forHostURL: host.id))
+        mirrorCursor(hostID: host.id, seq: cursor)
     }
 
     /// Called when the host list changes. NOT a teardown: only links for
@@ -364,7 +542,7 @@ import LFGCore
         }
         for host in hosts {
             guard links[host.id] == nil, let client = settings.client(for: host) else { continue }
-            let link = HostLink(host: host, client: client)
+            let link = HostLink(host: host, client: client, localStore: localStore)
             let hid = host.id
             link.onEvent = { [weak self] ev in self?.ingest(ev, from: hid) }
             link.onResyncNeeded = { [weak self] in
@@ -557,8 +735,9 @@ import LFGCore
     /// Foregrounding: cancel any pending teardown, restart links (cursor resume
     /// makes this one cheap round-trip per host), and reconcile immediately.
     func enterForeground() {
+        let alreadyRunning = pollTask != nil
         start()
-        Task { await refresh() }
+        if alreadyRunning { Task { await refresh() } }
     }
 
     /// Background delta sync — the Phase-2 wake path (push wake / BGAppRefresh).
@@ -591,7 +770,7 @@ import LFGCore
                     // the next foreground refresh() — which the resync path
                     // performs anyway — but the cursor is consistent again.
                     cursor = page.head
-                    UserDefaults.standard.set(String(cursor), forKey: key)
+                    persistCursor(cursor, for: host)
                     applied = true
                     break
                 }
@@ -600,7 +779,7 @@ import LFGCore
                     apply(ev)
                     cursor = seq
                 }
-                UserDefaults.standard.set(String(cursor), forKey: key)
+                persistCursor(cursor, for: host)
                 applied = true
                 if cursor >= page.head { break }
             }
@@ -718,6 +897,7 @@ import LFGCore
     }
 
     private func performRefresh() async {
+        await hydrateFromStoreIfNeeded()
         let hosts = settings.hosts
         guard !hosts.isEmpty else {
             reachability = .badResponse("No host configured"); return
@@ -867,11 +1047,16 @@ import LFGCore
     /// healthy host to "Offline"; the cached snapshot keeps its sessions on screen.
     private func applyHostFetch(_ f: HostFetch) {
         if f.reach == .ok {
+            let fetchedSessions = f.sessions ?? []
+            writeThrough { store in
+                try await store.upsertHosts([f.host])
+                try await store.upsertSessions(fetchedSessions, hostId: f.host.id)
+            }
             unhealthySinceByHost[f.host.id] = nil
             bannerRecheck[f.host.id]?.cancel(); bannerRecheck[f.host.id] = nil
             reachabilityByHost[f.host.id] = .ok
             failuresByHost[f.host.id] = 0
-            lastSessionsByHost[f.host.id] = f.sessions ?? []
+            lastSessionsByHost[f.host.id] = fetchedSessions
         } else {
             let n = (failuresByHost[f.host.id] ?? 0) + 1
             failuresByHost[f.host.id] = n
@@ -1022,23 +1207,26 @@ import LFGCore
         guard let messageID, !messageID.isEmpty else { return }
         guard lastSeenMessageID[id] != messageID else { return }   // no redundant writes
         lastSeenMessageID[id] = messageID
-        persistSeen()
+        persistSeen(mirroredUpdates: [(id, messageID)])
     }
 
-    private func persistSeen() {
+    private func persistSeen(mirroredUpdates: [(String, String)] = []) {
         UserDefaults.standard.set(lastSeenMessageID, forKey: Self.lastSeenKey)
+        for (sessionID, messageID) in mirroredUpdates {
+            mirrorReadState(sessionID: sessionID, messageID: messageID)
+        }
     }
 
     /// Mark every currently-unread session's newest message as seen, clearing the
     /// "Unread" group in one tap. Persists once. Drives the list's "Mark all read".
     func markAllRead() {
-        var changed = false
+        var updates: [(String, String)] = []
         for s in sessions where group(for: s) == .unread {
             guard let sid = s.sessionId, let mid = s.last?.id, !mid.isEmpty else { continue }
             lastSeenMessageID[sid] = mid
-            changed = true
+            updates.append((sid, mid))
         }
-        if changed { persistSeen() }
+        if !updates.isEmpty { persistSeen(mirroredUpdates: updates) }
     }
 
     /// One-shot migration off the old mtime-based read-state (`lfg.lastOpenedAt`).
@@ -1051,15 +1239,17 @@ import LFGCore
     /// Runs on the first refresh that has sessions, then never again.
     private func migrateReadState() {
         guard needsReadStateMigration, !sessions.isEmpty else { return }
+        var updates: [(String, String)] = []
         for s in sessions {
             guard let sid = s.sessionId, let opened = lastOpenedAt[sid] else { continue }
             guard let mid = s.last?.id, !mid.isEmpty else { continue }
             guard lastSeenMessageID[sid] == nil else { continue }   // never clobber
             if !ReadState.isUnread(lastMessageAt: s.last?.ts, lastOpenedAt: opened) {
                 lastSeenMessageID[sid] = mid
+                updates.append((sid, mid))
             }
         }
-        persistSeen()
+        persistSeen(mirroredUpdates: updates)
         UserDefaults.standard.set(true, forKey: Self.migratedKey)
         needsReadStateMigration = false
     }
@@ -1072,6 +1262,9 @@ import LFGCore
             if set.contains(key) { return }
             set.insert(key); seen[sid] = set
             transcripts[sid, default: []].append(m)
+            writeThrough { store in
+                try await store.appendMessages(sessionId: sid, [m])
+            }
             // Keep the session on screen marked read as its output streams in, so
             // a turn that completes while you're watching doesn't resurface it as
             // unread when you leave the detail view.
@@ -1183,13 +1376,23 @@ import LFGCore
     /// prompts show even in long, tool-heavy sessions where they'd otherwise be
     /// older than the live-stream backfill window.
     func ensureHistory(_ id: String) async {
-        guard let client = client(forSession: id) else { return }
-        guard let msgs = try? await client.messages(id, limit: 5000, full: true) else { return }
+        guard let client = client(forSession: id) else {
+            await hydrateTranscriptFromStoreIfEmpty(id)
+            return
+        }
+        guard let msgs = try? await client.messages(id, limit: 5000, full: true) else {
+            await hydrateTranscriptFromStoreIfEmpty(id)
+            return
+        }
         var byKey: [String: SessionMessage] = [:]
         for m in (transcripts[id] ?? []) { byKey[m.stableID] = m }
         for m in msgs { byKey[m.stableID] = m }
-        transcripts[id] = byKey.values.sorted { ($0.ts ?? 0) < ($1.ts ?? 0) }
+        let merged = byKey.values.sorted { ($0.ts ?? 0) < ($1.ts ?? 0) }
+        transcripts[id] = merged
         seen[id] = Set(byKey.keys)
+        writeThrough { store in
+            try await store.appendMessages(sessionId: id, merged)
+        }
         reconcilePending(id)
     }
 

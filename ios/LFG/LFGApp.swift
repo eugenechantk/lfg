@@ -9,13 +9,32 @@ struct LFGApp: App {
 
     init() {
         let s = AppSettings()
-        let st = SessionStore(settings: s)
+        let storeBootstrap = Self.makeStore()
+        let st = SessionStore(
+            settings: s,
+            localStore: storeBootstrap.store,
+            localStoreIsDurable: storeBootstrap.isDurable
+        )
         _settings = State(initialValue: s)
         _store = State(initialValue: st)
         // Bridge the push manager (used by the UIKit AppDelegate) to the same
         // settings/store the SwiftUI views observe.
         PushManager.shared.configure(settings: s, store: st)
         LiveActivityManager.shared.configure(settings: s)
+    }
+
+    private static func makeStore() -> (store: LFGStore?, isDurable: Bool) {
+        let fileManager = FileManager.default
+        guard let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return (try? LFGStore.inMemory(), false)
+        }
+
+        do {
+            try fileManager.createDirectory(at: support, withIntermediateDirectories: true)
+            return (try LFGStore(.url(support.appendingPathComponent("lfg-store.sqlite"))), true)
+        } catch {
+            return (try? LFGStore.inMemory(), false)
+        }
     }
 
     var body: some Scene {

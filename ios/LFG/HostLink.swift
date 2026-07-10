@@ -42,10 +42,12 @@ final class HostLink {
     private var pingTask: Task<Void, Never>?
     private let cursorKey: String
     private(set) var cursor: Int64
+    private let localStore: LFGStore?
 
-    init(host: Host, client: LFGClient) {
+    init(host: Host, client: LFGClient, localStore: LFGStore? = nil) {
         self.host = host
         self.client = client
+        self.localStore = localStore
         // Shared key with the background delta sync (HostLinkPolicy.cursorKey):
         // both paths advance the SAME cursor, so a push-wake sync while the app
         // was backgrounded shortens the next foreground catch-up.
@@ -122,6 +124,13 @@ final class HostLink {
 
     private func persistCursor() {
         UserDefaults.standard.set(String(cursor), forKey: cursorKey)
+        guard let localStore else { return }
+        let hostID = host.id
+        let seq = cursor
+        Task.detached(priority: .utility) {
+            do { try await localStore.setCursor(hostId: hostID, seq: seq) }
+            catch { }
+        }
     }
 
     private func run() async {
