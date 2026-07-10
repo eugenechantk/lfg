@@ -100,6 +100,7 @@ struct RootView: View {
                 store.enterForeground()
             case .background:
                 store.enterBackground()
+                AppDelegate.scheduleAppRefresh()   // keep a periodic delta sync queued
             default:
                 break
             }

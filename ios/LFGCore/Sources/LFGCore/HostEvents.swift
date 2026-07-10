@@ -44,6 +44,50 @@ public enum HostStreamDecoder {
     }
 }
 
+/// One page of journaled events from `GET /api/events/page` — the
+/// non-streaming fetch shape used by background wakes (push / BGAppRefresh),
+/// where holding an SSE stream isn't possible. Rows decode through the exact
+/// same path as the live stream: each is rebuilt into an `SSEFrame` and handed
+/// to `HostStreamDecoder`, so page-synced and stream-synced state can't drift.
+public struct EventsPage: Sendable {
+    public let events: [(seq: Int64, event: LiveEvent)]
+    public let head: Int64
+    /// False = the cursor was unserviceable (predates retention / journal
+    /// recreated). Full-refresh via REST and reset the cursor to `head`.
+    public let canServe: Bool
+
+    public init(events: [(seq: Int64, event: LiveEvent)], head: Int64, canServe: Bool) {
+        self.events = events; self.head = head; self.canServe = canServe
+    }
+
+    struct Wire: Decodable {
+        struct Row: Decodable {
+            let seq: Int64
+            let type: String
+            let payload: String
+        }
+        let events: [Row]
+        let head: Int64?
+        let canServe: Bool?
+    }
+
+    /// Decode the wire JSON, folding each row through the stream decoder.
+    /// Unknown event types are skipped (forward compatibility), same as the
+    /// live stream path.
+    public static func decode(_ data: Data) throws -> EventsPage {
+        let wire = try JSONDecoder().decode(Wire.self, from: data)
+        var out: [(seq: Int64, event: LiveEvent)] = []
+        out.reserveCapacity(wire.events.count)
+        for row in wire.events {
+            let frame = SSEFrame(event: row.type, data: row.payload, isComment: false, id: String(row.seq))
+            if case .event(let seq, let ev)? = HostStreamDecoder.decode(frame) {
+                out.append((seq: seq, event: ev))
+            }
+        }
+        return EventsPage(events: out, head: wire.head ?? 0, canServe: wire.canServe ?? true)
+    }
+}
+
 /// Pure connection policy for a `HostLink` — every number the link's behavior
 /// hangs off, testable without a network or a clock.
 public enum HostLinkPolicy {
@@ -76,5 +120,13 @@ public enum HostLinkPolicy {
     public static func showUnreachable(unhealthySince: Date?, now: Date = Date()) -> Bool {
         guard let since = unhealthySince else { return false }
         return now.timeIntervalSince(since) >= bannerAfter
+    }
+
+    /// UserDefaults key of a host's persisted journal cursor. Keyed by the
+    /// CONFIGURED url (`Host.id`) — stable across app runs; editing the URL in
+    /// Settings correctly starts a fresh cursor. Shared by `HostLink` (live
+    /// stream) and the background delta sync so both advance the same cursor.
+    public static func cursorKey(forHostURL hostURL: String) -> String {
+        "lfg.cursor.\(hostURL)"
     }
 }

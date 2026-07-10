@@ -475,4 +475,19 @@ public struct LFGClient: Sendable {
         let p = try await get("api/ping", timeout: timeout, as: P.self)
         return (head: p.seq ?? 0, rtt: Date().timeIntervalSince(started))
     }
+
+    /// One bounded page of journaled events — the background-wake fetch shape
+    /// (push wake / BGAppRefresh can't hold an SSE stream). Short timeout: a
+    /// background execution window is ~30s total for everything.
+    public func eventsPage(since: Int64, limit: Int = 500,
+                           timeout: TimeInterval = 10) async throws -> EventsPage {
+        var req = URLRequest(url: url("api/events/page", query: [
+            URLQueryItem(name: "since", value: String(since)),
+            URLQueryItem(name: "limit", value: String(limit)),
+        ]))
+        req.httpMethod = "GET"
+        req.timeoutInterval = timeout
+        let data = try await performRaw(req)
+        return try EventsPage.decode(data)
+    }
 }

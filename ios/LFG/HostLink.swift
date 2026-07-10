@@ -47,11 +47,19 @@ final class HostLink {
     init(host: Host, client: LFGClient) {
         self.host = host
         self.client = client
-        // Keyed by the configured url (Host.id): stable across app runs, and a
-        // URL edit in Settings correctly starts a fresh cursor for what may be
-        // a different machine.
-        self.cursorKey = "lfg.cursor.\(host.id)"
+        // Shared key with the background delta sync (HostLinkPolicy.cursorKey):
+        // both paths advance the SAME cursor, so a push-wake sync while the app
+        // was backgrounded shortens the next foreground catch-up.
+        self.cursorKey = HostLinkPolicy.cursorKey(forHostURL: host.id)
         self.cursor = Int64(UserDefaults.standard.string(forKey: cursorKey) ?? "") ?? 0
+    }
+
+    /// Re-read the persisted cursor (a background sync may have advanced it
+    /// while this link was stopped). Called on start().
+    private func reloadCursor() {
+        if let s = UserDefaults.standard.string(forKey: cursorKey), let v = Int64(s), v > cursor {
+            cursor = v
+        }
     }
 
     var isHealthy: Bool {
@@ -64,6 +72,7 @@ final class HostLink {
 
     func start() {
         guard runTask == nil else { return }
+        reloadCursor()
         runTask = Task { [weak self] in await self?.run() }
         pingTask = Task { [weak self] in await self?.keepalive() }
     }
@@ -105,6 +114,11 @@ final class HostLink {
                 try? await Task.sleep(for: .seconds(delay))
                 if Task.isCancelled { return }
             }
+            // A background sync may have advanced the persisted cursor while
+            // this loop was in backoff (push-wake during an outage) — pick it
+            // up per attempt, or the reconnect wastefully re-replays what the
+            // sync already applied (caught live in the Phase-2 gate test).
+            reloadCursor()
             // .connecting until BYTES actually flow — claiming .catchingUp on
             // dial would read as healthy while hung against a black-holed host
             // (caught live in the Phase-1 gate test: the banner re-check saw a
