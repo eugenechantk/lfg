@@ -630,12 +630,12 @@ struct ContentView: View {
             }
         }
         .listStyle(.inset)
-        .frame(minWidth: 640, minHeight: 420)
+        // 660, not 640: in the last ~20pt above the toolbar's fit width the
+        // system squeezes the principal item ~14pt off the window centerline.
+        .frame(minWidth: 660, minHeight: 420)
         .navigationTitle("lfg")
-        .searchable(text: $searchText, placement: .toolbar, prompt: "Search sessions")
         // HIG "Toolbars" item groupings: common view controls in the center
-        // area, search + actions on the trailing edge. Adjacent trailing items
-        // share one Liquid Glass group.
+        // area, search + actions on the trailing edge.
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Picker("Group by", selection: $groupMode) {
@@ -656,9 +656,27 @@ struct ContentView: View {
                     }
                 }
                 .disabled(store.refreshing)
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
                 .help("Refresh (auto-refreshes every 10s)")
             }
-            DefaultToolbarItem(kind: .search, placement: .primaryAction)
+            // Adjacent items in one placement share a glass capsule by
+            // default; hide it so refresh is its own circle beside search.
+            .sharedBackgroundVisibility(.hidden)
+            ToolbarItem(placement: .primaryAction) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Search sessions", text: $searchText)
+                        .textFieldStyle(.plain)
+                }
+                .padding(.horizontal, 10)
+                // 150pt (not wider): at the 640pt minWidth the centered
+                // pill + this cluster must fit without collapsing into ».
+                // No custom glass here — the system toolbar item background
+                // is the only container around the field.
+                .frame(width: 150, height: 30)
+            }
         }
         .task { await store.refresh() }
         .onReceive(timer) { _ in
