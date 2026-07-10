@@ -15,6 +15,7 @@ import {
 } from "../sessions.ts";
 import { capturePaneAsync, isBusy, parsePrompt, type PanePrompt } from "../tmux.ts";
 import { findEntryByAnyId } from "../aisdk-registry.ts";
+import { codexDelegationSessionIds } from "../activity.ts";
 import { listDevices } from "./store.ts";
 import {
   listActivityUpdateTokens,
@@ -279,15 +280,16 @@ async function observeSession(s: {
   sessionId?: string | null;
   tmuxTarget?: string | null;
 }): Promise<SessionState> {
+  const delegated = s.sessionId ? codexDelegationSessionIds().has(s.sessionId) : false;
   if (!s.tmuxTarget) {
     const entry = s.sessionId ? findEntryByAnyId(s.sessionId) : null;
-    return { busy: entry ? entry.busy : false, promptPresent: false };
+    return { busy: (entry ? entry.busy : false) || delegated, promptPresent: false };
   }
   const pane = await capturePaneAsync(s.tmuxTarget);
   const tp = s.sessionId ? await resolveTranscript(s.sessionId) : null;
   let prompt: PendingPrompt | PanePrompt | null = tp ? await pendingToolPrompt(tp) : null;
   if (!prompt && pane) prompt = parsePrompt(pane);
-  const busy = pane ? isBusy(pane) : false;
+  const busy = (pane ? isBusy(pane) : false) || delegated;
   return { busy, promptPresent: !!prompt, promptQuestion: prompt?.question ?? null };
 }
 
