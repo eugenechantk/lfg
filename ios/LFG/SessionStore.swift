@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Network
 import LFGCore
 
 /// The single source of truth for live session state. Reduces `GET /api/sessions`
@@ -142,6 +143,17 @@ import LFGCore
     private var unknownSessionRefresh: Task<Void, Never>?
     /// Per-host delayed re-evaluation of the sustained-failure banner rule.
     private var bannerRecheck: [String: Task<Void, Never>] = [:]
+    /// Store-owned sustained-failure clock, keyed by configured host URL.
+    /// Unlike `HostLink.unhealthySince`, this survives link teardown/rebuild
+    /// while the app remains alive.
+    private var unhealthySinceByHost: [String: Date] = [:]
+    /// Events replayed while a link is catching up are coalesced here so SwiftUI
+    /// renders the final post-replay state instead of every intermediate flip.
+    private var catchUpBuffers: [String: [LiveEvent]] = [:]
+    private static let catchUpBufferLimit = 2_000
+    private var pathMonitor: NWPathMonitor?
+    private let pathMonitorQueue = DispatchQueue(label: "lfg.network-path")
+    private var networkPathSatisfied: Bool?
     /// Pending delayed teardown while backgrounded (grace window so a quick
     /// app-switch keeps every stream alive).
     private var backgroundStopTask: Task<Void, Never>?
@@ -186,6 +198,9 @@ import LFGCore
         lastOpenedAt = opened
         needsReadStateMigration = !d.bool(forKey: Self.migratedKey) && !opened.isEmpty
     }
+
+    // No deinit for pathMonitor: the store is app-lifetime and `stop()` cancels
+    // it; a nonisolated deinit can't touch @MainActor state under Swift 6 anyway.
 
     /// The host for HOST-AGNOSTIC work: create-flow metadata (dirs/users/usage),
     /// resumable lookups, and creating/resuming when the caller named no host.
@@ -290,6 +305,7 @@ import LFGCore
 
     func start() {
         backgroundStopTask?.cancel(); backgroundStopTask = nil
+        startPathMonitor()
         syncLinks()
         guard pollTask == nil else { return }
         // Slow reconcile only: live delivery is the links' job now. This loop
@@ -312,8 +328,14 @@ import LFGCore
         refreshTask?.cancel(); refreshTask = nil
         autoResendTask?.cancel(); autoResendTask = nil
         backgroundStopTask?.cancel(); backgroundStopTask = nil
-        for l in links.values { l.stop() }
+        stopPathMonitor()
+        for (id, l) in links {
+            l.stop()
+            flushCatchUpBuffer(for: id)
+        }
         links = [:]
+        for task in bannerRecheck.values { task.cancel() }
+        bannerRecheck = [:]
     }
 
     /// Called when the host list changes. NOT a teardown: only links for
@@ -332,9 +354,13 @@ import LFGCore
         let hosts = settings.hosts
         let ids = Set(hosts.map(\.id))
         for (id, link) in links where !ids.contains(id) {
+            flushCatchUpBuffer(for: id)
             link.stop()
             links[id] = nil
             reachabilityByHost[id] = nil
+            unhealthySinceByHost[id] = nil
+            catchUpBuffers[id] = nil
+            bannerRecheck[id]?.cancel(); bannerRecheck[id] = nil
         }
         for host in hosts {
             guard links[host.id] == nil, let client = settings.client(for: host) else { continue }
@@ -347,7 +373,55 @@ import LFGCore
             link.onStateChange = { [weak self] in self?.linkStateChanged(hid) }
             links[hid] = link
             link.start()
+            linkStateChanged(hid)
         }
+        if networkPathSatisfied == false {
+            markNoNetwork(hostIds: hosts.map(\.id), now: Date())
+        }
+    }
+
+    private func startPathMonitor() {
+        guard pathMonitor == nil else { return }
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            let isSatisfied = path.status == .satisfied
+            Task { @MainActor [weak self] in
+                self?.networkPathChanged(isSatisfied: isSatisfied)
+            }
+        }
+        pathMonitor = monitor
+        monitor.start(queue: pathMonitorQueue)
+    }
+
+    private func stopPathMonitor() {
+        pathMonitor?.cancel()
+        pathMonitor = nil
+        networkPathSatisfied = nil
+    }
+
+    private func networkPathChanged(isSatisfied: Bool) {
+        let previous = networkPathSatisfied
+        guard previous != isSatisfied else { return }
+        networkPathSatisfied = isSatisfied
+        if isSatisfied {
+            if previous == false {
+                for link in links.values { link.retryNow() }
+            }
+        } else {
+            markNoNetwork(hostIds: settings.hosts.map(\.id), now: Date())
+        }
+    }
+
+    private func markNoNetwork(hostIds: [String], now: Date) {
+        for hostId in hostIds {
+            if unhealthySinceByHost[hostId] == nil {
+                unhealthySinceByHost[hostId] = now
+            }
+            reachabilityByHost[hostId] = .hostUnreachable("No network connection")
+            bannerRecheck[hostId]?.cancel(); bannerRecheck[hostId] = nil
+        }
+        reachability = HostHealth.aggregate(hostIds: settings.hosts.map(\.id),
+                                            health: reachabilityByHost)
     }
 
     /// Live events from a host link. Same reducer as always (`apply`), plus:
@@ -355,6 +429,22 @@ import LFGCore
     /// is behind reality (session just created / transferred here) — pull the
     /// list forward now, throttled.
     private func ingest(_ ev: LiveEvent, from hostId: String) {
+        if links[hostId]?.state == .catchingUp {
+            catchUpBuffers[hostId, default: []].append(ev)
+            if (catchUpBuffers[hostId]?.count ?? 0) > Self.catchUpBufferLimit {
+                flushCatchUpBuffer(for: hostId)
+            }
+            return
+        }
+        applyIngested(ev)
+    }
+
+    private func flushCatchUpBuffer(for hostId: String) {
+        guard let buffered = catchUpBuffers.removeValue(forKey: hostId), !buffered.isEmpty else { return }
+        for ev in buffered { applyIngested(ev) }
+    }
+
+    private func applyIngested(_ ev: LiveEvent) {
         if case .message(let sid, _) = ev,
            session(sid) == nil, !sid.hasPrefix("local-"),
            unknownSessionRefresh == nil {
@@ -367,11 +457,12 @@ import LFGCore
         apply(ev)
     }
 
-    /// Link state → per-host reachability. Healthy links (and blips shorter
-    /// than `HostLinkPolicy.bannerAfter`) read `.ok`; only SUSTAINED failure
-    /// flips the map — which is what the banner, the offline composer notice,
-    /// and reachability-aware routing all key off. The 60s REST reconcile keeps
-    /// feeding the same map through `applyHostFetch`; both writers converge.
+    /// Link state → per-host reachability. Bytes received by a link
+    /// (`.catchingUp`/`.live` with no outstanding link failure) are evidence of
+    /// health; a fresh `.connecting` link is neutral. Sustained failure is timed
+    /// by `unhealthySinceByHost` so background teardown/foreground rebuild cannot
+    /// reset the banner clock. The 60s REST reconcile keeps feeding the same map
+    /// through `applyHostFetch`; both writers converge.
     ///
     /// The sustained-failure flip cannot wait for the NEXT state-change
     /// callback: during a black-holed stall those only arrive once per
@@ -381,13 +472,50 @@ import LFGCore
     /// exact moment the grace expires.
     private func linkStateChanged(_ hostId: String) {
         guard let link = links[hostId] else { return }
+        if link.state != .catchingUp {
+            flushCatchUpBuffer(for: hostId)
+        }
         bannerRecheck[hostId]?.cancel(); bannerRecheck[hostId] = nil
-        if link.isHealthy {
+
+        switch link.state {
+        case .catchingUp, .live where link.unhealthySince == nil:
+            unhealthySinceByHost[hostId] = nil
             reachabilityByHost[hostId] = .ok
             failuresByHost[hostId] = 0
-        } else if HostLinkPolicy.showUnreachable(unhealthySince: link.unhealthySince) {
-            reachabilityByHost[hostId] = .hostUnreachable("Connection lost")
-        } else if let since = link.unhealthySince {
+        case .catchingUp, .live:
+            rememberHostUnhealthy(hostId, candidate: link.unhealthySince)
+        case .connecting:
+            if let since = link.unhealthySince {
+                rememberHostUnhealthy(hostId, candidate: since)
+            } else {
+                evaluateStoredUnhealthy(hostId)
+            }
+        case .backoff:
+            rememberHostUnhealthy(hostId, candidate: link.unhealthySince)
+        case .idle:
+            evaluateStoredUnhealthy(hostId)
+        }
+        reachability = HostHealth.aggregate(hostIds: settings.hosts.map(\.id),
+                                            health: reachabilityByHost)
+    }
+
+    private func rememberHostUnhealthy(_ hostId: String, candidate: Date?) {
+        let now = Date()
+        let since = candidate.map { min($0, now) } ?? now
+        if let existing = unhealthySinceByHost[hostId] {
+            if since < existing { unhealthySinceByHost[hostId] = since }
+        } else {
+            unhealthySinceByHost[hostId] = since
+        }
+        evaluateStoredUnhealthy(hostId)
+    }
+
+    private func evaluateStoredUnhealthy(_ hostId: String) {
+        guard let since = unhealthySinceByHost[hostId] else { return }
+        if HostLinkPolicy.showUnreachable(unhealthySince: since) {
+            let message = networkPathSatisfied == false ? "No network connection" : "Connection lost"
+            reachabilityByHost[hostId] = .hostUnreachable(message)
+        } else {
             // Within the grace window — keep the previous value, but come back
             // the moment the window closes.
             let delay = HostLinkPolicy.bannerAfter - Date().timeIntervalSince(since) + 0.5
@@ -398,8 +526,6 @@ import LFGCore
                 self?.linkStateChanged(hostId)
             }
         }
-        reachability = HostHealth.aggregate(hostIds: settings.hosts.map(\.id),
-                                            health: reachabilityByHost)
     }
 
     /// Backgrounding: hold every link open through a short grace window under a
@@ -623,6 +749,8 @@ import LFGCore
         reachabilityByHost = reachabilityByHost.filter { hostIds.contains($0.key) }
         lastSessionsByHost = lastSessionsByHost.filter { hostIds.contains($0.key) }
         failuresByHost = failuresByHost.filter { hostIds.contains($0.key) }
+        unhealthySinceByHost = unhealthySinceByHost.filter { hostIds.contains($0.key) }
+        catchUpBuffers = catchUpBuffers.filter { hostIds.contains($0.key) }
         closedFirstPageByHost = closedFirstPageByHost.filter { hostIds.contains($0.key) }
         closedExtraPagesByHost = closedExtraPagesByHost.filter { hostIds.contains($0.key) }
         closedNextBeforeByHost = closedNextBeforeByHost.filter { hostIds.contains($0.key) }
@@ -739,6 +867,8 @@ import LFGCore
     /// healthy host to "Offline"; the cached snapshot keeps its sessions on screen.
     private func applyHostFetch(_ f: HostFetch) {
         if f.reach == .ok {
+            unhealthySinceByHost[f.host.id] = nil
+            bannerRecheck[f.host.id]?.cancel(); bannerRecheck[f.host.id] = nil
             reachabilityByHost[f.host.id] = .ok
             failuresByHost[f.host.id] = 0
             lastSessionsByHost[f.host.id] = f.sessions ?? []
