@@ -15,6 +15,7 @@ struct LFGApp: App {
         // Bridge the push manager (used by the UIKit AppDelegate) to the same
         // settings/store the SwiftUI views observe.
         PushManager.shared.configure(settings: s, store: st)
+        LiveActivityManager.shared.configure(settings: s)
     }
 
     var body: some Scene {

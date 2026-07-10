@@ -1,13 +1,17 @@
 import { test, expect, describe } from "bun:test";
 import {
   reduceTransition,
+  reduceLiveActivityTransition,
+  liveActivitiesEnabled,
   buildPayload,
   runPushTick,
+  type LiveActivityActive,
   type PriorState,
   type SessionState,
   type TickDeps,
 } from "./watcher.ts";
 import { apnsBody, type ApnsConfig, type ApnsPayload } from "./apns.ts";
+import type { LiveActivityPush } from "./liveactivity.ts";
 
 const seed = (
   busy: boolean,
@@ -84,6 +88,110 @@ describe("buildPayload", () => {
   test("falls back to a session-id stub when there's no title", () => {
     const p = buildPayload({ sessionId: "0123456789ab" }, "finished");
     expect(p.title).toContain("01234567");
+  });
+});
+
+describe("reduceLiveActivityTransition", () => {
+  test("starts when a session is working and no activity is tracked", () => {
+    const r = reduceLiveActivityTransition({
+      session: { sessionId: "s1", title: "Job" },
+      previous: null,
+      observed: obs(true, false),
+      active: null,
+      now: 1_700,
+      hostName: "mac",
+    });
+    expect(r.action?.event).toBe("start");
+    expect(r.nextActive?.startedAt).toBe(1_700);
+    expect(r.action?.push.body.aps).toMatchObject({
+      event: "start",
+      "content-state": { sid: "s1", title: "Job", state: "working", since: 1_700 },
+      attributes: { sid: "s1", hostName: "mac" },
+      "attributes-type": "LFGSessionAttributes",
+    });
+  });
+
+  test("does not start for idle sessions", () => {
+    const r = reduceLiveActivityTransition({
+      session: { sessionId: "s1", title: "Job" },
+      previous: null,
+      observed: obs(false, false),
+      active: null,
+      now: 1_700,
+      hostName: "mac",
+    });
+    expect(r.action).toBeNull();
+    expect(r.nextActive).toBeNull();
+  });
+
+  test("updates when a working session becomes prompt-blocked", () => {
+    const active: LiveActivityActive = {
+      startedAt: 1_700,
+      contentState: { sid: "s1", title: "Job", state: "working", since: 1_700 },
+    };
+    const r = reduceLiveActivityTransition({
+      session: { sessionId: "s1", title: "Job" },
+      previous: seed(true, false),
+      observed: obs(false, true, "Approve?"),
+      active,
+      now: 1_710,
+      hostName: "mac",
+    });
+    expect(r.action?.event).toBe("update");
+    expect(r.action?.push.body.aps["content-state"]).toEqual({
+      sid: "s1",
+      title: "Job",
+      state: "blocked",
+      since: 1_710,
+    });
+  });
+
+  test("updates when active content changes while still working", () => {
+    const active: LiveActivityActive = {
+      startedAt: 1_700,
+      contentState: { sid: "s1", title: "Old", state: "working", since: 1_700 },
+    };
+    const r = reduceLiveActivityTransition({
+      session: { sessionId: "s1", title: "New" },
+      previous: seed(true, false),
+      observed: obs(true, false),
+      active,
+      now: 1_715,
+      hostName: "mac",
+    });
+    expect(r.action?.event).toBe("update");
+    expect(r.action?.push.body.aps["content-state"]).toEqual({
+      sid: "s1",
+      title: "New",
+      state: "working",
+      since: 1_715,
+    });
+  });
+
+  test("ends after two consecutive idle ticks", () => {
+    const active: LiveActivityActive = {
+      startedAt: 1_700,
+      contentState: { sid: "s1", title: "Job", state: "idle", since: 1_720 },
+    };
+    const r = reduceLiveActivityTransition({
+      session: { sessionId: "s1", title: "Job" },
+      previous: seed(false, false),
+      observed: obs(false, false),
+      active,
+      now: 1_730,
+      hostName: "mac",
+    });
+    expect(r.action?.event).toBe("end");
+    expect(r.nextActive).toBeNull();
+    expect(r.action?.push.body.aps["dismissal-date"]).toBe(1_730);
+  });
+});
+
+describe("liveActivitiesEnabled", () => {
+  test("is enabled only by LFG_LIVE_ACTIVITIES=1", () => {
+    expect(liveActivitiesEnabled({} as NodeJS.ProcessEnv)).toBe(false);
+    expect(liveActivitiesEnabled({ LFG_LIVE_ACTIVITIES: "true" } as NodeJS.ProcessEnv)).toBe(false);
+    expect(liveActivitiesEnabled({ LFG_LIVE_ACTIVITIES: "1" } as NodeJS.ProcessEnv)).toBe(true);
   });
 });
 
@@ -243,5 +351,33 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
     };
     await runPushTick(prior, deps);
     expect(observed).toBe(0);
+  });
+
+  test("Live Activity deps can start even when regular APNs devices are absent", async () => {
+    const sent: { token: string; push: LiveActivityPush }[] = [];
+    const prior = new Map<string, PriorState>();
+    const active = new Map<string, LiveActivityActive>();
+    const deps: TickDeps = {
+      sessions: async () => [{ sessionId: "s1", title: "Job", tmuxTarget: "t" }],
+      observe: async () => obs(true, false),
+      devices: async () => [],
+      cfg,
+      send: async () => ({ ok: true, status: 200 }),
+      hostName: () => "mac",
+      liveActivities: {
+        active,
+        pushToStartTokens: async () => [{ token: "start", env: "sandbox" }],
+        updateTokensForSession: async () => [],
+        send: async (d, push) => {
+          sent.push({ token: d.token, push });
+          return { ok: true, status: 200 };
+        },
+      },
+      now: () => 1_700_000,
+    };
+    await runPushTick(prior, deps);
+    expect(sent.map((s) => s.token)).toEqual(["start"]);
+    expect(sent[0].push.body.aps.event).toBe("start");
+    expect(active.has("s1")).toBe(true);
   });
 });

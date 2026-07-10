@@ -17,6 +17,11 @@ import { capturePaneAsync, isBusy, parsePrompt, type PanePrompt } from "../tmux.
 import { findEntryByAnyId } from "../aisdk-registry.ts";
 import { listDevices } from "./store.ts";
 import {
+  listActivityUpdateTokens,
+  listPushToStartTokens,
+  removeLiveActivityToken,
+} from "./liveactivity-store.ts";
+import {
   apnsConfigFromEnv,
   sendApns,
   type ApnsConfig,
@@ -24,6 +29,15 @@ import {
   type ApnsPayloadSession,
   type ApnsTransport,
 } from "./apns.ts";
+import {
+  LIVE_ACTIVITY_ATTRIBUTES_TYPE,
+  buildEnd,
+  buildStart,
+  buildUpdate,
+  sendLiveActivity,
+  type LiveActivityContentState,
+  type LiveActivityPush,
+} from "./liveactivity.ts";
 import { unregisterDevice } from "./store.ts";
 
 // One observation of a session at a single tick.
@@ -113,6 +127,105 @@ export type PayloadSessionInput = {
   lastActivityAt?: number | null;
 };
 
+export type LiveActivityActive = {
+  startedAt: number;
+  contentState?: LiveActivityContentState;
+};
+
+export type LiveActivityAction = {
+  event: "start" | "update" | "end";
+  push: LiveActivityPush;
+};
+
+export type LiveActivityDecision = {
+  action: LiveActivityAction | null;
+  nextActive: LiveActivityActive | null;
+};
+
+function liveActivityState(next: SessionState): LiveActivityContentState["state"] {
+  if (next.busy) return "working";
+  if (next.promptPresent) return "blocked";
+  return "idle";
+}
+
+function sameContentState(a: LiveActivityContentState | undefined, b: LiveActivityContentState): boolean {
+  return !!a && a.title === b.title && a.state === b.state && a.sid === b.sid && a.since === b.since;
+}
+
+function buildLiveActivityContentState(
+  session: PayloadSessionInput,
+  next: SessionState,
+  active: LiveActivityActive | null | undefined,
+  nowSec: number,
+): LiveActivityContentState {
+  const sid = session.sessionId ?? "";
+  const state = liveActivityState(next);
+  const title = clip(session.title || session.tmuxName || sid.slice(0, 8) || "Session", 80);
+  const prior = active?.contentState;
+  return {
+    title,
+    state,
+    sid,
+    since: prior && prior.sid === sid && prior.state === state && prior.title === title ? prior.since : nowSec,
+  };
+}
+
+export function reduceLiveActivityTransition(args: {
+  session: PayloadSessionInput;
+  previous: PriorState | null | undefined;
+  observed: SessionState;
+  active: LiveActivityActive | null | undefined;
+  now: number;
+  hostName: string;
+}): LiveActivityDecision {
+  const contentState = buildLiveActivityContentState(
+    args.session,
+    args.observed,
+    args.active,
+    args.now,
+  );
+
+  if (!args.active) {
+    if (!args.observed.busy) return { action: null, nextActive: null };
+    return {
+      action: {
+        event: "start",
+        push: buildStart(
+          { ...contentState, hostName: args.hostName },
+          LIVE_ACTIVITY_ATTRIBUTES_TYPE,
+        ),
+      },
+      nextActive: { startedAt: args.now, contentState },
+    };
+  }
+
+  const nextActive: LiveActivityActive = { ...args.active, contentState };
+  const idleForTwoTicks =
+    !args.observed.busy &&
+    !args.observed.promptPresent &&
+    !!args.previous &&
+    !args.previous.busy &&
+    !args.previous.promptPresent;
+  if (idleForTwoTicks) {
+    const endState = { ...contentState, since: args.now };
+    return {
+      action: { event: "end", push: buildEnd(endState, args.now) },
+      nextActive: null,
+    };
+  }
+
+  const blockedFromBusy = !!args.previous?.busy && !args.observed.busy && args.observed.promptPresent;
+  const contentChanged = !sameContentState(args.active.contentState, contentState);
+  if (blockedFromBusy || (contentChanged && contentState.state !== "idle")) {
+    return {
+      action: { event: "update", push: buildUpdate(contentState) },
+      nextActive,
+    };
+  }
+
+  return { action: null, nextActive };
+}
+
 // Compact session snapshot embedded in the push so the client can render the
 // session instantly on tap instead of waiting for the reconnect + refresh.
 function snapshot(s: PayloadSessionInput): ApnsPayloadSession | undefined {
@@ -197,6 +310,20 @@ export type TickDeps = {
   onDeadToken?: (token: string) => Promise<void> | void;
   head?: () => number;
   hostId?: () => string;
+  hostName?: () => string;
+  liveActivities?: {
+    active: Map<string, LiveActivityActive>;
+    pushToStartTokens: () => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
+    updateTokensForSession: (
+      sessionId: string,
+    ) => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
+    send: (
+      device: { token: string; env: "sandbox" | "production" },
+      push: LiveActivityPush,
+      cfg: ApnsConfig,
+    ) => Promise<{ ok: boolean; status: number; reason?: string }>;
+    onDeadToken?: (token: string) => Promise<void> | void;
+  };
   now?: () => number;
   log?: (line: string) => void;
 };
@@ -211,6 +338,59 @@ function withWakeMetadata(payload: ApnsPayload, deps: Pick<TickDeps, "head" | "h
   };
 }
 
+function isDeadApnsToken(r: { ok: boolean; status: number; reason?: string }): boolean {
+  return !r.ok && (r.status === 410 || r.reason === "BadDeviceToken" || r.reason === "Unregistered");
+}
+
+async function sendLiveActivityToTokens(
+  tokens: Array<{ token: string; env: "sandbox" | "production" }>,
+  push: LiveActivityPush,
+  deps: NonNullable<TickDeps["liveActivities"]>,
+  cfg: ApnsConfig,
+  log?: (line: string) => void,
+): Promise<number> {
+  let sent = 0;
+  for (const token of tokens) {
+    const r = await deps.send(token, push, cfg);
+    if (r.ok) {
+      sent++;
+    } else if (isDeadApnsToken(r)) {
+      await deps.onDeadToken?.(token.token);
+    } else {
+      log?.(`[liveactivity] ${token.token.slice(0, 8)}… ${r.status} ${r.reason ?? ""}`.trim());
+    }
+  }
+  return sent;
+}
+
+async function applyLiveActivityDecision(
+  sid: string,
+  decision: LiveActivityDecision,
+  deps: NonNullable<TickDeps["liveActivities"]>,
+  cfg: ApnsConfig,
+  startTokens: Array<{ token: string; env: "sandbox" | "production" }>,
+  log?: (line: string) => void,
+): Promise<void> {
+  if (!decision.action) {
+    if (decision.nextActive) deps.active.set(sid, decision.nextActive);
+    else deps.active.delete(sid);
+    return;
+  }
+
+  if (decision.action.event === "start") {
+    const sent = await sendLiveActivityToTokens(startTokens, decision.action.push, deps, cfg, log);
+    if (sent > 0 && decision.nextActive) deps.active.set(sid, decision.nextActive);
+    return;
+  }
+
+  const updateTokens = await deps.updateTokensForSession(sid);
+  if (!updateTokens.length) return;
+  const sent = await sendLiveActivityToTokens(updateTokens, decision.action.push, deps, cfg, log);
+  if (sent <= 0) return;
+  if (decision.nextActive) deps.active.set(sid, decision.nextActive);
+  else deps.active.delete(sid);
+}
+
 /**
  * Run one watcher tick against injected dependencies. Exposed (rather than
  * buried in the interval) so it can be driven deterministically in tests. The
@@ -220,7 +400,9 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
   const now = deps.now ?? Date.now;
   const sessions = await deps.sessions();
   const devices = await deps.devices();
-  if (!devices.length) {
+  const liveActivities = deps.liveActivities;
+  const liveStartTokens = liveActivities ? await liveActivities.pushToStartTokens() : [];
+  if (!devices.length && !liveActivities) {
     // Nobody listening — keep state seeded so we don't fire a backlog when a
     // device registers mid-flight, but skip the work of observing.
     return;
@@ -236,7 +418,26 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
     } catch {
       continue;
     }
+    const observedAt = now();
     const prev = prior.get(sid);
+    if (liveActivities) {
+      const decision = reduceLiveActivityTransition({
+        session: s,
+        previous: prev,
+        observed: state,
+        active: liveActivities.active.get(sid),
+        now: Math.floor(observedAt / 1000),
+        hostName: deps.hostName?.() ?? "lfg",
+      });
+      await applyLiveActivityDecision(
+        sid,
+        decision,
+        liveActivities,
+        deps.cfg,
+        liveStartTokens,
+        deps.log,
+      );
+    }
     if (!prev) {
       // First sighting — seed without emitting. -Infinity marks "never notified"
       // so the first genuine transition isn't swallowed by the dedupe window.
@@ -247,7 +448,7 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
       });
       continue;
     }
-    const { event, state: nextState } = reduceTransition(prev, state, now());
+    const { event, state: nextState } = reduceTransition(prev, state, observedAt);
     prior.set(sid, nextState);
     if (!event) continue;
     const payload = withWakeMetadata(buildPayload(s, event, state.promptQuestion), deps);
@@ -262,10 +463,17 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
   }
   // Drop memory for sessions that no longer exist.
   for (const k of [...prior.keys()]) if (!seen.has(k)) prior.delete(k);
+  if (liveActivities) {
+    for (const k of [...liveActivities.active.keys()]) if (!seen.has(k)) liveActivities.active.delete(k);
+  }
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
-type StartPushWatcherDeps = Pick<Partial<TickDeps>, "head" | "hostId">;
+type StartPushWatcherDeps = Pick<Partial<TickDeps>, "head" | "hostId" | "hostName">;
+
+export function liveActivitiesEnabled(env = process.env): boolean {
+  return env.LFG_LIVE_ACTIVITIES === "1";
+}
 
 /**
  * Start the background watcher. No-op (and self-stopping) when APNs isn't
@@ -280,6 +488,7 @@ export function startPushWatcher(
   const cfg = apnsConfigFromEnv();
   if (!cfg) return; // push not configured → feature is off
   const prior = new Map<string, PriorState>();
+  const active = new Map<string, LiveActivityActive>();
   const deps: TickDeps = {
     sessions: listSessions,
     observe: observeSession,
@@ -289,8 +498,18 @@ export function startPushWatcher(
     onDeadToken: unregisterDevice,
     head: injected.head,
     hostId: injected.hostId,
+    hostName: injected.hostName,
     log,
   };
+  if (liveActivitiesEnabled()) {
+    deps.liveActivities = {
+      active,
+      pushToStartTokens: listPushToStartTokens,
+      updateTokensForSession: listActivityUpdateTokens,
+      send: sendLiveActivity,
+      onDeadToken: removeLiveActivityToken,
+    };
+  }
   let running = false;
   timer = setInterval(async () => {
     if (running) return; // skip if the previous tick is still going (slow panes)

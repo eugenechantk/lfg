@@ -197,6 +197,21 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         try? BGTaskScheduler.shared.submit(req)
     }
 
+    /// A background URLSession we own finished its work while we were dead or
+    /// suspended — iOS relaunched us to process the results. Recreating the
+    /// session (via `shared`) reattaches the delegate; the handler is called
+    /// once its events drain (urlSessionDidFinishEvents).
+    func application(
+        _ application: UIApplication,
+        handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        guard identifier == BackgroundSender.sessionIdentifier else {
+            completionHandler(); return
+        }
+        BackgroundSender.shared.systemCompletionHandler = completionHandler
+    }
+
     /// A remote notification with content-available arrived (app backgrounded
     /// or foregrounded). Parse the (Sendable) sync hint off the main actor,
     /// then hop for the delta sync. Phase-2 pushes carry {hostId, seq}; older

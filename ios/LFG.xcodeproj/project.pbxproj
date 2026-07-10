@@ -8,9 +8,14 @@
 
 /* Begin PBXBuildFile section */
 		0B5E6EC8D0198C245E872599 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 847BA9F87A178565C0EEC901 /* SettingsView.swift */; };
+		0D46DEDB3AF8664A7E8DEF2E /* LFGSessionAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB446B012E8694721414FE8 /* LFGSessionAttributes.swift */; };
 		17E5CC9417E33D6CADF1F707 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25CBF3AE8C40F2EE10BB4BD0 /* Theme.swift */; };
 		50F6EF746AAEB80DB6229E05 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 073FCBCA797989A55F83BAE4 /* MessageComposer.swift */; };
+		524B5CC79B3BBA73827C7B05 /* LFGSessionActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5674F88F214C41CB36C903F6 /* LFGSessionActivityWidget.swift */; };
+		53041C690C2CB5A6B7ADFAD5 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 76672CAA13A7F7B59D2B0A72 /* SwiftUI.framework */; };
 		55469BC6D5744CDBA92DC030 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20B34D8A3106C01BA13F2DC2 /* SessionStore.swift */; };
+		5942295A0F639DE68C4FF451 /* BackgroundSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D1BD4A3061EFB2858AB2A4B /* BackgroundSender.swift */; };
+		5E6C84F3CB9E6AA06447AFBC /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E73816164B94C119D0706DA8 /* WidgetKit.framework */; };
 		63E697B25FFD5633F32DF474 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 0F494F67402A869EB8A3476E /* MarkdownUI */; };
 		680725D02451A3EEFF5A9F28 /* NewSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27C81E2B22DECF886C37B1A7 /* NewSessionView.swift */; };
 		7254BB93C3886BB66A1304A2 /* LFGCore in Frameworks */ = {isa = PBXBuildFile; productRef = 672BDBCB9E1F5950E1DB7012 /* LFGCore */; };
@@ -19,12 +24,41 @@
 		8A8BAA0AADCD3A860CCA5B39 /* HostLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */; };
 		8D3E23D31117026A9BF00460 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 649DB6E8EC8E3C5852C813C8 /* LaunchScreen.storyboard */; };
 		A541589C33833A613D05AD8B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6461434AE6C2B0858AC679ED /* RootView.swift */; };
+		A9769E2F571F58BFBE480AB0 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAECB64072CE4F5286C7591E /* LiveActivityManager.swift */; };
+		A9CABFDC3E306F17D2F69E33 /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */; };
+		BBA9DA9482B7D2A76656E8BB /* LFGSessionAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB446B012E8694721414FE8 /* LFGSessionAttributes.swift */; };
+		D2F9456B4314172C7546226F /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */; };
 		D34242B9518E03AED793C989 /* SessionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2641AAFED0A103CF2409D79C /* SessionListView.swift */; };
 		D9DD48F43B87E8793C27102F /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 512247CB20DB703CAE731727 /* SessionDetailView.swift */; };
 		EF7A801ECD3C787CEC6ECA82 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 36D7D08CD0B7C101A085BC11 /* Assets.xcassets */; };
+		F550F9A23975E3A96952B92F /* LFGWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F903FB2EEB4D545099929559 /* PushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34FFA2FCDA2FF018358CB220 /* PushManager.swift */; };
 		FDC78A1C6A82751D9F56E521 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4C23B1D7493D21B0344531F /* Components.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		5A27BECA037B504157A3A6A6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B70B0B4668D37FDAA54905D6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2DEBFBAD6853B0C519FB25AC;
+			remoteInfo = LFGWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		DBB2377F42FAB3F619E341F7 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				F550F9A23975E3A96952B92F /* LFGWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		073FCBCA797989A55F83BAE4 /* MessageComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageComposer.swift; sourceTree = "<group>"; };
@@ -33,17 +67,26 @@
 		25CBF3AE8C40F2EE10BB4BD0 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		2641AAFED0A103CF2409D79C /* SessionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionListView.swift; sourceTree = "<group>"; };
 		27C81E2B22DECF886C37B1A7 /* NewSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionView.swift; sourceTree = "<group>"; };
+		2BB446B012E8694721414FE8 /* LFGSessionAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGSessionAttributes.swift; sourceTree = "<group>"; };
 		34FFA2FCDA2FF018358CB220 /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
 		36D7D08CD0B7C101A085BC11 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		512247CB20DB703CAE731727 /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
+		5674F88F214C41CB36C903F6 /* LFGSessionActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGSessionActivityWidget.swift; sourceTree = "<group>"; };
 		5C0AF429850CD7F98D54334E /* LFG.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LFG.entitlements; sourceTree = "<group>"; };
 		6461434AE6C2B0858AC679ED /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		649DB6E8EC8E3C5852C813C8 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		716A5CB7BF742B16562A7EF8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		76672CAA13A7F7B59D2B0A72 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		847BA9F87A178565C0EEC901 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		909139FA5D9B976298B7AA3F /* LFGApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGApp.swift; sourceTree = "<group>"; };
+		90C243BC659878B4353ED8C8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		9D1BD4A3061EFB2858AB2A4B /* BackgroundSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSender.swift; sourceTree = "<group>"; };
 		9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostLink.swift; sourceTree = "<group>"; };
 		C22EA76E51E2B0A745EE8847 /* RichContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichContent.swift; sourceTree = "<group>"; };
+		CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
+		D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LFGWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		E73816164B94C119D0706DA8 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		EAECB64072CE4F5286C7591E /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
 		F4C23B1D7493D21B0344531F /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		F63A269E91FBB297094BA544 /* LFGCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LFGCore; path = LFGCore; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -55,17 +98,41 @@
 			files = (
 				7254BB93C3886BB66A1304A2 /* LFGCore in Frameworks */,
 				63E697B25FFD5633F32DF474 /* MarkdownUI in Frameworks */,
+				A9CABFDC3E306F17D2F69E33 /* ActivityKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		600585A8CDC28DF4D10C24E4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D2F9456B4314172C7546226F /* ActivityKit.framework in Frameworks */,
+				53041C690C2CB5A6B7ADFAD5 /* SwiftUI.framework in Frameworks */,
+				5E6C84F3CB9E6AA06447AFBC /* WidgetKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0542EECBB7F4E0F79564C5E6 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */,
+				76672CAA13A7F7B59D2B0A72 /* SwiftUI.framework */,
+				E73816164B94C119D0706DA8 /* WidgetKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		1634932B7ACF7433EA5E19E5 = {
 			isa = PBXGroup;
 			children = (
 				1DEF3A76C8CE97E28B63A13C /* LFG */,
+				FA8FE8245D3AF81F2B302E13 /* LFGWidgets */,
 				33994F66596F8E85A2F92388 /* Packages */,
+				4A14429DD60DEA489C97C92A /* Shared */,
+				0542EECBB7F4E0F79564C5E6 /* Frameworks */,
 				73237F52945A981B453A84AA /* Products */,
 			);
 			sourceTree = "<group>";
@@ -74,12 +141,14 @@
 			isa = PBXGroup;
 			children = (
 				36D7D08CD0B7C101A085BC11 /* Assets.xcassets */,
+				9D1BD4A3061EFB2858AB2A4B /* BackgroundSender.swift */,
 				F4C23B1D7493D21B0344531F /* Components.swift */,
 				9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */,
 				716A5CB7BF742B16562A7EF8 /* Info.plist */,
 				649DB6E8EC8E3C5852C813C8 /* LaunchScreen.storyboard */,
 				5C0AF429850CD7F98D54334E /* LFG.entitlements */,
 				909139FA5D9B976298B7AA3F /* LFGApp.swift */,
+				EAECB64072CE4F5286C7591E /* LiveActivityManager.swift */,
 				073FCBCA797989A55F83BAE4 /* MessageComposer.swift */,
 				27C81E2B22DECF886C37B1A7 /* NewSessionView.swift */,
 				34FFA2FCDA2FF018358CB220 /* PushManager.swift */,
@@ -102,17 +171,53 @@
 			name = Packages;
 			sourceTree = "<group>";
 		};
+		4A14429DD60DEA489C97C92A /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				2BB446B012E8694721414FE8 /* LFGSessionAttributes.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
 		73237F52945A981B453A84AA /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				0D5CF03B9589A96341781809 /* LFG.app */,
+				D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		FA8FE8245D3AF81F2B302E13 /* LFGWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				90C243BC659878B4353ED8C8 /* Info.plist */,
+				5674F88F214C41CB36C903F6 /* LFGSessionActivityWidget.swift */,
+			);
+			path = LFGWidgets;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		2DEBFBAD6853B0C519FB25AC /* LFGWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5A8E77E103CF373BE00DBA1E /* Build configuration list for PBXNativeTarget "LFGWidgets" */;
+			buildPhases = (
+				99E0EAA2D99A5B033BB094A5 /* Sources */,
+				600585A8CDC28DF4D10C24E4 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LFGWidgets;
+			packageProductDependencies = (
+			);
+			productName = LFGWidgets;
+			productReference = D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		BB8191D802584F22B9CD53A0 /* LFG */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = E2D9D49957C42589080D73AD /* Build configuration list for PBXNativeTarget "LFG" */;
@@ -120,10 +225,12 @@
 				6056354380E196AD86E4C985 /* Sources */,
 				0B51C770103B8439D9D0BCEA /* Resources */,
 				3D97971F04140FC5BBF66792 /* Frameworks */,
+				DBB2377F42FAB3F619E341F7 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				4A0BF8AE408B6C12828322AB /* PBXTargetDependency */,
 			);
 			name = LFG;
 			packageProductDependencies = (
@@ -143,6 +250,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					2DEBFBAD6853B0C519FB25AC = {
+						DevelopmentTeam = 39GJBP8V5A;
+						ProvisioningStyle = Automatic;
+					};
 					BB8191D802584F22B9CD53A0 = {
 						DevelopmentTeam = 39GJBP8V5A;
 						ProvisioningStyle = Automatic;
@@ -168,6 +279,7 @@
 			projectRoot = "";
 			targets = (
 				BB8191D802584F22B9CD53A0 /* LFG */,
+				2DEBFBAD6853B0C519FB25AC /* LFGWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -189,9 +301,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5942295A0F639DE68C4FF451 /* BackgroundSender.swift in Sources */,
 				FDC78A1C6A82751D9F56E521 /* Components.swift in Sources */,
 				8A8BAA0AADCD3A860CCA5B39 /* HostLink.swift in Sources */,
 				8950528E1385EF07CB2814AD /* LFGApp.swift in Sources */,
+				BBA9DA9482B7D2A76656E8BB /* LFGSessionAttributes.swift in Sources */,
+				A9769E2F571F58BFBE480AB0 /* LiveActivityManager.swift in Sources */,
 				50F6EF746AAEB80DB6229E05 /* MessageComposer.swift in Sources */,
 				680725D02451A3EEFF5A9F28 /* NewSessionView.swift in Sources */,
 				F903FB2EEB4D545099929559 /* PushManager.swift in Sources */,
@@ -205,7 +320,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		99E0EAA2D99A5B033BB094A5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				524B5CC79B3BBA73827C7B05 /* LFGSessionActivityWidget.swift in Sources */,
+				0D46DEDB3AF8664A7E8DEF2E /* LFGSessionAttributes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		4A0BF8AE408B6C12828322AB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2DEBFBAD6853B0C519FB25AC /* LFGWidgets */;
+			targetProxy = 5A27BECA037B504157A3A6A6 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		3C257A2DF0EDBB955F5C21E2 /* Debug */ = {
@@ -259,7 +391,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -269,6 +401,28 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		5476A6104B88033D8656C778 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 39GJBP8V5A;
+				INFOPLIST_FILE = LFGWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -284,7 +438,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -308,7 +462,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -320,6 +474,28 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
+		};
+		D58C1D3BFBB14BADEB84A750 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 39GJBP8V5A;
+				INFOPLIST_FILE = LFGWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
 		};
 		D872027F94EF4A4F02B5F609 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -366,7 +542,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -382,6 +558,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		5A8E77E103CF373BE00DBA1E /* Build configuration list for PBXNativeTarget "LFGWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5476A6104B88033D8656C778 /* Debug */,
+				D58C1D3BFBB14BADEB84A750 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		D2860566EA830DE876CDCE7C /* Build configuration list for PBXProject "LFG" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -38,11 +38,21 @@ export type ApnsPayload = {
 };
 
 export type ApnsResult = { ok: boolean; status: number; reason?: string };
+export type ApnsPushType = "alert" | "liveactivity";
+
+export type ApnsWireRequest = {
+  topic: string;
+  pushType: ApnsPushType;
+  priority?: number;
+  body: string;
+};
 
 export type ApnsTransport = (args: {
   host: string;
   token: string;
   topic: string;
+  pushType: ApnsPushType;
+  priority?: number;
   jwt: string;
   body: string;
 }) => Promise<ApnsResult>;
@@ -112,7 +122,7 @@ function host(env: "sandbox" | "production"): string {
 // Default transport: real HTTP/2 POST to APNs. APNs is HTTP/2-only and `fetch`
 // (Bun's, as of 1.3.x) chokes on its responses — "Malformed_HTTP_Response" — so
 // we use node:http2 directly, which speaks the protocol cleanly.
-const realTransport: ApnsTransport = ({ host, token, topic, jwt, body }) =>
+const realTransport: ApnsTransport = ({ host, token, topic, pushType, priority, jwt, body }) =>
   new Promise<ApnsResult>((resolve) => {
     let settled = false;
     const done = (r: ApnsResult) => {
@@ -127,14 +137,16 @@ const realTransport: ApnsTransport = ({ host, token, topic, jwt, body }) =>
       return done({ ok: false, status: 0, reason: (e as Error).message });
     }
     client.on("error", (e) => done({ ok: false, status: 0, reason: (e as Error).message }));
-    const req = client.request({
+    const headers: http2.OutgoingHttpHeaders = {
       ":method": "POST",
       ":path": `/3/device/${token}`,
       authorization: `bearer ${jwt}`,
       "apns-topic": topic,
-      "apns-push-type": "alert",
+      "apns-push-type": pushType,
       "content-type": "application/json",
-    });
+    };
+    if (typeof priority === "number") headers["apns-priority"] = priority;
+    const req = client.request(headers);
     let status = 0;
     let data = "";
     req.on("response", (headers) => {
@@ -181,11 +193,27 @@ export async function sendApns(
   cfg: ApnsConfig,
   transport: ApnsTransport = realTransport,
 ): Promise<ApnsResult> {
+  return sendApnsRequest(
+    device,
+    { topic: cfg.topic, pushType: "alert", body: apnsBody(payload) },
+    cfg,
+    transport,
+  );
+}
+
+export async function sendApnsRequest(
+  device: { token: string; env: "sandbox" | "production" },
+  request: ApnsWireRequest,
+  cfg: ApnsConfig,
+  transport: ApnsTransport = realTransport,
+): Promise<ApnsResult> {
   return transport({
     host: host(device.env),
     token: device.token,
-    topic: cfg.topic,
+    topic: request.topic,
+    pushType: request.pushType,
+    priority: request.priority,
     jwt: apnsJwt(cfg),
-    body: apnsBody(payload),
+    body: request.body,
   });
 }
