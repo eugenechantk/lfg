@@ -10,11 +10,12 @@ struct SessionListView: View {
     @Binding var showNewSession: Bool
     @State private var searchText = ""
 
-    /// Directory sections the user has expanded (keyed by section id). Directory
-    /// sections are collapsed by default, so a section is open only while its id
-    /// is in this set. In-memory per the current run; directory mode only.
+    /// Collapsible UI state is in-memory per the current run: directory sections
+    /// and the orphan Agents fallback collapse by section id; nested agent rows
+    /// collapse by parent session id.
     @State private var expandedDirs: Set<String> = []
     @State private var expandedAgentSections: Set<String> = []
+    @State private var expandedAgentParents: Set<String> = []
 
     /// One rendered section of the list: a header title + its sessions, plus the
     /// running/idle tallies shown on a directory section's collapsible header.
@@ -24,8 +25,16 @@ struct SessionListView: View {
         let items: [Session]
         var group: SessionStore.Group? = nil
         var isAgents = false
+        var childrenByParentId: [String: [Session]] = [:]
         var running = 0
         var idle = 0
+    }
+
+    private struct RenderedSessionRow: Identifiable {
+        let id: String
+        let session: Session
+        let children: [Session]
+        let indent: CGFloat
     }
 
     /// Sessions passing the user filter + host filter + search query.
@@ -50,17 +59,15 @@ struct SessionListView: View {
         let base = matchingSessions
         switch settings.groupMode {
         case .status:
-            let regular = base.filter { !isFoldedAgent($0) }
-            let agentItems = base.filter { isFoldedAgent($0) }
-                .sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
-            var sections = SessionStore.Group.allCases.compactMap { g in
-                let items = regular.filter { store.group(for: $0) == g }
-                    .sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
-                return items.isEmpty ? nil
-                    : ListSection(id: "status-\(g.rawValue)", title: g.title, items: items, group: g)
+            if isSearching {
+                return statusSections(for: base)
             }
-            if !agentItems.isEmpty {
-                sections.append(ListSection(id: "status-agents", title: "Agents", items: agentItems, isAgents: true))
+            let grouped = statusAgentGrouping(for: base)
+            var sections = statusSections(for: grouped.regular,
+                                          childrenByParentId: grouped.childrenByParentId)
+            if !grouped.orphanAgents.isEmpty {
+                sections.append(ListSection(id: "status-agents", title: "Agents",
+                                            items: grouped.orphanAgents, isAgents: true))
             }
             return sections
         case .directory:
@@ -77,9 +84,59 @@ struct SessionListView: View {
         }
     }
 
-    private func isFoldedAgent(_ session: Session) -> Bool {
-        guard let parentSessionId = session.parentSessionId, !parentSessionId.isEmpty else { return false }
-        return store.group(for: session) != .needsInput
+    private var isSearching: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func statusSections(
+        for sessions: [Session],
+        childrenByParentId: [String: [Session]] = [:]
+    ) -> [ListSection] {
+        SessionStore.Group.allCases.compactMap { g in
+            let items = sessions.filter { store.group(for: $0) == g }
+                .sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
+            return items.isEmpty ? nil
+                : ListSection(id: "status-\(g.rawValue)", title: g.title, items: items,
+                              group: g, childrenByParentId: childrenByParentId)
+        }
+    }
+
+    private func statusAgentGrouping(
+        for sessions: [Session]
+    ) -> (regular: [Session], childrenByParentId: [String: [Session]], orphanAgents: [Session]) {
+        let visibleParentIds = Set(sessions.compactMap { normalizedId($0.sessionId) })
+        let agentCandidates = sessions.filter { statusAgentParentId(for: $0) != nil }
+        let candidateIds = Set(agentCandidates.map(\.id))
+        let childAgents = agentCandidates.filter { session in
+            guard let parentId = statusAgentParentId(for: session) else { return false }
+            return visibleParentIds.contains(parentId)
+        }
+        let orphanAgents = agentCandidates.filter { session in
+            guard let parentId = statusAgentParentId(for: session) else { return false }
+            return !visibleParentIds.contains(parentId)
+        }
+        let childrenByParentId = Dictionary(grouping: childAgents) { session in
+            statusAgentParentId(for: session) ?? ""
+        }
+        .mapValues { items in
+            items.sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
+        }
+        let regular = sessions.filter { !candidateIds.contains($0.id) }
+        return (regular,
+                childrenByParentId,
+                orphanAgents.sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) })
+    }
+
+    private func statusAgentParentId(for session: Session) -> String? {
+        guard store.group(for: session) != .needsInput else { return nil }
+        return normalizedId(session.parentSessionId)
+    }
+
+    private func normalizedId(_ value: String?) -> String? {
+        guard let id = value?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty else {
+            return nil
+        }
+        return id
     }
 
     /// Stable grouping key for a session's directory: its working dir, else the
@@ -174,6 +231,118 @@ struct SessionListView: View {
         }
     }
 
+    private func renderedRows(for section: ListSection) -> [RenderedSessionRow] {
+        guard settings.groupMode == .status,
+              !section.isAgents,
+              !section.childrenByParentId.isEmpty else {
+            return section.items.map {
+                RenderedSessionRow(id: $0.id, session: $0, children: [], indent: 0)
+            }
+        }
+
+        var rows: [RenderedSessionRow] = []
+        var path: Set<String> = []
+        for session in section.items {
+            appendRenderedRows(for: session, depth: 0, section: section, path: &path, rows: &rows)
+        }
+        return rows
+    }
+
+    private func appendRenderedRows(
+        for session: Session,
+        depth: Int,
+        section: ListSection,
+        path: inout Set<String>,
+        rows: inout [RenderedSessionRow]
+    ) {
+        let parentId = normalizedId(session.sessionId)
+        let children: [Session]
+        if let parentId, !path.contains(parentId) {
+            children = section.childrenByParentId[parentId] ?? []
+        } else {
+            children = []
+        }
+
+        rows.append(RenderedSessionRow(id: "\(depth)-\(session.id)",
+                                       session: session,
+                                       children: children,
+                                       indent: CGFloat(depth) * 24))
+
+        guard let parentId,
+              expandedAgentParents.contains(parentId),
+              !children.isEmpty,
+              !path.contains(parentId) else { return }
+        path.insert(parentId)
+        for child in children {
+            appendRenderedRows(for: child, depth: depth + 1, section: section, path: &path, rows: &rows)
+        }
+        path.remove(parentId)
+    }
+
+    @ViewBuilder
+    private func sessionRow(_ row: RenderedSessionRow) -> some View {
+        if row.children.isEmpty {
+            indented(row.indent) {
+                SessionRow(session: row.session, group: store.group(for: row.session))
+            }
+            .tag(row.session.sessionId ?? "")
+        } else {
+            indented(row.indent) {
+                VStack(alignment: .leading, spacing: 6) {
+                    SessionRow(session: row.session, group: store.group(for: row.session))
+                    if let parentId = normalizedId(row.session.sessionId) {
+                        agentDisclosure(parentId: parentId, children: row.children)
+                    }
+                }
+            }
+            .tag(row.session.sessionId ?? "")
+        }
+    }
+
+    @ViewBuilder
+    private func indented<Content: View>(
+        _ indent: CGFloat,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if indent > 0 {
+            content().padding(.leading, indent)
+        } else {
+            content()
+        }
+    }
+
+    private func agentDisclosure(parentId: String, children: [Session]) -> some View {
+        let isExpanded = expandedAgentParents.contains(parentId)
+        let running = children.filter { store.group(for: $0) == .working }.count
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if expandedAgentParents.contains(parentId) { expandedAgentParents.remove(parentId) }
+                else { expandedAgentParents.insert(parentId) }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 10)
+                Text(agentCountText(children.count))
+                if running > 0 {
+                    Text("· \(running) running")
+                }
+                Spacer(minLength: 0)
+            }
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.leading, 34)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func agentCountText(_ count: Int) -> String {
+        "\(count) \(count == 1 ? "agent" : "agents")"
+    }
+
     var body: some View {
         @Bindable var settings = settings
         VStack(spacing: 0) {
@@ -224,9 +393,8 @@ struct SessionListView: View {
                     ForEach(sections) { section in
                         Section {
                             if !isCollapsed(section) {
-                                ForEach(section.items) { session in
-                                    SessionRow(session: session, group: store.group(for: session))
-                                        .tag(session.sessionId ?? "")
+                                ForEach(renderedRows(for: section)) { row in
+                                    sessionRow(row)
                                 }
                                 if section.group == .closed, store.canLoadMoreClosed {
                                     Button {
