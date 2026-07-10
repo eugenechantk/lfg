@@ -28,3 +28,14 @@ ios/.bundle/
 .claude/shots/
 # Provisioning profiles (fastlane regenerates per deploy)
 *.mobileprovision
+
+# Syncthing conflict copies + migration backups
+*.sync-conflict-*
+ios/fastlane/*.bak
+
+# Transient verification evidence + tool state
+.codex/evidence/
+.playwright-mcp/
+
+# Desktop app build output
+desktop/build/
