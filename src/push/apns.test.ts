@@ -94,7 +94,23 @@ describe("sendApns", () => {
   test("apnsBody carries thread-id + routing fields", () => {
     const body = JSON.parse(apnsBody({ title: "T", body: "B", sid: "s9", kind: "needs-input" }));
     expect(body.aps["thread-id"]).toBe("s9");
+    expect(body.aps["content-available"]).toBe(1);
     expect(body.sid).toBe("s9");
     expect(body.kind).toBe("needs-input");
+  });
+
+  test("apnsBody carries optional journal wake keys", () => {
+    const body = JSON.parse(
+      apnsBody({
+        title: "T",
+        body: "B",
+        sid: "s9",
+        kind: "finished",
+        hostId: "host-1",
+        seq: 42,
+      }),
+    );
+    expect(body.hostId).toBe("host-1");
+    expect(body.seq).toBe(42);
   });
 });

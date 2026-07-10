@@ -428,6 +428,53 @@ import LFGCore
         Task { await refresh() }
     }
 
+    /// Background delta sync — the Phase-2 wake path (push wake / BGAppRefresh).
+    /// Pulls journal pages for the hinted host (nil = every host) and folds them
+    /// through the normal `apply` reducer WITHOUT starting links: a background
+    /// execution window is seconds, not a session. Advances the same persisted
+    /// cursor the links use, so the work also shortens the next foreground
+    /// catch-up even if iOS kills us mid-sync (cursor is persisted per page).
+    /// Returns true if any new events were applied (drives the
+    /// UIBackgroundFetchResult the system uses to tune our wake budget).
+    func backgroundSync(hostId: String?) async -> Bool {
+        var applied = false
+        for host in settings.hosts {
+            if let hostId, host.hostId != hostId { continue }
+            // Deliberately NO "skip if link is healthy" guard: a suspended
+            // process's link still READS healthy (its watchdogs were frozen
+            // with everything else), so any health check here is stale by
+            // definition — it made the first live wake test silently no-op.
+            // Syncing while actually current costs one empty page fetch, and
+            // re-applying events is idempotent (seen-set dedupe).
+            guard let client = settings.client(for: host) else { continue }
+            let key = HostLinkPolicy.cursorKey(forHostURL: host.id)
+            var cursor = Int64(UserDefaults.standard.string(forKey: key) ?? "") ?? 0
+            var pages = 0
+            while pages < 10 {   // bounded: stay well inside the bg window
+                pages += 1
+                guard let page = try? await client.eventsPage(since: cursor) else { break }
+                if !page.canServe {
+                    // Unserviceable cursor: skip to head. State is stale until
+                    // the next foreground refresh() — which the resync path
+                    // performs anyway — but the cursor is consistent again.
+                    cursor = page.head
+                    UserDefaults.standard.set(String(cursor), forKey: key)
+                    applied = true
+                    break
+                }
+                guard !page.events.isEmpty else { break }
+                for (seq, ev) in page.events {
+                    apply(ev)
+                    cursor = seq
+                }
+                UserDefaults.standard.set(String(cursor), forKey: key)
+                applied = true
+                if cursor >= page.head { break }
+            }
+        }
+        return applied
+    }
+
     // MARK: Polling
 
     /// One host's live-session fetch result (Sendable so it crosses the task

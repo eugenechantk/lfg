@@ -195,9 +195,21 @@ export type TickDeps = {
     cfg: ApnsConfig,
   ) => Promise<{ ok: boolean; status: number; reason?: string }>;
   onDeadToken?: (token: string) => Promise<void> | void;
+  head?: () => number;
+  hostId?: () => string;
   now?: () => number;
   log?: (line: string) => void;
 };
+
+function withWakeMetadata(payload: ApnsPayload, deps: Pick<TickDeps, "head" | "hostId">): ApnsPayload {
+  const hostId = deps.hostId?.();
+  const seq = deps.head?.();
+  return {
+    ...payload,
+    ...(hostId ? { hostId } : {}),
+    ...(typeof seq === "number" && Number.isFinite(seq) ? { seq } : {}),
+  };
+}
 
 /**
  * Run one watcher tick against injected dependencies. Exposed (rather than
@@ -238,7 +250,7 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
     const { event, state: nextState } = reduceTransition(prev, state, now());
     prior.set(sid, nextState);
     if (!event) continue;
-    const payload = buildPayload(s, event, state.promptQuestion);
+    const payload = withWakeMetadata(buildPayload(s, event, state.promptQuestion), deps);
     for (const d of devices) {
       const r = await deps.send(d, payload, deps.cfg);
       if (!r.ok && (r.status === 410 || r.reason === "BadDeviceToken" || r.reason === "Unregistered")) {
@@ -253,13 +265,17 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
+type StartPushWatcherDeps = Pick<Partial<TickDeps>, "head" | "hostId">;
 
 /**
  * Start the background watcher. No-op (and self-stopping) when APNs isn't
  * configured, so an install without push credentials pays nothing. Safe to call
  * repeatedly — only one interval runs.
  */
-export function startPushWatcher(log: (line: string) => void = () => {}): void {
+export function startPushWatcher(
+  log: (line: string) => void = () => {},
+  injected: StartPushWatcherDeps = {},
+): void {
   if (timer) return;
   const cfg = apnsConfigFromEnv();
   if (!cfg) return; // push not configured → feature is off
@@ -271,6 +287,8 @@ export function startPushWatcher(log: (line: string) => void = () => {}): void {
     cfg,
     send: sendApns,
     onDeadToken: unregisterDevice,
+    head: injected.head,
+    hostId: injected.hostId,
     log,
   };
   let running = false;

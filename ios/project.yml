@@ -62,6 +62,14 @@ targets:
         # App uses only standard HTTPS/TLS -> exempt from export compliance.
         # Baked in so TestFlight uploads don't pause for the encryption question.
         ITSAppUsesNonExemptEncryption: false
+        # Phase 2 background continuity: content-available pushes wake the app
+        # for a journal delta sync; BGAppRefresh covers push-less gaps. The task
+        # id must match AppDelegate.refreshTaskID.
+        UIBackgroundModes:
+          - remote-notification
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.eugenechan.lfg.refresh
         # Launch screen: black background + centered mark (LaunchScreen.storyboard).
         UILaunchStoryboardName: LaunchScreen
         UISupportedInterfaceOrientations~ipad:

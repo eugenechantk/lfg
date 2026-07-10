@@ -10,6 +10,36 @@ public enum PushEventKind: String, Sendable, Equatable {
     case finished = "finished"
 }
 
+/// Background-sync hint carried by Phase-2 pushes: which host sent this and its
+/// journal head at send time. The app compares `seq` against the host's stored
+/// cursor and delta-syncs only when behind. Separate from `PushNotification`
+/// because it drives the silent wake path, not navigation — one push can carry
+/// both (alert + content-available in the same payload).
+public struct PushSyncHint: Sendable, Equatable {
+    public let hostId: String
+    public let seq: Int64
+
+    public init(hostId: String, seq: Int64) {
+        self.hostId = hostId
+        self.seq = seq
+    }
+
+    /// Returns nil when the payload carries no usable hint (older server, or a
+    /// foreign push). `seq` tolerates number or string — APNs custom keys pass
+    /// through JSON; stay lenient like the rest of the models.
+    public init?(userInfo: [AnyHashable: Any]) {
+        guard let h = userInfo["hostId"] as? String, !h.isEmpty else { return nil }
+        if let n = userInfo["seq"] as? NSNumber {
+            self.seq = n.int64Value
+        } else if let s = userInfo["seq"] as? String, let n = Int64(s) {
+            self.seq = n
+        } else {
+            return nil
+        }
+        self.hostId = h
+    }
+}
+
 /// A decoded push payload. The server sends `{ aps: {...}, sid, kind }`, so the
 /// routing fields sit at the top level of `userInfo`.
 public struct PushNotification: Sendable, Equatable {

@@ -33,6 +33,8 @@ export type ApnsPayload = {
   sid: string; // session id, for deep-linking + thread grouping
   kind: "needs-input" | "finished";
   session?: ApnsPayloadSession;
+  hostId?: string;
+  seq?: number;
 };
 
 export type ApnsResult = { ok: boolean; status: number; reason?: string };
@@ -162,9 +164,12 @@ export function apnsBody(payload: ApnsPayload): string {
       alert: { title: payload.title, body: payload.body },
       sound: "default",
       "thread-id": payload.sid,
+      "content-available": 1,
     },
     sid: payload.sid,
     kind: payload.kind,
+    ...(payload.hostId ? { hostId: payload.hostId } : {}),
+    ...(typeof payload.seq === "number" ? { seq: payload.seq } : {}),
     // Compact session snapshot for instant-render on tap (omitted when absent).
     ...(payload.session ? { session: payload.session } : {}),
   });
