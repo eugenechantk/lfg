@@ -16,8 +16,9 @@ Activities.
 |---|---|---|---|
 | A | Server: `/api/events/page` + push payloads carry `{hostId, seq}` + content-available | **Codex** (brief: `.codex/delegate/brief-phase2a-server.md`) | ✅ done, Claude-verified |
 | B | Client: remote-notification wake + BGAppRefreshTask → per-host delta sync via page endpoint | Claude | ✅ done, sim-verified (device caveat below) |
-| C | Client: sends via background URLSession + persisted pending list | Claude (spec) → decide | pending |
-| D | Live Activities: widget target, push-to-start, APNs liveactivity updates, entitlement | split later | pending |
+| C | Client: sends via background URLSession + persisted pending list | spec ready: `.codex/delegate/brief-phase2c-background-sends.md` — execution deferred until ios/LFG/* is quiet (twin session active); gates C1–C3 must run on sim/device | spec ✅ / exec pending |
+| D1 | Server: liveactivity APNs (token endpoints + store, pure payload builders, watcher hooks behind `LFG_LIVE_ACTIVITIES=1`) | **Codex** (brief: `.codex/delegate/brief-phase2d1-liveactivity-server.md`) | delegated, in flight |
+| D2 | Client: widget extension target (project.yml), `LFGSessionAttributes` shared type, push-to-start + update-token registration, frequent-updates entitlement | Claude — after D1 verified + twin idle (project.yml/xcodegen collides with active builds) | pending |
 
 ## A+B results (2026-07-10)
 
