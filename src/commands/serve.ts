@@ -1127,6 +1127,30 @@ export async function cmdServe() {
         return json({ ok: true, seq: journal.head(), ts: Date.now() });
       }
 
+      // ---- journaled event page (cursor-resumable, non-streaming) ----
+      // GET /api/events/page?since=<seq>&limit=<n>. Mirrors /api/events replay
+      // semantics for background wakes where iOS has a short fetch window and
+      // wants one bounded JSON page instead of holding an SSE stream.
+      if (path === "/api/events/page") {
+        const since = Number(url.searchParams.get("since") ?? "0");
+        const cursor = Number.isFinite(since) && since >= 0 ? Math.floor(since) : 0;
+        const rawLimit = Number(url.searchParams.get("limit") ?? "200");
+        const limit = Math.max(
+          1,
+          Math.min(1000, Number.isFinite(rawLimit) ? Math.floor(rawLimit) : 200),
+        );
+        const head = journal.head();
+        if (!journal.canServe(cursor)) {
+          console.log(`[events] page since=${cursor} limit=${limit} head=${head} served=0`);
+          return json({ events: [], head, canServe: false });
+        }
+        const events = journal.since(cursor, limit);
+        console.log(
+          `[events] page since=${cursor} limit=${limit} head=${head} served=${events.length}`,
+        );
+        return json({ events, head, canServe: true });
+      }
+
       // ---- journaled event stream (cursor-resumable) ----
       // GET /api/events?since=<seq>. Replays every journaled event after the
       // client's cursor, then streams live — one stream covers ALL sessions on
@@ -1367,7 +1391,10 @@ export async function cmdServe() {
         const device = await registerDevice({ token, env, owner: body?.owner ?? null });
         // A device just arrived — make sure the watcher is running (it self-skips
         // when push isn't configured, so this is a no-op without APNs creds).
-        startPushWatcher((l) => console.log(l));
+        startPushWatcher((l) => console.log(l), {
+          head: () => journal.head(),
+          hostId: () => hostInfo().hostId,
+        });
         return json({ ok: true, env: device.env });
       }
       if (path === "/api/push/unregister" && req.method === "POST") {
@@ -2310,7 +2337,10 @@ export async function cmdServe() {
 
   startAutoScheduler((l) => console.log(l));
   // Background push watcher — no-op unless APNs is configured (LFG_APNS_*).
-  startPushWatcher((l) => console.log(l));
+  startPushWatcher((l) => console.log(l), {
+    head: () => journal.head(),
+    hostId: () => hostInfo().hostId,
+  });
   // Client-independent queue pump: drains the hold-in-lfg outbound queue when
   // each agent goes idle (held messages must deliver even with the app closed).
   startQueuePump();

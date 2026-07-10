@@ -7,7 +7,7 @@ import {
   type SessionState,
   type TickDeps,
 } from "./watcher.ts";
-import type { ApnsConfig, ApnsPayload } from "./apns.ts";
+import { apnsBody, type ApnsConfig, type ApnsPayload } from "./apns.ts";
 
 const seed = (
   busy: boolean,
@@ -155,6 +155,56 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
     expect(sent.length).toBe(1);
     expect(sent[0].kind).toBe("needs-input");
     expect(sent[0].body).toBe("Approve the plan?");
+  });
+
+  test("transition payload carries background wake metadata when deps provide it", async () => {
+    const sent: ApnsPayload[] = [];
+    const prior = new Map<string, PriorState>();
+    let state = obs(true, false);
+    const deps: TickDeps = {
+      sessions: async () => [{ sessionId: "s1", title: "Job", tmuxTarget: "t" }],
+      observe: async () => state,
+      devices: async () => [{ token: "a", env: "sandbox" }],
+      cfg,
+      send: async (_d, p) => {
+        sent.push(p);
+        return { ok: true, status: 200 };
+      },
+      head: () => 123,
+      hostId: () => "host-1",
+      now: () => 1000,
+    };
+    await runPushTick(prior, deps);
+    state = obs(false, false);
+    await runPushTick(prior, deps);
+    const body = JSON.parse(apnsBody(sent[0]));
+    expect(body.aps["content-available"]).toBe(1);
+    expect(body.hostId).toBe("host-1");
+    expect(body.seq).toBe(123);
+  });
+
+  test("transition payload omits journal wake keys when deps do not provide them", async () => {
+    const sent: ApnsPayload[] = [];
+    const prior = new Map<string, PriorState>();
+    let state = obs(true, false);
+    const deps: TickDeps = {
+      sessions: async () => [{ sessionId: "s1", title: "Job", tmuxTarget: "t" }],
+      observe: async () => state,
+      devices: async () => [{ token: "a", env: "sandbox" }],
+      cfg,
+      send: async (_d, p) => {
+        sent.push(p);
+        return { ok: true, status: 200 };
+      },
+      now: () => 1000,
+    };
+    await runPushTick(prior, deps);
+    state = obs(false, false);
+    await runPushTick(prior, deps);
+    const body = JSON.parse(apnsBody(sent[0]));
+    expect(body.aps["content-available"]).toBe(1);
+    expect("hostId" in body).toBe(false);
+    expect("seq" in body).toBe(false);
   });
 
   test("a 410/BadDeviceToken response prunes the device", async () => {
