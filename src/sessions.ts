@@ -5,7 +5,7 @@ import { statSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "no
 import { join, basename } from "node:path";
 import { tmpdir } from "node:os";
 import { tmuxTargetForPid } from "./tmux";
-import { isManagedName } from "./managed";
+import { listManaged, type ManagedSession } from "./managed";
 import {
   listEntries as listAisdkEntries,
   isPidAlive,
@@ -95,6 +95,9 @@ export type Session = {
   statusReason: "model_unavailable" | "out_of_credits" | null;
   // Human-readable one-liner for the banner (e.g. the dead model id), or null.
   statusDetail: string | null;
+  // Present only for orchestrator-spawned worker sessions. Omitted for
+  // untagged rows so existing clients see byte-identical JSON.
+  parentSessionId?: string;
 };
 
 // Classify a session's health from the most recent assistant turn. Claude Code
@@ -903,6 +906,16 @@ function modelAlias(id: string | null | undefined): string | null {
   return id;
 }
 
+export function managedFieldsForTmuxName(
+  tmuxName: string | null | undefined,
+  managedByName: Map<string, ManagedSession>,
+): { managed: boolean; parentSessionId?: string } {
+  const rec = tmuxName ? managedByName.get(tmuxName) : undefined;
+  return rec?.parentSessionId
+    ? { managed: !!rec, parentSessionId: rec.parentSessionId }
+    : { managed: !!rec };
+}
+
 // The model of the most recent assistant turn. Claude stamps every assistant
 // line with `message.model`, so the tail tells us the *live* model even after a
 // mid-session `/model` switch (the launch `--model` arg goes stale). Returns
@@ -1053,6 +1066,7 @@ async function listSessionsUncached(): Promise<Session[]> {
 
   const overrides = await readTitleOverrides();
   const assigns = userAssignments();
+  const managedByName = new Map(listManaged().map((m) => [m.tmuxName, m] as const));
   const out: Session[] = [];
   for (const e of enriched) {
     let transcriptPath: string | null = null;
@@ -1127,7 +1141,7 @@ async function listSessionsUncached(): Promise<Session[]> {
       // pane would hit the wrong session.
       tmuxTarget,
       tmuxName,
-      managed: isManagedName(tmuxName),
+      ...managedFieldsForTmuxName(tmuxName, managedByName),
       assignedUser: tmuxName ? (assigns[tmuxName] ?? null) : null,
       model,
       status: health.status,
@@ -1207,7 +1221,7 @@ async function listSessionsUncached(): Promise<Session[]> {
       last,
       tmuxTarget,
       tmuxName,
-      managed: isManagedName(tmuxName),
+      ...managedFieldsForTmuxName(tmuxName, managedByName),
       assignedUser: tmuxName ? (assigns[tmuxName] ?? null) : null,
       // Codex model isn't switchable mid-session from lfg; surface the launch
       // arg verbatim (its names are catalog-driven, not the Claude aliases).
@@ -1292,7 +1306,7 @@ async function listSessionsUncached(): Promise<Session[]> {
       // No pane I/O — but keep the supervisor name so kill + managed badge work.
       tmuxTarget: null,
       tmuxName: e.tmuxName || null,
-      managed: isManagedName(e.tmuxName),
+      ...managedFieldsForTmuxName(e.tmuxName, managedByName),
       assignedUser: e.tmuxName ? (assigns[e.tmuxName] ?? null) : null,
       // Codex slugs and opencode "provider/model" ids aren't Claude aliases —
       // pass them through raw. modelAlias would leave them unchanged anyway, but

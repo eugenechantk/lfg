@@ -53,8 +53,9 @@ curl -s -X POST $BASE/api/sessions/<id>/interrupt
 # Check delivery status of things you sent
 curl -s $BASE/api/sessions/<id>/queue | jq '.queue'
 
-# Start a new worker session (defaults to the configured repo; pass cwd to change)
-curl -s -X POST $BASE/api/sessions/new -H 'Content-Type: application/json' -d '{"prompt":"investigate the failing deploy"}' | jq '{sessionId, tmuxName}'
+# Start a new worker session (defaults to the configured repo; pass cwd to change).
+# Include your own sessionId as parentSessionId so worker sessions fold under Agents.
+curl -s -X POST $BASE/api/sessions/new -H 'Content-Type: application/json' -d '{"prompt":"investigate the failing deploy","parentSessionId":"<your own sessionId>"}' | jq '{sessionId, tmuxName}'
 
 # Close a session you started
 curl -s -X POST $BASE/api/sessions/<id>/close

@@ -67,7 +67,7 @@ import {
   panePidForSession,
   isBusy,
 } from "../tmux.ts";
-import { addManaged, removeManaged } from "../managed.ts";
+import { addManaged, normalizeParentSessionId, removeManaged } from "../managed.ts";
 import { PtyBridge, termSessionName } from "../pty.ts";
 import { capturePaneScroll, capturePaneEscaped, paneWidth, ensureFolderTrusted } from "../tmux.ts";
 import { rootDir, inboxDir, setInbox, createDir } from "../dirs.ts";
@@ -1529,6 +1529,7 @@ export async function cmdServe() {
           voice?: boolean;
           model?: string;
           agent?: "claude" | "codex" | "aisdk" | "codex-aisdk" | "opencode";
+          parentSessionId?: unknown;
         } | null;
         // Default flip (Task B): with no agent specified, the default Claude path
         // now goes through the AI SDK ("aisdk") rather than the Claude CLI. Every
@@ -1579,6 +1580,7 @@ export async function cmdServe() {
         }
         if (!cwd) return err(400, "directory not found");
         ensureFolderTrusted(cwd);
+        const parentSessionId = normalizeParentSessionId(body?.parentSessionId);
         const tmuxName = `lfg-${randomBytes(3).toString("hex")}`;
         // For the voice orchestrator, append a live snapshot of every OTHER
         // session (built before this one spawns, so it's not in the list) so its
@@ -1630,7 +1632,13 @@ export async function cmdServe() {
                     })
                   : spawnManagedSession({ name: tmuxName, cwd, prompt, model });
         if (!r.ok) return err(502, r.error || "failed to start session");
-        addManaged({ tmuxName, cwd, createdAt: Date.now(), agent });
+        addManaged({
+          tmuxName,
+          cwd,
+          createdAt: Date.now(),
+          agent,
+          ...(parentSessionId ? { parentSessionId } : {}),
+        });
         // Tag the new session to whoever created it so it lands in their filter
         // immediately (best-effort: assignUser ignores an unknown email).
         if (body?.user) assignUser(tmuxName, body.user);
