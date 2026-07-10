@@ -11,8 +11,16 @@ let package = Package(
     products: [
         .library(name: "LFGCore", targets: ["LFGCore"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/groue/GRDB.swift.git", .upToNextMajor(from: "7.0.0")),
+    ],
     targets: [
-        .target(name: "LFGCore"),
+        .target(
+            name: "LFGCore",
+            dependencies: [
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ]
+        ),
         .testTarget(name: "LFGCoreTests", dependencies: ["LFGCore"]),
     ]
 )

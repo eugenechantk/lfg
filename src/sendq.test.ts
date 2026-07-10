@@ -6,6 +6,7 @@ const GRACE = 10_000;
 function qmsg(over: Partial<QueuedMsg> = {}): QueuedMsg {
   return {
     id: "m1",
+    clientId: "c1",
     text: "Actually never mind we can use dc instead",
     status: "queued",
     attempts: 1,

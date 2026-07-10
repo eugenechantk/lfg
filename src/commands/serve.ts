@@ -93,7 +93,22 @@ const SELF_REPO = PATHS.root;
 const CLAUDE_MODELS = ["fable", "opus", "sonnet", "haiku"];
 // Models the "aisdk" session kind accepts (the provider maps these aliases).
 const AISDK_MODELS = ["opus", "sonnet", "haiku"];
-import { enqueueMessage, listQueue, retryMessage, clearResolved, reconcileQueued, getMessage, removeMessage, sendNow, startQueuePump } from "../sendq.ts";
+import {
+  enqueueMessage,
+  listQueue,
+  retryMessage,
+  clearResolved,
+  reconcileQueued,
+  getMessage,
+  removeMessage,
+  sendNow,
+  startQueuePump,
+  setSendqJournal,
+  setSendqStore,
+  getMessageByClientId,
+  recordImmediateMessage,
+} from "../sendq.ts";
+import { SendqStore } from "../sendq-store.ts";
 
 // Relaunch a closed claude session via `claude --resume <id>` in a fresh managed
 // tmux pane, preserving the full conversation. Shared by the explicit
@@ -524,7 +539,10 @@ export async function cmdServe() {
   // Event journal + the one global session pump (replaces per-connection pump
   // loops for /api/events consumers; /api/live/stream keeps its own for
   // back-compat until old clients are gone). See src/journal.ts.
-  const journal = Journal.open(join(PATHS.data, "journal.db"));
+  const journalPath = join(PATHS.data, "journal.db");
+  const journal = Journal.open(journalPath);
+  setSendqJournal(journal);
+  setSendqStore(SendqStore.open(journalPath));
   startJournalPump(journal, {
     renderMsg: (m) => msgWithHtml(m),
     resolvePrompt: (tp, pane) => resolveSessionPrompt(tp, pane),
@@ -1716,9 +1734,24 @@ export async function cmdServe() {
         if (m && req.method === "POST") {
           const body = (await req.json().catch(() => null)) as {
             text?: string;
+            clientId?: unknown;
           } | null;
           const text = body?.text?.trim();
           if (!text) return err(400, "expected { text }");
+          if (
+            body?.clientId !== undefined &&
+            (typeof body.clientId !== "string" || body.clientId.length > 128)
+          ) {
+            return err(400, "clientId must be a string <= 128 chars");
+          }
+          const clientId = typeof body?.clientId === "string" && body.clientId
+            ? body.clientId
+            : crypto.randomUUID();
+          const existing = getMessageByClientId(m[1], clientId);
+          if (existing) {
+            const { duplicate: _duplicate, ...msgBody } = existing;
+            return json({ ok: true, msg: msgBody, clientId: existing.clientId, duplicate: true });
+          }
           const sess = (await listSessions()).find((s) => s.sessionId === m[1]);
           // The session's pane is gone — it was reaped while idle (box reboot,
           // host restart, the user closing it) but its transcript survives on
@@ -1735,6 +1768,8 @@ export async function cmdServe() {
               return err(404, "session not found");
             const out = await resumeClosedSession({ sessionId: m[1], prompt: text });
             if (!out.ok) return err(out.status, out.error);
+            const msg = recordImmediateMessage(m[1], text, clientId);
+            const { duplicate: _duplicate, ...msgBody } = msg;
             return json({
               ok: true,
               resumed: true,
@@ -1742,7 +1777,8 @@ export async function cmdServe() {
               resumedFrom: m[1],
               tmuxName: out.tmuxName,
               cwd: out.cwd,
-              msg: { id: randomBytes(8).toString("hex"), text, status: "delivered" },
+              clientId: msg.clientId,
+              msg: msgBody,
             });
           }
           // aisdk / codex-aisdk sessions have no pane — push the turn through the
@@ -1758,14 +1794,26 @@ export async function cmdServe() {
           ) {
             const key = findAisdkEntryByAnyId(m[1])?.sessionId ?? m[1];
             appendAisdkCmd(key, { type: "send", text });
-            return json({ ok: true, msg: { id: randomBytes(8).toString("hex"), text, status: "delivered" } });
+            const msg = recordImmediateMessage(m[1], text, clientId);
+            const { duplicate: _duplicate, ...msgBody } = msg;
+            return json({
+              ok: true,
+              clientId: msg.clientId,
+              msg: msgBody,
+            });
           }
           if (!sess.tmuxTarget)
             return err(409, "session is not in a tmux pane — cannot send");
           // Enqueue and return immediately; the queue confirms delivery in the
           // background and the client tracks status via the `queue` SSE event.
-          const msg = enqueueMessage(m[1], text);
-          return json({ ok: true, msg });
+          const msg = enqueueMessage(m[1], text, { clientId });
+          const { duplicate: _duplicate, ...msgBody } = msg;
+          return json({
+            ok: true,
+            msg: msgBody,
+            clientId: msg.clientId,
+            ...(msg.duplicate ? { duplicate: true } : {}),
+          });
         }
       }
 

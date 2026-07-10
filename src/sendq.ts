@@ -10,7 +10,7 @@
 // that Claude accepted it). It retries a stranded Enter, clears+retypes a
 // dropped type, and only marks a message failed when it truly never landed.
 
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -29,9 +29,12 @@ import {
 } from "./tmux.ts";
 import { listSessions, resolveTranscript, recentMessages } from "./sessions.ts";
 import { PATHS } from "./config.ts";
+import type { Journal } from "./journal.ts";
+import { SendqStore, type SendqRow } from "./sendq-store.ts";
 
 export type QueuedMsg = {
   id: string;
+  clientId: string;
   text: string;
   // pending: held in lfg's own queue — either behind an earlier send, or because
   // the agent is busy (hold-in-lfg: we do NOT push into Claude's native queue
@@ -53,13 +56,131 @@ export type QueuedMsg = {
   redeliveries?: number;
 };
 
+export type EnqueueOptions = {
+  clientId?: string;
+  /** Test-only escape hatch; production callers leave delivery auto-starting. */
+  autoKick?: boolean;
+};
+
+export type EnqueuedMsg = QueuedMsg & { duplicate?: true };
+export type QueueListMsg = Omit<QueuedMsg, "clientId">;
+
 type SessionQueue = { msgs: QueuedMsg[]; running: boolean };
 
 const queues = new Map<string, SessionQueue>();
+let store: SendqStore | null = null;
+let recovered = false;
+let journal: Journal | null = null;
+let lastCreatedAt = 0;
 
 // Keep the per-session list from growing unbounded; terminal rows older than
 // this many are pruned on each enqueue.
 const KEEP_TERMINAL = 12;
+
+function fromRow(row: SendqRow): QueuedMsg {
+  return {
+    id: row.id,
+    clientId: row.clientId,
+    text: row.text,
+    status: row.status,
+    error: row.error ?? undefined,
+    attempts: row.attempts,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    redeliveries: row.redeliveries || undefined,
+  };
+}
+
+function duplicateByClientId(sessionId: string, clientId: string): EnqueuedMsg | null {
+  const existing = queues.get(sessionId)?.msgs.find((m) => m.clientId === clientId);
+  if (existing) return Object.assign({ ...existing }, { duplicate: true as const });
+  const persisted = store?.findByClientId(sessionId, clientId);
+  return persisted ? Object.assign(fromRow(persisted), { duplicate: true as const }) : null;
+}
+
+function persistMsg(sessionId: string, msg: QueuedMsg): void {
+  store?.upsert({
+    id: msg.id,
+    sessionId,
+    clientId: msg.clientId,
+    text: msg.text,
+    status: msg.status,
+    error: msg.error ?? null,
+    attempts: msg.attempts,
+    redeliveries: msg.redeliveries ?? 0,
+    createdAt: msg.createdAt,
+    updatedAt: msg.updatedAt,
+  });
+}
+
+function deletePersisted(ids: string[]): void {
+  store?.deleteMany(ids);
+}
+
+function nextCreatedAt(): number {
+  lastCreatedAt = Math.max(Date.now(), lastCreatedAt + 1);
+  return lastCreatedAt;
+}
+
+function journalDelivered(sessionId: string, msg: QueuedMsg, userTurnId: string | null): void {
+  journal?.append(sessionId, "queue", {
+    kind: "delivered",
+    clientId: msg.clientId,
+    msgId: msg.id,
+    userTurnId,
+  });
+}
+
+function journalFailed(sessionId: string, msg: QueuedMsg): void {
+  journal?.append(sessionId, "queue", {
+    kind: "failed",
+    clientId: msg.clientId,
+    msgId: msg.id,
+  });
+}
+
+function ensureRecovered(): void {
+  if (!store || recovered) return;
+  recovered = true;
+  for (const row of store.recoverable()) {
+    const msg = fromRow(row);
+    if (msg.status === "sending") {
+      msg.status = "pending";
+      msg.updatedAt = Date.now();
+      persistMsg(row.sessionId, msg);
+    }
+    const s = q(row.sessionId);
+    if (!s.msgs.some((m) => m.id === msg.id)) s.msgs.push(msg);
+  }
+}
+
+export function setSendqStore(next: SendqStore | null): void {
+  store = next;
+  recovered = false;
+  if (store) ensureRecovered();
+}
+
+export function setSendqJournal(next: Journal | null): void {
+  journal = next;
+}
+
+export function __resetSendqForTests(): void {
+  stopQueuePump();
+  queues.clear();
+  store = null;
+  recovered = false;
+  journal = null;
+  lastCreatedAt = 0;
+}
+
+export function __journalQueueTerminalForTests(
+  sessionId: string,
+  msg: QueuedMsg,
+  userTurnId: string | null = null,
+): void {
+  if (msg.status === "delivered") journalDelivered(sessionId, msg, userTurnId);
+  else if (msg.status === "failed") journalFailed(sessionId, msg);
+}
 
 function q(sessionId: string): SessionQueue {
   let s = queues.get(sessionId);
@@ -70,19 +191,58 @@ function q(sessionId: string): SessionQueue {
   return s;
 }
 
-export function listQueue(sessionId: string): QueuedMsg[] {
-  return queues.get(sessionId)?.msgs ?? [];
+export function listQueue(sessionId: string): QueueListMsg[] {
+  ensureRecovered();
+  return (queues.get(sessionId)?.msgs ?? []).map(({ clientId: _clientId, ...msg }) => msg);
 }
 
 export function getMessage(sessionId: string, id: string): QueuedMsg | null {
+  ensureRecovered();
   return queues.get(sessionId)?.msgs.find((m) => m.id === id) ?? null;
 }
 
-export function enqueueMessage(sessionId: string, text: string): QueuedMsg {
-  const s = q(sessionId);
-  const now = Date.now();
+export function getMessageByClientId(sessionId: string, clientId: string): EnqueuedMsg | null {
+  ensureRecovered();
+  return duplicateByClientId(sessionId, clientId);
+}
+
+export function recordImmediateMessage(
+  sessionId: string,
+  text: string,
+  clientId: string,
+): EnqueuedMsg {
+  ensureRecovered();
+  const existing = duplicateByClientId(sessionId, clientId);
+  if (existing) return existing;
+  const now = nextCreatedAt();
   const msg: QueuedMsg = {
     id: randomBytes(8).toString("hex"),
+    clientId,
+    text,
+    status: "delivered",
+    attempts: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+  persistMsg(sessionId, msg);
+  // Pre-delivered rows (resume-path sends confirmed outside the pump) need the
+  // ack too — the client's outbox resolves bubbles by this event, whichever
+  // path delivered the text. userTurnId is unknown here; null per protocol.
+  journalDelivered(sessionId, msg, null);
+  store?.pruneTerminal(sessionId, KEEP_TERMINAL);
+  return msg;
+}
+
+export function enqueueMessage(sessionId: string, text: string, opts: EnqueueOptions = {}): EnqueuedMsg {
+  ensureRecovered();
+  const clientId = opts.clientId || randomUUID();
+  const existing = duplicateByClientId(sessionId, clientId);
+  if (existing) return existing;
+  const s = q(sessionId);
+  const now = nextCreatedAt();
+  const msg: QueuedMsg = {
+    id: randomBytes(8).toString("hex"),
+    clientId,
     text,
     status: "pending",
     attempts: 0,
@@ -90,12 +250,15 @@ export function enqueueMessage(sessionId: string, text: string): QueuedMsg {
     updatedAt: now,
   };
   s.msgs.push(msg);
+  persistMsg(sessionId, msg);
   pruneTerminal(s);
-  kick(sessionId);
+  store?.pruneTerminal(sessionId, KEEP_TERMINAL);
+  if (opts.autoKick !== false) kick(sessionId);
   return msg;
 }
 
 export function retryMessage(sessionId: string, id: string): QueuedMsg | null {
+  ensureRecovered();
   const s = queues.get(sessionId);
   const msg = s?.msgs.find((m) => m.id === id);
   if (!s || !msg) return null;
@@ -104,24 +267,27 @@ export function retryMessage(sessionId: string, id: string): QueuedMsg | null {
   msg.error = undefined;
   msg.attempts = 0;
   msg.updatedAt = Date.now();
+  persistMsg(sessionId, msg);
   kick(sessionId);
   return msg;
 }
 
-// Drop messages the user no longer needs to see — everything that's reached a
-// terminal state (delivered/queued/failed). In-flight messages (pending/
+// Drop messages the user no longer needs to see. In-flight messages (pending/
 // sending) stay so a clear never silently abandons a send mid-delivery.
 export function clearResolved(sessionId: string): number {
+  ensureRecovered();
   const s = queues.get(sessionId);
   if (!s) return 0;
   const before = s.msgs.length;
+  const removed = s.msgs.filter((m) => m.status !== "pending" && m.status !== "sending");
   s.msgs = s.msgs.filter((m) => m.status === "pending" || m.status === "sending");
+  deletePersisted(removed.map((m) => m.id));
   return before - s.msgs.length;
 }
 
 function pruneTerminal(s: SessionQueue) {
   const terminal = s.msgs.filter(
-    (m) => m.status === "delivered" || m.status === "queued" || m.status === "failed",
+    (m) => m.status === "delivered" || m.status === "failed",
   );
   if (terminal.length <= KEEP_TERMINAL) return;
   const drop = new Set(
@@ -130,6 +296,7 @@ function pruneTerminal(s: SessionQueue) {
       .slice(0, terminal.length - KEEP_TERMINAL),
   );
   s.msgs = s.msgs.filter((m) => !drop.has(m));
+  deletePersisted([...drop].map((m) => m.id));
 }
 
 async function sessionTarget(sessionId: string): Promise<string | null> {
@@ -149,6 +316,7 @@ async function agentBusy(sessionId: string): Promise<boolean> {
 }
 
 function kick(sessionId: string) {
+  ensureRecovered();
   const s = q(sessionId);
   if (s.running) return;
   if (!s.msgs.some((m) => m.status === "pending")) return;
@@ -166,13 +334,21 @@ function kick(sessionId: string) {
         if (await agentBusy(sessionId)) break;
         next.status = "sending";
         next.updatedAt = Date.now();
+        persistMsg(sessionId, next);
+        let deliveredUserTurnId: string | null = null;
         try {
-          await deliver(sessionId, next);
+          const result = await deliver(sessionId, next);
+          deliveredUserTurnId = result.userTurnId;
         } catch (e) {
           next.status = "failed";
           next.error = e instanceof Error ? e.message : String(e);
         }
         next.updatedAt = Date.now();
+        persistMsg(sessionId, next);
+        if (next.status === "delivered") journalDelivered(sessionId, next, deliveredUserTurnId);
+        else if (next.status === "failed") journalFailed(sessionId, next);
+        pruneTerminal(s);
+        store?.pruneTerminal(sessionId, KEEP_TERMINAL);
       }
     } finally {
       s.running = false;
@@ -188,7 +364,9 @@ function kick(sessionId: string) {
 let pumpTimer: ReturnType<typeof setInterval> | null = null;
 export function startQueuePump(intervalMs = 1000): void {
   if (pumpTimer) return;
+  ensureRecovered();
   pumpTimer = setInterval(() => {
+    ensureRecovered();
     for (const [sid, s] of queues) {
       if (s.running) continue;
       if (s.msgs.some((m) => m.status === "pending")) kick(sid);
@@ -207,11 +385,13 @@ export function stopQueuePump(): void {
 // typed ("sending") can't be safely pulled mid-keystroke, and a terminal one is
 // nothing to cancel. Returns true if it was removed.
 export function removeMessage(sessionId: string, id: string): boolean {
+  ensureRecovered();
   const s = queues.get(sessionId);
   if (!s) return false;
   const m = s.msgs.find((x) => x.id === id);
   if (!m || m.status === "sending" || m.status === "delivered") return false;
   s.msgs = s.msgs.filter((x) => x.id !== id);
+  store?.delete(id);
   return true;
 }
 
@@ -220,6 +400,7 @@ export function removeMessage(sessionId: string, id: string): boolean {
 // pump/kick delivers it the moment the Escape lands. A message that already
 // reached Claude's own queue (status "queued") is run by the interrupt directly.
 export async function sendNow(sessionId: string, id: string): Promise<boolean> {
+  ensureRecovered();
   const s = queues.get(sessionId);
   if (!s) return false;
   const m = s.msgs.find((x) => x.id === id);
@@ -292,18 +473,19 @@ function logDeliverFailure(sessionId: string, msg: QueuedMsg, target: string | n
   } catch {}
 }
 
-async function transcriptUserMatchCount(
+async function transcriptUserMatches(
   transcriptPath: string | null,
   needle: string,
-): Promise<number> {
-  if (!transcriptPath) return 0;
+): Promise<{ count: number; newestId: string | null }> {
+  if (!transcriptPath) return { count: 0, newestId: null };
   try {
     const msgs = await recentMessages(transcriptPath, 120);
-    return msgs.filter(
+    const matches = msgs.filter(
       (m) => m.role === "user" && m.kind === "text" && norm(m.text).includes(needle),
-    ).length;
+    );
+    return { count: matches.length, newestId: matches[matches.length - 1]?.id ?? null };
   } catch {
-    return 0;
+    return { count: 0, newestId: null };
   }
 }
 
@@ -370,6 +552,7 @@ export function reconcileQueuedCore(
 // re-drive it so it actually gets picked up now that the agent is ready (see
 // reconcileQueuedCore). Returns true if anything changed so the caller re-emits.
 export async function reconcileQueued(sessionId: string): Promise<boolean> {
+  ensureRecovered();
   const s = queues.get(sessionId);
   if (!s) return false;
   const pending = s.msgs.filter((m) => m.status === "queued");
@@ -382,9 +565,8 @@ export async function reconcileQueued(sessionId: string): Promise<boolean> {
   } catch {
     return false;
   }
-  const recentUserTexts = recent
-    .filter((r) => r.role === "user" && r.kind === "text")
-    .map((r) => r.text);
+  const recentUserMsgs = recent.filter((r) => r.role === "user" && r.kind === "text");
+  const recentUserTexts = recentUserMsgs.map((r) => r.text);
 
   // We can only re-drive a queued message once we've confirmed the session is
   // idle — a busy Claude may still be mid-turn with the message legitimately
@@ -400,10 +582,46 @@ export async function reconcileQueued(sessionId: string): Promise<boolean> {
     idleConfirmed = pane != null && !isBusy(pane);
   }
 
+  const before = new Map(
+    s.msgs.map((m) => [
+      m.id,
+      {
+        status: m.status,
+        attempts: m.attempts,
+        redeliveries: m.redeliveries ?? 0,
+        error: m.error,
+      },
+    ]),
+  );
   const { changed, kick: needsKick } = reconcileQueuedCore(s.msgs, recentUserTexts, {
     idleConfirmed,
     now,
   });
+  if (changed) {
+    for (const m of s.msgs) {
+      const prev = before.get(m.id);
+      if (!prev) continue;
+      const redeliveries = m.redeliveries ?? 0;
+      if (
+        prev.status === m.status &&
+        prev.attempts === m.attempts &&
+        prev.redeliveries === redeliveries &&
+        prev.error === m.error
+      ) {
+        continue;
+      }
+      persistMsg(sessionId, m);
+      if (prev.status !== "delivered" && m.status === "delivered") {
+        const needle = norm(m.text).slice(0, NEEDLE_LEN);
+        const match = [...recentUserMsgs].reverse().find((r) => norm(r.text).includes(needle));
+        journalDelivered(sessionId, m, match?.id ?? null);
+      } else if (prev.status !== "failed" && m.status === "failed") {
+        journalFailed(sessionId, m);
+      }
+    }
+    pruneTerminal(s);
+    store?.pruneTerminal(sessionId, KEEP_TERMINAL);
+  }
   // A re-driven message is back to "pending"; run the delivery loop so it's
   // actually (re)submitted to the now-idle agent. kick() no-ops if already busy.
   if (needsKick) kick(sessionId);
@@ -422,17 +640,17 @@ function clearFeedbackPrompt(target: string): boolean {
   return false;
 }
 
-async function deliver(sessionId: string, msg: QueuedMsg): Promise<void> {
+async function deliver(sessionId: string, msg: QueuedMsg): Promise<{ userTurnId: string | null }> {
   const sess = (await listSessions()).find((s) => s.sessionId === sessionId);
   const target = sess?.tmuxTarget ?? null;
   if (!target) {
     msg.status = "failed";
     msg.error = "session is not in a tmux pane";
-    return;
+    return { userTurnId: null };
   }
   const transcriptPath = await resolveTranscript(sessionId);
   const needle = norm(msg.text).slice(0, NEEDLE_LEN);
-  const transcriptMatchesBefore = await transcriptUserMatchCount(transcriptPath, needle);
+  const transcriptMatchesBefore = await transcriptUserMatches(transcriptPath, needle);
 
   // Clear any session-rating overlay first — it swallows Enter and would
   // otherwise strand every send with "never left the input box".
@@ -473,7 +691,7 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<void> {
     if (attempt === 1) {
       msg.status = "failed";
       msg.error = "a prompt/selector wouldn't dismiss — answer it first";
-      return;
+      return { userTurnId: null };
     }
   }
 
@@ -486,6 +704,7 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<void> {
   while (msg.attempts < MAX_ATTEMPTS) {
     msg.attempts++;
     msg.updatedAt = Date.now();
+    persistMsg(sessionId, msg);
 
     // Only (re)insert when our draft isn't already sitting in the box (a previous
     // attempt may have inserted it but failed to submit — reinserting doubles it).
@@ -532,11 +751,12 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<void> {
     for (let i = 0; i < 24; i++) {
       await sleep(150);
       const held = composerHoldsInput(target, needle);
-      const transcriptMatchesNow = await transcriptUserMatchCount(transcriptPath, needle);
-      if (transcriptMatchesNow > transcriptMatchesBefore) {
+      const transcriptMatchesNow = await transcriptUserMatches(transcriptPath, needle);
+      if (transcriptMatchesNow.count > transcriptMatchesBefore.count) {
         msg.status = "delivered";
         msg.error = undefined;
-        return;
+        persistMsg(sessionId, msg);
+        return { userTurnId: transcriptMatchesNow.newestId };
       }
       // held === false: composer visible and our draft is gone.
       // held === null: composer vanished — a selector/overlay opened right after
@@ -553,7 +773,8 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<void> {
         const isCommand = msg.text.trimStart().startsWith("/");
         msg.status = isCommand ? "delivered" : "queued";
         msg.error = undefined;
-        return;
+        persistMsg(sessionId, msg);
+        return { userTurnId: null };
       }
     }
     // Still in the box → the Enter didn't submit. Loop: we'll skip re-inserting
@@ -562,5 +783,7 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<void> {
 
   msg.status = "failed";
   msg.error = "message never left the input box after retries";
+  persistMsg(sessionId, msg);
   logDeliverFailure(sessionId, msg, target);
+  return { userTurnId: null };
 }
