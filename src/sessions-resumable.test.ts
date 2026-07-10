@@ -5,7 +5,11 @@ import { join } from "node:path";
 
 const home = join(tmpdir(), `lfg-resumable-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const projects = join(home, ".claude", "projects");
+const data = join(home, "data");
 process.env.LFG_CLAUDE_PROJECTS_DIR = projects;
+process.env.LFG_DATA = data;
+mkdirSync(data, { recursive: true });
+writeFileSync(join(data, "host-id"), "host-a\n");
 
 const { listResumable } = await import("./sessions.ts");
 
@@ -16,6 +20,7 @@ beforeEach(() => {
 
 afterAll(() => {
   delete process.env.LFG_CLAUDE_PROJECTS_DIR;
+  delete process.env.LFG_DATA;
   rmSync(home, { recursive: true, force: true });
 });
 
@@ -58,6 +63,26 @@ describe("listResumable pagination", () => {
 
     const page = await listResumable();
     expect(page.sessions).toHaveLength(1);
+    expect(page.nextBefore).toBeNull();
+  });
+
+  test("excludes sessions with a fresh foreign lease", async () => {
+    const leased = "00000000-0000-4000-8000-000000000201";
+    const resumable = "00000000-0000-4000-8000-000000000202";
+    writeTranscript("p", leased, 2_000);
+    writeTranscript("p", resumable, 1_000);
+    writeFileSync(
+      join(projects, "p", `${leased}.lease.json`),
+      JSON.stringify({
+        hostId: "host-b",
+        pid: 99,
+        acquiredAt: Date.now(),
+        heartbeatAt: Date.now(),
+      }),
+    );
+
+    const page = await listResumable({ limit: 10 });
+    expect(page.sessions.map((s) => s.sessionId)).toEqual([resumable]);
     expect(page.nextBefore).toBeNull();
   });
 });

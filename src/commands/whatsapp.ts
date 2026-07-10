@@ -30,6 +30,7 @@ import {
   findEntryByAnyId as findAisdkEntryByAnyId,
   readEntry as readAisdkEntry,
 } from "../aisdk-registry.ts";
+import { acquireLease, releaseLease } from "../leases.ts";
 
 const HELP = `lfg whatsapp — WhatsApp group sidecar agent
 
@@ -387,6 +388,7 @@ async function handleAgentCommand(sock: WASocket, inbound: Inbound, command: str
     if (s?.tmuxName) {
       tmuxKillSession(s.tmuxName);
       removeManaged(s.tmuxName);
+      await releaseLease(s.sessionId);
     }
     delete store.groups[inbound.groupJid];
     await writeStore(store);
@@ -457,6 +459,9 @@ async function getOrCreateGroupSession(sock: WASocket, groupJid: string): Promis
     }
   }
   if (!sessionId) throw new Error("managed session started but no sessionId was discovered");
+  const entry = aisdkId ? readAisdkEntry(aisdkId) : null;
+  const leasePid = entry?.harnessPid ?? panePidForSession(tmuxName);
+  if (leasePid) await acquireLease(sessionId, leasePid);
 
   const rec: SavedGroupSession = {
     groupJid,

@@ -76,6 +76,7 @@ import type { ServerWebSocket } from "bun";
 import { appendCmd as appendAisdkCmd, removeEntry as removeAisdkEntry, readEntry as readAisdkEntry, findEntryByAnyId as findAisdkEntryByAnyId } from "../aisdk-registry.ts";
 import { markClosed } from "../closing.ts";
 import { assignUser, userRoster } from "../users.ts";
+import { acquireLease, foreignFresh, releaseLease, renewLease } from "../leases.ts";
 import { registerDevice, unregisterDevice, deviceCount } from "../push/store.ts";
 import { upsertLiveActivityToken } from "../push/liveactivity-store.ts";
 import { startPushWatcher, pushConfigured } from "../push/watcher.ts";
@@ -118,7 +119,7 @@ import { SendqStore } from "../sendq-store.ts";
 // from the pidfile (like /new) and hand back so the client can re-point at it.
 type ResumeOutcome =
   | { ok: true; tmuxName: string; cwd: string; newId: string | null; alreadyLive?: boolean }
-  | { ok: false; status: number; error: string };
+  | { ok: false; status: number; error: string; liveOn?: string };
 
 async function resumeClosedSession(opts: {
   sessionId: string;
@@ -134,6 +135,9 @@ async function resumeClosedSession(opts: {
   const live = (await listSessions()).find((s) => s.sessionId === sessionId);
   if (live)
     return { ok: true, tmuxName: live.tmuxName ?? "", cwd: live.cwd ?? "", newId: sessionId, alreadyLive: true };
+  const liveOn = await foreignFresh(sessionId);
+  if (liveOn)
+    return { ok: false, status: 409, error: "session is live on another host", liveOn };
   const transcript = await resolveTranscript(sessionId);
   if (!transcript) return { ok: false, status: 404, error: "no transcript found for that session" };
   // claude-only: resume drives the claude CLI, and codex/aisdk rollouts don't
@@ -151,11 +155,16 @@ async function resumeClosedSession(opts: {
   if (opts.user) assignUser(tmuxName, opts.user);
   // Claude resumes into a fresh sessionId/transcript — wait for the pidfile.
   let newId: string | null = null;
+  let newPid: number | null = null;
   for (let i = 0; i < 12 && !newId; i++) {
     await new Promise((res) => setTimeout(res, 500));
     const pid = panePidForSession(tmuxName);
-    if (pid) newId = sessionIdForPid(pid);
+    if (pid) {
+      newPid = pid;
+      newId = sessionIdForPid(pid);
+    }
   }
+  if (newId && newPid) await acquireLease(newId, newPid);
   return { ok: true, tmuxName, cwd, newId };
 }
 
@@ -167,7 +176,7 @@ async function resumeClosedSession(opts: {
 // hand back so the client can deep-link into the fork.
 type ForkOutcome =
   | { ok: true; tmuxName: string; cwd: string; newId: string | null }
-  | { ok: false; status: number; error: string };
+  | { ok: false; status: number; error: string; liveOn?: string };
 
 async function forkSession(opts: {
   sessionId: string;
@@ -178,6 +187,9 @@ async function forkSession(opts: {
   if (!sessionId) return { ok: false, status: 400, error: "sessionId required" };
   if (opts.model && !CLAUDE_MODELS.includes(opts.model))
     return { ok: false, status: 400, error: `unknown model "${opts.model}"` };
+  const liveOn = await foreignFresh(sessionId);
+  if (liveOn)
+    return { ok: false, status: 409, error: "session is live on another host", liveOn };
   const transcript = await resolveTranscript(sessionId);
   if (!transcript) return { ok: false, status: 404, error: "no transcript found for that session" };
   // fork drives the claude CLI (`--resume ... --fork-session`), which only
@@ -195,11 +207,16 @@ async function forkSession(opts: {
   if (opts.user) assignUser(tmuxName, opts.user);
   // The fork gets a fresh sessionId/transcript — wait for the pidfile.
   let newId: string | null = null;
+  let newPid: number | null = null;
   for (let i = 0; i < 12 && !newId; i++) {
     await new Promise((res) => setTimeout(res, 500));
     const pid = panePidForSession(tmuxName);
-    if (pid) newId = sessionIdForPid(pid);
+    if (pid) {
+      newPid = pid;
+      newId = sessionIdForPid(pid);
+    }
   }
+  if (newId && newPid) await acquireLease(newId, newPid);
   return { ok: true, tmuxName, cwd, newId };
 }
 
@@ -411,8 +428,8 @@ function json(obj: unknown, init?: ResponseInit) {
   });
 }
 
-function err(status: number, message: string) {
-  return json({ error: message }, { status });
+function err(status: number, message: string, extra?: Record<string, unknown>) {
+  return json({ error: message, ...(extra ?? {}) }, { status });
 }
 
 // Attach rendered markdown for assistant/user prose; tool/thinking stay raw.
@@ -535,6 +552,27 @@ function clampDim(raw: string | null, fallback: number): number {
   return Math.max(1, Math.min(500, n));
 }
 
+function startLeaseHeartbeat(): () => void {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const loop = async () => {
+    if (stopped) return;
+    try {
+      const sessions = await listSessions();
+      for (const s of sessions) {
+        if (stopped) return;
+        if (s.sessionId) await renewLease(s.sessionId);
+      }
+    } catch {}
+    if (!stopped) timer = setTimeout(loop, 30_000);
+  };
+  timer = setTimeout(loop, 30_000);
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+  };
+}
+
 export async function cmdServe() {
   // Event journal + the one global session pump (replaces per-connection pump
   // loops for /api/events consumers; /api/live/stream keeps its own for
@@ -547,6 +585,7 @@ export async function cmdServe() {
     renderMsg: (m) => msgWithHtml(m),
     resolvePrompt: (tp, pane) => resolveSessionPrompt(tp, pane),
   });
+  startLeaseHeartbeat();
   const ensurePushWatcher = () =>
     startPushWatcher((l) => console.log(l), {
       head: () => journal.head(),
@@ -1515,7 +1554,7 @@ export async function cmdServe() {
         if (!sessionId) return err(400, "sessionId required");
         const model = body?.model?.trim() || undefined;
         const out = await resumeClosedSession({ sessionId, model, user: body?.user, prompt: body?.prompt });
-        if (!out.ok) return err(out.status, out.error);
+        if (!out.ok) return err(out.status, out.error, out.liveOn ? { liveOn: out.liveOn } : undefined);
         if (out.alreadyLive)
           return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId, alreadyLive: true, agent: "claude" });
         return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId: out.newId, resumedFrom: sessionId, agent: "claude" });
@@ -1535,7 +1574,7 @@ export async function cmdServe() {
         if (!sessionId) return err(400, "sessionId required");
         const model = body?.model?.trim() || undefined;
         const out = await forkSession({ sessionId, model, user: body?.user });
-        if (!out.ok) return err(out.status, out.error);
+        if (!out.ok) return err(out.status, out.error, out.liveOn ? { liveOn: out.liveOn } : undefined);
         return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId: out.newId, forkedFrom: sessionId, agent: "claude" });
       }
 
@@ -1701,6 +1740,18 @@ export async function cmdServe() {
             await new Promise((res) => setTimeout(res, 250));
           }
         }
+        if (sessionId) {
+          const entry =
+            aisdkSessionId
+              ? readAisdkEntry(aisdkSessionId)
+              : codexAisdkKey
+                ? readAisdkEntry(codexAisdkKey)
+                : opencodeKey
+                  ? readAisdkEntry(opencodeKey)
+                  : null;
+          const leasePid = entry?.harnessPid ?? panePidForSession(tmuxName);
+          if (leasePid) await acquireLease(sessionId, leasePid);
+        }
         return json({ ok: true, tmuxName, cwd, sessionId, agent });
       }
 
@@ -1767,7 +1818,7 @@ export async function cmdServe() {
             if (!transcript || !transcript.includes("/.claude/projects/"))
               return err(404, "session not found");
             const out = await resumeClosedSession({ sessionId: m[1], prompt: text });
-            if (!out.ok) return err(out.status, out.error);
+            if (!out.ok) return err(out.status, out.error, out.liveOn ? { liveOn: out.liveOn } : undefined);
             const msg = recordImmediateMessage(m[1], text, clientId);
             const { duplicate: _duplicate, ...msgBody } = msg;
             return json({
@@ -2074,6 +2125,7 @@ export async function cmdServe() {
               assignUser(sess.tmuxName, null);
             }
             clearResolved(m[1]);
+            await releaseLease(m[1]);
             return json({ ok: true });
           }
           if (!sess.tmuxTarget)
@@ -2096,6 +2148,7 @@ export async function cmdServe() {
             assignUser(sess.tmuxName, null); // a managed name is unique + now gone
           }
           clearResolved(m[1]);
+          await releaseLease(m[1]);
           return json({ ok: true });
         }
       }

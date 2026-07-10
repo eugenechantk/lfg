@@ -15,6 +15,7 @@ import {
 import { isClosing } from "./closing";
 import { userAssignments } from "./users";
 import { PATHS } from "./config";
+import { foreignFreshAt } from "./leases";
 import { homedir } from "node:os";
 import {
   listProcs,
@@ -1442,8 +1443,17 @@ export async function listResumable(
   }
   const candidates = [...byId.values()].filter((c) => before == null || c.mtime < before);
   candidates.sort((a, b) => b.mtime - a.mtime);
-  const page = candidates.slice(0, limit);
-  const nextBefore = candidates.length > page.length ? page[page.length - 1]?.mtime ?? null : null;
+  const page: typeof candidates = [];
+  let nextBefore: number | null = null;
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i];
+    if (await foreignFreshAt(c.id, c.path)) continue;
+    page.push(c);
+    if (page.length >= limit) {
+      nextBefore = candidates.length > i + 1 ? c.mtime : null;
+      break;
+    }
+  }
   const overrides = await readTitleOverrides();
   const out: ResumableSession[] = [];
   for (const c of page) {

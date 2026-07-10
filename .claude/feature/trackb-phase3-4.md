@@ -11,7 +11,7 @@ Worktree: `.claude/worktrees/track-b-reliability` (branch `worktree-track-b`).
 | 4a | Client: `LFGStore` (GRDB in LFGCore) — schema, upsert ingestion, observation, migrations, tests. NO UI integration yet. | Codex (brief: `.codex/delegate/brief-phase4a-lfgstore.md`) | delegated |
 | 4b | SessionStore hydrates from + writes through the store; airplane-mode cold launch gate | Codex (brief: `.codex/delegate/brief-phase4b-store-hydration.md`) | ✅ done, gate passed live |
 | 5a | Outbox on the store + identity acks (ADDITIVE; reconcile-by-text deletion deferred to post-soak 5b) | Codex (brief: `.codex/delegate/brief-phase5a-outbox.md`) | ✅ done, kill-gate passed live |
-| 6 | Leases | after 5 | pending |
+| 6 | Session leases: single-execution enforcement, 409 {liveOn}, resumable exclusion | Codex (brief: `.codex/delegate/brief-phase6-leases.md`) | ✅ done, gates verified |
 | 7 | Legacy deletion sweep | last | pending |
 
 ## Pinned decisions
@@ -83,3 +83,17 @@ Worktree: `.claude/worktrees/track-b-reliability` (branch `worktree-track-b`).
 - 123/123 swift tests (8 new: outbox round-trip, ack decode incl. legacy queue-list
   shape). Build green. Reconcile-by-text stack untouched and still running (5b deletes
   it after the soak proves acks in the field).
+
+## Phase 6 gate evidence (2026-07-10, night)
+
+- **Double-resume:** two serves with distinct host-ids sharing the real ~/.claude/projects.
+  A resumed a closed session → lease file `{hostId: A, pid, acquiredAt, heartbeatAt}`
+  appeared beside the transcript. B's foreign-lease decision (`foreignFresh`, the exact
+  value the endpoint 409s from) named A's hostId against A's real lease file. Over HTTP on
+  this ONE-MACHINE rig B answers `alreadyLive` first — correct here, since both serves see
+  the same tmux; distinct machines hit the 409 branch (unit-tested with a two-host
+  simulation incl. staleness takeover).
+- **Heartbeat:** lease heartbeatAt advanced across 40s (30s serialized loop, no interval
+  fan-out). **Release:** /close deleted the lease file. Crash cleanup rides the 90s
+  staleness rule (no discrete reap hook exists — noted by Codex, accepted).
+- 113/113 bun tests (6 new lease tests + resumable exclusion coverage).
