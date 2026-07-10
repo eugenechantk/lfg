@@ -190,6 +190,7 @@ public struct AgentPrompt: Codable, Sendable, Hashable {
 
 public struct QueueItem: Codable, Sendable, Hashable, Identifiable {
     public var id: String
+    public var clientId: String?
     public var text: String
     public var status: String         // delivered | queued | sending | failed
     public var attempts: Int?
@@ -197,17 +198,43 @@ public struct QueueItem: Codable, Sendable, Hashable, Identifiable {
 
     public var isFailed: Bool { status == "failed" }
 
-    public init(id: String, text: String, status: String, attempts: Int? = nil, error: String? = nil) {
-        self.id = id; self.text = text; self.status = status; self.attempts = attempts; self.error = error
+    public init(id: String, text: String, status: String, clientId: String? = nil, attempts: Int? = nil, error: String? = nil) {
+        self.id = id; self.clientId = clientId; self.text = text; self.status = status; self.attempts = attempts; self.error = error
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = (try c.decodeIfPresent(String.self, forKey: .id)) ?? UUID().uuidString
+        clientId = try c.decodeIfPresent(String.self, forKey: .clientId)
         text = (try c.decodeIfPresent(String.self, forKey: .text)) ?? ""
         status = (try c.decodeIfPresent(String.self, forKey: .status)) ?? "queued"
         attempts = try c.decodeIfPresent(Int.self, forKey: .attempts)
         error = try c.decodeIfPresent(String.self, forKey: .error)
+    }
+}
+
+public struct QueueAck: Codable, Sendable, Hashable {
+    public var kind: String
+    public var clientId: String
+    public var msgId: String?
+    public var userTurnId: String?
+    public var sid: String?
+
+    public init(kind: String, clientId: String, msgId: String? = nil, userTurnId: String? = nil, sid: String? = nil) {
+        self.kind = kind
+        self.clientId = clientId
+        self.msgId = msgId
+        self.userTurnId = userTurnId
+        self.sid = sid
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = (try c.decodeIfPresent(String.self, forKey: .kind)) ?? ""
+        clientId = (try c.decodeIfPresent(String.self, forKey: .clientId)) ?? ""
+        msgId = try c.decodeIfPresent(String.self, forKey: .msgId)
+        userTurnId = try c.decodeIfPresent(String.self, forKey: .userTurnId)
+        sid = try c.decodeIfPresent(String.self, forKey: .sid)
     }
 }
 
@@ -396,6 +423,8 @@ public struct SendResponse: Codable, Sendable {
     public var resumed: Bool?
     public var sessionId: String?
     public var resumedFrom: String?
+    public var clientId: String?
+    public var duplicate: Bool?
     /// The server's queue entry for this send (id/text/status), so the client can
     /// correlate the optimistic bubble to a server queue id immediately — used to
     /// drive remove / edit / send-now actions on the still-pending message.
@@ -409,6 +438,7 @@ public enum LiveEvent: Sendable, Equatable {
     case prompt(sid: String, prompt: AgentPrompt?)
     case busy(sid: String, busy: Bool)
     case queue(sid: String, queue: [QueueItem])
+    case queueAck(sid: String?, ack: QueueAck)
     case heartbeat
 }
 

@@ -122,6 +122,48 @@ final class LFGStoreTests: XCTestCase {
         XCTAssertEqual(readState, LFGReadStateSnapshot(sessionId: "s1", lastSeenMessageId: "m9", openedAt: 1234))
     }
 
+    func testOutboxRoundTripAndTerminalStates() async throws {
+        let store = try LFGStore.inMemory()
+
+        try await store.enqueueOutbox(clientId: "c1", sessionId: "s1", hostId: "h1", text: "hello")
+        var pending = try await store.pendingOutbox()
+        XCTAssertEqual(pending.map(\.clientId), ["c1"])
+        XCTAssertEqual(pending[0].sessionId, "s1")
+        XCTAssertEqual(pending[0].hostId, "h1")
+        XCTAssertEqual(pending[0].text, "hello")
+        XCTAssertEqual(pending[0].state, "pending")
+
+        try await store.markOutbox(clientId: "c1", state: "sent")
+        pending = try await store.pendingOutbox()
+        XCTAssertEqual(pending.map(\.state), ["sent"])
+
+        try await store.markOutbox(clientId: "c1", state: "failed")
+        let failedPending = try await store.pendingOutbox()
+        let failedRow = try await store.outbox(clientId: "c1")
+        XCTAssertTrue(failedPending.isEmpty)
+        XCTAssertEqual(failedRow?.state, "failed")
+
+        try await store.enqueueOutbox(clientId: "c1", sessionId: "s1", hostId: "h1", text: "retry")
+        let retryPending = try await store.pendingOutbox()
+        XCTAssertEqual(retryPending.map(\.text), ["retry"])
+
+        try await store.markOutbox(clientId: "c1", state: "delivered")
+        let deliveredRow = try await store.outbox(clientId: "c1")
+        XCTAssertNil(deliveredRow)
+    }
+
+    func testDeleteOutbox() async throws {
+        let store = try LFGStore.inMemory()
+
+        try await store.enqueueOutbox(clientId: "c1", sessionId: "s1", hostId: "h1", text: "hello")
+        try await store.deleteOutbox(clientId: "c1")
+
+        let pending = try await store.pendingOutbox()
+        let row = try await store.outbox(clientId: "c1")
+        XCTAssertTrue(pending.isEmpty)
+        XCTAssertNil(row)
+    }
+
     func testObservationsEmitOnRelevantWrites() async throws {
         let store = try LFGStore.inMemory()
         let sessionProbe = StreamProbe(store.observeSessions())

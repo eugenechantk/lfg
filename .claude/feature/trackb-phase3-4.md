@@ -10,7 +10,7 @@ Worktree: `.claude/worktrees/track-b-reliability` (branch `worktree-track-b`).
 | 3 | Server: sendq rows persisted in SQLite (journal db), `clientId` idempotency on POST /send, journaled `queue {clientId, delivered, userTurnId}` acks | Codex (brief: `.codex/delegate/brief-phase3-durable-sendq.md`) | delegated |
 | 4a | Client: `LFGStore` (GRDB in LFGCore) — schema, upsert ingestion, observation, migrations, tests. NO UI integration yet. | Codex (brief: `.codex/delegate/brief-phase4a-lfgstore.md`) | delegated |
 | 4b | SessionStore hydrates from + writes through the store; airplane-mode cold launch gate | Codex (brief: `.codex/delegate/brief-phase4b-store-hydration.md`) | ✅ done, gate passed live |
-| 5 | Outbox worker on the store driven by Phase 3 acks; delete reconcile-by-text stack | after 3+4 soak | pending |
+| 5a | Outbox on the store + identity acks (ADDITIVE; reconcile-by-text deletion deferred to post-soak 5b) | Codex (brief: `.codex/delegate/brief-phase5a-outbox.md`) | ✅ done, kill-gate passed live |
 | 6 | Leases | after 5 | pending |
 | 7 | Legacy deletion sweep | last | pending |
 
@@ -70,3 +70,16 @@ Worktree: `.claude/worktrees/track-b-reliability` (branch `worktree-track-b`).
   created managed sessions from its list (the known macOS enumeration gap another
   session is fixing). Prod (one serve per host) has neither.
 - swift test 115/115 after changes.
+
+## 5a gate evidence (2026-07-10, night)
+
+- **Hardest flow proven live:** send tapped and app SIGKILLed in the same instant — the
+  POST never fired (0 turns, no server row). The outbox row (`state: pending`, awaited
+  before transport) survived; relaunch replayed it with the same clientId → **delivered
+  3s after launch, exactly once** (1 user turn; server sendq row same clientId,
+  delivered). Outbox emptied by the ack; the message renders as a real resolved turn.
+- Force-quit gap from Phase 2 Task C: closed (the outbox row is the persistence the
+  background URLSession couldn't provide against user-initiated kills).
+- 123/123 swift tests (8 new: outbox round-trip, ack decode incl. legacy queue-list
+  shape). Build green. Reconcile-by-text stack untouched and still running (5b deletes
+  it after the soak proves acks in the field).

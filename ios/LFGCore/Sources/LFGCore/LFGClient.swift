@@ -230,8 +230,8 @@ public struct LFGClient: Sendable {
     // MARK: Steering
 
     @discardableResult
-    public func sendMessage(_ id: String, text: String) async throws -> SendResponse {
-        let data = try await send("POST", "api/sessions/\(id)/send", json: ["text": text])
+    public func sendMessage(_ id: String, text: String, clientId: String? = nil) async throws -> SendResponse {
+        let data = try await send("POST", "api/sessions/\(id)/send", json: sendMessageBody(text: text, clientId: clientId))
         // Best-effort decode: a plain `{ ok, msg }` still decodes (resumed stays
         // nil). Tolerate a body that doesn't fit (return an empty response) so a
         // successful send never throws just because the shape drifted.
@@ -243,13 +243,19 @@ public struct LFGClient: Sendable {
     /// system finishes the POST even if the app is suspended or killed
     /// mid-transfer (Phase 2 Task C). Body construction must stay identical to
     /// `sendMessage`.
-    public func sendMessageRequest(_ id: String, text: String) throws -> URLRequest {
+    public func sendMessageRequest(_ id: String, text: String, clientId: String? = nil) throws -> URLRequest {
         var req = URLRequest(url: url("api/sessions/\(id)/send"))
         req.httpMethod = "POST"
         req.timeoutInterval = 60
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["text": text])
+        req.httpBody = try JSONSerialization.data(withJSONObject: sendMessageBody(text: text, clientId: clientId).compactMapValues { $0 })
         return req
+    }
+
+    private func sendMessageBody(text: String, clientId: String?) -> [String: Any?] {
+        var body: [String: Any?] = ["text": text]
+        if let clientId { body["clientId"] = clientId }
+        return body
     }
 
     /// Decode a send response body (the background-transport counterpart of

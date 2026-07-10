@@ -102,7 +102,7 @@ private struct QueuePayload: Decodable { let sid: String; let queue: [QueueItem]
 public enum LiveEventDecoder {
     /// Decode a parsed SSE frame into a typed `LiveEvent`, or nil if it's a
     /// heartbeat-only comment we don't surface / an unknown event.
-    public static func decode(_ frame: SSEFrame) -> LiveEvent? {
+    public static func decode(_ frame: SSEFrame, sessionIdHint: String? = nil) -> LiveEvent? {
         if frame.isComment { return .heartbeat }
         guard let data = frame.data.data(using: .utf8) else { return nil }
         let dec = JSONDecoder()
@@ -120,6 +120,12 @@ public enum LiveEventDecoder {
                 return .busy(sid: p.sid, busy: p.busy)
             }
         case "queue":
+            if var ack = try? dec.decode(QueueAck.self, from: data),
+               !ack.kind.isEmpty,
+               !ack.clientId.isEmpty {
+                ack.sid = ack.sid ?? sessionIdHint
+                return .queueAck(sid: ack.sid, ack: ack)
+            }
             if let p = try? dec.decode(QueuePayload.self, from: data) {
                 return .queue(sid: p.sid, queue: p.queue)
             }

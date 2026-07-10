@@ -8,6 +8,43 @@ final class LFGClientLiveActivityTests: XCTestCase {
         super.tearDown()
     }
 
+    func testSendMessagePostsClientIdWhenProvided() async throws {
+        let client = makeClient()
+
+        _ = try await client.sendMessage("session-123", text: "hello", clientId: "client-1")
+
+        let request = try XCTUnwrap(RequestCapturingURLProtocol.capturedRequest)
+        XCTAssertEqual(request.url?.path, "/api/sessions/session-123/send")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        XCTAssertEqual(try requestBody(request), [
+            "text": "hello",
+            "clientId": "client-1",
+        ])
+    }
+
+    func testSendMessageRequestBuildsSameClientIdBody() throws {
+        let client = makeClient()
+
+        let request = try client.sendMessageRequest("session-123", text: "hello", clientId: "client-1")
+
+        XCTAssertEqual(request.url?.path, "/api/sessions/session-123/send")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        XCTAssertEqual(try requestBody(request), [
+            "text": "hello",
+            "clientId": "client-1",
+        ])
+    }
+
+    func testSendMessageRequestOmitsNilClientId() throws {
+        let client = makeClient()
+
+        let request = try client.sendMessageRequest("session-123", text: "hello")
+
+        XCTAssertEqual(try requestBody(request), ["text": "hello"])
+    }
+
     func testRegisterLiveActivityStartTokenPostsExpectedBody() async throws {
         let client = makeClient()
 

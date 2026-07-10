@@ -87,6 +87,32 @@ final class SSEParserTests: XCTestCase {
         XCTAssertEqual(items[0].attempts, 2)
     }
 
+    func testDecodeQueueDeliveredAckEvent() {
+        let frame = SSEFrame(event: "queue", data: """
+        {"kind":"delivered","clientId":"c1","msgId":"m1","userTurnId":"u1"}
+        """)
+        guard case let .queueAck(sid, ack)? = LiveEventDecoder.decode(frame, sessionIdHint: "s1") else {
+            return XCTFail("expected queue ack event")
+        }
+        XCTAssertEqual(sid, "s1")
+        XCTAssertEqual(ack.kind, "delivered")
+        XCTAssertEqual(ack.clientId, "c1")
+        XCTAssertEqual(ack.msgId, "m1")
+        XCTAssertEqual(ack.userTurnId, "u1")
+    }
+
+    func testDecodeQueueFailedAckEventWithoutUserTurnId() {
+        let frame = SSEFrame(event: "queue", data: #"{"kind":"failed","clientId":"c2","msgId":"m2"}"#)
+        guard case let .queueAck(sid, ack)? = LiveEventDecoder.decode(frame) else {
+            return XCTFail("expected queue ack event")
+        }
+        XCTAssertNil(sid)
+        XCTAssertEqual(ack.kind, "failed")
+        XCTAssertEqual(ack.clientId, "c2")
+        XCTAssertEqual(ack.msgId, "m2")
+        XCTAssertNil(ack.userTurnId)
+    }
+
     func testMultipleFramesInOneChunk() {
         var p = SSEParser()
         // Explicit trailing "\n\n" so the second frame's terminating blank line

@@ -71,6 +71,7 @@ import LFGCore
 
     struct PendingSend: Identifiable, Equatable {
         let id: String            // client-generated UUID
+        var clientId: String? = nil
         var displayText: String   // what the user typed (shown in the bubble)
         var matchText: String     // full sent text incl. attachment paths (for reconcile)
         var ts: Double            // device send time, epoch ms (ordering)
@@ -165,6 +166,7 @@ import LFGCore
     private var focusedID: String?
     private var storeHydrationTask: Task<Void, Never>?
     private var storeHydrationCompleted = false
+    private static let outboxRetryCapMs: Double = 24 * 60 * 60 * 1000
 
     /// Closed (resumable) sessions synthesized from `/api/sessions/resumable`,
     /// merged into `sessions` each poll so ended sessions stay visible. Refreshed
@@ -320,6 +322,8 @@ import LFGCore
         // unknown event type would have carried).
         pollTask = Task { [weak self] in
             await self?.hydrateFromStoreIfNeeded()
+            guard !Task.isCancelled else { return }
+            await self?.replayPendingOutboxOnStart()
             guard !Task.isCancelled else { return }
             self?.syncLinks()
             while !Task.isCancelled {
@@ -508,6 +512,144 @@ import LFGCore
     private func mirrorCursor(hostID: String, seq: Int64) {
         writeThrough { store in
             try await store.setCursor(hostId: hostID, seq: seq)
+        }
+    }
+
+    private func enqueueOutboxForTransport(clientId: String, sessionId: String, hostId: String, text: String) async -> Bool {
+        guard let store = localStore else { return true }
+        do {
+            try await store.enqueueOutbox(clientId: clientId, sessionId: sessionId, hostId: hostId, text: text)
+            return true
+        } catch {
+            lastError = "Outbox write failed: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    private func markOutboxState(_ clientId: String, state: String) async {
+        guard let store = localStore else { return }
+        do { try await store.markOutbox(clientId: clientId, state: state) }
+        catch {
+            Logger(subsystem: "dev.omg.lfg", category: "outbox")
+                .error("mark outbox failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func markOutboxStateEventually(_ clientId: String, state: String) {
+        writeThrough { store in
+            try await store.markOutbox(clientId: clientId, state: state)
+        }
+    }
+
+    private func deleteOutbox(_ clientId: String) async {
+        guard let store = localStore else { return }
+        do { try await store.deleteOutbox(clientId: clientId) }
+        catch {
+            Logger(subsystem: "dev.omg.lfg", category: "outbox")
+                .error("delete outbox failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func pendingLocation(clientId: String, preferredSid: String? = nil) -> (sid: String, pid: String)? {
+        let matches: (PendingSend) -> Bool = { pending in
+            pending.clientId == clientId || pending.id == clientId
+        }
+        if let preferredSid,
+           let pending = pendingSends[preferredSid]?.first(where: matches) {
+            return (preferredSid, pending.id)
+        }
+        for (sid, pending) in pendingSends {
+            if let match = pending.first(where: matches) {
+                return (sid, match.id)
+            }
+        }
+        return nil
+    }
+
+    private func hasPendingSend(clientId: String) -> Bool {
+        pendingLocation(clientId: clientId) != nil
+    }
+
+    private func appendPendingFromOutbox(_ row: LFGOutboxRow, failed: Bool = false) {
+        guard !hasPendingSend(clientId: row.clientId) else { return }
+        pendingSends[row.sessionId, default: []].append(
+            PendingSend(
+                id: row.clientId,
+                clientId: row.clientId,
+                displayText: row.text,
+                matchText: row.text,
+                ts: row.createdAt,
+                failed: failed,
+                showSent: true,
+                confirmed: row.state == "sent" || failed
+            )
+        )
+    }
+
+    private func markPendingFailed(clientId: String) {
+        guard let location = pendingLocation(clientId: clientId) else { return }
+        mutatePending(location.sid, location.pid) { $0.failed = true }
+    }
+
+    private func replayPendingOutboxOnStart() async {
+        guard let store = localStore else { return }
+        let rows: [LFGOutboxRow]
+        do {
+            rows = try await store.pendingOutbox()
+        } catch {
+            Logger(subsystem: "dev.omg.lfg", category: "outbox")
+                .error("pending outbox fetch failed: \(error.localizedDescription)")
+            return
+        }
+
+        let now = Date().timeIntervalSince1970 * 1000
+        for row in rows {
+            if hasPendingSend(clientId: row.clientId) { continue }
+            if now - row.updatedAt > Self.outboxRetryCapMs {
+                appendPendingFromOutbox(row, failed: true)
+                await markOutboxState(row.clientId, state: "failed")
+                continue
+            }
+            await retryOutboxRow(row)
+        }
+    }
+
+    private func retryOutboxRow(_ row: LFGOutboxRow) async {
+        appendPendingFromOutbox(row)
+        guard let host = settings.hosts.first(where: { $0.id == row.hostId }),
+              let client = settings.client(for: host) else {
+            markPendingFailed(clientId: row.clientId)
+            await markOutboxState(row.clientId, state: "failed")
+            return
+        }
+
+        guard await enqueueOutboxForTransport(
+            clientId: row.clientId,
+            sessionId: row.sessionId,
+            hostId: row.hostId,
+            text: row.text
+        ) else {
+            markPendingFailed(clientId: row.clientId)
+            return
+        }
+
+        do {
+            let req = try client.sendMessageRequest(row.sessionId, text: row.text, clientId: row.clientId)
+            let respData = try await BackgroundSender.shared.post(req, label: row.clientId)
+            let resp = LFGClient.decodeSendResponse(respData)
+            await markOutboxState(row.clientId, state: "sent")
+            applyResume(from: row.sessionId, resp)
+            let eff = (resp.resumed == true ? resp.sessionId : nil) ?? row.sessionId
+            mutatePending(eff, row.clientId) {
+                $0.confirmed = true
+                if let qid = resp.msg?.id { $0.serverQueueID = qid }
+            }
+            await refresh()
+            reconcilePending(eff)
+        } catch {
+            lastError = "Outbox retry failed: \(error.localizedDescription)"
+            markPendingFailed(clientId: row.clientId)
+            await markOutboxState(row.clientId, state: "failed")
         }
     }
 
@@ -1278,6 +1420,8 @@ import LFGCore
         case .queue(let sid, let q):
             queues[sid] = q
             correlatePending(sid, q)
+        case .queueAck(let sid, let ack):
+            applyQueueAck(sid: sid, ack: ack)
         case .heartbeat:
             break
         }
@@ -1463,6 +1607,31 @@ import LFGCore
         if remaining != pend { pendingSends[sid] = remaining }
     }
 
+    private func applyQueueAck(sid: String?, ack: QueueAck) {
+        let preferredSid = sid ?? ack.sid
+        switch ack.kind {
+        case "delivered":
+            if let location = pendingLocation(clientId: ack.clientId, preferredSid: preferredSid) {
+                removePending(location.sid, location.pid)
+                loadHistory(location.sid)
+            } else if let preferredSid {
+                loadHistory(preferredSid)
+            }
+            markOutboxStateEventually(ack.clientId, state: "delivered")
+        case "failed":
+            if let location = pendingLocation(clientId: ack.clientId, preferredSid: preferredSid) {
+                mutatePending(location.sid, location.pid) {
+                    $0.failed = true
+                    $0.confirmed = true
+                    if let msgId = ack.msgId { $0.serverQueueID = msgId }
+                }
+            }
+            markOutboxStateEventually(ack.clientId, state: "failed")
+        default:
+            break
+        }
+    }
+
     /// Poll-based safety net (runs on the 3s refresh): for any session with
     /// outstanding optimistic sends, fetch its queue directly and reconcile.
     /// Catches deliveries even when the live `queue` event was missed (stream
@@ -1519,21 +1688,48 @@ import LFGCore
             await attemptCreate(sid, req, on: pendingCreateHost[sid], attachments: [])
             return
         }
-        mutatePending(sid, pending.id) { $0.failed = false }
+        let clientId = pending.clientId ?? pending.id
+        mutatePending(sid, pending.id) {
+            $0.clientId = clientId
+            $0.failed = false
+        }
         if let qid = pending.serverQueueID {
-            await retry(sid, qid)
+            guard let hostId = routeHostId(forSession: sid),
+                  await enqueueOutboxForTransport(clientId: clientId, sessionId: sid, hostId: hostId, text: pending.matchText) else {
+                mutatePending(sid, pending.id) { $0.failed = true }
+                return
+            }
+            let ok = await run("Retry", for: sid) { try await $0.retryQueued(sid, messageID: qid) }
+            if ok { await markOutboxState(clientId, state: "sent") }
+            else {
+                mutatePending(sid, pending.id) { $0.failed = true }
+                await markOutboxState(clientId, state: "failed")
+            }
         } else if let client = client(forSession: sid) {
             do {
                 // Same background transport as the composer send — a retry must
                 // survive suspension/kill just like the original attempt.
-                let req = try client.sendMessageRequest(sid, text: pending.matchText)
-                let respData = try await BackgroundSender.shared.post(req, label: pending.id)
+                guard let hostId = routeHostId(forSession: sid),
+                      await enqueueOutboxForTransport(clientId: clientId, sessionId: sid, hostId: hostId, text: pending.matchText) else {
+                    mutatePending(sid, pending.id) { $0.failed = true }
+                    return
+                }
+                let req = try client.sendMessageRequest(sid, text: pending.matchText, clientId: clientId)
+                let respData = try await BackgroundSender.shared.post(req, label: clientId)
                 let resp = LFGClient.decodeSendResponse(respData)
+                await markOutboxState(clientId, state: "sent")
                 applyResume(from: sid, resp)
                 let eff = (resp.resumed == true ? resp.sessionId : nil) ?? sid
-                mutatePending(eff, pending.id) { $0.confirmed = true }
+                mutatePending(eff, pending.id) {
+                    $0.clientId = clientId
+                    $0.confirmed = true
+                    if let qid = resp.msg?.id { $0.serverQueueID = qid }
+                }
                 await refresh(); reconcilePending(eff)
-            } catch { mutatePending(sid, pending.id) { $0.failed = true } }
+            } catch {
+                mutatePending(sid, pending.id) { $0.failed = true }
+                await markOutboxState(clientId, state: "failed")
+            }
         }
     }
 
@@ -1567,11 +1763,20 @@ import LFGCore
 
     func send(_ id: String, _ text: String) async {
         guard let client = client(forSession: id) else { return }
+        let clientId = UUID().uuidString
+        guard let hostId = routeHostId(forSession: id),
+              await enqueueOutboxForTransport(clientId: clientId, sessionId: id, hostId: hostId, text: text) else {
+            return
+        }
         do {
-            let resp = try await client.sendMessage(id, text: text)
+            let resp = try await client.sendMessage(id, text: text, clientId: clientId)
+            await markOutboxState(clientId, state: "sent")
             applyResume(from: id, resp)
             await refresh()
-        } catch { lastError = "Send failed: \(error.localizedDescription)" }
+        } catch {
+            lastError = "Send failed: \(error.localizedDescription)"
+            await markOutboxState(clientId, state: "failed")
+        }
     }
 
     // Sends in flight, keyed so the store retains them. A send must outlive the
@@ -1629,10 +1834,12 @@ import LFGCore
         let isWakeUp = isClosed
             || (!sessions.contains { $0.sessionId == id }
                 && (focusedSnapshot?.sessionId == id || deepLinkSession?.sessionId == id))
-        let pid = UUID().uuidString
+        let clientId = UUID().uuidString
+        let pid = clientId
         let nowMs = Date().timeIntervalSince1970 * 1000
         pendingSends[id, default: []].append(
             PendingSend(id: pid,
+                        clientId: clientId,
                         displayText: typed.isEmpty ? "📎 Attachment" : typed,
                         matchText: typed,
                         ts: nowMs,
@@ -1656,9 +1863,15 @@ import LFGCore
             // While alive, the await resolves normally and everything below is
             // unchanged; if we die, the message still lands and the next
             // launch's queue/transcript reconcile resolves the outcome.
-            let req = try client.sendMessageRequest(id, text: full)
+            guard let hostId = routeHostId(forSession: id),
+                  await enqueueOutboxForTransport(clientId: clientId, sessionId: id, hostId: hostId, text: full) else {
+                mutatePending(id, pid) { $0.failed = true }
+                return
+            }
+            let req = try client.sendMessageRequest(id, text: full, clientId: clientId)
             let respData = try await BackgroundSender.shared.post(req, label: pid)
             let resp = LFGClient.decodeSendResponse(respData)
+            await markOutboxState(clientId, state: "sent")
             applyResume(from: id, resp)
             let eff = (resp.resumed == true ? resp.sessionId : nil) ?? id
             // The backend accepted it (and, for a wake-up, finished resuming) —
@@ -1675,6 +1888,7 @@ import LFGCore
         } catch {
             lastError = "Send failed: \(error.localizedDescription)"
             mutatePending(id, pid) { $0.failed = true }
+            await markOutboxState(clientId, state: "failed")
         }
     }
 
@@ -1686,6 +1900,7 @@ import LFGCore
         if let qid = pending.serverQueueID {
             await run("Remove", for: sid) { try await $0.removeQueued(sid, qid) }
         }
+        if let clientId = pending.clientId { await deleteOutbox(clientId) }
         removePending(sid, pending.id)
     }
 
@@ -1696,6 +1911,7 @@ import LFGCore
         if let qid = pending.serverQueueID {
             await run("Edit", for: sid) { try await $0.removeQueued(sid, qid) }
         }
+        if let clientId = pending.clientId { await deleteOutbox(clientId) }
         removePending(sid, pending.id)
         return pending.displayText
     }

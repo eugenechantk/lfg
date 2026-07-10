@@ -178,6 +178,86 @@ public final class LFGStore: @unchecked Sendable {
         }
     }
 
+    /// Inserts or refreshes an unresolved send before transport starts.
+    public func enqueueOutbox(clientId: String, sessionId: String, hostId: String, text: String) async throws {
+        guard LFGStoreRecordHelpers.nonEmpty(clientId) != nil,
+              LFGStoreRecordHelpers.nonEmpty(sessionId) != nil,
+              LFGStoreRecordHelpers.nonEmpty(hostId) != nil else { return }
+        let now = Self.nowMs()
+        try await dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO outbox (clientId, sessionId, hostId, text, state, createdAt, updatedAt)
+                VALUES (:clientId, :sessionId, :hostId, :text, 'pending', :createdAt, :updatedAt)
+                ON CONFLICT(clientId) DO UPDATE SET
+                    sessionId = excluded.sessionId,
+                    hostId = excluded.hostId,
+                    text = excluded.text,
+                    state = 'pending',
+                    updatedAt = excluded.updatedAt
+                """,
+                arguments: [
+                    "clientId": clientId,
+                    "sessionId": sessionId,
+                    "hostId": hostId,
+                    "text": text,
+                    "createdAt": now,
+                    "updatedAt": now,
+                ]
+            )
+        }
+    }
+
+    /// Marks an outbox row. Delivered rows are terminal and removed immediately.
+    public func markOutbox(clientId: String, state: String) async throws {
+        guard LFGStoreRecordHelpers.nonEmpty(clientId) != nil else { return }
+        if state == "delivered" {
+            try await deleteOutbox(clientId: clientId)
+            return
+        }
+        let now = Self.nowMs()
+        try await dbQueue.write { db in
+            try db.execute(
+                sql: """
+                UPDATE outbox
+                SET state = :state,
+                    updatedAt = :updatedAt
+                WHERE clientId = :clientId
+                """,
+                arguments: [
+                    "clientId": clientId,
+                    "state": state,
+                    "updatedAt": now,
+                ]
+            )
+        }
+    }
+
+    /// Fetches unresolved outbox rows. Failed rows persist for retry UI but are terminal for auto-replay.
+    public func pendingOutbox() async throws -> [LFGOutboxRow] {
+        try await dbQueue.read { db in
+            try OutboxRecord
+                .fetchAll(
+                    db,
+                    sql: """
+                    SELECT clientId, sessionId, hostId, text, state, createdAt, updatedAt
+                    FROM outbox
+                    WHERE state IS NULL OR state NOT IN ('delivered', 'failed')
+                    ORDER BY COALESCE(createdAt, 0) ASC, clientId ASC
+                    """
+                )
+                .map(\.stored)
+        }
+    }
+
+    /// Deletes an outbox row after a delivered ack or explicit local cleanup.
+    public func deleteOutbox(clientId: String) async throws {
+        guard LFGStoreRecordHelpers.nonEmpty(clientId) != nil else { return }
+        try await dbQueue.write { db in
+            try db.execute(sql: "DELETE FROM outbox WHERE clientId = ?", arguments: [clientId])
+        }
+    }
+
     /// Fetches all stored hosts ordered by URL.
     public func hosts() async throws -> [LFGStoredHost] {
         try await dbQueue.read { db in
@@ -264,9 +344,29 @@ public final class LFGStore: @unchecked Sendable {
             Set(try String.fetchAll(db, sql: "SELECT name FROM sqlite_master WHERE type = 'table'"))
         }
     }
+
+    func outbox(clientId: String) async throws -> LFGOutboxRow? {
+        try await dbQueue.read { db in
+            try OutboxRecord
+                .fetchOne(
+                    db,
+                    sql: """
+                    SELECT clientId, sessionId, hostId, text, state, createdAt, updatedAt
+                    FROM outbox
+                    WHERE clientId = ?
+                    """,
+                    arguments: [clientId]
+                )?
+                .stored
+        }
+    }
 }
 
 private extension LFGStore {
+    static func nowMs() -> Double {
+        Date().timeIntervalSince1970 * 1000
+    }
+
     static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1") { db in

@@ -61,6 +61,35 @@ final class BackgroundSyncTests: XCTestCase {
         XCTAssertEqual(m.text, "hi")
     }
 
+    func testPageDecodesQueueAckRowsWithSessionHint() throws {
+        let json = """
+        {"events":[
+          {"seq":20,"ts":1,"sessionId":"s1","type":"queue","payload":"{\\"kind\\":\\"delivered\\",\\"clientId\\":\\"c1\\",\\"msgId\\":\\"m1\\",\\"userTurnId\\":\\"u1\\"}"},
+          {"seq":21,"ts":2,"sessionId":"s2","type":"queue","payload":"{\\"kind\\":\\"failed\\",\\"clientId\\":\\"c2\\",\\"msgId\\":\\"m2\\"}"}
+        ],"head":21,"canServe":true}
+        """
+        let p = try page(json)
+        XCTAssertEqual(p.events.count, 2)
+
+        guard case .queueAck(let deliveredSid, let delivered) = p.events[0].event else {
+            return XCTFail("expected delivered ack")
+        }
+        XCTAssertEqual(deliveredSid, "s1")
+        XCTAssertEqual(delivered.kind, "delivered")
+        XCTAssertEqual(delivered.clientId, "c1")
+        XCTAssertEqual(delivered.msgId, "m1")
+        XCTAssertEqual(delivered.userTurnId, "u1")
+
+        guard case .queueAck(let failedSid, let failed) = p.events[1].event else {
+            return XCTFail("expected failed ack")
+        }
+        XCTAssertEqual(failedSid, "s2")
+        XCTAssertEqual(failed.kind, "failed")
+        XCTAssertEqual(failed.clientId, "c2")
+        XCTAssertEqual(failed.msgId, "m2")
+        XCTAssertNil(failed.userTurnId)
+    }
+
     func testPageSkipsUnknownEventTypes() throws {
         let json = """
         {"events":[

@@ -23,7 +23,7 @@ public enum HostStreamDecoder {
     /// Decode a parsed SSE frame from `/api/events`. Returns nil for frames we
     /// don't understand (forward compatibility: unknown event types are skipped
     /// but their seq still advances the cursor via the next known event).
-    public static func decode(_ frame: SSEFrame) -> HostStreamElement? {
+    public static func decode(_ frame: SSEFrame, sessionIdHint: String? = nil) -> HostStreamElement? {
         if frame.isComment {
             // Comment body is "hb <head>" (head added in Phase 1; tolerate bare "hb").
             let parts = frame.data.split(separator: " ")
@@ -39,7 +39,7 @@ public enum HostStreamDecoder {
             return .resync(head: head)
         }
         guard let idStr = frame.id, let seq = Int64(idStr) else { return nil }
-        guard let ev = LiveEventDecoder.decode(frame) else { return nil }
+        guard let ev = LiveEventDecoder.decode(frame, sessionIdHint: sessionIdHint) else { return nil }
         return .event(seq: seq, ev)
     }
 }
@@ -63,6 +63,7 @@ public struct EventsPage: Sendable {
     struct Wire: Decodable {
         struct Row: Decodable {
             let seq: Int64
+            let sessionId: String?
             let type: String
             let payload: String
         }
@@ -80,7 +81,7 @@ public struct EventsPage: Sendable {
         out.reserveCapacity(wire.events.count)
         for row in wire.events {
             let frame = SSEFrame(event: row.type, data: row.payload, isComment: false, id: String(row.seq))
-            if case .event(let seq, let ev)? = HostStreamDecoder.decode(frame) {
+            if case .event(let seq, let ev)? = HostStreamDecoder.decode(frame, sessionIdHint: row.sessionId) {
                 out.append((seq: seq, event: ev))
             }
         }

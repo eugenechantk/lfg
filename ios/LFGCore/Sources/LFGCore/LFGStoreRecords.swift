@@ -153,6 +153,45 @@ public struct LFGReadStateSnapshot: Sendable, Hashable {
     }
 }
 
+/// A durable client-side send awaiting a terminal server ack.
+public struct LFGOutboxRow: Sendable, Hashable, Identifiable {
+    /// The stable client-generated id attached to the send POST.
+    public var id: String { clientId }
+    /// The stable client-generated id attached to the send POST.
+    public var clientId: String
+    /// The target session id.
+    public var sessionId: String
+    /// The configured host URL the send is routed to.
+    public var hostId: String
+    /// The exact text posted to the server.
+    public var text: String
+    /// pending | sent | failed. Delivered rows are deleted.
+    public var state: String
+    /// Creation time as epoch milliseconds.
+    public var createdAt: Double
+    /// Last state-change time as epoch milliseconds.
+    public var updatedAt: Double
+
+    /// Creates an outbox snapshot.
+    public init(
+        clientId: String,
+        sessionId: String,
+        hostId: String,
+        text: String,
+        state: String,
+        createdAt: Double,
+        updatedAt: Double
+    ) {
+        self.clientId = clientId
+        self.sessionId = sessionId
+        self.hostId = hostId
+        self.text = text
+        self.state = state
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
 struct HostRecord: Codable, FetchableRecord, PersistableRecord {
     static let databaseTableName = "hosts"
 
@@ -283,6 +322,30 @@ struct ReadStateRecord: Codable, FetchableRecord, PersistableRecord {
 
     var stored: LFGReadStateSnapshot {
         LFGReadStateSnapshot(sessionId: sessionId, lastSeenMessageId: lastSeenMessageId, openedAt: openedAt)
+    }
+}
+
+struct OutboxRecord: Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "outbox"
+
+    var clientId: String
+    var sessionId: String
+    var hostId: String
+    var text: String
+    var state: String?
+    var createdAt: Double
+    var updatedAt: Double
+
+    var stored: LFGOutboxRow {
+        LFGOutboxRow(
+            clientId: clientId,
+            sessionId: sessionId,
+            hostId: hostId,
+            text: text,
+            state: state ?? "pending",
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
     }
 }
 
