@@ -42,3 +42,16 @@ public enum ReadState {
         return last > (lastOpenedAt ?? 0)
     }
 }
+
+/// Pure focus bookkeeping for read-state. The app marks streamed messages as
+/// seen only while their session is actually focused; a detail view leaving the
+/// screen must release focus (guarded, so a stale view can't blur a newer one).
+public enum SessionFocus {
+    public static func isFocused(_ sessionID: String, focusedID: String?) -> Bool {
+        sessionID == focusedID
+    }
+
+    public static func afterDisappearing(_ sessionID: String, focusedID: String?) -> String? {
+        focusedID == sessionID ? nil : focusedID
+    }
+}

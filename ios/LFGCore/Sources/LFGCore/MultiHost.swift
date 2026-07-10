@@ -14,6 +14,23 @@ public struct MergedSessions: Sendable, Equatable {
     }
 }
 
+/// Pure result of rebuilding the visible session list from the current live
+/// snapshots plus cached resumable pages.
+public struct SessionListReconciliation: Sendable, Equatable {
+    public var live: MergedSessions
+    public var liveIds: Set<String>
+    public var optimistic: [Session]
+    public var visibleClosed: [ResumableSession]
+
+    public init(live: MergedSessions, liveIds: Set<String>,
+                optimistic: [Session], visibleClosed: [ResumableSession]) {
+        self.live = live
+        self.liveIds = liveIds
+        self.optimistic = optimistic
+        self.visibleClosed = visibleClosed
+    }
+}
+
 /// Pure fan-out reconciliation for the multi-host client. No networking, no
 /// UIKit — `swift test` verifies the merge/dedupe rules deterministically.
 public enum MultiHost {
@@ -56,6 +73,32 @@ public enum MultiHost {
             }
         }
         return out
+    }
+
+    /// Reconcile one visible list from a single current live merge. Closed-session
+    /// exclusion must use the live ids from THIS merge, not a previously cached
+    /// `liveIds` set, or a row can fall through the live/closed gap after recovery.
+    public static func reconcileSessionList(
+        perHostLive: [(host: Host, sessions: [Session])],
+        closedPerHost: [[ResumableSession]],
+        optimisticSessions: [Session] = [],
+        resumedIds: Set<String> = []
+    ) -> SessionListReconciliation {
+        let live = mergeSessions(perHostLive)
+        let liveIds = Set(live.sessions.compactMap(\.sessionId))
+        let optimistic = optimisticSessions.filter { o in
+            guard let id = o.sessionId else { return true }
+            return !liveIds.contains(id)
+        }
+        let optimisticIds = Set(optimistic.compactMap(\.sessionId))
+        let visibleClosed = reconcileResumable(perHost: closedPerHost, liveIds: liveIds)
+            .filter {
+                !optimisticIds.contains($0.sessionId)
+                    && !resumedIds.contains($0.sessionId)
+            }
+        return SessionListReconciliation(live: live, liveIds: liveIds,
+                                         optimistic: optimistic,
+                                         visibleClosed: visibleClosed)
     }
 
     /// Which host a per-session op must be sent to during a partial outage.
