@@ -12,11 +12,10 @@ import LFGCore
 /// it never tears a link down for anything but host-list changes and
 /// backgrounding.
 ///
-/// Health semantics: `unhealthySince` is the moment the link last stopped
-/// receiving (connect failure or stream death) and is cleared by the first
-/// element received after reconnect. The unreachable UI shows only when
-/// `HostLinkPolicy.showUnreachable` says the failure is SUSTAINED (≥30s) — a
-/// blip renders as nothing while the link quietly recovers.
+/// Health semantics: `unhealthySince` is the moment this link object last
+/// stopped receiving (connect failure or stream death) and is cleared by the
+/// first element received after reconnect. `SessionStore` owns the durable
+/// sustained-failure clock across foreground teardowns/rebuilds.
 @MainActor
 final class HostLink {
     enum State: Equatable {
@@ -64,17 +63,37 @@ final class HostLink {
 
     var isHealthy: Bool {
         switch state {
-        case .catchingUp, .live: return true
-        case .connecting: return unhealthySince == nil // first dial after a healthy run
-        case .idle, .backoff: return false
+        case .catchingUp, .live: return unhealthySince == nil
+        case .connecting, .idle, .backoff: return false
         }
     }
 
     func start() {
         guard runTask == nil else { return }
+        startRunTask()
+    }
+
+    func retryNow() {
+        switch state {
+        case .catchingUp, .live:
+            // Bytes are flowing. Do not churn a healthy stream just because the
+            // system path changed.
+            return
+        case .idle:
+            start()
+        case .connecting, .backoff:
+            runTask?.cancel()
+            runTask = nil
+            startRunTask()
+        }
+    }
+
+    private func startRunTask() {
         reloadCursor()
         runTask = Task { [weak self] in await self?.run() }
-        pingTask = Task { [weak self] in await self?.keepalive() }
+        if pingTask == nil {
+            pingTask = Task { [weak self] in await self?.keepalive() }
+        }
     }
 
     func stop() {
