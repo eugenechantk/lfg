@@ -77,6 +77,34 @@ def regenerate_project
   sh("cd .. && xcodegen generate") if uses_xcodegen?
 end
 
+# TestFlight groups builds by marketing-version train and sorts trains by semver.
+# A build whose MARKETING_VERSION is LOWER than the highest existing train uploads
+# fine, processes VALID, and even reports IN_BETA_TESTING — but never surfaces on
+# testers' devices (TestFlight buries downgrades below the installed version).
+# Project migrations (e.g. a rewritten project.yml) can silently reset the version,
+# so refuse to ship a downgrade.
+def assert_marketing_version_not_a_downgrade!
+  app = Spaceship::ConnectAPI::App.find(app_identifier)
+  return if app.nil? # no record yet -> nothing to downgrade against
+
+  local = get_version_number(xcodeproj: xcodeproj, target: target_name).to_s.strip
+  UI.user_error!("Could not read MARKETING_VERSION from #{xcodeproj}") if local.empty?
+
+  parse = ->(v) { Gem::Version.new(v) rescue Gem::Version.new("0") }
+  trains = Spaceship::ConnectAPI.get_pre_release_versions(filter: { app: app.id }).map(&:version).compact
+  highest = trains.max_by(&parse)
+  return if highest.nil?
+
+  if parse.call(local) < parse.call(highest)
+    UI.user_error!(
+      "MARKETING_VERSION #{local} is a DOWNGRADE from the highest TestFlight " \
+      "version train #{highest}. TestFlight will accept the upload but never show " \
+      "it to testers. Bump MARKETING_VERSION above #{highest} and redeploy."
+    )
+  end
+  UI.success("Version train OK: #{local} >= highest existing train #{highest}.")
+end
+
 platform :ios do
   desc "Verify the App Store Connect app record exists"
   lane :verify_app_store_record do
@@ -134,6 +162,7 @@ platform :ios do
     end
 
     regenerate_project
+    assert_marketing_version_not_a_downgrade!
     sync_appstore_signing(readonly: true)
 
     profile_name = "match AppStore #{app_identifier}"
@@ -176,6 +205,13 @@ platform :ios do
     }
     upload_opts[:changelog] = testflight_changelog if wait
     upload_to_testflight(**upload_opts)
+  end
+
+  desc "Check the project's MARKETING_VERSION against existing TestFlight version trains"
+  lane :verify_version_train do
+    app_store_connect_key
+    regenerate_project
+    assert_marketing_version_not_a_downgrade!
   end
 
   desc "Alias for deploy_testflight"
