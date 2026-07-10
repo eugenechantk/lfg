@@ -1132,7 +1132,11 @@ import LFGCore
             await retry(sid, qid)
         } else if let client = client(forSession: sid) {
             do {
-                let resp = try await client.sendMessage(sid, text: pending.matchText)
+                // Same background transport as the composer send — a retry must
+                // survive suspension/kill just like the original attempt.
+                let req = try client.sendMessageRequest(sid, text: pending.matchText)
+                let respData = try await BackgroundSender.shared.post(req, label: pending.id)
+                let resp = LFGClient.decodeSendResponse(respData)
                 applyResume(from: sid, resp)
                 let eff = (resp.resumed == true ? resp.sessionId : nil) ?? sid
                 mutatePending(eff, pending.id) { $0.confirmed = true }
@@ -1255,7 +1259,14 @@ import LFGCore
         // 3) Send. On failure mark the bubble failed (Retry); on success let the
         //    queue/transcript reconcile it.
         do {
-            let resp = try await client.sendMessage(id, text: full)
+            // Background URLSession transport (Phase 2 Task C): the system
+            // finishes this POST even if we're suspended or killed mid-transfer.
+            // While alive, the await resolves normally and everything below is
+            // unchanged; if we die, the message still lands and the next
+            // launch's queue/transcript reconcile resolves the outcome.
+            let req = try client.sendMessageRequest(id, text: full)
+            let respData = try await BackgroundSender.shared.post(req, label: pid)
+            let resp = LFGClient.decodeSendResponse(respData)
             applyResume(from: id, resp)
             let eff = (resp.resumed == true ? resp.sessionId : nil) ?? id
             // The backend accepted it (and, for a wake-up, finished resuming) —

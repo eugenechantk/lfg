@@ -16,8 +16,8 @@ Activities.
 |---|---|---|---|
 | A | Server: `/api/events/page` + push payloads carry `{hostId, seq}` + content-available | **Codex** (brief: `.codex/delegate/brief-phase2a-server.md`) | ✅ done, Claude-verified |
 | B | Client: remote-notification wake + BGAppRefreshTask → per-host delta sync via page endpoint | Claude | ✅ done, sim-verified (device caveat below) |
-| C | Client: sends via background URLSession + persisted pending list | spec ready: `.codex/delegate/brief-phase2c-background-sends.md` — execution deferred until ios/LFG/* is quiet (twin session active); gates C1–C3 must run on sim/device | spec ✅ / exec pending |
-| D1 | Server: liveactivity APNs (token endpoints + store, pure payload builders, watcher hooks behind `LFG_LIVE_ACTIVITIES=1`) | **Codex** (brief: `.codex/delegate/brief-phase2d1-liveactivity-server.md`) | delegated, in flight |
+| C | Client: sends via background URLSession + persisted pending list | implemented by twin session (BackgroundSender.swift); Claude reviewed, fixed retry path, ran gates | ✅ done, gates C1–C3 passed |
+| D1 | Server: liveactivity APNs (token endpoints + store, pure payload builders, watcher hooks behind `LFG_LIVE_ACTIVITIES=1`) | **Codex** (brief: `.codex/delegate/brief-phase2d1-liveactivity-server.md`) | ✅ done, Claude-verified (`7522258`) |
 | D2 | Client: widget extension target (project.yml), `LFGSessionAttributes` shared type, push-to-start + update-token registration, frequent-updates entitlement | Claude — after D1 verified + twin idle (project.yml/xcodegen collides with active builds) | pending |
 
 ## A+B results (2026-07-10)
@@ -45,6 +45,29 @@ Activities.
   prod server log from the phone.
 - SC-B3 (BGAppRefresh): registration + scheduling verified (registers without exception,
   submits on background); actual firing is at iOS's discretion — device-soak observable.
+
+## C results (2026-07-10)
+
+- **Implementation** (twin session, reviewed + completed here): `BackgroundSender` — one
+  background URLSession (`com.eugenechan.lfg.send`), file-based uploads (Caches/lfg-bgsend,
+  pruned at startup), await-shaped `post()` over delegate continuations; composer send AND
+  the `retryPending` fallback re-send both route through it (retry fix added during review);
+  `handleEventsForBackgroundURLSession` reattaches after relaunch-from-kill.
+- **Deviation from brief, accepted:** no `Application Support/pending-sends` reconcile table.
+  After death the outcome is reconciled from server state (queue + transcript) via the
+  existing optimistic-send repair paths — fewer moving parts, and the gates prove the
+  delivery half. `pendingSends` stay in-memory; a send cancelled by user force-quit is lost
+  silently (iOS cancels bg transfers on force-quit BY POLICY — no transport can beat that);
+  exactly-once bookkeeping arrives with Track B clientId idempotency as planned.
+- **Gate C1 (suspension):** send → immediate home → delivered server-side while backgrounded;
+  bubble resolved on return, target replied. PASS.
+- **Gate C2 (death), airtight variant:** server SIGSTOPped → send fired (POST provably
+  un-completable) → app SIGKILLed 1.9s later → server SIGCONTed 2s after death → message
+  landed (`C2B-TEST-inflight-kill`). nsurlsessiond finished the transfer post-mortem. PASS.
+- **Gate C3 (no duplicates):** 8 sends across suspension/kill/normal paths → 8 user turns,
+  every text exactly once (jq group-by count == 1 for all). PASS.
+- Suites: LFGCore 106/106; app build green; smoke send on final build delivered (including
+  auto-resume against a reaped session).
 
 ## Design decisions (pinned)
 

@@ -235,6 +235,26 @@ public struct LFGClient: Sendable {
         return (try? JSONDecoder().decode(SendResponse.self, from: data)) ?? SendResponse()
     }
 
+    /// The message-send as a plain URLRequest, for transports this client
+    /// doesn't own — the app routes it through a background URLSession so the
+    /// system finishes the POST even if the app is suspended or killed
+    /// mid-transfer (Phase 2 Task C). Body construction must stay identical to
+    /// `sendMessage`.
+    public func sendMessageRequest(_ id: String, text: String) throws -> URLRequest {
+        var req = URLRequest(url: url("api/sessions/\(id)/send"))
+        req.httpMethod = "POST"
+        req.timeoutInterval = 60
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["text": text])
+        return req
+    }
+
+    /// Decode a send response body (the background-transport counterpart of
+    /// `sendMessage`'s lenient decode).
+    public static func decodeSendResponse(_ data: Data) -> SendResponse {
+        (try? JSONDecoder().decode(SendResponse.self, from: data)) ?? SendResponse()
+    }
+
     public func answer(_ id: String, index: Int) async throws {
         _ = try await send("POST", "api/sessions/\(id)/answer", json: ["index": index])
     }
