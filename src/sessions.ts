@@ -16,7 +16,6 @@ import { isClosing } from "./closing";
 import { userAssignments } from "./users";
 import { PATHS } from "./config";
 import { homedir } from "node:os";
-import { codexDelegationSessionIds, lastPaneBusy } from "./activity.ts";
 import {
   listProcs,
   cwdOf,
@@ -65,10 +64,12 @@ export type Session = {
   lastActivityAt: number | null;
   // Best-effort "is this session mid-turn" baseline carried on the REST list so
   // the client can correct a stale "Working" badge for sessions outside the live
-  // SSE window (or whose busy delta was missed across a stream reconnect). Pane
-  // sessions use the pump's recent pane scrape when available; transcript
-  // freshness is only the fallback. Background Codex delegations are folded in
-  // here too so every surface shares the same busy boolean.
+  // SSE window (or whose busy delta was missed across a stream reconnect). For
+  // pane sessions it's approximated from transcript freshness (a CLI agent
+  // appends to its .jsonl as it streams); for headless aisdk/codex harnesses it
+  // comes from the accurate registry `busy`. The SSE pane-scraped busy remains
+  // the authoritative signal for streamed sessions and overrides this. See the
+  // multiplexed live stream's per-connection delta caveat in serve.ts.
   busy: boolean;
   last: SessionMsg | null;
   tmuxTarget: string | null;
@@ -1052,7 +1053,6 @@ async function listSessionsUncached(): Promise<Session[]> {
 
   const overrides = await readTitleOverrides();
   const assigns = userAssignments();
-  const delegatedSessionIds = codexDelegationSessionIds();
   const out: Session[] = [];
   for (const e of enriched) {
     let transcriptPath: string | null = null;
@@ -1103,10 +1103,6 @@ async function listSessionsUncached(): Promise<Session[]> {
     const tmuxTarget =
       isHeadless(e.cmd) || !e.authoritative ? null : tmuxTargetForPid(e.pid);
     const tmuxName = tmuxTarget ? tmuxTarget.split(":")[0] : null;
-    const transcriptRecent =
-      lastActivityAt != null && Date.now() - lastActivityAt < REST_BUSY_WINDOW_MS;
-    const delegated = sessionId ? delegatedSessionIds.has(sessionId) : false;
-    const paneBusy = sessionId ? lastPaneBusy(sessionId) : null;
     out.push({
       agent: "claude",
       pid: e.pid,
@@ -1119,7 +1115,7 @@ async function listSessionsUncached(): Promise<Session[]> {
       startedAt: e.startedAt,
       transcriptPath,
       lastActivityAt,
-      busy: delegated || (paneBusy ?? transcriptRecent),
+      busy: lastActivityAt != null && Date.now() - lastActivityAt < REST_BUSY_WINDOW_MS,
       last,
       // A headless `claude -p` (the report runner, or a dispatched agent
       // before it moved to its own tmux session) is a *descendant* of
@@ -1195,10 +1191,6 @@ async function listSessionsUncached(): Promise<Session[]> {
     if (!title) title = cwd ? basename(cwd) : project;
     const tmuxTarget = tmuxTargetForPid(p.pid);
     const tmuxName = tmuxTarget ? tmuxTarget.split(":")[0] : null;
-    const transcriptRecent =
-      lastActivityAt != null && Date.now() - lastActivityAt < REST_BUSY_WINDOW_MS;
-    const delegated = sessionId ? delegatedSessionIds.has(sessionId) : false;
-    const paneBusy = sessionId ? lastPaneBusy(sessionId) : null;
     out.push({
       agent: "codex",
       pid: p.pid,
@@ -1211,7 +1203,7 @@ async function listSessionsUncached(): Promise<Session[]> {
       startedAt,
       transcriptPath,
       lastActivityAt,
-      busy: delegated || (paneBusy ?? transcriptRecent),
+      busy: lastActivityAt != null && Date.now() - lastActivityAt < REST_BUSY_WINDOW_MS,
       last,
       tmuxTarget,
       tmuxName,
@@ -1278,7 +1270,6 @@ async function listSessionsUncached(): Promise<Session[]> {
       title = await firstPromptTitle(transcriptPath).catch(() => null);
     if (!title) title = e.title || (e.cwd ? basename(e.cwd) : project);
     let startedAt: number | null = startTimeMsOf(e.harnessPid) ?? e.createdAt;
-    const delegated = delegatedSessionIds.has(sessionId);
     out.push({
       agent: isCodex ? "codex-aisdk" : isOpencode ? "opencode" : "aisdk",
       pid: e.harnessPid,
@@ -1296,7 +1287,7 @@ async function listSessionsUncached(): Promise<Session[]> {
       transcriptPath,
       lastActivityAt,
       // Headless harness: the registry tracks an accurate per-turn busy flag.
-      busy: e.busy || delegated,
+      busy: e.busy,
       last,
       // No pane I/O — but keep the supervisor name so kill + managed badge work.
       tmuxTarget: null,

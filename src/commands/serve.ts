@@ -8,7 +8,6 @@ import { PATHS } from "../config.ts";
 import { hostInfo } from "../hostinfo.ts";
 import { Journal } from "../journal.ts";
 import { startJournalPump } from "../journal-pump.ts";
-import { codexDelegationSessionIds, notePaneBusy } from "../activity.ts";
 import {
   AGENTS_DIR,
   listAgents,
@@ -2143,16 +2142,15 @@ export async function cmdServe() {
               target: string | null;
             }) => {
               if (closed) return;
-              const delegated = codexDelegationSessionIds().has(p.sid);
               if (!p.target) {
                 // Pane-less (aisdk / codex-aisdk) session: busy comes from the
                 // registry, and there are no pane-scraped prompts. For a
                 // codex-aisdk session the sid may be the threadId rather than the
                 // control-plane key, so look it up by either.
                 const entry = findAisdkEntryByAnyId(p.sid);
-                let baseBusy: boolean;
+                let busy: boolean;
                 if (entry) {
-                  baseBusy = entry.busy;
+                  busy = entry.busy;
                 } else {
                   // Bare CLI session whose pane lfg couldn't resolve (e.g. a
                   // `claude`/`codex` launched outside lfg and not wrapped in a
@@ -2164,12 +2162,11 @@ export async function cmdServe() {
                   // during a long silent tool call. Wrap launches via the cy/
                   // codexy tmux aliases to get accurate pane-scraped busy instead.
                   try {
-                    baseBusy = Date.now() - statSync(p.tp).mtimeMs < BARE_BUSY_WINDOW_MS;
+                    busy = Date.now() - statSync(p.tp).mtimeMs < BARE_BUSY_WINDOW_MS;
                   } catch {
-                    baseBusy = false;
+                    busy = false;
                   }
                 }
-                const busy = baseBusy || delegated;
                 const bsig = busy ? "1" : "0";
                 if (bsig !== (lastBusy.get(p.sid) ?? "0")) {
                   lastBusy.set(p.sid, bsig);
@@ -2187,9 +2184,7 @@ export async function cmdServe() {
                   `event: prompt\ndata: ${JSON.stringify({ sid: p.sid, prompt: prompt ?? null })}\n\n`,
                 );
               }
-              const paneBusy = pane ? isBusy(pane) : false;
-              notePaneBusy(p.sid, paneBusy);
-              const busy = paneBusy || delegated;
+              const busy = pane ? isBusy(pane) : false;
               const bsig = busy ? "1" : "0";
               if (bsig !== (lastBusy.get(p.sid) ?? "0")) {
                 lastBusy.set(p.sid, bsig);

@@ -21,7 +21,6 @@ import type { SessionMsg } from "./sessions.ts";
 import { capturePaneAsync, isBusy } from "./tmux.ts";
 import { listQueue, reconcileQueued } from "./sendq.ts";
 import { findEntryByAnyId as findAisdkEntryByAnyId } from "./aisdk-registry.ts";
-import { codexDelegationSessionIds, notePaneBusy } from "./activity.ts";
 import { statSync } from "node:fs";
 
 const MSG_TICK_MS = 700;
@@ -125,20 +124,18 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
 
   const pollOne = async (w: Watched) => {
     try {
-      const delegated = codexDelegationSessionIds().has(w.sid);
       if (!w.target) {
         // Pane-less: registry busy (aisdk), else transcript-freshness heuristic.
         const entry = findAisdkEntryByAnyId(w.sid);
-        let baseBusy: boolean;
-        if (entry) baseBusy = entry.busy;
+        let busy: boolean;
+        if (entry) busy = entry.busy;
         else {
           try {
-            baseBusy = Date.now() - statSync(w.tp).mtimeMs < BARE_BUSY_WINDOW_MS;
+            busy = Date.now() - statSync(w.tp).mtimeMs < BARE_BUSY_WINDOW_MS;
           } catch {
-            baseBusy = false;
+            busy = false;
           }
         }
-        const busy = baseBusy || delegated;
         if (deltas.busyChanged(w.sid, busy)) j.append(w.sid, "busy", { sid: w.sid, busy });
         return;
       }
@@ -146,9 +143,7 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       const prompt = (await deps.resolvePrompt(w.tp, pane)) ?? null;
       if (deltas.promptChanged(w.sid, prompt))
         j.append(w.sid, "prompt", { sid: w.sid, prompt });
-      const paneBusy = pane ? isBusy(pane) : false;
-      notePaneBusy(w.sid, paneBusy);
-      const busy = paneBusy || delegated;
+      const busy = pane ? isBusy(pane) : false;
       if (deltas.busyChanged(w.sid, busy)) j.append(w.sid, "busy", { sid: w.sid, busy });
     } catch {}
   };

@@ -5,6 +5,15 @@
 - [ ] 2026-07-10 — Diagnosis claimed sync-conflict files were "correctly excluded" from code-reading alone; live testing proved the opposite
 - [ ] 2026-07-10 — Spent ~6 tool calls on cliclick coordinate clicks that never fire SwiftUI List row buttons; AXPress worked first try
 - [ ] 2026-07-10 — First Codex status monitor parsed `--json` output wrong and misreported the job as gone
+- [x] 2026-07-10 — Background Ruby ASC poller ran 17 min with zero output (no $stdout.sync); Eugene had to nudge — FIXED: `verify_testflight_build` DoD lane added to testflight-deploy skill (synced to all apps, verified green on build 202607101926); spaceship filter gotcha documented; unbuffered-background-output rule added to global CLAUDE.md
+
+## Log (addendum)
+
+### 2026-07-10 — Background poller silent for 17 minutes
+
+**What happened:** The ASC definition-of-done poller ran as a background task with buffered stdout (Ruby buffers when stdout isn't a tty), so its output file stayed at 0 bytes for 17 minutes and Eugene had to ask what was happening. A separate spaceship quirk compounded it: `Build.all(version: ...)` filtering returned nothing for a build that the unfiltered list showed as VALID.
+**Why this was wrong:** A long-running background probe that emits nothing is indistinguishable from a hung one — the whole point of the log file is observability. And the version-filter quirk is exactly the class of "query by filter, not sorted listings" trap the testflight skill warns about, but inverted (here the FILTER lied and the listing was right).
+**What better looks like:** `$stdout.sync = true` (or stdbuf/PYTHONUNBUFFERED equivalents) in every backgrounded script, and prefer short foreground one-shot probes repeated on wake over one long silent loop. For spaceship: fetch the unfiltered build list and select client-side; trust no server-side filter until verified once (see [[probe-shape-before-scripting]]).
 
 ## Log
 

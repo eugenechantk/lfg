@@ -246,6 +246,61 @@ platform :ios do
     assert_marketing_version_not_a_downgrade!
   end
 
+  desc "Definition-of-done for an uploaded build: ipa ground truth + VALID + right train + beta-testable"
+  lane :verify_testflight_build do |options|
+    require "json"
+    require "shellwords"
+    app_store_connect_key
+    build_number = (options[:build_number] || ENV["VERIFY_BUILD_NUMBER"]).to_s.strip
+    UI.user_error!("Pass build_number: `fastlane ios verify_testflight_build build_number:YYYYMMDDHHMM`") if build_number.empty?
+
+    # DoD 1 — ipa ground truth, when the ipa from this deploy is still on disk.
+    # Plain-Ruby file access runs with cwd = fastlane/, so anchor to the Fastfile.
+    ipa = File.expand_path("../build/fastlane/#{target_name}.ipa", __dir__)
+    if File.exist?(ipa)
+      plist = `unzip -p #{ipa.shellescape} 'Payload/*.app/Info.plist' | plutil -convert json -o - -- -`
+      info = JSON.parse(plist) rescue {}
+      actual = info["CFBundleVersion"].to_s
+      UI.user_error!("ipa carries CFBundleVersion=#{actual}, expected #{build_number} — the xcargs build number never reached the binary") if actual != build_number
+      UI.success("ipa ground truth OK: CFBundleVersion=#{actual}, v#{info['CFBundleShortVersionString']}")
+    else
+      UI.important("No local ipa at #{ipa} — skipping ground-truth check (fine when verifying an old upload)")
+    end
+
+    app = Spaceship::ConnectAPI::App.find(app_identifier)
+    UI.user_error!("No App Store Connect record for #{app_identifier}") if app.nil?
+
+    # DoD 2 — processing VALID, polled. Server-side filters lie: Build.all(version:)
+    # has returned [] for a build the unfiltered list showed as VALID (2026-07-10).
+    # Always fetch unfiltered and select client-side.
+    parse = ->(v) { Gem::Version.new(v) rescue Gem::Version.new("0") }
+    timeout_min = (options[:timeout_minutes] || 20).to_i
+    build = nil
+    timeout_min.times do |i|
+      builds = Spaceship::ConnectAPI::Build.all(app_id: app.id, includes: "preReleaseVersion")
+      build = builds.find { |b| b.version.to_s == build_number }
+      state = build&.processing_state
+      UI.message("[#{i + 1}/#{timeout_min}] build #{build_number}: #{state || 'not visible yet'}")
+      break if state == "VALID"
+      UI.user_error!("Build #{build_number} failed processing: #{state}") if %w[FAILED INVALID].include?(state.to_s)
+      sleep 60
+    end
+    UI.user_error!("Timed out: build #{build_number} not VALID after #{timeout_min} min") unless build&.processing_state == "VALID"
+
+    # DoD 3 — right version train (a lower train is buried on testers' devices).
+    train = build.pre_release_version&.version.to_s
+    trains = Spaceship::ConnectAPI.get_pre_release_versions(filter: { app: app.id }).map(&:version).compact
+    highest = trains.max_by(&parse).to_s
+    UI.user_error!("Build is on train #{train}, below highest #{highest} — TestFlight will bury it") if parse.call(train) < parse.call(highest)
+
+    # DoD 4 — actually testable, queried by build ID.
+    detail = Spaceship::ConnectAPI.get_build_beta_details(filter: { build: build.id }).first
+    internal = detail&.internal_build_state.to_s
+    UI.user_error!("internalBuildState=#{internal} (want IN_BETA_TESTING)") unless internal == "IN_BETA_TESTING"
+
+    UI.success("DoD PASS: #{build_number} VALID on train #{train} (highest), internal=IN_BETA_TESTING")
+  end
+
   desc "Alias for deploy_testflight"
   lane :beta do
     deploy_testflight
