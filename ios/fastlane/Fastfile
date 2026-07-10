@@ -24,6 +24,20 @@ def scheme_name      = ENV.fetch("FASTLANE_SCHEME") { target_name }
 def app_name         = ENV["APP_NAME"].to_s.strip.empty? ? app_identifier : ENV["APP_NAME"]
 def uses_xcodegen?   = boolean_env("USES_XCODEGEN", false)
 
+# Optional embedded extensions (widgets, etc.): comma-separated "TargetName:bundle.id"
+# pairs, e.g. EXTENSION_TARGETS="MyWidgets:com.me.app.MyWidgets". Empty -> app-only,
+# identical to pre-extension behavior. Each extension gets its own match AppStore
+# profile and manual-signing entry alongside the app target.
+def extension_targets
+  ENV["EXTENSION_TARGETS"].to_s.split(",").map(&:strip).reject(&:empty?).map do |pair|
+    t, id = pair.split(":", 2)&.map(&:strip)
+    UI.user_error!("EXTENSION_TARGETS entry '#{pair}' must be TargetName:bundle.id") if t.to_s.empty? || id.to_s.empty?
+    [t, id]
+  end
+end
+
+def all_identifiers = [app_identifier, *extension_targets.map(&:last)]
+
 # Hong Kong is UTC+8 year-round (no DST) — fixed offset is safe on any CI runner.
 HONG_KONG_UTC_OFFSET = "+08:00".freeze
 def hong_kong_now = Time.now.getlocal(HONG_KONG_UTC_OFFSET)
@@ -60,7 +74,7 @@ def sync_appstore_signing(readonly:)
   match(
     type:           "appstore",
     readonly:       readonly,
-    app_identifier: app_identifier,
+    app_identifier: all_identifiers,
     git_url:        required_env("MATCH_GIT_URL"),
     git_branch:     ENV.fetch("MATCH_GIT_BRANCH", "main"),
     team_id:        required_env("DEVELOPER_TEAM_ID"),
@@ -149,6 +163,15 @@ platform :ios do
 
   desc "Create or refresh App Store signing assets in the shared match repo (run once per app)"
   lane :bootstrap_match do
+    # match generates profiles but does NOT register missing bundle ids — extensions
+    # need their App IDs created first (the main app's comes from create_app_record).
+    app_store_connect_key # sets the global Spaceship::ConnectAPI token
+    extension_targets.each do |t, id|
+      if Spaceship::ConnectAPI::BundleId.all(filter: { identifier: id }).none? { |b| b.identifier == id }
+        UI.message("Registering bundle id #{id} on the Developer Portal…")
+        Spaceship::ConnectAPI::BundleId.create(name: "#{app_name} #{t}", identifier: id, platform: "IOS")
+      end
+    end
     sync_appstore_signing(readonly: false)
   end
 
@@ -166,14 +189,23 @@ platform :ios do
     sync_appstore_signing(readonly: true)
 
     profile_name = "match AppStore #{app_identifier}"
-    update_code_signing_settings(
-      use_automatic_signing: false,
-      path:                  xcodeproj,
-      targets:               [target_name],
-      team_id:               required_env("DEVELOPER_TEAM_ID"),
-      code_sign_identity:    "Apple Distribution",
-      profile_name:          profile_name
-    )
+    # One manual-signing pass per target — each needs its own profile name, so the
+    # app and every extension get separate update_code_signing_settings calls.
+    signing_plan = { target_name => profile_name }
+    extension_targets.each { |t, id| signing_plan[t] = "match AppStore #{id}" }
+    signing_plan.each do |tgt, profile|
+      update_code_signing_settings(
+        use_automatic_signing: false,
+        path:                  xcodeproj,
+        targets:               [tgt],
+        team_id:               required_env("DEVELOPER_TEAM_ID"),
+        code_sign_identity:    "Apple Distribution",
+        profile_name:          profile
+      )
+    end
+
+    export_profiles = { app_identifier => profile_name }
+    extension_targets.each { |_t, id| export_profiles[id] = "match AppStore #{id}" }
 
     build_app(
       project:          xcodeproj,
@@ -189,7 +221,7 @@ platform :ios do
       xcargs:           "CURRENT_PROJECT_VERSION=#{timestamp_build_number}",
       export_options: {
         signingStyle: "manual",
-        provisioningProfiles: { app_identifier => profile_name }
+        provisioningProfiles: export_profiles
       }
     )
 
