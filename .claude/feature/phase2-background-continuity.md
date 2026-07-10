@@ -18,7 +18,7 @@ Activities.
 | B | Client: remote-notification wake + BGAppRefreshTask → per-host delta sync via page endpoint | Claude | ✅ done, sim-verified (device caveat below) |
 | C | Client: sends via background URLSession + persisted pending list | implemented by twin session (BackgroundSender.swift); Claude reviewed, fixed retry path, ran gates | ✅ done, gates C1–C3 passed |
 | D1 | Server: liveactivity APNs (token endpoints + store, pure payload builders, watcher hooks behind `LFG_LIVE_ACTIVITIES=1`) | **Codex** (brief: `.codex/delegate/brief-phase2d1-liveactivity-server.md`) | ✅ done, Claude-verified (`7522258`) |
-| D2 | Client: widget extension target (project.yml), `LFGSessionAttributes` shared type, push-to-start + update-token registration, frequent-updates entitlement | Claude — after D1 verified + twin idle (project.yml/xcodegen collides with active builds) | pending |
+| D2 | Client: widget extension target (project.yml), `LFGSessionAttributes` shared type, push-to-start + update-token registration, frequent-updates entitlement | **Codex** (brief: `.codex/delegate/brief-phase2d2-liveactivity-client.md`; report: `.claude/feature/phase2d2-liveactivity-client.md`) | ✅ done, Claude-verified live |
 
 ## A+B results (2026-07-10)
 
@@ -68,6 +68,31 @@ Activities.
   every text exactly once (jq group-by count == 1 for all). PASS.
 - Suites: LFGCore 106/106; app build green; smoke send on final build delivered (including
   auto-resume against a reaped session).
+
+## D2 results (2026-07-10)
+
+- **Codex delegation:** implemented per brief (widget target, shared attributes, manager,
+  client methods, 2 request-shape tests); killed at the 600s exec timeout mid-report but the
+  work was complete — xcodegen + 108/108 LFGCore tests already recorded in its output.
+- **Claude verification:** both targets build for sim (LFGWidgets.appex embedded in the app
+  bundle, LA Info.plist keys present); **live token seam proven** — the sim DOES issue
+  push-to-start tokens; the app fanned registration out to both configured hosts, a
+  D1-carrying scratch server stored `{kind: pushToStart, env: sandbox}` in
+  `live-activity-tokens.json`, and the prod host 404'd (expected deploy gap — prod serve
+  process predates the Phase 2 merge).
+- **Spec bug caught live (mine, not Codex's):** the brief said `env: "dev"/"prod"`; the D1
+  server only recognizes `"production"` (else → sandbox), so release builds would have
+  registered as sandbox and production LA pushes would fail. Client now sends
+  `"sandbox"/"production"` matching `PushManager.apnsEnv`.
+- **Device checkpoints (sim cannot verify):** update-token path + widget rendering need a
+  real activity, which needs a real APNs `liveactivity` start push (server flag
+  `LFG_LIVE_ACTIVITIES=1` + device build). Fold into the existing device soak.
+- **Sim rig recipe (cost real time):** to point the sim app at a scratch host, write the
+  app-container plist then `kill -9` the SIM's cfprefsd (`ps ax | grep cfprefsd | grep
+  CoreSimulator`) — `simctl spawn defaults write` hits the user domain, not the app
+  container, and a live cfprefsd clobbers direct file writes. A same-machine scratch server
+  also inherits the prod `host-id` via the data-dir migration — overwrite
+  `<LFG_DATA>/host-id` with a fresh uuid or the app's hostId dedupe collapses the two hosts.
 
 ## Design decisions (pinned)
 

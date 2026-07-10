@@ -322,6 +322,21 @@ public struct LFGClient: Sendable {
         ])
     }
 
+    /// Register the ActivityKit push-to-start token. `env` uses the same
+    /// "sandbox"/"production" strings as ordinary alert-push registration —
+    /// the server treats anything else as sandbox.
+    public func registerLiveActivityStartToken(_ hex: String, env: String) async throws {
+        _ = try await send("POST", "api/push/live-activity/start-token", json: [
+            "token": hex, "env": env,
+        ])
+    }
+
+    public func registerLiveActivityUpdateToken(_ hex: String, env: String, sessionId: String) async throws {
+        _ = try await send("POST", "api/push/live-activity/update-token", json: [
+            "token": hex, "env": env, "sessionId": sessionId,
+        ])
+    }
+
     public func unregisterPush(token: String) async throws {
         _ = try await send("POST", "api/push/unregister", json: ["token": token])
     }

@@ -21,6 +21,20 @@
                ReferencedContainer = "container:LFG.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "2DEBFBAD6853B0C519FB25AC"
+               BuildableName = "LFGWidgets.appex"
+               BlueprintName = "LFGWidgets"
+               ReferencedContainer = "container:LFG.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
