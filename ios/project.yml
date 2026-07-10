@@ -29,7 +29,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.eugenechan.lfg
-        MARKETING_VERSION: 0.1.0
+        MARKETING_VERSION: 0.2.0
         CURRENT_PROJECT_VERSION: 1
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 39GJBP8V5A
