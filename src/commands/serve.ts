@@ -1472,8 +1472,14 @@ export async function cmdServe() {
           (await listSessions()).map((s) => s.sessionId).filter((x): x is string => !!x),
         );
         const limit = Number(url.searchParams.get("limit")) || 30;
-        const sessions = await listResumable({ limit, excludeIds: liveIds });
-        return json({ sessions });
+        const rawBefore = url.searchParams.get("before");
+        const before = rawBefore == null ? null : Number.parseFloat(rawBefore);
+        const page = await listResumable({
+          limit,
+          excludeIds: liveIds,
+          before: before != null && Number.isFinite(before) ? before : null,
+        });
+        return json(page);
       }
 
       // Resume a closed claude session: relaunch `claude --resume <id>` in the

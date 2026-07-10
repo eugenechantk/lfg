@@ -147,6 +147,8 @@ function computeStatus(
 }
 
 const UUID = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
+// Whole-string variant for validating a bare id (e.g. a transcript filename).
+const UUID_EXACT = new RegExp(`^${UUID.source}$`);
 
 // Live `claude` / `codex` processes with their full command line. Platform
 // details (pgrep on Linux, ps on macOS) live in ./procinfo; the include gate
@@ -1382,52 +1384,69 @@ export type ResumableSession = {
   lastUserText: string | null;
 };
 
+export type ResumablePage = {
+  sessions: ResumableSession[];
+  nextBefore: number | null;
+};
+
 // Recently-active claude sessions that are NOT currently live — the closed /
 // rebooted-away conversations a user can bring back with `claude --resume`.
 // pgrep-based listSessions() only ever shows running procs, so after the box
 // reboots (tmux server + every claude proc gone) the live list is empty even
 // though all the transcripts survive on disk. This reads those transcripts so
-// the UI can offer to resume one. Newest first, capped — enriching every
-// historical transcript would be needlessly slow.
+// the UI can offer to resume one. Newest first, cursor-paged — enriching every
+// historical transcript in a single response would be needlessly slow.
 export async function listResumable(
-  opts: { limit?: number; excludeIds?: Set<string> } = {},
-): Promise<ResumableSession[]> {
+  opts: { limit?: number; excludeIds?: Set<string>; before?: number | null } = {},
+): Promise<ResumablePage> {
   const limit = Math.max(1, Math.min(100, opts.limit ?? 30));
   const exclude = opts.excludeIds ?? new Set<string>();
+  const before = typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
   let dirs: string[];
+  const projectsDir = process.env.LFG_CLAUDE_PROJECTS_DIR ?? PROJECTS_DIR;
   try {
-    dirs = await readdir(PROJECTS_DIR);
+    dirs = await readdir(projectsDir);
   } catch {
-    return [];
+    return { sessions: [], nextBefore: null };
   }
   // Cheap first pass: collect (id, path, mtime) for every transcript, skipping
   // live ones, so we only pay the title/cwd read cost for the newest `limit`.
-  const candidates: { id: string; path: string; mtime: number }[] = [];
+  // A synced transcript can occasionally exist under more than one encoded
+  // project directory; treat sessionId as authoritative and keep the newest copy
+  // so pagination never returns the same conversation twice.
+  const byId = new Map<string, { id: string; path: string; mtime: number }>();
   for (const d of dirs) {
     let files: string[];
     try {
-      files = await readdir(join(PROJECTS_DIR, d));
+      files = await readdir(join(projectsDir, d));
     } catch {
       continue;
     }
     for (const f of files) {
       if (!f.endsWith(".jsonl")) continue;
       const id = f.replace(/\.jsonl$/, "");
-      if (!UUID.test(id) || exclude.has(id)) continue;
-      const path = join(PROJECTS_DIR, d, f);
+      // Whole-name UUID match, not UUID.test: a Syncthing conflict copy
+      // ("<uuid>.sync-conflict-<stamp>.jsonl") contains a UUID substring but is
+      // a duplicate of the real transcript and can't be `--resume`d by its name.
+      if (!UUID_EXACT.test(id) || exclude.has(id)) continue;
+      const path = join(projectsDir, d, f);
       let mtime = 0;
       try {
         mtime = statSync(path).mtimeMs;
       } catch {
         continue;
       }
-      candidates.push({ id, path, mtime });
+      const prev = byId.get(id);
+      if (!prev || mtime > prev.mtime) byId.set(id, { id, path, mtime });
     }
   }
+  const candidates = [...byId.values()].filter((c) => before == null || c.mtime < before);
   candidates.sort((a, b) => b.mtime - a.mtime);
+  const page = candidates.slice(0, limit);
+  const nextBefore = candidates.length > page.length ? page[page.length - 1]?.mtime ?? null : null;
   const overrides = await readTitleOverrides();
   const out: ResumableSession[] = [];
-  for (const c of candidates.slice(0, limit)) {
+  for (const c of page) {
     const cwd = await cwdForTranscript(c.path).catch(() => null);
     let title = overrides[c.id] || null;
     if (!title) title = await firstPromptTitle(c.path).catch(() => null);
@@ -1441,7 +1460,7 @@ export async function listResumable(
       lastUserText: await lastUserText(c.path).catch(() => null),
     });
   }
-  return out;
+  return { sessions: out, nextBefore };
 }
 
 // Recent normalized messages for an initial render (tail of the file).
