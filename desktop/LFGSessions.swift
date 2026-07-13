@@ -183,11 +183,27 @@ final class SessionStore: ObservableObject {
     @Published var lastRefreshed: Date?
 
     var items: [SessionItem] {
-        hosts.flatMap { host in
+        let all = hosts.flatMap { host in
             host.sessions.map {
                 SessionItem(session: $0, hostLabel: host.label, hostIsLocal: host.isLocal)
             }
         }
+        // A host can list one sessionId twice (e.g. a session resumed into a
+        // new tmux pane while the old pane is still tracked). Duplicate row
+        // IDs crash the AppKit-backed List on expand — keep the freshest.
+        var byId: [String: SessionItem] = [:]
+        var order: [String] = []
+        for item in all {
+            if let existing = byId[item.id] {
+                if (item.session.lastActivityAt ?? 0) > (existing.session.lastActivityAt ?? 0) {
+                    byId[item.id] = item
+                }
+            } else {
+                byId[item.id] = item
+                order.append(item.id)
+            }
+        }
+        return order.compactMap { byId[$0] }
     }
 
     var unreachableHosts: [String] {
