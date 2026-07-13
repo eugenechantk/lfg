@@ -38,6 +38,7 @@ import {
   listSessions,
   resolveTranscript,
   recentMessages,
+  snapshotMessages,
   messagePage,
   normalizeLineMessages,
   setSessionTitle,
@@ -47,6 +48,7 @@ import {
   listResumable,
   cwdForTranscript,
   modelAliasForTranscript,
+  type Session,
   type PendingPrompt,
 } from "../sessions.ts";
 import {
@@ -68,7 +70,7 @@ import {
   panePidForSession,
   isBusy,
 } from "../tmux.ts";
-import { addManaged, normalizeParentSessionId, removeManaged } from "../managed.ts";
+import { addManaged, forkLineageForSession, normalizeParentSessionId, patchManaged, removeManaged } from "../managed.ts";
 import { PtyBridge, termSessionName } from "../pty.ts";
 import { capturePaneScroll, capturePaneEscaped, paneWidth, ensureFolderTrusted } from "../tmux.ts";
 import { rootDir, inboxDir, setInbox, createDir } from "../dirs.ts";
@@ -174,6 +176,7 @@ async function forkSession(opts: {
   const cwd = (await cwdForTranscript(transcript)) ?? SELF_REPO;
   // Branch on the model the conversation was last using, unless overridden.
   const model = opts.model || (await modelAliasForTranscript(transcript)) || undefined;
+  const forkSourceBytes = statSync(transcript).size;
   const tmuxName = `lfg-${randomBytes(3).toString("hex")}`;
   const r = spawnManagedSession({ name: tmuxName, cwd, model, resume: sessionId, fork: true });
   if (!r.ok) return { ok: false, status: 502, error: r.error || "failed to fork session" };
@@ -185,6 +188,9 @@ async function forkSession(opts: {
     await new Promise((res) => setTimeout(res, 500));
     const pid = panePidForSession(tmuxName);
     if (pid) newId = sessionIdForPid(pid);
+  }
+  if (newId) {
+    patchManaged(tmuxName, { sessionId: newId, forkedFrom: sessionId, forkSourceBytes });
   }
   return { ok: true, tmuxName, cwd, newId };
 }
@@ -407,6 +413,145 @@ function msgWithHtml<T extends { kind: string; text: string }>(m: T) {
   return m;
 }
 
+async function messagePageFromSnapshot(
+  path: string,
+  opts: { before?: number | null; limit?: number; maxBytes: number | null },
+): Promise<{
+  messages: Awaited<ReturnType<typeof snapshotMessages>>;
+  nextBefore: number | null;
+  total: number;
+}> {
+  const all = await snapshotMessages(path, 0, { maxBytes: opts.maxBytes });
+  const limit = Math.max(1, Math.min(500, opts.limit ?? 220));
+  const rawEnd = opts.before ?? all.length;
+  const end = Math.max(0, Math.min(all.length, rawEnd));
+  const start = Math.max(0, end - limit);
+  return {
+    messages: all.slice(start, end),
+    nextBefore: start > 0 ? start : null,
+    total: all.length,
+  };
+}
+
+export async function messagesResponseForSession(sid: string, url: URL): Promise<Response> {
+  let tp = await resolveTranscript(sid);
+  let forkPending = false;
+  let forkSourceBytes: number | null = null;
+  if (!tp) {
+    const lineage = forkLineageForSession(sid);
+    if (!lineage?.forkedFrom) return err(404, "session transcript not found");
+    tp = await resolveTranscript(lineage.forkedFrom);
+    if (!tp) return err(404, "session transcript not found");
+    forkPending = true;
+    forkSourceBytes = lineage.forkSourceBytes ?? null;
+  }
+
+  if (url.searchParams.get("page") === "backward") {
+    const rawLimit = parseInt(url.searchParams.get("limit") ?? "220", 10);
+    const rawBefore = url.searchParams.get("before");
+    const before =
+      rawBefore == null ? null : Math.max(0, parseInt(rawBefore, 10) || 0);
+    const page = forkPending
+      ? await messagePageFromSnapshot(tp, {
+          before,
+          limit: Number.isFinite(rawLimit) ? rawLimit : 220,
+          maxBytes: forkSourceBytes,
+        })
+      : await messagePage(tp, {
+          before,
+          limit: Number.isFinite(rawLimit) ? rawLimit : 220,
+        });
+    return json({
+      id: sid,
+      total: page.total,
+      nextBefore: page.nextBefore,
+      messages: page.messages.map(msgWithHtml),
+      ...(forkPending ? { forkPending: true } : {}),
+    });
+  }
+
+  const full = url.searchParams.get("full") === "1";
+  const rawLimit = parseInt(url.searchParams.get("limit") ?? (full ? "0" : "30"), 10);
+  const lim = full
+    ? Math.max(0, Math.min(20000, Number.isFinite(rawLimit) ? rawLimit : 0))
+    : Math.min(200, Math.max(1, Number.isFinite(rawLimit) ? rawLimit : 30));
+  const messages = forkPending
+    ? await snapshotMessages(tp, lim, { maxBytes: forkSourceBytes })
+    : await recentMessages(tp, lim, { maxBytes: full ? null : undefined });
+  return json({
+    id: sid,
+    messages: messages.map(msgWithHtml),
+    ...(forkPending ? { forkPending: true } : {}),
+  });
+}
+
+export type LiveStreamPane = { sid: string; tp: string; target: string | null };
+
+export async function liveStreamInitialState(
+  ids: string[],
+  deps: {
+    listSessions?: () => Promise<Session[]>;
+    resolveTranscript?: (sid: string) => Promise<string | null>;
+    forkLineageForSession?: (sid: string) => unknown;
+  } = {},
+): Promise<{ panes: LiveStreamPane[]; pending: Set<string>; sessions: Session[] }> {
+  const listSessionsFn = deps.listSessions ?? listSessions;
+  const resolveTranscriptFn = deps.resolveTranscript ?? resolveTranscript;
+  const forkLineageForSessionFn = deps.forkLineageForSession ?? forkLineageForSession;
+  const sessions = await listSessionsFn();
+  const pending = new Set<string>();
+  const panes = (
+    await Promise.all(
+      ids.map(async (sid) => {
+        const tp = await resolveTranscriptFn(sid);
+        if (!tp) {
+          if (forkLineageForSessionFn(sid)) pending.add(sid);
+          return null;
+        }
+        const target = sessions.find((s) => s.sessionId === sid)?.tmuxTarget ?? null;
+        return { sid, tp, target };
+      }),
+    )
+  ).filter((p): p is LiveStreamPane => !!p);
+  return { panes, pending, sessions };
+}
+
+export async function attachPendingForkTranscripts(args: {
+  pending: Set<string>;
+  panes: LiveStreamPane[];
+  sessions: Session[];
+  offsets: Map<string, number>;
+  send: (s: string) => void;
+  pollOne?: (p: LiveStreamPane) => void | Promise<void>;
+  queueOne?: (p: { sid: string }) => void | Promise<void>;
+  listSessions?: () => Promise<Session[]>;
+  resolveTranscript?: (sid: string) => Promise<string | null>;
+}): Promise<number> {
+  if (!args.pending.size) return 0;
+  const resolveTranscriptFn = args.resolveTranscript ?? resolveTranscript;
+  let sessions = args.sessions;
+  if (args.listSessions) {
+    sessions = await args.listSessions().catch(() => args.sessions);
+  }
+  let attached = 0;
+  for (const sid of [...args.pending]) {
+    const tp = await resolveTranscriptFn(sid);
+    if (!tp) continue;
+    const target = sessions.find((s) => s.sessionId === sid)?.tmuxTarget
+      ?? args.sessions.find((s) => s.sessionId === sid)?.tmuxTarget
+      ?? null;
+    const pane = { sid, tp, target };
+    args.pending.delete(sid);
+    args.panes.push(pane);
+    args.offsets.set(sid, Bun.file(tp).size);
+    args.send(`event: reset\ndata: ${JSON.stringify({ sid })}\n\n`);
+    await args.pollOne?.(pane);
+    await args.queueOne?.(pane);
+    attached++;
+  }
+  return attached;
+}
+
 // Compact, spoken-summary-friendly snapshot of every live session, injected into
 // the voice orchestrator's spawn prompt so its FIRST reply can be a proactive
 // status briefing with no tool-call round-trip. Each session is classified:
@@ -619,7 +764,7 @@ export async function cmdServe() {
         const sessionName = termSessionName(url.searchParams.get("session") || "main");
         const cols = clampDim(url.searchParams.get("cols"), 80);
         const rows = clampDim(url.searchParams.get("rows"), 24);
-        const ok = server.upgrade<TermSocketData>(req, {
+        const ok = server.upgrade(req, {
           data: { sessionName, cols, rows },
         });
         if (ok) return undefined; // upgraded — Bun takes over the socket
@@ -990,7 +1135,7 @@ export async function cmdServe() {
             status?: "open" | "dismissed" | "session" | "read";
             sessionId?: string;
           } | null;
-          const patch: { status?: typeof b.status; sessionId?: string } = {};
+          const patch: { status?: "open" | "dismissed" | "session" | "read"; sessionId?: string } = {};
           if (b?.status) patch.status = b.status;
           if (b?.sessionId) patch.sessionId = b.sessionId;
           const f = await updateFinding(m[1], patch);
@@ -1842,33 +1987,7 @@ export async function cmdServe() {
       {
         const m = path.match(/^\/api\/sessions\/([0-9a-fA-F-]{36})\/messages$/);
         if (m && req.method === "GET") {
-          const tp = await resolveTranscript(m[1]);
-          if (!tp) return err(404, "session transcript not found");
-          if (url.searchParams.get("page") === "backward") {
-            const rawLimit = parseInt(url.searchParams.get("limit") ?? "220", 10);
-            const rawBefore = url.searchParams.get("before");
-            const before =
-              rawBefore == null ? null : Math.max(0, parseInt(rawBefore, 10) || 0);
-            const page = await messagePage(tp, {
-              before,
-              limit: Number.isFinite(rawLimit) ? rawLimit : 220,
-            });
-            return json({
-              id: m[1],
-              total: page.total,
-              nextBefore: page.nextBefore,
-              messages: page.messages.map(msgWithHtml),
-            });
-          }
-          const full = url.searchParams.get("full") === "1";
-          const rawLimit = parseInt(url.searchParams.get("limit") ?? (full ? "0" : "30"), 10);
-          const lim = full
-            ? Math.max(0, Math.min(20000, Number.isFinite(rawLimit) ? rawLimit : 0))
-            : Math.min(200, Math.max(1, Number.isFinite(rawLimit) ? rawLimit : 30));
-          return json({
-            id: m[1],
-            messages: (await recentMessages(tp, lim, { maxBytes: full ? null : undefined })).map(msgWithHtml),
-          });
+          return messagesResponseForSession(m[1], url);
         }
       }
 
@@ -2062,10 +2181,7 @@ export async function cmdServe() {
           /^\/api\/sessions\/([0-9a-fA-F-]{36})\/messages$/,
         );
         if (m && req.method === "GET") {
-          const tp = await resolveTranscript(m[1]);
-          if (!tp) return err(404, "session transcript not found");
-          const msgs = (await recentMessages(tp, 60)).map(msgWithHtml);
-          return json({ id: m[1], messages: msgs });
+          return messagesResponseForSession(m[1], url);
         }
       }
 
@@ -2087,20 +2203,11 @@ export async function cmdServe() {
           .map((s) => s.trim())
           .filter((s) => /^[0-9a-fA-F-]{36}$/.test(s))
           .slice(0, 24);
-        const all = await listSessions();
-        const panes = (
-          await Promise.all(
-            ids.map(async (sid) => {
-              const tp = await resolveTranscript(sid);
-              if (!tp) return null;
-              const target = all.find((s) => s.sessionId === sid)?.tmuxTarget ?? null;
-              return { sid, tp, target };
-            }),
-          )
-        ).filter((p): p is { sid: string; tp: string; target: string | null } => !!p);
+        const { panes, pending, sessions: initialSessions } = await liveStreamInitialState(ids);
 
         let iv: ReturnType<typeof setInterval> | null = null;
         let pi: ReturnType<typeof setInterval> | null = null;
+        let ri: ReturnType<typeof setInterval> | null = null;
         let hb: ReturnType<typeof setInterval> | null = null;
         let closed = false;
         const stream = new ReadableStream({
@@ -2141,11 +2248,7 @@ export async function cmdServe() {
               } catch {}
             };
             const lastBusy = new Map<string, string>();
-            const pollOne = async (p: {
-              sid: string;
-              tp: string;
-              target: string | null;
-            }) => {
+            const pollOne = async (p: LiveStreamPane) => {
               if (closed) return;
               const delegated = codexDelegationSessionIds().has(p.sid);
               if (!p.target) {
@@ -2239,6 +2342,23 @@ export async function cmdServe() {
                   void reconcileQueued(p.sid).then((c) => c && queueOne(p));
                 }
               }, 1000);
+              ri = setInterval(() => {
+                void attachPendingForkTranscripts({
+                  pending,
+                  panes,
+                  sessions: initialSessions,
+                  offsets,
+                  send,
+                  listSessions,
+                  pollOne: async (p) => {
+                    lastSig.set(p.sid, " ");
+                    lastQ.set(p.sid, "[]");
+                    lastBusy.set(p.sid, "init");
+                    await pollOne(p);
+                  },
+                  queueOne,
+                });
+              }, 2000);
             })();
             hb = setInterval(() => send(`: hb\n\n`), 15000);
           },
@@ -2246,6 +2366,7 @@ export async function cmdServe() {
             closed = true;
             if (iv) clearInterval(iv);
             if (pi) clearInterval(pi);
+            if (ri) clearInterval(ri);
             if (hb) clearInterval(hb);
           },
         });
