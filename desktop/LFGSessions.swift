@@ -172,6 +172,12 @@ enum Config {
         }
         return seed.hosts
     }
+
+    static func saveHosts(_ hosts: [String]) throws {
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let data = try JSONEncoder().encode(HostsFile(hosts: hosts))
+        try data.write(to: hostsFile, options: .atomic)
+    }
 }
 
 // MARK: - Store
@@ -179,6 +185,7 @@ enum Config {
 @MainActor
 final class SessionStore: ObservableObject {
     @Published var hosts: [HostState] = []
+    @Published var duplicateHostsByURL: [String: HostState] = [:]
     @Published var refreshing = false
     @Published var lastRefreshed: Date?
 
@@ -239,10 +246,20 @@ final class SessionStore: ObservableObject {
             ordered.append(state)
         }
         // Dedupe two URLs that reached the same machine (Tailscale IP + localhost).
-        var seenHostIds = Set<String>()
-        var uniqueHosts = ordered.filter { state in
-            guard let id = state.info?.hostId else { return true }
-            return seenHostIds.insert(id).inserted
+        var hostsById: [String: HostState] = [:]
+        var duplicates: [String: HostState] = [:]
+        var uniqueHosts: [HostState] = []
+        for state in ordered {
+            guard let id = state.info?.hostId else {
+                uniqueHosts.append(state)
+                continue
+            }
+            if let existing = hostsById[id] {
+                duplicates[state.url] = existing
+            } else {
+                hostsById[id] = state
+                uniqueHosts.append(state)
+            }
         }
         let liveIds = Set(uniqueHosts.flatMap { $0.sessions.compactMap(\.sessionId) })
         var seenClosedIds = Set<String>()
@@ -256,6 +273,7 @@ final class SessionStore: ObservableObject {
                 ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0)
             }
         }
+        duplicateHostsByURL = duplicates
         hosts = uniqueHosts
     }
 
@@ -541,8 +559,186 @@ struct SessionRow: View {
     }
 }
 
+struct HostsSettingsView: View {
+    @EnvironmentObject private var store: SessionStore
+    @State private var configuredHosts: [String] = Config.loadHosts()
+    @State private var newHost = ""
+    @State private var validationMessage: String?
+    @State private var saveError: String?
+
+    private struct HostRow: Identifiable {
+        let index: Int
+        let url: String
+        var id: Int { index }
+    }
+
+    private var rows: [HostRow] {
+        configuredHosts.enumerated().map { HostRow(index: $0.offset, url: $0.element) }
+    }
+
+    private var trimmedNewHost: String {
+        newHost.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var configPath: String {
+        Config.hostsFile.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            List {
+                ForEach(rows) { row in
+                    settingsRow(for: row)
+                }
+            }
+            .listStyle(.inset)
+            .frame(minHeight: 220)
+
+            HStack(spacing: 8) {
+                TextField("http://host:8766", text: $newHost)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("host_url_field")
+                    .onSubmit(addHost)
+                Button("Add") { addHost() }
+                    .disabled(trimmedNewHost.isEmpty)
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityIdentifier("add_host_button")
+            }
+
+            if let message = validationMessage ?? saveError {
+                Text(message)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.red)
+            }
+
+            Text("Backed by \(configPath)")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        }
+        .padding(20)
+        .frame(width: 560)
+        .frame(minHeight: 360)
+        .navigationTitle("Hosts")
+        .task {
+            configuredHosts = Config.loadHosts()
+            await store.refresh()
+        }
+    }
+
+    @ViewBuilder
+    private func settingsRow(for row: HostRow) -> some View {
+        let state = store.hosts.first { $0.url == row.url }
+        let duplicate = store.duplicateHostsByURL[row.url]
+        HStack(spacing: 10) {
+            Circle()
+                .fill(statusColor(state: state, duplicate: duplicate))
+                .frame(width: 8, height: 8)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(row.url)
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                    if state?.isLocal == true || duplicate?.isLocal == true {
+                        badge("this Mac", color: .blue)
+                    }
+                }
+                Text(detailText(state: state, duplicate: duplicate))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Button {
+                removeHost(at: row.index)
+            } label: {
+                Image(systemName: "minus.circle")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .help("Remove host")
+            .accessibilityIdentifier("remove_host_button_\(row.index)")
+        }
+        .padding(.vertical, 3)
+    }
+
+    private func statusColor(state: HostState?, duplicate: HostState?) -> Color {
+        if state?.error == nil && (state != nil || duplicate != nil) { return .green }
+        return .red
+    }
+
+    private func detailText(state: HostState?, duplicate: HostState?) -> String {
+        if let state {
+            if state.error != nil { return "Unreachable" }
+            return "\(state.label) · \(sessionCountText(state.sessions.count))"
+        }
+        if let duplicate {
+            return "Reachable duplicate of \(duplicate.label) · \(sessionCountText(duplicate.sessions.count))"
+        }
+        return "Unreachable"
+    }
+
+    private func sessionCountText(_ count: Int) -> String {
+        "\(count) \(count == 1 ? "session" : "sessions")"
+    }
+
+    private func badge(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold))
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(color.opacity(0.15))
+            .foregroundStyle(color)
+            .clipShape(Capsule())
+    }
+
+    private func addHost() {
+        saveError = nil
+        let url = trimmedNewHost
+        guard validate(url) else { return }
+        persist(configuredHosts + [url])
+        newHost = ""
+    }
+
+    private func removeHost(at index: Int) {
+        guard configuredHosts.indices.contains(index) else { return }
+        saveError = nil
+        validationMessage = nil
+        var next = configuredHosts
+        next.remove(at: index)
+        persist(next)
+    }
+
+    private func validate(_ url: String) -> Bool {
+        if url.isEmpty {
+            validationMessage = "Enter a host URL."
+            return false
+        }
+        if configuredHosts.contains(url) {
+            validationMessage = "That host is already configured."
+            return false
+        }
+        guard let parsed = URL(string: url),
+              parsed.scheme?.isEmpty == false,
+              parsed.host?.isEmpty == false else {
+            validationMessage = "Enter a URL with a scheme and host."
+            return false
+        }
+        validationMessage = nil
+        return true
+    }
+
+    private func persist(_ hosts: [String]) {
+        do {
+            try Config.saveHosts(hosts)
+            configuredHosts = Config.loadHosts()
+            Task { await store.refresh() }
+        } catch {
+            saveError = "Couldn't save hosts: \(error.localizedDescription)"
+        }
+    }
+}
+
 struct ContentView: View {
-    @StateObject private var store = SessionStore()
+    @EnvironmentObject private var store: SessionStore
     @State private var alertMessage: String?
     @State private var searchText = ""
     @State private var groupMode: GroupMode = .status
@@ -963,9 +1159,16 @@ struct ContentView: View {
 
 @main
 struct LFGSessionsApp: App {
+    @StateObject private var store = SessionStore()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(store)
+        }
+        Settings {
+            HostsSettingsView()
+                .environmentObject(store)
         }
     }
 }
