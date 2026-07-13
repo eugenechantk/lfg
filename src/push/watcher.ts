@@ -18,7 +18,7 @@ import { findEntryByAnyId } from "../aisdk-registry.ts";
 import { codexDelegationSessionIds } from "../activity.ts";
 import { listDevices } from "./store.ts";
 import {
-  listActivityUpdateTokens,
+  listFleetUpdateTokens,
   listPushToStartTokens,
   removeLiveActivityToken,
 } from "./liveactivity-store.ts";
@@ -31,13 +31,13 @@ import {
   type ApnsTransport,
 } from "./apns.ts";
 import {
-  LIVE_ACTIVITY_ATTRIBUTES_TYPE,
   buildEnd,
   buildStart,
   buildUpdate,
   sendLiveActivity,
   type LiveActivityContentState,
   type LiveActivityPush,
+  type LiveActivityRow,
 } from "./liveactivity.ts";
 import { unregisterDevice } from "./store.ts";
 
@@ -143,81 +143,105 @@ export type LiveActivityDecision = {
   nextActive: LiveActivityActive | null;
 };
 
-function liveActivityState(next: SessionState): LiveActivityContentState["state"] {
+const FLEET_ACTIVITY_KEY = "fleet";
+
+function liveActivityState(next: SessionState): LiveActivityRow["state"] {
   if (next.busy) return "working";
   if (next.promptPresent) return "blocked";
   return "idle";
 }
 
-function sameContentState(a: LiveActivityContentState | undefined, b: LiveActivityContentState): boolean {
-  return !!a && a.title === b.title && a.state === b.state && a.sid === b.sid && a.since === b.since;
+function sameFleetContentState(a: LiveActivityContentState | undefined, b: LiveActivityContentState): boolean {
+  if (
+    !a ||
+    a.working !== b.working ||
+    a.needsInput !== b.needsInput ||
+    a.rows.length !== b.rows.length ||
+    a.hosts.length !== b.hosts.length
+  ) {
+    return false;
+  }
+  const sameRows = a.rows.every((row, i) => {
+    const other = b.rows[i];
+    return (
+      row.sid === other.sid &&
+      row.title === other.title &&
+      row.host === other.host &&
+      row.state === other.state &&
+      row.since === other.since
+    );
+  });
+  const sameHosts = a.hosts.every((host, i) => {
+    const other = b.hosts[i];
+    return host.name === other.name && host.online === other.online;
+  });
+  return sameRows && sameHosts;
 }
 
-function buildLiveActivityContentState(
-  session: PayloadSessionInput,
-  next: SessionState,
-  active: LiveActivityActive | null | undefined,
-  nowSec: number,
-): LiveActivityContentState {
-  const sid = session.sessionId ?? "";
-  const state = liveActivityState(next);
-  const title = clip(session.title || session.tmuxName || sid.slice(0, 8) || "Session", 80);
-  const prior = active?.contentState;
-  return {
-    title,
-    state,
-    sid,
-    since: prior && prior.sid === sid && prior.state === state && prior.title === title ? prior.since : nowSec,
-  };
+export function orderFleetRows(rows: LiveActivityRow[]): LiveActivityRow[] {
+  const rank = (state: LiveActivityRow["state"]) => (state === "blocked" ? 0 : state === "working" ? 1 : 2);
+  return rows
+    .filter((row) => row.state !== "idle")
+    .sort((a, b) => rank(a.state) - rank(b.state) || a.since - b.since || a.sid.localeCompare(b.sid))
+    .slice(0, 3);
 }
 
-export function reduceLiveActivityTransition(args: {
-  session: PayloadSessionInput;
-  previous: PriorState | null | undefined;
-  observed: SessionState;
+export function reduceFleetLiveActivity(args: {
+  observations: Array<{ session: PayloadSessionInput; observed: SessionState }>;
   active: LiveActivityActive | null | undefined;
   now: number;
   hostName: string;
 }): LiveActivityDecision {
-  const contentState = buildLiveActivityContentState(
-    args.session,
-    args.observed,
-    args.active,
-    args.now,
+  const priorRows = args.active?.contentState?.rows ?? [];
+  const hostName = clip(args.hostName || "lfg", 28);
+  const rows = orderFleetRows(
+    args.observations
+      .filter(({ session, observed }) => !!session.sessionId && (observed.busy || observed.promptPresent))
+      .map(({ session, observed }) => {
+        const sid = session.sessionId ?? "";
+        const state = liveActivityState(observed);
+        const prior = priorRows.find((row) => row.sid === sid && row.state === state);
+        return {
+          sid,
+          title: clip(session.title || session.tmuxName || sid.slice(0, 8) || "Session", 80),
+          host: hostName,
+          state,
+          since: prior?.since ?? args.now,
+        };
+      }),
   );
+  const working = args.observations.filter(({ observed }) => observed.busy).length;
+  const needsInput = args.observations.filter(({ observed }) => !observed.busy && observed.promptPresent).length;
+  const activeTotal = working + needsInput;
+  const contentState: LiveActivityContentState = {
+    working,
+    needsInput,
+    rows,
+    // TODO: have the phone app / multi-host coordinator enrich this with every host's reachability.
+    hosts: [{ name: hostName, online: true }],
+    updatedAt: args.now,
+  };
+
+  if (activeTotal === 0) {
+    if (!args.active) return { action: null, nextActive: null };
+    return {
+      action: { event: "end", push: buildEnd(contentState, args.now) },
+      nextActive: null,
+    };
+  }
 
   if (!args.active) {
-    if (!args.observed.busy) return { action: null, nextActive: null };
     return {
       action: {
         event: "start",
-        push: buildStart(
-          { ...contentState, hostName: args.hostName },
-          LIVE_ACTIVITY_ATTRIBUTES_TYPE,
-        ),
+        push: buildStart({ contentState, fleetId: FLEET_ACTIVITY_KEY }),
       },
       nextActive: { startedAt: args.now, contentState },
     };
   }
 
   const nextActive: LiveActivityActive = { ...args.active, contentState };
-  const idleForTwoTicks =
-    !args.observed.busy &&
-    !args.observed.promptPresent &&
-    !!args.previous &&
-    !args.previous.busy &&
-    !args.previous.promptPresent;
-  if (idleForTwoTicks) {
-    const endState = { ...contentState, since: args.now };
-    return {
-      action: { event: "end", push: buildEnd(endState, args.now) },
-      nextActive: null,
-    };
-  }
-
-  const blockedFromBusy = !!args.previous?.busy && !args.observed.busy && args.observed.promptPresent;
-  const contentChanged = !sameContentState(args.active.contentState, contentState);
-  if (blockedFromBusy || (contentChanged && contentState.state !== "idle")) {
+  if (!sameFleetContentState(args.active.contentState, contentState)) {
     return {
       action: { event: "update", push: buildUpdate(contentState) },
       nextActive,
@@ -316,9 +340,7 @@ export type TickDeps = {
   liveActivities?: {
     active: Map<string, LiveActivityActive>;
     pushToStartTokens: () => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
-    updateTokensForSession: (
-      sessionId: string,
-    ) => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
+    fleetUpdateTokens: () => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
     send: (
       device: { token: string; env: "sandbox" | "production" },
       push: LiveActivityPush,
@@ -366,7 +388,6 @@ async function sendLiveActivityToTokens(
 }
 
 async function applyLiveActivityDecision(
-  sid: string,
   decision: LiveActivityDecision,
   deps: NonNullable<TickDeps["liveActivities"]>,
   cfg: ApnsConfig,
@@ -374,23 +395,23 @@ async function applyLiveActivityDecision(
   log?: (line: string) => void,
 ): Promise<void> {
   if (!decision.action) {
-    if (decision.nextActive) deps.active.set(sid, decision.nextActive);
-    else deps.active.delete(sid);
+    if (decision.nextActive) deps.active.set(FLEET_ACTIVITY_KEY, decision.nextActive);
+    else deps.active.delete(FLEET_ACTIVITY_KEY);
     return;
   }
 
   if (decision.action.event === "start") {
     const sent = await sendLiveActivityToTokens(startTokens, decision.action.push, deps, cfg, log);
-    if (sent > 0 && decision.nextActive) deps.active.set(sid, decision.nextActive);
+    if (sent > 0 && decision.nextActive) deps.active.set(FLEET_ACTIVITY_KEY, decision.nextActive);
     return;
   }
 
-  const updateTokens = await deps.updateTokensForSession(sid);
+  const updateTokens = await deps.fleetUpdateTokens();
   if (!updateTokens.length) return;
   const sent = await sendLiveActivityToTokens(updateTokens, decision.action.push, deps, cfg, log);
   if (sent <= 0) return;
-  if (decision.nextActive) deps.active.set(sid, decision.nextActive);
-  else deps.active.delete(sid);
+  if (decision.nextActive) deps.active.set(FLEET_ACTIVITY_KEY, decision.nextActive);
+  else deps.active.delete(FLEET_ACTIVITY_KEY);
 }
 
 /**
@@ -410,6 +431,7 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
     return;
   }
   const seen = new Set<string>();
+  const liveActivityObservations: Array<{ session: PayloadSessionInput; observed: SessionState }> = [];
   for (const s of sessions) {
     const sid = s.sessionId;
     if (!sid) continue;
@@ -422,24 +444,7 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
     }
     const observedAt = now();
     const prev = prior.get(sid);
-    if (liveActivities) {
-      const decision = reduceLiveActivityTransition({
-        session: s,
-        previous: prev,
-        observed: state,
-        active: liveActivities.active.get(sid),
-        now: Math.floor(observedAt / 1000),
-        hostName: deps.hostName?.() ?? "lfg",
-      });
-      await applyLiveActivityDecision(
-        sid,
-        decision,
-        liveActivities,
-        deps.cfg,
-        liveStartTokens,
-        deps.log,
-      );
-    }
+    if (liveActivities) liveActivityObservations.push({ session: s, observed: state });
     if (!prev) {
       // First sighting — seed without emitting. -Infinity marks "never notified"
       // so the first genuine transition isn't swallowed by the dedupe window.
@@ -466,7 +471,19 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
   // Drop memory for sessions that no longer exist.
   for (const k of [...prior.keys()]) if (!seen.has(k)) prior.delete(k);
   if (liveActivities) {
-    for (const k of [...liveActivities.active.keys()]) if (!seen.has(k)) liveActivities.active.delete(k);
+    const decision = reduceFleetLiveActivity({
+      observations: liveActivityObservations,
+      active: liveActivities.active.get(FLEET_ACTIVITY_KEY),
+      now: Math.floor(now() / 1000),
+      hostName: deps.hostName?.() ?? "lfg",
+    });
+    await applyLiveActivityDecision(
+      decision,
+      liveActivities,
+      deps.cfg,
+      liveStartTokens,
+      deps.log,
+    );
   }
 }
 
@@ -507,7 +524,7 @@ export function startPushWatcher(
     deps.liveActivities = {
       active,
       pushToStartTokens: listPushToStartTokens,
-      updateTokensForSession: listActivityUpdateTokens,
+      fleetUpdateTokens: listFleetUpdateTokens,
       send: sendLiveActivity,
       onDeadToken: removeLiveActivityToken,
     };

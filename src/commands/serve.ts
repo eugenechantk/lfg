@@ -1418,21 +1418,17 @@ export async function cmdServe() {
         const body = (await req.json().catch(() => null)) as {
           token?: string;
           env?: string;
-          sessionId?: string;
         } | null;
         const token = body?.token?.trim();
         if (!token || !/^[0-9a-fA-F]{8,}$/.test(token)) return err(400, "invalid token");
-        const sessionId = body?.sessionId?.trim();
-        if (!sessionId) return err(400, "missing sessionId");
         const env = body?.env === "production" ? "production" : "sandbox";
         const record = await upsertLiveActivityToken({
           token,
           env,
           kind: "activityUpdate",
-          sessionId,
         });
         ensurePushWatcher();
-        return json({ ok: true, kind: record.kind, env: record.env, sessionId: record.sessionId });
+        return json({ ok: true, kind: record.kind, env: record.env });
       }
       if (path === "/api/push/unregister" && req.method === "POST") {
         const body = (await req.json().catch(() => null)) as { token?: string } | null;

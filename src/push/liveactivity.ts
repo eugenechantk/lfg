@@ -7,18 +7,33 @@ import {
   type ApnsTransport,
 } from "./apns.ts";
 
-export const LIVE_ACTIVITY_ATTRIBUTES_TYPE = "LFGSessionAttributes";
+export const LIVE_ACTIVITY_ATTRIBUTES_TYPE = "LFGFleetAttributes";
 export const DEFAULT_APNS_TOPIC = "dev.omg.lfg";
 
-export type LiveActivityContentState = {
-  title: string;
-  state: "working" | "blocked" | "idle";
+export type LiveActivityRow = {
   sid: string;
+  title: string;
+  host: string;
+  state: "working" | "blocked" | "idle";
   since: number;
 };
 
-export type LiveActivityStartSession = LiveActivityContentState & {
-  hostName: string;
+export type LiveActivityHostStatus = {
+  name: string;
+  online: boolean;
+};
+
+export type LiveActivityContentState = {
+  working: number;
+  needsInput: number;
+  rows: LiveActivityRow[];
+  hosts: LiveActivityHostStatus[];
+  updatedAt: number;
+};
+
+export type LiveActivityStartFleet = {
+  contentState: LiveActivityContentState;
+  fleetId?: string;
   alertTitle?: string;
   alertBody?: string;
 };
@@ -37,7 +52,7 @@ export type LiveActivityBody = {
     event: LiveActivityEvent;
     "content-state"?: LiveActivityContentState;
     "attributes-type"?: string;
-    attributes?: { sid: string; hostName: string };
+    attributes?: { fleetId: string };
     alert?: { title: string; body: string };
     "dismissal-date"?: number;
   };
@@ -62,30 +77,40 @@ function headers(bundleId = DEFAULT_APNS_TOPIC): LiveActivityHeaders {
 
 function contentState(input: LiveActivityContentState): LiveActivityContentState {
   return {
-    title: input.title,
-    state: input.state,
-    sid: input.sid,
-    since: input.since,
+    working: input.working,
+    needsInput: input.needsInput,
+    rows: input.rows.map((row) => ({
+      sid: row.sid,
+      title: row.title,
+      host: row.host,
+      state: row.state,
+      since: row.since,
+    })),
+    hosts: input.hosts.map((host) => ({
+      name: host.name,
+      online: host.online,
+    })),
+    updatedAt: input.updatedAt,
   };
 }
 
 export function buildStart(
-  session: LiveActivityStartSession,
+  fleet: LiveActivityStartFleet,
   attributesType = LIVE_ACTIVITY_ATTRIBUTES_TYPE,
 ): LiveActivityPush {
-  const state = contentState(session);
+  const state = contentState(fleet.contentState);
   return {
     headers: headers(),
     body: {
       aps: {
-        timestamp: state.since,
+        timestamp: state.updatedAt,
         event: "start",
         "content-state": state,
         "attributes-type": attributesType,
-        attributes: { sid: state.sid, hostName: session.hostName },
+        attributes: { fleetId: fleet.fleetId ?? "fleet" },
         alert: {
-          title: session.alertTitle ?? state.title,
-          body: session.alertBody ?? "LFG session is working.",
+          title: fleet.alertTitle ?? "lfg",
+          body: fleet.alertBody ?? "LFG agents are active.",
         },
       },
     },
@@ -98,7 +123,7 @@ export function buildUpdate(content: LiveActivityContentState): LiveActivityPush
     headers: headers(),
     body: {
       aps: {
-        timestamp: state.since,
+        timestamp: state.updatedAt,
         event: "update",
         "content-state": state,
       },
@@ -115,7 +140,7 @@ export function buildEnd(
     headers: headers(),
     body: {
       aps: {
-        timestamp: state?.since ?? dismissalDate ?? 0,
+        timestamp: state?.updatedAt ?? dismissalDate ?? 0,
         event: "end",
         ...(state ? { "content-state": state } : {}),
         ...(typeof dismissalDate === "number" ? { "dismissal-date": dismissalDate } : {}),

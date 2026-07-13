@@ -18,8 +18,18 @@ afterEach(() => _resetApnsJwtCache());
 
 describe("Live Activity payload builders", () => {
   test("buildStart produces the pinned liveactivity header/body shape", () => {
+    const contentState = {
+      working: 1,
+      needsInput: 1,
+      rows: [
+        { sid: "s2", title: "Approve", host: "mac", state: "blocked" as const, since: 1_690 },
+        { sid: "s1", title: "Build", host: "mac", state: "working" as const, since: 1_700 },
+      ],
+      hosts: [{ name: "mac", online: true }],
+      updatedAt: 1_701,
+    };
     const push = buildStart(
-      { sid: "s1", title: "Build", state: "working", since: 1_700, hostName: "mac" },
+      { contentState, fleetId: "fleet" },
       LIVE_ACTIVITY_ATTRIBUTES_TYPE,
     );
     expect(push).toEqual({
@@ -30,19 +40,26 @@ describe("Live Activity payload builders", () => {
       },
       body: {
         aps: {
-          timestamp: 1_700,
+          timestamp: 1_701,
           event: "start",
-          "content-state": { title: "Build", state: "working", sid: "s1", since: 1_700 },
-          "attributes-type": "LFGSessionAttributes",
-          attributes: { sid: "s1", hostName: "mac" },
-          alert: { title: "Build", body: "LFG session is working." },
+          "content-state": contentState,
+          "attributes-type": "LFGFleetAttributes",
+          attributes: { fleetId: "fleet" },
+          alert: { title: "lfg", body: "LFG agents are active." },
         },
       },
     });
   });
 
   test("buildUpdate produces the pinned update shape", () => {
-    expect(buildUpdate({ sid: "s1", title: "Build", state: "blocked", since: 1_701 })).toEqual({
+    const contentState = {
+      working: 0,
+      needsInput: 1,
+      rows: [{ sid: "s1", title: "Build", host: "mac", state: "blocked" as const, since: 1_700 }],
+      hosts: [{ name: "mac", online: true }],
+      updatedAt: 1_701,
+    };
+    expect(buildUpdate(contentState)).toEqual({
       headers: {
         "apns-push-type": "liveactivity",
         "apns-topic": `${DEFAULT_APNS_TOPIC}.push-type.liveactivity`,
@@ -52,14 +69,21 @@ describe("Live Activity payload builders", () => {
         aps: {
           timestamp: 1_701,
           event: "update",
-          "content-state": { title: "Build", state: "blocked", sid: "s1", since: 1_701 },
+          "content-state": contentState,
         },
       },
     });
   });
 
   test("buildEnd produces the pinned end shape with optional dismissal date", () => {
-    expect(buildEnd({ sid: "s1", title: "Build", state: "idle", since: 1_702 }, 1_800)).toEqual({
+    const contentState = {
+      working: 0,
+      needsInput: 0,
+      rows: [],
+      hosts: [{ name: "mac", online: true }],
+      updatedAt: 1_702,
+    };
+    expect(buildEnd(contentState, 1_800)).toEqual({
       headers: {
         "apns-push-type": "liveactivity",
         "apns-topic": `${DEFAULT_APNS_TOPIC}.push-type.liveactivity`,
@@ -69,7 +93,7 @@ describe("Live Activity payload builders", () => {
         aps: {
           timestamp: 1_702,
           event: "end",
-          "content-state": { title: "Build", state: "idle", sid: "s1", since: 1_702 },
+          "content-state": contentState,
           "dismissal-date": 1_800,
         },
       },
@@ -84,7 +108,13 @@ describe("sendLiveActivity", () => {
       calls.push(args);
       return { ok: true, status: 200 };
     };
-    const push = buildUpdate({ sid: "s1", title: "Build", state: "working", since: 1_700 });
+    const push = buildUpdate({
+      working: 1,
+      needsInput: 0,
+      rows: [{ sid: "s1", title: "Build", host: "mac", state: "working", since: 1_700 }],
+      hosts: [{ name: "mac", online: true }],
+      updatedAt: 1_700,
+    });
     await sendLiveActivity({ token: "tok", env: "sandbox" }, push, cfg, transport);
 
     expect(calls.length).toBe(1);
