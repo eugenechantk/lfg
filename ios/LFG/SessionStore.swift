@@ -1229,54 +1229,59 @@ import LFGCore
             closed: true)
     }
 
-    /// Normalize text for fuzzy matching an optimistic send against the user turn
-    /// the agent eventually records (whitespace/case differences, wrapping).
-    private static func normMatch(_ s: String) -> String {
-        s.lowercased().split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
-    }
-
     /// Remove optimistic bubbles whose text now appears as a real user turn in the
     /// transcript — the live message took over, so the placeholder is done.
     private func reconcilePending(_ sid: String) {
         guard let pend = pendingSends[sid], !pend.isEmpty else { return }
-        let userTurns = (transcripts[sid] ?? [])
-            .filter { $0.role == "user" && $0.kind == "text" }
-            .map { Self.normMatch($0.text) }
         let remaining = pend.filter { p in
-            let needle = Self.normMatch(p.matchText)
-            guard needle.count >= 3 else { return true }
-            let key = String(needle.prefix(80))
-            return !userTurns.contains { $0.contains(key) }
+            !OptimisticSendReconciliation.containsMatchingUserTurn(
+                matchText: p.matchText,
+                in: transcripts[sid] ?? [])
         }
         if remaining.count != pend.count { pendingSends[sid] = remaining }
     }
 
-    /// Drive optimistic bubbles off the server's authoritative outbound-queue
-    /// status — more reliable than re-matching transcript text on the client
-    /// (which can miss when the recorded turn is reformatted/wrapped). The server
-    /// marks an item `delivered` once it has surfaced as a real user turn in the
-    /// transcript, so on `delivered` we drop the placeholder and let that real
-    /// bubble take over; `failed` surfaces a Retry; anything else is still in
-    /// flight, so keep showing the muted bar.
+    /// Drive optimistic bubbles from the server's outbound-queue status, but only
+    /// remove a bubble after the matching user turn is present in this client's
+    /// local transcript. The server marks an item `delivered` when it has reached
+    /// the server-side transcript; the local live stream/history fetch may lag
+    /// behind that, so delivered/vanished queue items trigger a history fetch
+    /// instead of creating a visible gap.
     private func correlatePending(_ sid: String, _ q: [QueueItem]) {
         guard let pend = pendingSends[sid], !pend.isEmpty else { return }
+        var needsHistory = false
         let remaining: [PendingSend] = pend.compactMap { p in
-            let needle = Self.normMatch(p.matchText)
-            guard needle.count >= 3 else { return p }
-            let key = String(needle.prefix(60))
-            guard let item = q.first(where: { Self.normMatch($0.text).contains(key) }) else {
-                // We linked this to a queue item earlier and it's now gone. The
-                // server only prunes items after a terminal state (delivered /
-                // failed), so a vanished item means it's done — drop the bar.
-                return p.serverQueueID != nil ? nil : p
+            guard let item = OptimisticSendReconciliation.matchingQueueItem(
+                matchText: p.matchText,
+                in: q
+            ) else {
+                guard p.serverQueueID != nil else { return p }
+                if OptimisticSendReconciliation.containsMatchingUserTurn(
+                    matchText: p.matchText,
+                    in: transcripts[sid] ?? []) {
+                    return nil
+                }
+                // A previously linked queue item vanished before the matching
+                // local turn arrived. Keep the optimistic bubble and fetch the
+                // transcript; the poll safety net will retry if this fetch races.
+                needsHistory = true
+                return p
             }
-            if item.status == "delivered" { return nil }   // surfaced as a real user turn
+            if item.status == "delivered" {
+                if OptimisticSendReconciliation.containsMatchingUserTurn(
+                    matchText: p.matchText,
+                    in: transcripts[sid] ?? []) {
+                    return nil
+                }
+                needsHistory = true
+            }
             var p2 = p
             p2.serverQueueID = item.id
             p2.failed = item.isFailed
             return p2
         }
         if remaining != pend { pendingSends[sid] = remaining }
+        if needsHistory { loadHistory(sid) }
     }
 
     /// Poll-based safety net (runs on the 3s refresh): for any session with
@@ -1295,9 +1300,7 @@ import LFGCore
             guard let client = client(forSession: sid) else { continue }
             guard let q = try? await client.queue(sid) else { continue }
             queues[sid] = q
-            let had = pendingSends[sid]?.count ?? 0
             correlatePending(sid, q)
-            if (pendingSends[sid]?.count ?? 0) < had { loadHistory(sid) }
         }
     }
 
