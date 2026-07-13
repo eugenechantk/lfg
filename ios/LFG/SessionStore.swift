@@ -995,11 +995,15 @@ import LFGCore
     }
 
     private func rebuildClosedCache(for hosts: [Host]) {
-        let perHost = hosts.map { host in
-            (closedFirstPageByHost[host.id] ?? []) + (closedExtraPagesByHost[host.id] ?? [])
-        }
+        let perHost = closedPages(for: hosts)
         let reconciled = MultiHost.reconcileResumable(perHost: perHost, liveIds: liveIds)
         closedCache = reconciled.map(Self.closedSession(from:))
+    }
+
+    private func closedPages(for hosts: [Host]) -> [[ResumableSession]] {
+        hosts.map { host in
+            (closedFirstPageByHost[host.id] ?? []) + (closedExtraPagesByHost[host.id] ?? [])
+        }
     }
 
     func loadMoreClosed() async {
@@ -1214,24 +1218,28 @@ import LFGCore
         // Merge each host's last-known live sessions (configured order → stable
         // list + deterministic first-wins), building the session→host routing map.
         let perHostLive = settings.hosts.map { (host: $0, sessions: lastSessionsByHost[$0.id] ?? []) }
-        let merged = MultiHost.mergeSessions(perHostLive)
-        let fresh = merged.sessions
-        hostBySession = merged.hostBySession
-        liveIds = Set(fresh.compactMap(\.sessionId))
+        // Live merge, optimistic keep-alive, and closed fallback are computed in
+        // ONE pass against THIS merge's live ids. Splitting them across passes
+        // (closedCache built against a previous rebuild's liveIds) let a session
+        // fall through the live/closed gap after its host recovered from an
+        // outage — present in neither bucket until app relaunch.
+        let okHosts = settings.hosts.filter { reachabilityByHost[$0.id] == .ok }
+        let reconciled = MultiHost.reconcileSessionList(
+            perHostLive: perHostLive,
+            closedPerHost: closedPages(for: okHosts),
+            optimisticSessions: optimisticSessions,
+            resumedIds: resumedIds)
+        let fresh = reconciled.live.sessions
+        hostBySession = reconciled.live.hostBySession
+        liveIds = reconciled.liveIds
 
         // Keep any not-yet-reconciled optimistic (placeholder-id) sessions so
         // a poll landing mid-create can't make the open session vanish.
-        let optimistic = optimisticSessions.filter { o in
-            guard let id = o.sessionId else { return true }
-            return !liveIds.contains(id)
-        }
-        let optimisticIds = Set(optimistic.compactMap(\.sessionId))
+        let optimistic = reconciled.optimistic
         // Merge closed sessions that aren't live, optimistic, or already resumed
         // away this run, so ended sessions stay in the list.
-        let closed = closedCache.filter { c in
-            guard let cid = c.sessionId else { return false }
-            return !liveIds.contains(cid) && !optimisticIds.contains(cid) && !resumedIds.contains(cid)
-        }
+        closedCache = reconciled.visibleClosed.map(Self.closedSession(from:))
+        let closed = closedCache
         sessions = fresh + optimistic + closed
         // First poll after upgrading: convert old open-times into seen-message ids.
         migrateReadState()
@@ -1329,6 +1337,15 @@ import LFGCore
         focusedID = id
     }
 
+    /// Release focus when a detail view leaves the screen. Guarded so a stale
+    /// view's disappearance can't blur a newer session's focus. Without this,
+    /// `focusedID` outlived the detail view and every later streamed message got
+    /// auto-marked seen — idle sessions never surfaced as Unread.
+    func blur(_ id: String) {
+        guard !id.isEmpty else { return }
+        focusedID = SessionFocus.afterDisappearing(id, focusedID: focusedID)
+    }
+
     /// Mark a session's newest known message as seen, and persist. Called when the
     /// session is opened and as it streams while on screen, so it clears from the
     /// "Unread" group. No-op for local placeholder ids (not real sessions yet).
@@ -1410,7 +1427,7 @@ import LFGCore
             // Keep the session on screen marked read as its output streams in, so
             // a turn that completes while you're watching doesn't resurface it as
             // unread when you leave the detail view.
-            if sid == focusedID { markOpened(sid) }
+            if SessionFocus.isFocused(sid, focusedID: focusedID) { markOpened(sid) }
             // A real user turn just landed — drop any optimistic bubble it fulfils.
             if m.role == "user" { reconcilePending(sid) }
         case .prompt(let sid, let prompt):
@@ -1451,7 +1468,7 @@ import LFGCore
         // Completed (idle) but its newest message isn't the newest one this device
         // has seen → "Unread". The session on screen is excluded (you're reading it
         // right now, even before its stream stamps it read).
-        if let sid = s.sessionId, sid != focusedID,
+        if let sid = s.sessionId, !SessionFocus.isFocused(sid, focusedID: focusedID),
            ReadState.isUnread(lastMessageID: s.last?.id, lastSeenMessageID: lastSeenMessageID[sid]) {
             return .unread
         }

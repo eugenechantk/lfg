@@ -340,9 +340,9 @@ public struct LFGClient: Sendable {
         ])
     }
 
-    public func registerLiveActivityUpdateToken(_ hex: String, env: String, sessionId: String) async throws {
+    public func registerLiveActivityUpdateToken(_ hex: String, env: String) async throws {
         _ = try await send("POST", "api/push/live-activity/update-token", json: [
-            "token": hex, "env": env, "sessionId": sessionId,
+            "token": hex, "env": env,
         ])
     }
 

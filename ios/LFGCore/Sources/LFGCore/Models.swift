@@ -16,6 +16,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     public var statusReason: String?  // "model_unavailable" | "out_of_credits" | null
     public var statusDetail: String?
     public var assignedUser: String?
+    public var parentSessionId: String?
     public var lastUserText: String?
     public var startedAt: Double?
     public var lastActivityAt: Double?
@@ -50,7 +51,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         sessionId: String? = nil, title: String = "", agent: String = "aisdk",
         model: String? = nil, project: String? = nil, cwd: String? = nil,
         status: String? = nil, statusReason: String? = nil, statusDetail: String? = nil,
-        assignedUser: String? = nil, lastUserText: String? = nil,
+        assignedUser: String? = nil, parentSessionId: String? = nil, lastUserText: String? = nil,
         startedAt: Double? = nil, lastActivityAt: Double? = nil,
         tmuxTarget: String? = nil, tmuxName: String? = nil, managed: Bool? = nil,
         busy: Bool? = nil, last: SessionMessage? = nil, closed: Bool = false
@@ -58,7 +59,8 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         self.sessionId = sessionId; self.title = title; self.agent = agent
         self.model = model; self.project = project; self.cwd = cwd
         self.status = status; self.statusReason = statusReason; self.statusDetail = statusDetail
-        self.assignedUser = assignedUser; self.lastUserText = lastUserText
+        self.assignedUser = assignedUser; self.parentSessionId = parentSessionId
+        self.lastUserText = lastUserText
         self.startedAt = startedAt; self.lastActivityAt = lastActivityAt
         self.tmuxTarget = tmuxTarget; self.tmuxName = tmuxName; self.managed = managed
         self.busy = busy; self.last = last; self.closed = closed
@@ -76,6 +78,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         statusReason = try c.decodeIfPresent(String.self, forKey: .statusReason)
         statusDetail = try c.decodeIfPresent(String.self, forKey: .statusDetail)
         assignedUser = try c.decodeIfPresent(String.self, forKey: .assignedUser)
+        parentSessionId = try c.decodeIfPresent(String.self, forKey: .parentSessionId)
         lastUserText = try c.decodeIfPresent(String.self, forKey: .lastUserText)
         startedAt = try c.decodeIfPresent(Double.self, forKey: .startedAt)
         lastActivityAt = try c.decodeIfPresent(Double.self, forKey: .lastActivityAt)

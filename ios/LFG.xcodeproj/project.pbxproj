@@ -8,16 +8,18 @@
 
 /* Begin PBXBuildFile section */
 		0B5E6EC8D0198C245E872599 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 847BA9F87A178565C0EEC901 /* SettingsView.swift */; };
-		0D46DEDB3AF8664A7E8DEF2E /* LFGSessionAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB446B012E8694721414FE8 /* LFGSessionAttributes.swift */; };
+		16B0F6A79CE890FBF2B0E5E2 /* LFGFleetAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */; };
 		17E5CC9417E33D6CADF1F707 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25CBF3AE8C40F2EE10BB4BD0 /* Theme.swift */; };
 		50F6EF746AAEB80DB6229E05 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 073FCBCA797989A55F83BAE4 /* MessageComposer.swift */; };
 		524B5CC79B3BBA73827C7B05 /* LFGSessionActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5674F88F214C41CB36C903F6 /* LFGSessionActivityWidget.swift */; };
 		53041C690C2CB5A6B7ADFAD5 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 76672CAA13A7F7B59D2B0A72 /* SwiftUI.framework */; };
 		55469BC6D5744CDBA92DC030 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20B34D8A3106C01BA13F2DC2 /* SessionStore.swift */; };
 		5942295A0F639DE68C4FF451 /* BackgroundSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D1BD4A3061EFB2858AB2A4B /* BackgroundSender.swift */; };
+		5C80FE3B63D36885C3E3CA4F /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */; };
 		5E6C84F3CB9E6AA06447AFBC /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E73816164B94C119D0706DA8 /* WidgetKit.framework */; };
 		63E697B25FFD5633F32DF474 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 0F494F67402A869EB8A3476E /* MarkdownUI */; };
 		680725D02451A3EEFF5A9F28 /* NewSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27C81E2B22DECF886C37B1A7 /* NewSessionView.swift */; };
+		6D57951618DB68F747829455 /* LFGFleetAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */; };
 		7254BB93C3886BB66A1304A2 /* LFGCore in Frameworks */ = {isa = PBXBuildFile; productRef = 672BDBCB9E1F5950E1DB7012 /* LFGCore */; };
 		85C03A175F9DF48F0DAF9D6E /* RichContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C22EA76E51E2B0A745EE8847 /* RichContent.swift */; };
 		8950528E1385EF07CB2814AD /* LFGApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909139FA5D9B976298B7AA3F /* LFGApp.swift */; };
@@ -26,7 +28,7 @@
 		A541589C33833A613D05AD8B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6461434AE6C2B0858AC679ED /* RootView.swift */; };
 		A9769E2F571F58BFBE480AB0 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAECB64072CE4F5286C7591E /* LiveActivityManager.swift */; };
 		A9CABFDC3E306F17D2F69E33 /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */; };
-		BBA9DA9482B7D2A76656E8BB /* LFGSessionAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB446B012E8694721414FE8 /* LFGSessionAttributes.swift */; };
+		C1B5BCFA6FA382188AFC753C /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */; };
 		D2F9456B4314172C7546226F /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */; };
 		D34242B9518E03AED793C989 /* SessionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2641AAFED0A103CF2409D79C /* SessionListView.swift */; };
 		D9DD48F43B87E8793C27102F /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 512247CB20DB703CAE731727 /* SessionDetailView.swift */; };
@@ -67,9 +69,9 @@
 		25CBF3AE8C40F2EE10BB4BD0 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		2641AAFED0A103CF2409D79C /* SessionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionListView.swift; sourceTree = "<group>"; };
 		27C81E2B22DECF886C37B1A7 /* NewSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionView.swift; sourceTree = "<group>"; };
-		2BB446B012E8694721414FE8 /* LFGSessionAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGSessionAttributes.swift; sourceTree = "<group>"; };
 		34FFA2FCDA2FF018358CB220 /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
 		36D7D08CD0B7C101A085BC11 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGFleetAttributes.swift; sourceTree = "<group>"; };
 		512247CB20DB703CAE731727 /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
 		5674F88F214C41CB36C903F6 /* LFGSessionActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGSessionActivityWidget.swift; sourceTree = "<group>"; };
 		5C0AF429850CD7F98D54334E /* LFG.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LFG.entitlements; sourceTree = "<group>"; };
@@ -84,6 +86,7 @@
 		9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostLink.swift; sourceTree = "<group>"; };
 		C22EA76E51E2B0A745EE8847 /* RichContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichContent.swift; sourceTree = "<group>"; };
 		CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
+		D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = SharedAssets.xcassets; sourceTree = "<group>"; };
 		D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LFGWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E73816164B94C119D0706DA8 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		EAECB64072CE4F5286C7591E /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
@@ -174,7 +177,8 @@
 		4A14429DD60DEA489C97C92A /* Shared */ = {
 			isa = PBXGroup;
 			children = (
-				2BB446B012E8694721414FE8 /* LFGSessionAttributes.swift */,
+				45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */,
+				D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -205,6 +209,7 @@
 			buildConfigurationList = 5A8E77E103CF373BE00DBA1E /* Build configuration list for PBXNativeTarget "LFGWidgets" */;
 			buildPhases = (
 				99E0EAA2D99A5B033BB094A5 /* Sources */,
+				F19B0D1C0B33EBC325F439DB /* Resources */,
 				600585A8CDC28DF4D10C24E4 /* Frameworks */,
 			);
 			buildRules = (
@@ -212,6 +217,8 @@
 			dependencies = (
 			);
 			name = LFGWidgets;
+			packageProductDependencies = (
+			);
 			productName = LFGWidgets;
 			productReference = D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -289,6 +296,15 @@
 			files = (
 				EF7A801ECD3C787CEC6ECA82 /* Assets.xcassets in Resources */,
 				8D3E23D31117026A9BF00460 /* LaunchScreen.storyboard in Resources */,
+				5C80FE3B63D36885C3E3CA4F /* SharedAssets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F19B0D1C0B33EBC325F439DB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C1B5BCFA6FA382188AFC753C /* SharedAssets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -303,7 +319,7 @@
 				FDC78A1C6A82751D9F56E521 /* Components.swift in Sources */,
 				8A8BAA0AADCD3A860CCA5B39 /* HostLink.swift in Sources */,
 				8950528E1385EF07CB2814AD /* LFGApp.swift in Sources */,
-				BBA9DA9482B7D2A76656E8BB /* LFGSessionAttributes.swift in Sources */,
+				16B0F6A79CE890FBF2B0E5E2 /* LFGFleetAttributes.swift in Sources */,
 				A9769E2F571F58BFBE480AB0 /* LiveActivityManager.swift in Sources */,
 				50F6EF746AAEB80DB6229E05 /* MessageComposer.swift in Sources */,
 				680725D02451A3EEFF5A9F28 /* NewSessionView.swift in Sources */,
@@ -322,8 +338,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6D57951618DB68F747829455 /* LFGFleetAttributes.swift in Sources */,
 				524B5CC79B3BBA73827C7B05 /* LFGSessionActivityWidget.swift in Sources */,
-				0D46DEDB3AF8664A7E8DEF2E /* LFGSessionAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -407,8 +423,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFGWidgets/Info.plist;
@@ -420,7 +435,6 @@
 				);
 				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -433,8 +447,8 @@
 				APS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
@@ -445,7 +459,6 @@
 				);
 				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -458,8 +471,8 @@
 				APS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
@@ -470,7 +483,6 @@
 				);
 				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -481,8 +493,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFGWidgets/Info.plist;
@@ -494,7 +505,6 @@
 				);
 				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";

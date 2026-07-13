@@ -121,6 +121,9 @@ struct SessionDetailView: View {
             pinningToBottom = false
             isAtBottom = true
         }
+        .onDisappear {
+            store.blur(sid)
+        }
         .alert("Rename session", isPresented: $renaming) {
             TextField("Title", text: $newTitle)
             Button("Cancel", role: .cancel) {}

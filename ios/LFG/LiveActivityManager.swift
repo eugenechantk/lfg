@@ -20,6 +20,9 @@ final class LiveActivityManager {
 
     func configure(settings: AppSettings) {
         self.settings = settings
+        #if DEBUG
+        startMockFleetActivityIfRequested()
+        #endif
         start()
     }
 
@@ -39,29 +42,28 @@ final class LiveActivityManager {
         guard pushToStartTask == nil, activityUpdatesTask == nil else { return }
 
         pushToStartTask = Task { @MainActor [weak self] in
-            for await token in Activity<LFGSessionAttributes>.pushToStartTokenUpdates {
+            for await token in Activity<LFGFleetAttributes>.pushToStartTokenUpdates {
                 await self?.sendStartToken(apnsTokenHex(token))
             }
         }
 
         activityUpdatesTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            for activity in Activity<LFGSessionAttributes>.activities {
+            for activity in Activity<LFGFleetAttributes>.activities {
                 self.track(activity)
             }
-            for await activity in Activity<LFGSessionAttributes>.activityUpdates {
+            for await activity in Activity<LFGFleetAttributes>.activityUpdates {
                 self.track(activity)
             }
         }
     }
 
     @available(iOS 17.2, *)
-    private func track(_ activity: Activity<LFGSessionAttributes>) {
+    private func track(_ activity: Activity<LFGFleetAttributes>) {
         guard activityTokenTasks[activity.id] == nil else { return }
-        let sessionId = activity.attributes.sid
         activityTokenTasks[activity.id] = Task { @MainActor [weak self] in
             for await token in activity.pushTokenUpdates {
-                await self?.sendUpdateToken(apnsTokenHex(token), sessionId: sessionId)
+                await self?.sendUpdateToken(apnsTokenHex(token))
             }
         }
     }
@@ -78,15 +80,89 @@ final class LiveActivityManager {
         }
     }
 
-    private func sendUpdateToken(_ token: String, sessionId: String) async {
+    private func sendUpdateToken(_ token: String) async {
         guard let settings, !settings.hosts.isEmpty else { return }
         for host in settings.hosts {
             guard let client = settings.client(for: host) else { continue }
             do {
-                try await client.registerLiveActivityUpdateToken(token, env: liveActivityEnv, sessionId: sessionId)
+                try await client.registerLiveActivityUpdateToken(token, env: liveActivityEnv)
             } catch {
                 log.error("live activity update-token register on \(host.label) failed: \(error.localizedDescription)")
             }
         }
     }
+
+    #if DEBUG
+    func startMockFleetActivityIfRequested() {
+        let mockMode = ProcessInfo.processInfo.environment["LFG_LA_MOCK"]
+        guard mockMode == "1" || mockMode == "working" else { return }
+        guard #available(iOS 17.2, *) else { return }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+
+        Task { @MainActor in
+            for activity in Activity<LFGFleetAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+
+            let now = Date().timeIntervalSince1970
+            let allWorking = ProcessInfo.processInfo.environment["LFG_LA_MOCK"] == "working"
+            let state = allWorking
+                ? LFGFleetAttributes.ContentState(
+                    working: 3,
+                    needsInput: 0,
+                    rows: [
+                        .init(sid: "mock-sendq", title: "fix sendq bracketed paste", host: "air", state: "working", since: now - 724),
+                        .init(sid: "mock-tokens", title: "migrate push tokens store", host: "pro", state: "working", since: now - 212),
+                        .init(sid: "mock-reelly", title: "reelly ad pipeline refactor", host: "pro", state: "working", since: now - 95),
+                    ],
+                    hosts: [
+                        .init(name: "pro", online: true),
+                        .init(name: "air", online: false),
+                    ],
+                    updatedAt: now
+                )
+                : LFGFleetAttributes.ContentState(
+                    working: 2,
+                    needsInput: 2,
+                    rows: [
+                        .init(
+                            sid: "mock-redesign",
+                            title: "redesign live activity widget",
+                            host: "pro",
+                            state: "blocked",
+                            since: now - 184
+                        ),
+                        .init(
+                            sid: "mock-sendq",
+                            title: "fix sendq bracketed paste",
+                            host: "air",
+                            state: "blocked",
+                            since: now - 126
+                        ),
+                        .init(
+                            sid: "mock-tokens",
+                            title: "migrate push tokens store",
+                            host: "pro",
+                            state: "working",
+                            since: now - 724
+                        ),
+                    ],
+                    hosts: [
+                        .init(name: "pro", online: true),
+                        .init(name: "air", online: true),
+                    ],
+                    updatedAt: now
+                )
+            do {
+                _ = try Activity.request(
+                    attributes: LFGFleetAttributes(fleetId: "fleet"),
+                    content: .init(state: state, staleDate: nil),
+                    pushType: nil
+                )
+            } catch {
+                log.error("mock fleet live activity start failed: \(error.localizedDescription)")
+            }
+        }
+    }
+    #endif
 }

@@ -63,7 +63,7 @@ final class LFGClientLiveActivityTests: XCTestCase {
     func testRegisterLiveActivityUpdateTokenPostsExpectedBody() async throws {
         let client = makeClient()
 
-        try await client.registerLiveActivityUpdateToken("ff09", env: "prod", sessionId: "session-123")
+        try await client.registerLiveActivityUpdateToken("ff09", env: "prod")
 
         let request = try XCTUnwrap(RequestCapturingURLProtocol.capturedRequest)
         XCTAssertEqual(request.url?.path, "/api/push/live-activity/update-token")
@@ -72,7 +72,6 @@ final class LFGClientLiveActivityTests: XCTestCase {
         XCTAssertEqual(try requestBody(request), [
             "token": "ff09",
             "env": "prod",
-            "sessionId": "session-123",
         ])
     }
 

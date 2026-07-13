@@ -8,6 +8,7 @@ import { PATHS } from "../config.ts";
 import { hostInfo } from "../hostinfo.ts";
 import { Journal } from "../journal.ts";
 import { startJournalPump } from "../journal-pump.ts";
+import { codexDelegationSessionIds, notePaneBusy } from "../activity.ts";
 import {
   AGENTS_DIR,
   listAgents,
@@ -67,7 +68,7 @@ import {
   panePidForSession,
   isBusy,
 } from "../tmux.ts";
-import { addManaged, removeManaged } from "../managed.ts";
+import { addManaged, normalizeParentSessionId, removeManaged } from "../managed.ts";
 import { PtyBridge, termSessionName } from "../pty.ts";
 import { capturePaneScroll, capturePaneEscaped, paneWidth, ensureFolderTrusted } from "../tmux.ts";
 import { rootDir, inboxDir, setInbox, createDir } from "../dirs.ts";
@@ -1474,21 +1475,17 @@ export async function cmdServe() {
         const body = (await req.json().catch(() => null)) as {
           token?: string;
           env?: string;
-          sessionId?: string;
         } | null;
         const token = body?.token?.trim();
         if (!token || !/^[0-9a-fA-F]{8,}$/.test(token)) return err(400, "invalid token");
-        const sessionId = body?.sessionId?.trim();
-        if (!sessionId) return err(400, "missing sessionId");
         const env = body?.env === "production" ? "production" : "sandbox";
         const record = await upsertLiveActivityToken({
           token,
           env,
           kind: "activityUpdate",
-          sessionId,
         });
         ensurePushWatcher();
-        return json({ ok: true, kind: record.kind, env: record.env, sessionId: record.sessionId });
+        return json({ ok: true, kind: record.kind, env: record.env });
       }
       if (path === "/api/push/unregister" && req.method === "POST") {
         const body = (await req.json().catch(() => null)) as { token?: string } | null;
@@ -1586,6 +1583,7 @@ export async function cmdServe() {
           voice?: boolean;
           model?: string;
           agent?: "claude" | "codex" | "aisdk" | "codex-aisdk" | "opencode";
+          parentSessionId?: unknown;
         } | null;
         // Default flip (Task B): with no agent specified, the default Claude path
         // now goes through the AI SDK ("aisdk") rather than the Claude CLI. Every
@@ -1636,6 +1634,7 @@ export async function cmdServe() {
         }
         if (!cwd) return err(400, "directory not found");
         ensureFolderTrusted(cwd);
+        const parentSessionId = normalizeParentSessionId(body?.parentSessionId);
         const tmuxName = `lfg-${randomBytes(3).toString("hex")}`;
         // For the voice orchestrator, append a live snapshot of every OTHER
         // session (built before this one spawns, so it's not in the list) so its
@@ -1687,7 +1686,13 @@ export async function cmdServe() {
                     })
                   : spawnManagedSession({ name: tmuxName, cwd, prompt, model });
         if (!r.ok) return err(502, r.error || "failed to start session");
-        addManaged({ tmuxName, cwd, createdAt: Date.now(), agent });
+        addManaged({
+          tmuxName,
+          cwd,
+          createdAt: Date.now(),
+          agent,
+          ...(parentSessionId ? { parentSessionId } : {}),
+        });
         // Tag the new session to whoever created it so it lands in their filter
         // immediately (best-effort: assignUser ignores an unknown email).
         if (body?.user) assignUser(tmuxName, body.user);
@@ -2243,15 +2248,16 @@ export async function cmdServe() {
               target: string | null;
             }) => {
               if (closed) return;
+              const delegated = codexDelegationSessionIds().has(p.sid);
               if (!p.target) {
                 // Pane-less (aisdk / codex-aisdk) session: busy comes from the
                 // registry, and there are no pane-scraped prompts. For a
                 // codex-aisdk session the sid may be the threadId rather than the
                 // control-plane key, so look it up by either.
                 const entry = findAisdkEntryByAnyId(p.sid);
-                let busy: boolean;
+                let baseBusy: boolean;
                 if (entry) {
-                  busy = entry.busy;
+                  baseBusy = entry.busy;
                 } else {
                   // Bare CLI session whose pane lfg couldn't resolve (e.g. a
                   // `claude`/`codex` launched outside lfg and not wrapped in a
@@ -2263,11 +2269,12 @@ export async function cmdServe() {
                   // during a long silent tool call. Wrap launches via the cy/
                   // codexy tmux aliases to get accurate pane-scraped busy instead.
                   try {
-                    busy = Date.now() - statSync(p.tp).mtimeMs < BARE_BUSY_WINDOW_MS;
+                    baseBusy = Date.now() - statSync(p.tp).mtimeMs < BARE_BUSY_WINDOW_MS;
                   } catch {
-                    busy = false;
+                    baseBusy = false;
                   }
                 }
+                const busy = baseBusy || delegated;
                 const bsig = busy ? "1" : "0";
                 if (bsig !== (lastBusy.get(p.sid) ?? "0")) {
                   lastBusy.set(p.sid, bsig);
@@ -2285,7 +2292,9 @@ export async function cmdServe() {
                   `event: prompt\ndata: ${JSON.stringify({ sid: p.sid, prompt: prompt ?? null })}\n\n`,
                 );
               }
-              const busy = pane ? isBusy(pane) : false;
+              const paneBusy = pane ? isBusy(pane) : false;
+              notePaneBusy(p.sid, paneBusy);
+              const busy = paneBusy || delegated;
               const bsig = busy ? "1" : "0";
               if (bsig !== (lastBusy.get(p.sid) ?? "0")) {
                 lastBusy.set(p.sid, bsig);

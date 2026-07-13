@@ -1,0 +1,1 @@
+GUI screenshot verification unavailable: open returned kLSNoExecutableErr, screencapture returned could not create image from display, and sandbox denied writes to ~/.config/lfg-desktop/hosts.json.

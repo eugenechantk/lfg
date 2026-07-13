@@ -34,7 +34,6 @@ describe("Live Activity token store", () => {
     const second = await s.upsertLiveActivityToken({
       token: "tok1",
       kind: "activityUpdate",
-      sessionId: "s1",
       env: "production",
     });
 
@@ -43,28 +42,26 @@ describe("Live Activity token store", () => {
     expect(list[0]).toEqual(second);
     expect(second.updatedAt).toBeGreaterThan(first.updatedAt);
     expect(second.kind).toBe("activityUpdate");
-    expect(second.sessionId).toBe("s1");
+    expect(second.sessionId).toBeUndefined();
     expect(second.env).toBe("production");
   });
 
-  test("lists push-to-start and session update tokens separately", async () => {
+  test("lists push-to-start and fleet update tokens separately", async () => {
     const s = await store();
     await s.upsertLiveActivityToken({ token: "start", kind: "pushToStart", env: "sandbox" });
     await s.upsertLiveActivityToken({
       token: "u1",
       kind: "activityUpdate",
-      sessionId: "s1",
       env: "sandbox",
     });
     await s.upsertLiveActivityToken({
       token: "u2",
       kind: "activityUpdate",
-      sessionId: "s2",
       env: "production",
     });
 
     expect((await s.listPushToStartTokens()).map((t) => t.token)).toEqual(["start"]);
-    expect((await s.listActivityUpdateTokens("s1")).map((t) => t.token)).toEqual(["u1"]);
+    expect((await s.listFleetUpdateTokens()).map((t) => t.token)).toEqual(["u1", "u2"]);
   });
 
   test("lookup and remove operate by token", async () => {
