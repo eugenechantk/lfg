@@ -46,20 +46,12 @@ struct SessionDetailView: View {
     /// appears the matching placeholder drops out of the same render pass — no
     /// visible duplicate. Mirrors the store's reconcile matching.
     private var unmatchedSentBubbles: [SessionStore.PendingSend] {
-        let userTurns = messages
-            .filter { $0.role == "user" && $0.kind == "text" }
-            .map { Self.normForMatch($0.text) }
         return pending.filter { p in
             guard p.showSent else { return false }
-            let needle = Self.normForMatch(p.matchText)
-            guard needle.count >= 3 else { return true }
-            let key = String(needle.prefix(80))
-            return !userTurns.contains { $0.contains(key) }
+            return !OptimisticSendReconciliation.containsMatchingUserTurn(
+                matchText: p.matchText,
+                in: messages)
         }
-    }
-
-    private static func normForMatch(_ s: String) -> String {
-        s.lowercased().split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
     }
 
     var body: some View {
