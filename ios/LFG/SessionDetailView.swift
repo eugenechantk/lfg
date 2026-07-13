@@ -375,7 +375,8 @@ struct SessionDetailView: View {
 
     /// Branch this session and navigate into the fork. The store returns the new
     /// session's id, which we hand to `requestSelection` so the split view opens
-    /// the fork directly (its history is already copied server-side).
+    /// the fork directly; history loads from a fork-point snapshot until the
+    /// fork's own transcript file appears after its first turn.
     private func forkSession() async {
         guard !forking else { return }
         forking = true
@@ -457,4 +458,3 @@ struct OfflineComposerNotice: View {
         .padding(.bottom, 8)
     }
 }
-

@@ -51,6 +51,11 @@ final class SSEParserTests: XCTestCase {
         XCTAssertEqual(message.html, "<p>hello</p>")
     }
 
+    func testDecodeResetEvent() {
+        let frame = SSEFrame(event: "reset", data: "{\"sid\":\"s1\"}")
+        XCTAssertEqual(LiveEventDecoder.decode(frame), .reset(sid: "s1"))
+    }
+
     func testDecodePromptEvent() {
         let frame = SSEFrame(event: "prompt", data: """
         {"sid":"s1","prompt":{"question":"Which DB?","options":[{"index":0,"label":"Postgres","selected":false,"description":"robust"},{"index":1,"label":"SQLite"}]}}

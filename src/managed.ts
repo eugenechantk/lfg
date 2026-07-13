@@ -16,6 +16,9 @@ export type ManagedSession = {
   createdAt: number;
   agent?: "claude" | "codex" | "aisdk" | "codex-aisdk" | "opencode";
   parentSessionId?: string;
+  sessionId?: string;
+  forkedFrom?: string;
+  forkSourceBytes?: number;
 };
 
 function filePath(): string {
@@ -51,6 +54,29 @@ export function addManaged(rec: ManagedSession): void {
   const all = readAll();
   all[rec.tmuxName] = rec;
   writeAll(all);
+}
+
+export function patchManaged(tmuxName: string, patch: Partial<ManagedSession>): ManagedSession | null {
+  const all = readAll();
+  const rec = all[tmuxName];
+  if (!rec) return null;
+  all[tmuxName] = { ...rec, ...patch, tmuxName };
+  writeAll(all);
+  return all[tmuxName];
+}
+
+export function forkLineageForSession(sessionId: string): ManagedSession | null {
+  return (
+    listManaged().find(
+      (rec) =>
+        rec.sessionId === sessionId &&
+        typeof rec.forkedFrom === "string" &&
+        rec.forkedFrom.length > 0 &&
+        typeof rec.forkSourceBytes === "number" &&
+        Number.isFinite(rec.forkSourceBytes) &&
+        rec.forkSourceBytes >= 0,
+    ) ?? null
+  );
 }
 
 export function removeManaged(tmuxName: string): void {

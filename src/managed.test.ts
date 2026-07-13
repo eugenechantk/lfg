@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   addManaged,
+  forkLineageForSession,
   listManaged,
   normalizeParentSessionId,
+  patchManaged,
   type ManagedSession,
 } from "./managed.ts";
 import { managedFieldsForTmuxName } from "./sessions.ts";
@@ -52,6 +54,46 @@ describe("managed session parent tags", () => {
         parentSessionId: "parent-123",
       },
     ]);
+  });
+
+  test("persists fork lineage fields through a write/read round trip", () => {
+    addManaged({
+      tmuxName: "lfg-fork",
+      cwd: "/repo",
+      createdAt: 123,
+      agent: "claude",
+    });
+
+    expect(
+      patchManaged("lfg-fork", {
+        sessionId: "00000000-0000-4000-8000-0000000000f0",
+        forkedFrom: "00000000-0000-4000-8000-0000000000a0",
+        forkSourceBytes: 456,
+      }),
+    ).toEqual({
+      tmuxName: "lfg-fork",
+      cwd: "/repo",
+      createdAt: 123,
+      agent: "claude",
+      sessionId: "00000000-0000-4000-8000-0000000000f0",
+      forkedFrom: "00000000-0000-4000-8000-0000000000a0",
+      forkSourceBytes: 456,
+    });
+
+    expect(listManaged()).toEqual([
+      {
+        tmuxName: "lfg-fork",
+        cwd: "/repo",
+        createdAt: 123,
+        agent: "claude",
+        sessionId: "00000000-0000-4000-8000-0000000000f0",
+        forkedFrom: "00000000-0000-4000-8000-0000000000a0",
+        forkSourceBytes: 456,
+      },
+    ]);
+    expect(forkLineageForSession("00000000-0000-4000-8000-0000000000f0")?.forkedFrom).toBe(
+      "00000000-0000-4000-8000-0000000000a0",
+    );
   });
 
   test("listSessions managed join emits parentSessionId only for tagged rows", () => {

@@ -438,6 +438,7 @@ public struct SendResponse: Codable, Sendable {
 
 public enum LiveEvent: Sendable, Equatable {
     case message(sid: String, message: SessionMessage)
+    case reset(sid: String)
     case prompt(sid: String, prompt: AgentPrompt?)
     case busy(sid: String, busy: Bool)
     case queue(sid: String, queue: [QueueItem])

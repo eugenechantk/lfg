@@ -1430,6 +1430,8 @@ import LFGCore
             if SessionFocus.isFocused(sid, focusedID: focusedID) { markOpened(sid) }
             // A real user turn just landed — drop any optimistic bubble it fulfils.
             if m.role == "user" { reconcilePending(sid) }
+        case .reset(let sid):
+            if transcripts[sid]?.isEmpty == false { loadHistory(sid) }
         case .prompt(let sid, let prompt):
             if let prompt { prompts[sid] = prompt } else { prompts[sid] = nil }
         case .busy(let sid, let value):
