@@ -32,6 +32,10 @@ const PROJECTS_DIR = join(HOME, ".claude", "projects");
 const CODEX_SESSIONS_DIR = join(HOME, ".codex", "sessions");
 const TITLE_MAX = 72;
 
+function claudeProjectsDir(): string {
+  return process.env.LFG_CLAUDE_PROJECTS_DIR ?? PROJECTS_DIR;
+}
+
 export type SessionMsg = {
   // Stable per-line id (the transcript `uuid`). Lets the client dedup messages
   // that the live stream legitimately re-sends — e.g. the 40-message backlog
@@ -273,13 +277,14 @@ function candidateDirs(cwd: string): string[] {
 
 async function findTranscriptById(id: string): Promise<string | null> {
   let dirs: string[];
+  const projectsDir = claudeProjectsDir();
   try {
-    dirs = await readdir(PROJECTS_DIR);
+    dirs = await readdir(projectsDir);
   } catch {
     return null;
   }
   for (const d of dirs) {
-    const p = join(PROJECTS_DIR, d, `${id}.jsonl`);
+    const p = join(projectsDir, d, `${id}.jsonl`);
     if (await Bun.file(p).exists()) return p;
   }
   return null;
@@ -472,8 +477,9 @@ async function newestUnclaimedInCwd(
 ): Promise<{ path: string; id: string } | null> {
   let best: { path: string; id: string; mtime: number } | null = null;
   let newestAny = 0; // freshest transcript regardless of claim status
+  const projectsDir = claudeProjectsDir();
   for (const dir of candidateDirs(cwd)) {
-    const abs = join(PROJECTS_DIR, dir);
+    const abs = join(projectsDir, dir);
     let files: string[];
     try {
       files = await readdir(abs);
@@ -1426,7 +1432,7 @@ export async function listResumable(
   const exclude = opts.excludeIds ?? new Set<string>();
   const before = typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
   let dirs: string[];
-  const projectsDir = process.env.LFG_CLAUDE_PROJECTS_DIR ?? PROJECTS_DIR;
+  const projectsDir = claudeProjectsDir();
   try {
     dirs = await readdir(projectsDir);
   } catch {
@@ -1500,6 +1506,30 @@ export async function recentMessages(
   const lines = text.split("\n").filter(Boolean);
   const msgs: SessionMsg[] = [];
   for (const l of lines) {
+    msgs.push(...normalizeLineMessages(l));
+  }
+  return limit > 0 ? msgs.slice(-limit) : msgs;
+}
+
+// Messages from the first `maxBytes` bytes of a transcript. Used for forked
+// sessions before Claude materializes the fork's own file: if the byte cap cuts
+// through a JSONL row, drop that trailing partial row rather than trying to parse
+// a corrupt message or leaking source turns written after the fork point.
+export async function snapshotMessages(
+  path: string,
+  limit = 40,
+  opts: { maxBytes: number | null },
+): Promise<SessionMsg[]> {
+  const file = Bun.file(path);
+  const size = file.size;
+  const cap = opts.maxBytes == null ? size : Math.max(0, Math.min(size, Math.floor(opts.maxBytes)));
+  let text = await file.slice(0, cap).text();
+  if (cap < size && text && !text.endsWith("\n")) {
+    const lastNewline = text.lastIndexOf("\n");
+    text = lastNewline >= 0 ? text.slice(0, lastNewline + 1) : "";
+  }
+  const msgs: SessionMsg[] = [];
+  for (const l of text.split("\n").filter(Boolean)) {
     msgs.push(...normalizeLineMessages(l));
   }
   return limit > 0 ? msgs.slice(-limit) : msgs;

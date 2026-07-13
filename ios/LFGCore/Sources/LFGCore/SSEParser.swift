@@ -95,6 +95,7 @@ public struct SSEParser: Sendable {
 // MARK: - Frame → LiveEvent decoding
 
 private struct MsgPayload: Decodable { let sid: String; let m: SessionMessage }
+private struct ResetPayload: Decodable { let sid: String }
 private struct PromptPayload: Decodable { let sid: String; let prompt: AgentPrompt? }
 private struct BusyPayload: Decodable { let sid: String; let busy: Bool }
 private struct QueuePayload: Decodable { let sid: String; let queue: [QueueItem] }
@@ -110,6 +111,10 @@ public enum LiveEventDecoder {
         case "msg":
             if let p = try? dec.decode(MsgPayload.self, from: data) {
                 return .message(sid: p.sid, message: p.m)
+            }
+        case "reset":
+            if let p = try? dec.decode(ResetPayload.self, from: data) {
+                return .reset(sid: p.sid)
             }
         case "prompt":
             if let p = try? dec.decode(PromptPayload.self, from: data) {
