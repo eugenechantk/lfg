@@ -68,27 +68,23 @@ final class LiveActivityManager {
         }
     }
 
+    // Register with ONLY the default host, not every host. Registering with all
+    // hosts made each host's server push-to-start its own fleet activity → two cards.
     private func sendStartToken(_ token: String) async {
-        guard let settings, !settings.hosts.isEmpty else { return }
-        for host in settings.hosts {
-            guard let client = settings.client(for: host) else { continue }
-            do {
-                try await client.registerLiveActivityStartToken(token, env: liveActivityEnv)
-            } catch {
-                log.error("live activity start-token register on \(host.label) failed: \(error.localizedDescription)")
-            }
+        guard let settings, let host = settings.defaultHost, let client = settings.client(for: host) else { return }
+        do {
+            try await client.registerLiveActivityStartToken(token, env: liveActivityEnv)
+        } catch {
+            log.error("live activity start-token register on \(host.label) failed: \(error.localizedDescription)")
         }
     }
 
     private func sendUpdateToken(_ token: String) async {
-        guard let settings, !settings.hosts.isEmpty else { return }
-        for host in settings.hosts {
-            guard let client = settings.client(for: host) else { continue }
-            do {
-                try await client.registerLiveActivityUpdateToken(token, env: liveActivityEnv)
-            } catch {
-                log.error("live activity update-token register on \(host.label) failed: \(error.localizedDescription)")
-            }
+        guard let settings, let host = settings.defaultHost, let client = settings.client(for: host) else { return }
+        do {
+            try await client.registerLiveActivityUpdateToken(token, env: liveActivityEnv)
+        } catch {
+            log.error("live activity update-token register on \(host.label) failed: \(error.localizedDescription)")
         }
     }
 

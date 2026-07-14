@@ -96,6 +96,11 @@ struct LFGApp: App {
 
     var hasConfiguredHost: Bool { !hosts.isEmpty }
 
+    /// The single host that owns the Live Activity push tokens. Registering the
+    /// push-to-start/update tokens with only this host (not every host) prevents
+    /// multiple servers each starting their own fleet activity — the duplicate-card bug.
+    var defaultHost: Host? { hosts.first(where: { $0.isDefault }) ?? hosts.first }
+
     init() {
         hosts = HostStore.migrate(
             hostsData: defaults.data(forKey: Self.hostsKey),
