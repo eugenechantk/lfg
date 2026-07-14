@@ -83,13 +83,24 @@ final class FleetActivityController {
         guard let snapshot = makeSnapshot(now: Date().timeIntervalSince1970) else { return }
         lastSnapshot = snapshot
 
-        let activity = Activity<LFGFleetAttributes>.activities.first
+        let activities = Activity<LFGFleetAttributes>.activities
         let activeTotal = snapshot.working + snapshot.needsInput
         let appState = appContentState(from: snapshot)
         let content = ActivityContent(state: appState, staleDate: nil)
 
         do {
-            if activeTotal > 0, activity == nil {
+            // No active work → there must be NO card. End every fleet activity
+            // (a server push-to-start or an old orphan may have left extras).
+            if activeTotal == 0 {
+                for activity in activities {
+                    await activity.end(content, dismissalPolicy: .immediate)
+                }
+                lastSyncedSnapshot = nil
+                return
+            }
+
+            // Active work → exactly ONE card. Nothing exists yet → start it.
+            guard let survivor = activities.first else {
                 _ = try Activity.request(
                     attributes: LFGFleetAttributes(fleetId: "fleet"),
                     content: content,
@@ -99,19 +110,15 @@ final class FleetActivityController {
                 return
             }
 
-            guard let activity else {
-                lastSyncedSnapshot = activeTotal == 0 ? nil : lastSyncedSnapshot
-                return
+            // Collapse duplicates: keep the first, end any extras (the app + each
+            // host's server can each create one, racing into 2+ cards).
+            let hadDuplicates = activities.count > 1
+            for extra in activities.dropFirst() {
+                await extra.end(nil, dismissalPolicy: .immediate)
             }
 
-            if activeTotal == 0 {
-                await activity.end(content, dismissalPolicy: .immediate)
-                lastSyncedSnapshot = snapshot
-                return
-            }
-
-            if !Self.sameRenderableContent(lastSyncedSnapshot, snapshot) {
-                await activity.update(content)
+            if hadDuplicates || !Self.sameRenderableContent(lastSyncedSnapshot, snapshot) {
+                await survivor.update(content)
                 lastSyncedSnapshot = snapshot
             }
         } catch {
