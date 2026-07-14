@@ -39,3 +39,4 @@ ios/fastlane/*.bak
 
 # Desktop app build output
 desktop/build/
+.worktrees/

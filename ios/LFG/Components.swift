@@ -43,6 +43,12 @@ private struct TextBubble: View {
                     }
                     // User attachments show as tappable file cards, not inline previews.
                     if !media.isEmpty { MediaAttachmentsView(refs: media, cardsOnly: true).frame(maxWidth: 280) }
+                    // Sent-time caption under the user message.
+                    if let sentAt = timestampText {
+                        Text(sentAt)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .padding(.vertical, 10)
@@ -58,6 +64,17 @@ private struct TextBubble: View {
                 }
             }
         }
+    }
+
+    /// Human-readable send time for the user bubble caption. `ts` is epoch
+    /// milliseconds; show the time of day, prefixed with the date when it isn't today.
+    private var timestampText: String? {
+        guard let ts = message.ts, ts > 0 else { return nil }
+        let date = Date(timeIntervalSince1970: ts / 1000)
+        if Calendar.current.isDateInToday(date) {
+            return date.formatted(date: .omitted, time: .shortened)
+        }
+        return date.formatted(date: .abbreviated, time: .shortened)
     }
 
     /// Assistant prose with inline image markdown removed — each image now shows
