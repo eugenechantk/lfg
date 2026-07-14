@@ -1040,6 +1040,7 @@ import LFGCore
         refreshTask = task
         await task.value
         if refreshTask == task { refreshTask = nil }
+        FleetActivityController.shared.syncNow()
     }
 
     private func performRefresh() async {

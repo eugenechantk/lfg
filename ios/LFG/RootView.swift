@@ -98,6 +98,7 @@ struct RootView: View {
             switch phase {
             case .active:
                 store.enterForeground()
+                FleetActivityController.shared.syncNow()
             case .background:
                 store.enterBackground()
                 AppDelegate.scheduleAppRefresh()   // keep a periodic delta sync queued

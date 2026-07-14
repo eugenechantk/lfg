@@ -95,11 +95,6 @@ private struct FleetHeaderView: View {
                     .font(.subheadline.weight(.bold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
-
-                Text(connectionStatus(state.hosts))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
 
             Spacer(minLength: 0)
@@ -118,10 +113,6 @@ private struct FleetIslandHeader: View {
                     .font(.subheadline.weight(.bold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.55)
-                Text(connectionStatus(state.hosts))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
         }
     }
@@ -273,18 +264,6 @@ private func color(for state: String) -> Color {
 
 private func fleetAccent(for state: LFGFleetAttributes.ContentState) -> Color {
     state.needsInput > 0 ? .orange : .blue
-}
-
-private func connectionStatus(_ hosts: [LFGFleetAttributes.ContentState.HostStatus]) -> String {
-    guard !hosts.isEmpty else { return "Offline" }
-    guard hosts.count > 1 else { return hosts[0].online ? "Connected" : "Offline" }
-
-    let online = hosts.filter(\.online).map { displayHostName($0.name) }
-    let offline = hosts.filter { !$0.online }.map { displayHostName($0.name) }
-    var parts: [String] = []
-    if !online.isEmpty { parts.append("\(online.joined(separator: ", ")) online") }
-    if !offline.isEmpty { parts.append("\(offline.joined(separator: ", ")) offline") }
-    return parts.joined(separator: " · ")
 }
 
 private func isHostOffline(_ host: String, in hosts: [LFGFleetAttributes.ContentState.HostStatus]) -> Bool {

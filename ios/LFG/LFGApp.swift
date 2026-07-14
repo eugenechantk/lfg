@@ -21,6 +21,7 @@ struct LFGApp: App {
         // settings/store the SwiftUI views observe.
         PushManager.shared.configure(settings: s, store: st)
         LiveActivityManager.shared.configure(settings: s)
+        FleetActivityController.shared.configure(settings: s, store: st)
     }
 
     private static func makeStore() -> (store: LFGStore?, isDurable: Bool) {

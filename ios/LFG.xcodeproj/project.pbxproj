@@ -28,6 +28,7 @@
 		A541589C33833A613D05AD8B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6461434AE6C2B0858AC679ED /* RootView.swift */; };
 		A9769E2F571F58BFBE480AB0 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAECB64072CE4F5286C7591E /* LiveActivityManager.swift */; };
 		A9CABFDC3E306F17D2F69E33 /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */; };
+		BF6314DDC10C441712E87E2E /* FleetActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 565F8BC62A1D403CDD690340 /* FleetActivityController.swift */; };
 		C1B5BCFA6FA382188AFC753C /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */; };
 		D2F9456B4314172C7546226F /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */; };
 		D34242B9518E03AED793C989 /* SessionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2641AAFED0A103CF2409D79C /* SessionListView.swift */; };
@@ -73,6 +74,7 @@
 		36D7D08CD0B7C101A085BC11 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGFleetAttributes.swift; sourceTree = "<group>"; };
 		512247CB20DB703CAE731727 /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
+		565F8BC62A1D403CDD690340 /* FleetActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FleetActivityController.swift; sourceTree = "<group>"; };
 		5674F88F214C41CB36C903F6 /* LFGSessionActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGSessionActivityWidget.swift; sourceTree = "<group>"; };
 		5C0AF429850CD7F98D54334E /* LFG.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LFG.entitlements; sourceTree = "<group>"; };
 		6461434AE6C2B0858AC679ED /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -146,6 +148,7 @@
 				36D7D08CD0B7C101A085BC11 /* Assets.xcassets */,
 				9D1BD4A3061EFB2858AB2A4B /* BackgroundSender.swift */,
 				F4C23B1D7493D21B0344531F /* Components.swift */,
+				565F8BC62A1D403CDD690340 /* FleetActivityController.swift */,
 				9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */,
 				716A5CB7BF742B16562A7EF8 /* Info.plist */,
 				649DB6E8EC8E3C5852C813C8 /* LaunchScreen.storyboard */,
@@ -317,6 +320,7 @@
 			files = (
 				5942295A0F639DE68C4FF451 /* BackgroundSender.swift in Sources */,
 				FDC78A1C6A82751D9F56E521 /* Components.swift in Sources */,
+				BF6314DDC10C441712E87E2E /* FleetActivityController.swift in Sources */,
 				8A8BAA0AADCD3A860CCA5B39 /* HostLink.swift in Sources */,
 				8950528E1385EF07CB2814AD /* LFGApp.swift in Sources */,
 				16B0F6A79CE890FBF2B0E5E2 /* LFGFleetAttributes.swift in Sources */,
