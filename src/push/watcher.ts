@@ -40,6 +40,7 @@ import {
   type LiveActivityRow,
 } from "./liveactivity.ts";
 import { unregisterDevice } from "./store.ts";
+import { loadFleetActivityActive, saveFleetActivityActive } from "./fleet-active-store.ts";
 
 // One observation of a session at a single tick.
 export type SessionState = {
@@ -347,6 +348,7 @@ export type TickDeps = {
       cfg: ApnsConfig,
     ) => Promise<{ ok: boolean; status: number; reason?: string }>;
     onDeadToken?: (token: string) => Promise<void> | void;
+    persistActive?: (active: LiveActivityActive | null) => Promise<void> | void;
   };
   now?: () => number;
   log?: (line: string) => void;
@@ -402,7 +404,10 @@ async function applyLiveActivityDecision(
 
   if (decision.action.event === "start") {
     const sent = await sendLiveActivityToTokens(startTokens, decision.action.push, deps, cfg, log);
-    if (sent > 0 && decision.nextActive) deps.active.set(FLEET_ACTIVITY_KEY, decision.nextActive);
+    if (sent > 0 && decision.nextActive) {
+      deps.active.set(FLEET_ACTIVITY_KEY, decision.nextActive);
+      await deps.persistActive?.(decision.nextActive);
+    }
     return;
   }
 
@@ -410,8 +415,13 @@ async function applyLiveActivityDecision(
   if (!updateTokens.length) return;
   const sent = await sendLiveActivityToTokens(updateTokens, decision.action.push, deps, cfg, log);
   if (sent <= 0) return;
-  if (decision.nextActive) deps.active.set(FLEET_ACTIVITY_KEY, decision.nextActive);
-  else deps.active.delete(FLEET_ACTIVITY_KEY);
+  if (decision.nextActive) {
+    deps.active.set(FLEET_ACTIVITY_KEY, decision.nextActive);
+    await deps.persistActive?.(decision.nextActive);
+  } else {
+    deps.active.delete(FLEET_ACTIVITY_KEY);
+    await deps.persistActive?.(null);
+  }
 }
 
 /**
@@ -508,6 +518,15 @@ export function startPushWatcher(
   if (!cfg) return; // push not configured → feature is off
   const prior = new Map<string, PriorState>();
   const active = new Map<string, LiveActivityActive>();
+  let fleetActiveLoaded = false;
+  const fleetActiveLoad = loadFleetActivityActive()
+    .then((loaded) => {
+      if (loaded) active.set(FLEET_ACTIVITY_KEY, loaded);
+      fleetActiveLoaded = true;
+    })
+    .catch(() => {
+      fleetActiveLoaded = true;
+    });
   const deps: TickDeps = {
     sessions: listSessions,
     observe: observeSession,
@@ -527,6 +546,7 @@ export function startPushWatcher(
       fleetUpdateTokens: listFleetUpdateTokens,
       send: sendLiveActivity,
       onDeadToken: removeLiveActivityToken,
+      persistActive: saveFleetActivityActive,
     };
   }
   let running = false;
@@ -534,6 +554,7 @@ export function startPushWatcher(
     if (running) return; // skip if the previous tick is still going (slow panes)
     running = true;
     try {
+      if (deps.liveActivities && !fleetActiveLoaded) await fleetActiveLoad;
       await runPushTick(prior, deps);
     } catch (e) {
       log(`[push] tick error: ${(e as Error).message}`);
