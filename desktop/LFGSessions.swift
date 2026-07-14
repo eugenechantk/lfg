@@ -4,10 +4,12 @@
 //
 //   - Session on THIS machine with a tmux pane  -> iTerm2 window attached to
 //     that same tmux session (`tmux attach -t <name>`).
-//   - Session on ANOTHER machine (or a local one with no tmux pane) -> iTerm2
-//     window with a fresh local tmux session running `claude --resume <id>`
-//     in the session's cwd. Works because ~/.claude/projects syncs between
-//     hosts, so the transcript is present locally.
+//   - Session on ANOTHER machine with a tmux pane -> iTerm2 window ssh-attached
+//     to that same remote tmux session.
+//   - Session with no tmux pane -> iTerm2 window with a fresh local tmux
+//     session running `claude --resume <id>` in the session's cwd. Works
+//     because ~/.claude/projects syncs between hosts, so the transcript is
+//     present locally.
 //
 // Opened iTerm2 windows are resized to span the full height of the desktop
 // (screen) they appear on.
@@ -17,12 +19,14 @@
 // sections with running/idle tallies).
 //
 // Hosts are read from ~/.config/lfg-desktop/hosts.json:
-//   { "hosts": ["http://localhost:8766", "http://100.75.162.40:8766"] }
+//   { "hosts": ["http://localhost:8766", {"url": "http://100.75.162.40:8766", "ssh": "user@air"}] }
 //
 // Built by build.sh (swiftc, no Xcode project).
 
 import SwiftUI
 import AppKit
+import Darwin
+import Dispatch
 
 // MARK: - API models (subset of lfg's Session type)
 
@@ -103,6 +107,7 @@ struct HostInfoResponse: Decodable { let hostId: String; let hostName: String }
 
 struct HostState: Identifiable {
     let url: String
+    let sshTarget: String?
     var info: HostInfoResponse?
     var sessions: [APISession] = []
     var closedSessions: [APISession] = []
@@ -122,10 +127,21 @@ struct HostState: Identifiable {
 /// One session joined with the host it lives on — the unit the list renders.
 struct SessionItem: Identifiable {
     let session: APISession
+    let hostURL: String
+    let hostId: String
     let hostLabel: String
     let hostIsLocal: Bool
+    let hostSSHTarget: String?
 
-    var id: String { "\(hostLabel)-\(session.id)" }
+    var id: String { "\(hostId)-\(session.id)" }
+
+    var canOpen: Bool {
+        session.tmuxName != nil || session.sessionId != nil
+    }
+
+    var opensByResume: Bool {
+        session.tmuxName == nil && session.sessionId != nil
+    }
 
     enum Status: Int, CaseIterable {
         case paused, working, idle, closed
@@ -156,16 +172,51 @@ enum Config {
     }
     static var hostsFile: URL { dir.appendingPathComponent("hosts.json") }
 
-    struct HostsFile: Codable { var hosts: [String] }
+    struct HostEntry: Codable, Equatable {
+        let url: String
+        let ssh: String?
 
-    static func loadHosts() -> [String] {
+        enum CodingKeys: String, CodingKey { case url, ssh }
+
+        init(url: String, ssh: String? = nil) {
+            self.url = url
+            self.ssh = ssh
+        }
+
+        init(from decoder: Decoder) throws {
+            let single = try decoder.singleValueContainer()
+            if let url = try? single.decode(String.self) {
+                self.url = url
+                self.ssh = nil
+                return
+            }
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            url = try c.decode(String.self, forKey: .url)
+            ssh = try c.decodeIfPresent(String.self, forKey: .ssh)
+        }
+
+        func encode(to encoder: Encoder) throws {
+            if ssh == nil {
+                var single = encoder.singleValueContainer()
+                try single.encode(url)
+                return
+            }
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(url, forKey: .url)
+            try c.encodeIfPresent(ssh, forKey: .ssh)
+        }
+    }
+
+    struct HostsFile: Codable { var hosts: [HostEntry] }
+
+    static func loadHosts() -> [HostEntry] {
         if let data = try? Data(contentsOf: hostsFile),
            let parsed = try? JSONDecoder().decode(HostsFile.self, from: data),
            !parsed.hosts.isEmpty {
             return parsed.hosts
         }
         // Seed a default config so the file is discoverable/editable.
-        let seed = HostsFile(hosts: ["http://localhost:8766"])
+        let seed = HostsFile(hosts: [HostEntry(url: "http://localhost:8766")])
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         if let data = try? JSONEncoder().encode(seed) {
             try? data.write(to: hostsFile)
@@ -173,7 +224,15 @@ enum Config {
         return seed.hosts
     }
 
-    static func saveHosts(_ hosts: [String]) throws {
+    static func sshTarget(for entry: HostEntry) -> String? {
+        if let ssh = entry.ssh?.trimmingCharacters(in: .whitespacesAndNewlines), !ssh.isEmpty {
+            return ssh
+        }
+        guard let host = URL(string: entry.url)?.host, !host.isEmpty else { return nil }
+        return "\(NSUserName())@\(host)"
+    }
+
+    static func saveHosts(_ hosts: [HostEntry]) throws {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let data = try JSONEncoder().encode(HostsFile(hosts: hosts))
         try data.write(to: hostsFile, options: .atomic)
@@ -188,11 +247,19 @@ final class SessionStore: ObservableObject {
     @Published var duplicateHostsByURL: [String: HostState] = [:]
     @Published var refreshing = false
     @Published var lastRefreshed: Date?
+    @Published var movingIds: Set<String> = []
 
     var items: [SessionItem] {
         let all = hosts.flatMap { host in
             host.sessions.map {
-                SessionItem(session: $0, hostLabel: host.label, hostIsLocal: host.isLocal)
+                SessionItem(
+                    session: $0,
+                    hostURL: host.url,
+                    hostId: host.info?.hostId ?? host.url,
+                    hostLabel: host.label,
+                    hostIsLocal: host.isLocal,
+                    hostSSHTarget: host.sshTarget
+                )
             }
         }
         // A host can list one sessionId twice (e.g. a session resumed into a
@@ -227,21 +294,30 @@ final class SessionStore: ObservableObject {
         return name
     }()
 
+    struct MoveTarget: Identifiable, Hashable {
+        let hostId: String
+        let label: String
+        let url: String
+
+        var id: String { hostId }
+    }
+
     func refresh() async {
         refreshing = true
         defer { refreshing = false; lastRefreshed = Date() }
-        let urls = Config.loadHosts()
+        let entries = Config.loadHosts()
         var results: [HostState] = []
         await withTaskGroup(of: HostState.self) { group in
-            for url in urls {
-                group.addTask { await Self.fetchHost(url: url) }
+            for entry in entries {
+                group.addTask { await Self.fetchHost(entry: entry) }
             }
             for await state in group { results.append(state) }
         }
         // Preserve config order; mark local hosts.
         var ordered: [HostState] = []
-        for url in urls {
-            guard var state = results.first(where: { $0.url == url }) else { continue }
+        for entry in entries {
+            guard var state = results.first(where: { $0.url == entry.url }) else { continue }
+            let url = entry.url
             state.isLocal = isLocalURL(url) || matchesLocalHostname(state.info?.hostName)
             ordered.append(state)
         }
@@ -277,6 +353,33 @@ final class SessionStore: ObservableObject {
         hosts = uniqueHosts
     }
 
+    func moveTargets(for item: SessionItem) -> [MoveTarget] {
+        guard let _ = item.session.sessionId,
+              item.session.agent == "claude" || item.session.agent == "aisdk" else {
+            return []
+        }
+        return hosts.compactMap { host in
+            guard host.error == nil else { return nil }
+            let hostId = host.info?.hostId ?? host.url
+            guard hostId != item.hostId else { return nil }
+            return MoveTarget(hostId: hostId, label: host.label, url: host.url)
+        }
+    }
+
+    func move(item: SessionItem, to target: MoveTarget) async -> String? {
+        guard let sessionId = item.session.sessionId else {
+            return "Move failed: this session has no session id."
+        }
+        movingIds.insert(sessionId)
+        defer { movingIds.remove(sessionId) }
+
+        if let err = await MoveCoordinator.move(item: item, to: target) {
+            return err
+        }
+        await refresh()
+        return nil
+    }
+
     private func isLocalURL(_ url: String) -> Bool {
         guard let host = URL(string: url)?.host?.lowercased() else { return false }
         return host == "localhost" || host == "127.0.0.1" || host == "::1"
@@ -291,8 +394,9 @@ final class SessionStore: ObservableObject {
         return name == localHostname
     }
 
-    private static func fetchHost(url: String) async -> HostState {
-        var state = HostState(url: url)
+    private static func fetchHost(entry: Config.HostEntry) async -> HostState {
+        let url = entry.url
+        var state = HostState(url: url, sshTarget: Config.sshTarget(for: entry))
         let session = URLSession(configuration: {
             let c = URLSessionConfiguration.ephemeral
             c.timeoutIntervalForRequest = 4
@@ -344,6 +448,296 @@ final class SessionStore: ObservableObject {
     }
 }
 
+// MARK: - Moving sessions between hosts
+
+enum MoveCoordinator {
+    private struct ResumeResponse: Decodable {
+        let ok: Bool?
+        let tmuxName: String?
+        let sessionId: String?
+        let error: String?
+        let message: String?
+        let alreadyLive: Bool?
+    }
+
+    static func move(item: SessionItem, to target: SessionStore.MoveTarget) async -> String? {
+        guard let sessionId = item.session.sessionId else {
+            return "Move failed: this session has no session id."
+        }
+
+        do {
+            try await postClose(sourceURL: item.hostURL, sessionId: sessionId)
+        } catch {
+            return "Move failed at close: \(detail(for: error))"
+        }
+
+        let finalActivity = (try? await fetchResumable(baseURL: item.hostURL)
+            .first { $0.sessionId == sessionId }?
+            .lastActivityAt) ?? item.session.lastActivityAt
+
+        do {
+            let synced = try await waitForSync(
+                targetURL: target.url,
+                sessionId: sessionId,
+                finalActivity: finalActivity
+            )
+            if !synced {
+                return "Closed on \(item.hostLabel), but the transcript hasn't synced to \(target.label) yet. The session is safe — resume it there once sync catches up."
+            }
+        } catch {
+            return "Move failed while waiting for sync: \(detail(for: error))"
+        }
+
+        do {
+            try await postResume(targetURL: target.url, sessionId: sessionId)
+        } catch {
+            return "Move failed at resume: \(detail(for: error))"
+        }
+        return nil
+    }
+
+    private static func postClose(sourceURL: String, sessionId: String) async throws {
+        let (data, response) = try await sharedSession.data(for: try request(
+            baseURL: sourceURL,
+            path: "/api/sessions/\(sessionId)/close",
+            method: "POST"
+        ))
+        try validateHTTP(response, data: data)
+    }
+
+    private static func waitForSync(
+        targetURL: String,
+        sessionId: String,
+        finalActivity: Double?
+    ) async throws -> Bool {
+        let deadline = Date().addingTimeInterval(90)
+        while true {
+            if let sessions = try? await fetchResumable(baseURL: targetURL),
+               let found = sessions.first(where: { $0.sessionId == sessionId }) {
+                if let finalActivity {
+                    if let targetActivity = found.lastActivityAt,
+                       targetActivity >= finalActivity - 1.0 {
+                        return true
+                    }
+                } else {
+                    return true
+                }
+            }
+
+            let remaining = deadline.timeIntervalSinceNow
+            if remaining <= 0 { return false }
+            let sleepSeconds = min(3.0, remaining)
+            try await Task.sleep(nanoseconds: UInt64(sleepSeconds * 1_000_000_000))
+        }
+    }
+
+    private static func postResume(targetURL: String, sessionId: String) async throws {
+        var req = try request(baseURL: targetURL, path: "/api/sessions/resume", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["sessionId": sessionId])
+        let (data, response) = try await sharedSession.data(for: req)
+        try validateHTTP(response, data: data)
+        let decoded = try? JSONDecoder().decode(ResumeResponse.self, from: data)
+        if decoded?.ok == false {
+            throw MoveError.server(decoded?.error ?? decoded?.message ?? "resume endpoint returned ok=false")
+        }
+        if let error = decoded?.error, !error.isEmpty {
+            throw MoveError.server(error)
+        }
+        if decoded == nil,
+           let text = try? JSONDecoder().decode(String.self, from: data),
+           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw MoveError.server(text)
+        }
+        _ = decoded?.tmuxName
+        _ = decoded?.sessionId
+        _ = decoded?.alreadyLive
+    }
+
+    private static func fetchResumable(baseURL: String) async throws -> [ResumableAPISession] {
+        let (data, response) = try await sharedSession.data(for: try request(
+            baseURL: baseURL,
+            path: "/api/sessions/resumable?limit=100",
+            method: "GET"
+        ))
+        try validateHTTP(response, data: data)
+        return try JSONDecoder().decode(ResumableResponse.self, from: data).sessions
+    }
+
+    private static let sharedSession: URLSession = {
+        let c = URLSessionConfiguration.ephemeral
+        c.timeoutIntervalForRequest = 10
+        return URLSession(configuration: c)
+    }()
+
+    private static func request(baseURL: String, path: String, method: String) throws -> URLRequest {
+        let trimmed = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: trimmed + path) else {
+            throw MoveError.server("bad URL: \(baseURL)")
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        return req
+    }
+
+    private static func validateHTTP(_ response: URLResponse, data: Data = Data()) throws {
+        guard let http = response as? HTTPURLResponse else { return }
+        guard (200..<300).contains(http.statusCode) else {
+            let body = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            throw MoveError.server(body.isEmpty ? "HTTP \(http.statusCode)" : "HTTP \(http.statusCode): \(body)")
+        }
+    }
+
+    private static func detail(for error: Error) -> String {
+        if let moveError = error as? MoveError {
+            return moveError.message
+        }
+        return error.localizedDescription
+    }
+
+    private enum MoveError: Error {
+        case server(String)
+
+        var message: String {
+            switch self {
+            case .server(let message): return message
+            }
+        }
+    }
+}
+
+// MARK: - Headless move-flow test hook
+
+enum MoveTestCLI {
+    static func runIfRequested() {
+        let args = CommandLine.arguments
+        guard args.count > 1, args[1] == "--move-test" else { return }
+        guard args.count == 5 else {
+            writeResult(ok: false, error: "usage: lfg --move-test <sessionId> <sourceURL> <targetURL>")
+            Darwin.exit(1)
+        }
+
+        let sessionId = args[2]
+        let sourceURL = args[3]
+        let targetURL = args[4]
+
+        Task.detached {
+            let ok = await run(sessionId: sessionId, sourceURL: sourceURL, targetURL: targetURL)
+            Darwin.exit(ok ? 0 : 1)
+        }
+        dispatchMain()
+    }
+
+    private static func run(sessionId: String, sourceURL: String, targetURL: String) async -> Bool {
+        let sourceSession = await fetchSourceSession(sessionId: sessionId, sourceURL: sourceURL)
+        let item = SessionItem(
+            session: sourceSession ?? fallbackSession(sessionId: sessionId),
+            hostURL: sourceURL,
+            hostId: "source",
+            hostLabel: hostLabel(for: sourceURL),
+            hostIsLocal: false,
+            hostSSHTarget: nil
+        )
+        let target = SessionStore.MoveTarget(
+            hostId: await fetchHostId(targetURL) ?? "target",
+            label: hostLabel(for: targetURL),
+            url: targetURL
+        )
+
+        if let error = await MoveCoordinator.move(item: item, to: target) {
+            writeResult(ok: false, error: error)
+            return false
+        }
+        writeResult(ok: true, error: nil)
+        return true
+    }
+
+    private static func fetchSourceSession(sessionId: String, sourceURL: String) async -> APISession? {
+        guard let url = URL(string: sourceURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/sessions") else {
+            return nil
+        }
+        do {
+            let (data, response) = try await session.data(from: url)
+            guard let http = response as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode) else {
+                return nil
+            }
+            let parsed = try JSONDecoder().decode(SessionsResponse.self, from: data)
+            return parsed.sessions.first { $0.sessionId == sessionId }
+        } catch {
+            return nil
+        }
+    }
+
+    private static func fetchHostId(_ baseURL: String) async -> String? {
+        guard let url = URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/info"),
+              let (data, response) = try? await session.data(from: url),
+              let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode),
+              let info = try? JSONDecoder().decode(HostInfoResponse.self, from: data) else {
+            return nil
+        }
+        return info.hostId
+    }
+
+    private static func fallbackSession(sessionId: String) -> APISession {
+        APISession(
+            agent: "claude",
+            pid: -1,
+            cwd: nil,
+            project: "Session",
+            title: sessionId,
+            sessionId: sessionId,
+            busy: false,
+            lastActivityAt: nil,
+            tmuxName: nil,
+            model: nil,
+            status: nil,
+            lastUserText: nil
+        )
+    }
+
+    private static func hostLabel(for url: String) -> String {
+        URL(string: url)?.host ?? url
+    }
+
+    private static func writeResult(ok: Bool, error: String?) {
+        if ok {
+            print("{\"ok\":true}")
+        } else {
+            print("{\"ok\":false,\"error\":\"\(jsonEscaped(error ?? ""))\"}")
+        }
+        fflush(stdout)
+    }
+
+    private static func jsonEscaped(_ value: String) -> String {
+        var result = ""
+        for scalar in value.unicodeScalars {
+            switch scalar {
+            case "\"": result += "\\\""
+            case "\\": result += "\\\\"
+            case "\n": result += "\\n"
+            case "\r": result += "\\r"
+            case "\t": result += "\\t"
+            default:
+                if scalar.value < 0x20 {
+                    result += String(format: "\\u%04x", scalar.value)
+                } else {
+                    result += String(scalar)
+                }
+            }
+        }
+        return result
+    }
+
+    private static let session: URLSession = {
+        let c = URLSessionConfiguration.ephemeral
+        c.timeoutIntervalForRequest = 10
+        return URLSession(configuration: c)
+    }()
+}
+
 // MARK: - Opening sessions in iTerm2
 
 enum Opener {
@@ -365,14 +759,25 @@ enum Opener {
         return out.isEmpty ? fallback : out
     }
 
-    /// Open the session: attach when it's a local tmux session, otherwise
-    /// resume the Claude Code session in a fresh local tmux session.
+    /// Open the session: attach when it's a local tmux session, ssh-attach
+    /// when it's a remote tmux session, otherwise resume locally.
     /// Returns an error message, or nil on success.
     static func open(_ item: SessionItem) -> String? {
         let s = item.session
         if item.hostIsLocal, let name = s.tmuxName {
             return runInNewITermWindow("\(shq(tmux)) attach-session -t \(shq(name))")
         }
+        if !item.hostIsLocal, let name = s.tmuxName {
+            guard let target = item.hostSSHTarget else {
+                return "This host has no SSH target configured and no URL host to derive one from."
+            }
+            return runInNewITermWindow(sshAttachCommand(sshTarget: target, tmuxName: name))
+        }
+        return resumeLocally(item)
+    }
+
+    static func resumeLocally(_ item: SessionItem) -> String? {
+        let s = item.session
         guard s.agent == "claude" || s.agent == "aisdk" else {
             return "Only Claude sessions can be resumed across machines (this is \(s.agent))."
         }
@@ -391,6 +796,11 @@ enum Opener {
         return runInNewITermWindow(cmd)
     }
 
+    static func sshAttachCommand(sshTarget: String, tmuxName: String) -> String {
+        let remote = "PATH=/opt/homebrew/bin:/usr/local/bin:$PATH tmux attach-session -t \(shq(tmuxName))"
+        return "ssh -t -o ConnectTimeout=5 \(shq(sshTarget)) \(itermDoubleQuoted(remote))"
+    }
+
     /// Single-quote a string for zsh.
     private static func shq(_ s: String) -> String {
         "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
@@ -400,6 +810,11 @@ enum Opener {
     private static func asq(_ s: String) -> String {
         s.replacingOccurrences(of: "\\", with: "\\\\")
          .replacingOccurrences(of: "\"", with: "\\\"")
+    }
+
+    private static func itermDoubleQuoted(_ s: String) -> String {
+        "\"" + s.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 
     /// Run an AppleScript via `osascript` (thread-safe, unlike NSAppleScript).
@@ -499,12 +914,9 @@ enum GroupMode: String, CaseIterable, Identifiable {
 struct SessionRow: View {
     let item: SessionItem
     let showHost: Bool
+    let isMoving: Bool
 
     private var session: APISession { item.session }
-
-    private var openable: Bool {
-        (item.hostIsLocal && session.tmuxName != nil) || session.sessionId != nil
-    }
 
     private var dotColor: Color {
         switch item.status {
@@ -538,15 +950,25 @@ struct SessionRow: View {
             }
             if item.hostIsLocal, session.tmuxName != nil {
                 badge("tmux", color: .blue)
-            } else if session.sessionId != nil {
+            } else if !item.hostIsLocal, session.tmuxName != nil {
+                badge("ssh", color: .green)
+            } else if item.opensByResume {
                 badge("resume", color: .orange)
             }
+            if isMoving {
+                HStack(spacing: 4) {
+                    ProgressView().controlSize(.mini)
+                    Text("moving…")
+                }
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.secondary)
+            }
             Image(systemName: "arrow.up.forward.square")
-                .foregroundStyle(openable ? Color.accentColor : Color.secondary.opacity(0.3))
+                .foregroundStyle(item.canOpen && !isMoving ? Color.accentColor : Color.secondary.opacity(0.3))
         }
         .padding(.vertical, 3)
         .contentShape(Rectangle())
-        .opacity(openable ? 1 : 0.5)
+        .opacity(item.canOpen && !isMoving ? 1 : 0.5)
     }
 
     private func badge(_ text: String, color: Color) -> some View {
@@ -561,23 +983,28 @@ struct SessionRow: View {
 
 struct HostsSettingsView: View {
     @EnvironmentObject private var store: SessionStore
-    @State private var configuredHosts: [String] = Config.loadHosts()
+    @State private var configuredHosts: [Config.HostEntry] = Config.loadHosts()
     @State private var newHost = ""
+    @State private var newSSH = ""
     @State private var validationMessage: String?
     @State private var saveError: String?
 
     private struct HostRow: Identifiable {
         let index: Int
-        let url: String
+        let entry: Config.HostEntry
         var id: Int { index }
     }
 
     private var rows: [HostRow] {
-        configuredHosts.enumerated().map { HostRow(index: $0.offset, url: $0.element) }
+        configuredHosts.enumerated().map { HostRow(index: $0.offset, entry: $0.element) }
     }
 
     private var trimmedNewHost: String {
         newHost.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var trimmedNewSSH: String {
+        newSSH.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var configPath: String {
@@ -598,6 +1025,10 @@ struct HostsSettingsView: View {
                 TextField("http://host:8766", text: $newHost)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityIdentifier("host_url_field")
+                    .onSubmit(addHost)
+                TextField("user@host (optional)", text: $newSSH)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("host_ssh_field")
                     .onSubmit(addHost)
                 Button("Add") { addHost() }
                     .disabled(trimmedNewHost.isEmpty)
@@ -627,15 +1058,15 @@ struct HostsSettingsView: View {
 
     @ViewBuilder
     private func settingsRow(for row: HostRow) -> some View {
-        let state = store.hosts.first { $0.url == row.url }
-        let duplicate = store.duplicateHostsByURL[row.url]
+        let state = store.hosts.first { $0.url == row.entry.url }
+        let duplicate = store.duplicateHostsByURL[row.entry.url]
         HStack(spacing: 10) {
             Circle()
                 .fill(statusColor(state: state, duplicate: duplicate))
                 .frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(row.url)
+                    Text(row.entry.url)
                         .font(.system(size: 13, weight: .medium))
                         .lineLimit(1)
                     if state?.isLocal == true || duplicate?.isLocal == true {
@@ -643,6 +1074,10 @@ struct HostsSettingsView: View {
                     }
                 }
                 Text(detailText(state: state, duplicate: duplicate))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Text(sshDetailText(for: row.entry))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -681,6 +1116,13 @@ struct HostsSettingsView: View {
         "\(count) \(count == 1 ? "session" : "sessions")"
     }
 
+    private func sshDetailText(for entry: Config.HostEntry) -> String {
+        if let target = Config.sshTarget(for: entry) {
+            return "SSH: \(target)"
+        }
+        return "SSH: unavailable"
+    }
+
     private func badge(_ text: String, color: Color) -> some View {
         Text(text)
             .font(.system(size: 10, weight: .semibold))
@@ -694,8 +1136,10 @@ struct HostsSettingsView: View {
         saveError = nil
         let url = trimmedNewHost
         guard validate(url) else { return }
-        persist(configuredHosts + [url])
+        let ssh = trimmedNewSSH.isEmpty ? nil : trimmedNewSSH
+        persist(configuredHosts + [Config.HostEntry(url: url, ssh: ssh)])
         newHost = ""
+        newSSH = ""
     }
 
     private func removeHost(at index: Int) {
@@ -712,7 +1156,7 @@ struct HostsSettingsView: View {
             validationMessage = "Enter a host URL."
             return false
         }
-        if configuredHosts.contains(url) {
+        if configuredHosts.contains(where: { $0.url == url }) {
             validationMessage = "That host is already configured."
             return false
         }
@@ -726,7 +1170,7 @@ struct HostsSettingsView: View {
         return true
     }
 
-    private func persist(_ hosts: [String]) {
+    private func persist(_ hosts: [Config.HostEntry]) {
         do {
             try Config.saveHosts(hosts)
             configuredHosts = Config.loadHosts()
@@ -746,6 +1190,7 @@ struct ContentView: View {
     @State private var expandedDirs: Set<String> = []
     @State private var expandedAgentSections: Set<String> = []
     @State private var expandedAgentParents: Set<String> = []
+    @State private var pendingMove: PendingMove?
     private let timer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
 
     private struct ListSection: Identifiable {
@@ -763,6 +1208,13 @@ struct ContentView: View {
         let item: SessionItem
         let children: [SessionItem]
         let indent: CGFloat
+    }
+
+    private struct PendingMove: Identifiable {
+        let item: SessionItem
+        let target: SessionStore.MoveTarget
+
+        var id: String { "\(item.id)-\(target.id)" }
     }
 
     /// Sessions passing the search query.
@@ -953,7 +1405,9 @@ struct ContentView: View {
     }
 
     private func openButton(for item: SessionItem) -> some View {
-        Button {
+        let isMoving = item.session.sessionId.map { store.movingIds.contains($0) } ?? false
+        return Button {
+            guard !isMoving else { return }
             // Off the main thread: the AppleScript round-trip can
             // block for a minute on the first-run automation
             // consent prompt, and must not freeze the UI.
@@ -964,9 +1418,52 @@ struct ContentView: View {
                 }
             }
         } label: {
-            SessionRow(item: item, showHost: store.multipleHosts)
+            SessionRow(item: item, showHost: store.multipleHosts, isMoving: isMoving)
         }
         .buttonStyle(.plain)
+        .disabled(isMoving)
+        .contextMenu {
+            if !isMoving {
+                if !item.hostIsLocal, item.session.sessionId != nil {
+                    Button("Resume locally") {
+                        resumeLocally(item)
+                    }
+                }
+                ForEach(store.moveTargets(for: item)) { target in
+                    Button("Move to \(target.label)") {
+                        requestMove(item, to: target)
+                    }
+                }
+            }
+        }
+    }
+
+    private func resumeLocally(_ item: SessionItem) {
+        Task.detached {
+            let err = Opener.resumeLocally(item)
+            if let err {
+                await MainActor.run { alertMessage = err }
+            }
+        }
+    }
+
+    private func requestMove(_ item: SessionItem, to target: SessionStore.MoveTarget) {
+        guard let sessionId = item.session.sessionId, !store.movingIds.contains(sessionId) else { return }
+        let pending = PendingMove(item: item, target: target)
+        if item.status == .working {
+            pendingMove = pending
+        } else {
+            startMove(pending)
+        }
+    }
+
+    private func startMove(_ pending: PendingMove) {
+        Task {
+            let err = await store.move(item: pending.item, to: pending.target)
+            if let err {
+                alertMessage = err
+            }
+        }
     }
 
     @ViewBuilder
@@ -1098,6 +1595,22 @@ struct ContentView: View {
         } message: {
             Text(alertMessage ?? "")
         }
+        .alert("Session is working — move anyway?", isPresented: .init(
+            get: { pendingMove != nil },
+            set: { if !$0 { pendingMove = nil } }
+        )) {
+            Button("Move", role: .destructive) {
+                if let pendingMove {
+                    startMove(pendingMove)
+                }
+                pendingMove = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingMove = nil
+            }
+        } message: {
+            Text("The source session will be closed before lfg waits for transcript sync and resumes it on the target host.")
+        }
     }
 
     @ViewBuilder
@@ -1160,6 +1673,9 @@ struct ContentView: View {
 @main
 struct LFGSessionsApp: App {
     @StateObject private var store = SessionStore()
+    init() {
+        MoveTestCLI.runIfRequested()
+    }
 
     var body: some Scene {
         WindowGroup {
