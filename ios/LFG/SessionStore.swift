@@ -53,6 +53,9 @@ import LFGCore
     /// Held so only one runs at a time: the sweep calls `refresh()` (via retry), and a
     /// second sweep starting underneath it would resend the same bubble twice.
     private var autoResendTask: Task<Void, Never>?
+    /// Client ids currently being replayed, so launch replay and host-recovery
+    /// replay cannot post the same durable outbox row twice.
+    private var replayingOutbox: Set<String> = []
     /// Ids currently live on some host — recomputed by `rebuildSessions`.
     private var liveIds: Set<String> = []
 
@@ -76,6 +79,10 @@ import LFGCore
         var matchText: String     // full sent text incl. attachment paths (for reconcile)
         var ts: Double            // device send time, epoch ms (ordering)
         var failed: Bool = false
+        /// Held locally because the owning host was unreachable at send time. The
+        /// durable outbox row stays `pending`; the reconnect replay sends it. Distinct
+        /// from `failed` (a real send attempt that errored → red + Retry).
+        var queuedOffline: Bool = false
         var serverQueueID: String? = nil   // set once correlated to a server queue item
         /// Render as a finished user bubble in the transcript rather than the
         /// muted "Sending…" bar. Used for a session's kickoff message, which is
@@ -88,6 +95,20 @@ import LFGCore
         /// (a real 1–6s round-trip), so the bubble renders muted/gray until the
         /// send returns, then animates to the confirmed accent color.
         var confirmed: Bool = true
+    }
+
+    private enum OutboxAttachmentError: LocalizedError {
+        case supportDirectoryUnavailable
+        case replayProducedEmptyMessage
+
+        var errorDescription: String? {
+            switch self {
+            case .supportDirectoryUnavailable:
+                return "Application Support directory is unavailable"
+            case .replayProducedEmptyMessage:
+                return "Queued attachment replay produced an empty message"
+            }
+        }
     }
 
     /// Client-created sessions shown before the server has assigned a real id.
@@ -128,6 +149,8 @@ import LFGCore
     /// to resurrect long-idle sessions as unread forever.
     private var lastSeenMessageID: [String: String]
     private static let lastSeenKey = "lfg.lastSeenMessageID"
+    private var manualUnread: Set<String>
+    private static let manualUnreadKey = "lfg.manualUnread"
     private static let storeReadStateSeededKey = "lfg.storeReadStateSeededFromUserDefaults"
 
     /// Legacy per-session open times (epoch ms) from the old mtime-based scheme.
@@ -205,6 +228,7 @@ import LFGCore
         let d = UserDefaults.standard
         let opened = (d.dictionary(forKey: Self.lastOpenedKey) as? [String: Double]) ?? [:]
         lastSeenMessageID = (d.dictionary(forKey: Self.lastSeenKey) as? [String: String]) ?? [:]
+        manualUnread = Set(d.stringArray(forKey: Self.manualUnreadKey) ?? [])
         lastOpenedAt = opened
         needsReadStateMigration = !d.bool(forKey: Self.migratedKey) && !opened.isEmpty
     }
@@ -526,6 +550,101 @@ import LFGCore
         }
     }
 
+    private var outboxAttachmentRoot: URL? {
+        FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent("outbox-attachments", isDirectory: true)
+    }
+
+    private func outboxAttachmentDirectory(clientId: String) -> URL? {
+        outboxAttachmentRoot?.appendingPathComponent(clientId, isDirectory: true)
+    }
+
+    private func persistOutboxAttachments(_ attachments: [ComposerAttachment], clientId: String) throws {
+        guard !attachments.isEmpty else { return }
+        guard let dir = outboxAttachmentDirectory(clientId: clientId) else {
+            throw OutboxAttachmentError.supportDirectoryUnavailable
+        }
+
+        let fm = FileManager.default
+        if fm.fileExists(atPath: dir.path) {
+            try fm.removeItem(at: dir)
+        }
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        for (index, attachment) in attachments.enumerated() {
+            try attachment.data.write(
+                to: dir.appendingPathComponent("\(index).png"),
+                options: [.atomic]
+            )
+        }
+    }
+
+    private func outboxAttachmentFiles(clientId: String) -> [URL] {
+        guard let dir = outboxAttachmentDirectory(clientId: clientId),
+              let files = try? FileManager.default.contentsOfDirectory(
+                at: dir,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+              ) else {
+            return []
+        }
+        return files
+            .filter { $0.pathExtension.lowercased() == "png" }
+            .sorted { lhs, rhs in
+                let lhsIndex = Int(lhs.deletingPathExtension().lastPathComponent) ?? .max
+                let rhsIndex = Int(rhs.deletingPathExtension().lastPathComponent) ?? .max
+                if lhsIndex != rhsIndex { return lhsIndex < rhsIndex }
+                return lhs.lastPathComponent < rhs.lastPathComponent
+            }
+    }
+
+    private func deleteOutboxAttachments(clientId: String) {
+        guard let dir = outboxAttachmentDirectory(clientId: clientId),
+              FileManager.default.fileExists(atPath: dir.path) else { return }
+        do {
+            try FileManager.default.removeItem(at: dir)
+        } catch {
+            Logger(subsystem: "dev.omg.lfg", category: "outbox")
+                .error("delete outbox attachments failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func uploadOutboxAttachmentsIfNeeded(
+        row: LFGOutboxRow,
+        client: LFGClient
+    ) async throws -> String? {
+        let files = outboxAttachmentFiles(clientId: row.clientId)
+        guard !files.isEmpty else { return nil }
+
+        var paths: [String] = []
+        for file in files {
+            let data = try Data(contentsOf: file)
+            let path = try await client.upload(row.sessionId, data: data, contentType: "image/png")
+            paths.append(path)
+        }
+
+        let full = ([row.text] + paths).filter { !$0.isEmpty }.joined(separator: "\n")
+        guard !full.isEmpty else { throw OutboxAttachmentError.replayProducedEmptyMessage }
+        guard await enqueueOutboxForTransport(
+            clientId: row.clientId,
+            sessionId: row.sessionId,
+            hostId: row.hostId,
+            text: full
+        ) else {
+            throw OutboxAttachmentError.supportDirectoryUnavailable
+        }
+
+        if let loc = pendingLocation(clientId: row.clientId) {
+            mutatePending(loc.sid, loc.pid) {
+                $0.matchText = full
+                $0.queuedOffline = false
+            }
+        }
+        deleteOutboxAttachments(clientId: row.clientId)
+        return full
+    }
+
     private func markOutboxState(_ clientId: String, state: String) async {
         guard let store = localStore else { return }
         do { try await store.markOutbox(clientId: clientId, state: state) }
@@ -542,6 +661,7 @@ import LFGCore
     }
 
     private func deleteOutbox(_ clientId: String) async {
+        deleteOutboxAttachments(clientId: clientId)
         guard let store = localStore else { return }
         do { try await store.deleteOutbox(clientId: clientId) }
         catch {
@@ -572,15 +692,17 @@ import LFGCore
 
     private func appendPendingFromOutbox(_ row: LFGOutboxRow, failed: Bool = false) {
         guard !hasPendingSend(clientId: row.clientId) else { return }
+        let hasAttachmentSidecars = !outboxAttachmentFiles(clientId: row.clientId).isEmpty
         pendingSends[row.sessionId, default: []].append(
             PendingSend(
                 id: row.clientId,
                 clientId: row.clientId,
-                displayText: row.text,
+                displayText: row.text.isEmpty && hasAttachmentSidecars ? "📎 Attachment" : row.text,
                 matchText: row.text,
                 ts: row.createdAt,
                 failed: failed,
-                showSent: true,
+                queuedOffline: hasAttachmentSidecars && !failed,
+                showSent: !(hasAttachmentSidecars && !failed),
                 confirmed: row.state == "sent" || failed
             )
         )
@@ -605,12 +727,32 @@ import LFGCore
         let now = Date().timeIntervalSince1970 * 1000
         for row in rows {
             if hasPendingSend(clientId: row.clientId) { continue }
+            if replayingOutbox.contains(row.clientId) { continue }
             if now - row.updatedAt > Self.outboxRetryCapMs {
                 appendPendingFromOutbox(row, failed: true)
                 await markOutboxState(row.clientId, state: "failed")
+                deleteOutboxAttachments(clientId: row.clientId)
                 continue
             }
+            replayingOutbox.insert(row.clientId)
             await retryOutboxRow(row)
+            replayingOutbox.remove(row.clientId)
+        }
+    }
+
+    /// Replay this host's still-pending outbox rows now that it is reachable again.
+    private func replayPendingOutbox(forHost hostId: String) async {
+        guard let store = localStore else { return }
+        let rows = ((try? await store.pendingOutbox()) ?? []).filter { $0.hostId == hostId }
+        for row in rows where !replayingOutbox.contains(row.clientId) {
+            replayingOutbox.insert(row.clientId)
+            // Clear the "queued offline" chrome on the existing bubble; retryOutboxRow
+            // reconciles it to sent/confirmed from here.
+            if let loc = pendingLocation(clientId: row.clientId) {
+                mutatePending(loc.sid, loc.pid) { $0.queuedOffline = false }
+            }
+            await retryOutboxRow(row)
+            replayingOutbox.remove(row.clientId)
         }
     }
 
@@ -623,24 +765,28 @@ import LFGCore
             return
         }
 
-        guard await enqueueOutboxForTransport(
-            clientId: row.clientId,
-            sessionId: row.sessionId,
-            hostId: row.hostId,
-            text: row.text
-        ) else {
-            markPendingFailed(clientId: row.clientId)
-            return
-        }
-
         do {
-            let req = try client.sendMessageRequest(row.sessionId, text: row.text, clientId: row.clientId)
+            let sendText = try await uploadOutboxAttachmentsIfNeeded(row: row, client: client) ?? row.text
+            guard await enqueueOutboxForTransport(
+                clientId: row.clientId,
+                sessionId: row.sessionId,
+                hostId: row.hostId,
+                text: sendText
+            ) else {
+                markPendingFailed(clientId: row.clientId)
+                return
+            }
+
+            let req = try client.sendMessageRequest(row.sessionId, text: sendText, clientId: row.clientId)
             let respData = try await BackgroundSender.shared.post(req, label: row.clientId)
             let resp = LFGClient.decodeSendResponse(respData)
             await markOutboxState(row.clientId, state: "sent")
             applyResume(from: row.sessionId, resp)
             let eff = (resp.resumed == true ? resp.sessionId : nil) ?? row.sessionId
             mutatePending(eff, row.clientId) {
+                $0.matchText = sendText
+                $0.failed = false
+                $0.queuedOffline = false
                 $0.confirmed = true
                 if let qid = resp.msg?.id { $0.serverQueueID = qid }
             }
@@ -648,6 +794,17 @@ import LFGCore
             reconcilePending(eff)
         } catch {
             lastError = "Outbox retry failed: \(error.localizedDescription)"
+            if !outboxAttachmentFiles(clientId: row.clientId).isEmpty {
+                if let loc = pendingLocation(clientId: row.clientId) {
+                    mutatePending(loc.sid, loc.pid) {
+                        $0.failed = false
+                        $0.queuedOffline = true
+                        $0.confirmed = false
+                        $0.showSent = false
+                    }
+                }
+                return
+            }
             markPendingFailed(clientId: row.clientId)
             await markOutboxState(row.clientId, state: "failed")
         }
@@ -790,6 +947,14 @@ import LFGCore
     /// and the banner could lag by most of a minute (caught live in the Phase 1
     /// gate test). While unhealthy-but-graced, a re-check is scheduled for the
     /// exact moment the grace expires.
+    private func markReachable(_ hostId: String) {
+        let wasReachable = reachabilityByHost[hostId] == .ok
+        reachabilityByHost[hostId] = .ok
+        if !wasReachable {
+            Task { await self.replayPendingOutbox(forHost: hostId) }
+        }
+    }
+
     private func linkStateChanged(_ hostId: String) {
         guard let link = links[hostId] else { return }
         if link.state != .catchingUp {
@@ -800,7 +965,7 @@ import LFGCore
         switch link.state {
         case .catchingUp, .live where link.unhealthySince == nil:
             unhealthySinceByHost[hostId] = nil
-            reachabilityByHost[hostId] = .ok
+            markReachable(hostId)
             failuresByHost[hostId] = 0
         case .catchingUp, .live:
             rememberHostUnhealthy(hostId, candidate: link.unhealthySince)
@@ -1201,7 +1366,7 @@ import LFGCore
             }
             unhealthySinceByHost[f.host.id] = nil
             bannerRecheck[f.host.id]?.cancel(); bannerRecheck[f.host.id] = nil
-            reachabilityByHost[f.host.id] = .ok
+            markReachable(f.host.id)
             failuresByHost[f.host.id] = 0
             lastSessionsByHost[f.host.id] = fetchedSessions
         } else {
@@ -1333,7 +1498,14 @@ import LFGCore
     /// session could drop the live connection. HostLinks stream every session
     /// on the host, so focusing is now pure bookkeeping (Phase 1 SC1).
     func focus(_ id: String?) {
-        if let id { markOpened(id) }
+        if let id {
+            let updated = ManualUnread.afterOpening(id, flags: manualUnread)
+            if updated != manualUnread {
+                manualUnread = updated
+                persistManualUnread()
+            }
+            markOpened(id)
+        }
         guard focusedID != id else { return }
         focusedID = id
     }
@@ -1377,11 +1549,37 @@ import LFGCore
         }
     }
 
+    private func persistManualUnread() {
+        UserDefaults.standard.set(Array(manualUnread), forKey: Self.manualUnreadKey)
+    }
+
+    func isManuallyUnread(_ id: String) -> Bool {
+        manualUnread.contains(id)
+    }
+
+    func markUnread(_ id: String) {
+        guard ManualUnread.canMarkUnread(id) else { return }
+        guard manualUnread.insert(id).inserted else { return }
+        persistManualUnread()
+        if id == focusedID { focusedID = nil }
+    }
+
+    func markRead(_ id: String) {
+        let removed = manualUnread.remove(id) != nil
+        if removed { persistManualUnread() }
+        markOpened(id)
+    }
+
     /// Mark every currently-unread session's newest message as seen, clearing the
     /// "Unread" group in one tap. Persists once. Drives the list's "Mark all read".
     func markAllRead() {
         var updates: [(String, String)] = []
-        for s in sessions where group(for: s) == .unread {
+        let unreadSessions = sessions.filter { group(for: $0) == .unread }
+        if !manualUnread.isEmpty {
+            manualUnread.removeAll()
+            persistManualUnread()
+        }
+        for s in unreadSessions {
             guard let sid = s.sessionId, let mid = s.last?.id, !mid.isEmpty else { continue }
             lastSeenMessageID[sid] = mid
             updates.append((sid, mid))
@@ -1468,6 +1666,7 @@ import LFGCore
         if let sid = s.sessionId, prompts[sid] != nil { return .needsInput }
         if s.isBlocked { return .blocked }
         if let sid = s.sessionId, busy[sid] == true { return .working }
+        if let sid = s.sessionId, manualUnread.contains(sid) { return .unread }
         // Completed (idle) but its newest message isn't the newest one this device
         // has seen → "Unread". The session on screen is excluded (you're reading it
         // right now, even before its stream stamps it read).
@@ -1485,6 +1684,12 @@ import LFGCore
     /// Number of sessions currently working (busy) — shown in the top bar.
     var runningCount: Int {
         sessions.filter { group(for: $0) == .working }.count
+    }
+
+    /// Matches the user filter and status grouping. Host filtering is owned by
+    /// `SessionListView`, so the global app badge remains user-filtered only.
+    var unreadCount: Int {
+        filteredSessions.filter { group(for: $0) == .unread }.count
     }
 
     func grouped() -> [(Group, [Session])] {
@@ -1869,7 +2074,35 @@ import LFGCore
                         showSent: idle || isWakeUp,
                         confirmed: !isWakeUp))
 
-        // 2) Upload attachments, then assemble the full text the agent will record.
+        // 2) Offline sends persist attachment bytes as sidecars and leave the outbox
+        //    text as typed text only; replay uploads the bytes and bakes paths in.
+        let offlineAtSend = isOffline(id)
+        if offlineAtSend {
+            do {
+                try persistOutboxAttachments(attachments, clientId: clientId)
+            } catch {
+                lastError = "Queue attachments failed: \(error.localizedDescription)"
+                mutatePending(id, pid) { $0.failed = true }
+                return
+            }
+
+            guard let hostId = routeHostId(forSession: id),
+                  await enqueueOutboxForTransport(clientId: clientId, sessionId: id, hostId: hostId, text: typed) else {
+                deleteOutboxAttachments(clientId: clientId)
+                mutatePending(id, pid) { $0.failed = true }
+                return
+            }
+            mutatePending(id, pid) {
+                $0.matchText = typed
+                $0.queuedOffline = true
+                $0.confirmed = false
+                $0.showSent = false
+            }
+            return
+        }
+
+        // 3) Online sends upload attachments immediately, then assemble the full text
+        //    the agent will record.
         var paths: [String] = []
         for att in attachments {
             if let p = try? await client.upload(id, data: att.data, contentType: "image/png") { paths.append(p) }
@@ -1878,7 +2111,14 @@ import LFGCore
         guard !full.isEmpty else { removePending(id, pid); return }
         mutatePending(id, pid) { $0.matchText = full }
 
-        // 3) Send. On failure mark the bubble failed (Retry); on success let the
+        // 4) Save to the durable outbox first.
+        guard let hostId = routeHostId(forSession: id),
+              await enqueueOutboxForTransport(clientId: clientId, sessionId: id, hostId: hostId, text: full) else {
+            mutatePending(id, pid) { $0.failed = true }
+            return
+        }
+
+        // 5) Send. On failure mark the bubble failed (Retry); on success let the
         //    queue/transcript reconcile it.
         do {
             // Background URLSession transport (Phase 2 Task C): the system
@@ -1886,11 +2126,6 @@ import LFGCore
             // While alive, the await resolves normally and everything below is
             // unchanged; if we die, the message still lands and the next
             // launch's queue/transcript reconcile resolves the outcome.
-            guard let hostId = routeHostId(forSession: id),
-                  await enqueueOutboxForTransport(clientId: clientId, sessionId: id, hostId: hostId, text: full) else {
-                mutatePending(id, pid) { $0.failed = true }
-                return
-            }
             let req = try client.sendMessageRequest(id, text: full, clientId: clientId)
             let respData = try await BackgroundSender.shared.post(req, label: pid)
             let resp = LFGClient.decodeSendResponse(respData)
@@ -2038,6 +2273,8 @@ import LFGCore
     /// server-assigned id once an optimistic create lands, then drop the
     /// placeholder session so only the real one remains.
     private func remap(from old: String, to new: String) {
+        guard old != new else { return }
+
         // A resumed closed session's old transcript lingers on disk; remember it
         // so the merge in `refresh` doesn't re-add it as a stale "Closed" card.
         resumedIds.insert(old)
@@ -2159,5 +2396,3 @@ import LFGCore
         }
     }
 }
-        guard old != new else { return }
-

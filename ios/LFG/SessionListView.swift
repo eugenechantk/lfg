@@ -9,6 +9,8 @@ struct SessionListView: View {
     @Binding var showSettings: Bool
     @Binding var showNewSession: Bool
     @State private var searchText = ""
+    @State private var showSearch = false
+    @FocusState private var isSearchFocused: Bool
 
     /// Collapsible UI state is in-memory per the current run: directory sections
     /// and the orphan Agents fallback collapse by section id; nested agent rows
@@ -346,21 +348,13 @@ struct SessionListView: View {
     var body: some View {
         @Bindable var settings = settings
         VStack(spacing: 0) {
-            // Search lives above the session list, in the content area — detached
-            // from the nav-bar header (status badge) rather than docked into it.
-            searchField
-                .padding(.horizontal, 16)
-                .padding(.top, 6)
-                .padding(.bottom, 8)
-
-            Picker("Group by", selection: $settings.groupMode) {
-                ForEach(GroupMode.allCases) { mode in
-                    Text(mode.label).tag(mode)
-                }
+            if showSearch {
+                searchField
+                    .padding(.horizontal, 16)
+                    .padding(.top, 6)
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
 
             List(selection: $selection) {
                 // The banner only appears when the AGGREGATE is unhealthy — i.e.
@@ -432,31 +426,43 @@ struct SessionListView: View {
             }
             .listStyle(.insetGrouped)
             .refreshable { await store.refresh() }
+            .safeAreaInset(edge: .bottom) {
+                NewSessionBar { showNewSession = true }
+            }
         }
-        // iPad sidebar: a tall native large-title header with the connection
-        // status as a subtitle (iPadOS 26 `navigationSubtitle`). iPhone keeps the
-        // compact centered status badge in the top bar.
-        .navigationTitle(isPad ? "Sessions" : "")
-        .navigationBarTitleDisplayMode(isPad ? .large : .inline)
-        .sidebarStatusSubtitle(isPad ? statusSubtitle : nil)
+        .navigationTitle("Sessions")
+        // Collapse to the inline title while searching. The large title is laid
+        // out against the first scrollable descendant, and revealing the search
+        // field above the List breaks that association — the title renders blank
+        // and leaves ~90pt of dead space between the bar and the field.
+        .navigationBarTitleDisplayMode(showSearch ? .inline : .large)
+        .sidebarStatusSubtitle(statusSubtitle)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { showSettings = true } label: { Image(systemName: "gearshape") }
             }
-            if !isPad {
-                ToolbarItem(placement: .principal) { StatusBadge() }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showNewSession = true } label: { Image(systemName: "plus") }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button(action: toggleSearch) {
+                    Image(systemName: "magnifyingglass")
+                }
+                .accessibilityIdentifier("sessionSearchToggle")
+
+                Menu {
+                    Picker("Sort", selection: $settings.groupMode) {
+                        Text("Status").tag(GroupMode.status)
+                        Text("Directory").tag(GroupMode.directory)
+                    }
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease")
+                }
+                .accessibilityIdentifier("sessionSortMenu")
             }
         }
     }
 
-    private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
-
     private var statusSubtitle: String {
-        // Multi-host: name which hosts are online vs offline (the iPad sidebar has
-        // no principal StatusBadge, so this subtitle carries the per-host status).
+        // Multi-host: name which hosts are online vs offline. With no principal
+        // StatusBadge, this subtitle carries the per-host status on both idioms.
         if settings.hosts.count > 1 {
             let online = settings.hosts.filter { store.reachabilityByHost[$0.id] == .ok }
             let offline = settings.hosts.filter { store.reachabilityByHost[$0.id] != .ok }
@@ -477,6 +483,8 @@ struct SessionListView: View {
                 .textFieldStyle(.plain)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .focused($isSearchFocused)
+                .accessibilityIdentifier("sessionSearchField")
             if !searchText.isEmpty {
                 Button { searchText = "" } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
@@ -487,6 +495,58 @@ struct SessionListView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func toggleSearch() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showSearch.toggle()
+        }
+
+        if showSearch {
+            // The field is inserted by this same state change, so wait until the
+            // next actor turn before asking SwiftUI to focus it.
+            Task { @MainActor in
+                await Task.yield()
+                isSearchFocused = true
+            }
+        } else {
+            isSearchFocused = false
+            searchText = ""
+        }
+    }
+}
+
+private struct NewSessionBar: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "plus")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30, height: 30)
+                    .background(.white.opacity(0.10), in: Circle())
+
+                Text("Plan, ask, build…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.regularMaterial, in: Capsule())
+            .overlay {
+                Capsule().stroke(.white.opacity(0.08), lineWidth: 1)
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("newSessionBar")
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
     }
 }
 

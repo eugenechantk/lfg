@@ -32,7 +32,9 @@ struct RootView: View {
                 } detail: {
                     if let selection {
                         if let session = store.session(selection) {
-                            SessionDetailView(session: session, onEnded: { self.selection = nil })
+                            SessionDetailView(session: session,
+                                              onEnded: { self.selection = nil },
+                                              onMarkedUnread: { self.selection = nil })
                                 .id(selection)
                         } else {
                             // Selected (often via a notification tap) but not
@@ -83,6 +85,18 @@ struct RootView: View {
             guard let requested else { return }
             selection = requested
             store.clearRequestedSelection()
+        }
+        .onChange(of: store.unreadCount, initial: true) { _, count in
+            AppBadge.set(count)
+        }
+        .onOpenURL { url in
+            let path = url.path.split(separator: "/", omittingEmptySubsequences: true)
+            guard url.scheme?.lowercased() == "lfg",
+                  url.host?.lowercased() == "session",
+                  path.count == 1,
+                  let sid = String(path[0]).removingPercentEncoding,
+                  !sid.isEmpty else { return }
+            store.openFromNotification(sid)
         }
         // iOS can't hold a socket while suspended, so the app owns an explicit
         // linger/reconnect around backgrounding: `.background` holds every host

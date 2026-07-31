@@ -63,6 +63,10 @@ targets:
         # ("Successfully uploaded" + build never appears in TestFlight).
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleURLTypes:
+          - CFBundleURLName: com.eugenechan.lfg
+            CFBundleURLSchemes:
+              - lfg
         # App uses only standard HTTPS/TLS -> exempt from export compliance.
         # Baked in so TestFlight uploads don't pause for the encryption question.
         ITSAppUsesNonExemptEncryption: false

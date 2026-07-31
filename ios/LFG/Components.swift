@@ -5,6 +5,10 @@ import LFGCore
 
 struct TranscriptMessageView: View {
     let message: SessionMessage
+    /// True when the entry directly above also rendered as a user bubble — the
+    /// bubble then drops its top padding so stacked user turns read as one run
+    /// instead of being separated by a double gap.
+    var followsUserBubble: Bool = false
 
     var body: some View {
         switch message.kind {
@@ -13,13 +17,24 @@ struct TranscriptMessageView: View {
         case "thinking":
             ThinkingView(text: message.text)
         default:
-            TextBubble(message: message)
+            TextBubble(message: message, followsUserBubble: followsUserBubble)
         }
+    }
+}
+
+extension SessionMessage {
+    /// Whether this message renders as a trailing user bubble (`TextBubble`'s
+    /// user branch) — tool lines and thinking blocks carry role "user" too.
+    public var rendersAsUserBubble: Bool {
+        role == "user" && kind != "tool_use" && kind != "tool_result" && kind != "thinking"
     }
 }
 
 private struct TextBubble: View {
     let message: SessionMessage
+    var followsUserBubble: Bool = false
+    /// Sent time is hidden by default and toggled by tapping the bubble.
+    @State private var showTimestamp = false
     private var isUser: Bool { message.role == "user" }
     // Always surface inline images as refs so they render as compact, tappable
     // file cards (below) rather than full-width inline previews — for both user
@@ -40,18 +55,25 @@ private struct TextBubble: View {
                             .padding(.horizontal, 12).padding(.vertical, 8)
                             .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
                             .foregroundStyle(.white)
+                            .contentShape(RoundedRectangle(cornerRadius: 14))
+                            // Tap the bubble to reveal the sent time; tap again to hide.
+                            .onTapGesture {
+                                withAnimation(.easeInOut(duration: 0.15)) { showTimestamp.toggle() }
+                            }
                     }
                     // User attachments show as tappable file cards, not inline previews.
                     if !media.isEmpty { MediaAttachmentsView(refs: media, cardsOnly: true).frame(maxWidth: 280) }
-                    // Sent-time caption under the user message.
-                    if let sentAt = timestampText {
+                    // Sent-time caption — only while toggled on.
+                    if showTimestamp, let sentAt = timestampText {
                         Text(sentAt)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
             }
-            .padding(.vertical, 10)
+            .padding(.top, followsUserBubble ? 0 : 10)
+            .padding(.bottom, 10)
         } else {
             // Assistant turns are full-width markdown — no bubble.
             VStack(alignment: .leading, spacing: 6) {
@@ -271,9 +293,9 @@ struct PausedBannerView: View {
             if canSwitchToOpus, let id = session.sessionId {
                 Button {
                     working = true
-                    Task { await store.setModel(id, "opus"); working = false }
+                    Task { await store.setModel(id, "claude-opus-5"); working = false }
                 } label: {
-                    Text(working ? "Resuming…" : "Resume on Opus")
+                    Text(working ? "Resuming…" : "Resume on Opus 5")
                 }
                 .buttonStyle(.borderedProminent).controlSize(.small).tint(.orange)
                 .disabled(working)
@@ -314,7 +336,9 @@ struct PendingStripView: View {
             VStack(spacing: 6) {
                 ForEach(items) { item in
                     HStack(spacing: 8) {
-                        if item.failed {
+                        if item.queuedOffline {
+                            Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
+                        } else if item.failed {
                             Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red)
                         } else {
                             ProgressView().controlSize(.mini)
@@ -322,7 +346,11 @@ struct PendingStripView: View {
                         Text(item.displayText)
                             .font(.caption).lineLimit(1).foregroundStyle(.secondary)
                         Spacer(minLength: 0)
-                        if item.failed {
+                        if item.queuedOffline {
+                            Text("Queued")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        } else if item.failed {
                             Button("Retry") { Task { await store.retryPending(sessionID, item) } }
                                 .font(.caption2).buttonStyle(.bordered).controlSize(.mini)
                         } else {
@@ -333,7 +361,7 @@ struct PendingStripView: View {
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(.quaternary.opacity(0.4), in: Capsule())
                     .contentShape(Capsule())
-                    .onTapGesture { if !item.failed { onTap(item) } }
+                    .onTapGesture { if !item.failed && !item.queuedOffline { onTap(item) } }
                 }
             }
         }
@@ -351,7 +379,8 @@ struct OptimisticUserBubble: View {
 
     // Awaiting the backend: a wake-up send to a reaped session that's still
     // resuming server-side. Render muted/gray until it's confirmed (then blue).
-    private var awaitingResume: Bool { !pending.confirmed && !pending.failed }
+    private var awaitingResume: Bool { !pending.confirmed && !pending.failed && !pending.queuedOffline }
+    private var mutedBubble: Bool { awaitingResume || pending.queuedOffline }
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
@@ -360,9 +389,9 @@ struct OptimisticUserBubble: View {
                 Text(pending.displayText)
                     .textSelection(.enabled)
                     .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(awaitingResume ? Color(.secondarySystemFill) : Color.accentColor,
+                    .background(mutedBubble ? Color(.secondarySystemFill) : Color.accentColor,
                                 in: RoundedRectangle(cornerRadius: 14))
-                    .foregroundStyle(awaitingResume ? Color.primary : Color.white)
+                    .foregroundStyle(mutedBubble ? Color.primary : Color.white)
                     .opacity(pending.failed ? 0.5 : 1)
             }
             .animation(.easeInOut(duration: 0.25), value: pending.confirmed)
@@ -370,7 +399,12 @@ struct OptimisticUserBubble: View {
             // instant the user hits send. A wake-up send shows a quiet "Waking…"
             // note while the session resumes; a genuine failure surfaces Retry
             // (this bubble bypasses the pending bar's own Retry).
-            if awaitingResume {
+            if pending.queuedOffline {
+                HStack(spacing: 6) {
+                    Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
+                    Text("Will send when reachable").font(.caption2).foregroundStyle(.secondary)
+                }
+            } else if awaitingResume {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.mini)
                     Text("Waking session…").font(.caption2).foregroundStyle(.secondary)

@@ -9,11 +9,14 @@ struct SessionDetailView: View {
     /// keeps `selection` pointed at the now-deleted session and the detail column
     /// gets stuck on `DetailLoading` ("Opening session…").
     var onEnded: () -> Void = {}
+    var onMarkedUnread: () -> Void = {}
     @Environment(SessionStore.self) private var store
     @Environment(AppSettings.self) private var settings
 
     @State private var draft = ""
     @State private var renaming = false
+    /// Tapping the (truncated) nav-bar title reveals the full one in a card below it.
+    @State private var showFullTitle = false
     @State private var newTitle = ""
     @State private var confirmEnd = false
     @State private var forking = false
@@ -56,6 +59,13 @@ struct SessionDetailView: View {
 
     var body: some View {
         transcript
+            // Full title, revealed by tapping the (truncated) nav-bar title. An overlay
+            // card rather than an expanded bar, because these titles are whole
+            // sentences and can need several lines (see `fullTitle` for where the
+            // untruncated text comes from).
+            .overlay(alignment: .top) {
+                if showFullTitle { fullTitleCard }
+            }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 8) {
                     PendingStripView(sessionID: sid, items: pending.filter { !$0.showSent }) { tapped in
@@ -63,27 +73,24 @@ struct SessionDetailView: View {
                     }
                     .padding(.horizontal, 16)
                     // This session is LIVE on a host that is currently unreachable.
-                    // Its agent only exists on that machine, so a send here could
-                    // never land — swap the composer for an explanation rather than
-                    // accepting a message that would silently fail. The transcript
-                    // above stays readable.
+                    // Keep the draft editable; the store queues sends durably until
+                    // the owning host comes back.
                     if store.isOffline(sid) {
                         OfflineComposerNotice(hostLabel: store.host(forSession: sid)?.label ?? "This host")
-                    } else {
-                        MessageComposer(text: $draft, sending: false) { text, atts in
-                            // Hand the send to the store, which owns it for the app's
-                            // lifetime (under a background-task assertion). Leaving
-                            // this view or backgrounding the app no longer drops the
-                            // message — the optimistic bubble + pending strip already
-                            // give immediate feedback, so no view-owned spinner.
-                            store.dispatchSend(sid, text: text, attachments: atts)
-                            // Sending is an explicit "follow me to the latest" intent:
-                            // re-arm auto-follow even if the user had scrolled up. The
-                            // onChange(of: pending.count) below does the actual scroll
-                            // once the optimistic bubble has laid out.
-                            isAtBottom = true
-                            scrollProxy?.scrollTo("BOTTOM", anchor: .bottom)
-                        }
+                    }
+                    MessageComposer(text: $draft, sending: false) { text, atts in
+                        // Hand the send to the store, which owns it for the app's
+                        // lifetime (under a background-task assertion). Leaving
+                        // this view or backgrounding the app no longer drops the
+                        // message — the optimistic bubble + pending strip already
+                        // give immediate feedback, so no view-owned spinner.
+                        store.dispatchSend(sid, text: text, attachments: atts)
+                        // Sending is an explicit "follow me to the latest" intent:
+                        // re-arm auto-follow even if the user had scrolled up. The
+                        // onChange(of: pending.count) below does the actual scroll
+                        // once the optimistic bubble has laid out.
+                        isAtBottom = true
+                        scrollProxy?.scrollTo("BOTTOM", anchor: .bottom)
                     }
                 }
             }
@@ -157,7 +164,14 @@ struct SessionDetailView: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity).padding(.top, 40)
                     } else {
-                        ForEach(messages) { TranscriptMessageView(message: $0).id($0.stableID) }
+                        ForEach(Array(messages.enumerated()), id: \.element.stableID) { idx, msg in
+                            TranscriptMessageView(
+                                message: msg,
+                                // Back-to-back user turns collapse their leading gap.
+                                followsUserBubble: idx > 0 && messages[idx - 1].rendersAsUserBubble
+                            )
+                            .id(msg.stableID)
+                        }
                     }
 
                     // Kickoff sends show as a finished user bubble right away
@@ -245,10 +259,20 @@ struct SessionDetailView: View {
     private var toolbarMenu: some ToolbarContent {
         ToolbarItem(placement: .principal) {
             VStack(spacing: 1) {
-                Text(session.title.isEmpty ? "Session" : session.title)
+                // Titles are whole sentences (the session's first prompt), so the
+                // one-line nav-bar title almost always truncates. Tapping it opens
+                // a popover with the full text rather than expanding the bar, which
+                // would reflow the status/path line under it on every session.
+                Text(displayTitle)
                     .font(.headline)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.easeOut(duration: 0.18)) { showFullTitle.toggle() }
+                    }
+                    .accessibilityIdentifier("sessionTitle")
+                    .accessibilityHint("Shows the full session title")
                 HStack(spacing: 5) {
                     if let host = hostLabel {
                         Text(host)
@@ -332,6 +356,20 @@ struct SessionDetailView: View {
                     .disabled(transferring)
                 }
 
+                if ManualUnread.canMarkUnread(sid) {
+                    if store.isManuallyUnread(sid) {
+                        Button { store.markRead(sid) } label: {
+                            Label("Mark as read", systemImage: "envelope.open")
+                        }
+                        .accessibilityIdentifier("markReadButton")
+                    } else {
+                        Button { markUnreadAndExit() } label: {
+                            Label("Mark as unread", systemImage: "envelope.badge")
+                        }
+                        .accessibilityIdentifier("markUnreadButton")
+                    }
+                }
+
                 // Debug: surface the underlying ids; tapping copies to clipboard.
                 Section("Debug — tap to copy") {
                     if let tmux = session.tmuxName ?? session.tmuxTarget, !tmux.isEmpty {
@@ -352,6 +390,62 @@ struct SessionDetailView: View {
                 }
             } label: { Image(systemName: "ellipsis.circle") }
         }
+    }
+
+    /// Nav-bar title text, shared by the truncated bar label and the full-title card.
+    private var displayTitle: String {
+        session.title.isEmpty ? "Session" : session.title
+    }
+
+    /// The session's full title. `Session.title` from the API is the first user prompt
+    /// already truncated to 72 chars with a trailing "…" (`TITLE_MAX` in
+    /// `src/sessions.ts`), so the untruncated text can only come from the transcript —
+    /// the same first user turn the server derives the title from. Falls back to the
+    /// truncated title until the transcript has loaded.
+    private var fullTitle: String {
+        let firstPrompt = messages.first { m in
+            guard m.role == "user" else { return false }
+            let t = m.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !t.isEmpty && !t.hasPrefix("<")   // skip harness/meta turns, as the server does
+        }
+        guard let text = firstPrompt?.text.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else { return displayTitle }
+        return text
+    }
+
+    /// The untruncated title, shown under the nav bar until tapped away (tapping the
+    /// bar title again also closes it). Selectable so a long title can be copied.
+    ///
+    /// Sized by its text — deliberately no `frame(maxHeight:)` or ScrollView here:
+    /// a flexible frame claims the whole proposed height, which left a short title
+    /// floating in the middle of a 240pt card. `lineLimit` is the cap instead, so a
+    /// runaway first prompt can't swallow the transcript.
+    private var fullTitleCard: some View {
+        fullTitleText
+        .padding(14)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14).stroke(Color(.separator), lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.easeOut(duration: 0.18)) { showFullTitle = false }
+        }
+        .accessibilityIdentifier("fullTitleCard")
+    }
+
+    private var fullTitleText: some View {
+        Text(fullTitle)
+            .font(.subheadline.weight(.semibold))
+            .multilineTextAlignment(.leading)
+            .lineLimit(12)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var modelOptions: [String] {
@@ -400,6 +494,12 @@ struct SessionDetailView: View {
         _ = await store.transfer(sid, to: target)
     }
 
+    private func markUnreadAndExit() {
+        store.markUnread(sid)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        onMarkedUnread()
+    }
+
     /// The working path shown under the title when the session is idle (no
     /// "Running" status text). Prefers the real working dir, falling back to the
     /// friendly project name; nil when neither is known.
@@ -424,29 +524,24 @@ struct SessionDetailView: View {
     }
 }
 
-/// Replaces the composer when the open session is live on an unreachable host.
-/// The agent's pane exists only on that machine, so there is no host that could
-/// accept a message for it — say so instead of taking input that would fail. The
-/// session reappears with a working composer as soon as the host answers a poll.
+/// Compact banner shown above the composer when the open session is live on an
+/// unreachable host.
 struct OfflineComposerNotice: View {
     let hostLabel: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .center, spacing: 8) {
             Image(systemName: "wifi.exclamationmark")
                 .foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(hostLabel) is unreachable")
-                    .font(.subheadline.weight(.semibold))
-                Text("This session is running on \(hostLabel), so it can't take messages until that host is back. Its transcript above is up to date as of the last poll.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            Text("\(hostLabel) is unreachable — messages will send when it's back.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
-        .padding(12)
-        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
         .padding(.horizontal, 16)
-        .padding(.bottom, 8)
     }
 }
