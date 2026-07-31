@@ -2041,14 +2041,30 @@ import LFGCore
         // A resumed closed session's old transcript lingers on disk; remember it
         // so the merge in `refresh` doesn't re-add it as a stale "Closed" card.
         resumedIds.insert(old)
-        if let v = transcripts.removeValue(forKey: old) { transcripts[new] = v }
-        if let v = prompts.removeValue(forKey: old) { prompts[new] = v }
-        if let v = busy.removeValue(forKey: old) { busy[new] = v }
-        if let v = queues.removeValue(forKey: old) { queues[new] = v }
+        // Host-wide SSE can deliver real-id events while `/api/sessions/new` is
+        // still waiting for the agent's first transcript write. Preserve that
+        // destination state instead of replacing it with placeholder/resume state.
+        if let moved = transcripts.removeValue(forKey: old) {
+            let merged = TranscriptMerge.unionByStableID(moved, transcripts[new] ?? [])
+            transcripts[new] = merged
+            seen[new] = Set(merged.map(\.stableID))
+        }
+        if let v = prompts.removeValue(forKey: old), prompts[new] == nil { prompts[new] = v }
+        if let v = busy.removeValue(forKey: old), busy[new] == nil { busy[new] = v }
+        if let v = queues.removeValue(forKey: old), queues[new] == nil { queues[new] = v }
         if let v = pendingSends.removeValue(forKey: old) {
             pendingSends[new, default: []].insert(contentsOf: v, at: 0)
         }
-        if let v = seen.removeValue(forKey: old) { seen[new] = v }
+        let movedSeen = seen.removeValue(forKey: old)
+        if let merged = transcripts[new] {
+            seen[new] = Set(merged.map(\.stableID))
+        } else if let movedSeen {
+            seen[new, default: []].formUnion(movedSeen)
+        }
+        if let v = hostBySession.removeValue(forKey: old), hostBySession[new] == nil {
+            hostBySession[new] = v
+        }
+        reconcilePending(new)
         optimisticSessions.removeAll { $0.sessionId == old }
         // Rename the session in place (rather than removing it) so it stays
         // visible under the new id with no "no session selected" flash before
@@ -2143,3 +2159,5 @@ import LFGCore
         }
     }
 }
+        guard old != new else { return }
+
