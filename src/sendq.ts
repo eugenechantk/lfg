@@ -345,8 +345,9 @@ function kick(sessionId: string) {
         }
         next.updatedAt = Date.now();
         persistMsg(sessionId, next);
-        if (next.status === "delivered") journalDelivered(sessionId, next, deliveredUserTurnId);
-        else if (next.status === "failed") journalFailed(sessionId, next);
+        const status = (next as QueuedMsg).status;
+        if (status === "delivered") journalDelivered(sessionId, next, deliveredUserTurnId);
+        else if (status === "failed") journalFailed(sessionId, next);
         pruneTerminal(s);
         store?.pruneTerminal(sessionId, KEEP_TERMINAL);
       }
