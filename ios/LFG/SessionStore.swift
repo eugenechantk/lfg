@@ -1971,12 +1971,22 @@ import LFGCore
         catch { lastError = "\(label) failed: \(error.localizedDescription)"; return false }
     }
 
-    /// If a send auto-resumed a session whose pane had been reaped (the server
-    /// revived it and may have handed back a new id), re-point all per-session
-    /// keyed state at the new id. No-op in the common case — the resumed id is
-    /// almost always identical, and a normal live send sets `resumed` nil.
+    /// If a send auto-resumed a session whose pane had been reaped, carry a live
+    /// display copy forward immediately. Claude returns a new id, so keyed state
+    /// must be remapped; codex resumes in place, so the id-stable path still has
+    /// to flip `closed` off and suppress the stale closed row until polling sees
+    /// the live pane.
     private func applyResume(from old: String, _ resp: SendResponse) {
-        guard resp.resumed == true, let new = resp.sessionId, !new.isEmpty, new != old else { return }
+        guard resp.resumed == true else { return }
+        carryForwardResume(from: old, to: resp.sessionId)
+    }
+
+    /// Resume responses mean the session is no longer just a closed transcript,
+    /// regardless of whether the agent minted a new id. Keep the detail/list from
+    /// rendering "Closed" during the 1-6s gap before the revived pane appears in
+    /// `/api/sessions`.
+    private func carryForwardResume(from old: String, to returnedId: String?) {
+        let new = (returnedId?.isEmpty == false ? returnedId : nil) ?? old
         // Carry the just-resumed session forward under its new live id so the open
         // detail doesn't blank out during the 1–6s the revived pane takes to
         // appear in the live list. Cleared on the next refresh once it's live.
@@ -1985,8 +1995,15 @@ import LFGCore
             carried.closed = false
             deepLinkSession = carried
         }
-        remap(from: old, to: new)
-        requestSelection(new)   // move the open detail from the closed id to the live one
+        if old == new {
+            resumedIds.insert(old)
+            if let i = sessions.firstIndex(where: { $0.sessionId == old }) {
+                sessions[i].closed = false   // id-stable resume: same row is now reviving
+            }
+        } else {
+            remap(from: old, to: new)
+        }
+        requestSelection(new)   // move/open the detail at the live id
     }
 
     func send(_ id: String, _ text: String) async {
@@ -2320,8 +2337,9 @@ import LFGCore
         guard let client = (host ?? agnosticHost).flatMap({ settings.client(for: $0) }) else { return nil }
         do {
             let resp = try await client.resume(req)
+            carryForwardResume(from: req.sessionId, to: resp.sessionId)
             await refresh()
-            return resp.sessionId
+            return resp.sessionId ?? req.sessionId
         } catch { lastError = "Resume failed: \(error.localizedDescription)"; return nil }
     }
 

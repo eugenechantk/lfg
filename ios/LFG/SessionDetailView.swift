@@ -325,11 +325,10 @@ struct SessionDetailView: View {
                     Label("Rename", systemImage: "pencil")
                 }
 
-                // Fork branches this conversation into a new session (claude
-                // --resume --fork-session): the source is untouched, the fork
-                // carries the full history and lands at an empty composer. Only
-                // Claude-family transcripts (claude/aisdk) can be forked; the
-                // codex family isn't --resume-compatible, so hide it there.
+                // Fork branches this conversation into a new session: the source
+                // is untouched, the fork carries the full history and lands at an
+                // empty composer. Claude-family sessions use claude resume/fork;
+                // codex CLI sessions use codex's native fork lane.
                 if canFork {
                     Button { Task { await forkSession() } } label: {
                         Label(forking ? "Forking…" : "Fork session",
@@ -452,11 +451,16 @@ struct SessionDetailView: View {
         AgentKind(rawValue: session.agent)?.models ?? AgentKind.aisdk.models
     }
 
-    /// Only Claude-family sessions (claude CLI + aisdk) keep a claude-shaped
-    /// transcript under ~/.claude/projects that `claude --resume --fork-session`
-    /// understands. The codex family isn't resume-compatible, so hide Fork there.
+    /// Fork is available for transcript families whose server lane can branch
+    /// natively: Claude-family sessions use `claude --resume --fork-session`,
+    /// while codex CLI sessions use `codex fork`. `codex-aisdk` and opencode stay
+    /// hidden until the server grows explicit fork support for those agents.
     private var canFork: Bool {
-        !sid.isEmpty && (session.agent == "claude" || session.agent == "aisdk" || session.agent == nil)
+        !sid.isEmpty
+            && (session.agent == "claude"
+                || session.agent == "aisdk"
+                || session.agent == "codex"
+                || session.agent == nil)
     }
 
     /// Branch this session and navigate into the fork. The store returns the new

@@ -377,10 +377,10 @@ public struct ResumeRequest: Codable, Sendable {
     }
 }
 
-/// Fork a session into a new branch (`claude --resume <id> --fork-session`). The
-/// source transcript is left untouched; the server mints a new sessionId for the
-/// branch and returns it in a `NewSessionResponse`. Unlike resume, no prompt —
-/// a fork lands at the composer carrying the copied history, ready to diverge.
+/// Fork a session into a new branch using the server's agent-native fork lane.
+/// The source transcript is left untouched; the server mints a new sessionId for
+/// the branch and returns it in a `NewSessionResponse`. Unlike resume, no prompt
+/// — a fork lands at the composer carrying the copied history, ready to diverge.
 public struct ForkRequest: Codable, Sendable {
     public var sessionId: String
     public var model: String?
