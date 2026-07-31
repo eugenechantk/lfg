@@ -248,6 +248,7 @@ final class SessionStore: ObservableObject {
     @Published var refreshing = false
     @Published var lastRefreshed: Date?
     @Published var movingIds: Set<String> = []
+    @Published var closingIds: Set<String> = []
 
     var items: [SessionItem] {
         let all = hosts.flatMap { host in
@@ -380,6 +381,22 @@ final class SessionStore: ObservableObject {
         return nil
     }
 
+    /// Ends the session's live process on its host. The transcript survives, so a
+    /// closed session stays resumable — this is "stop running", not "delete".
+    func close(item: SessionItem) async -> String? {
+        guard let sessionId = item.session.sessionId else {
+            return "Close failed: this session has no session id."
+        }
+        closingIds.insert(sessionId)
+        defer { closingIds.remove(sessionId) }
+
+        if let err = await MoveCoordinator.close(item: item) {
+            return err
+        }
+        await refresh()
+        return nil
+    }
+
     private func isLocalURL(_ url: String) -> Bool {
         guard let host = URL(string: url)?.host?.lowercased() else { return false }
         return host == "localhost" || host == "127.0.0.1" || host == "::1"
@@ -492,6 +509,19 @@ enum MoveCoordinator {
             try await postResume(targetURL: target.url, sessionId: sessionId)
         } catch {
             return "Move failed at resume: \(detail(for: error))"
+        }
+        return nil
+    }
+
+    /// Close without the move dance — no sync wait, no resume on a target host.
+    static func close(item: SessionItem) async -> String? {
+        guard let sessionId = item.session.sessionId else {
+            return "Close failed: this session has no session id."
+        }
+        do {
+            try await postClose(sourceURL: item.hostURL, sessionId: sessionId)
+        } catch {
+            return "Close failed: \(detail(for: error))"
         }
         return nil
     }
@@ -1191,6 +1221,7 @@ struct ContentView: View {
     @State private var expandedAgentSections: Set<String> = []
     @State private var expandedAgentParents: Set<String> = []
     @State private var pendingMove: PendingMove?
+    @State private var pendingClose: SessionItem?
     private let timer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
 
     private struct ListSection: Identifiable {
@@ -1405,7 +1436,9 @@ struct ContentView: View {
     }
 
     private func openButton(for item: SessionItem) -> some View {
-        let isMoving = item.session.sessionId.map { store.movingIds.contains($0) } ?? false
+        let isMoving = item.session.sessionId.map {
+            store.movingIds.contains($0) || store.closingIds.contains($0)
+        } ?? false
         return Button {
             guard !isMoving else { return }
             // Off the main thread: the AppleScript round-trip can
@@ -1434,6 +1467,33 @@ struct ContentView: View {
                         requestMove(item, to: target)
                     }
                 }
+                if item.session.sessionId != nil {
+                    Divider()
+                    Button("Close session", role: .destructive) {
+                        requestClose(item)
+                    }
+                }
+            }
+        }
+    }
+
+    private func requestClose(_ item: SessionItem) {
+        guard let sessionId = item.session.sessionId,
+              !store.closingIds.contains(sessionId) else { return }
+        // Closing an idle session is cheap and reversible (resume brings it
+        // back), so only interrupt for one that's mid-turn.
+        if item.status == .working {
+            pendingClose = item
+        } else {
+            startClose(item)
+        }
+    }
+
+    private func startClose(_ item: SessionItem) {
+        Task {
+            let err = await store.close(item: item)
+            if let err {
+                alertMessage = err
             }
         }
     }
@@ -1610,6 +1670,22 @@ struct ContentView: View {
             }
         } message: {
             Text("The source session will be closed before lfg waits for transcript sync and resumes it on the target host.")
+        }
+        .alert("Session is working — close anyway?", isPresented: .init(
+            get: { pendingClose != nil },
+            set: { if !$0 { pendingClose = nil } }
+        )) {
+            Button("Close", role: .destructive) {
+                if let pendingClose {
+                    startClose(pendingClose)
+                }
+                pendingClose = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingClose = nil
+            }
+        } message: {
+            Text("The session is mid-turn. Closing ends its process now — the transcript is kept, so you can resume it later.")
         }
     }
 
