@@ -2,7 +2,13 @@ import { describe, expect, it } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { codexPromptFromCmd, firstUserTextFromTop, pickCodexThread } from "./sessions.ts";
+import {
+  codexPromptFromCmd,
+  firstUserTextFromTop,
+  pickCodexForkThread,
+  pickCodexThread,
+  pickKnownCodexThread,
+} from "./sessions.ts";
 
 type Thread = {
   id: string;
@@ -11,6 +17,7 @@ type Thread = {
   createdAt: number | null;
   updatedAt: number | null;
   firstUserText: string | null;
+  forkedFromId: string | null;
 };
 
 const T0 = 1_782_885_876_000; // process startedAt used across cases
@@ -22,6 +29,7 @@ function thread(over: Partial<Thread> & { id: string }): Thread {
     createdAt: T0 + 8_000,
     updatedAt: T0 + 8_000,
     firstUserText: null,
+    forkedFromId: null,
     ...over,
   };
 }
@@ -115,6 +123,48 @@ describe("pickCodexThread — promptless (interactive codex)", () => {
       new Set(),
     );
     expect(got).toBeNull();
+  });
+});
+
+describe("codex managed binding intents", () => {
+  it("binds a resumed session by known id even when the rollout predates process start", () => {
+    const oldResume = thread({
+      id: "00000000-0000-4000-8000-0000000000aa",
+      createdAt: T0 - 6 * 60 * 60_000,
+      updatedAt: T0 + 1_000,
+    });
+
+    expect(
+      pickCodexThread(
+        { cwd: "/Users/eugenechan/dev/inbox", startedAt: T0, prompt: null },
+        [oldResume],
+        new Set(),
+      ),
+    ).toBeNull();
+    expect(pickKnownCodexThread(oldResume.id, [oldResume], new Set())?.id).toBe(oldResume.id);
+  });
+
+  it("binds two forks from one parent by forked_from_id, spawn time, and claimed ids", () => {
+    const parent = "00000000-0000-4000-8000-0000000000bb";
+    const forkA = thread({
+      id: "00000000-0000-4000-8000-0000000000c1",
+      createdAt: T0 + 1_000,
+      forkedFromId: parent,
+    });
+    const forkB = thread({
+      id: "00000000-0000-4000-8000-0000000000c2",
+      createdAt: T0 + 6_000,
+      forkedFromId: parent,
+    });
+    const claimed = new Set<string>();
+    const threads = [forkA, forkB];
+
+    const gotA = pickCodexForkThread({ forkedFromId: parent, spawnedAt: T0 }, threads, claimed);
+    expect(gotA?.id).toBe(forkA.id);
+    claimed.add(gotA!.id);
+
+    const gotB = pickCodexForkThread({ forkedFromId: parent, spawnedAt: T0 + 5_000 }, threads, claimed);
+    expect(gotB?.id).toBe(forkB.id);
   });
 });
 

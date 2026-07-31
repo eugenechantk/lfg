@@ -16,7 +16,13 @@ export type ManagedSession = {
   createdAt: number;
   agent?: "claude" | "codex" | "aisdk" | "codex-aisdk" | "opencode";
   parentSessionId?: string;
+  // Authoritative live binding for lfg-managed panes. Claude fills this after
+  // the pidfile appears; Codex resume knows it before spawn because resume is
+  // id-stable, and Codex fork fills it once the forked rollout is discovered.
   sessionId?: string;
+  // Branch source. For Claude this also powers the pending-fork transcript
+  // fallback with forkSourceBytes; for Codex it is the exact binding key while
+  // waiting for the new rollout's session_meta.forked_from_id to appear.
   forkedFrom?: string;
   forkSourceBytes?: number;
 };

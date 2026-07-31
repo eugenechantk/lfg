@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { DEFAULT_MODEL, managedSessionArgv } from "./tmux.ts";
+import { DEFAULT_MODEL, managedCodexSessionArgv, managedSessionArgv } from "./tmux.ts";
 
 const ID = "11111111-2222-3333-4444-555555555555";
 
@@ -40,5 +40,43 @@ describe("managedSessionArgv — fork vs resume vs fresh", () => {
     const dash = argv.indexOf("--");
     expect(dash).toBeGreaterThanOrEqual(0);
     expect(argv[dash + 1]).toBe("hello");
+  });
+});
+
+describe("managedCodexSessionArgv — resume and fork", () => {
+  it("resume uses codex resume <id> <prompt> and does not pass --model", () => {
+    const argv = managedCodexSessionArgv({
+      name: "lfg-codex-r",
+      cwd: "/tmp",
+      resume: ID,
+      model: "gpt-5.6-sol",
+      prompt: "continue",
+    });
+    const ri = argv.indexOf("resume");
+
+    expect(ri).toBeGreaterThanOrEqual(0);
+    expect(argv[ri + 1]).toBe(ID);
+    expect(argv[ri + 2]).toBe("continue");
+    expect(argv).not.toContain("--model");
+    expect(argv).toContain("--sandbox");
+    expect(argv).toContain("--ask-for-approval");
+    expect(argv).toContain("--cd");
+    expect(argv).toContain("--add-dir");
+  });
+
+  it("fork uses codex fork <source-id> and keeps an explicit codex model", () => {
+    const argv = managedCodexSessionArgv({
+      name: "lfg-codex-f",
+      cwd: "/tmp",
+      resume: ID,
+      fork: true,
+      model: "gpt-5.6-sol",
+    });
+    const fi = argv.indexOf("fork");
+
+    expect(fi).toBeGreaterThanOrEqual(0);
+    expect(argv[fi + 1]).toBe(ID);
+    expect(argv).toContain("--model");
+    expect(argv[argv.indexOf("--model") + 1]).toBe("gpt-5.6-sol");
   });
 });

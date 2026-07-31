@@ -5,7 +5,7 @@ import { statSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "no
 import { join, basename } from "node:path";
 import { tmpdir } from "node:os";
 import { tmuxTargetForPid } from "./tmux";
-import { listManaged, type ManagedSession } from "./managed";
+import { listManaged, patchManaged, type ManagedSession } from "./managed";
 import {
   listEntries as listAisdkEntries,
   isPidAlive,
@@ -30,12 +30,15 @@ import {
 
 const HOME = process.env.HOME ?? homedir();
 const PROJECTS_DIR = join(HOME, ".claude", "projects");
-const CODEX_SESSIONS_DIR = join(HOME, ".codex", "sessions");
 const TITLE_MAX = 72;
 const CODEX_PROMPT_READ_BYTES = 1024 * 1024;
 
 function claudeProjectsDir(): string {
   return process.env.LFG_CLAUDE_PROJECTS_DIR ?? PROJECTS_DIR;
+}
+
+function codexSessionsDir(): string {
+  return join(process.env.HOME ?? homedir(), ".codex", "sessions");
 }
 
 export type SessionMsg = {
@@ -294,35 +297,36 @@ async function findTranscriptById(id: string): Promise<string | null> {
 
 async function codexRolloutFiles(): Promise<string[]> {
   const out: string[] = [];
+  const root = codexSessionsDir();
   let years: string[];
   try {
-    years = await readdir(CODEX_SESSIONS_DIR);
+    years = await readdir(root);
   } catch {
     return out;
   }
   for (const y of years) {
     let months: string[];
     try {
-      months = await readdir(join(CODEX_SESSIONS_DIR, y));
+      months = await readdir(join(root, y));
     } catch {
       continue;
     }
     for (const m of months) {
       let days: string[];
       try {
-        days = await readdir(join(CODEX_SESSIONS_DIR, y, m));
+        days = await readdir(join(root, y, m));
       } catch {
         continue;
       }
       for (const d of days) {
         let files: string[];
         try {
-          files = await readdir(join(CODEX_SESSIONS_DIR, y, m, d));
+          files = await readdir(join(root, y, m, d));
         } catch {
           continue;
         }
         for (const f of files) {
-          if (f.endsWith(".jsonl")) out.push(join(CODEX_SESSIONS_DIR, y, m, d, f));
+          if (f.endsWith(".jsonl")) out.push(join(root, y, m, d, f));
         }
       }
     }
@@ -338,13 +342,14 @@ async function findCodexTranscriptById(id: string): Promise<string | null> {
   return null;
 }
 
-type CodexThread = {
+export type CodexThread = {
   id: string;
   path: string;
   cwd: string | null;
   createdAt: number | null;
   updatedAt: number | null;
   firstUserText: string | null;
+  forkedFromId: string | null;
 };
 
 async function codexThreads(): Promise<CodexThread[]> {
@@ -355,7 +360,8 @@ async function codexThreads(): Promise<CodexThread[]> {
       if (!first) continue;
       const row = JSON.parse(first) as {
         type?: string;
-        payload?: { id?: string; cwd?: string; timestamp?: string };
+        forked_from_id?: string;
+        payload?: { id?: string; cwd?: string; timestamp?: string; forked_from_id?: string };
       };
       const id = row.payload?.id ?? path.match(UUID)?.[0] ?? null;
       if (row.type !== "session_meta" || !id) continue;
@@ -370,6 +376,7 @@ async function codexThreads(): Promise<CodexThread[]> {
         createdAt: row.payload?.timestamp ? Date.parse(row.payload.timestamp) : null,
         updatedAt,
         firstUserText: await firstUserTextFromTop(path),
+        forkedFromId: row.payload?.forked_from_id ?? row.forked_from_id ?? null,
       });
     } catch {}
   }
@@ -493,6 +500,35 @@ export function pickCodexThread(
           Math.abs((a.createdAt ?? 0) - startedAt) -
           Math.abs((b.createdAt ?? 0) - startedAt),
       )[0] ?? null
+  );
+}
+
+export function pickKnownCodexThread(
+  sessionId: string | null | undefined,
+  threads: CodexThread[],
+  claimed: Set<string>,
+): CodexThread | null {
+  if (!sessionId || claimed.has(sessionId)) return null;
+  return threads.find((t) => t.id === sessionId) ?? null;
+}
+
+export function pickCodexForkThread(
+  proc: { forkedFromId: string | null; spawnedAt: number | null },
+  threads: CodexThread[],
+  claimed: Set<string>,
+): CodexThread | null {
+  const { forkedFromId, spawnedAt } = proc;
+  if (!forkedFromId || spawnedAt == null) return null;
+  return (
+    threads
+      .filter(
+        (t) =>
+          t.forkedFromId === forkedFromId &&
+          !claimed.has(t.id) &&
+          t.createdAt != null &&
+          t.createdAt >= spawnedAt,
+      )
+      .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))[0] ?? null
   );
 }
 
@@ -1230,8 +1266,40 @@ async function listSessionsUncached(): Promise<Session[]> {
 
     let cwd: string | null = await cwdOf(p.pid);
     let startedAt: number | null = startTimeMsOf(p.pid);
-    let sessionId = p.cmd.match(new RegExp(`(?:resume|fork)\\s+(${UUID.source})`))?.[1] ?? null;
-    let thread = sessionId ? codex.find((t) => t.id === sessionId) : null;
+    const tmuxTarget = tmuxTargetForPid(p.pid);
+    const tmuxName = tmuxTarget ? tmuxTarget.split(":")[0] : null;
+    const managedRec = tmuxName ? managedByName.get(tmuxName) : undefined;
+    const managedCodex = managedRec?.agent === "codex" ? managedRec : undefined;
+    const resumeId =
+      managedCodex?.sessionId ??
+      p.cmd.match(new RegExp(`(?:^|\\s)resume\\s+(${UUID.source})`))?.[1] ??
+      null;
+    const forkedFromId =
+      managedCodex && !managedCodex.sessionId
+        ? managedCodex.forkedFrom ?? null
+        : p.cmd.match(new RegExp(`(?:^|\\s)fork\\s+(${UUID.source})`))?.[1] ?? null;
+    // Codex resume appends to an old rollout, so it MUST bind by the id we
+    // already know. Falling through to pickCodexThread would reject that rollout
+    // on the createdAt skew guard and make the live session disappear on re-scan.
+    let sessionId = resumeId;
+    let thread = pickKnownCodexThread(sessionId, codex, claimedCodex);
+    // Codex fork mints a new rollout whose session_meta links back to the
+    // source id. Bind that exact parent link before any cwd/prompt heuristic;
+    // two forks from one parent disambiguate by each pane's spawn time plus the
+    // claimed set.
+    if (!thread) {
+      thread = pickCodexForkThread(
+        { forkedFromId, spawnedAt: managedCodex?.createdAt ?? startedAt },
+        codex,
+        claimedCodex,
+      );
+      if (thread) {
+        sessionId = thread.id;
+        if (managedCodex && !managedCodex.sessionId) {
+          patchManaged(managedCodex.tmuxName, { sessionId: thread.id });
+        }
+      }
+    }
     const prompt = codexPromptFromCmd(p.cmd);
     if (!thread) {
       thread = pickCodexThread({ cwd, startedAt, prompt }, codex, claimedCodex);
@@ -1261,8 +1329,6 @@ async function listSessionsUncached(): Promise<Session[]> {
     let title = (sessionId && overrides[sessionId]) || null;
     if (!title && transcriptPath) title = await firstPromptTitle(transcriptPath);
     if (!title) title = cwd ? basename(cwd) : project;
-    const tmuxTarget = tmuxTargetForPid(p.pid);
-    const tmuxName = tmuxTarget ? tmuxTarget.split(":")[0] : null;
     const transcriptRecent =
       lastActivityAt != null && Date.now() - lastActivityAt < REST_BUSY_WINDOW_MS;
     const delegated = sessionId ? delegatedSessionIds.has(sessionId) : false;
@@ -1444,8 +1510,14 @@ export async function cwdForTranscript(path: string): Promise<string | null> {
     for (const line of text.split("\n")) {
       if (!line.trim()) continue;
       try {
-        const x = JSON.parse(line) as { cwd?: string };
+        const x = JSON.parse(line) as {
+          type?: string;
+          cwd?: string;
+          payload?: { cwd?: string };
+        };
         if (typeof x.cwd === "string" && x.cwd) return x.cwd;
+        if (x.type === "session_meta" && typeof x.payload?.cwd === "string" && x.payload.cwd)
+          return x.payload.cwd;
       } catch {}
     }
   } catch {}
@@ -1453,6 +1525,7 @@ export async function cwdForTranscript(path: string): Promise<string | null> {
 }
 
 export type ResumableSession = {
+  agent: "claude" | "codex";
   sessionId: string;
   cwd: string | null;
   project: string;
@@ -1479,19 +1552,25 @@ export async function listResumable(
   const limit = Math.max(1, Math.min(100, opts.limit ?? 30));
   const exclude = opts.excludeIds ?? new Set<string>();
   const before = typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
-  let dirs: string[];
+  type Candidate = {
+    agent: "claude" | "codex";
+    id: string;
+    path: string;
+    mtime: number;
+    cwdHint?: string | null;
+    firstUserText?: string | null;
+  };
+  let dirs: string[] = [];
   const projectsDir = claudeProjectsDir();
   try {
     dirs = await readdir(projectsDir);
-  } catch {
-    return { sessions: [], nextBefore: null };
-  }
+  } catch {}
   // Cheap first pass: collect (id, path, mtime) for every transcript, skipping
   // live ones, so we only pay the title/cwd read cost for the newest `limit`.
   // A synced transcript can occasionally exist under more than one encoded
   // project directory; treat sessionId as authoritative and keep the newest copy
   // so pagination never returns the same conversation twice.
-  const byId = new Map<string, { id: string; path: string; mtime: number }>();
+  const byId = new Map<string, Candidate>();
   for (const d of dirs) {
     let files: string[];
     try {
@@ -1514,7 +1593,22 @@ export async function listResumable(
         continue;
       }
       const prev = byId.get(id);
-      if (!prev || mtime > prev.mtime) byId.set(id, { id, path, mtime });
+      if (!prev || mtime > prev.mtime) byId.set(id, { agent: "claude", id, path, mtime });
+    }
+  }
+  for (const thread of await codexThreads()) {
+    if (!UUID_EXACT.test(thread.id) || exclude.has(thread.id)) continue;
+    const mtime = thread.updatedAt ?? thread.createdAt ?? 0;
+    const prev = byId.get(thread.id);
+    if (!prev || mtime > prev.mtime) {
+      byId.set(thread.id, {
+        agent: "codex",
+        id: thread.id,
+        path: thread.path,
+        mtime,
+        cwdHint: thread.cwd,
+        firstUserText: thread.firstUserText,
+      });
     }
   }
   const candidates = [...byId.values()].filter((c) => before == null || c.mtime < before);
@@ -1533,11 +1627,13 @@ export async function listResumable(
   const overrides = await readTitleOverrides();
   const out: ResumableSession[] = [];
   for (const c of page) {
-    const cwd = await cwdForTranscript(c.path).catch(() => null);
+    const cwd = c.cwdHint ?? (await cwdForTranscript(c.path).catch(() => null));
     let title = overrides[c.id] || null;
     if (!title) title = await firstPromptTitle(c.path).catch(() => null);
+    if (!title) title = c.firstUserText?.slice(0, TITLE_MAX) ?? null;
     if (!title) title = cwd ? basename(cwd) : "—";
     out.push({
+      agent: c.agent,
       sessionId: c.id,
       cwd,
       project: projectName(cwd),
