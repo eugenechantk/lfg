@@ -32,6 +32,7 @@ const HOME = process.env.HOME ?? homedir();
 const PROJECTS_DIR = join(HOME, ".claude", "projects");
 const CODEX_SESSIONS_DIR = join(HOME, ".codex", "sessions");
 const TITLE_MAX = 72;
+const CODEX_PROMPT_READ_BYTES = 1024 * 1024;
 
 function claudeProjectsDir(): string {
   return process.env.LFG_CLAUDE_PROJECTS_DIR ?? PROJECTS_DIR;
@@ -375,20 +376,59 @@ async function codexThreads(): Promise<CodexThread[]> {
   return out;
 }
 
-async function firstUserTextFromTop(path: string): Promise<string | null> {
-  try {
-    const text = await Bun.file(path).slice(0, 256 * 1024).text();
-    for (const line of text.split("\n")) {
-      const m = normalizeCodexLine(line);
-      if (m?.role === "user" && m.kind === "text") return m.text.trim();
-    }
-  } catch {}
-  return null;
+function isInjectedCodexUserContext(text: string): boolean {
+  const leading = text.trimStart();
+  return (
+    leading.startsWith("# AGENTS.md instructions") ||
+    leading.startsWith("<INSTRUCTIONS>") ||
+    leading.startsWith("<user_instructions>") ||
+    leading.startsWith("<environment_context>")
+  );
 }
 
-function codexPromptFromCmd(cmd: string): string | null {
+export async function firstUserTextFromTop(path: string): Promise<string | null> {
+  let fallback: string | null = null;
+  try {
+    const text = await Bun.file(path).slice(0, CODEX_PROMPT_READ_BYTES).text();
+    for (const line of text.split("\n")) {
+      if (!line.trim()) continue;
+      let x: {
+        type?: string;
+        payload?: {
+          type?: string;
+          role?: string;
+          message?: string;
+          content?: unknown;
+        };
+      };
+      try {
+        x = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const p = x.payload;
+      if (!p) continue;
+      if (x.type === "event_msg" && p.type === "user_message" && p.message?.trim()) {
+        return stripConversationPrefix(p.message.trim());
+      }
+      if (fallback || x.type !== "response_item" || p.type !== "message" || p.role !== "user")
+        continue;
+      const text = stripConversationPrefix(codexContentText(p.content).trim());
+      if (text && !isInjectedCodexUserContext(text)) fallback = text;
+    }
+  } catch {}
+  return fallback;
+}
+
+function decodeBackslashOctalEscapes(text: string): string {
+  return text.replace(/\\([0-7]{3})/g, (_, octal: string) =>
+    String.fromCharCode(Number.parseInt(octal, 8)),
+  );
+}
+
+export function codexPromptFromCmd(cmd: string): string | null {
   const m = cmd.match(/\s--\s+([\s\S]+)$/);
-  return m?.[1]?.trim() || null;
+  return m?.[1] ? decodeBackslashOctalEscapes(m[1]).trim() || null : null;
 }
 
 function samePrompt(a: string | null, b: string | null): boolean {
@@ -407,7 +447,10 @@ const CODEX_BIND_WINDOW_MS = 120_000;
 
 // Bind a running tmux `codex` process to its rollout transcript. Two modes:
 //   1. prompt — the process was launched with an inline `-- <prompt>`; match the
-//      unclaimed same-cwd thread whose first user text equals it (freshest wins).
+//      unclaimed same-cwd thread whose first user text equals it. When two live
+//      sessions launched with the same prompt, bind by rollout-created proximity
+//      to the process start; only fall back to freshest write when that signal is
+//      missing or tied.
 //   2. promptless — an interactive `codex` / `codex --yolo` has no prompt and no
 //      resume id, so it is bound to the unclaimed same-cwd thread whose createdAt
 //      is nearest the process startedAt (codex writes its rollout at launch). This
@@ -429,11 +472,15 @@ export function pickCodexThread(
   );
   if (inCwd.length === 0) return null;
   if (prompt) {
-    return (
-      inCwd
-        .filter((t) => samePrompt(t.firstUserText, prompt))
-        .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0] ?? null
-    );
+    const matches = inCwd.filter((t) => samePrompt(t.firstUserText, prompt));
+    if (matches.length <= 1) return matches[0] ?? null;
+    return matches.sort((a, b) => {
+      if (startedAt != null && a.createdAt != null && b.createdAt != null) {
+        const byCreatedProximity = Math.abs(a.createdAt - startedAt) - Math.abs(b.createdAt - startedAt);
+        if (byCreatedProximity !== 0) return byCreatedProximity;
+      }
+      return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+    })[0] ?? null;
   }
   // Promptless: require a real startedAt (else "nearest to 0" is meaningless) and
   // bind the thread whose createdAt is closest to launch, within the window.
@@ -899,7 +946,7 @@ export async function lastUserPromptText(path: string): Promise<string | null> {
   return null;
 }
 
-// Collapse a full model id (e.g. "claude-opus-4-8", "claude-3-5-haiku-...") to
+// Collapse a full model id (e.g. "claude-opus-5", "claude-haiku-4-5") to
 // the short alias lfg uses everywhere (the same tokens the `/model` command
 // and the model picker speak). Returns the raw value if it matches no family.
 function modelAlias(id: string | null | undefined): string | null {
