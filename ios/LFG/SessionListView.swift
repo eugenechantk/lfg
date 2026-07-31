@@ -582,29 +582,18 @@ struct SessionListView: View {
             // sessions": the label the design showed is the one thing on this
             // screen that never tells you anything, and replacing the nav bar
             // had otherwise dropped the connection state entirely on iPhone.
-            HStack(spacing: 9) {
-                Circle()
-                    .fill(statusTint)
-                    .frame(width: 10, height: 10)
-                Text(statusHeadline)
-                    .font(.system(size: 30, weight: .bold))
-                    .tracking(-0.6)
-                    .foregroundStyle(Tokens.label)
-                    .lineLimit(1)
-                    // Host labels are user-supplied and "Connected · 12 running"
-                    // is already wide next to three 38pt controls, so shrink to
-                    // fit rather than truncating a status the user needs whole.
-                    .minimumScaleFactor(0.5)
-            }
-            .accessibilityElement(children: .combine)
+            HeaderStatusLine()
+                .layoutPriority(1)
             .accessibilityIdentifier("sessionListHeader")
             Spacer(minLength: 12)
-            HStack(spacing: 10) {
-                headerButton("magnifyingglass", size: 15.5, action: toggleSearch)
-                    .accessibilityIdentifier("sessionSearchToggle")
-                groupSortMenu(groupMode: groupMode, sortMode: sortMode)
-                headerButton("gearshape", size: 16, weight: .regular) { showSettings = true }
-                    .accessibilityIdentifier("sessionSettingsButton")
+            GlassChromeContainer(spacing: 10) {
+                HStack(spacing: 10) {
+                    headerButton("magnifyingglass", size: 15.5, action: toggleSearch)
+                        .accessibilityIdentifier("sessionSearchToggle")
+                    groupSortMenu(groupMode: groupMode, sortMode: sortMode)
+                    headerButton("gearshape", size: 16, weight: .regular) { showSettings = true }
+                        .accessibilityIdentifier("sessionSettingsButton")
+                }
             }
         }
         .padding(.top, 6)
@@ -624,7 +613,7 @@ struct SessionListView: View {
                 .font(.system(size: size, weight: weight))
                 .foregroundStyle(Tokens.label)
                 .frame(width: 38, height: 38)
-                .background(background, in: Circle())
+                .glassOrRaised(in: Circle(), fallback: background, interactive: true)
         }
         .buttonStyle(.plain)
     }
@@ -664,7 +653,12 @@ struct SessionListView: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Tokens.label)
                 .frame(width: 38, height: 38)
-                .background(sortMenuHighlight ? Tokens.accent : Tokens.raised, in: Circle())
+                .glassOrRaised(
+                    in: Circle(),
+                    fallback: sortMenuHighlight ? Tokens.accent : Tokens.raised,
+                    tint: sortMenuHighlight ? Tokens.accent : nil,
+                    interactive: true
+                )
         }
         .buttonStyle(.plain)
         .simultaneousGesture(TapGesture().onEnded {
@@ -675,41 +669,6 @@ struct SessionListView: View {
             }
         })
         .accessibilityIdentifier("sessionSortMenu")
-    }
-
-    /// The header title. Single host reads as its connection state plus the
-    /// running tally; multiple hosts read as which hosts are up, since with
-    /// several backends "Connected" alone would hide a partial outage.
-    private var statusHeadline: String {
-        statusSubtitle.isEmpty ? "All sessions" : statusSubtitle
-    }
-
-    /// Green only when every configured host answers — one host down turns the
-    /// dot orange even though the app still works, because the list is then
-    /// showing an incomplete picture and the user should know before wondering
-    /// where a session went.
-    private var statusTint: Color {
-        if settings.hosts.count > 1 {
-            let allOnline = settings.hosts.allSatisfy { store.reachabilityByHost[$0.id] == .ok }
-            return allOnline ? Color(.systemGreen) : Color(.systemOrange)
-        }
-        return store.isConnected ? Color(.systemGreen) : Color(.systemOrange)
-    }
-
-    private var statusSubtitle: String {
-        // Multi-host: name which hosts are online vs offline. With no principal
-        // StatusBadge, this subtitle carries the per-host status on both idioms.
-        if settings.hosts.count > 1 {
-            let online = settings.hosts.filter { store.reachabilityByHost[$0.id] == .ok }
-            let offline = settings.hosts.filter { store.reachabilityByHost[$0.id] != .ok }
-            var parts: [String] = []
-            if !online.isEmpty { parts.append("\(online.map(\.label).joined(separator: ", ")) online") }
-            if !offline.isEmpty { parts.append("\(offline.map(\.label).joined(separator: ", ")) offline") }
-            return parts.joined(separator: " · ")
-        }
-        guard store.isConnected else { return "Offline" }
-        let n = store.runningCount
-        return n > 0 ? "Connected · \(n) running" : "Connected"
     }
 
     private var searchField: some View {
@@ -757,6 +716,77 @@ struct SessionListView: View {
     }
 }
 
+private struct HeaderStatusLine: View {
+    @Environment(SessionStore.self) private var store
+    @Environment(AppSettings.self) private var settings
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if settings.hosts.count > 1 {
+                ForEach(settings.hosts.indices, id: \.self) { index in
+                    let host = settings.hosts[index]
+                    if index > 0 {
+                        Text("·")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Tokens.labelSecondary)
+                            .fixedSize()
+                            .accessibilityHidden(true)
+                    }
+                    HostHeaderToken(host: host, online: store.reachabilityByHost[host.id] == .ok)
+                }
+            } else {
+                Circle()
+                    .fill(store.isConnected ? Color(.systemGreen) : Color(.systemOrange))
+                    .frame(width: 7, height: 7)
+                    .fixedSize()
+                Text(store.isConnected ? "Connected" : "Offline")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(store.isConnected ? Tokens.label : Color(.systemOrange))
+                    .lineLimit(1)
+                if store.runningCount > 0 {
+                    Text("·")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Tokens.labelSecondary)
+                        .fixedSize()
+                        .accessibilityHidden(true)
+                    Text("\(store.runningCount) running")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Tokens.label)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+        }
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        .lineLimit(1)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct HostHeaderToken: View {
+    let host: Host
+    let online: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(online ? Color(.systemGreen) : Color(.systemOrange))
+                .frame(width: 7, height: 7)
+                .fixedSize()
+                .accessibilityHidden(true)
+            Text(host.label)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(online ? Tokens.label : Color(.systemOrange))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .minimumScaleFactor(0.82)
+        }
+        .frame(minWidth: 0)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(host.label) \(online ? "online" : "offline")")
+    }
+}
+
 private struct NewSessionBar: View {
     let action: () -> Void
     let micAction: () -> Void
@@ -795,7 +825,7 @@ private struct NewSessionBar: View {
             }
             .frame(height: 52)
             .padding(.horizontal, 14)
-            .background(Tokens.raised, in: Capsule())
+            .glassOrRaised(in: Capsule(), fallback: Tokens.raised)
             .contentShape(Capsule())
 
             // Both container ids are published as zero-size sibling elements.

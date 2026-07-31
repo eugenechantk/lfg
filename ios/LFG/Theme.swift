@@ -124,3 +124,53 @@ struct StatusDot: View {
             .frame(width: 8, height: 8)
     }
 }
+
+struct GlassChromeContainer<Content: View>: View {
+    let spacing: CGFloat
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: spacing) {
+                content()
+            }
+        } else {
+            content()
+        }
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func glassOrRaised<S: Shape>(
+        in shape: S,
+        fallback: Color = Color(.secondarySystemBackground),
+        tint: Color? = nil,
+        interactive: Bool = false
+    ) -> some View {
+        if #available(iOS 26.0, *) {
+            if let tint {
+                if interactive {
+                    self.glassEffect(.regular.tint(tint).interactive(), in: shape)
+                } else {
+                    self.glassEffect(.regular.tint(tint), in: shape)
+                }
+            } else if interactive {
+                self.glassEffect(.regular.interactive(), in: shape)
+            } else {
+                self.glassEffect(.regular, in: shape)
+            }
+        } else {
+            self.background(fallback, in: shape)
+        }
+    }
+
+    @ViewBuilder
+    func glassButtonStyleOrPlain() -> some View {
+        if #available(iOS 26.0, *) {
+            self.buttonStyle(.glass)
+        } else {
+            self.buttonStyle(.plain)
+        }
+    }
+}

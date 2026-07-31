@@ -122,13 +122,9 @@ struct MessageComposer: View {
 struct GlassPanel: ViewModifier {
     let cornerRadius: CGFloat
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
-        } else {
-            content
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
-                .overlay(RoundedRectangle(cornerRadius: cornerRadius).stroke(.quaternary))
-                .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
-        }
+        content.glassOrRaised(
+            in: RoundedRectangle(cornerRadius: cornerRadius),
+            fallback: Color(.secondarySystemBackground)
+        )
     }
 }

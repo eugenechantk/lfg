@@ -57,8 +57,10 @@ struct SelectionCheck: View {
     let selected: Bool
 
     var body: some View {
+        // Sized to the design's drawn ink (12x10); 18pt rendered 16x16. The 18pt
+        // FRAME stays — it is the gutter that keeps row text aligned.
         Image(systemName: "checkmark")
-            .font(.system(size: 18, weight: .semibold))
+            .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(NewSessionPalette.accent)
             .frame(width: 18, height: 18)
             .opacity(selected ? 1 : 0)
@@ -104,7 +106,11 @@ struct CircularBackButton: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(NewSessionPalette.labelPrimary)
                 .frame(width: 38, height: 38)
-                .background(NewSessionPalette.surfaceRaised, in: Circle())
+                .glassOrRaised(
+                    in: Circle(),
+                    fallback: NewSessionPalette.surfaceRaised,
+                    interactive: true
+                )
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Back")

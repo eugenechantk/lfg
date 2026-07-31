@@ -39,7 +39,7 @@ struct ConfigChip: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .glassButtonStyleOrPlain()
         .accessibilityIdentifier(accessibilityIdentifier)
     }
 
@@ -150,7 +150,7 @@ struct NewSessionComposer: View {
                         .foregroundStyle(NewSessionPalette.attachIcon)
                         .frame(width: 26, height: 26)
                 }
-                .buttonStyle(.plain)
+                .glassButtonStyleOrPlain()
                 .accessibilityLabel("Attach image")
                 .accessibilityIdentifier("newSession.attach")
 
@@ -174,9 +174,11 @@ struct NewSessionComposer: View {
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(canSend ? Color.white : NewSessionPalette.idleSendIcon)
                         .frame(width: 32, height: 32)
-                        .background(
-                            canSend ? NewSessionPalette.accent : NewSessionPalette.surfaceControl,
-                            in: Circle()
+                        .glassOrRaised(
+                            in: Circle(),
+                            fallback: canSend ? NewSessionPalette.accent : NewSessionPalette.surfaceControl,
+                            tint: canSend ? NewSessionPalette.accent : nil,
+                            interactive: true
                         )
                 }
                 .buttonStyle(.plain)
@@ -193,7 +195,10 @@ struct NewSessionComposer: View {
         .padding(.top, 14)
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
-        .background(NewSessionPalette.surfaceRaised, in: RoundedRectangle(cornerRadius: 24))
+        .glassOrRaised(
+            in: RoundedRectangle(cornerRadius: 24),
+            fallback: NewSessionPalette.surfaceRaised
+        )
         // No identifier on the card container — same propagation trap as the screen
         // root: it overwrote the chip/input/attach/send ids with "newSession.composer".
         .onChange(of: pickerItems) { _, items in
