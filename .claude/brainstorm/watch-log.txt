@@ -1,0 +1,1 @@
+t=1782843307750 size=420377 marker=1 auq=0 tail=[user:tool_result || last-prompt:- || ai-title:- || mode:- || permission-mode:- || bridge-session:- || assistant:tu(Bash) || user:tool_result]
