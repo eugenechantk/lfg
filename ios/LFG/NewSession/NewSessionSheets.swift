@@ -108,13 +108,13 @@ struct SheetSearchField: View {
                 .tint(NewSessionPalette.accent)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .accessibilityIdentifier("sheet.search")
         }
         .padding(.horizontal, 11)
         .frame(height: 36)
         .background(NewSessionPalette.searchFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
-        .accessibilityIdentifier("sheet.search")
     }
 }
 
@@ -351,6 +351,6 @@ struct ModelSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("sheet.row.\(model)")
+        .accessibilityIdentifier("sheet.row.\(kind.rawValue).\(model)")
     }
 }
