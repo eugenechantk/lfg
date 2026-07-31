@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+  html, body { margin:0; background:#1a1a1c; }
+  a { color:#0A84FF; text-decoration:none; }
+  a:hover { color:#409CFF; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</helmet>
+<section style="padding:48px;font-family:-apple-system,'SF Pro Text','SF Pro Display','Helvetica Neue',Helvetica,Arial,sans-serif;color:#fff;font-size:17px">
+  <div id="5a">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:28px">
+      <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;letter-spacing:1px;padding:4px 9px;border-radius:6px;background:#2C2C2E;color:rgba(235,235,245,0.6)">5a</div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:-0.3px">Iteration 4 — Session list restyle</div>
+      <div style="font-size:15px;color:rgba(235,235,245,0.6)">Screens 29–34 · minimal rows, search + sort toolbar, grouping by status / directory / host, collapsible groups, composer bar</div>
+    </div>
+    <div style="display:flex;flex-wrap:nowrap;gap:36px;align-items:flex-start">
+
+      <div style="flex:none;width:390px">
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;color:rgba(235,235,245,0.6);margin-bottom:10px">29-home-status-grouped</div>
+        <div style="width:390px;height:844px;background:#000;border-radius:42px;overflow:hidden;position:relative">
+          <dc-import name="StatusBar" time="9:41" hint-size="390px,54px"></dc-import>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 16px 2px">
+              <div style="font-size:30px;font-weight:700;letter-spacing:-0.6px">All sessions</div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4.4-4.4"></path></svg></div>
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M6.5 12h11M10 17h4"></path></svg></div>
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"></circle><circle cx="12" cy="12" r="7.6"></circle><path d="M12 1.6v2.6M12 19.8v2.6M1.6 12h2.6M19.8 12h2.6M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"></path></svg></div>
+              </div>
+            </div>
+            <div style="padding:6px 0 0">
+              <sc-for list="{{ statusGroups }}" as="g" hint-placeholder-count="4">
+                <div style="margin-top:20px">
+                  <div style="display:flex;align-items:center;gap:9px;padding:0 20px 8px">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.4)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l7 7 7-7"></path></svg>
+                    <div style="font-size:15px;color:rgba(235,235,245,0.6)">{{ g.name }}</div>
+                    <div style="font-size:15px;color:rgba(235,235,245,0.3)">{{ g.count }}</div>
+                  </div>
+                  <sc-for list="{{ g.items }}" as="s" hint-placeholder-count="3">
+                    <div>
+                      <div style="display:flex;gap:11px;padding:15px 20px 16px">
+                        <div style="width:8px;height:8px;border-radius:50%;background:{{ s.dot }};margin-top:6px;flex:none"></div>
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:17px;line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.title }}</div>
+                          <div style="display:flex;align-items:center;gap:7px;margin-top:4px">
+                            <div style="font-size:15px;line-height:20px;color:rgba(235,235,245,0.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.meta }}</div>
+                            <div style="display:flex;align-items:center;gap:4px;flex:none">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.4)" stroke-width="1.9" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="12" rx="1.6"></rect><path d="M8 20h8"></path></svg>
+                              <div style="font-size:13px;line-height:20px;color:rgba(235,235,245,0.4);white-space:nowrap">{{ s.host }}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div style="height:1px;background:rgba(255,255,255,0.07);margin-left:39px"></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+            <div style="position:absolute;bottom:26px;left:12px;right:12px;background:#1C1C1E;border-radius:26px;height:52px;display:flex;align-items:center;gap:12px;padding:0 14px">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.9" stroke-linecap="round" style="flex:none"><path d="M12 5v14M5 12h14"></path></svg>
+              <div style="flex:1;font-size:17px;color:rgba(235,235,245,0.45)">Plan, ask, build…</div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.6)" stroke-width="1.8" stroke-linecap="round" style="flex:none"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5.5 12a6.5 6.5 0 0013 0M12 18.5V21"></path></svg>
+            </div>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:140px;height:5px;border-radius:3px;background:rgba(255,255,255,0.22)"></div>
+        </div>
+      </div>
+
+      <div style="flex:none;width:390px">
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;color:rgba(235,235,245,0.6);margin-bottom:10px">30-home-sort-menu</div>
+        <div style="width:390px;height:844px;background:#000;border-radius:42px;overflow:hidden;position:relative">
+          <dc-import name="StatusBar" time="9:41" hint-size="390px,54px"></dc-import>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 16px 2px">
+              <div style="font-size:30px;font-weight:700;letter-spacing:-0.6px">All sessions</div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4.4-4.4"></path></svg></div>
+                <div style="width:38px;height:38px;border-radius:19px;background:#0A84FF;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M6.5 12h11M10 17h4"></path></svg></div>
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"></circle><circle cx="12" cy="12" r="7.6"></circle><path d="M12 1.6v2.6M12 19.8v2.6M1.6 12h2.6M19.8 12h2.6M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"></path></svg></div>
+              </div>
+            </div>
+            <div style="padding:6px 0 0">
+              <sc-for list="{{ statusGroups }}" as="g" hint-placeholder-count="4">
+                <div style="margin-top:20px">
+                  <div style="display:flex;align-items:center;gap:9px;padding:0 20px 8px">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.4)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l7 7 7-7"></path></svg>
+                    <div style="font-size:15px;color:rgba(235,235,245,0.6)">{{ g.name }}</div>
+                    <div style="font-size:15px;color:rgba(235,235,245,0.3)">{{ g.count }}</div>
+                  </div>
+                  <sc-for list="{{ g.items }}" as="s" hint-placeholder-count="3">
+                    <div>
+                      <div style="display:flex;gap:11px;padding:15px 20px 16px">
+                        <div style="width:8px;height:8px;border-radius:50%;background:{{ s.dot }};margin-top:6px;flex:none"></div>
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:17px;line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.title }}</div>
+                          <div style="display:flex;align-items:center;gap:7px;margin-top:4px">
+                            <div style="font-size:15px;line-height:20px;color:rgba(235,235,245,0.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.meta }}</div>
+                            <div style="display:flex;align-items:center;gap:4px;flex:none">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.4)" stroke-width="1.9" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="12" rx="1.6"></rect><path d="M8 20h8"></path></svg>
+                              <div style="font-size:13px;line-height:20px;color:rgba(235,235,245,0.4);white-space:nowrap">{{ s.host }}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div style="height:1px;background:rgba(255,255,255,0.07);margin-left:39px"></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+            <div style="position:absolute;top:104px;right:16px;width:236px;z-index:12;background:#2C2C2E;border-radius:14px;overflow:hidden;box-shadow:0 14px 44px rgba(0,0,0,0.6)">
+              <div style="padding:9px 15px 5px;font-size:12px;font-weight:600;letter-spacing:0.6px;color:rgba(235,235,245,0.5)">GROUP BY</div>
+              <div style="display:flex;align-items:center;gap:11px;padding:0 15px;height:44px">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M5 12.8l4.2 4.2L19 6.6"></path></svg>
+                <div style="font-size:17px">Status</div>
+              </div>
+              <div style="height:1px;background:rgba(255,255,255,0.08);margin-left:15px"></div>
+              <div style="display:flex;align-items:center;gap:11px;padding:0 15px;height:44px">
+                <div style="width:17px;flex:none"></div>
+                <div style="font-size:17px">Directory</div>
+              </div>
+              <div style="height:1px;background:rgba(255,255,255,0.08);margin-left:15px"></div>
+              <div style="display:flex;align-items:center;gap:11px;padding:0 15px;height:44px">
+                <div style="width:17px;flex:none"></div>
+                <div style="font-size:17px">Host</div>
+              </div>
+              <div style="height:1px;background:rgba(255,255,255,0.08)"></div>
+              <div style="padding:9px 15px 5px;font-size:12px;font-weight:600;letter-spacing:0.6px;color:rgba(235,235,245,0.5)">SORT BY</div>
+              <div style="display:flex;align-items:center;gap:11px;padding:0 15px;height:44px">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M5 12.8l4.2 4.2L19 6.6"></path></svg>
+                <div style="font-size:17px">Recent activity</div>
+              </div>
+              <div style="height:1px;background:rgba(255,255,255,0.08);margin-left:15px"></div>
+              <div style="display:flex;align-items:center;gap:11px;padding:0 15px;height:44px">
+                <div style="width:17px;flex:none"></div>
+                <div style="font-size:17px">Name</div>
+              </div>
+            </div>
+            <div style="position:absolute;bottom:26px;left:12px;right:12px;background:#1C1C1E;border-radius:26px;height:52px;display:flex;align-items:center;gap:12px;padding:0 14px">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.9" stroke-linecap="round" style="flex:none"><path d="M12 5v14M5 12h14"></path></svg>
+              <div style="flex:1;font-size:17px;color:rgba(235,235,245,0.45)">Plan, ask, build…</div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.6)" stroke-width="1.8" stroke-linecap="round" style="flex:none"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5.5 12a6.5 6.5 0 0013 0M12 18.5V21"></path></svg>
+            </div>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:140px;height:5px;border-radius:3px;background:rgba(255,255,255,0.22)"></div>
+        </div>
+      </div>
+
+      <div style="flex:none;width:390px">
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;color:rgba(235,235,245,0.6);margin-bottom:10px">31-home-directory-grouped</div>
+        <div style="width:390px;height:844px;background:#000;border-radius:42px;overflow:hidden;position:relative">
+          <dc-import name="StatusBar" time="9:42" hint-size="390px,54px"></dc-import>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 16px 2px">
+              <div style="font-size:30px;font-weight:700;letter-spacing:-0.6px">All sessions</div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4.4-4.4"></path></svg></div>
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M6.5 12h11M10 17h4"></path></svg></div>
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"></circle><circle cx="12" cy="12" r="7.6"></circle><path d="M12 1.6v2.6M12 19.8v2.6M1.6 12h2.6M19.8 12h2.6M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"></path></svg></div>
+              </div>
+            </div>
+            <div style="padding:6px 0 0">
+              <sc-for list="{{ dirGroups }}" as="g" hint-placeholder-count="4">
+                <div style="margin-top:20px">
+                  <div style="display:flex;align-items:center;gap:9px;padding:0 20px 8px">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.4)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l7 7 7-7"></path></svg>
+                    <div style="font-size:15px;color:rgba(235,235,245,0.6)">{{ g.name }}</div>
+                    <div style="font-size:15px;color:rgba(235,235,245,0.3)">{{ g.count }}</div>
+                  </div>
+                  <sc-for list="{{ g.items }}" as="s" hint-placeholder-count="3">
+                    <div>
+                      <div style="display:flex;gap:11px;padding:15px 20px 16px">
+                        <div style="width:8px;height:8px;border-radius:50%;background:{{ s.dot }};margin-top:6px;flex:none"></div>
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:17px;line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.title }}</div>
+                          <div style="display:flex;align-items:center;gap:7px;margin-top:4px">
+                            <div style="font-size:15px;line-height:20px;color:rgba(235,235,245,0.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.meta }}</div>
+                            <div style="display:flex;align-items:center;gap:4px;flex:none">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.4)" stroke-width="1.9" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="12" rx="1.6"></rect><path d="M8 20h8"></path></svg>
+                              <div style="font-size:13px;line-height:20px;color:rgba(235,235,245,0.4);white-space:nowrap">{{ s.host }}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div style="height:1px;background:rgba(255,255,255,0.07);margin-left:39px"></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+            <div style="position:absolute;bottom:26px;left:12px;right:12px;background:#1C1C1E;border-radius:26px;height:52px;display:flex;align-items:center;gap:12px;padding:0 14px">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.9" stroke-linecap="round" style="flex:none"><path d="M12 5v14M5 12h14"></path></svg>
+              <div style="flex:1;font-size:17px;color:rgba(235,235,245,0.45)">Plan, ask, build…</div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.6)" stroke-width="1.8" stroke-linecap="round" style="flex:none"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5.5 12a6.5 6.5 0 0013 0M12 18.5V21"></path></svg>
+            </div>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:140px;height:5px;border-radius:3px;background:rgba(255,255,255,0.22)"></div>
+        </div>
+      </div>
+
+      <div style="flex:none;width:390px">
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;color:rgba(235,235,245,0.6);margin-bottom:10px">32-home-host-grouped</div>
+        <div style="width:390px;height:844px;background:#000;border-radius:42px;overflow:hidden;position:relative">
+          <dc-import name="StatusBar" time="9:44" hint-size="390px,54px"></dc-import>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 16px 2px">
+              <div style="font-size:30px;font-weight:700;letter-spacing:-0.6px">All sessions</div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4.4-4.4"></path></svg></div>
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M6.5 12h11M10 17h4"></path></svg></div>
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"></circle><circle cx="12" cy="12" r="7.6"></circle><path d="M12 1.6v2.6M12 19.8v2.6M1.6 12h2.6M19.8 12h2.6M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"></path></svg></div>
+              </div>
+            </div>
+            <div style="padding:6px 0 0">
+              <sc-for list="{{ hostGroups }}" as="g" hint-placeholder-count="4">
+                <div style="margin-top:20px">
+                  <div style="display:flex;align-items:center;gap:9px;padding:0 20px 8px">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.4)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l7 7 7-7"></path></svg>
+                    <div style="font-size:15px;color:rgba(235,235,245,0.6)">{{ g.name }}</div>
+                    <div style="font-size:15px;color:rgba(235,235,245,0.3)">{{ g.count }}</div>
+                  </div>
+                  <sc-for list="{{ g.items }}" as="s" hint-placeholder-count="3">
+                    <div>
+                      <div style="display:flex;gap:11px;padding:15px 20px 16px">
+                        <div style="width:8px;height:8px;border-radius:50%;background:{{ s.dot }};margin-top:6px;flex:none"></div>
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:17px;line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.title }}</div>
+                          <div style="display:flex;align-items:center;gap:7px;margin-top:4px">
+                            <div style="font-size:15px;line-height:20px;color:rgba(235,235,245,0.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.meta }}</div>
+                            <div style="display:flex;align-items:center;gap:4px;flex:none">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.4)" stroke-width="1.9" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="12" rx="1.6"></rect><path d="M8 20h8"></path></svg>
+                              <div style="font-size:13px;line-height:20px;color:rgba(235,235,245,0.4);white-space:nowrap">{{ s.host }}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div style="height:1px;background:rgba(255,255,255,0.07);margin-left:39px"></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+            <div style="position:absolute;bottom:26px;left:12px;right:12px;background:#1C1C1E;border-radius:26px;height:52px;display:flex;align-items:center;gap:12px;padding:0 14px">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.9" stroke-linecap="round" style="flex:none"><path d="M12 5v14M5 12h14"></path></svg>
+              <div style="flex:1;font-size:17px;color:rgba(235,235,245,0.45)">Plan, ask, build…</div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.6)" stroke-width="1.8" stroke-linecap="round" style="flex:none"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5.5 12a6.5 6.5 0 0013 0M12 18.5V21"></path></svg>
+            </div>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:140px;height:5px;border-radius:3px;background:rgba(255,255,255,0.22)"></div>
+        </div>
+      </div>
+
+      <div style="flex:none;width:390px">
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;color:rgba(235,235,245,0.6);margin-bottom:10px">33-home-groups-collapsed</div>
+        <div style="width:390px;height:844px;background:#000;border-radius:42px;overflow:hidden;position:relative">
+          <dc-import name="StatusBar" time="9:42" hint-size="390px,54px"></dc-import>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 16px 2px">
+              <div style="font-size:30px;font-weight:700;letter-spacing:-0.6px">All sessions</div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4.4-4.4"></path></svg></div>
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M6.5 12h11M10 17h4"></path></svg></div>
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"></circle><circle cx="12" cy="12" r="7.6"></circle><path d="M12 1.6v2.6M12 19.8v2.6M1.6 12h2.6M19.8 12h2.6M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"></path></svg></div>
+              </div>
+            </div>
+            <div style="padding:6px 0 0">
+              <sc-for list="{{ collapsedGroups }}" as="g" hint-placeholder-count="5">
+                <div>
+                  <div style="display:flex;align-items:center;gap:9px;padding:0 20px;height:54px">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.4)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"></path></svg>
+                    <div style="flex:1;font-size:17px">{{ g.name }}</div>
+                    <div style="font-size:17px;color:rgba(235,235,245,0.3)">{{ g.count }}</div>
+                  </div>
+                  <div style="height:1px;background:rgba(255,255,255,0.07);margin-left:20px"></div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="position:absolute;bottom:26px;left:12px;right:12px;background:#1C1C1E;border-radius:26px;height:52px;display:flex;align-items:center;gap:12px;padding:0 14px">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.9" stroke-linecap="round" style="flex:none"><path d="M12 5v14M5 12h14"></path></svg>
+              <div style="flex:1;font-size:17px;color:rgba(235,235,245,0.45)">Plan, ask, build…</div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.6)" stroke-width="1.8" stroke-linecap="round" style="flex:none"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5.5 12a6.5 6.5 0 0013 0M12 18.5V21"></path></svg>
+            </div>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:140px;height:5px;border-radius:3px;background:rgba(255,255,255,0.22)"></div>
+        </div>
+      </div>
+
+      <div style="flex:none;width:390px">
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;color:rgba(235,235,245,0.6);margin-bottom:10px">34-home-search-active</div>
+        <div style="width:390px;height:844px;background:#000;border-radius:42px;overflow:hidden;position:relative">
+          <dc-import name="StatusBar" time="9:43" hint-size="390px,54px"></dc-import>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 16px 2px">
+              <div style="font-size:30px;font-weight:700;letter-spacing:-0.6px">All sessions</div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4.4-4.4"></path></svg></div>
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M6.5 12h11M10 17h4"></path></svg></div>
+                <div style="width:38px;height:38px;border-radius:19px;background:#1C1C1E;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"></circle><circle cx="12" cy="12" r="7.6"></circle><path d="M12 1.6v2.6M12 19.8v2.6M1.6 12h2.6M19.8 12h2.6M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"></path></svg></div>
+              </div>
+            </div>
+            <div style="margin:8px 16px 0;height:40px;border-radius:12px;background:#1C1C1E;display:flex;align-items:center;gap:9px;padding:0 12px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.6)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4.4-4.4"></path></svg>
+              <div style="font-size:17px;display:flex;align-items:center">codex<span style="display:inline-block;width:2px;height:20px;background:#0A84FF;margin-left:1px"></span></div>
+            </div>
+            <div style="padding:6px 0 0">
+              <sc-for list="{{ statusGroups }}" as="g" hint-placeholder-count="4">
+                <div style="margin-top:20px">
+                  <div style="display:flex;align-items:center;gap:9px;padding:0 20px 8px">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.4)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l7 7 7-7"></path></svg>
+                    <div style="font-size:15px;color:rgba(235,235,245,0.6)">{{ g.name }}</div>
+                    <div style="font-size:15px;color:rgba(235,235,245,0.3)">{{ g.count }}</div>
+                  </div>
+                  <sc-for list="{{ g.items }}" as="s" hint-placeholder-count="3">
+                    <div>
+                      <div style="display:flex;gap:11px;padding:15px 20px 16px">
+                        <div style="width:8px;height:8px;border-radius:50%;background:{{ s.dot }};margin-top:6px;flex:none"></div>
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:17px;line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.title }}</div>
+                          <div style="display:flex;align-items:center;gap:7px;margin-top:4px">
+                            <div style="font-size:15px;line-height:20px;color:rgba(235,235,245,0.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.meta }}</div>
+                            <div style="display:flex;align-items:center;gap:4px;flex:none">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.4)" stroke-width="1.9" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="12" rx="1.6"></rect><path d="M8 20h8"></path></svg>
+                              <div style="font-size:13px;line-height:20px;color:rgba(235,235,245,0.4);white-space:nowrap">{{ s.host }}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div style="height:1px;background:rgba(255,255,255,0.07);margin-left:39px"></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+            <div style="position:absolute;bottom:26px;left:12px;right:12px;background:#1C1C1E;border-radius:26px;height:52px;display:flex;align-items:center;gap:12px;padding:0 14px">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.9" stroke-linecap="round" style="flex:none"><path d="M12 5v14M5 12h14"></path></svg>
+              <div style="flex:1;font-size:17px;color:rgba(235,235,245,0.45)">Plan, ask, build…</div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.6)" stroke-width="1.8" stroke-linecap="round" style="flex:none"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5.5 12a6.5 6.5 0 0013 0M12 18.5V21"></path></svg>
+            </div>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:140px;height:5px;border-radius:3px;background:rgba(255,255,255,0.22)"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const C = { green: "#30D158", orange: "#FF9F0A", purple: "#BF5AF0", gray: "rgba(235,235,245,0.3)", blue: "#0A84FF" };
+    const it = (title, meta, dot, host) => ({ title, meta, dot, host: host || "Eugenes-MacBook-Pro" });
+    const statusGroups = [
+      { name: "Working", items: [
+        it("Read /Users/eugenechan/dev/personal…", "lfg · opus · 47s", C.green)
+      ]},
+      { name: "Needs input", items: [
+        it("Does codex work for lfg?", "inbox · opus · 11s", C.orange),
+        it("[Image #1] can we mimick this live acti…", "lfg · opus · 2m", C.orange)
+      ]},
+      { name: "Unread", items: [
+        it("can you take screenshots of all the sta…", "lfg · opus · 8s", C.purple),
+        it("Does lfg work for codex? If so, can we…", "lfg · gpt-5.5 · 1h", C.purple, "Air")
+      ]},
+      { name: "Idle", items: [
+        it("I want to be able to have you to reply s…", "inbox · opus · 19h", C.blue),
+        it("In the iOS client, can you add an option…", "lfg · opus · 20h", C.blue, "Air")
+      ]},
+      { name: "Closed", items: [
+        it("upgrade codex cli and app for me", "inbox · 40m", C.gray)
+      ]}
+    ].map(g => ({ ...g, count: g.items.length }));
+    const dirGroups = [
+      { name: "inbox", items: [
+        it("Does codex work for lfg?", "Needs input · opus · 11s", C.orange),
+        it("I want to be able to have you to reply s…", "Idle · opus · 19h", C.blue),
+        it("upgrade codex cli and app for me", "Closed · 40m", C.gray)
+      ]},
+      { name: "lfg", items: [
+        it("Read /Users/eugenechan/dev/personal…", "Working · opus · 47s", C.green),
+        it("[Image #1] can we mimick this live acti…", "Needs input · opus · 2m", C.orange),
+        it("can you take screenshots of all the sta…", "Unread · opus · 8s", C.purple),
+        it("Does lfg work for codex? If so, can we…", "Unread · gpt-5.5 · 1h", C.purple, "Air")
+      ]},
+      { name: "mac-command-center", items: [
+        it("In the iOS client, can you add an option…", "Idle · opus · 20h", C.blue, "Air")
+      ]}
+    ].map(g => ({ ...g, count: g.items.length }));
+    const hostGroups = [
+      { name: "Eugenes-MacBook-Pro", items: [
+        it("Read /Users/eugenechan/dev/personal…", "lfg · Working · 47s", C.green),
+        it("Does codex work for lfg?", "inbox · Needs input · 11s", C.orange),
+        it("[Image #1] can we mimick this live acti…", "lfg · Needs input · 2m", C.orange),
+        it("can you take screenshots of all the sta…", "lfg · Unread · 8s", C.purple),
+        it("I want to be able to have you to reply s…", "inbox · Idle · 19h", C.blue)
+      ]},
+      { name: "Air", items: [
+        it("Does lfg work for codex? If so, can we…", "lfg · Unread · 1h", C.purple, "Air"),
+        it("In the iOS client, can you add an option…", "lfg · Idle · 20h", C.blue, "Air")
+      ]}
+    ].map(g => ({ ...g, count: g.items.length }));
+    const collapsedGroups = [
+      { name: "Working", count: 1 },
+      { name: "Needs input", count: 2 },
+      { name: "Unread", count: 2 },
+      { name: "Idle", count: 2 },
+      { name: "Closed", count: 1 }
+    ];
+    return { statusGroups, dirGroups, hostGroups, collapsedGroups };
+  }
+}
+</script>
+</body>
+</html>
