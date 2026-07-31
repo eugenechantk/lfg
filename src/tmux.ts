@@ -315,13 +315,14 @@ export function relaunchSessionWithModel(opts: {
   return { ok: true };
 }
 
-export function spawnManagedCodexSession(opts: {
+export function managedCodexSessionArgv(opts: {
   name: string;
   cwd: string;
   prompt?: string;
   model?: string;
-}): { ok: boolean; error?: string } {
-  const dec = new TextDecoder();
+  resume?: string;
+  fork?: boolean;
+}): string[] {
   const argv = [
     "tmux",
     "new-session",
@@ -340,9 +341,26 @@ export function spawnManagedCodexSession(opts: {
     "--add-dir",
     reposRoot(),
   ];
-  if (opts.model) argv.push("--model", opts.model);
-  if (opts.prompt && opts.prompt.trim()) argv.push("--", opts.prompt);
-  const create = Bun.spawnSync(argv);
+  if (opts.model && !(opts.resume && !opts.fork)) argv.push("--model", opts.model);
+  if (opts.resume && opts.resume.trim()) {
+    argv.push(opts.fork ? "fork" : "resume", opts.resume.trim());
+    if (opts.prompt && opts.prompt.trim()) argv.push(opts.prompt);
+  } else if (opts.prompt && opts.prompt.trim()) {
+    argv.push("--", opts.prompt);
+  }
+  return argv;
+}
+
+export function spawnManagedCodexSession(opts: {
+  name: string;
+  cwd: string;
+  prompt?: string;
+  model?: string;
+  resume?: string;
+  fork?: boolean;
+}): { ok: boolean; error?: string } {
+  const dec = new TextDecoder();
+  const create = Bun.spawnSync(managedCodexSessionArgv(opts));
   if (create.exitCode !== 0)
     return { ok: false, error: dec.decode(create.stderr) || "new-session failed" };
   return { ok: true };

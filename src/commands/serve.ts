@@ -104,6 +104,22 @@ const CLAUDE_MODEL_ALIASES = ["opus", "fable", "sonnet", "haiku"];
 const CLAUDE_MODELS = [...CLAUDE_MODEL_IDS, ...CLAUDE_MODEL_ALIASES];
 // Models the "aisdk" session kind accepts through the Claude Code provider.
 const AISDK_MODELS = CLAUDE_MODELS;
+const CODEX_MODEL_RE = /^[A-Za-z0-9_.:-]{1,80}$/;
+
+function transcriptFamily(path: string): "claude" | "codex" | null {
+  const claudeRoot = process.env.LFG_CLAUDE_PROJECTS_DIR ?? join(homedir(), ".claude", "projects");
+  const codexRoot = join(process.env.HOME ?? homedir(), ".codex", "sessions");
+  if (path.startsWith(`${claudeRoot}/`) || path.includes("/.claude/projects/")) return "claude";
+  if (path.startsWith(`${codexRoot}/`) || path.includes("/.codex/sessions/")) return "codex";
+  return null;
+}
+
+function validateModelForAgent(agent: "claude" | "codex", model: string | undefined): string | null {
+  if (!model) return null;
+  if (agent === "claude" && !CLAUDE_MODELS.includes(model)) return `unknown model "${model}"`;
+  if (agent === "codex" && !CODEX_MODEL_RE.test(model)) return "invalid codex model name";
+  return null;
+}
 import {
   enqueueMessage,
   listQueue,
@@ -128,7 +144,7 @@ import { SendqStore } from "../sendq-store.ts";
 // close). Claude continues into a NEW sessionId/transcript, which we resolve
 // from the pidfile (like /new) and hand back so the client can re-point at it.
 type ResumeOutcome =
-  | { ok: true; tmuxName: string; cwd: string; newId: string | null; alreadyLive?: boolean }
+  | { ok: true; tmuxName: string; cwd: string; newId: string | null; agent: "claude" | "codex"; alreadyLive?: boolean }
   | { ok: false; status: number; error: string; liveOn?: string };
 
 async function resumeClosedSession(opts: {
@@ -139,22 +155,50 @@ async function resumeClosedSession(opts: {
 }): Promise<ResumeOutcome> {
   const sessionId = opts.sessionId.trim();
   if (!sessionId) return { ok: false, status: 400, error: "sessionId required" };
-  if (opts.model && !CLAUDE_MODELS.includes(opts.model))
-    return { ok: false, status: 400, error: `unknown model "${opts.model}"` };
   // Already running? Don't double-spawn — point the caller at the live one.
   const live = (await listSessions()).find((s) => s.sessionId === sessionId);
-  if (live)
-    return { ok: true, tmuxName: live.tmuxName ?? "", cwd: live.cwd ?? "", newId: sessionId, alreadyLive: true };
+  if (live && (live.agent === "claude" || live.agent === "codex")) {
+    const modelError = validateModelForAgent(live.agent, opts.model);
+    if (modelError) return { ok: false, status: 400, error: modelError };
+    return {
+      ok: true,
+      tmuxName: live.tmuxName ?? "",
+      cwd: live.cwd ?? "",
+      newId: sessionId,
+      agent: live.agent,
+      alreadyLive: true,
+    };
+  }
   const liveOn = await foreignFresh(sessionId);
   if (liveOn)
     return { ok: false, status: 409, error: "session is live on another host", liveOn };
   const transcript = await resolveTranscript(sessionId);
   if (!transcript) return { ok: false, status: 404, error: "no transcript found for that session" };
-  // claude-only: resume drives the claude CLI, and codex/aisdk rollouts don't
-  // live under ~/.claude/projects. Reject those with a clear message.
-  if (!transcript.includes("/.claude/projects/"))
-    return { ok: false, status: 400, error: "only claude sessions can be resumed" };
+  const agent = transcriptFamily(transcript);
+  if (!agent) return { ok: false, status: 400, error: "only claude and codex sessions can be resumed" };
+  const modelError = validateModelForAgent(agent, opts.model);
+  if (modelError) return { ok: false, status: 400, error: modelError };
   const cwd = (await cwdForTranscript(transcript)) ?? SELF_REPO;
+  if (agent === "codex") {
+    const tmuxName = `lfg-${randomBytes(3).toString("hex")}`;
+    const spawnStartedAt = Date.now();
+    const r = spawnManagedCodexSession({ name: tmuxName, cwd, resume: sessionId, prompt: opts.prompt });
+    if (!r.ok) return { ok: false, status: 502, error: r.error || "failed to resume session" };
+    // Codex resume is id-stable. Persist that intended id immediately so every
+    // later listSessions()/refreshWatchSet pass binds this pane by known id
+    // instead of the create-path skew heuristic.
+    addManaged({ tmuxName, cwd, createdAt: spawnStartedAt, agent: "codex", sessionId });
+    if (opts.user) assignUser(tmuxName, opts.user);
+    for (let i = 0; i < 12; i++) {
+      const pid = panePidForSession(tmuxName);
+      if (pid) {
+        await acquireLease(sessionId, pid);
+        break;
+      }
+      await new Promise((res) => setTimeout(res, 250));
+    }
+    return { ok: true, tmuxName, cwd, newId: sessionId, agent: "codex" };
+  }
   // Relaunch on the model the conversation was last using (read from the
   // transcript) so a resume doesn't silently bump the session to opus.
   const model = opts.model || (await modelAliasForTranscript(transcript)) || undefined;
@@ -175,7 +219,7 @@ async function resumeClosedSession(opts: {
     }
   }
   if (newId && newPid) await acquireLease(newId, newPid);
-  return { ok: true, tmuxName, cwd, newId };
+  return { ok: true, tmuxName, cwd, newId, agent: "claude" };
 }
 
 // Fork a claude session into a new branch via `claude --resume <id>
@@ -185,7 +229,7 @@ async function resumeClosedSession(opts: {
 // sessionId/transcript for the branch, which we resolve from the pidfile and
 // hand back so the client can deep-link into the fork.
 type ForkOutcome =
-  | { ok: true; tmuxName: string; cwd: string; newId: string | null }
+  | { ok: true; tmuxName: string; cwd: string; newId: string | null; agent: "claude" | "codex" }
   | { ok: false; status: number; error: string; liveOn?: string };
 
 async function forkSession(opts: {
@@ -195,19 +239,47 @@ async function forkSession(opts: {
 }): Promise<ForkOutcome> {
   const sessionId = opts.sessionId.trim();
   if (!sessionId) return { ok: false, status: 400, error: "sessionId required" };
-  if (opts.model && !CLAUDE_MODELS.includes(opts.model))
-    return { ok: false, status: 400, error: `unknown model "${opts.model}"` };
   const liveOn = await foreignFresh(sessionId);
   if (liveOn)
     return { ok: false, status: 409, error: "session is live on another host", liveOn };
   const transcript = await resolveTranscript(sessionId);
   if (!transcript) return { ok: false, status: 404, error: "no transcript found for that session" };
-  // fork drives the claude CLI (`--resume ... --fork-session`), which only
-  // understands transcripts under ~/.claude/projects (claude + aisdk). Codex/
-  // opencode rollouts live elsewhere, so reject them with a clear message.
-  if (!transcript.includes("/.claude/projects/"))
-    return { ok: false, status: 400, error: "only claude sessions can be forked" };
+  const agent = transcriptFamily(transcript);
+  if (!agent) return { ok: false, status: 400, error: "only claude and codex sessions can be forked" };
+  const modelError = validateModelForAgent(agent, opts.model);
+  if (modelError) return { ok: false, status: 400, error: modelError };
   const cwd = (await cwdForTranscript(transcript)) ?? SELF_REPO;
+  if (agent === "codex") {
+    const tmuxName = `lfg-${randomBytes(3).toString("hex")}`;
+    const spawnStartedAt = Date.now();
+    const r = spawnManagedCodexSession({
+      name: tmuxName,
+      cwd,
+      model: opts.model,
+      resume: sessionId,
+      fork: true,
+    });
+    if (!r.ok) return { ok: false, status: 502, error: r.error || "failed to fork session" };
+    // The new id is not known until Codex writes session_meta, but the parent
+    // link is exact. Store it before polling so listSessions binds by
+    // forked_from_id during the initial wait and on future re-scans.
+    addManaged({ tmuxName, cwd, createdAt: spawnStartedAt, agent: "codex", forkedFrom: sessionId });
+    if (opts.user) assignUser(tmuxName, opts.user);
+    let newId: string | null = null;
+    let newPid: number | null = null;
+    for (let i = 0; i < CODEX_CREATE_SESSION_BIND_POLLS && !newId; i++) {
+      await new Promise((res) => setTimeout(res, CREATE_SESSION_BIND_POLL_MS));
+      dismissCodexUpdatePrompt(`${tmuxName}:0.0`);
+      const liveFork = (await listSessions()).find((s) => s.tmuxName === tmuxName);
+      newId = liveFork?.sessionId ?? null;
+      if (newId) newPid = panePidForSession(tmuxName);
+    }
+    if (newId) {
+      patchManaged(tmuxName, { sessionId: newId });
+      if (newPid) await acquireLease(newId, newPid);
+    }
+    return { ok: true, tmuxName, cwd, newId, agent: "codex" };
+  }
   // Branch on the model the conversation was last using, unless overridden.
   const model = opts.model || (await modelAliasForTranscript(transcript)) || undefined;
   const forkSourceBytes = statSync(transcript).size;
@@ -231,7 +303,7 @@ async function forkSession(opts: {
     patchManaged(tmuxName, { sessionId: newId, forkedFrom: sessionId, forkSourceBytes });
     if (newPid) await acquireLease(newId, newPid);
   }
-  return { ok: true, tmuxName, cwd, newId };
+  return { ok: true, tmuxName, cwd, newId, agent: "claude" };
 }
 
 const PORT = Number(process.env.LFG_PORT ?? 8766);
@@ -1797,8 +1869,8 @@ export async function cmdServe() {
         const out = await resumeClosedSession({ sessionId, model, user: body?.user, prompt: body?.prompt });
         if (!out.ok) return err(out.status, out.error, out.liveOn ? { liveOn: out.liveOn } : undefined);
         if (out.alreadyLive)
-          return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId, alreadyLive: true, agent: "claude" });
-        return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId: out.newId, resumedFrom: sessionId, agent: "claude" });
+          return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId, alreadyLive: true, agent: out.agent });
+        return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId: out.newId, resumedFrom: sessionId, agent: out.agent });
       }
 
       // Fork a claude session into a new branch: `claude --resume <id>
@@ -1816,7 +1888,7 @@ export async function cmdServe() {
         const model = body?.model?.trim() || undefined;
         const out = await forkSession({ sessionId, model, user: body?.user });
         if (!out.ok) return err(out.status, out.error, out.liveOn ? { liveOn: out.liveOn } : undefined);
-        return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId: out.newId, forkedFrom: sessionId, agent: "claude" });
+        return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId: out.newId, forkedFrom: sessionId, agent: out.agent });
       }
 
       if (path === "/api/sessions/new" && req.method === "POST") {
@@ -1848,14 +1920,14 @@ export async function cmdServe() {
         const model = body?.model?.trim() || undefined;
         if (agent === "claude" && model && !CLAUDE_MODELS.includes(model))
           return err(400, `unknown model "${model}" (expected one of ${CLAUDE_MODELS.join(", ")})`);
-        if (agent === "codex" && model && !/^[A-Za-z0-9_.:-]{1,80}$/.test(model))
+        if (agent === "codex" && model && !CODEX_MODEL_RE.test(model))
           return err(400, "invalid codex model name");
         if (agent === "aisdk" && model && !AISDK_MODELS.includes(model))
           return err(400, `unknown model "${model}" (expected one of ${AISDK_MODELS.join(", ")})`);
         // codex-aisdk drives codex through the AI SDK, so its model is a codex
         // slug (gpt-5.x…) — provider/catalog driven like the tmux codex.
         // Validate by shape, same as the codex branch.
-        if (agent === "codex-aisdk" && model && !/^[A-Za-z0-9_.:-]{1,80}$/.test(model))
+        if (agent === "codex-aisdk" && model && !CODEX_MODEL_RE.test(model))
           return err(400, "invalid codex model name");
         // opencode models are "provider/model" (e.g. anthropic/claude-sonnet-5),
         // so the validation shape additionally allows a slash. Catalog-driven, so
@@ -2079,14 +2151,13 @@ export async function cmdServe() {
           // disk. Rather than fail the send (the old "session not found" 404
           // that stranded every message to a since-closed session), resume the
           // conversation with this message as the kickoff prompt. Claude
-          // continues into a NEW sessionId, which we hand back so the client can
-          // re-point at the revived session. claude-only: resumeClosedSession
-          // rejects non-claude transcripts, so codex/aisdk closed sessions still
-          // 404 here (they have their own lifecycles).
+          // continues into a NEW sessionId for Claude, while Codex resume is
+          // id-stable and returns the same id. resumeClosedSession branches by
+          // transcript family and records the Codex binding before the live
+          // scanner can fall back to heuristics.
           if (!sess) {
             const transcript = await resolveTranscript(m[1]);
-            if (!transcript || !transcript.includes("/.claude/projects/"))
-              return err(404, "session not found");
+            if (!transcript) return err(404, "session not found");
             const out = await resumeClosedSession({ sessionId: m[1], prompt: text });
             if (!out.ok) return err(out.status, out.error, out.liveOn ? { liveOn: out.liveOn } : undefined);
             const msg = recordImmediateMessage(m[1], text, clientId);
@@ -2098,6 +2169,7 @@ export async function cmdServe() {
               resumedFrom: m[1],
               tmuxName: out.tmuxName,
               cwd: out.cwd,
+              agent: out.agent,
               clientId: msg.clientId,
               msg: msgBody,
             });

@@ -49,4 +49,18 @@ final class SessionListReconciliationTests: XCTestCase {
         XCTAssertEqual(out.optimistic.map(\.sessionId), ["optimistic"])
         XCTAssertEqual(out.visibleClosed.map(\.sessionId), ["visible"])
     }
+
+    func testSessionListReconcilePreservesCodexResumableRows() {
+        let host = Host(url: "air:8766")
+        let codex = ResumableSession(sessionId: "codex-closed",
+                                     title: "Codex",
+                                     agent: "codex")
+
+        let out = MultiHost.reconcileSessionList(
+            perHostLive: [(host, [])],
+            closedPerHost: [[codex]])
+
+        XCTAssertEqual(out.visibleClosed.map(\.sessionId), ["codex-closed"])
+        XCTAssertEqual(out.visibleClosed.first?.agent, "codex")
+    }
 }
