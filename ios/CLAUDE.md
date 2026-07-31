@@ -18,6 +18,13 @@ live, the conventions to keep, and the traps that have burned past sessions.
   will be clobbered.
 - **Don't `cd` between FlowDeck commands** — its simulator guard keys off the cwd.
   Use the literal UDID it returns (see memory `flowdeck-sim-guard-cwd`).
+- **Always verify on `iPhone 17 Pro`** — `flowdeck simulator boot "iPhone 17 Pro"`.
+  This holds *regardless of what device or dimensions a design file specifies*; an
+  artboard size (e.g. "iPhone 16e 390×844") is a canvas convention, not a
+  deployment target. One consistent device keeps screenshots comparable across
+  sessions. Many agents run here at once, so check for another session already
+  driving it before LIVE verification — contention is a coordination problem, not
+  a reason to boot a different device.
 
 ## Layout
 

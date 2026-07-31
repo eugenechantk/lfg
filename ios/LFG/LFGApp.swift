@@ -57,6 +57,8 @@ struct LFGApp: App {
     private static let hostsKey = "lfg.hosts"
     private static let ownerKey = "lfg.defaultOwner"
     private static let groupModeKey = "lfg.groupMode"
+    private static let sortModeKey = "lfg.sortMode"
+    private static let recentDirsKey = "lfg.recentDirs"
 
     /// Configured backend hosts. Persisted as JSON; exactly one is `isDefault`.
     var hosts: [Host] {
@@ -71,16 +73,34 @@ struct LFGApp: App {
         }
     }
 
+    /// Most-recently-used working directories, newest first. Feeds the RECENT
+    /// section of the new-session directory picker. MRU algebra lives in
+    /// `LFGCore.RecentDirs` (unit-tested); this only persists the result.
+    var recentDirs: [String] {
+        didSet { defaults.set(recentDirs, forKey: Self.recentDirsKey) }
+    }
+
+    /// Promote a directory to the front of the MRU list after a session starts there.
+    func noteRecentDir(_ path: String) {
+        recentDirs = RecentDirs.pushing(path, onto: recentDirs)
+    }
+
     /// Live user filter (not persisted — session-local).
     var userFilter: UserFilter = .all
 
     /// Live host filter (not persisted). `nil` = all hosts.
     var hostFilter: String? = nil
 
-    /// How the session list is grouped (by status vs by directory). Persisted so
-    /// the chosen lens sticks across launches.
+    /// How the session list is grouped. Persisted so the chosen lens sticks
+    /// across launches.
     var groupMode: GroupMode {
         didSet { defaults.set(groupMode.rawValue, forKey: Self.groupModeKey) }
+    }
+
+    /// How sessions are sorted inside each rendered group. The default preserves
+    /// the historical most-recently-active order.
+    var sortMode: SortMode {
+        didSet { defaults.set(sortMode.rawValue, forKey: Self.sortModeKey) }
     }
 
     /// A stateless client for one host.
@@ -107,6 +127,8 @@ struct LFGApp: App {
             legacyBaseURL: defaults.string(forKey: Self.baseURLKey))
         defaultOwner = defaults.string(forKey: Self.ownerKey)
         groupMode = GroupMode(rawValue: defaults.string(forKey: Self.groupModeKey) ?? "") ?? .status
+        sortMode = SortMode(rawValue: defaults.string(forKey: Self.sortModeKey) ?? "") ?? .recentActivity
+        recentDirs = defaults.stringArray(forKey: Self.recentDirsKey) ?? []
         // Persist the migrated list so later launches read the new key directly
         // (didSet doesn't fire during init; all stored props must be set first).
         defaults.set(HostStore.encode(hosts), forKey: Self.hostsKey)
@@ -176,12 +198,28 @@ struct LFGApp: App {
 enum GroupMode: String, CaseIterable, Identifiable {
     case status
     case directory
+    case host
 
     var id: String { rawValue }
     var label: String {
         switch self {
         case .status: return "Status"
         case .directory: return "Directory"
+        case .host: return "Host"
+        }
+    }
+}
+
+/// The order applied inside each rendered group.
+enum SortMode: String, CaseIterable, Identifiable {
+    case recentActivity
+    case name
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .recentActivity: return "Recent activity"
+        case .name: return "Name"
         }
     }
 }

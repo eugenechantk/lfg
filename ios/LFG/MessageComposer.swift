@@ -15,6 +15,7 @@ struct MessageComposer: View {
     @Binding var text: String
     var placeholder: String = "Message"
     var sending: Bool = false
+    var autofocus = false
     /// Receives the trimmed text and any picked image attachments.
     let onSend: (String, [ComposerAttachment]) -> Void
 
@@ -64,6 +65,11 @@ struct MessageComposer: View {
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
         .onChange(of: pickerItems) { _, items in Task { await load(items) } }
+        .task(id: autofocus) {
+            guard autofocus else { return }
+            await Task.yield()
+            focused = true
+        }
     }
 
     private var thumbnails: some View {

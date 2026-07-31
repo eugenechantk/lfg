@@ -8,6 +8,7 @@ struct RootView: View {
     @State private var selection: String?
     @State private var showSettings = false
     @State private var showNewSession = false
+    @State private var focusNewSessionComposer = false
     @State private var columnVisibility = NavigationSplitViewVisibility.automatic
     @Environment(\.scenePhase) private var scenePhase
 
@@ -27,8 +28,15 @@ struct RootView: View {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     SessionListView(selection: $selection,
                                     showSettings: $showSettings,
-                                    showNewSession: $showNewSession)
+                                    showNewSession: $showNewSession,
+                                    focusNewSessionComposer: $focusNewSessionComposer)
                         .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 460)
+                        // Attached INSIDE the sidebar column so the compact-width
+                        // `.navigationDestination` resolves against that column's
+                        // navigation stack — on the Group it would have none.
+                        .newSessionPresentation(selection: $selection,
+                                                isPresented: $showNewSession,
+                                                autofocusComposer: $focusNewSessionComposer)
                 } detail: {
                     if let selection {
                         if let session = store.session(selection) {
@@ -57,9 +65,6 @@ struct RootView: View {
         // (multi-host), falling back to the default host.
         .environment(\.hostFiles, hostFilesForSelection)
         .sheet(isPresented: $showSettings) { SettingsView() }
-        .sheet(isPresented: $showNewSession) {
-            NewSessionView { newID in selection = newID }
-        }
         .task(id: settings.hosts) {
             guard settings.hasConfiguredHost else { return }
             store.start()

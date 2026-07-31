@@ -1,6 +1,52 @@
 import SwiftUI
 import LFGCore
 
+/// The screen's palette: semantic where the design value genuinely IS a system
+/// color, explicitly adaptive where it isn't.
+///
+/// Some of the design's values are exactly the dark variant of a UIKit semantic
+/// color — measured back byte-for-byte: `#000000` = systemBackground, `#1C1C1E`
+/// = secondarySystemBackground, `rgba(235,235,245,0.60)` = secondaryLabel,
+/// `0.30` = tertiaryLabel. Those bind to the semantic name and are exact.
+///
+/// But the design ALSO uses `0.50`, `0.45`, `0.40` label inks and a `0.07` white
+/// hairline, and none of those has a semantic equivalent. An earlier version of
+/// this file assumed they all did and rounded each to the nearest system color,
+/// which shifted four inks (meta text read 0.60 instead of 0.50, the chevron
+/// 0.30 instead of 0.40, the placeholder 0.30 instead of 0.45, and the
+/// separator picked up systemSeparator's blue tint). Those are built explicitly
+/// below, off Apple's own label base colors, so they stay exact in dark and
+/// still adapt to light.
+private enum Tokens {
+    /// Apple's label ink at an arbitrary alpha: `(235,235,245)` on dark,
+    /// `(60,60,67)` on light — the same bases the semantic label colors use, so
+    /// an explicit alpha lands on the same ramp rather than beside it.
+    private static func labelInk(_ alpha: CGFloat) -> Color {
+        Color(UIColor { $0.userInterfaceStyle == .dark
+            ? UIColor(red: 235 / 255, green: 235 / 255, blue: 245 / 255, alpha: alpha)
+            : UIColor(red: 60 / 255, green: 60 / 255, blue: 67 / 255, alpha: alpha) })
+    }
+
+    // Exact semantic matches.
+    static let screen = Color(.systemBackground)
+    static let raised = Color(.secondarySystemBackground)
+    static let labelSecondary = Color(.secondaryLabel)   // 0.60
+    static let tertiary = Color(.tertiaryLabel)          // 0.30
+    static let label = Color(.label)
+    static let accent = Color.accentColor
+
+    // No semantic equivalent — built to the design's exact alpha.
+    static let meta = labelInk(0.50)
+    static let host = labelInk(0.40)
+    static let placeholder = labelInk(0.45)
+    /// A plain white/black wash, NOT `Color(.separator)` — the system separator
+    /// is blue-tinted `(84,84,88,0.65)` and read back `(42,42,44)` against the
+    /// design's `(18,18,18)`.
+    static let separator = Color(UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(white: 1, alpha: 0.07)
+        : UIColor(white: 0, alpha: 0.07) })
+}
+
 struct SessionListView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(SessionStore.self) private var store
@@ -8,15 +54,15 @@ struct SessionListView: View {
     @Binding var selection: String?
     @Binding var showSettings: Bool
     @Binding var showNewSession: Bool
+    @Binding var focusNewSessionComposer: Bool
     @State private var searchText = ""
     @State private var showSearch = false
+    @State private var sortMenuHighlight = false
     @FocusState private var isSearchFocused: Bool
 
-    /// Collapsible UI state is in-memory per the current run: directory sections
-    /// and the orphan Agents fallback collapse by section id; nested agent rows
-    /// collapse by parent session id.
-    @State private var expandedDirs: Set<String> = []
-    @State private var expandedAgentSections: Set<String> = []
+    /// Collapsible UI state is in-memory per the current run. Sections default
+    /// expanded, and only store their id here after the user collapses them.
+    @State private var collapsedSections: Set<String> = []
     @State private var expandedAgentParents: Set<String> = []
 
     /// One rendered section of the list: a header title + its sessions, plus the
@@ -55,11 +101,10 @@ struct SessionListView: View {
         }
     }
 
-    /// The matching sessions grouped per the active `GroupMode`: by status
-    /// (Needs you / Paused / Working / Idle) or by directory.
+    /// The matching sessions grouped per the active `GroupMode`.
     private var visibleSections: [ListSection] {
         let base = matchingSessions
-        switch settings.groupMode {
+        switch effectiveGroupMode {
         case .status:
             if isSearching {
                 return statusSections(for: base)
@@ -75,7 +120,7 @@ struct SessionListView: View {
         case .directory:
             let byDir = Dictionary(grouping: base) { Self.dirKey(for: $0) }
             return byDir.map { key, items in
-                let sorted = items.sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
+                let sorted = sortedSessions(items)
                 let running = sorted.filter { store.group(for: $0) == .working }.count
                 let idle = sorted.filter { store.group(for: $0) == .idle }.count
                 return ListSection(id: "dir-\(key)", title: Self.dirLabel(for: sorted[0]),
@@ -83,11 +128,57 @@ struct SessionListView: View {
             }
             // Most-recently-active directory first, so where the action is floats up.
             .sorted { ($0.items.first?.lastActivityAt ?? 0) > ($1.items.first?.lastActivityAt ?? 0) }
+        case .host:
+            let byHost = Dictionary(grouping: base) { session in
+                store.host(forSession: session.id)?.id ?? "unknown"
+            }
+            var sections: [ListSection] = settings.hosts.compactMap { host in
+                guard let items = byHost[host.id], !items.isEmpty else { return nil }
+                return ListSection(id: "host-\(host.id)", title: host.label,
+                                   items: sortedSessions(items))
+            }
+            if let unknown = byHost["unknown"], !unknown.isEmpty {
+                sections.append(ListSection(id: "host-unknown", title: "Unknown host",
+                                            items: sortedSessions(unknown)))
+            }
+            return sections
         }
+    }
+
+    private var effectiveGroupMode: GroupMode {
+        settings.groupMode == .host && settings.hosts.count <= 1 ? .status : settings.groupMode
+    }
+
+    private var groupModeOptions: [GroupMode] {
+        settings.hosts.count > 1 ? GroupMode.allCases : GroupMode.allCases.filter { $0 != .host }
     }
 
     private var isSearching: Bool {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func sortedSessions(_ sessions: [Session]) -> [Session] {
+        switch settings.sortMode {
+        case .recentActivity:
+            return sessions.sorted {
+                if ($0.lastActivityAt ?? 0) == ($1.lastActivityAt ?? 0) {
+                    return $0.id < $1.id
+                }
+                return ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0)
+            }
+        case .name:
+            return sessions.sorted {
+                let lhs = title(for: $0).localizedCaseInsensitiveCompare(title(for: $1))
+                if lhs == .orderedSame {
+                    return ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0)
+                }
+                return lhs == .orderedAscending
+            }
+        }
+    }
+
+    private func title(for session: Session) -> String {
+        session.title.isEmpty ? "Untitled session" : session.title
     }
 
     private func statusSections(
@@ -96,9 +187,9 @@ struct SessionListView: View {
     ) -> [ListSection] {
         SessionStore.Group.allCases.compactMap { g in
             let items = sessions.filter { store.group(for: $0) == g }
-                .sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
-            return items.isEmpty ? nil
-                : ListSection(id: "status-\(g.rawValue)", title: g.title, items: items,
+            let sorted = sortedSessions(items)
+            return sorted.isEmpty ? nil
+                : ListSection(id: "status-\(g.rawValue)", title: g.title, items: sorted,
                               group: g, childrenByParentId: childrenByParentId)
         }
     }
@@ -121,12 +212,12 @@ struct SessionListView: View {
             statusAgentParentId(for: session) ?? ""
         }
         .mapValues { items in
-            items.sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
+            sortedSessions(items)
         }
         let regular = sessions.filter { !candidateIds.contains($0.id) }
         return (regular,
                 childrenByParentId,
-                orphanAgents.sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) })
+                sortedSessions(orphanAgents))
     }
 
     private func statusAgentParentId(for session: Session) -> String? {
@@ -162,79 +253,106 @@ struct SessionListView: View {
     }
 
     private func isCollapsed(_ section: ListSection) -> Bool {
-        if settings.groupMode == .status, section.isAgents {
-            return !expandedAgentSections.contains(section.id)
-        }
-        return settings.groupMode == .directory && !expandedDirs.contains(section.id)
+        collapsedSections.contains(section.id)
     }
 
-    /// Directory headers are tappable to collapse/expand and carry running + idle
-    /// tallies; status headers keep the plain title + total count.
+    private func toggleSection(_ id: String) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if collapsedSections.contains(id) {
+                collapsedSections.remove(id)
+            } else {
+                collapsedSections.insert(id)
+            }
+        }
+    }
+
+    /// Section headers are collapsible in every grouping mode. The Unread
+    /// section keeps its mark-all-read action because the design mock lacked
+    /// unread data, not because the workflow should disappear.
     @ViewBuilder
-    private func sectionHeader(_ section: ListSection) -> some View {
-        if settings.groupMode == .directory || section.isAgents {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    if section.isAgents {
-                        if expandedAgentSections.contains(section.id) { expandedAgentSections.remove(section.id) }
-                        else { expandedAgentSections.insert(section.id) }
-                    } else if expandedDirs.contains(section.id) {
-                        expandedDirs.remove(section.id)
-                    } else {
-                        expandedDirs.insert(section.id)
-                    }
+    private func expandedSectionHeader(_ section: ListSection) -> some View {
+        HStack(spacing: 0) {
+            Button { toggleSection(section.id) } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Tokens.host)
+                        .frame(width: 13, height: 13)
+                    Text(section.title)
+                        .font(.system(size: 15))
+                        .foregroundStyle(Tokens.labelSecondary)
+                        .lineLimit(1)
+                    Text("\(section.items.count)")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Tokens.tertiary)
+                    // The trailing spacer lives INSIDE the button's label so the
+                    // whole header row toggles, not just the text. With the
+                    // spacer outside, the row's accessibility frame spans the
+                    // full width while the hit area covers only the leading
+                    // text — a tap anywhere right of the count (including the
+                    // centre, where synthetic taps land) silently did nothing.
+                    Spacer(minLength: 0)
                 }
-            } label: {
-                let isExpanded = section.isAgents
-                    ? expandedAgentSections.contains(section.id)
-                    : expandedDirs.contains(section.id)
-                HStack(spacing: 8) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 10)
-                    Text(section.title.uppercased())
-                    Spacer()
-                    if section.isAgents {
-                        Text("\(section.items.count)").foregroundStyle(.tertiary)
-                    } else {
-                        countBadge(.working, section.running)
-                        countBadge(.idle, section.idle)
-                    }
-                }
-                .font(.caption2.weight(.semibold))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-        } else {
-            HStack {
-                Text(section.title.uppercased())
-                Spacer()
-                if section.group == .unread {
-                    Button("Mark all read") { store.markAllRead() }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.tint)
-                        .textCase(nil)
-                } else {
-                    Text("\(section.items.count)").foregroundStyle(.tertiary)
-                }
+            if section.group == .unread {
+                Button("Mark all read") { store.markAllRead() }
+                    .font(.system(size: 13, weight: .medium))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Tokens.accent)
             }
-            .font(.caption2.weight(.semibold))
         }
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 8)
+        .textCase(nil)
+        .listRowSeparator(.hidden)
+        .listRowBackground(Tokens.screen)
+        // Section headers do NOT inherit the zero row insets the rows get, so
+        // without this the header sits ~15pt further right than its own rows
+        // (measured: chevron at x=36.7 against the design's x=22) and carries
+        // extra vertical padding of its own.
+        .accessibilityIdentifier("sessionGroupHeader-\(section.id)")
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Tokens.screen)
     }
 
-    /// A small status-colored dot + count (running = green, idle = gray), dimmed
-    /// when zero so a directory's live work reads at a glance.
-    private func countBadge(_ group: SessionStore.Group, _ count: Int) -> some View {
-        HStack(spacing: 3) {
-            Circle().fill(Theme.statusColor(group)).frame(width: 6, height: 6)
-                .opacity(count > 0 ? 1 : 0.35)
-            Text("\(count)").foregroundStyle(count > 0 ? .secondary : .tertiary)
+    private func collapsedSectionRow(_ section: ListSection) -> some View {
+        Button { toggleSection(section.id) } label: {
+            VStack(spacing: 0) {
+                HStack(spacing: 9) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Tokens.host)
+                        .frame(width: 13, height: 13)
+                    Text(section.title)
+                        .font(.system(size: 17))
+                        .foregroundStyle(Tokens.label)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text("\(section.items.count)")
+                        .font(.system(size: 17))
+                        .foregroundStyle(Tokens.tertiary)
+                }
+                .frame(height: 54)
+                .padding(.horizontal, 20)
+                Rectangle()
+                    .fill(Tokens.separator)
+                    .frame(height: 1)
+                    .padding(.leading, 20)
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("sessionGroupHeader-\(section.id)")
+        .listRowInsets(EdgeInsets())
+        .listRowSeparator(.hidden)
+        .listRowBackground(Tokens.screen)
     }
 
     private func renderedRows(for section: ListSection) -> [RenderedSessionRow] {
-        guard settings.groupMode == .status,
+        guard effectiveGroupMode == .status,
               !section.isAgents,
               !section.childrenByParentId.isEmpty else {
             return section.items.map {
@@ -283,34 +401,24 @@ struct SessionListView: View {
 
     @ViewBuilder
     private func sessionRow(_ row: RenderedSessionRow) -> some View {
-        if row.children.isEmpty {
-            indented(row.indent) {
-                SessionRow(session: row.session, group: store.group(for: row.session))
+        VStack(alignment: .leading, spacing: 0) {
+            SessionRow(session: row.session, group: store.group(for: row.session))
+                .padding(.leading, row.indent)
+            if !row.children.isEmpty, let parentId = normalizedId(row.session.sessionId) {
+                agentDisclosure(parentId: parentId, children: row.children)
+                    .padding(.leading, row.indent)
             }
-            .tag(row.session.sessionId ?? "")
-        } else {
-            indented(row.indent) {
-                VStack(alignment: .leading, spacing: 6) {
-                    SessionRow(session: row.session, group: store.group(for: row.session))
-                    if let parentId = normalizedId(row.session.sessionId) {
-                        agentDisclosure(parentId: parentId, children: row.children)
-                    }
-                }
-            }
-            .tag(row.session.sessionId ?? "")
+            Rectangle()
+                .fill(Tokens.separator)
+                .frame(height: 1)
+                .padding(.leading, row.indent + 39)
         }
-    }
-
-    @ViewBuilder
-    private func indented<Content: View>(
-        _ indent: CGFloat,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        if indent > 0 {
-            content().padding(.leading, indent)
-        } else {
-            content()
-        }
+        .contentShape(Rectangle())
+        .tag(row.session.sessionId ?? "")
+        .accessibilityIdentifier("sessionRow-\(row.session.id)")
+        .listRowInsets(EdgeInsets())
+        .listRowSeparator(.hidden)
+        .listRowBackground(Tokens.screen)
     }
 
     private func agentDisclosure(parentId: String, children: [Session]) -> some View {
@@ -348,11 +456,12 @@ struct SessionListView: View {
     var body: some View {
         @Bindable var settings = settings
         VStack(spacing: 0) {
+            customHeader(groupMode: $settings.groupMode, sortMode: $settings.sortMode)
+
             if showSearch {
                 searchField
                     .padding(.horizontal, 16)
-                    .padding(.top, 6)
-                    .padding(.bottom, 8)
+                    .padding(.top, 8)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
@@ -373,20 +482,36 @@ struct SessionListView: View {
                                             ? settings.hosts.filter { store.reachabilityByHost[$0.id] != .ok }.map(\.label)
                                             : [])
                             .listRowInsets(EdgeInsets())
+                            .listRowBackground(Tokens.screen)
                     }
-                    .listRowBackground(Color.clear)
                 }
 
                 let sections = visibleSections
                 if sections.isEmpty {
                     Section {
-                        EmptyListState(connected: store.isConnected) { showNewSession = true }
-                            .listRowBackground(Color.clear)
+                        EmptyListState(connected: store.isConnected) {
+                            openNewSession(focusComposer: false)
+                        }
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Tokens.screen)
                     }
                 } else {
                     ForEach(sections) { section in
-                        Section {
-                            if !isCollapsed(section) {
+                        if isCollapsed(section) {
+                            Section {
+                                collapsedSectionRow(section)
+                            }
+                        } else {
+                            Section {
+                                // The group header is a normal ROW, not a
+                                // `Section(header:)`. A plain List pins section
+                                // headers, and these headers are transparent —
+                                // so rows scrolled underneath drew straight
+                                // through the header text. The design shows
+                                // groups scrolling away as a unit, so making it
+                                // a row fixes the collision and the header's
+                                // extra built-in top padding at the same time.
+                                expandedSectionHeader(section)
                                 ForEach(renderedRows(for: section)) { row in
                                     sessionRow(row)
                                 }
@@ -405,7 +530,8 @@ struct SessionListView: View {
                                             Spacer()
                                         }
                                         .foregroundStyle(.tint)
-                                        .padding(.vertical, 4)
+                                        .padding(.horizontal, 20)
+                                        .padding(.vertical, 15)
                                         // Hit-test the whole row, Spacer included: a
                                         // plain button's default content shape skips
                                         // transparent space, so taps there fell through
@@ -416,48 +542,158 @@ struct SessionListView: View {
                                     .buttonStyle(.plain)
                                     .disabled(store.isLoadingMoreClosed)
                                     .accessibilityIdentifier("loadMoreClosedButton")
+                                    .listRowInsets(EdgeInsets())
+                                    .listRowSeparator(.hidden)
+                                    .listRowBackground(Tokens.screen)
                                 }
                             }
-                        } header: {
-                            sectionHeader(section)
                         }
                     }
                 }
             }
-            .listStyle(.insetGrouped)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Tokens.screen)
             .refreshable { await store.refresh() }
-            .safeAreaInset(edge: .bottom) {
-                NewSessionBar { showNewSession = true }
+            .listSectionSpacing(0)
+            .overlay(alignment: .bottom) {
+                NewSessionBar(
+                    action: { openNewSession(focusComposer: false) },
+                    micAction: { openNewSession(focusComposer: true) }
+                )
+                .ignoresSafeArea(.container, edges: .bottom)
             }
         }
-        .navigationTitle("Sessions")
-        // Collapse to the inline title while searching. The large title is laid
-        // out against the first scrollable descendant, and revealing the search
-        // field above the List breaks that association — the title renders blank
-        // and leaves ~90pt of dead space between the bar and the field.
-        .navigationBarTitleDisplayMode(showSearch ? .inline : .large)
-        .sidebarStatusSubtitle(statusSubtitle)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button { showSettings = true } label: { Image(systemName: "gearshape") }
-            }
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button(action: toggleSearch) {
-                    Image(systemName: "magnifyingglass")
-                }
-                .accessibilityIdentifier("sessionSearchToggle")
+        .background(Tokens.screen.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+    }
 
-                Menu {
-                    Picker("Sort", selection: $settings.groupMode) {
-                        Text("Status").tag(GroupMode.status)
-                        Text("Directory").tag(GroupMode.directory)
-                    }
-                } label: {
-                    Image(systemName: "line.3.horizontal.decrease")
-                }
-                .accessibilityIdentifier("sessionSortMenu")
+    private func openNewSession(focusComposer: Bool) {
+        focusNewSessionComposer = focusComposer
+        showNewSession = true
+    }
+
+    private func customHeader(
+        groupMode: Binding<GroupMode>,
+        sortMode: Binding<SortMode>
+    ) -> some View {
+        HStack(alignment: .center) {
+            // The title slot carries host status rather than a static "All
+            // sessions": the label the design showed is the one thing on this
+            // screen that never tells you anything, and replacing the nav bar
+            // had otherwise dropped the connection state entirely on iPhone.
+            HStack(spacing: 9) {
+                Circle()
+                    .fill(statusTint)
+                    .frame(width: 10, height: 10)
+                Text(statusHeadline)
+                    .font(.system(size: 30, weight: .bold))
+                    .tracking(-0.6)
+                    .foregroundStyle(Tokens.label)
+                    .lineLimit(1)
+                    // Host labels are user-supplied and "Connected · 12 running"
+                    // is already wide next to three 38pt controls, so shrink to
+                    // fit rather than truncating a status the user needs whole.
+                    .minimumScaleFactor(0.5)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("sessionListHeader")
+            Spacer(minLength: 12)
+            HStack(spacing: 10) {
+                headerButton("magnifyingglass", size: 15.5, action: toggleSearch)
+                    .accessibilityIdentifier("sessionSearchToggle")
+                groupSortMenu(groupMode: groupMode, sortMode: sortMode)
+                headerButton("gearshape", size: 16, weight: .regular) { showSettings = true }
+                    .accessibilityIdentifier("sessionSettingsButton")
             }
         }
+        .padding(.top, 6)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 2)
+    }
+
+    private func headerButton(
+        _ systemName: String,
+        size: CGFloat,
+        weight: Font.Weight = .medium,
+        background: Color = Tokens.raised,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: size, weight: weight))
+                .foregroundStyle(Tokens.label)
+                .frame(width: 38, height: 38)
+                .background(background, in: Circle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func groupSortMenu(
+        groupMode: Binding<GroupMode>,
+        sortMode: Binding<SortMode>
+    ) -> some View {
+        Menu {
+            // Plain buttons inside a titled `Section`, NOT a `Picker`. UIKit
+            // renders a menu section's header only when its children are menu
+            // elements it owns; an inline `Picker` (either bare or wrapped in a
+            // Section) produces the right options and checkmarks but silently
+            // drops both "GROUP BY" and "SORT BY" titles. The design leans on
+            // those titles to tell two adjacent option groups apart, so we
+            // build the rows ourselves and carry the checkmark explicitly.
+            Section("GROUP BY") {
+                ForEach(groupModeOptions) { mode in
+                    Button { groupMode.wrappedValue = mode } label: {
+                        Label(mode.label,
+                              systemImage: groupMode.wrappedValue == mode ? "checkmark" : "")
+                    }
+                    .accessibilityIdentifier("groupModeOption-\(mode.rawValue)")
+                }
+            }
+            Section("SORT BY") {
+                ForEach(SortMode.allCases) { mode in
+                    Button { sortMode.wrappedValue = mode } label: {
+                        Label(mode.label,
+                              systemImage: sortMode.wrappedValue == mode ? "checkmark" : "")
+                    }
+                    .accessibilityIdentifier("sortModeOption-\(mode.rawValue)")
+                }
+            }
+        } label: {
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Tokens.label)
+                .frame(width: 38, height: 38)
+                .background(sortMenuHighlight ? Tokens.accent : Tokens.raised, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(TapGesture().onEnded {
+            sortMenuHighlight = true
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                sortMenuHighlight = false
+            }
+        })
+        .accessibilityIdentifier("sessionSortMenu")
+    }
+
+    /// The header title. Single host reads as its connection state plus the
+    /// running tally; multiple hosts read as which hosts are up, since with
+    /// several backends "Connected" alone would hide a partial outage.
+    private var statusHeadline: String {
+        statusSubtitle.isEmpty ? "All sessions" : statusSubtitle
+    }
+
+    /// Green only when every configured host answers — one host down turns the
+    /// dot orange even though the app still works, because the list is then
+    /// showing an incomplete picture and the user should know before wondering
+    /// where a session went.
+    private var statusTint: Color {
+        if settings.hosts.count > 1 {
+            let allOnline = settings.hosts.allSatisfy { store.reachabilityByHost[$0.id] == .ok }
+            return allOnline ? Color(.systemGreen) : Color(.systemOrange)
+        }
+        return store.isConnected ? Color(.systemGreen) : Color(.systemOrange)
     }
 
     private var statusSubtitle: String {
@@ -477,24 +713,29 @@ struct SessionListView: View {
     }
 
     private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+        HStack(spacing: 9) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 18))
+                .foregroundStyle(Tokens.labelSecondary)
             TextField("Search sessions", text: $searchText)
                 .textFieldStyle(.plain)
+                .font(.system(size: 17))
+                .foregroundStyle(Tokens.label)
+                .tint(Tokens.accent)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .focused($isSearchFocused)
                 .accessibilityIdentifier("sessionSearchField")
             if !searchText.isEmpty {
                 Button { searchText = "" } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Tokens.labelSecondary)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 12)
+        .frame(height: 40)
+        .background(Tokens.raised, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func toggleSearch() {
@@ -518,35 +759,73 @@ struct SessionListView: View {
 
 private struct NewSessionBar: View {
     let action: () -> Void
+    let micAction: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: "plus")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 30, height: 30)
-                    .background(.white.opacity(0.10), in: Circle())
+        ZStack {
+            HStack(spacing: 12) {
+                Button(action: action) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 19, weight: .regular))
+                        .foregroundStyle(Tokens.label.opacity(0.90))
+                        .frame(width: 28, height: 52)
+                }
+                .buttonStyle(.plain)
 
-                Text("Plan, ask, build…")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                Button(action: action) {
+                    Text("Plan, ask, build…")
+                        .font(.system(size: 17))
+                        .foregroundStyle(Tokens.placeholder)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
 
-                Spacer(minLength: 0)
+                Button(action: micAction) {
+                    Image(systemName: "mic")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(Tokens.labelSecondary)
+                        .frame(width: 32, height: 52)
+                }
+                .buttonStyle(.plain)
+                // Identifier on the BUTTON, matching `headerButton` — whose
+                // ids (sessionSearchToggle, sessionSortMenu) do resolve. Moving
+                // it inward onto the Image is what made this one unfindable.
+                .accessibilityIdentifier("sessionComposerMic")
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(.regularMaterial, in: Capsule())
-            .overlay {
-                Capsule().stroke(.white.opacity(0.08), lineWidth: 1)
-            }
+            .frame(height: 52)
+            .padding(.horizontal, 14)
+            .background(Tokens.raised, in: Capsule())
             .contentShape(Capsule())
+
+            // Both container ids are published as zero-size sibling elements.
+            // An identifier applied to the HStack itself shadows its children,
+            // which is what kept `sessionComposerMic` unfindable through four
+            // attempts while the header's button ids resolved fine.
+            Color.clear
+                .frame(width: 1, height: 1)
+                .accessibilityHidden(false)
+                .accessibilityIdentifier("sessionComposerBar")
+            Color.clear
+                .frame(width: 1, height: 1)
+                .accessibilityHidden(false)
+                .accessibilityIdentifier("newSessionBar")
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("newSessionBar")
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
+        .padding(.horizontal, 12)
+        // The design floats the capsule 26pt above the SCREEN bottom. Inside a
+        // `safeAreaInset` a plain 26 stacks on the 34pt home-indicator inset and
+        // lands at 60, so subtract the inset back out — the bar is meant to sit
+        // beside the home indicator, not above it. Devices without one report 0
+        // and simply get 26.
+        .padding(.bottom, 26 - Self.safeAreaBottom)
+    }
+
+    /// Bottom safe-area inset of the active window (0 when there is none).
+    private static var safeAreaBottom: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: \.isKeyWindow)?
+            .safeAreaInsets.bottom ?? 0
     }
 }
 
@@ -583,47 +862,73 @@ struct SessionRow: View {
     private var isOffline: Bool { store.isOffline(session.id) }
 
     var body: some View {
-        HStack(spacing: 12) {
-            AgentBadge(agent: session.agent)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(session.title.isEmpty ? "Untitled session" : session.title)
-                    .font(.subheadline.weight(.medium))
+        HStack(alignment: .top, spacing: 11) {
+            Circle()
+                .fill(Theme.statusColor(group))
+                .frame(width: 8, height: 8)
+                .padding(.top, 6)
+                .frame(width: 8)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
+                    .font(.system(size: 17))
+                    .foregroundStyle(Tokens.label)
+                    .lineSpacing(0)
                     .lineLimit(1)
-                HStack(spacing: 6) {
-                    StatusDot(group: group)
-                    if let project = session.project, !project.isEmpty {
-                        Text(project)
-                            .font(.caption2).foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.head)   // ellipsis the start, keep the end visible
-                    }
-                    if let model = session.model { ModelBadge(model: model) }
+                    .truncationMode(.tail)
+                    .frame(height: 22, alignment: .leading)
+                HStack(spacing: 7) {
+                    Text(metaText)
+                        .font(.system(size: 15))
+                        .foregroundStyle(Tokens.meta)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(height: 20, alignment: .leading)
                     if let hostLabel {
-                        HStack(spacing: 3) {
-                            if isOffline {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.system(size: 8))
-                            }
+                        HStack(spacing: 4) {
+                            Image(systemName: "desktopcomputer")
+                                .font(.system(size: 12))
                             Text(hostLabel).lineLimit(1)
                         }
-                        .font(.caption2)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(isOffline ? Color.orange.opacity(0.15) : Color(.tertiarySystemFill),
-                                    in: Capsule())
-                        .foregroundStyle(isOffline ? Color.orange : Color.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    if let at = session.lastActivityAt {
-                        Text(at.asRelativeFromMillis).font(.caption2).foregroundStyle(.tertiary)
+                        .font(.system(size: 13))
+                        .foregroundStyle(isOffline ? Color(.systemOrange) : Tokens.host)
+                        .frame(height: 20)
                     }
                 }
+                .padding(.top, 4)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 4)
+        .padding(.top, 15)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
         // Dim the row so a stale (unreachable) session doesn't compete with live
-        // ones. The orange host chip dims with it, but stays the only warm-colored
+        // ones. The orange host label dims with it, but stays the only warm-colored
         // element in the row, so it still reads as the reason for the dimming.
         .opacity(isOffline ? 0.55 : 1)
+    }
+
+    private var title: String {
+        session.title.isEmpty ? "Untitled session" : session.title
+    }
+
+    private var metaText: String {
+        var parts: [String] = [directoryText]
+        if !session.closed, let model = session.model, !model.isEmpty {
+            parts.append(model)
+        }
+        if let at = session.lastActivityAt {
+            parts.append(at.asCompactRelativeFromMillis)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private var directoryText: String {
+        if let cwd = session.cwd, !cwd.isEmpty,
+           let leaf = cwd.split(separator: "/").last {
+            return String(leaf)
+        }
+        if let project = session.project, !project.isEmpty { return project }
+        return "No directory"
     }
 }
 
@@ -645,11 +950,11 @@ struct StatusBadge: View {
         } else {
             HStack(spacing: 6) {
                 Circle()
-                    .fill(store.isConnected ? Color.green : Color.orange)
+                    .fill(store.isConnected ? Color(.systemGreen) : Color(.systemOrange))
                     .frame(width: 7, height: 7)
                 Text(store.isConnected ? "Connected" : "Offline")
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(store.isConnected ? Color.primary : Color.orange)
+                    .foregroundStyle(store.isConnected ? Color.primary : Color(.systemOrange))
                 if store.runningCount > 0 {
                     Text("· \(store.runningCount) running")
                         .font(.caption)
@@ -670,11 +975,11 @@ private struct HostStatusChip: View {
     var body: some View {
         HStack(spacing: 5) {
             Circle()
-                .fill(online ? Color.green : Color.orange)
+                .fill(online ? Color(.systemGreen) : Color(.systemOrange))
                 .frame(width: 7, height: 7)
             Text(host.label)
                 .font(.caption.weight(.medium))
-                .foregroundStyle(online ? Color.primary : Color.orange)
+                .foregroundStyle(online ? Color.primary : Color(.systemOrange))
                 .lineLimit(1)
         }
     }
