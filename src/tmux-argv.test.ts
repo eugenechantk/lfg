@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { managedSessionArgv } from "./tmux.ts";
+import { DEFAULT_MODEL, managedSessionArgv } from "./tmux.ts";
 
 const ID = "11111111-2222-3333-4444-555555555555";
 
@@ -9,6 +9,7 @@ describe("managedSessionArgv — fork vs resume vs fresh", () => {
     expect(argv).not.toContain("--resume");
     expect(argv).not.toContain("--fork-session");
     expect(argv).toContain("--model");
+    expect(argv[argv.indexOf("--model") + 1]).toBe(DEFAULT_MODEL);
   });
 
   it("resume carries --resume <id> but NOT --fork-session", () => {

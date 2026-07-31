@@ -154,7 +154,7 @@ All config is environment-driven (`.env`, see [`.env.example`](./.env.example)):
 | `LFG_REPO` | cwd | Default project repo for collectors/actions. |
 | `LFG_USERS` | — | Comma-separated emails for per-user session tagging. |
 | `LFG_CLAUDE_BACKEND` | `cli` | `cli` or `ai-sdk` report backend. |
-| `LFG_CLAUDE_MODEL` | `opus` | Model for the `ai-sdk` backend. |
+| `LFG_CLAUDE_MODEL` | `claude-opus-5` | Model for the `ai-sdk` backend. |
 | `ANTHROPIC_API_KEY` | — | Optional, instead of `claude` OAuth. |
 | `TTS_UPSTREAM` / `TTS_TOKEN` | — | Optional self-hosted voice (TTS/STT) proxy. |
 | `LFG_WHATSAPP_*` | — | Optional WhatsApp sidecar (see `.env.example`). |

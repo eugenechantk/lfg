@@ -182,18 +182,29 @@ type QueueMsg = {
   error?: string;
 };
 
-const CLAUDE_MODELS = ["sonnet", "opus", "haiku", "fable"];
-const CODEX_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"];
+const CLAUDE_MODELS = [
+  "claude-opus-5",
+  "claude-fable-5",
+  "claude-sonnet-5",
+  "claude-haiku-4-5",
+  "opus",
+  "fable",
+  "sonnet",
+  "haiku",
+];
+const CODEX_MODELS = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"];
 // Models the one-shot AI-SDK test option supports (the provider maps these
 // aliases). Kept in sync with the AISDK_MODELS allowlist in serve.ts.
-const AISDK_MODELS = ["opus", "sonnet", "haiku"];
-const CODEX_AISDK_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"];
+const AISDK_MODELS = CLAUDE_MODELS;
+const CODEX_AISDK_MODELS = CODEX_MODELS;
 const OPENCODE_MODELS = [
-  "anthropic/claude-sonnet-4-6",
-  "anthropic/claude-opus-4-8",
+  "anthropic/claude-fable-5",
+  "anthropic/claude-opus-5",
+  "anthropic/claude-sonnet-5",
   "anthropic/claude-haiku-4-5",
-  "openai/gpt-5.5",
-  "openai/gpt-5.4",
+  "openai/gpt-5.6-sol",
+  "openai/gpt-5.6-terra",
+  "openai/gpt-5.6-luna",
 ];
 
 type AgentKind = "claude" | "aisdk" | "codex" | "codex-aisdk" | "opencode";
@@ -209,11 +220,11 @@ const AGENT_MODELS: Record<AgentKind, string[]> = {
   opencode: OPENCODE_MODELS,
 };
 const AGENT_DEFAULT_MODEL: Record<AgentKind, string> = {
-  claude: "sonnet",
-  aisdk: "opus",
-  codex: "gpt-5.5",
-  "codex-aisdk": "gpt-5.5",
-  opencode: "anthropic/claude-sonnet-4-6",
+  claude: "claude-opus-5",
+  aisdk: "claude-opus-5",
+  codex: "gpt-5.6-sol",
+  "codex-aisdk": "gpt-5.6-sol",
+  opencode: "anthropic/claude-sonnet-5",
 };
 
 // New-session picker options, in display order. The three AI-SDK agents are the
@@ -2815,7 +2826,7 @@ function PausedBanner({
       await api(`/api/sessions/${sid}/model`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "opus" }),
+        body: JSON.stringify({ model: "claude-opus-5" }),
       });
       await onRefresh();
     } catch (e) {
@@ -2846,7 +2857,7 @@ function PausedBanner({
             disabled={working}
             className="shrink-0 rounded-lg bg-warning px-3 py-1.5 font-medium text-white disabled:opacity-50"
           >
-            {working ? "Resuming…" : "Resume on Opus"}
+            {working ? "Resuming…" : "Resume on Opus 5"}
           </button>
         ) : null}
       </div>
@@ -4260,7 +4271,7 @@ function NewSessionDialog({
     // Carry the chosen model only when it's a Claude alias (resume drives the
     // claude CLI); otherwise let the backend default it. Owner tags the resumed
     // session to whoever's active, same as a fresh create.
-    const claudeModel = ["fable", "opus", "sonnet", "haiku"].includes(model) ? model : undefined;
+    const claudeModel = CLAUDE_MODELS.includes(model) ? model : undefined;
     onClose();
     toast.promise(
       api("/api/sessions/resume", {

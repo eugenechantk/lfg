@@ -103,7 +103,7 @@ export async function cmdOpencodeAisdkSession(argv: string[]): Promise<void> {
   // The control-plane key (a uuid) — names the registry/command files AND the
   // transcript file (we own it, so they're one id).
   const keyArg = arg(argv, "--key");
-  const model = arg(argv, "--model") ?? "anthropic/claude-sonnet-4-6";
+  const model = arg(argv, "--model") ?? "anthropic/claude-sonnet-5";
   const cwd = arg(argv, "--cwd") ?? process.cwd();
   const tmuxName = arg(argv, "--tmux") ?? "";
   // Everything after `--` is the initial prompt (mirrors the other harnesses).

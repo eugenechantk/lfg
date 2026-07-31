@@ -12,7 +12,7 @@ export type RunOptions = {
   // Override the report-generation backend for this run. Falls back to
   // LFG_CLAUDE_BACKEND, then "cli". Lets the web UI pick per-run.
   backend?: string;
-  // Model for the ai-sdk backend (opus|sonnet|haiku|full id). Ignored by the
+  // Model for the ai-sdk backend (current Claude id or alias). Ignored by the
   // cli backend, which uses the installed CLI's configured model.
   model?: string;
 };

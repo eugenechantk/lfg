@@ -146,7 +146,7 @@ ${reportContext ? `# Full report for context\n${reportContext.slice(0, 12000)}` 
     name: session,
     cwd: PROJECT_REPO,
     prompt,
-    model: "opus",
+    model: "claude-opus-5",
     sessionId,
   });
   if (!spawned.ok) {
@@ -310,7 +310,7 @@ ${reportContext ? `# Full report for context\n${reportContext.slice(0, 12000)}` 
     name: session,
     cwd: PROJECT_REPO,
     prompt,
-    model: "opus",
+    model: "claude-opus-5",
     sessionId,
   });
   if (!spawned.ok) {
@@ -441,7 +441,7 @@ ${convo || "(unavailable)"}
     name: session,
     cwd: SELF_REPO,
     prompt,
-    model: "opus",
+    model: "claude-opus-5",
     sessionId,
   });
   if (!spawned.ok) {

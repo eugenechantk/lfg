@@ -55,7 +55,7 @@ export async function cmdCodexAisdkSession(argv: string[]): Promise<void> {
   // The control-plane key (a uuid) — names the registry/command files. NOT the
   // codex thread id (which we don't know until after turn 1).
   const keyArg = arg(argv, "--key");
-  const model = arg(argv, "--model") ?? "gpt-5.5";
+  const model = arg(argv, "--model") ?? "gpt-5.6-sol";
   const cwd = arg(argv, "--cwd") ?? process.cwd();
   const tmuxName = arg(argv, "--tmux") ?? "";
   // Everything after `--` is the initial prompt (mirrors how the Claude harness

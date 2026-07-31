@@ -14,7 +14,7 @@
 // working even if these packages aren't installed.
 
 export type AiSdkOptions = {
-  /** Model id: "opus" | "sonnet" | "haiku" or a full id like "claude-opus-4-8". */
+  /** Model id: "claude-opus-5" or a Claude Code alias such as "opus". */
   model?: string;
   /** Tools to allow (mirrors the CLI's --allowedTools). */
   allowedTools?: string[];
@@ -35,7 +35,7 @@ export async function pipeToClaudeAiSdk(
   log: (s: string) => void,
   opts: AiSdkOptions = {},
 ): Promise<string> {
-  const model = opts.model ?? process.env.LFG_CLAUDE_MODEL ?? "opus";
+  const model = opts.model ?? process.env.LFG_CLAUDE_MODEL ?? "claude-opus-5";
   const allowedTools = opts.allowedTools ?? ["WebSearch", "WebFetch"];
   const claudePath = process.env.LFG_CLAUDE_PATH ?? resolveClaudePath();
 

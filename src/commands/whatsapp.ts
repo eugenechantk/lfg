@@ -431,9 +431,9 @@ async function getOrCreateGroupSession(sock: WASocket, groupJid: string): Promis
   const aisdkId = AGENT === "aisdk" || AGENT === "codex-aisdk" ? randomUUID() : null;
   const spawned =
     AGENT === "aisdk"
-      ? spawnManagedAisdkSession({ name: tmuxName, cwd: AGENT_CWD, model: "opus", sessionId: aisdkId! })
+      ? spawnManagedAisdkSession({ name: tmuxName, cwd: AGENT_CWD, model: "claude-opus-5", sessionId: aisdkId! })
       : AGENT === "codex-aisdk"
-        ? spawnManagedCodexAisdkSession({ name: tmuxName, cwd: AGENT_CWD, model: "gpt-5.5", key: aisdkId! })
+        ? spawnManagedCodexAisdkSession({ name: tmuxName, cwd: AGENT_CWD, model: "gpt-5.6-sol", key: aisdkId! })
         : AGENT === "codex"
           ? spawnManagedCodexSession({ name: tmuxName, cwd: AGENT_CWD })
           : spawnManagedSession({ name: tmuxName, cwd: AGENT_CWD });

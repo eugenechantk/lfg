@@ -5,11 +5,11 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { ppidOf as procPpidOf } from "./procinfo";
 
-// Known-good Claude model alias to launch with when a caller doesn't specify
-// one. Never launch a managed `claude` bare — see spawnManagedSession. Opus is
-// the current most-capable widely-available model and the alias the `/model`
-// command and lfg's picker both accept.
-export const DEFAULT_MODEL = "opus";
+// Known-good Claude model to launch with when a caller doesn't specify one.
+// Never launch a managed `claude` bare — see spawnManagedSession. Pin the
+// current Opus ID instead of the alias so new sessions don't inherit a stale
+// provider default.
+export const DEFAULT_MODEL = "claude-opus-5";
 
 // claude shows a blocking "Is this a project you trust?" dialog the first time
 // it opens an untrusted cwd. It is NOT bypassed by --dangerously-skip-permissions

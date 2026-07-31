@@ -9,7 +9,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     public var sessionId: String?
     public var title: String
     public var agent: String          // "aisdk" | "claude" | "codex" | "codex-aisdk" | "opencode"
-    public var model: String?         // short alias: opus/sonnet/haiku/fable, gpt-5.5, …
+    public var model: String?         // model id/alias: claude-opus-5, opus, gpt-5.6, …
     public var project: String?
     public var cwd: String?
     public var status: String?        // "ok" | "blocked"
@@ -471,11 +471,13 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable {
     /// codex/opencode are catalog-driven so we provide common defaults.
     public var models: [String] {
         switch self {
-        // First entry is the default. Claude → opus, Codex → gpt-5.5.
-        case .aisdk: return ["opus", "sonnet", "haiku"]
-        case .claude: return ["opus", "sonnet", "haiku", "fable"]
-        case .codex, .codexAisdk: return ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"]
-        case .opencode: return ["anthropic/claude-sonnet-4-6", "anthropic/claude-opus-4-8"]
+        // First entry is the default. Claude → Opus 5, Codex → GPT-5.6 Sol.
+        case .aisdk, .claude:
+            return ["claude-opus-5", "claude-fable-5", "claude-sonnet-5", "claude-haiku-4-5", "opus", "fable", "sonnet", "haiku"]
+        case .codex, .codexAisdk:
+            return ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"]
+        case .opencode:
+            return ["anthropic/claude-sonnet-5", "anthropic/claude-opus-5", "anthropic/claude-fable-5", "anthropic/claude-haiku-4-5"]
         }
     }
 

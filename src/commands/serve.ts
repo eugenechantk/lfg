@@ -90,13 +90,20 @@ import { startPushWatcher, pushConfigured } from "../push/watcher.ts";
 const REPOS_ROOT = process.env.LFG_REPOS_ROOT ?? join(homedir(), "repos");
 const SELF_REPO = PATHS.root;
 
-// Allowlisted Claude model aliases. They land both on a launch argv (--model)
-// and in a `/model <alias>` slash command we inject mid-session — so an unknown
-// value is a hard 400, never a silent fallback. These mirror Claude Code's own
-// `/model` aliases (same set the --model flag accepts).
-const CLAUDE_MODELS = ["fable", "opus", "sonnet", "haiku"];
-// Models the "aisdk" session kind accepts (the provider maps these aliases).
-const AISDK_MODELS = ["opus", "sonnet", "haiku"];
+// Allowlisted Claude models. They land both on a launch argv (--model) and in a
+// `/model <id>` slash command we inject mid-session — so an unknown value is a
+// hard 400, never a silent fallback. Explicit current IDs are the picker/default
+// path; aliases stay accepted for existing clients and transcript-derived resume.
+const CLAUDE_MODEL_IDS = [
+  "claude-opus-5",
+  "claude-fable-5",
+  "claude-sonnet-5",
+  "claude-haiku-4-5",
+];
+const CLAUDE_MODEL_ALIASES = ["opus", "fable", "sonnet", "haiku"];
+const CLAUDE_MODELS = [...CLAUDE_MODEL_IDS, ...CLAUDE_MODEL_ALIASES];
+// Models the "aisdk" session kind accepts through the Claude Code provider.
+const AISDK_MODELS = CLAUDE_MODELS;
 import {
   enqueueMessage,
   listQueue,
@@ -232,6 +239,12 @@ const PORT = Number(process.env.LFG_PORT ?? 8766);
 // (via `tailscale serve`), never the public internet. Override LFG_HOST only
 // if you understand the exposure.
 const HOST = process.env.LFG_HOST ?? "127.0.0.1";
+const CREATE_SESSION_BIND_POLL_MS = 500;
+const DEFAULT_CREATE_SESSION_BIND_POLLS = 12;
+const CODEX_CREATE_SESSION_BIND_POLLS = 28;
+const CODEX_CREATE_FALLBACK_WINDOW_MS =
+  CODEX_CREATE_SESSION_BIND_POLLS * CREATE_SESSION_BIND_POLL_MS;
+const UUID_RE = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
 
 marked.setOptions({ gfm: true, breaks: false });
 
@@ -239,12 +252,6 @@ marked.setOptions({ gfm: true, breaks: false });
 // scroll container so wide tables (security posture, pricing, db stats) scroll
 // within their card on mobile instead of blowing out the viewport width.
 function renderReportHtml(raw: string): string {
-const CREATE_SESSION_BIND_POLL_MS = 500;
-const DEFAULT_CREATE_SESSION_BIND_POLLS = 12;
-const CODEX_CREATE_SESSION_BIND_POLLS = 28;
-const CODEX_CREATE_FALLBACK_WINDOW_MS =
-  CODEX_CREATE_SESSION_BIND_POLLS * CREATE_SESSION_BIND_POLL_MS;
-const UUID_RE = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
   const html = marked.parse(raw) as string;
   return html
     .replace(/<table>/g, '<div class="table-wrap"><table>')
@@ -445,13 +452,6 @@ function err(status: number, message: string, extra?: Record<string, unknown>) {
   return json({ error: message, ...(extra ?? {}) }, { status });
 }
 
-// Attach rendered markdown for assistant/user prose; tool/thinking stay raw.
-function msgWithHtml<T extends { kind: string; text: string }>(m: T) {
-  if (m.kind === "text" && m.text) return { ...m, html: marked.parse(m.text) };
-  return m;
-}
-
-async function messagePageFromSnapshot(
 type CodexCreateFallbackCandidate = {
   id: string;
   cwd: string | null;
@@ -535,6 +535,13 @@ async function codexCreateFallbackCandidates(): Promise<CodexCreateFallbackCandi
   return out;
 }
 
+// Attach rendered markdown for assistant/user prose; tool/thinking stay raw.
+function msgWithHtml<T extends { kind: string; text: string }>(m: T) {
+  if (m.kind === "text" && m.text) return { ...m, html: marked.parse(m.text) };
+  return m;
+}
+
+async function messagePageFromSnapshot(
   path: string,
   opts: { before?: number | null; limit?: number; maxBytes: number | null },
 ): Promise<{
@@ -1843,11 +1850,11 @@ export async function cmdServe() {
         if (agent === "aisdk" && model && !AISDK_MODELS.includes(model))
           return err(400, `unknown model "${model}" (expected one of ${AISDK_MODELS.join(", ")})`);
         // codex-aisdk drives codex through the AI SDK, so its model is a codex
-        // slug (gpt-5.x-codex …) — provider/catalog driven like the tmux codex.
+        // slug (gpt-5.x…) — provider/catalog driven like the tmux codex.
         // Validate by shape, same as the codex branch.
         if (agent === "codex-aisdk" && model && !/^[A-Za-z0-9_.:-]{1,80}$/.test(model))
           return err(400, "invalid codex model name");
-        // opencode models are "provider/model" (e.g. anthropic/claude-sonnet-4-6),
+        // opencode models are "provider/model" (e.g. anthropic/claude-sonnet-5),
         // so the validation shape additionally allows a slash. Catalog-driven, so
         // validate by shape rather than an allowlist.
         if (agent === "opencode" && model && !/^[A-Za-z0-9_.:\/-]{1,80}$/.test(model))
@@ -1891,6 +1898,7 @@ export async function cmdServe() {
         // the returned sessionId == key (no after-turn-1 id to wait for, unlike
         // codex-aisdk). See the opencode harness header.
         const opencodeKey = agent === "opencode" ? crypto.randomUUID() : null;
+        const spawnStartedAt = Date.now();
         const r =
           agent === "codex"
             ? spawnManagedCodexSession({ name: tmuxName, cwd, prompt, model })
@@ -1898,9 +1906,8 @@ export async function cmdServe() {
               ? spawnManagedAisdkSession({
                   name: tmuxName,
                   cwd,
-        const spawnStartedAt = Date.now();
                   prompt,
-                  model: model ?? "opus",
+                  model: model ?? "claude-opus-5",
                   sessionId: aisdkSessionId!,
                 })
               : agent === "codex-aisdk"
@@ -1908,7 +1915,7 @@ export async function cmdServe() {
                     name: tmuxName,
                     cwd,
                     prompt,
-                    model: model ?? "gpt-5.5",
+                    model: model ?? "gpt-5.6-sol",
                     key: codexAisdkKey!,
                   })
                 : agent === "opencode"
@@ -1916,7 +1923,7 @@ export async function cmdServe() {
                       name: tmuxName,
                       cwd,
                       prompt,
-                      model: model ?? "anthropic/claude-sonnet-4-6",
+                      model: model ?? "anthropic/claude-sonnet-5",
                       key: opencodeKey!,
                     })
                   : spawnManagedSession({ name: tmuxName, cwd, prompt, model });
@@ -1951,13 +1958,6 @@ export async function cmdServe() {
             if (pid) sessionId = sessionIdForPid(pid);
           }
         }
-        if (agent === "aisdk") {
-          for (let i = 0; i < 20 && !readAisdkEntry(aisdkSessionId!); i++)
-            await new Promise((res) => setTimeout(res, 250));
-        }
-        // opencode: the harness writes the transcript at the key, so the
-        // sessionId IS the key — just wait for the harness to register so the
-        // session is listable (no after-turn-1 threadId to wait for).
         if (agent === "codex" && !sessionId) {
           const sessions = await listSessions();
           sessionId = sessions.find((s) => s.tmuxName === tmuxName)?.sessionId ?? null;
@@ -1976,6 +1976,13 @@ export async function cmdServe() {
               })?.id ?? null;
           }
         }
+        if (agent === "aisdk") {
+          for (let i = 0; i < 20 && !readAisdkEntry(aisdkSessionId!); i++)
+            await new Promise((res) => setTimeout(res, 250));
+        }
+        // opencode: the harness writes the transcript at the key, so the
+        // sessionId IS the key — just wait for the harness to register so the
+        // session is listable (no after-turn-1 threadId to wait for).
         if (agent === "opencode") {
           for (let i = 0; i < 20 && !readAisdkEntry(opencodeKey!); i++)
             await new Promise((res) => setTimeout(res, 250));

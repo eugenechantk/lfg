@@ -42,7 +42,7 @@ function resolveClaudePath(): string | undefined {
 
 export async function cmdAisdkSession(argv: string[]): Promise<void> {
   const sessionIdArg = arg(argv, "--session");
-  const model = arg(argv, "--model") ?? "opus";
+  const model = arg(argv, "--model") ?? "claude-opus-5";
   const cwd = arg(argv, "--cwd") ?? process.cwd();
   const tmuxName = arg(argv, "--tmux") ?? "";
   // Everything after `--` is the initial prompt (mirrors how spawnManagedSession
