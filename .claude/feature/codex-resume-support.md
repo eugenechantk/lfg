@@ -1,5 +1,8 @@
 # Scope: Codex resume support (list + wake-up resume)
 
+
+> **Superseded (2026-07-31)** by `.claude/feature/codex-resume-and-fork.md`, which
+> scopes resume together with fork (`codex fork` exists — this doc predates that finding).
 **Status:** Scoping
 **Tier:** Product (shipping server + iOS app)
 **Author:** session 2026-06-29
