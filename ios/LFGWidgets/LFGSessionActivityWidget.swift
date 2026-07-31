@@ -19,18 +19,21 @@ struct LFGSessionActivityWidget: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     FleetIslandHeader(state: context.state)
+                        // Same edge-to-edge clipping as the bottom region: without
+                        // this the island's corner shaves the first character.
+                        .padding(.leading, 6)
                 }
 
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 0) {
-                        Divider().overlay(.white.opacity(0.14))
+                    VStack(alignment: .leading, spacing: 7) {
                         ForEach(context.state.rows.prefix(2), id: \.sid) { row in
-                            FleetRowView(row: row, hosts: context.state.hosts, compact: true)
-                            if row.sid != context.state.rows.prefix(2).last?.sid {
-                                Divider().overlay(.white.opacity(0.10))
-                            }
+                            ActiveFleetRow(row: row)
                         }
                     }
+                    // The expanded region runs edge-to-edge; without this the
+                    // island's rounded corners clip the first glyph of each title
+                    // and the trailing elapsed time.
+                    .padding(.horizontal, 6)
                 }
             } compactLeading: {
                 StateDot(state: context.state.needsInput > 0 ? "blocked" : "working", size: 9)
@@ -47,58 +50,136 @@ struct LFGSessionActivityWidget: Widget {
 private struct LockScreenFleetActivityView: View {
     let context: ActivityViewContext<LFGFleetAttributes>
 
-    // Lock-screen Live Activities have a tight fixed height budget (~160pt); more
-    // than header + 2 rows + overflow gets center-clipped by the system (which
-    // silently drops the header). Cap at 2 rows — rows arrive needs-input-first,
-    // so the actionable sessions stay visible; the rest fold into "+N more".
-    private var visibleRows: [LFGFleetAttributes.Row] {
-        Array(context.state.rows.prefix(2))
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            FleetHeaderView(state: context.state)
-
-            VStack(spacing: 0) {
-                ForEach(visibleRows, id: \.sid) { row in
-                    FleetRowView(row: row, hosts: context.state.hosts, compact: false)
-                    if row.sid != visibleRows.last?.sid {
-                        Divider().overlay(.white.opacity(0.12))
-                    }
-                }
-            }
-
-            if overflowCount > 0 {
-                Text("+\(overflowCount) more")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+        Group {
+            if context.state.needsInput > 0, let hero = blockedRow {
+                AttentionFleetView(state: context.state, hero: hero)
+            } else {
+                ActiveFleetView(state: context.state)
             }
         }
+        .padding(.horizontal, 18)
         .padding(.vertical, 14)
-        .padding(.horizontal, 20)
     }
 
-    private var overflowCount: Int {
-        max(0, context.state.working + context.state.needsInput - visibleRows.count)
+    private var blockedRow: LFGFleetAttributes.Row? {
+        context.state.rows.first { $0.state.lowercased() == "blocked" }
+            ?? context.state.rows.first
     }
 }
 
-private struct FleetHeaderView: View {
+private struct ActiveFleetView: View {
     let state: LFGFleetAttributes.ContentState
 
-    var body: some View {
-        HStack(alignment: .center, spacing: 9) {
-            LFGMark(size: 26, cornerRadius: 7, font: .caption.weight(.black))
+    private var visibleRows: [LFGFleetAttributes.Row] {
+        Array(state.rows.prefix(3))
+    }
 
-            VStack(alignment: .leading, spacing: 1) {
-                SummaryText(state: state)
-                    .font(.subheadline.weight(.bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+    private var overflowCount: Int {
+        max(0, state.working + state.needsInput - visibleRows.count)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ActiveHeader(count: state.working)
+
+            ForEach(visibleRows, id: \.sid) { row in
+                ActiveFleetRow(row: row)
             }
 
-            Spacer(minLength: 0)
+            if overflowCount > 0 {
+                Text("+\(overflowCount) More")
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+            }
         }
+    }
+}
+
+private struct AttentionFleetView: View {
+    let state: LFGFleetAttributes.ContentState
+    let hero: LFGFleetAttributes.Row
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            AttentionLabel(count: state.needsInput)
+
+            Text(hero.title.isEmpty ? "Session" : hero.title)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .layoutPriority(1)
+
+            HStack(spacing: 12) {
+                AttentionMeta(state: state, hero: hero)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .layoutPriority(1)
+
+                Spacer(minLength: 0)
+
+                if let destination = URL(string: "lfg://session/\(hero.sid)") {
+                    Link(destination: destination) {
+                        Text("Reply")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14))
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct ActiveHeader: View {
+    let count: Int
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("\(count)")
+                .font(.title2.bold())
+                .foregroundStyle(.white)
+            Text("Active")
+                .font(.body)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct AttentionLabel: View {
+    let count: Int
+
+    var body: some View {
+        Text(count > 1 ? "\(count) need you" : "Needs input")
+            .font(.footnote)
+            .foregroundStyle(count > 1 ? Color.orange : Color.secondary)
+    }
+}
+
+private struct AttentionMeta: View {
+    let state: LFGFleetAttributes.ContentState
+    let hero: LFGFleetAttributes.Row
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            Text(metaText(at: context.date))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
+    }
+
+    private func metaText(at date: Date) -> String {
+        var parts = [displayHostName(hero.host), compactElapsed(since: hero.since, at: date)]
+        if state.working > 0 {
+            parts.append("\(state.working) working")
+        }
+        if state.needsInput > 1 {
+            parts.append("+\(state.needsInput - 1) more need you")
+        }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -106,94 +187,51 @@ private struct FleetIslandHeader: View {
     let state: LFGFleetAttributes.ContentState
 
     var body: some View {
-        HStack(spacing: 8) {
-            LFGMark(size: 24, cornerRadius: 6, font: .caption2.weight(.black))
-            VStack(alignment: .leading, spacing: 1) {
-                SummaryText(state: state)
-                    .font(.subheadline.weight(.bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.55)
+        Group {
+            if state.needsInput > 0 {
+                // Summary only. The expanded island's leading region is narrow —
+                // pairing the label with the hero title there scaled both down to
+                // an unreadable, double-clipped line. The titles are already the
+                // rows in the bottom region.
+                AttentionLabel(count: state.needsInput)
+            } else {
+                ActiveHeader(count: state.working)
             }
         }
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
     }
 }
 
-private struct SummaryText: View {
-    let state: LFGFleetAttributes.ContentState
-
-    var body: some View {
-        let total = state.working + state.needsInput
-        let need = state.needsInput
-        let accent = fleetAccent(for: state)
-        if need > 0 {
-            (Text("\(total) agents · ") + Text("\(need) need you").foregroundColor(accent))
-                .foregroundStyle(.white)
-        } else {
-            (Text("\(total) agents · ") + Text("working").foregroundColor(accent))
-                .foregroundStyle(.white)
-        }
-    }
-}
-
-private struct FleetRowView: View {
+private struct ActiveFleetRow: View {
     let row: LFGFleetAttributes.Row
-    let hosts: [LFGFleetAttributes.ContentState.HostStatus]
-    let compact: Bool
 
     var body: some View {
-        HStack(alignment: .center, spacing: compact ? 9 : 11) {
-            StateDot(state: row.state, size: compact ? 8 : 9)
-
+        HStack(spacing: 8) {
             Text(row.title.isEmpty ? "Session" : row.title)
-                .font(.subheadline.weight(.semibold))
+                .font(.subheadline)
                 .foregroundStyle(.white)
                 .lineLimit(1)
-                .minimumScaleFactor(0.78)
+                .truncationMode(.tail)
                 .layoutPriority(1)
 
-            HostPill(name: row.host, offline: isHostOffline(row.host, in: hosts))
+            Spacer(minLength: 8)
 
-            Spacer(minLength: 0)
-
-            if row.state.lowercased() == "blocked" {
-                NeedsInputPill()
-            }
+            ElapsedTimeText(since: row.since)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
         }
-        .padding(.vertical, compact ? 7 : 6)
     }
 }
 
-private struct HostPill: View {
-    let name: String
-    let offline: Bool
+private struct ElapsedTimeText: View {
+    let since: Double
 
     var body: some View {
-        HStack(spacing: 3) {
-            if offline {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 8))
-            }
-            Text(displayHostName(name))
-                .lineLimit(1)
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            Text(compactElapsed(since: since, at: context.date))
         }
-        .font(.caption2)
-        .padding(.horizontal, 5)
-        .padding(.vertical, 1)
-        .background(offline ? Color.orange.opacity(0.15) : Color(.tertiarySystemFill), in: Capsule())
-        .foregroundStyle(offline ? Color.orange : Color.secondary)
-        .fixedSize(horizontal: true, vertical: false)
-    }
-}
-
-private struct NeedsInputPill: View {
-    var body: some View {
-        Text("needs input")
-            .font(.caption.weight(.bold))
-            .foregroundStyle(.orange)
-            .lineLimit(1)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(Color.orange.opacity(0.20)))
     }
 }
 
@@ -221,22 +259,6 @@ private struct CompactCountView: View {
     }
 }
 
-private struct LFGMark: View {
-    var size: CGFloat = 30
-    var cornerRadius: CGFloat = 8
-    // Retained for call-site compatibility; the app icon carries its own glyph.
-    var font: Font = .subheadline.weight(.black)
-
-    var body: some View {
-        Image("AppMark")
-            .resizable()
-            .interpolation(.high)
-            .aspectRatio(contentMode: .fill)
-            .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-    }
-}
-
 private struct StateDot: View {
     let state: String
     var size: CGFloat = 8
@@ -247,6 +269,19 @@ private struct StateDot: View {
             .frame(width: size, height: size)
             .shadow(color: color(for: state).opacity(0.55), radius: 5)
     }
+}
+
+private func compactElapsed(since: Double, at date: Date) -> String {
+    guard since > 0 else { return "now" }
+    let seconds = max(0, Int(date.timeIntervalSince1970 - since))
+    guard seconds >= 60 else { return "now" }
+
+    let minutes = seconds / 60
+    guard minutes >= 60 else { return "\(minutes)m" }
+
+    let hours = minutes / 60
+    let remainingMinutes = minutes % 60
+    return remainingMinutes == 0 ? "\(hours)h" : "\(hours)h \(remainingMinutes)m"
 }
 
 private func color(for state: String) -> Color {
@@ -264,14 +299,6 @@ private func color(for state: String) -> Color {
 
 private func fleetAccent(for state: LFGFleetAttributes.ContentState) -> Color {
     state.needsInput > 0 ? .orange : .blue
-}
-
-private func isHostOffline(_ host: String, in hosts: [LFGFleetAttributes.ContentState.HostStatus]) -> Bool {
-    let label = host.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard let status = hosts.first(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) == label }) else {
-        return true
-    }
-    return !status.online
 }
 
 private func displayHostName(_ name: String) -> String {
