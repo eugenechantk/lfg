@@ -239,6 +239,12 @@ marked.setOptions({ gfm: true, breaks: false });
 // scroll container so wide tables (security posture, pricing, db stats) scroll
 // within their card on mobile instead of blowing out the viewport width.
 function renderReportHtml(raw: string): string {
+const CREATE_SESSION_BIND_POLL_MS = 500;
+const DEFAULT_CREATE_SESSION_BIND_POLLS = 12;
+const CODEX_CREATE_SESSION_BIND_POLLS = 28;
+const CODEX_CREATE_FALLBACK_WINDOW_MS =
+  CODEX_CREATE_SESSION_BIND_POLLS * CREATE_SESSION_BIND_POLL_MS;
+const UUID_RE = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
   const html = marked.parse(raw) as string;
   return html
     .replace(/<table>/g, '<div class="table-wrap"><table>')
@@ -446,6 +452,89 @@ function msgWithHtml<T extends { kind: string; text: string }>(m: T) {
 }
 
 async function messagePageFromSnapshot(
+type CodexCreateFallbackCandidate = {
+  id: string;
+  cwd: string | null;
+  createdAt: number | null;
+};
+
+export function pickSingleCodexCreateFallbackCandidate(args: {
+  cwd: string;
+  spawnedAt: number;
+  candidates: CodexCreateFallbackCandidate[];
+  claimedIds?: Set<string>;
+}): CodexCreateFallbackCandidate | null {
+  const maxCreatedAt = args.spawnedAt + CODEX_CREATE_FALLBACK_WINDOW_MS;
+  const matches = args.candidates.filter(
+    (candidate) =>
+      candidate.cwd === args.cwd &&
+      candidate.createdAt != null &&
+      candidate.createdAt >= args.spawnedAt &&
+      candidate.createdAt <= maxCreatedAt &&
+      !args.claimedIds?.has(candidate.id),
+  );
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function codexSessionsDir(): string {
+  return join(process.env.HOME ?? homedir(), ".codex", "sessions");
+}
+
+async function codexCreateFallbackCandidates(): Promise<CodexCreateFallbackCandidate[]> {
+  const out: CodexCreateFallbackCandidate[] = [];
+  let years: string[];
+  try {
+    years = await readdir(codexSessionsDir());
+  } catch {
+    return out;
+  }
+  for (const year of years) {
+    let months: string[];
+    try {
+      months = await readdir(join(codexSessionsDir(), year));
+    } catch {
+      continue;
+    }
+    for (const month of months) {
+      let days: string[];
+      try {
+        days = await readdir(join(codexSessionsDir(), year, month));
+      } catch {
+        continue;
+      }
+      for (const day of days) {
+        let files: string[];
+        try {
+          files = await readdir(join(codexSessionsDir(), year, month, day));
+        } catch {
+          continue;
+        }
+        for (const file of files) {
+          if (!file.endsWith(".jsonl")) continue;
+          const path = join(codexSessionsDir(), year, month, day, file);
+          try {
+            const first = (await Bun.file(path).slice(0, 128 * 1024).text()).split("\n")[0];
+            if (!first) continue;
+            const row = JSON.parse(first) as {
+              type?: string;
+              payload?: { id?: string; cwd?: string; timestamp?: string };
+            };
+            const id = row.payload?.id ?? path.match(UUID_RE)?.[0] ?? null;
+            if (row.type !== "session_meta" || !id) continue;
+            const createdAt = row.payload?.timestamp ? Date.parse(row.payload.timestamp) : NaN;
+            out.push({
+              id,
+              cwd: row.payload?.cwd ?? null,
+              createdAt: Number.isFinite(createdAt) ? createdAt : null,
+            });
+          } catch {}
+        }
+      }
+    }
+  }
+  return out;
+}
+
   path: string,
   opts: { before?: number | null; limit?: number; maxBytes: number | null },
 ): Promise<{
@@ -1809,6 +1898,7 @@ export async function cmdServe() {
               ? spawnManagedAisdkSession({
                   name: tmuxName,
                   cwd,
+        const spawnStartedAt = Date.now();
                   prompt,
                   model: model ?? "opus",
                   sessionId: aisdkSessionId!,
@@ -1847,8 +1937,10 @@ export async function cmdServe() {
         // dismiss automatically. aisdk's id is known immediately — just wait for
         // the harness to register so the session is listable.
         let sessionId: string | null = aisdkSessionId;
-        for (let i = 0; i < 12 && !sessionId; i++) {
-          await new Promise((res) => setTimeout(res, 500));
+        const bindPolls =
+          agent === "codex" ? CODEX_CREATE_SESSION_BIND_POLLS : DEFAULT_CREATE_SESSION_BIND_POLLS;
+        for (let i = 0; i < bindPolls && !sessionId; i++) {
+          await new Promise((res) => setTimeout(res, CREATE_SESSION_BIND_POLL_MS));
           if (agent === "codex") {
             dismissCodexUpdatePrompt(`${tmuxName}:0.0`);
             sessionId =
@@ -1866,6 +1958,24 @@ export async function cmdServe() {
         // opencode: the harness writes the transcript at the key, so the
         // sessionId IS the key — just wait for the harness to register so the
         // session is listable (no after-turn-1 threadId to wait for).
+        if (agent === "codex" && !sessionId) {
+          const sessions = await listSessions();
+          sessionId = sessions.find((s) => s.tmuxName === tmuxName)?.sessionId ?? null;
+          if (!sessionId) {
+            const claimedIds = new Set(
+              sessions
+                .filter((s) => s.sessionId)
+                .map((s) => s.sessionId as string),
+            );
+            sessionId =
+              pickSingleCodexCreateFallbackCandidate({
+                cwd,
+                spawnedAt: spawnStartedAt,
+                candidates: await codexCreateFallbackCandidates(),
+                claimedIds,
+              })?.id ?? null;
+          }
+        }
         if (agent === "opencode") {
           for (let i = 0; i < 20 && !readAisdkEntry(opencodeKey!); i++)
             await new Promise((res) => setTimeout(res, 250));
