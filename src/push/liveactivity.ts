@@ -7,33 +7,25 @@ import {
   type ApnsTransport,
 } from "./apns.ts";
 
-export const LIVE_ACTIVITY_ATTRIBUTES_TYPE = "LFGFleetAttributes";
+export const LIVE_ACTIVITY_ATTRIBUTES_TYPE = "LFGSessionAttributes";
 export const DEFAULT_APNS_TOPIC = "dev.omg.lfg";
 
-export type LiveActivityRow = {
-  sid: string;
+export type LiveActivitySessionState = {
+  state: "working" | "blocked" | "finished";
   title: string;
+  dir: string;
   host: string;
-  state: "working" | "blocked" | "idle";
   since: number;
-};
-
-export type LiveActivityHostStatus = {
-  name: string;
-  online: boolean;
-};
-
-export type LiveActivityContentState = {
-  working: number;
-  needsInput: number;
-  rows: LiveActivityRow[];
-  hosts: LiveActivityHostStatus[];
   updatedAt: number;
+  subtitle?: string;
+  added?: number;
+  removed?: number;
+  files?: number;
 };
 
-export type LiveActivityStartFleet = {
-  contentState: LiveActivityContentState;
-  fleetId?: string;
+export type LiveActivityStartSession = {
+  contentState: LiveActivitySessionState;
+  sessionId: string;
   alertTitle?: string;
   alertBody?: string;
 };
@@ -50,9 +42,9 @@ export type LiveActivityBody = {
   aps: {
     timestamp: number;
     event: LiveActivityEvent;
-    "content-state"?: LiveActivityContentState;
+    "content-state"?: LiveActivitySessionState;
     "attributes-type"?: string;
-    attributes?: { fleetId: string };
+    attributes?: { sessionId: string };
     alert?: { title: string; body: string };
     "dismissal-date"?: number;
   };
@@ -75,30 +67,26 @@ function headers(bundleId = DEFAULT_APNS_TOPIC): LiveActivityHeaders {
   };
 }
 
-function contentState(input: LiveActivityContentState): LiveActivityContentState {
+function contentState(input: LiveActivitySessionState): LiveActivitySessionState {
   return {
-    working: input.working,
-    needsInput: input.needsInput,
-    rows: input.rows.map((row) => ({
-      sid: row.sid,
-      title: row.title,
-      host: row.host,
-      state: row.state,
-      since: row.since,
-    })),
-    hosts: input.hosts.map((host) => ({
-      name: host.name,
-      online: host.online,
-    })),
+    state: input.state,
+    title: input.title,
+    dir: input.dir,
+    host: input.host,
+    since: input.since,
     updatedAt: input.updatedAt,
+    ...(typeof input.subtitle === "string" ? { subtitle: input.subtitle } : {}),
+    ...(typeof input.added === "number" ? { added: input.added } : {}),
+    ...(typeof input.removed === "number" ? { removed: input.removed } : {}),
+    ...(typeof input.files === "number" ? { files: input.files } : {}),
   };
 }
 
 export function buildStart(
-  fleet: LiveActivityStartFleet,
+  session: LiveActivityStartSession,
   attributesType = LIVE_ACTIVITY_ATTRIBUTES_TYPE,
 ): LiveActivityPush {
-  const state = contentState(fleet.contentState);
+  const state = contentState(session.contentState);
   return {
     headers: headers(),
     body: {
@@ -107,17 +95,17 @@ export function buildStart(
         event: "start",
         "content-state": state,
         "attributes-type": attributesType,
-        attributes: { fleetId: fleet.fleetId ?? "fleet" },
+        attributes: { sessionId: session.sessionId },
         alert: {
-          title: fleet.alertTitle ?? "lfg",
-          body: fleet.alertBody ?? "LFG agents are active.",
+          title: session.alertTitle ?? "lfg",
+          body: session.alertBody ?? "LFG session is active.",
         },
       },
     },
   };
 }
 
-export function buildUpdate(content: LiveActivityContentState): LiveActivityPush {
+export function buildUpdate(content: LiveActivitySessionState): LiveActivityPush {
   const state = contentState(content);
   return {
     headers: headers(),
@@ -132,7 +120,7 @@ export function buildUpdate(content: LiveActivityContentState): LiveActivityPush
 }
 
 export function buildEnd(
-  content?: LiveActivityContentState,
+  content?: LiveActivitySessionState,
   dismissalDate?: number,
 ): LiveActivityPush {
   const state = content ? contentState(content) : undefined;

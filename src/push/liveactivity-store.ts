@@ -1,6 +1,5 @@
 // Registry of APNs Live Activity tokens. Push-to-start tokens are device-level;
-// activity update tokens are per Live Activity instance. The fleet Live Activity
-// has one update token per device, not one per session.
+// activity update tokens are per Live Activity instance and keyed by session.
 // Persisted as a small JSON file following the device push store conventions.
 import { dirname, join } from "node:path";
 import { mkdir } from "node:fs/promises";
@@ -68,10 +67,6 @@ export async function listActivityUpdateTokens(sessionId: string): Promise<LiveA
   return (await listLiveActivityTokens()).filter(
     (t) => t.kind === "activityUpdate" && t.sessionId === sessionId,
   );
-}
-
-export async function listFleetUpdateTokens(): Promise<LiveActivityToken[]> {
-  return (await listLiveActivityTokens()).filter((t) => t.kind === "activityUpdate");
 }
 
 export async function removeLiveActivityToken(token: string): Promise<void> {

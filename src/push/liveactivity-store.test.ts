@@ -46,22 +46,25 @@ describe("Live Activity token store", () => {
     expect(second.env).toBe("production");
   });
 
-  test("lists push-to-start and fleet update tokens separately", async () => {
+  test("lists push-to-start and per-session update tokens separately", async () => {
     const s = await store();
     await s.upsertLiveActivityToken({ token: "start", kind: "pushToStart", env: "sandbox" });
     await s.upsertLiveActivityToken({
       token: "u1",
       kind: "activityUpdate",
+      sessionId: "s1",
       env: "sandbox",
     });
     await s.upsertLiveActivityToken({
       token: "u2",
       kind: "activityUpdate",
+      sessionId: "s2",
       env: "production",
     });
 
     expect((await s.listPushToStartTokens()).map((t) => t.token)).toEqual(["start"]);
-    expect((await s.listFleetUpdateTokens()).map((t) => t.token)).toEqual(["u1", "u2"]);
+    expect((await s.listActivityUpdateTokens("s1")).map((t) => t.token)).toEqual(["u1"]);
+    expect((await s.listActivityUpdateTokens("s2")).map((t) => t.token)).toEqual(["u2"]);
   });
 
   test("lookup and remove operate by token", async () => {

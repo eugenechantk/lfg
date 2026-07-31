@@ -19,17 +19,15 @@ afterEach(() => _resetApnsJwtCache());
 describe("Live Activity payload builders", () => {
   test("buildStart produces the pinned liveactivity header/body shape", () => {
     const contentState = {
-      working: 1,
-      needsInput: 1,
-      rows: [
-        { sid: "s2", title: "Approve", host: "mac", state: "blocked" as const, since: 1_690 },
-        { sid: "s1", title: "Build", host: "mac", state: "working" as const, since: 1_700 },
-      ],
-      hosts: [{ name: "mac", online: true }],
+      state: "blocked" as const,
+      title: "Approve",
+      dir: "lfg",
+      host: "mac",
+      since: 1_690,
       updatedAt: 1_701,
     };
     const push = buildStart(
-      { contentState, fleetId: "fleet" },
+      { contentState, sessionId: "s2" },
       LIVE_ACTIVITY_ATTRIBUTES_TYPE,
     );
     expect(push).toEqual({
@@ -43,20 +41,45 @@ describe("Live Activity payload builders", () => {
           timestamp: 1_701,
           event: "start",
           "content-state": contentState,
-          "attributes-type": "LFGFleetAttributes",
-          attributes: { fleetId: "fleet" },
-          alert: { title: "lfg", body: "LFG agents are active." },
+          "attributes-type": "LFGSessionAttributes",
+          attributes: { sessionId: "s2" },
+          alert: { title: "lfg", body: "LFG session is active." },
         },
       },
     });
   });
 
+  test("content-state omits undefined optional fields", () => {
+    const push = buildUpdate({
+      state: "working",
+      title: "Build",
+      dir: "lfg",
+      host: "mac",
+      since: 1_700,
+      updatedAt: 1_701,
+      subtitle: undefined,
+      added: undefined,
+      removed: undefined,
+      files: undefined,
+    });
+
+    expect(push.body.aps["content-state"]).toEqual({
+      state: "working",
+      title: "Build",
+      dir: "lfg",
+      host: "mac",
+      since: 1_700,
+      updatedAt: 1_701,
+    });
+  });
+
   test("buildUpdate produces the pinned update shape", () => {
     const contentState = {
-      working: 0,
-      needsInput: 1,
-      rows: [{ sid: "s1", title: "Build", host: "mac", state: "blocked" as const, since: 1_700 }],
-      hosts: [{ name: "mac", online: true }],
+      state: "blocked" as const,
+      title: "Build",
+      dir: "inbox",
+      host: "mac",
+      since: 1_700,
       updatedAt: 1_701,
     };
     expect(buildUpdate(contentState)).toEqual({
@@ -77,10 +100,11 @@ describe("Live Activity payload builders", () => {
 
   test("buildEnd produces the pinned end shape with optional dismissal date", () => {
     const contentState = {
-      working: 0,
-      needsInput: 0,
-      rows: [],
-      hosts: [{ name: "mac", online: true }],
+      state: "finished" as const,
+      title: "Build",
+      dir: "lfg",
+      host: "mac",
+      since: 1_700,
       updatedAt: 1_702,
     };
     expect(buildEnd(contentState, 1_800)).toEqual({
@@ -109,10 +133,11 @@ describe("sendLiveActivity", () => {
       return { ok: true, status: 200 };
     };
     const push = buildUpdate({
-      working: 1,
-      needsInput: 0,
-      rows: [{ sid: "s1", title: "Build", host: "mac", state: "working", since: 1_700 }],
-      hosts: [{ name: "mac", online: true }],
+      state: "working",
+      title: "Build",
+      dir: "lfg",
+      host: "mac",
+      since: 1_700,
       updatedAt: 1_700,
     });
     await sendLiveActivity({ token: "tok", env: "sandbox" }, push, cfg, transport);

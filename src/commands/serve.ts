@@ -1716,14 +1716,17 @@ export async function cmdServe() {
         const body = (await req.json().catch(() => null)) as {
           token?: string;
           env?: string;
+          sessionId?: string;
         } | null;
         const token = body?.token?.trim();
         if (!token || !/^[0-9a-fA-F]{8,}$/.test(token)) return err(400, "invalid token");
         const env = body?.env === "production" ? "production" : "sandbox";
+        const sessionId = body?.sessionId?.trim();
         const record = await upsertLiveActivityToken({
           token,
           env,
           kind: "activityUpdate",
+          ...(sessionId ? { sessionId } : {}),
         });
         ensurePushWatcher();
         return json({ ok: true, kind: record.kind, env: record.env });

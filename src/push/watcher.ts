@@ -18,7 +18,7 @@ import { findEntryByAnyId } from "../aisdk-registry.ts";
 import { codexDelegationSessionIds } from "../activity.ts";
 import { listDevices } from "./store.ts";
 import {
-  listFleetUpdateTokens,
+  listActivityUpdateTokens,
   listPushToStartTokens,
   removeLiveActivityToken,
 } from "./liveactivity-store.ts";
@@ -35,12 +35,12 @@ import {
   buildStart,
   buildUpdate,
   sendLiveActivity,
-  type LiveActivityContentState,
+  type LiveActivitySessionState,
   type LiveActivityPush,
-  type LiveActivityRow,
 } from "./liveactivity.ts";
 import { unregisterDevice } from "./store.ts";
-import { loadFleetActivityActive, saveFleetActivityActive } from "./fleet-active-store.ts";
+import { loadSessionLiveActivitiesActive, saveSessionLiveActivitiesActive } from "./session-active-store.ts";
+import { basename } from "node:path";
 
 // One observation of a session at a single tick.
 export type SessionState = {
@@ -130,8 +130,9 @@ export type PayloadSessionInput = {
 };
 
 export type LiveActivityActive = {
+  sessionId: string;
   startedAt: number;
-  contentState?: LiveActivityContentState;
+  contentState?: LiveActivitySessionState;
 };
 
 export type LiveActivityAction = {
@@ -140,116 +141,158 @@ export type LiveActivityAction = {
 };
 
 export type LiveActivityDecision = {
+  sessionId: string;
   action: LiveActivityAction | null;
   nextActive: LiveActivityActive | null;
 };
 
-const FLEET_ACTIVITY_KEY = "fleet";
+export type LiveActivityReduction = {
+  decisions: LiveActivityDecision[];
+  dropped: string[];
+};
 
-function liveActivityState(next: SessionState): LiveActivityRow["state"] {
+function liveActivityState(
+  next: SessionState,
+  previous?: PriorState,
+): LiveActivitySessionState["state"] | null {
   if (next.busy) return "working";
   if (next.promptPresent) return "blocked";
-  return "idle";
+  if (previous?.busy) return "finished";
+  return null;
 }
 
-function sameFleetContentState(a: LiveActivityContentState | undefined, b: LiveActivityContentState): boolean {
-  if (
-    !a ||
-    a.working !== b.working ||
-    a.needsInput !== b.needsInput ||
-    a.rows.length !== b.rows.length ||
-    a.hosts.length !== b.hosts.length
-  ) {
-    return false;
-  }
-  const sameRows = a.rows.every((row, i) => {
-    const other = b.rows[i];
-    return (
-      row.sid === other.sid &&
-      row.title === other.title &&
-      row.host === other.host &&
-      row.state === other.state &&
-      row.since === other.since
-    );
-  });
-  const sameHosts = a.hosts.every((host, i) => {
-    const other = b.hosts[i];
-    return host.name === other.name && host.online === other.online;
-  });
-  return sameRows && sameHosts;
+function sameSessionContentState(a: LiveActivitySessionState | undefined, b: LiveActivitySessionState): boolean {
+  return !!a &&
+    a.state === b.state &&
+    a.title === b.title &&
+    a.dir === b.dir &&
+    a.host === b.host &&
+    a.since === b.since &&
+    a.subtitle === b.subtitle &&
+    a.added === b.added &&
+    a.removed === b.removed &&
+    a.files === b.files;
 }
 
-export function orderFleetRows(rows: LiveActivityRow[]): LiveActivityRow[] {
-  const rank = (state: LiveActivityRow["state"]) => (state === "blocked" ? 0 : state === "working" ? 1 : 2);
-  return rows
-    .filter((row) => row.state !== "idle")
-    .sort((a, b) => rank(a.state) - rank(b.state) || a.since - b.since || a.sid.localeCompare(b.sid))
-    .slice(0, 3);
+function sessionDirectory(cwd?: string | null): string {
+  const trimmed = (cwd ?? "").trim();
+  return trimmed ? basename(trimmed) : "";
 }
 
-export function reduceFleetLiveActivity(args: {
-  observations: Array<{ session: PayloadSessionInput; observed: SessionState }>;
-  active: LiveActivityActive | null | undefined;
+type SessionLiveActivityCandidate = {
+  sessionId: string;
+  contentState: LiveActivitySessionState;
+};
+
+export function orderSessionLiveActivityCandidates(
+  candidates: SessionLiveActivityCandidate[],
+): SessionLiveActivityCandidate[] {
+  const rank = (state: LiveActivitySessionState["state"]) =>
+    state === "blocked" ? 0 : state === "working" ? 1 : 2;
+  return [...candidates].sort(
+    (a, b) =>
+      rank(a.contentState.state) - rank(b.contentState.state) ||
+      a.contentState.since - b.contentState.since ||
+      a.sessionId.localeCompare(b.sessionId),
+  );
+}
+
+/**
+ * ActivityKit's hard per-app ceiling. Measured, not guessed: seeding activities
+ * one at a time on an iPhone 17 Pro simulator, requests 1–5 succeed and the 6th
+ * throws `targetMaximumExceeded`. Going over doesn't degrade gracefully — the
+ * extra requests simply fail — so the reducer truncates here and logs what it
+ * dropped. Sessions are ordered blocked → working → finished first, so the five
+ * that survive are always the most urgent.
+ */
+export const MAX_CONCURRENT_LIVE_ACTIVITIES = 5;
+
+export function reduceSessionLiveActivities(args: {
+  observations: Array<{ session: PayloadSessionInput; observed: SessionState; previous?: PriorState }>;
+  active: Map<string, LiveActivityActive>;
   now: number;
   hostName: string;
-}): LiveActivityDecision {
-  const priorRows = args.active?.contentState?.rows ?? [];
+}): LiveActivityReduction {
   const hostName = clip(args.hostName || "lfg", 28);
-  const rows = orderFleetRows(
-    args.observations
-      .filter(({ session, observed }) => !!session.sessionId && (observed.busy || observed.promptPresent))
-      .map(({ session, observed }) => {
-        const sid = session.sessionId ?? "";
-        const state = liveActivityState(observed);
-        const prior = priorRows.find((row) => row.sid === sid && row.state === state);
-        return {
-          sid,
-          title: clip(session.title || session.tmuxName || sid.slice(0, 8) || "Session", 80),
-          host: hostName,
+  const candidates = orderSessionLiveActivityCandidates(
+    args.observations.flatMap(({ session, observed, previous }) => {
+      const sessionId = session.sessionId ?? "";
+      if (!sessionId) return [];
+      const state = liveActivityState(observed, previous);
+      if (!state) return [];
+      const prior = args.active.get(sessionId)?.contentState;
+      return [{
+        sessionId,
+        contentState: {
           state,
-          since: prior?.since ?? args.now,
-        };
-      }),
+          title: clip(session.title || session.tmuxName || sessionId.slice(0, 8) || "Session", 80),
+          dir: sessionDirectory(session.cwd),
+          host: hostName,
+          since: prior?.state === state ? prior.since : args.now,
+          updatedAt: args.now,
+        },
+      }];
+    }),
   );
-  const working = args.observations.filter(({ observed }) => observed.busy).length;
-  const needsInput = args.observations.filter(({ observed }) => !observed.busy && observed.promptPresent).length;
-  const activeTotal = working + needsInput;
-  const contentState: LiveActivityContentState = {
-    working,
-    needsInput,
-    rows,
-    // TODO: have the phone app / multi-host coordinator enrich this with every host's reachability.
-    hosts: [{ name: hostName, online: true }],
-    updatedAt: args.now,
-  };
 
-  if (activeTotal === 0) {
-    if (!args.active) return { action: null, nextActive: null };
-    return {
-      action: { event: "end", push: buildEnd(contentState, args.now) },
-      nextActive: null,
-    };
-  }
+  const selected = candidates.slice(0, MAX_CONCURRENT_LIVE_ACTIVITIES);
+  const dropped = candidates.slice(MAX_CONCURRENT_LIVE_ACTIVITIES).map((c) => c.sessionId);
+  const selectedIds = new Set(selected.map((c) => c.sessionId));
+  const decisions: LiveActivityDecision[] = [];
 
-  if (!args.active) {
-    return {
-      action: {
-        event: "start",
-        push: buildStart({ contentState, fleetId: FLEET_ACTIVITY_KEY }),
-      },
-      nextActive: { startedAt: args.now, contentState },
-    };
-  }
+  for (const candidate of selected) {
+    const active = args.active.get(candidate.sessionId);
+    if (!active) {
+      decisions.push({
+        sessionId: candidate.sessionId,
+        action: {
+          event: "start",
+          push: buildStart({ contentState: candidate.contentState, sessionId: candidate.sessionId }),
+        },
+        nextActive: {
+          sessionId: candidate.sessionId,
+          startedAt: args.now,
+          contentState: candidate.contentState,
+        },
+      });
+      continue;
+    }
 
-  const nextActive: LiveActivityActive = { ...args.active, contentState };
-  if (!sameFleetContentState(args.active.contentState, contentState)) {
-    return {
-      action: { event: "update", push: buildUpdate(contentState) },
+    if (candidate.contentState.state === "finished") {
+      decisions.push({
+        sessionId: candidate.sessionId,
+        action: {
+          event: "end",
+          push: buildEnd(candidate.contentState, args.now + 480),
+        },
+        nextActive: null,
+      });
+      continue;
+    }
+
+    const nextActive: LiveActivityActive = { ...active, contentState: candidate.contentState };
+    decisions.push({
+      sessionId: candidate.sessionId,
+      action: sameSessionContentState(active.contentState, candidate.contentState)
+        ? null
+        : { event: "update", push: buildUpdate(candidate.contentState) },
       nextActive,
-    };
+    });
   }
 
-  return { action: null, nextActive };
+  for (const [sessionId, active] of args.active) {
+    if (selectedIds.has(sessionId)) continue;
+    decisions.push({
+      sessionId,
+      action: {
+        event: "end",
+        push: buildEnd(active.contentState, args.now),
+      },
+      nextActive: null,
+    });
+  }
+
+  return { decisions, dropped };
 }
 
 // Compact session snapshot embedded in the push so the client can render the
@@ -341,14 +384,14 @@ export type TickDeps = {
   liveActivities?: {
     active: Map<string, LiveActivityActive>;
     pushToStartTokens: () => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
-    fleetUpdateTokens: () => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
+    activityUpdateTokens: (sessionId: string) => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
     send: (
       device: { token: string; env: "sandbox" | "production" },
       push: LiveActivityPush,
       cfg: ApnsConfig,
     ) => Promise<{ ok: boolean; status: number; reason?: string }>;
     onDeadToken?: (token: string) => Promise<void> | void;
-    persistActive?: (active: LiveActivityActive | null) => Promise<void> | void;
+    persistActive?: (active: Map<string, LiveActivityActive>) => Promise<void> | void;
   };
   now?: () => number;
   log?: (line: string) => void;
@@ -397,30 +440,30 @@ async function applyLiveActivityDecision(
   log?: (line: string) => void,
 ): Promise<void> {
   if (!decision.action) {
-    if (decision.nextActive) deps.active.set(FLEET_ACTIVITY_KEY, decision.nextActive);
-    else deps.active.delete(FLEET_ACTIVITY_KEY);
+    if (decision.nextActive) deps.active.set(decision.sessionId, decision.nextActive);
+    else deps.active.delete(decision.sessionId);
     return;
   }
 
   if (decision.action.event === "start") {
     const sent = await sendLiveActivityToTokens(startTokens, decision.action.push, deps, cfg, log);
     if (sent > 0 && decision.nextActive) {
-      deps.active.set(FLEET_ACTIVITY_KEY, decision.nextActive);
-      await deps.persistActive?.(decision.nextActive);
+      deps.active.set(decision.sessionId, decision.nextActive);
+      await deps.persistActive?.(deps.active);
     }
     return;
   }
 
-  const updateTokens = await deps.fleetUpdateTokens();
+  const updateTokens = await deps.activityUpdateTokens(decision.sessionId);
   if (!updateTokens.length) return;
   const sent = await sendLiveActivityToTokens(updateTokens, decision.action.push, deps, cfg, log);
   if (sent <= 0) return;
   if (decision.nextActive) {
-    deps.active.set(FLEET_ACTIVITY_KEY, decision.nextActive);
-    await deps.persistActive?.(decision.nextActive);
+    deps.active.set(decision.sessionId, decision.nextActive);
+    await deps.persistActive?.(deps.active);
   } else {
-    deps.active.delete(FLEET_ACTIVITY_KEY);
-    await deps.persistActive?.(null);
+    deps.active.delete(decision.sessionId);
+    await deps.persistActive?.(deps.active);
   }
 }
 
@@ -441,7 +484,11 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
     return;
   }
   const seen = new Set<string>();
-  const liveActivityObservations: Array<{ session: PayloadSessionInput; observed: SessionState }> = [];
+  const liveActivityObservations: Array<{
+    session: PayloadSessionInput;
+    observed: SessionState;
+    previous?: PriorState;
+  }> = [];
   for (const s of sessions) {
     const sid = s.sessionId;
     if (!sid) continue;
@@ -454,7 +501,7 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
     }
     const observedAt = now();
     const prev = prior.get(sid);
-    if (liveActivities) liveActivityObservations.push({ session: s, observed: state });
+    if (liveActivities) liveActivityObservations.push({ session: s, observed: state, previous: prev });
     if (!prev) {
       // First sighting — seed without emitting. -Infinity marks "never notified"
       // so the first genuine transition isn't swallowed by the dedupe window.
@@ -481,19 +528,24 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
   // Drop memory for sessions that no longer exist.
   for (const k of [...prior.keys()]) if (!seen.has(k)) prior.delete(k);
   if (liveActivities) {
-    const decision = reduceFleetLiveActivity({
+    const reduction = reduceSessionLiveActivities({
       observations: liveActivityObservations,
-      active: liveActivities.active.get(FLEET_ACTIVITY_KEY),
+      active: liveActivities.active,
       now: Math.floor(now() / 1000),
       hostName: deps.hostName?.() ?? "lfg",
     });
-    await applyLiveActivityDecision(
-      decision,
-      liveActivities,
-      deps.cfg,
-      liveStartTokens,
-      deps.log,
-    );
+    if (reduction.dropped.length) {
+      deps.log?.(`[liveactivity] cap dropped ${reduction.dropped.join(", ")}`);
+    }
+    for (const decision of reduction.decisions) {
+      await applyLiveActivityDecision(
+        decision,
+        liveActivities,
+        deps.cfg,
+        liveStartTokens,
+        deps.log,
+      );
+    }
   }
 }
 
@@ -518,14 +570,14 @@ export function startPushWatcher(
   if (!cfg) return; // push not configured → feature is off
   const prior = new Map<string, PriorState>();
   const active = new Map<string, LiveActivityActive>();
-  let fleetActiveLoaded = false;
-  const fleetActiveLoad = loadFleetActivityActive()
+  let sessionActivitiesLoaded = false;
+  const sessionActivitiesLoad = loadSessionLiveActivitiesActive()
     .then((loaded) => {
-      if (loaded) active.set(FLEET_ACTIVITY_KEY, loaded);
-      fleetActiveLoaded = true;
+      for (const [sessionId, record] of loaded) active.set(sessionId, record);
+      sessionActivitiesLoaded = true;
     })
     .catch(() => {
-      fleetActiveLoaded = true;
+      sessionActivitiesLoaded = true;
     });
   const deps: TickDeps = {
     sessions: listSessions,
@@ -543,10 +595,10 @@ export function startPushWatcher(
     deps.liveActivities = {
       active,
       pushToStartTokens: listPushToStartTokens,
-      fleetUpdateTokens: listFleetUpdateTokens,
+      activityUpdateTokens: listActivityUpdateTokens,
       send: sendLiveActivity,
       onDeadToken: removeLiveActivityToken,
-      persistActive: saveFleetActivityActive,
+      persistActive: saveSessionLiveActivitiesActive,
     };
   }
   let running = false;
@@ -554,7 +606,7 @@ export function startPushWatcher(
     if (running) return; // skip if the previous tick is still going (slow panes)
     running = true;
     try {
-      if (deps.liveActivities && !fleetActiveLoaded) await fleetActiveLoad;
+      if (deps.liveActivities && !sessionActivitiesLoaded) await sessionActivitiesLoad;
       await runPushTick(prior, deps);
     } catch (e) {
       log(`[push] tick error: ${(e as Error).message}`);
