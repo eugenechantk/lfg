@@ -60,6 +60,13 @@ export type SessionMsg = {
   // exactly what lets computeStatus avoid false "build paused" banners on
   // sessions that are debugging or summarizing those errors.
   apiError?: boolean;
+  // Structured error identity for an apiError turn, straight off the transcript
+  // line: Claude Code writes a top-level `error` code (e.g. "authentication_failed")
+  // and `apiErrorStatus` (the HTTP status). Present only on real upstream errors —
+  // some isApiErrorMessage lines ("No response requested.") carry neither, and
+  // those are not blocks. Prefer these over reading the English.
+  errorCode?: string;
+  apiErrorStatus?: number;
 };
 
 export type Session = {
@@ -102,7 +109,7 @@ export type Session = {
   // session reads as an explained pause, not a silent stall. See computeStatus.
   status: "ok" | "blocked";
   // Machine-readable reason when status === "blocked"; null when ok.
-  statusReason: "model_unavailable" | "out_of_credits" | null;
+  statusReason: "model_unavailable" | "out_of_credits" | "auth_required" | "unknown" | null;
   // Human-readable one-liner for the banner (e.g. the dead model id), or null.
   statusDetail: string | null;
   // Present only for orchestrator-spawned worker sessions. Omitted for
@@ -127,37 +134,64 @@ function computeStatus(
   // stamps those with `isApiErrorMessage: true` (surfaced here as last.apiError);
   // normal assistant prose that merely *quotes* an error string is not flagged.
   // Gating on this is what stops a session that's debugging / shipping a fix for
-  // credit or model errors (its summary quotes "credit balance is too low" or
-  // "Claude … is currently unavailable") from tripping a false "build paused".
-  if (text && last?.apiError) {
-    // Model retired / disabled / no access — the freeze the user sees. Match the
-    // verbatim Claude Code error ("There's an issue with the selected model (X).
-    // It may not exist or you may not have access to it. Run /model…") and the
-    // Anthropic "Claude <name> is currently unavailable" notice. Kept specific so
-    // a normal sentence containing "model" + "unavailable" can't trip it. The
-    // synthetic-model marker (liveModel) is a corroborating signal when present.
-    const modelErr =
-      /issue with the selected model|may not have access to it\.?\s*run \/model|claude[\w.\s-]*is (currently )?unavailable|\bis no longer (available|supported)\b/i.test(
-        text,
-      );
-    if (modelErr || (liveModel === "<synthetic>" && /\bmodel\b/i.test(text))) {
-      const bad = text.match(/\(([^)]+)\)/)?.[1] ?? (liveModel && liveModel !== "<synthetic>" ? liveModel : null);
-      return {
-        status: "blocked",
-        statusReason: "model_unavailable",
-        statusDetail: bad ? `Model "${bad}" is unavailable` : "Selected model is unavailable",
-      };
-    }
-    // Anthropic API credit exhaustion. Match the verbatim API error only —
-    // NOT loose words like "billing" or "credits", which show up constantly in
-    // normal dev/product chat ("add a billing page", "credit pack checkout")
-    // and would mislabel healthy sessions as paused.
-    if (/credit balance is too low|"type":\s*"(credit_balance_too_low|billing_error)"/i.test(text)) {
-      return { status: "blocked", statusReason: "out_of_credits", statusDetail: "Out of API credits" };
-    }
+  // credit or model errors from tripping a false "build paused".
+  if (!text || !last?.apiError) return { status: "ok", statusReason: null, statusDetail: null };
+
+  const code = last.errorCode ?? null;
+  const httpStatus = last.apiErrorStatus ?? null;
+
+  // --- structured first -------------------------------------------------
+  // Claude Code writes a machine-readable `error` code and `apiErrorStatus`.
+  // Reading those beats matching English, which changes with every upstream
+  // wording tweak. Observed in real transcripts: error="authentication_failed"
+  // with apiErrorStatus 401/403 and text "Please run /login · API Error: 403".
+  // That case matched none of the prose patterns below, so a logged-out host
+  // used to report a perfectly healthy "ok" while every turn failed.
+  if (code === "authentication_failed" || httpStatus === 401 || httpStatus === 403) {
+    return {
+      status: "blocked",
+      statusReason: "auth_required",
+      statusDetail: "Not signed in on the host — run /login there",
+    };
   }
+
+  // --- prose as a labeller, never as the gate ---------------------------
+  // These stay because no structured code has been observed for the model and
+  // credit cases yet. They now only *label* a turn already proven to be an API
+  // error; they no longer decide whether one exists.
+  const modelErr =
+    /issue with the selected model|may not have access to it\.?\s*run \/model|claude[\w.\s-]*is (currently )?unavailable|\bis no longer (available|supported)\b/i.test(
+      text,
+    );
+  if (modelErr || (liveModel === "<synthetic>" && /\bmodel\b/i.test(text))) {
+    const bad = text.match(/\(([^)]+)\)/)?.[1] ?? (liveModel && liveModel !== "<synthetic>" ? liveModel : null);
+    return {
+      status: "blocked",
+      statusReason: "model_unavailable",
+      statusDetail: bad ? `Model "${bad}" is unavailable` : "Selected model is unavailable",
+    };
+  }
+  if (/credit balance is too low|"type":\s*"(credit_balance_too_low|billing_error)"/i.test(text)) {
+    return { status: "blocked", statusReason: "out_of_credits", statusDetail: "Out of API credits" };
+  }
+
+  // --- unknown is a first-class state, not silence ----------------------
+  // An API error we cannot name is still an API error: the session is frozen and
+  // every turn replays it. Reporting "ok" here is how a new upstream wording
+  // becomes an invisible outage. Surface the raw text and let the user read it.
+  // Requires a structured signal: some isApiErrorMessage lines carry neither a
+  // code nor a status (e.g. "No response requested.") and are not real blocks.
+  if (code || httpStatus) {
+    const detail = text.split("\n")[0].trim().slice(0, 160);
+    return { status: "blocked", statusReason: "unknown", statusDetail: detail || "Upstream API error" };
+  }
+
   return { status: "ok", statusReason: null, statusDetail: null };
 }
+
+// Test seam: computeStatus is private, but it is the whole of the status
+// contract, so the tests drive it directly rather than standing up listSessions.
+export const statusForTest = computeStatus;
 
 const UUID = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
 // Whole-string variant for validating a bare id (e.g. a transcript filename).
@@ -790,6 +824,9 @@ function normalizeLineUnsafe(line: string): SessionMsg[] {
     timestamp?: string;
     uuid?: string;
     isApiErrorMessage?: boolean;
+    // Structured error identity Claude Code writes alongside isApiErrorMessage.
+    error?: string;
+    apiErrorStatus?: number;
     isMeta?: boolean;
     message?: { role?: string; content?: unknown };
   };
@@ -814,10 +851,12 @@ function normalizeLineUnsafe(line: string): SessionMsg[] {
   const role = m.role || x.type;
   // Genuine upstream API-error turn (vs. prose that merely quotes an error).
   const apiError = x.isApiErrorMessage === true ? true : undefined;
+  const errorCode = typeof x.error === "string" && x.error ? x.error : undefined;
+  const apiErrorStatus = typeof x.apiErrorStatus === "number" ? x.apiErrorStatus : undefined;
   if (typeof m.content === "string") {
     if (!m.content.trim()) return [];
     const text = role === "user" ? stripHumanPrefix(m.content) : m.content;
-    return [{ id, role, kind: "text", text, ts, apiError }];
+    return [{ id, role, kind: "text", text, ts, apiError, errorCode, apiErrorStatus }];
   }
   if (Array.isArray(m.content)) {
     const arr = m.content as Array<{
@@ -842,7 +881,7 @@ function normalizeLineUnsafe(line: string): SessionMsg[] {
     arr.forEach((c, idx) => {
       if (c.type === "text" && c.text) {
         const text = role === "user" ? stripHumanPrefix(c.text) : c.text;
-        msgs.push({ id: blockId(id, idx), role, kind: "text", text, ts, apiError });
+        msgs.push({ id: blockId(id, idx), role, kind: "text", text, ts, apiError, errorCode, apiErrorStatus });
         return;
       }
       if (c.type === "thinking") {
