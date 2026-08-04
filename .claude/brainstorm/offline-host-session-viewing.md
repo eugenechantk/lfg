@@ -4,34 +4,68 @@
 **Question:** iOS client can't view sessions on an offline host. Since `~/.claude` is
 shared across hosts, can an online host serve them read-only?
 
-**Answer:** Yes — the server-side read path is *already* host-agnostic. But the
-premise is currently broken: the `~/.claude` Syncthing sync has been dead since
-2026-07-25. Fix that first; the feature is small after.
+**Answer:** Yes. The data is already on every host and the server already serves
+it. The blocker is entirely **client-side routing**: reads are pinned to the
+owner host, and the stale live row suppresses the copy that would route to a
+reachable peer.
 
 ---
 
-## Finding 1 — the sync is dead (blocker)
+## Finding 1 — ROOT CAUSE: reads are pinned to the dead owner
 
-| Evidence | Value |
-| --- | --- |
-| `which syncthing` | not found (binary gone) |
-| `~/Library/Application Support/Syncthing/syncthing.log` mtime | **2026-07-25 22:37** |
-| Last log line | `Folder failed to sync, will be retried (wait=32m1s ... folder.id=mgwa7-zewio)` |
-| Launch agent in `~/Library/LaunchAgents` | none |
-| Newest `.claude` sync-conflict file | 2026-07-16 |
-| Transcript mtimes clustering at `Jul 25 22:37` | last sync write |
+Three individually-correct decisions collide:
 
-So today an online host holds a **4-day-stale** copy of the other host's
-transcripts. Any "view the offline host's session" feature built now would show
-stale conversations with no signal that they're stale.
+**1. A down host's rows are deliberately kept on screen.**
+`SessionStore.applyHostFetch` (SessionStore.swift:1360) assigns
+`lastSessionsByHost` **only** when `f.reach == .ok`. A failed fetch leaves the
+last-good snapshot untouched — its own comment says *"the cached snapshot keeps
+its sessions on screen."* So the Air's sessions persist as rows with
+`closed == false` and `owner == Air`.
 
-Root cause of the stop looks like the `dot-codex` folder wedging on
-`Codex Computer Use.app` (`chmod ... operation not permitted` — TCC/quarantined
-app bundle) in a retry loop, then the binary disappearing (brew cleanup?).
+**2. Those stale rows suppress the peer's good copy.**
+`rebuildSessions` (1383) folds them into `perHostLive` → `liveIds`. Closed pages
+come only from reachable hosts (`closedPages(for: okHosts)`), and
+`MultiHost.reconcileResumable` does `if liveIds.contains(r.sessionId) { continue }`.
+So the Pro's copy of that exact transcript — which *would* be host-agnostic and
+routable — is **discarded as a duplicate of the stale row**.
 
-**Fix:** reinstall Syncthing, add `computer-use/` to `~/.codex/.stignore` so a
-signed .app bundle can't wedge the folder again, and put it under launchd so it
-survives reboots.
+**3. Routing then sends the read to the machine that's down.**
+`client(forSession:)` → `MultiHost.routeHost(owner:isClosed:reachable:agnostic:)`:
+
+```swift
+if let owner {
+    if reachable(owner) { return owner }
+    if !isClosed { return owner }   // ← owner down + live → owner anyway
+}
+```
+
+`ensureHistory` (1747) uses that client, `client.messages()` throws, and it falls
+back to `hydrateTranscriptFromStoreIfEmpty` — you get only what was already
+cached locally. The row is visible; the transcript won't load.
+
+**The one-line version:** `routeHost` does not distinguish **reads** from
+**writes**. A send genuinely must go to the owner — only that machine has the
+tmux pane, and the comment defending this rule (*"the op must fail honestly
+rather than land somewhere surprising"*) is right *about sends*. A **read** has
+no such constraint: the transcript is synced to every host. Both go through one
+routing decision, so the correct rule for writes silently breaks reads.
+
+**Minimal fix:** a read-only route that falls back to `agnosticHost` when the
+owner is unreachable, used by `ensureHistory` / `messagePage`. Nothing else in
+this doc is required to make offline hosts' sessions viewable.
+
+## Finding 1b — the sync is fine (earlier claim retracted)
+
+An earlier pass here called the Syncthing sync dead. That was wrong, twice over:
+
+- On macOS Syncthing runs as `/Applications/Syncthing.app/...`, which is **not on
+  PATH** — `which syncthing` returns "not found" while the daemon runs fine.
+  Verified running, log written through Aug 1.
+- The `dot-claude` folder logs `Failed to sync … no connected device has the
+  required version of this file` for 3 files. That's **benign**: the only copy of
+  those versions is on the offline Air. `projects/**.jsonl` syncs normally.
+
+There *was* a real outage 07-25 → ~07-31. It is not the current cause.
 
 ## Finding 2 — what already works
 
@@ -206,16 +240,89 @@ lets the client tell "the owner stopped heartbeating" (owner really died) from
 "we stopped receiving" (sync is broken) — two very different things that
 collapse into the same stale flag otherwise.
 
-## Recommendation
+---
 
-1. **Repair + harden the sync** (reinstall Syncthing, stignore `computer-use/`,
-   launchd). Everything below is built on it, including the safety guard.
-2. **Widen lease coverage.** Small, self-contained, and it closes a real
-   split-brain hole that exists today whether or not step 3 ships.
-3. **`/api/sessions/foreign` + owner-attributed read-only rows.**
+# SCOPED PLAN — read + move only
 
-Step 2 is the one I'd do regardless. Step 3 without step 1 ships stale data
-that looks live.
+Eugene's actual requirement: for an offline host's session, **read it** and
+**move it to a live host**. No sending to the dead machine, no attribution UI.
+That cuts the work to two small client changes plus one small server change.
+**`/api/sessions/foreign`, staleness captions and owner-attributed rows are all
+dropped.**
+
+## Change 1 — read: fall back to a peer
+
+Add a read-path route beside `MultiHost.routeHost`: when the owner is
+unreachable, return `agnosticHost` instead of the owner. Use it in
+`ensureHistory` and `messagePage` only. Sends keep `routeHost` unchanged — they
+must still fail honestly against the owner.
+
+Server: **no change.** Any host already serves any synced transcript by id
+(verified against a non-live transcript).
+
+## Change 2 — move: don't require closing the source
+
+`SessionStore.transfer` (2365) is "close on source → resume on target", and
+step 1 is unconditional:
+
+```swift
+do { try await sourceClient.close(id) }
+catch {
+    lastError = "Transfer: closing on \(source.label) failed: …"
+    return nil          // ← aborts
+}
+```
+
+So **transfer is impossible precisely when you need it** — the source is
+offline, the close can't land, the move aborts. Same root assumption as
+Change 1: always talk to the owner.
+
+Fix: when the source is unreachable, skip the close *and* the
+"wait for the pane to die" poll (2381-2385), and go straight to
+`targetClient.resume`. For a genuinely down host the pane is already gone, so
+there is nothing to close. `canTransfer` (SessionDetailView:486) already allows
+this — it only needs `!session.closed` and a known owner, both true for an
+offline-host row.
+
+Server: **no change.** `POST /api/sessions/resume` already resolves the synced
+transcript locally and spawns on the host you asked.
+
+## Change 3 — lease coverage (the one thing that can't be skipped)
+
+Skipping the close is safe only if the source is *actually* dead. The guard for
+that already exists — `resumeClosedSession` calls `foreignFresh()` and 409s
+"session is live on another host" — but it has nothing to read:
+
+> **3 of 17 live sessions currently hold a lease.** Even lfg-`managed` ones
+> mostly don't, because `acquireLease` fires only at creation and `renewLease`
+> refuses to create one.
+
+This matters more for Eugene than for most setups: per memory
+[[lfg-pro-host-sleep-disconnects]], *unreachable-but-alive* (Tailscale
+NAT-punch flaps) is his **normal** disconnect mode, not a rare one. Moving a
+session whose agent is still running on the other machine forks it in two.
+
+The mechanism is already correct — the lease syncs Pro↔Air over the same
+Syncthing link, so an alive Air keeps its lease fresh and the move correctly
+refuses; a dead Air goes stale in 90s and the move proceeds. It just needs the
+acquire-or-renew loop in `startLeaseHeartbeat` (serve.ts:700), claiming only
+`authoritative` sessions. See Step 2 above for the detail.
+
+## Also worth a guard while touching move
+
+`resumeClosedSession` does `const cwd = (await cwdForTranscript(transcript)) ?? SELF_REPO`.
+If the original cwd doesn't resolve on the target, the session silently resumes
+**in the lfg repo** — full conversation context, wrong directory. `~/dev` is a
+synced Syncthing folder so it usually resolves, but a move should fail loudly
+rather than relocate silently.
+
+## Net
+
+| | Before | Scoped |
+| --- | --- | --- |
+| New server endpoints | 1 | 0 |
+| Server changes | endpoint + lease loop | lease loop only |
+| Client changes | routing + new row type + attribution UI + captions | 2 small routing fixes |
 
 ## Rejected alternative
 
