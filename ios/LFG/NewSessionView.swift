@@ -25,6 +25,7 @@ struct NewSessionView: View {
     @Environment(SessionStore.self) private var store
     @Environment(AppSettings.self) private var settings
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var autofocusComposer = false
     var onCreated: (String?) -> Void
@@ -38,6 +39,7 @@ struct NewSessionView: View {
     @State private var draft = ""
     @State private var starting = false
     @State private var activeSheet: ActiveSheet?
+    @State private var edgeSwipeDismissed = false
     /// Snapshot taken when a sheet opens so ✕ can revert. Selection is applied
     /// live as rows are tapped, so "confirm" is really dismiss-and-keep.
     @State private var revertState: (cwd: String, label: String, host: Host?, agent: AgentKind, model: String)?
@@ -67,6 +69,16 @@ struct NewSessionView: View {
                 Spacer(minLength: 0)
             }
         }
+        // The hidden navigation bar prevents UIKit edge recognizers from seeing
+        // this screen's left-edge touch. Keep the fallback in SwiftUI and attach
+        // it before the composer safe-area inset so text editing stays isolated.
+        .modifier(CompactEdgeSwipeDismissModifier(
+            isEnabled: horizontalSizeClass != .regular,
+            activeSheet: activeSheet,
+            showAddDirectory: showAddDirectory,
+            didDismiss: $edgeSwipeDismissed,
+            dismiss: dismiss
+        ))
         .safeAreaInset(edge: .bottom, spacing: 0) {
             NewSessionComposer(
                 text: $draft,
@@ -82,8 +94,6 @@ struct NewSessionView: View {
             }
             .padding(.horizontal, 12)
         }
-        // Hiding the whole bar preserves the native compact-width interactive
-        // pop gesture while the custom nav row supplies the visible back affordance.
         .sheet(item: $activeSheet) { kind in
             sheet(for: kind)
                 .presentationDetents(kind.detents)
@@ -213,5 +223,42 @@ struct NewSessionView: View {
         let placeholder = store.startOptimistic(req, on: selectedHost, attachments: attachments)
         onCreated(placeholder)
         dismiss()
+    }
+}
+
+private struct CompactEdgeSwipeDismissModifier: ViewModifier {
+    let isEnabled: Bool
+    let activeSheet: ActiveSheet?
+    let showAddDirectory: Bool
+    @Binding var didDismiss: Bool
+    let dismiss: DismissAction
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.simultaneousGesture(edgeSwipeDismissGesture)
+        } else {
+            content
+        }
+    }
+
+    private var edgeSwipeDismissGesture: some Gesture {
+        DragGesture(minimumDistance: 30, coordinateSpace: .local)
+            .onChanged { value in
+                guard shouldDismissFromEdgeSwipe(value) else { return }
+                didDismiss = true
+                dismiss()
+            }
+            .onEnded { _ in
+                didDismiss = false
+            }
+    }
+
+    private func shouldDismissFromEdgeSwipe(_ value: DragGesture.Value) -> Bool {
+        activeSheet == nil
+            && !showAddDirectory
+            && !didDismiss
+            && value.startLocation.x <= 24
+            && value.translation.width >= 80
+            && abs(value.translation.height) <= value.translation.width * 0.6
     }
 }

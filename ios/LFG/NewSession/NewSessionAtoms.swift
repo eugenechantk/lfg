@@ -100,10 +100,10 @@ struct CircularBackButton: View {
 
     var body: some View {
         Button(action: action) {
-            // Sized from the design's DRAWN path (5x11), not its 24-unit SVG box —
-            // the box includes inset padding, which is what made every glyph oversized.
-            Image(systemName: "chevron.left")
-                .font(.system(size: 14, weight: .semibold))
+            // `xmark` has more ink than the chevron at the same point size, so it
+            // uses a lighter/smaller optical size inside the unchanged 38pt circle.
+            Image(systemName: "xmark")
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(NewSessionPalette.labelPrimary)
                 .frame(width: 38, height: 38)
                 .glassOrRaised(
@@ -113,7 +113,7 @@ struct CircularBackButton: View {
                 )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Back")
+        .accessibilityLabel("Close")
         .accessibilityIdentifier("newSession.back")
     }
 }
