@@ -1598,8 +1598,18 @@ export async function cmdServe() {
               }
               replaying = false;
             }
-            // 10s heartbeat carrying head seq: keepalive + a cheap gap detector
+            // Heartbeat carrying head seq: keepalive + a cheap gap detector
             // (client compares against its cursor without waiting for events).
+            //
+            // The FIRST one is sent immediately, not 10s in. A client whose
+            // cursor is already at head — the normal case when no sessions are
+            // running — gets no replay rows, so without this the response body
+            // stays empty for up to 10s and the client cannot tell an
+            // established stream from a black-holed dial. `HostLink` only leaves
+            // `.connecting` on the first element received, so that silence was
+            // the app showing "Offline" for ~10s after reopening against a
+            // perfectly healthy idle host.
+            send(`: hb ${journal.head()}\n\n`);
             hb = setInterval(() => send(`: hb ${journal.head()}\n\n`), 10_000);
           },
           cancel() {
