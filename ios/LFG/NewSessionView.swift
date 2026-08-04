@@ -213,13 +213,44 @@ struct NewSessionView: View {
     }
 
     private func start(text: String, attachments: [ComposerAttachment]) async {
-        guard !cwd.isEmpty, !starting else { return }
+        // Claim the tap FIRST, before any readiness check.
+        //
+        // The old order tested `cwd` before setting `starting`, so a send fired
+        // before the directory metadata had landed hit `guard !cwd.isEmpty` and
+        // returned having done nothing at all: no spinner, no error, no sheet.
+        // The tap simply vanished. `cwd` is populated from `store.inbox` in this
+        // view's `.task`, which is a network round-trip, so every tap before that
+        // resolved was swallowed — which is exactly the "I press send and nothing
+        // happens, so I keep pressing until it finally opens" report. The tap that
+        // eventually "worked" was just the first one to land after the metadata.
+        guard !starting else { return }
         starting = true
-        let req = NewSessionRequest(cwd: cwd, prompt: text, agent: agent.rawValue,
+
+        // Resolve the directory on demand instead of bailing. The FIRST tap should
+        // start the session, not merely be the one that discovers we weren't ready.
+        var dir = cwd
+        if dir.isEmpty {
+            if store.inbox.isEmpty { await store.loadCreateMetadata() }
+            dir = store.inbox
+            if !dir.isEmpty {
+                cwd = dir
+                cwdLabel = "Inbox"
+            }
+        }
+        // Still nothing — the host is unreachable, so there is no directory list to
+        // default from. Hand the user the picker rather than failing silently: a
+        // tap must always produce a visible result.
+        guard !dir.isEmpty else {
+            starting = false
+            activeSheet = .directory
+            return
+        }
+
+        let req = NewSessionRequest(cwd: dir, prompt: text, agent: agent.rawValue,
                                     model: model, user: settings.defaultOwner)
         // Preserve the load-bearing optimistic path and its navigation order.
         // Promote this cwd in the MRU list so it surfaces under RECENT next time.
-        settings.noteRecentDir(cwd)
+        settings.noteRecentDir(dir)
         let placeholder = store.startOptimistic(req, on: selectedHost, attachments: attachments)
         onCreated(placeholder)
         dismiss()

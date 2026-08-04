@@ -132,6 +132,10 @@ import LFGCore
     /// The create request behind each placeholder id, kept so a failed create
     /// can be retried straight from the optimistic kickoff bubble.
     private var pendingCreates: [String: NewSessionRequest] = [:]
+    /// placeholder id -> server id, for the update where `selection` still names
+    /// the placeholder. Bounded: entries are only added by `remap`, which runs
+    /// once per created session.
+    private var remappedIds: [String: String] = [:]
     /// The host each placeholder create targets, so a retry re-creates on the
     /// same machine the user picked.
     private var pendingCreateHost: [String: Host] = [:]
@@ -1824,6 +1828,10 @@ import LFGCore
 
     func session(_ id: String) -> Session? {
         if let s = sessions.first(where: { $0.sessionId == id }) { return s }
+        // A placeholder that has just been remapped to its server id: resolve
+        // through, so the detail view keeps rendering across the swap instead of
+        // falling back to "Opening session…".
+        if let real = remappedIds[id], let s = sessions.first(where: { $0.sessionId == real }) { return s }
         if id == focusedID, let snap = focusedSnapshot, snap.sessionId == id { return snap }
         if let dl = deepLinkSession, dl.sessionId == id { return dl }
         return nil
@@ -2416,6 +2424,11 @@ import LFGCore
         // A resumed closed session's old transcript lingers on disk; remember it
         // so the merge in `refresh` doesn't re-add it as a stale "Closed" card.
         resumedIds.insert(old)
+        // Remember where this id went. `selection` in RootView still points at the
+        // placeholder for one update after the remap, and `session(_:)` returning
+        // nil in that window is what put "Opening session…" over a detail view that
+        // already had its optimistic bubble. A redirect makes the swap invisible.
+        remappedIds[old] = new
         // Host-wide SSE can deliver real-id events while `/api/sessions/new` is
         // still waiting for the agent's first transcript write. Preserve that
         // destination state instead of replacing it with placeholder/resume state.
