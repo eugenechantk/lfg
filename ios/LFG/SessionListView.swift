@@ -38,7 +38,6 @@ private enum Tokens {
     // No semantic equivalent — built to the design's exact alpha.
     static let meta = labelInk(0.50)
     static let host = labelInk(0.40)
-    static let placeholder = labelInk(0.45)
     /// A plain white/black wash, NOT `Color(.separator)` — the system separator
     /// is blue-tinted `(84,84,88,0.65)` and read back `(42,42,44)` against the
     /// design's `(18,18,18)`.
@@ -56,9 +55,7 @@ struct SessionListView: View {
     @Binding var showNewSession: Bool
     @Binding var focusNewSessionComposer: Bool
     @State private var searchText = ""
-    @State private var showSearch = false
     @State private var sortMenuHighlight = false
-    @FocusState private var isSearchFocused: Bool
 
     /// Collapsible UI state is in-memory per the current run. Sections default
     /// expanded, and only store their id here after the user collapses them.
@@ -458,13 +455,6 @@ struct SessionListView: View {
         VStack(spacing: 0) {
             customHeader(groupMode: $settings.groupMode, sortMode: $settings.sortMode)
 
-            if showSearch {
-                searchField
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
             List(selection: $selection) {
                 // The banner only appears when the AGGREGATE is unhealthy — i.e.
                 // every configured host is down. A single host being offline
@@ -560,16 +550,15 @@ struct SessionListView: View {
             .background(Tokens.screen)
             .refreshable { await store.refresh() }
             .listSectionSpacing(0)
-            .overlay(alignment: .bottom) {
-                NewSessionBar(
-                    action: { openNewSession(focusComposer: false) },
-                    micAction: { openNewSession(focusComposer: true) }
-                )
-                .ignoresSafeArea(.container, edges: .bottom)
-            }
         }
         .background(Tokens.screen.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
+        // The bottom chrome is now the system search field + a plus button, not
+        // the old faux-composer capsule. On iOS 26 that is Apple's own bottom
+        // search toolbar (`.searchable` + `DefaultToolbarItem(kind: .search)`),
+        // so it gets the platform's minimize/expand behaviour for free; older
+        // OSes have no such API and fall back to a hand-built equivalent.
+        .bottomSearchChrome(text: $searchText) { openNewSession(focusComposer: false) }
     }
 
     private func openNewSession(focusComposer: Bool) {
@@ -592,8 +581,8 @@ struct SessionListView: View {
             Spacer(minLength: 12)
             GlassChromeContainer(spacing: 10) {
                 HStack(spacing: 10) {
-                    headerButton("magnifyingglass", size: 15.5, action: toggleSearch)
-                        .accessibilityIdentifier("sessionSearchToggle")
+                    // No search toggle here anymore — search lives in the bottom
+                    // bar, where the system puts it on iOS 26.
                     groupSortMenu(groupMode: groupMode, sortMode: sortMode)
                     headerButton("gearshape", size: 16, weight: .regular) { showSettings = true }
                         .accessibilityIdentifier("sessionSettingsButton")
@@ -675,49 +664,6 @@ struct SessionListView: View {
         .accessibilityIdentifier("sessionSortMenu")
     }
 
-    private var searchField: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 18))
-                .foregroundStyle(Tokens.labelSecondary)
-            TextField("Search sessions", text: $searchText)
-                .textFieldStyle(.plain)
-                .font(.system(size: 17))
-                .foregroundStyle(Tokens.label)
-                .tint(Tokens.accent)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .focused($isSearchFocused)
-                .accessibilityIdentifier("sessionSearchField")
-            if !searchText.isEmpty {
-                Button { searchText = "" } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(Tokens.labelSecondary)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 12)
-        .frame(height: 40)
-        .background(Tokens.raised, in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private func toggleSearch() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            showSearch.toggle()
-        }
-
-        if showSearch {
-            // The field is inserted by this same state change, so wait until the
-            // next actor turn before asking SwiftUI to focus it.
-            Task { @MainActor in
-                await Task.yield()
-                isSearchFocused = true
-            }
-        } else {
-            isSearchFocused = false
-            searchText = ""
-        }
-    }
 }
 
 private struct HeaderStatusLine: View {
@@ -793,75 +739,102 @@ private struct HostHeaderToken: View {
     }
 }
 
-private struct NewSessionBar: View {
-    let action: () -> Void
-    let micAction: () -> Void
+/// Pre-iOS-26 stand-in for the system bottom search toolbar: the same two
+/// controls (search field + plus), hand-built, because `DefaultToolbarItem(kind:
+/// .search)` and the automatic bottom placement of `.searchable` are 26-only.
+/// Deliberately plain — it is a floor, not a design; on 26 nobody sees it.
+private struct LegacyBottomSearchBar: View {
+    @Binding var text: String
+    let onNewSession: () -> Void
+    @FocusState private var isFocused: Bool
 
     var body: some View {
-        ZStack {
-            HStack(spacing: 12) {
-                Button(action: action) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 19, weight: .regular))
-                        .foregroundStyle(Tokens.label.opacity(0.90))
-                        .frame(width: 28, height: 52)
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 16))
+                    .foregroundStyle(Tokens.labelSecondary)
+                TextField("Search", text: $text)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 17))
+                    .foregroundStyle(Tokens.label)
+                    .tint(Tokens.accent)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .focused($isFocused)
+                    .submitLabel(.search)
+                    .accessibilityIdentifier("sessionSearchField")
+                if !text.isEmpty {
+                    Button {
+                        text = ""
+                        isFocused = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(Tokens.labelSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
                 }
-                .buttonStyle(.plain)
-
-                Button(action: action) {
-                    Text("Plan, ask, build…")
-                        .font(.system(size: 17))
-                        .foregroundStyle(Tokens.placeholder)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-
-                Button(action: micAction) {
-                    Image(systemName: "mic")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(Tokens.labelSecondary)
-                        .frame(width: 32, height: 52)
-                }
-                .buttonStyle(.plain)
-                // Identifier on the BUTTON, matching `headerButton` — whose
-                // ids (sessionSearchToggle, sessionSortMenu) do resolve. Moving
-                // it inward onto the Image is what made this one unfindable.
-                .accessibilityIdentifier("sessionComposerMic")
             }
-            .frame(height: 52)
-            .padding(.horizontal, 14)
-            .glassOrRaised(in: Capsule(), fallback: Tokens.raised)
-            .contentShape(Capsule())
+            .padding(.horizontal, 12)
+            .frame(height: 44)
+            .frame(maxWidth: .infinity)
+            .background(Tokens.raised, in: Capsule())
 
-            // Both container ids are published as zero-size sibling elements.
-            // An identifier applied to the HStack itself shadows its children,
-            // which is what kept `sessionComposerMic` unfindable through four
-            // attempts while the header's button ids resolved fine.
-            Color.clear
-                .frame(width: 1, height: 1)
-                .accessibilityHidden(false)
-                .accessibilityIdentifier("sessionComposerBar")
-            Color.clear
-                .frame(width: 1, height: 1)
-                .accessibilityHidden(false)
-                .accessibilityIdentifier("newSessionBar")
+            Button(action: onNewSession) {
+                Image(systemName: "plus")
+                    .font(.system(size: 19, weight: .regular))
+                    .foregroundStyle(Tokens.label)
+                    .frame(width: 44, height: 44)
+                    .background(Tokens.raised, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("New session")
+            .accessibilityIdentifier("newSessionBar")
         }
         .padding(.horizontal, 12)
-        // The design floats the capsule 26pt above the SCREEN bottom. Inside a
-        // `safeAreaInset` a plain 26 stacks on the 34pt home-indicator inset and
-        // lands at 60, so subtract the inset back out — the bar is meant to sit
-        // beside the home indicator, not above it. Devices without one report 0
-        // and simply get 26.
-        .padding(.bottom, 26 - Self.safeAreaBottom)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .background(.bar)
     }
+}
 
-    /// Bottom safe-area inset of the active window (0 when there is none).
-    private static var safeAreaBottom: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first(where: \.isKeyWindow)?
-            .safeAreaInsets.bottom ?? 0
+private extension View {
+    /// The bottom chrome for the session list: a search field plus a "new
+    /// session" button.
+    ///
+    /// On iOS 26 this is literally Apple's own setup — `.searchable` supplies the
+    /// field and `DefaultToolbarItem(kind: .search, placement: .bottomBar)` pins
+    /// it into the bottom toolbar next to the plus, so the field gets the
+    /// system's expand/minimize behaviour, Liquid Glass, and keyboard handling
+    /// for free rather than a look-alike. The nav bar is hidden on this screen;
+    /// the bottom bar is a separate bar and is unaffected.
+    @ViewBuilder
+    func bottomSearchChrome(text: Binding<String>,
+                            onNewSession: @escaping () -> Void) -> some View {
+        if #available(iOS 26.0, *) {
+            self
+                .searchable(text: text, placement: .toolbar, prompt: "Search sessions")
+                // Session titles are lowercase prompts and paths — the system
+                // field otherwise sentence-cases the first letter and offers
+                // corrections mid-query.
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .toolbar {
+                    DefaultToolbarItem(kind: .search, placement: .bottomBar)
+                    ToolbarSpacer(.fixed, placement: .bottomBar)
+                    ToolbarItem(placement: .bottomBar) {
+                        Button(action: onNewSession) {
+                            Label("New session", systemImage: "plus")
+                        }
+                        .accessibilityIdentifier("newSessionBar")
+                    }
+                }
+        } else {
+            self.safeAreaInset(edge: .bottom, spacing: 0) {
+                LegacyBottomSearchBar(text: text, onNewSession: onNewSession)
+            }
+        }
     }
 }
 
