@@ -3,7 +3,6 @@ import { statSync, mkdirSync, type Dirent } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
-import { marked } from "marked";
 import { PATHS } from "../config.ts";
 import { hostInfo } from "../hostinfo.ts";
 import { Journal } from "../journal.ts";
@@ -318,18 +317,6 @@ const CODEX_CREATE_FALLBACK_WINDOW_MS =
   CODEX_CREATE_SESSION_BIND_POLLS * CREATE_SESSION_BIND_POLL_MS;
 const UUID_RE = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
 
-marked.setOptions({ gfm: true, breaks: false });
-
-// Render a report's markdown to HTML, wrapping every table in a horizontal
-// scroll container so wide tables (security posture, pricing, db stats) scroll
-// within their card on mobile instead of blowing out the viewport width.
-function renderReportHtml(raw: string): string {
-  const html = marked.parse(raw) as string;
-  return html
-    .replace(/<table>/g, '<div class="table-wrap"><table>')
-    .replace(/<\/table>/g, "</table></div>");
-}
-
 // ---------- legacy: pre-agents flat reports ----------
 
 async function listLegacyReports() {
@@ -419,7 +406,7 @@ async function readAgentReport(agent: string, date: string) {
   const actions = parsed
     .map((id) => byId.get(id))
     .filter((r): r is ActionRow => !!r);
-  return { date, raw, html: renderReportHtml(raw), actions };
+  return { date, raw, actions };
 }
 
 // ---------- run lifecycle ----------
@@ -491,27 +478,6 @@ async function startRun(agent: string): Promise<RunState> {
 
 // ---------- HTTP helpers ----------
 
-// v2 frontend: the Vite-built React app at <repo>/web/dist. (v1, the hand-written
-// single-file src/web/index.html, was removed.) Rebuild with `bun run build` in
-// web/ to publish changes.
-const WEB_DIR = join(import.meta.dir, "..", "..", "web", "dist");
-const INDEX_PATH = join(WEB_DIR, "index.html");
-
-const STATIC_FILES: Record<string, { path: string; type: string }> = {
-  "/manifest.webmanifest": {
-    path: join(WEB_DIR, "manifest.webmanifest"),
-    type: "application/manifest+json",
-  },
-  "/icon.svg": { path: join(WEB_DIR, "icon.svg"), type: "image/svg+xml" },
-  "/icon-maskable.svg": {
-    path: join(WEB_DIR, "icon-maskable.svg"),
-    type: "image/svg+xml",
-  },
-  "/agent-claude.svg": { path: join(WEB_DIR, "agent-claude.svg"), type: "image/svg+xml" },
-  "/agent-codex.svg": { path: join(WEB_DIR, "agent-codex.svg"), type: "image/svg+xml" },
-  "/agent-opencode.svg": { path: join(WEB_DIR, "agent-opencode.svg"), type: "image/svg+xml" },
-  "/apple-touch-icon.png": { path: join(WEB_DIR, "icon.svg"), type: "image/svg+xml" },
-};
 
 function json(obj: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(obj), {
@@ -607,12 +573,6 @@ async function codexCreateFallbackCandidates(): Promise<CodexCreateFallbackCandi
   return out;
 }
 
-// Attach rendered markdown for assistant/user prose; tool/thinking stay raw.
-function msgWithHtml<T extends { kind: string; text: string }>(m: T) {
-  if (m.kind === "text" && m.text) return { ...m, html: marked.parse(m.text) };
-  return m;
-}
-
 async function messagePageFromSnapshot(
   path: string,
   opts: { before?: number | null; limit?: number; maxBytes: number | null },
@@ -665,7 +625,7 @@ export async function messagesResponseForSession(sid: string, url: URL): Promise
       id: sid,
       total: page.total,
       nextBefore: page.nextBefore,
-      messages: page.messages.map(msgWithHtml),
+      messages: page.messages,
       ...(forkPending ? { forkPending: true } : {}),
     });
   }
@@ -680,7 +640,7 @@ export async function messagesResponseForSession(sid: string, url: URL): Promise
     : await recentMessages(tp, lim, { maxBytes: full ? null : undefined });
   return json({
     id: sid,
-    messages: messages.map(msgWithHtml),
+    messages,
     ...(forkPending ? { forkPending: true } : {}),
   });
 }
@@ -888,15 +848,16 @@ function startLeaseHeartbeat(): () => void {
 }
 
 export async function cmdServe() {
-  // Event journal + the one global session pump (replaces per-connection pump
-  // loops for /api/events consumers; /api/live/stream keeps its own for
-  // back-compat until old clients are gone). See src/journal.ts.
+  // Event journal + the one global session pump: the single live-delivery path.
+  // The per-connection pumps behind /api/live/stream and /api/sessions/:id/stream
+  // are gone along with the web client that was their last consumer, so live
+  // delivery costs O(sessions) rather than O(connections x sessions), and a
+  // busy/prompt fix lands in one place instead of two. See src/journal.ts.
   const journalPath = join(PATHS.data, "journal.db");
   const journal = Journal.open(journalPath);
   setSendqJournal(journal);
   setSendqStore(SendqStore.open(journalPath));
   startJournalPump(journal, {
-    renderMsg: (m) => msgWithHtml(m),
     resolvePrompt: (tp, pane) => resolveSessionPrompt(tp, pane),
   });
   startLeaseHeartbeat();
@@ -1012,77 +973,6 @@ export async function cmdServe() {
         return json({ urls });
       }
 
-      // ---- static ----
-      if (path === "/" || path === "/index.html") {
-        // Runtime extension injection: LFG core ships no proprietary UI. Our
-        // deployments set LFG_EXTENSIONS (comma-separated ESM URLs) — each is
-        // injected as a module <script> AFTER the app bundle, so it runs once
-        // window.lfg (host React + registerExtension) exists and contributes UI
-        // (e.g. a private tab). Open-source forks set nothing → clean core.
-        let html = await Bun.file(INDEX_PATH).text();
-        const exts = (process.env.LFG_EXTENSIONS || "")
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-        if (exts.length) {
-          const tags = exts
-            .map((src) => `<script type="module" src="${src.replace(/"/g, "&quot;")}"></script>`)
-            .join("");
-          html = html.includes("</body>")
-            ? html.replace("</body>", `${tags}</body>`)
-            : html + tags;
-        }
-        return new Response(html, {
-          headers: {
-            "Content-Type": "text/html; charset=utf-8",
-            "Cache-Control": "no-cache",
-          },
-        });
-      }
-      if (path === "/sw.js") {
-        const src = await Bun.file(join(WEB_DIR, "sw.js")).text();
-        // Version derived from index.html size + mtime — changes invalidate the SW.
-        let version = "0";
-        try {
-          const s = statSync(INDEX_PATH);
-          version = `${s.size}-${Math.floor(s.mtimeMs)}`;
-        } catch {}
-        return new Response(src.replace(/__VERSION__/g, version), {
-          headers: {
-            "Content-Type": "application/javascript; charset=utf-8",
-            "Cache-Control": "no-cache",
-            "Service-Worker-Allowed": "/",
-          },
-        });
-      }
-      const staticFile = STATIC_FILES[path];
-      if (staticFile) {
-        return new Response(Bun.file(staticFile.path), {
-          headers: {
-            "Content-Type": staticFile.type,
-            "Cache-Control": "public, max-age=300",
-          },
-        });
-      }
-
-      // Hashed, content-addressed Vite bundles from the v2 build. Filenames
-      // change on every build, so they're safe to cache immutably.
-      if (path.startsWith("/assets/") && !path.includes("..")) {
-        const f = Bun.file(join(WEB_DIR, "assets", path.slice("/assets/".length)));
-        if (await f.exists()) {
-          const type = path.endsWith(".css")
-            ? "text/css; charset=utf-8"
-            : path.endsWith(".js")
-              ? "application/javascript; charset=utf-8"
-              : "application/octet-stream";
-          return new Response(f, {
-            headers: {
-              "Content-Type": type,
-              "Cache-Control": "public, max-age=31536000, immutable",
-            },
-          });
-        }
-      }
 
       // ---- voice TTS proxy: forward to the self-hosted SuperTonic service on
       // the control-plane box. The token + upstream URL live server-side (.env)
@@ -1220,7 +1110,7 @@ export async function cmdServe() {
         if (m) {
           const raw = await readLegacyReport(m[1]);
           if (raw === null) return err(404, "not found");
-          return json({ date: m[1], raw, html: renderReportHtml(raw) });
+          return json({ date: m[1], raw });
         }
       }
 
@@ -2485,317 +2375,6 @@ export async function cmdServe() {
       // off; small enough that it clears within a few seconds of a turn ending.
       const BARE_BUSY_WINDOW_MS = 4000;
 
-      // Multiplexed live stream: one connection tails many transcripts and
-      // polls many panes. The per-session /stream endpoint opens one HTTP
-      // connection each, so >6 open panes blow past the browser's per-host
-      // connection cap and the oldest panes silently stop updating. This
-      // folds them into a single SSE; events carry a `sid` so the client can
-      // route them to the right pane.
-      if (path === "/api/live/stream") {
-        const ids = (url.searchParams.get("ids") ?? "")
-          .split(",")
-          .map((s) => s.trim())
-          .filter((s) => /^[0-9a-fA-F-]{36}$/.test(s))
-          .slice(0, 24);
-        const { panes, pending, sessions: initialSessions } = await liveStreamInitialState(ids);
-
-        let iv: ReturnType<typeof setInterval> | null = null;
-        let pi: ReturnType<typeof setInterval> | null = null;
-        let ri: ReturnType<typeof setInterval> | null = null;
-        let hb: ReturnType<typeof setInterval> | null = null;
-        let closed = false;
-        const stream = new ReadableStream({
-          start(controller) {
-            const send = (s: string) => {
-              if (closed) return;
-              try {
-                controller.enqueue(s);
-              } catch {
-                closed = true;
-              }
-            };
-            const offsets = new Map<string, number>();
-            const bufs = new Map<string, string>();
-            const lastSig = new Map<string, string>();
-            const pumpOne = async (p: { sid: string; tp: string }) => {
-              if (closed) return;
-              try {
-                const f = Bun.file(p.tp);
-                const size = f.size;
-                let offset = offsets.get(p.sid) ?? 0;
-                if (size < offset) offset = 0; // rotated/truncated
-                if (size > offset) {
-                  const chunk = await f.slice(offset, size).text();
-                  offsets.set(p.sid, size);
-                  let buf = (bufs.get(p.sid) ?? "") + chunk;
-                  const lines = buf.split("\n");
-                  bufs.set(p.sid, lines.pop() ?? "");
-                  for (const l of lines) {
-                    if (!l) continue;
-                    const msgs = normalizeLineMessages(l);
-                    for (const msg of msgs)
-                      send(
-                        `event: msg\ndata: ${JSON.stringify({ sid: p.sid, m: msgWithHtml(msg) })}\n\n`,
-                      );
-                  }
-                }
-              } catch {}
-            };
-            const lastBusy = new Map<string, string>();
-            const pollOne = async (p: LiveStreamPane) => {
-              if (closed) return;
-              const delegated = codexDelegationSessionIds().has(p.sid);
-              if (!p.target) {
-                // Pane-less (aisdk / codex-aisdk) session: busy comes from the
-                // registry, and there are no pane-scraped prompts. For a
-                // codex-aisdk session the sid may be the threadId rather than the
-                // control-plane key, so look it up by either.
-                const entry = findAisdkEntryByAnyId(p.sid);
-                let baseBusy: boolean;
-                if (entry) {
-                  baseBusy = entry.busy;
-                } else {
-                  // Bare CLI session whose pane lfg couldn't resolve (e.g. a
-                  // `claude`/`codex` launched outside lfg and not wrapped in a
-                  // discoverable tmux pane). There's no pane to scrape, so
-                  // approximate "running" from transcript freshness: a CLI agent
-                  // appends to its .jsonl as it streams, so a recently-touched
-                  // transcript means it's mid-turn. Best-effort — it goes stale
-                  // (→ idle) a few seconds after the turn ends, and can read idle
-                  // during a long silent tool call. Wrap launches via the cy/
-                  // codexy tmux aliases to get accurate pane-scraped busy instead.
-                  try {
-                    baseBusy = Date.now() - statSync(p.tp).mtimeMs < BARE_BUSY_WINDOW_MS;
-                  } catch {
-                    baseBusy = false;
-                  }
-                }
-                const busy = baseBusy || delegated;
-                const bsig = busy ? "1" : "0";
-                if (bsig !== (lastBusy.get(p.sid) ?? "0")) {
-                  lastBusy.set(p.sid, bsig);
-                  send(`event: busy\ndata: ${JSON.stringify({ sid: p.sid, busy })}\n\n`);
-                }
-                return;
-              }
-              const pane = await capturePaneAsync(p.target);
-              const prompt = await resolveSessionPrompt(p.tp, pane);
-              if (closed) return;
-              const sig = prompt ? JSON.stringify(prompt) : "";
-              if (sig !== (lastSig.get(p.sid) ?? " ")) {
-                lastSig.set(p.sid, sig);
-                send(
-                  `event: prompt\ndata: ${JSON.stringify({ sid: p.sid, prompt: prompt ?? null })}\n\n`,
-                );
-              }
-              const paneBusy = pane ? isBusy(pane) : false;
-              notePaneBusy(p.sid, paneBusy);
-              const busy = paneBusy || delegated;
-              const bsig = busy ? "1" : "0";
-              if (bsig !== (lastBusy.get(p.sid) ?? "0")) {
-                lastBusy.set(p.sid, bsig);
-                send(`event: busy\ndata: ${JSON.stringify({ sid: p.sid, busy })}\n\n`);
-              }
-            };
-            const lastQ = new Map<string, string>();
-            const queueOne = (p: { sid: string }) => {
-              if (closed) return;
-              const queue = listQueue(p.sid);
-              const sig = JSON.stringify(queue);
-              if (sig === (lastQ.get(p.sid) ?? "[]")) return;
-              lastQ.set(p.sid, sig);
-              send(`event: queue\ndata: ${JSON.stringify({ sid: p.sid, queue })}\n\n`);
-            };
-            (async () => {
-              for (const p of panes) {
-                const msgs = (await recentMessages(p.tp, 40)).map(msgWithHtml);
-                for (const m of msgs)
-                  send(`event: msg\ndata: ${JSON.stringify({ sid: p.sid, m })}\n\n`);
-                offsets.set(p.sid, Bun.file(p.tp).size);
-                lastSig.set(p.sid, " ");
-                lastQ.set(p.sid, "[]");
-                // Force the first poll to emit an explicit busy snapshot. busy is
-                // a delta-only signal (emitted on change vs lastBusy, default
-                // "0"=idle), so without this an already-idle session sends NO
-                // busy event on connect — and since the client churns/reopens
-                // this stream constantly (its id set is reranked by activity and
-                // capped at 24), a session that finished while the client held a
-                // stale busy=true would never receive the false and stay stuck on
-                // "Working". Seeding a sentinel makes both "0" and "1" differ.
-                lastBusy.set(p.sid, "init");
-                pollOne(p);
-                queueOne(p);
-              }
-              iv = setInterval(() => {
-                for (const p of panes) pumpOne(p);
-              }, 700);
-              pi = setInterval(() => {
-                for (const p of panes) {
-                  pollOne(p);
-                  queueOne(p);
-                  void reconcileQueued(p.sid).then((c) => c && queueOne(p));
-                }
-              }, 1000);
-              ri = setInterval(() => {
-                void attachPendingForkTranscripts({
-                  pending,
-                  panes,
-                  sessions: initialSessions,
-                  offsets,
-                  send,
-                  listSessions,
-                  pollOne: async (p) => {
-                    lastSig.set(p.sid, " ");
-                    lastQ.set(p.sid, "[]");
-                    lastBusy.set(p.sid, "init");
-                    await pollOne(p);
-                  },
-                  queueOne,
-                });
-              }, 2000);
-            })();
-            hb = setInterval(() => send(`: hb\n\n`), 15000);
-          },
-          cancel() {
-            closed = true;
-            if (iv) clearInterval(iv);
-            if (pi) clearInterval(pi);
-            if (ri) clearInterval(ri);
-            if (hb) clearInterval(hb);
-          },
-        });
-        return new Response(stream, { headers: sseHeaders() });
-      }
-
-      {
-        const m = path.match(/^\/api\/sessions\/([0-9a-fA-F-]{36})\/stream$/);
-        if (m) {
-          const tp = await resolveTranscript(m[1]);
-          if (!tp) return err(404, "session transcript not found");
-          const target =
-            (await listSessions()).find((s) => s.sessionId === m[1])
-              ?.tmuxTarget ?? null;
-          const sid = m[1];
-          let iv: ReturnType<typeof setInterval> | null = null;
-          let pi: ReturnType<typeof setInterval> | null = null;
-          let qi: ReturnType<typeof setInterval> | null = null;
-          let hb: ReturnType<typeof setInterval> | null = null;
-          let closed = false;
-          const stream = new ReadableStream({
-            start(controller) {
-              const send = (s: string) => {
-                if (closed) return;
-                try {
-                  controller.enqueue(s);
-                } catch {
-                  closed = true;
-                }
-              };
-              let offset = 0;
-              let buf = "";
-              const pump = async () => {
-                if (closed) return;
-                try {
-                  const f = Bun.file(tp);
-                  const size = f.size;
-                  if (size < offset) offset = 0; // file rotated/truncated
-                  if (size > offset) {
-                    const chunk = await f.slice(offset, size).text();
-                    offset = size;
-                    buf += chunk;
-                    const lines = buf.split("\n");
-                    buf = lines.pop() ?? "";
-                    for (const l of lines) {
-                      if (!l) continue;
-                      const msgs = normalizeLineMessages(l);
-                      for (const msg of msgs)
-                        send(`event: msg\ndata: ${JSON.stringify(msgWithHtml(msg))}\n\n`);
-                    }
-                  }
-                } catch {}
-              };
-              // backlog, then tail
-              (async () => {
-                const msgs = (await recentMessages(tp, 40)).map(msgWithHtml);
-                for (const msg of msgs)
-                  send(`event: msg\ndata: ${JSON.stringify(msg)}\n\n`);
-                offset = Bun.file(tp).size;
-                // Tail fast: the reply is already fully written to the transcript
-                // by the time Claude finishes; a slow poll just adds dead wait
-                // before it reaches the UI. 200ms keeps perceived latency low
-                // without meaningfully more file stats.
-                iv = setInterval(pump, 200);
-              })();
-              // Poll the tmux pane for an interactive selector (permission /
-              // plan prompts live in the TUI, not the transcript). Emit only on
-              // change so the client can render/clear a prompt panel.
-              if (target) {
-                let lastSig = " ";
-                let lastBusy = "0";
-                const pollPrompt = async () => {
-                  if (closed) return;
-                  const pane = await capturePaneAsync(target);
-                  const prompt = await resolveSessionPrompt(tp, pane);
-                  if (closed) return;
-                  const sig = prompt ? JSON.stringify(prompt) : "";
-                  if (sig !== lastSig) {
-                    lastSig = sig;
-                    send(`event: prompt\ndata: ${prompt ? sig : "null"}\n\n`);
-                  }
-                  const bsig = pane && isBusy(pane) ? "1" : "0";
-                  if (bsig !== lastBusy) {
-                    lastBusy = bsig;
-                    send(`event: busy\ndata: ${bsig === "1" ? "true" : "false"}\n\n`);
-                  }
-                };
-                pollPrompt();
-                pi = setInterval(pollPrompt, 1000);
-              } else {
-                // Pane-less (aisdk / codex-aisdk) session: source busy from the
-                // registry — by key or threadId (codex-aisdk's sid is the latter).
-                let lastBusy = "0";
-                const pollBusy = () => {
-                  if (closed) return;
-                  const entry = findAisdkEntryByAnyId(sid);
-                  if (!entry) return;
-                  const bsig = entry.busy ? "1" : "0";
-                  if (bsig !== lastBusy) {
-                    lastBusy = bsig;
-                    send(`event: busy\ndata: ${entry.busy ? "true" : "false"}\n\n`);
-                  }
-                };
-                pollBusy();
-                pi = setInterval(pollBusy, 1000);
-              }
-              // Emit the outbound send-queue on change so the composer can show
-              // each message's delivery status (pending/queued/delivered/failed).
-              let lastQ = "[]";
-              const pollQueue = () => {
-                if (closed) return;
-                const queue = listQueue(sid);
-                const sig = JSON.stringify(queue);
-                if (sig === lastQ) return;
-                lastQ = sig;
-                send(`event: queue\ndata: ${sig}\n\n`);
-              };
-              pollQueue();
-              qi = setInterval(() => {
-                pollQueue();
-                void reconcileQueued(sid).then((c) => c && pollQueue());
-              }, 1000);
-              hb = setInterval(() => send(`: hb\n\n`), 15000);
-            },
-            cancel() {
-              closed = true;
-              if (iv) clearInterval(iv);
-              if (pi) clearInterval(pi);
-              if (qi) clearInterval(qi);
-              if (hb) clearInterval(hb);
-            },
-          });
-          return new Response(stream, { headers: sseHeaders() });
-        }
-      }
 
       return err(404, "not found");
     },

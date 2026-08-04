@@ -9,7 +9,7 @@
 # Usage:
 #   scripts/release.sh                 # build dist/lfg-bundle.tar.gz only
 #   scripts/release.sh v0.1.0          # build AND publish a GitHub release (gh)
-#   SKIP_INSTALL=1 scripts/release.sh  # reuse the current node_modules / web/dist
+#   SKIP_INSTALL=1 scripts/release.sh  # reuse the current node_modules
 #
 # Env:
 #   SKIP_INSTALL=1        skip `bun install` + web build (use the tree as-is)
@@ -77,12 +77,10 @@ if [ "${SKIP_INSTALL:-}" != "1" ]; then
   say "Installing dependencies (uses your configured registry)..."
   bun install
   say "Building the web UI..."
-  ( cd web && bun install && bun run build )
 else
-  say "SKIP_INSTALL=1 - reusing existing node_modules + web/dist."
+  say "SKIP_INSTALL=1 - reusing existing node_modules."
 fi
 
-[ -f web/dist/index.html ] || die "web/dist missing - run without SKIP_INSTALL."
 
 # Stage exactly what the runtime needs. Public deps are intentionally not
 # included; setup.sh runs a target-side production install after extracting.
@@ -94,7 +92,6 @@ cp -r \
   src agents scripts package.json bun.lock tsconfig.json \
   .env.example README.md LICENSE SECURITY.md CONTRIBUTING.md \
   "$STAGE/lfg/"
-cp -r web/dist "$STAGE/lfg/web/dist"
 
 VENDOR_PACKAGES="${LFG_VENDOR_PACKAGES:-}"
 VENDOR_PACKAGES="${VENDOR_PACKAGES//,/ }"

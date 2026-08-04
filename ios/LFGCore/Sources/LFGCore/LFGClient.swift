@@ -350,102 +350,18 @@ public struct LFGClient: Sendable {
         _ = try await send("POST", "api/push/unregister", json: ["token": token])
     }
 
-    // MARK: Live stream (SSE)
-
-    /// Subscribe to live transcript/prompt/busy/queue events for up to 24 sessions.
-    /// The server backfills ~40 recent messages per session, then streams deltas.
-    /// How long the live stream may go completely silent (no data *and* no
-    /// heartbeats) before we treat it as a dead connection and drop it to force a
-    /// reconnect. The server emits a `: hb` heartbeat every 15s, so this is two
-    /// missed heartbeats plus margin — long enough not to trip on a healthy idle
-    /// session, short enough to recover promptly from a silent stall (app
-    /// backgrounded, radio dropped, NAT/proxy black-holed the socket — cases that
-    /// produce neither an error nor a clean EOF, so nothing else would notice).
-    public static let streamStaleTimeout: TimeInterval = 35
-
-    public func liveStream(ids: [String]) -> AsyncThrowingStream<LiveEvent, Error> {
-        let capped = Array(ids.prefix(24))
-        let target = url("api/live/stream", query: [URLQueryItem(name: "ids", value: capped.joined(separator: ","))])
-        let session = self.session
-        let staleTimeout = Self.streamStaleTimeout
-        return AsyncThrowingStream { continuation in
-            let task = Task {
-                var req = URLRequest(url: target)
-                req.httpMethod = "GET"
-                req.timeoutInterval = .infinity
-                req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-                do {
-                    let (bytes, resp) = try await session.bytes(for: req)
-                    if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                        throw LFGError.http(status: http.statusCode, body: "")
-                    }
-                    // Timestamp of the last byte seen on the wire, shared with the
-                    // watchdog. Cheap lock (no actor hop in the byte loop); updated
-                    // once per line, which is plenty since a healthy connection
-                    // delivers at least a heartbeat line every 15s.
-                    let lastActivity = OSAllocatedUnfairLock(initialState: Date())
-
-                    // Watchdog: if no byte arrives for staleTimeout, the socket has
-                    // silently stalled (no error, no EOF — e.g. the app was
-                    // backgrounded, the radio dropped, or a NAT/proxy black-holed
-                    // the connection). Finish the stream with an error; that
-                    // terminates the AsyncThrowingStream, whose `onTermination`
-                    // cancels this task and unblocks the (otherwise indefinitely
-                    // parked) byte loop below. The store then reconnects.
-                    let watchdog = Task {
-                        while !Task.isCancelled {
-                            try? await Task.sleep(for: .seconds(5))
-                            if Task.isCancelled { return }
-                            let last = lastActivity.withLock { $0 }
-                            if Date().timeIntervalSince(last) > staleTimeout {
-                                continuation.finish(throwing: LFGError.streamStalled)
-                                return
-                            }
-                        }
-                    }
-                    defer { watchdog.cancel() }
-
-                    // Split the raw byte stream on \n ourselves. URLSession's
-                    // `.lines` helper *swallows blank lines*, but SSE uses the
-                    // blank line as the event-dispatch boundary — so we'd never
-                    // dispatch a frame. Manual splitting preserves the blanks.
-                    var parser = SSEParser()
-                    var lineBytes = [UInt8]()
-                    lineBytes.reserveCapacity(256)
-                    for try await byte in bytes {
-                        if Task.isCancelled { break }
-                        if byte == 0x0A {
-                            lastActivity.withLock { $0 = Date() }
-                            var line = String(decoding: lineBytes, as: UTF8.self)
-                            if line.hasSuffix("\r") { line.removeLast() }
-                            lineBytes.removeAll(keepingCapacity: true)
-                            if let frame = parser.feedLine(line), let event = LiveEventDecoder.decode(frame) {
-                                continuation.yield(event)
-                            }
-                        } else {
-                            lineBytes.append(byte)
-                        }
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-            continuation.onTermination = { _ in task.cancel() }
-        }
-    }
 
     // MARK: Journaled event stream (cursor-resumable, Phase 1)
 
     /// Subscribe to `GET /api/events?since=<seq>` — the whole host's journaled
-    /// event stream. Unlike `liveStream(ids:)` there is no id selection and no
-    /// cap: nothing about the subscription changes when sessions open/close, so
-    /// the connection is never rebuilt for lifecycle reasons. On reconnect,
+    /// event stream. There is no id selection and no cap: nothing about the
+    /// subscription changes when sessions open/close, so the connection is
+    /// never rebuilt for lifecycle reasons. On reconnect,
     /// pass the last applied seq and the server replays exactly what was
     /// missed (or emits `.resync` when the cursor is unserviceable).
     ///
-    /// Byte handling mirrors `liveStream`: manual `\n` splitting (`.lines`
-    /// swallows SSE's blank dispatch boundaries) and a silent-stall watchdog —
+    /// Byte handling: manual `\n` splitting (`.lines` swallows SSE's blank
+    /// dispatch boundaries) and a silent-stall watchdog —
     /// at `HostLinkPolicy.staleTimeout` (20s ≈ two missed 10s heartbeats).
     public func events(since: Int64) -> AsyncThrowingStream<HostStreamElement, Error> {
         let target = url("api/events", query: [URLQueryItem(name: "since", value: String(since))])

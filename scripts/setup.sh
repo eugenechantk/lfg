@@ -223,7 +223,6 @@ if [ "$LFG_INSTALL_MODE" = "source" ]; then
     say "Cloning lfg into ${LFG_DIR} (git)..."
     git clone "$LFG_REPO_URL" "$LFG_DIR"
   fi
-  # The web UI ships prebuilt in web/dist, so no web build is needed here.
   say "Installing dependencies..."
   ( cd "$LFG_DIR" && "$BUN_BIN" install )
 else

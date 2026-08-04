@@ -5,8 +5,9 @@ import os
 import LFGCore
 
 /// The single source of truth for live session state. Reduces `GET /api/sessions`
-/// snapshots plus the `/api/live/stream` SSE deltas (msg/prompt/busy/queue) into
-/// observable per-session state the views render.
+/// snapshots plus the journaled `/api/events` deltas (msg/prompt/busy/queue),
+/// delivered by one `HostLink` per host, into observable per-session state the
+/// views render.
 @MainActor @Observable final class SessionStore {
     let settings: AppSettings
     private let localStore: LFGStore?
@@ -162,7 +163,7 @@ import LFGCore
 
     // One HostLink per configured host, keyed by Host.id (url): each owns its
     // cursor-resumable /api/events stream, keepalive, and reconnect loop.
-    // Replaces the old per-host liveStream(ids:) management
+    // Replaces the old per-host id-selected stream management
     // (streamTasks/streamedIDsByHost), whose id-set rebuilds were a major source
     // of self-inflicted disconnects. There is no id-selected stream anymore.
     private var links: [String: HostLink] = [:]

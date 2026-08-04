@@ -31,8 +31,6 @@ const POLL_TICK_MS = 1000;
 const BARE_BUSY_WINDOW_MS = 4000;
 
 export type PumpDeps = {
-  /** serve.ts's msgWithHtml — attaches rendered markdown to prose messages. */
-  renderMsg: (m: SessionMsg) => unknown;
   /** serve.ts's resolveSessionPrompt — structured transcript prompt, else pane scrape. */
   resolvePrompt: (tp: string | null, pane: string | null) => Promise<unknown>;
 };
@@ -116,7 +114,7 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       for (const l of lines) {
         if (!l) continue;
         for (const m of normalizeLineMessages(l)) {
-          j.append(w.sid, "msg", { sid: w.sid, m: deps.renderMsg(m) });
+          j.append(w.sid, "msg", { sid: w.sid, m });
         }
       }
       j.setOffset(w.sid, size);
