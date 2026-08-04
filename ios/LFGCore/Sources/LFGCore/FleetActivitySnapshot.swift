@@ -32,30 +32,32 @@ public enum FleetActivitySnapshot {
             let sid = session.sessionId ?? session.id
             let state: String
 
-            // This ladder MUST mirror `SessionStore.group(for:)`'s precedence, or
-            // the card contradicts the list the user is looking at. Two traps live
-            // in the order:
-            //
-            //  - `closed` is checked FIRST and is client-synthesized (the server
-            //    never sends it). `busy` is seeded only for *live* sessions and is
-            //    never cleared when one closes, so a session that was working when
-            //    you ended it keeps `busy == true` forever. Without this guard it
-            //    renders as "working" permanently.
-            //  - `isBlocked` ("Paused") outranks busy and is neither working nor
-            //    needs-input, so it does not belong on the card at all.
+            // `closed` is checked FIRST and stays outside the shared ladder: it is
+            // client-synthesized (the server never sends it) and is a fact about
+            // process ownership, not about the turn. It matters here because `busy`
+            // is seeded only for *live* sessions and is never cleared when one
+            // closes — so a session that was working when you ended it keeps
+            // `busy == true` forever and would render as "working" permanently.
             if session.closed { continue }
 
-            if prompts[sid] != nil {
+            // The precedence itself is no longer restated here. It lives once in
+            // `SessionDisplayState.resolve`, shared with `SessionStore.group(for:)`
+            // and mirrored by `sessionDisplayState` on the server, so the card can
+            // no longer contradict the list the user is looking at.
+            switch SessionDisplayState.resolve(
+                promptPresent: prompts[sid] != nil,
+                blocked: session.isBlocked,
+                busy: busy[sid] == true
+            ) {
+            case .needsInput:
                 state = "needsInput"
                 needsInput += 1
-            } else if session.isBlocked {
-                continue
-            } else if busy[sid] == true {
+            case .working:
                 state = "working"
                 working += 1
-            } else {
-                // Idle. Never shown — which is also why there is no "unread"
-                // count here: unread is a property of idle sessions.
+            case .blocked, .idle:
+                // Neither is a card row. Idle is also why there is no "unread"
+                // count here — unread is a property of idle sessions.
                 continue
             }
 

@@ -75,6 +75,16 @@ import LFGCore
     private(set) var transcripts: [String: [SessionMessage]] = [:]
     private(set) var prompts: [String: AgentPrompt] = [:]
     private(set) var busy: [String: Bool] = [:]
+    /// Sessions whose `busy` has been stated by the journal at least once.
+    ///
+    /// The journal emits a `busy` event only when the value CHANGES
+    /// (`deltas.busyChanged`, src/journal-pump.ts). A session that was already
+    /// running before this client connected — and keeps running — therefore
+    /// produces no event at all, so "the link is healthy" does NOT imply "we know
+    /// this session's busy". Without this set the REST baseline was skipped for
+    /// every session on a live host, and a freshly-opened app rendered every
+    /// already-running agent as idle until it happened to change state.
+    private var busyFromJournal: Set<String> = []
     private(set) var queues: [String: [QueueItem]] = [:]
 
     /// Locally-originated sends shown optimistically as user bubbles the instant
@@ -96,10 +106,17 @@ import LFGCore
         /// from `failed` (a real send attempt that errored → red + Retry).
         var queuedOffline: Bool = false
         var serverQueueID: String? = nil   // set once correlated to a server queue item
-        /// Render as a finished user bubble in the transcript rather than the
-        /// muted "Sending…" bar. Used for a session's kickoff message, which is
-        /// already committed (it created the session) so a pending state is noise.
+        /// Render as a user bubble in the transcript. Every send sets this: a
+        /// message you just typed belongs in the conversation immediately, in
+        /// its own bubble, whatever the session is doing. State that used to
+        /// justify hiding it (queued behind a running turn, waking, offline)
+        /// is carried by the flags below and annotated under the bubble.
         var showSent: Bool = false
+        /// Accepted but not yet picked up: the session was mid-turn at send
+        /// time, so the agent runs it after the current turn. The bubble is
+        /// normal-looking and captioned "Queued", and stays tappable for
+        /// remove / edit / send-now while it waits.
+        var queuedBehindTurn: Bool = false
         /// Whether the backend has accepted this send yet. `true` for the normal
         /// path (the agent picks an idle/live session up instantly, so the bubble
         /// reads as sent immediately). `false` for a wake-up send to a session
@@ -815,7 +832,7 @@ import LFGCore
                 ts: row.createdAt,
                 failed: failed,
                 queuedOffline: hasAttachmentSidecars && !failed,
-                showSent: !(hasAttachmentSidecars && !failed),
+                showSent: true,
                 confirmed: row.state == "sent" || failed
             )
         )
@@ -913,7 +930,6 @@ import LFGCore
                         $0.failed = false
                         $0.queuedOffline = true
                         $0.confirmed = false
-                        $0.showSent = false
                     }
                 }
                 return
@@ -1524,16 +1540,32 @@ import LFGCore
         // The session on screen is seen by definition — keep its mark current against
         // the fresh list even between stream events.
         if let f = focusedID { markOpened(f) }
-        // Seed busy from the REST baseline only for sessions on hosts whose link
-        // isn't currently delivering (a healthy link streams pane-scraped busy
-        // for EVERY session on that host — there is no id window anymore, so
-        // the journal's value is strictly fresher than this snapshot's).
+        // Seed busy from the REST baseline for every session the JOURNAL has not
+        // spoken for yet.
+        //
+        // This used to skip any session on a live host, on the theory that "a
+        // healthy link streams pane-scraped busy for EVERY session". That is not
+        // what the pump does: it appends a `busy` event only when the value
+        // CHANGES (src/journal-pump.ts). A session already running when this
+        // client connected, and still running, emits nothing — so the link is
+        // healthy, no delta ever arrives, and the old guard suppressed the only
+        // other source. Result: a freshly-opened app showed every already-running
+        // agent as idle, the list disagreed with the Live Activity, and it
+        // resolved only when a session happened to change state.
+        //
+        // Keying on `busyFromJournal` instead of link health keeps the original
+        // intent — a journal value is fresher than this snapshot and must not be
+        // clobbered — without the false premise.
         for s in fresh {
             guard let sid = s.sessionId, let b = s.busy else { continue }
-            let hid = hostBySession[s.id]
-            if let hid, hostStateByHost[hid]?.isLive == true { continue }
+            if busyFromJournal.contains(sid) { continue }
             busy[sid] = b
         }
+        // Forget sessions that left the live list: if one comes back (pane
+        // relaunched, host recovered) its journal history is no longer a reason to
+        // refuse the REST baseline, or the bug above returns for exactly the
+        // sessions that just recovered.
+        busyFromJournal.formIntersection(Set(fresh.compactMap(\.sessionId)))
         // Snapshot the focused session while it's live so its detail view survives
         // the session later dropping out of the live list.
         if let f = focusedID, let live = fresh.first(where: { $0.sessionId == f }) {
@@ -1747,6 +1779,9 @@ import LFGCore
             if let prompt { prompts[sid] = prompt } else { prompts[sid] = nil }
         case .busy(let sid, let value):
             busy[sid] = value
+            // Remember that the journal has spoken for this session, so the REST
+            // baseline stops seeding it. See `busyFromJournal`.
+            busyFromJournal.insert(sid)
         case .queue(let sid, let q):
             queues[sid] = q
             correlatePending(sid, q)
@@ -1774,11 +1809,25 @@ import LFGCore
     }
 
     func group(for s: Session) -> Group {
+        // Two tiers sit OUTSIDE the shared ladder because nothing else can compute
+        // them: `closed` needs the cross-host live set, and `unread` is
+        // device-local (it depends on what THIS device has seen and is focused on).
+        // Everything between them is the one ladder in `SessionDisplayState`,
+        // shared with `FleetActivitySnapshot` and mirrored on the server — so the
+        // list and the Live Activity can no longer disagree.
         if s.closed { return .closed }
-        if let sid = s.sessionId, prompts[sid] != nil { return .needsInput }
-        if s.isBlocked { return .blocked }
-        if let sid = s.sessionId, busy[sid] == true { return .working }
-        if let sid = s.sessionId, manualUnread.contains(sid) { return .unread }
+        let sid = s.sessionId
+        switch SessionDisplayState.resolve(
+            promptPresent: sid.map { prompts[$0] != nil } ?? false,
+            blocked: s.isBlocked,
+            busy: sid.map { busy[$0] == true } ?? false
+        ) {
+        case .needsInput: return .needsInput
+        case .blocked: return .blocked
+        case .working: return .working
+        case .idle: break // fall through to the device-local unread tiers
+        }
+        if let sid, manualUnread.contains(sid) { return .unread }
         // Completed (idle) but its newest message isn't the newest one this device
         // has seen → "Unread". The session on screen is excluded (you're reading it
         // right now, even before its stream stamps it read).
@@ -1887,6 +1936,12 @@ import LFGCore
     /// Build a display `Session` for a closed/resumable transcript. `closed` marks
     /// it so `group(for:)` files it under "Closed" and the send path treats a
     /// message to it as a wake-up (server auto-resumes on send).
+    ///
+    /// `closed` is carried from the server's `ResumableSession.closed` rather than
+    /// hardcoded, so the server stays the one authority on session state — the
+    /// same as `busy` and `status`. Callers must pass rows that already survived
+    /// `MultiHost.reconcileResumable`, which is what turns the server's
+    /// "closed on this host" into "closed anywhere".
     private static func closedSession(from r: ResumableSession) -> Session {
         Session(
             sessionId: r.sessionId,
@@ -1896,7 +1951,7 @@ import LFGCore
             cwd: r.cwd,
             lastUserText: r.lastUserText,
             lastActivityAt: r.mtime,
-            closed: true)
+            closed: r.closed)
     }
 
     /// Remove optimistic bubbles whose text now appears as a real user turn in the
@@ -2188,12 +2243,13 @@ import LFGCore
         let typed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !typed.isEmpty || !attachments.isEmpty else { return }
 
-        // 1) Show the bubble right now, before any await. When the session is
-        //    idle (not busy, no open prompt) the agent picks the message up
-        //    immediately, so there's nothing to wait for — render it as a
-        //    finished user bubble (showSent) instead of a "Sending…" bar that
-        //    would just flicker. A busy session genuinely queues the message
-        //    behind the running turn, so there we keep the pending bar.
+        // 1) Show the bubble right now, before any await — for EVERY send, not
+        //    just the idle case. A follow-up typed while the agent is mid-turn
+        //    used to land in a one-line "Sending…" bar above the composer, so
+        //    the message you just wrote never appeared in the conversation
+        //    until the agent got around to it. It is your message either way;
+        //    it belongs in the transcript immediately. `idle` now only decides
+        //    whether the bubble is captioned as queued.
         let idle = prompts[id] == nil && busy[id] != true
         // A wake-up send: the target isn't in the live list — it's a closed
         // session whose detail we're carrying forward, either because its pane
@@ -2217,7 +2273,8 @@ import LFGCore
                         displayText: typed.isEmpty ? "📎 Attachment" : typed,
                         matchText: typed,
                         ts: nowMs,
-                        showSent: idle || isWakeUp,
+                        showSent: true,
+                        queuedBehindTurn: !idle && !isWakeUp,
                         confirmed: !isWakeUp))
 
         // 2) Offline sends persist attachment bytes as sidecars and leave the outbox
@@ -2242,7 +2299,10 @@ import LFGCore
                 $0.matchText = typed
                 $0.queuedOffline = true
                 $0.confirmed = false
-                $0.showSent = false
+                // Stays a bubble (muted, captioned "Will send when reachable")
+                // rather than dropping to the bar — an unsent message is still
+                // part of the conversation you're composing.
+                $0.queuedBehindTurn = false
             }
             return
         }
@@ -2286,6 +2346,11 @@ import LFGCore
                 // Link to the server queue id right away so the message can be
                 // removed / edited / sent-now while it's still pending.
                 if let qid = resp.msg?.id { $0.serverQueueID = qid }
+                // The response is the authority on whether this actually queued:
+                // a queue id means it waits for the current turn, no queue id
+                // means the agent took it directly. Corrects the optimistic
+                // guess made from local `busy` at send time.
+                $0.queuedBehindTurn = resp.msg?.id != nil
             }
             await refresh()
             reconcilePending(eff)
