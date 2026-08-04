@@ -22,6 +22,7 @@ import { capturePaneAsync, isBusy } from "./tmux.ts";
 import { listQueue, reconcileQueued } from "./sendq.ts";
 import { findEntryByAnyId as findAisdkEntryByAnyId } from "./aisdk-registry.ts";
 import { codexDelegationSessionIds, notePaneBusy } from "./activity.ts";
+import { forgetTurnState, transcriptTurnState } from "./turn-state.ts";
 import { statSync } from "node:fs";
 
 const MSG_TICK_MS = 700;
@@ -105,6 +106,7 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
     if (bootSids) bootSids = null; // boot trust window is one enumeration only
     for (const sid of Array.from(watched.keys())) {
       if (!seen.has(sid)) {
+        forgetTurnState(watched.get(sid)!.tp);
         watched.delete(sid);
         deltas.forget(sid); // if it comes back, it re-states its baseline
       }
@@ -163,8 +165,12 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       if (deltas.promptChanged(w.sid, prompt))
         j.append(w.sid, "prompt", { sid: w.sid, prompt });
       const paneBusy = pane ? isBusy(pane) : false;
-      notePaneBusy(w.sid, paneBusy);
-      const busy = paneBusy || delegated;
+      notePaneBusy(w.sid, paneBusy); // still the REST fallback when the transcript abstains
+      // Prefer the transcript's turn boundary; the pane only backstops it. We
+      // are in the pane-backed branch, so the process is known to exist — the
+      // transcript is answering "is a turn in flight", not "is this alive".
+      const turn = await transcriptTurnState(w.tp);
+      const busy = (turn != null ? turn === "running" : paneBusy) || delegated;
       if (deltas.busyChanged(w.sid, busy)) j.append(w.sid, "busy", { sid: w.sid, busy });
     } catch {}
   };

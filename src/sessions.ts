@@ -2,6 +2,7 @@
 // their on-disk transcripts (~/.claude/projects/<proj>/<sessionId>.jsonl).
 import { readdir } from "node:fs/promises";
 import { scanBack, tail } from "./transcript.ts";
+import { transcriptTurnState } from "./turn-state.ts";
 import { statSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, basename } from "node:path";
 import { tmpdir } from "node:os";
@@ -1222,6 +1223,14 @@ async function listSessionsUncached(): Promise<Session[]> {
       lastActivityAt != null && Date.now() - lastActivityAt < REST_BUSY_WINDOW_MS;
     const delegated = sessionId ? delegatedSessionIds.has(sessionId) : false;
     const paneBusy = sessionId ? lastPaneBusy(sessionId) : null;
+    // The transcript's turn boundary beats the pane scrape when it has an
+    // opinion (see turn-state.ts — the pane can be spoofed by an agent's own
+    // output). Pane-backed sessions ONLY: a live pane is the proof the process
+    // still exists. Without it, a transcript that simply ends mid-turn —
+    // crashed, or a stale row sitting on a recycled pid — would read "running"
+    // forever, which is the exact latch this change exists to remove.
+    const turn =
+      tmuxTarget && transcriptPath ? await transcriptTurnState(transcriptPath) : null;
     out.push({
       agent: "claude",
       pid: e.pid,
@@ -1234,7 +1243,7 @@ async function listSessionsUncached(): Promise<Session[]> {
       startedAt: e.startedAt,
       transcriptPath,
       lastActivityAt,
-      busy: delegated || (paneBusy ?? transcriptRecent),
+      busy: delegated || (turn != null ? turn === "running" : (paneBusy ?? transcriptRecent)),
       last,
       // A headless `claude -p` (the report runner, or a dispatched agent
       // before it moved to its own tmux session) is a *descendant* of

@@ -16,6 +16,7 @@ import {
 import { capturePaneAsync, isBusy, parsePrompt, type PanePrompt } from "../tmux.ts";
 import { findEntryByAnyId } from "../aisdk-registry.ts";
 import { codexDelegationSessionIds } from "../activity.ts";
+import { transcriptTurnState } from "../turn-state.ts";
 import { listDevices } from "./store.ts";
 import {
   listActivityUpdateTokens,
@@ -333,7 +334,10 @@ async function observeSession(s: {
   const tp = s.sessionId ? await resolveTranscript(s.sessionId) : null;
   let prompt: PendingPrompt | PanePrompt | null = tp ? await pendingToolPrompt(tp) : null;
   if (!prompt && pane) prompt = parsePrompt(pane);
-  const busy = (pane ? isBusy(pane) : false) || delegated;
+  // Transcript first, pane as backstop — a "Finished" push must not hinge on
+  // whether the agent happened to print the words the pane scraper looks for.
+  const turn = tp ? await transcriptTurnState(tp) : null;
+  const busy = (turn != null ? turn === "running" : pane ? isBusy(pane) : false) || delegated;
   return { busy, promptPresent: !!prompt, promptQuestion: prompt?.question ?? null };
 }
 
