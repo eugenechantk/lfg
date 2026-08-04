@@ -126,6 +126,35 @@ describe("reduceFleetLiveActivity", () => {
     expect(r.nextActive).toBeNull();
   });
 
+  test("a paused (status=blocked) session is not on the card even while busy", () => {
+    const r = reduceFleetLiveActivity({
+      observations: [{
+        session: { sessionId: "s1", title: "Paused", status: "blocked" },
+        observed: obs(true, false),
+      }],
+      active: null,
+      now: 1_700,
+    });
+    expect(r.action).toBeNull();
+    expect(r.nextActive).toBeNull();
+  });
+
+  test("a paused session that is asking something still counts as needs-input", () => {
+    const r = reduceFleetLiveActivity({
+      observations: [{
+        session: { sessionId: "s1", title: "Paused, asking", status: "blocked" },
+        observed: obs(false, true),
+      }],
+      active: null,
+      now: 1_700,
+    });
+    expect(r.action?.push.body.aps["content-state"]).toMatchObject({
+      working: 0,
+      needsInput: 1,
+      rows: [{ sid: "s1", state: "needsInput" }],
+    });
+  });
+
   test("a pending prompt outranks busy, matching the client's grouping", () => {
     const r = reduceFleetLiveActivity({
       observations: [{ session: { sessionId: "s1", title: "Job" }, observed: obs(true, true) }],

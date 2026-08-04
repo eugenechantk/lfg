@@ -195,6 +195,25 @@ export class PumpDeltas {
     return true;
   }
 
+  /**
+   * Last journaled busy value, or null when this session has no baseline yet.
+   *
+   * Needed to retract honestly on disappearance: `busyChanged(sid, false)`
+   * reports a *change* against an absent baseline, so retracting on that alone
+   * would fabricate a `busy: false` for a session no client was ever told was
+   * busy.
+   */
+  lastBusyValue(sid: string): boolean | null {
+    const sig = this.lastBusy.get(sid);
+    return sig === undefined ? null : sig === "1";
+  }
+
+  /** True when the last journaled prompt for this session was non-null. */
+  hadPrompt(sid: string): boolean {
+    const sig = this.lastPrompt.get(sid);
+    return sig !== undefined && sig !== "";
+  }
+
   /** Sessions no longer present locally — drop their maps so a session that
    * comes back (transfer round-trip) re-states its baseline. */
   forget(sid: string): void {
