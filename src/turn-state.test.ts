@@ -161,3 +161,60 @@ describe("transcriptTurnState", () => {
     expect(__turnStateScanCount()).toBe(after + 1);
   });
 });
+
+// ---- codex rollouts (Phase 3) ----
+//
+// codex uses a different envelope but a stronger signal: turn start AND end are
+// explicit and paired, and an interrupt has its own record instead of being an
+// absence. Fixtures below mirror real rollout lines from ~/.codex/sessions.
+
+const ev = (t: string) => ({ type: "event_msg", payload: { type: t } });
+const codexNoise = { type: "response_item", payload: { type: "function_call" } };
+
+describe("codex rollout vocabulary", () => {
+  test("task_started with no end yet → running", () => {
+    expect(classifyTurnLine(JSON.stringify(ev("task_started")))).toBe("running");
+  });
+
+  test("task_complete → idle", () => {
+    expect(classifyTurnLine(JSON.stringify(ev("task_complete")))).toBe("idle");
+  });
+
+  // The advantage over Claude Code: an interrupted codex turn says so, instead of
+  // silently omitting the end marker and leaving the turn to look open forever.
+  test("turn_aborted → idle", () => {
+    expect(classifyTurnLine(JSON.stringify(ev("turn_aborted")))).toBe("idle");
+  });
+
+  test("mid-turn traffic is not decisive", () => {
+    for (const t of ["token_count", "agent_message", "exec_command_end", "user_message"]) {
+      expect(classifyTurnLine(JSON.stringify(ev(t)))).toBeNull();
+    }
+    expect(classifyTurnLine(JSON.stringify(codexNoise))).toBeNull();
+    expect(classifyTurnLine(JSON.stringify({ type: "session_meta", payload: { id: "x" } }))).toBeNull();
+  });
+
+  test("a running codex turn scans back past noise to task_started", async () => {
+    const p = write([ev("task_started"), codexNoise, ev("token_count"), codexNoise]);
+    expect(await transcriptTurnState(p)).toBe("running");
+  });
+
+  test("a finished codex turn resolves idle", async () => {
+    const p = write([ev("task_started"), codexNoise, ev("task_complete")]);
+    expect(await transcriptTurnState(p)).toBe("idle");
+  });
+
+  test("an aborted codex turn resolves idle, not a latched running", async () => {
+    const p = write([ev("task_started"), codexNoise, ev("turn_aborted")]);
+    expect(await transcriptTurnState(p)).toBe("idle");
+  });
+
+  test("the newest turn wins across several turns", async () => {
+    const p = write([
+      ev("task_started"), ev("task_complete"),
+      ev("task_started"), ev("task_complete"),
+      ev("task_started"), codexNoise,
+    ]);
+    expect(await transcriptTurnState(p)).toBe("running");
+  });
+});

@@ -17,7 +17,7 @@ import {
 import { isClosing } from "./closing";
 import { userAssignments } from "./users";
 import { PATHS } from "./config";
-import { foreignFreshAt } from "./leases";
+import { anyFreshAt, ensureLease } from "./leases";
 import { homedir } from "node:os";
 import { codexDelegationSessionIds, lastPaneBusy } from "./activity.ts";
 import {
@@ -1581,6 +1581,19 @@ export type ResumableSession = {
   title: string;
   lastActivityAt: number | null;
   lastUserText: string | null;
+  /**
+   * Server-computed session state, alongside `busy` and `status`: this transcript
+   * has no live process **on this host**. `listResumable` establishes it by
+   * excluding the live-session ids, so it is a derivation, not a constant.
+   *
+   * Scope matters, and it is not the server's to widen: `~/.claude/projects` is
+   * SYNCED between hosts and a server has no peer awareness (hosts are
+   * client-side config), so host B enumerates host A's transcripts and would
+   * call A's *running* session closed. Only a client, which polls every host,
+   * can drop that phantom — see `MultiHost.reconcileResumable`. Read this field
+   * as "closed here", and let the client's cross-host merge decide "closed".
+   */
+  closed: true;
 };
 
 export type ResumablePage = {
@@ -1596,10 +1609,31 @@ export type ResumablePage = {
 // the UI can offer to resume one. Newest first, cursor-paged — enriching every
 // historical transcript in a single response would be needlessly slow.
 export async function listResumable(
-  opts: { limit?: number; excludeIds?: Set<string>; before?: number | null } = {},
+  opts: { limit?: number; before?: number | null } = {},
 ): Promise<ResumablePage> {
   const limit = Math.max(1, Math.min(100, opts.limit ?? 30));
-  const exclude = opts.excludeIds ?? new Set<string>();
+  // ONE definition of closed: nothing holds a fresh lease. There is no second
+  // liveness input here — no caller-supplied live-id set, no local process check.
+  //
+  // For that to be SAFE rather than merely tidy, the read guarantees its own
+  // precondition: every session this host can currently see gets its lease made
+  // current right now. Otherwise the invariant "a live session is never returned
+  // as closed" would depend on a 30s background loop having already run, and the
+  // failure direction is the bad one — hiding a live agent and offering a resume
+  // that would double-spawn.
+  //
+  // This is not hot (it backs the resumable page, not the session list), so an
+  // enumeration plus N stat-sized lease ops is the right price for removing a
+  // whole class of disagreement.
+  try {
+    for (const s of await listSessions()) {
+      if (s.sessionId) await ensureLease(s.sessionId, s.pid);
+    }
+  } catch {
+    // Enumeration failed: fall through and read whatever leases exist. A stale
+    // lease is still fresh for up to LEASE_FRESH_MS, so a transient failure
+    // cannot flip a running session to closed.
+  }
   const before = typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
   type Candidate = {
     agent: "claude" | "codex";
@@ -1633,7 +1667,7 @@ export async function listResumable(
       // Whole-name UUID match, not UUID.test: a Syncthing conflict copy
       // ("<uuid>.sync-conflict-<stamp>.jsonl") contains a UUID substring but is
       // a duplicate of the real transcript and can't be `--resume`d by its name.
-      if (!UUID_EXACT.test(id) || exclude.has(id)) continue;
+      if (!UUID_EXACT.test(id)) continue;
       const path = join(projectsDir, d, f);
       let mtime = 0;
       try {
@@ -1646,7 +1680,7 @@ export async function listResumable(
     }
   }
   for (const thread of await codexThreads()) {
-    if (!UUID_EXACT.test(thread.id) || exclude.has(thread.id)) continue;
+    if (!UUID_EXACT.test(thread.id)) continue;
     const mtime = thread.updatedAt ?? thread.createdAt ?? 0;
     const prev = byId.get(thread.id);
     if (!prev || mtime > prev.mtime) {
@@ -1666,7 +1700,12 @@ export async function listResumable(
   let nextBefore: number | null = null;
   for (let i = 0; i < candidates.length; i++) {
     const c = candidates[i];
-    if (await foreignFreshAt(c.id, c.path)) continue;
+    // THE definition of closed: nothing holds a fresh lease on this session.
+    // Was `foreignFreshAt` — a peer-only question that relied on `exclude` to
+    // cover local liveness. `ensureLease` now writes a lease for every session
+    // this host enumerates, so local and remote are the same fact and get the
+    // same question.
+    if (await anyFreshAt(c.id, c.path)) continue;
     page.push(c);
     if (page.length >= limit) {
       nextBefore = candidates.length > i + 1 ? c.mtime : null;
@@ -1689,6 +1728,8 @@ export async function listResumable(
       title,
       lastActivityAt: c.mtime,
       lastUserText: await lastUserText(c.path).catch(() => null),
+      // Earned, not assumed: nothing holds a fresh lease on this session.
+      closed: true,
     });
   }
   return { sessions: out, nextBefore };

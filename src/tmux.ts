@@ -371,6 +371,17 @@ export function managedCodexSessionArgv(opts: {
     "danger-full-access",
     "--ask-for-approval",
     "never",
+    // codex gates hooks behind a per-entry `trusted_hash` in config.toml, so a
+    // hook file dropped in by `scripts/install-agent-hooks.py` silently does NOT
+    // run — measured: codex exits 0, writes its rollout, and fires nothing.
+    // That leaves codex sessions without the turn-state and SessionEnd signals
+    // Claude Code gets, so `closed` falls back to the 90s lease expiry.
+    //
+    // Trusting them here is defensible precisely because lfg AUTHORED the hook
+    // file it is trusting — this is not accepting a third party's code. The
+    // shell aliases (`codexy` in ~/.zshrc) pass the same flag for the same
+    // reason, so hand-started and lfg-started sessions behave identically.
+    "--dangerously-bypass-hook-trust",
     "--add-dir",
     reposRoot(),
   ];

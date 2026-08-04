@@ -59,7 +59,7 @@ function writeCodexRollout(id: string, mtime: number, cwd = "/tmp/codex") {
 }
 
 describe("listResumable pagination", () => {
-  test("pages newest-first with before cursor and excludes live ids before paging", async () => {
+  test("pages newest-first with before cursor and excludes leased sessions before paging", async () => {
     const ids = [
       "00000000-0000-4000-8000-000000000001",
       "00000000-0000-4000-8000-000000000002",
@@ -74,7 +74,18 @@ describe("listResumable pagination", () => {
     writeTranscript("p", ids[4], 1_000);
     writeTranscript("p-copy", ids[0], 1_500);
 
-    const first = await listResumable({ limit: 2, excludeIds: new Set([ids[1]]) });
+    // ids[1] is "live": it holds a fresh lease. That is the ONLY way a session
+    // is kept out of the resumable list now — `excludeIds` is gone, because a
+    // caller-supplied live-id set was a second answer to the same question.
+    writeFileSync(
+      join(projects, "p", `${ids[1]}.lease.json`),
+      JSON.stringify({
+        hostId: "other-host", pid: 4242,
+        acquiredAt: Date.now(), heartbeatAt: Date.now(),
+      }),
+    );
+
+    const first = await listResumable({ limit: 2 });
     expect(first.sessions.map((s) => s.sessionId)).toEqual([ids[0], ids[2]]);
     expect(first.nextBefore).toBe(first.sessions[1].lastActivityAt);
 

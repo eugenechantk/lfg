@@ -42,6 +42,19 @@ type Line = {
   subtype?: unknown;
   isMeta?: unknown;
   message?: { role?: unknown; content?: unknown };
+  payload?: { type?: unknown };
+};
+
+// codex rollouts (`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`) use a different
+// envelope — `{"type":"event_msg","payload":{"type":…}}` — but carry a STRONGER
+// signal than Claude Code's: turn starts and ends are both explicit and paired,
+// and an interrupted turn gets its own `turn_aborted` record rather than simply
+// omitting the end marker. That removes the inference this file has to make for
+// Claude, where an interrupt is only visible as a `[Request interrupted` message.
+const CODEX_TURN: Record<string, TurnState> = {
+  task_started: "running",
+  task_complete: "idle",
+  turn_aborted: "idle",
 };
 
 /** First non-null wins when scanning newest-first. Null = keep looking. */
@@ -80,7 +93,18 @@ export function classifyTurnLine(line: string): TurnState | null {
     return "running"; // typed prompt or tool_result — either way, mid-turn
   }
 
-  // `mode`, `ai-title`, `last-prompt`, `file-history-*`, codex rollout records…
+  if (x.type === "event_msg") {
+    const p = x.payload;
+    const t = p && typeof p === "object" ? (p as { type?: unknown }).type : null;
+    // Only the three turn markers decide. `token_count`, `agent_message`,
+    // `exec_command_end` and friends are mid-turn traffic — treating them as
+    // "running" would be redundant (a `task_started` always precedes them when
+    // scanning back) and would risk out-voting a newer `turn_aborted`.
+    return typeof t === "string" ? (CODEX_TURN[t] ?? null) : null;
+  }
+
+  // `mode`, `ai-title`, `last-prompt`, `file-history-*`, codex `response_item` /
+  // `turn_context` / `session_meta` records…
   return null;
 }
 

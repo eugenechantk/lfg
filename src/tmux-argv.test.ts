@@ -80,3 +80,20 @@ describe("managedCodexSessionArgv — resume and fork", () => {
     expect(argv[argv.indexOf("--model") + 1]).toBe("gpt-5.6-sol");
   });
 });
+
+describe("managedCodexSessionArgv — hook trust", () => {
+  // codex refuses to run a hook without a `trusted_hash` in config.toml, and
+  // does so SILENTLY: it exits 0, writes its rollout, and fires nothing. Without
+  // this flag, lfg-spawned codex sessions get no turn state and no SessionEnd,
+  // so `closed` degrades to the 90s lease expiry. The `codexy` alias in ~/.zshrc
+  // carries the same flag so hand-started sessions behave identically.
+  it("trusts lfg's own hooks so they actually run", () => {
+    const argv = managedCodexSessionArgv({ name: "s", cwd: "/tmp/x" });
+    expect(argv).toContain("--dangerously-bypass-hook-trust");
+  });
+
+  it("still present on the resume path", () => {
+    const argv = managedCodexSessionArgv({ name: "s", cwd: "/tmp/x", resume: "abc-123" });
+    expect(argv).toContain("--dangerously-bypass-hook-trust");
+  });
+});

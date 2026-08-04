@@ -42,6 +42,7 @@ import {
 } from "./liveactivity.ts";
 import { unregisterDevice } from "./store.ts";
 import { loadFleetActivityActive, saveFleetActivityActive } from "./fleet-active-store.ts";
+import { sessionDisplayState } from "../session-state.ts";
 import { basename } from "node:path";
 
 // One observation of a session at a single tick.
@@ -150,12 +151,25 @@ export type LiveActivityDecision = {
   nextActive: LiveActivityActive | null;
 };
 
-/// Mirrors the client's `FleetActivitySnapshot`: a pending prompt outranks busy,
-/// and everything else is idle and therefore absent from the card.
-function fleetRowState(next: SessionState): LiveActivityRow["state"] | null {
-  if (next.promptPresent) return "needsInput";
-  if (next.busy) return "working";
-  return null;
+/// Which rows the CARD renders. The precedence itself is no longer restated here
+/// — it lives once in `sessionDisplayState` (../session-state.ts), shared with the
+/// REST `state` field and mirrored in LFGCore for the client, so this function and
+/// `FleetActivitySnapshot` can no longer drift apart by hand.
+///
+/// `blocked` and `idle` are real states but not card rows: a blocked session makes
+/// no progress AND asks nothing, and the list's own Paused group surfaces it.
+/// Closed sessions cannot reach here at all — `listSessions` returns only sessions
+/// with a live process, and `closed` is exactly the absence of one.
+function fleetRowState(
+  session: PayloadSessionInput,
+  next: SessionState,
+): LiveActivityRow["state"] | null {
+  const state = sessionDisplayState({
+    promptPresent: next.promptPresent,
+    blocked: session.status === "blocked",
+    busy: next.busy,
+  });
+  return state === "needsInput" || state === "working" ? state : null;
 }
 
 function sameFleetContentState(
@@ -214,7 +228,7 @@ export function reduceFleetLiveActivity(args: {
   for (const { session, observed } of args.observations) {
     const sid = session.sessionId ?? "";
     if (!sid) continue;
-    const state = fleetRowState(observed);
+    const state = fleetRowState(session, observed);
     if (!state) continue;
 
     if (state === "needsInput") needsInput++;

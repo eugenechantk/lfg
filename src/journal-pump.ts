@@ -22,7 +22,9 @@ import { capturePaneAsync, isBusy } from "./tmux.ts";
 import { listQueue, reconcileQueued } from "./sendq.ts";
 import { findEntryByAnyId as findAisdkEntryByAnyId } from "./aisdk-registry.ts";
 import { codexDelegationSessionIds, notePaneBusy } from "./activity.ts";
-import { forgetTurnState, transcriptTurnState } from "./turn-state.ts";
+import { forgetTurnState } from "./turn-state.ts";
+import { forgetHookState } from "./hook-state.ts";
+import { sessionTurnState } from "./session-state.ts";
 import { statSync } from "node:fs";
 
 const MSG_TICK_MS = 700;
@@ -59,6 +61,36 @@ let nudgeOne: ((sid: string) => void) | null = null;
 
 export function nudgeJournalPump(sid: string): void {
   nudgeOne?.(sid);
+}
+
+/**
+ * Journal the state a vanished session leaves behind.
+ *
+ * A session that disappears — pane killed, process gone, transferred to the
+ * other host — otherwise leaves `busy: true` as the last thing any client ever
+ * heard about it. Clients LATCH these values: `busy[sid]` is only overwritten by
+ * a newer event, and no newer event is ever coming. That stranded `true` is why
+ * an ended session kept rendering as "running" on the Live Activity forever.
+ *
+ * Must be called BEFORE `deltas.forget(sid)`: forget clears the last-value maps,
+ * after which the change checks report "no change" and emit nothing.
+ *
+ * Retracts only what was actually asserted: a session already idle when it
+ * disappeared costs no events, and one with no baseline at all (added to the
+ * watch set but gone before its first poll) emits nothing rather than a phantom
+ * `busy: false` for a state no client was ever told about.
+ */
+export function appendDisappearanceRetractions(
+  j: Pick<Journal, "append">,
+  deltas: PumpDeltas,
+  sid: string,
+): void {
+  if (deltas.lastBusyValue(sid) === true && deltas.busyChanged(sid, false)) {
+    j.append(sid, "busy", { sid, busy: false });
+  }
+  if (deltas.hadPrompt(sid) && deltas.promptChanged(sid, null)) {
+    j.append(sid, "prompt", { sid, prompt: null });
+  }
 }
 
 export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
@@ -106,7 +138,9 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
     if (bootSids) bootSids = null; // boot trust window is one enumeration only
     for (const sid of Array.from(watched.keys())) {
       if (!seen.has(sid)) {
+        appendDisappearanceRetractions(j, deltas, sid);
         forgetTurnState(watched.get(sid)!.tp);
+        forgetHookState(sid, watched.get(sid)!.tp);
         watched.delete(sid);
         deltas.forget(sid); // if it comes back, it re-states its baseline
       }
@@ -165,12 +199,14 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       if (deltas.promptChanged(w.sid, prompt))
         j.append(w.sid, "prompt", { sid: w.sid, prompt });
       const paneBusy = pane ? isBusy(pane) : false;
-      notePaneBusy(w.sid, paneBusy); // still the REST fallback when the transcript abstains
-      // Prefer the transcript's turn boundary; the pane only backstops it. We
-      // are in the pane-backed branch, so the process is known to exist — the
-      // transcript is answering "is a turn in flight", not "is this alive".
-      const turn = await transcriptTurnState(w.tp);
-      const busy = (turn != null ? turn === "running" : paneBusy) || delegated;
+      notePaneBusy(w.sid, paneBusy); // still the REST fallback when both layers abstain
+      // Ask the agent (hooks) and its transcript, in that order of certainty but
+      // arbitrated by recency — see `session-state.ts` for why rank alone would
+      // latch busy on every steering send. The pane only backstops both. We are
+      // in the pane-backed branch, so the process is known to exist; these layers
+      // answer "is a turn in flight", not "is this alive".
+      const verdict = await sessionTurnState({ sessionId: w.sid, transcriptPath: w.tp });
+      const busy = (verdict != null ? verdict.state === "running" : paneBusy) || delegated;
       if (deltas.busyChanged(w.sid, busy)) j.append(w.sid, "busy", { sid: w.sid, busy });
     } catch {}
   };

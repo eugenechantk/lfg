@@ -78,7 +78,7 @@ import type { ServerWebSocket } from "bun";
 import { appendCmd as appendAisdkCmd, removeEntry as removeAisdkEntry, readEntry as readAisdkEntry, findEntryByAnyId as findAisdkEntryByAnyId } from "../aisdk-registry.ts";
 import { markClosed } from "../closing.ts";
 import { assignUser, userRoster } from "../users.ts";
-import { acquireLease, foreignFresh, releaseLease, renewLease } from "../leases.ts";
+import { acquireLease, ensureLease, foreignFresh, releaseLease } from "../leases.ts";
 import { registerDevice, unregisterDevice, deviceCount } from "../push/store.ts";
 import { upsertLiveActivityToken } from "../push/liveactivity-store.ts";
 import { startPushWatcher, pushConfigured } from "../push/watcher.ts";
@@ -835,12 +835,17 @@ function startLeaseHeartbeat(): () => void {
       const sessions = await listSessions();
       for (const s of sessions) {
         if (stopped) return;
-        if (s.sessionId) await renewLease(s.sessionId);
+        // ensure, not renew: `renewLease` no-ops unless the lease is already
+        // ours, so sessions lfg ADOPTED rather than spawned never got one (7 of
+        // 16 on this machine). That is fatal once `closed` means "no fresh
+        // lease" — a leaseless running session would read as ended. Driving it
+        // from enumeration removes the "remember to acquire" step entirely.
+        if (s.sessionId) await ensureLease(s.sessionId, s.pid);
       }
     } catch {}
     if (!stopped) timer = setTimeout(loop, 30_000);
   };
-  timer = setTimeout(loop, 30_000);
+  timer = setTimeout(loop, 1_000);
   return () => {
     stopped = true;
     if (timer) clearTimeout(timer);
@@ -1746,7 +1751,6 @@ export async function cmdServe() {
         const before = rawBefore == null ? null : Number.parseFloat(rawBefore);
         const page = await listResumable({
           limit,
-          excludeIds: liveIds,
           before: before != null && Number.isFinite(before) ? before : null,
         });
         return json(page);
