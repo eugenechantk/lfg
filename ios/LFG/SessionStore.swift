@@ -34,15 +34,19 @@ import LFGCore
     /// `.claude/diagnosis-settings-reachable-list-offline.md`.
     private var failuresByHost: [String: Int] = [:]
     /// Failed polls to tolerate before surfacing "not reachable" from a
-    /// currently-healthy state (~9s at the 3s poll interval).
+    /// currently-healthy state.
     ///
-    /// `HostProbePolicy.failureThreshold` (when a host goes cold and backs off) MUST
-    /// stay strictly above this — see the note on that property.
-    private let failureThreshold = 3
+    /// Read from the policy rather than declared here: the probe threshold is
+    /// derived from this value (`displayFailureThreshold + 1`), so the two can no
+    /// longer drift apart. This used to be a second literal `3` kept in step with
+    /// `HostProbePolicy`'s `4` by a comment in another module.
+    private var failureThreshold: Int { probePolicy.displayFailureThreshold }
 
     /// Back-off policy for repeatedly-failing hosts. An offline Tailscale peer is a
     /// black hole (packets dropped, no RST), so probing it costs a full timeout every
-    /// time. Cold hosts get a short timeout and are probed once per ~30s.
+    /// time. Cold hosts get a short timeout and are probed once per
+    /// `coldProbeInterval` (300s by default — the policy states it in seconds so it
+    /// cannot drift out of step with this loop's period again).
     private let probePolicy = HostProbePolicy.default
     /// Monotonic poll counter driving `HostHealth.shouldProbe`.
     private var pollTick = 0

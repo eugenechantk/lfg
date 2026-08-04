@@ -7,40 +7,63 @@ import Foundation
 /// such a host on every 3s tick, at the 15s user-initiated timeout, is what turned a
 /// 3s poll into an ~18s one. This policy makes a repeatedly-failing host cheap: short
 /// timeout, and probed only occasionally.
+/// Every value here used to be an independent constant, with the relationships
+/// between them written in English in a *different* module from the numbers they
+/// constrained — so nothing failed when one drifted. Two had already drifted:
+/// `coldProbeEveryNTicks` was sized for a 3s poll that became 60s, and
+/// `pollTimeout` justified itself with "the next tick is 3s away".
+///
+/// Now the only free values are the ones a human actually chooses, expressed in
+/// the units a human thinks in (seconds, not ticks). Everything with an
+/// invariant attached is *derived*, so it cannot drift.
 public struct HostProbePolicy: Sendable, Equatable {
+    /// Consecutive failures after which the UI *shows* a host as offline.
+    /// This is the human-facing debounce; the probe threshold follows from it.
+    public let displayFailureThreshold: Int
+
     /// Consecutive failures after which a host is considered "cold" and backs off.
     ///
-    /// **Must stay strictly greater than `SessionStore.failureThreshold`** (the
-    /// separate debounce that decides when a host is *shown* as offline). Backing off
-    /// stops incrementing the failure count on skipped ticks, so if a host went cold at
-    /// or below the display threshold it would freeze one short of "offline" and the
-    /// banner would never appear.
-    public let failureThreshold: Int
-    /// Once cold, probe only on ticks where `tick % coldProbeEveryNTicks == 0`.
-    ///
-    /// **This is a tick count, so its meaning is coupled to the poll interval in
-    /// `SessionStore.start()`.** That loop is now a 60s belt-and-braces reconcile
-    /// (live delivery moved to the `HostLink`s), not the original 3s poll — at 10
-    /// ticks a cold host was being retried every 10 MINUTES. Whenever the poll
-    /// interval changes, re-derive this.
-    public let coldProbeEveryNTicks: Int
+    /// Derived, never set: it **must** be strictly greater than the display
+    /// threshold. Backing off stops incrementing the failure count on skipped
+    /// ticks, so a host that went cold at or below the display threshold would
+    /// freeze one short of "offline" and the banner would never appear. Deriving
+    /// it makes that invariant impossible to break by editing one number.
+    public var failureThreshold: Int { displayFailureThreshold + 1 }
+
+    /// How long a cold host waits between probes, in **seconds**.
+    public let coldProbeInterval: TimeInterval
+    /// The reconcile loop's period, in **seconds** (`SessionStore.start()`).
+    public let pollInterval: TimeInterval
+
+    /// Derived tick count for the cold back-off. Expressing the cadence in
+    /// seconds and dividing here is what stops the 3s-poll/60s-poll drift: change
+    /// `pollInterval` and the tick count re-derives itself.
+    public var coldProbeEveryNTicks: Int {
+        guard pollInterval > 0 else { return 1 }
+        return max(1, Int((coldProbeInterval / pollInterval).rounded()))
+    }
+
     /// Per-host timeout for the poll path. Deliberately far below `LFGClient`'s 15s
     /// user-initiated timeout: this loop is a background reconcile, not a user-
     /// initiated fetch, so a poll slower than this is worth abandoning — the
-    /// `HostLink`s are what actually keep a host live, and the next reconcile tick
-    /// is 60s away (`SessionStore.start()`).
+    /// `HostLink`s are what actually keep a host live.
     public let pollTimeout: TimeInterval
 
-    public init(failureThreshold: Int = 4, coldProbeEveryNTicks: Int = 5, pollTimeout: TimeInterval = 4) {
-        self.failureThreshold = failureThreshold
-        self.coldProbeEveryNTicks = coldProbeEveryNTicks
+    public init(displayFailureThreshold: Int = 3,
+                coldProbeInterval: TimeInterval = 300,
+                pollInterval: TimeInterval = 60,
+                pollTimeout: TimeInterval = 4) {
+        self.displayFailureThreshold = displayFailureThreshold
+        self.coldProbeInterval = coldProbeInterval
+        self.pollInterval = pollInterval
         self.pollTimeout = pollTimeout
     }
 
-    /// 60s poll cadence → cold hosts are retried every ~5min. The back-off only
-    /// governs the slow background reconcile: the links reconnect on their own
-    /// schedule, and foreground/user-initiated refreshes bypass it entirely
-    /// (`SessionStore` clears the failure counts when the app comes forward).
+    /// Defaults reproduce the previously hand-tuned numbers exactly: display 3,
+    /// probe 4, and 300s/60s = every 5th tick. The back-off only governs the slow
+    /// background reconcile — the links reconnect on their own schedule, and
+    /// foreground refreshes bypass it entirely (`SessionStore` clears the failure
+    /// counts when the app comes forward).
     public static let `default` = HostProbePolicy()
 }
 

@@ -50,15 +50,20 @@ final class HostHealthTests: XCTestCase {
     }
 
     func testColdBackoffRespectsCustomInterval() {
-        let policy = HostProbePolicy(failureThreshold: 2, coldProbeEveryNTicks: 3, pollTimeout: 4)
+        // displayFailureThreshold 1 -> failureThreshold 2 (derived);
+        // 180s cold interval over a 60s poll -> every 3rd tick (derived).
+        let policy = HostProbePolicy(displayFailureThreshold: 1, coldProbeInterval: 180, pollInterval: 60)
         let probed = (1...9).filter {
             HostHealth.shouldProbe(consecutiveFailures: 2, tick: $0, policy: policy)
         }
         XCTAssertEqual(probed, [3, 6, 9])
     }
 
-    func testZeroProbeIntervalDegradesToEveryTickAndNeverDividesByZero() {
-        let policy = HostProbePolicy(failureThreshold: 1, coldProbeEveryNTicks: 0, pollTimeout: 4)
+    func testDegenerateIntervalsDegradeToEveryTickAndNeverDivideByZero() {
+        // A cold interval at or below one poll period can only mean "every tick";
+        // the derivation clamps to 1 rather than producing 0 and dividing by it.
+        let policy = HostProbePolicy(displayFailureThreshold: 0, coldProbeInterval: 0, pollInterval: 60)
+        XCTAssertEqual(policy.coldProbeEveryNTicks, 1)
         for tick in 1...5 {
             XCTAssertTrue(HostHealth.shouldProbe(consecutiveFailures: 3, tick: tick, policy: policy))
         }
@@ -119,5 +124,58 @@ final class HostHealthTests: XCTestCase {
         let health: [String: Reachability] = ["removed": .ok, "a": .hostUnreachable("down")]
         XCTAssertEqual(HostHealth.aggregate(hostIds: ["a"], health: health),
                        .hostUnreachable("down"))
+    }
+}
+
+// MARK: - Policy invariants (previously enforced only by a comment)
+
+final class HostProbePolicyInvariantTests: XCTestCase {
+    /// The invariant that used to live as prose in a different module from the
+    /// numbers it constrained. If the probe threshold ever stops exceeding the
+    /// display threshold, a host freezes one short of "offline" and the banner
+    /// never appears — the exact class of bug behind the disconnect reports.
+    func testProbeThresholdAlwaysExceedsDisplayThreshold() {
+        for display in 0...20 {
+            let p = HostProbePolicy(displayFailureThreshold: display)
+            XCTAssertGreaterThan(p.failureThreshold, p.displayFailureThreshold,
+                                 "probe threshold must stay strictly above the display threshold")
+        }
+    }
+
+    /// A host must actually reach "cold" at some point after it is shown offline.
+    func testHostGoesColdOnTheTickAfterItIsShownOffline() {
+        let p = HostProbePolicy.default
+        XCTAssertFalse(HostHealth.isCold(consecutiveFailures: p.displayFailureThreshold, policy: p))
+        XCTAssertTrue(HostHealth.isCold(consecutiveFailures: p.failureThreshold, policy: p))
+    }
+
+    /// Cadence is stated in seconds and the tick count derives from the poll
+    /// period, so changing the loop's period cannot silently change the cadence.
+    /// This is what drifted before: ticks sized for a 3s poll, run at 60s.
+    func testColdCadenceDerivesFromThePollInterval() {
+        let sixty = HostProbePolicy(coldProbeInterval: 300, pollInterval: 60)
+        XCTAssertEqual(sixty.coldProbeEveryNTicks, 5)
+
+        // Same wall-clock intent, different loop period -> ticks re-derive.
+        let three = HostProbePolicy(coldProbeInterval: 300, pollInterval: 3)
+        XCTAssertEqual(three.coldProbeEveryNTicks, 100)
+
+        // The real wall-clock gap is unchanged by the period.
+        XCTAssertEqual(Double(sixty.coldProbeEveryNTicks) * sixty.pollInterval, 300)
+        XCTAssertEqual(Double(three.coldProbeEveryNTicks) * three.pollInterval, 300)
+    }
+
+    /// Defaults must reproduce the previously hand-tuned numbers exactly, so this
+    /// refactor changes no runtime behaviour.
+    func testDefaultsMatchThePreviousHandTunedValues() {
+        let p = HostProbePolicy.default
+        XCTAssertEqual(p.displayFailureThreshold, 3)
+        XCTAssertEqual(p.failureThreshold, 4)
+        XCTAssertEqual(p.coldProbeEveryNTicks, 5)
+        XCTAssertEqual(p.pollTimeout, 4)
+    }
+
+    func testDegeneratePollIntervalDoesNotDivideByZero() {
+        XCTAssertEqual(HostProbePolicy(pollInterval: 0).coldProbeEveryNTicks, 1)
     }
 }
