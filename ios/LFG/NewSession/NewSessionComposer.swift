@@ -180,6 +180,16 @@ struct NewSessionComposer: View {
                             tint: canSend ? NewSessionPalette.accent : nil,
                             interactive: true
                         )
+                        // Without an explicit content shape the button had NO
+                        // reliable hit area — the glass/tint background is not
+                        // part of the label's default shape, leaving only the
+                        // ~10x11pt arrow glyph, so presses landed on nothing and
+                        // send read as dead. The padding pair widens the target
+                        // to the 44pt HIG minimum while the negative padding
+                        // keeps the 32pt circle's layout and position unchanged.
+                        .padding(6)
+                        .contentShape(Circle())
+                        .padding(-6)
                 }
                 .buttonStyle(.plain)
                 // NOT `.disabled()` — SwiftUI dims a disabled plain-button label to
