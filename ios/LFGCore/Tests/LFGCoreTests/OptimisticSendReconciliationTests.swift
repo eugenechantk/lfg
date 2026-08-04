@@ -23,6 +23,25 @@ final class OptimisticSendReconciliationTests: XCTestCase {
             in: messages))
     }
 
+    /// The scan is tail-bounded so a queued message doesn't rescan a long
+    /// transcript on every render while it waits. A just-sent turn is always at
+    /// the tail; anything older than the window is deliberately out of scope.
+    func testMatchingUserTurnScansOnlyTheMostRecentUserTurns() {
+        let stale = SessionMessage(role: "user", kind: "text", text: "the older message")
+        let filler = (0 ..< 40).map {
+            SessionMessage(role: "user", kind: "text", text: "filler turn \($0)")
+        }
+
+        XCTAssertFalse(OptimisticSendReconciliation.containsMatchingUserTurn(
+            matchText: "the older message",
+            in: [stale] + filler))
+
+        // …and the same text lands the moment it is inside the window.
+        XCTAssertTrue(OptimisticSendReconciliation.containsMatchingUserTurn(
+            matchText: "the older message",
+            in: filler + [stale]))
+    }
+
     func testShortPendingTextDoesNotMatchAmbiguously() {
         let messages = [
             SessionMessage(role: "user", kind: "text", text: "ok")

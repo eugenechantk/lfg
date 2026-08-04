@@ -68,10 +68,9 @@ struct SessionDetailView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 8) {
-                    PendingStripView(sessionID: sid, items: pending.filter { !$0.showSent }) { tapped in
-                        queueAction = tapped
-                    }
-                    .padding(.horizontal, 16)
+                    // No pending strip: every send now renders as its own bubble
+                    // in the transcript, carrying its queued/offline/failed state
+                    // as a caption there rather than as a separate bar here.
                     // This session is LIVE on a host that is currently unreachable.
                     // Keep the draft editable; the store queues sends durably until
                     // the owning host comes back.
@@ -174,14 +173,19 @@ struct SessionDetailView: View {
                         }
                     }
 
-                    // Kickoff sends show as a finished user bubble right away
-                    // (no pending bar), until the real user turn reconciles them.
-                    // Filtered against the live transcript so the placeholder
-                    // disappears in the SAME render pass that the real user turn
-                    // appears — otherwise the two overlap for a beat (the
-                    // "momentary duplicate") until the store's reconcile mutates
+                    // Every send — kickoff or follow-up, delivered or queued
+                    // behind a running turn — shows as a user bubble right away,
+                    // until the real user turn reconciles it. Filtered against
+                    // the live transcript so the placeholder disappears in the
+                    // SAME render pass that the real user turn appears —
+                    // otherwise the two overlap for a beat (the "momentary
+                    // duplicate") until the store's reconcile mutates
                     // pendingSends a tick later.
-                    ForEach(unmatchedSentBubbles) { OptimisticUserBubble(sessionID: sid, pending: $0) }
+                    ForEach(unmatchedSentBubbles) { item in
+                        OptimisticUserBubble(sessionID: sid, pending: item) {
+                            queueAction = item
+                        }
+                    }
 
                     // "Running" now lives in the nav-bar header (below the title),
                     // not inline in the transcript.

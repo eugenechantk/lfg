@@ -320,61 +320,18 @@ struct PausedBannerView: View {
 
 // MARK: - Optimistic outbound message
 
-/// Locally-sent messages awaiting pickup, shown as small muted bars just above
-/// the composer (not as transcript bubbles). Each appears the instant the user
-/// sends and is removed once the agent records the real user turn — at which
-/// point it surfaces as a normal user bubble in the transcript.
-struct PendingStripView: View {
-    let sessionID: String
-    let items: [SessionStore.PendingSend]
-    /// Tapping an in-flight (not-failed) message surfaces remove / edit / send-now.
-    var onTap: (SessionStore.PendingSend) -> Void = { _ in }
-    @Environment(SessionStore.self) private var store
-
-    var body: some View {
-        if !items.isEmpty {
-            VStack(spacing: 6) {
-                ForEach(items) { item in
-                    HStack(spacing: 8) {
-                        if item.queuedOffline {
-                            Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
-                        } else if item.failed {
-                            Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red)
-                        } else {
-                            ProgressView().controlSize(.mini)
-                        }
-                        Text(item.displayText)
-                            .font(.caption).lineLimit(1).foregroundStyle(.secondary)
-                        Spacer(minLength: 0)
-                        if item.queuedOffline {
-                            Text("Queued")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        } else if item.failed {
-                            Button("Retry") { Task { await store.retryPending(sessionID, item) } }
-                                .font(.caption2).buttonStyle(.bordered).controlSize(.mini)
-                        } else {
-                            // Affordance hint that the queued message is tappable.
-                            Image(systemName: "ellipsis.circle").font(.caption).foregroundStyle(.tertiary)
-                        }
-                    }
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(.quaternary.opacity(0.4), in: Capsule())
-                    .contentShape(Capsule())
-                    .onTapGesture { if !item.failed && !item.queuedOffline { onTap(item) } }
-                }
-            }
-        }
-    }
-}
-
 /// A finished-looking user bubble for an optimistic send (no "Sending…"
-/// spinner). Used for a session's kickoff message, which is already committed,
-/// so it reads as sent immediately and is replaced by the real user turn on
-/// reconcile.
+/// spinner). Every send gets one — kickoff, follow-up, or a message queued
+/// behind a running turn — so what you typed joins the conversation the moment
+/// you send it, and is replaced by the real user turn on reconcile. The states
+/// that aren't "delivered" are captions under the bubble, not a different
+/// widget somewhere else on screen.
 struct OptimisticUserBubble: View {
     let sessionID: String
     let pending: SessionStore.PendingSend
+    /// Opens the remove / edit / send-now sheet for a message still waiting on
+    /// the current turn. Nil where that isn't offered.
+    var onManage: (() -> Void)? = nil
     @Environment(SessionStore.self) private var store
 
     // Awaiting the backend: a wake-up send to a reaped session that's still
@@ -416,6 +373,22 @@ struct OptimisticUserBubble: View {
                     Button("Retry") { Task { await store.retryPending(sessionID, pending) } }
                         .font(.caption2).buttonStyle(.bordered).controlSize(.mini)
                 }
+            } else if pending.queuedBehindTurn {
+                // Sent, accepted, waiting on the turn in progress. The caption
+                // carries what the old pending bar said, and the same tap —
+                // remove / edit / send-now — without moving the message out of
+                // the conversation to say it.
+                HStack(spacing: 5) {
+                    Text("Queued").font(.caption2).foregroundStyle(.secondary)
+                    if onManage != nil {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { onManage?() }
+                .accessibilityIdentifier("queuedBubbleManage")
             }
         }
         .padding(.vertical, 10)
