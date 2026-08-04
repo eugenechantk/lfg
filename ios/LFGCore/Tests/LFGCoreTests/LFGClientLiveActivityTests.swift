@@ -60,15 +60,27 @@ final class LFGClientLiveActivityTests: XCTestCase {
         ])
     }
 
-    func testRegisterLiveActivityUpdateTokenPostsExpectedBody() async throws {
+    func testRegisterLiveActivityUpdateTokenOmitsSessionIdForTheFleetActivity() async throws {
         let client = makeClient()
 
-        try await client.registerLiveActivityUpdateToken("ff09", env: "prod", sessionId: "session-1")
+        try await client.registerLiveActivityUpdateToken("ff09", env: "prod")
 
         let request = try XCTUnwrap(RequestCapturingURLProtocol.capturedRequest)
         XCTAssertEqual(request.url?.path, "/api/push/live-activity/update-token")
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        XCTAssertEqual(try requestBody(request), [
+            "token": "ff09",
+            "env": "prod",
+        ])
+    }
+
+    func testRegisterLiveActivityUpdateTokenStillSendsSessionIdWhenGiven() async throws {
+        let client = makeClient()
+
+        try await client.registerLiveActivityUpdateToken("ff09", env: "prod", sessionId: "session-1")
+
+        let request = try XCTUnwrap(RequestCapturingURLProtocol.capturedRequest)
         XCTAssertEqual(try requestBody(request), [
             "token": "ff09",
             "env": "prod",

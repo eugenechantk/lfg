@@ -12,10 +12,16 @@ import LFGCore
 /// it never tears a link down for anything but host-list changes and
 /// backgrounding.
 ///
-/// Health semantics: `unhealthySince` is the moment this link object last
-/// stopped receiving (connect failure or stream death) and is cleared by the
-/// first element received after reconnect. `SessionStore` owns the durable
-/// sustained-failure clock across foreground teardowns/rebuilds.
+/// Health semantics: this object holds **no** health opinion and keeps **no**
+/// failure clock. It reports what happened (`HostSignal`) and `SessionStore`
+/// folds that into the one `HostState` per host. The link used to own an
+/// `unhealthySince` date, which the store then had to mirror into
+/// `unhealthySinceByHost` to survive teardown/rebuild — two clocks that had to
+/// agree before "recovered" could be asserted. The clock now lives in the state.
+///
+/// `attemptFailed` below is not a health opinion: it is a fact about the dial
+/// currently in flight, used only to decide whether a foreground kick should
+/// interrupt it.
 @MainActor
 final class HostLink {
     enum State: Equatable {
@@ -29,8 +35,10 @@ final class HostLink {
     let host: Host
     private let client: LFGClient
     private(set) var state: State = .idle
-    /// When the link last left the healthy states; nil while healthy.
-    private(set) var unhealthySince: Date?
+    /// Whether the dial currently in flight has already failed at least once.
+    /// Scoped to the attempt, not to the host's health — `resumeNow` uses it to
+    /// avoid cancelling a fresh in-flight dial.
+    private(set) var attemptFailed = false
     /// When the last stream element (event or heartbeat) arrived. The freshness
     /// signal `resumeNow` uses — `state` alone can't tell a live stream from one
     /// frozen by a process suspension.
@@ -38,6 +46,9 @@ final class HostLink {
     private(set) var lastRTT: TimeInterval?
 
     var onEvent: ((LiveEvent) -> Void)?
+    /// Something happened that bears on this host's health. The store folds it
+    /// through `HostStateMachine`; the link itself draws no conclusion.
+    var onSignal: ((HostSignal) -> Void)?
     /// The server declared our cursor unserviceable — full-refresh via REST.
     var onResyncNeeded: (() -> Void)?
     var onStateChange: (() -> Void)?
@@ -64,13 +75,6 @@ final class HostLink {
     private func reloadCursor() {
         if let s = UserDefaults.standard.string(forKey: cursorKey), let v = Int64(s), v > cursor {
             cursor = v
-        }
-    }
-
-    var isHealthy: Bool {
-        switch state {
-        case .catchingUp, .live: return unhealthySince == nil
-        case .connecting, .idle, .backoff: return false
         }
     }
 
@@ -111,9 +115,9 @@ final class HostLink {
         case .backoff:
             redial()
         case .connecting:
-            // A dial that has already failed at least once; a fresh one
-            // (unhealthySince == nil) is left to complete.
-            if unhealthySince != nil { redial() }
+            // A dial that has already failed at least once; a fresh one is left
+            // to complete.
+            if attemptFailed { redial() }
         case .catchingUp, .live:
             let quietFor = now.timeIntervalSince(lastElementAt ?? now)
             if quietFor > HostLinkPolicy.quietRedialAfter { redial() }
@@ -138,6 +142,7 @@ final class HostLink {
         runTask?.cancel(); runTask = nil
         pingTask?.cancel(); pingTask = nil
         setState(.idle)
+        onSignal?(.stopped)
     }
 
     private func setState(_ s: State) {
@@ -146,16 +151,17 @@ final class HostLink {
         onStateChange?()
     }
 
-    private func markUnhealthy() {
-        if unhealthySince == nil { unhealthySince = Date() }
+    private func markFailed(_ reason: String) {
+        attemptFailed = true
+        onSignal?(.failed(reason: reason))
         onStateChange?()
     }
 
     private func markReceiving() {
-        if unhealthySince != nil {
-            unhealthySince = nil
-            onStateChange?()
-        }
+        let was = attemptFailed
+        attemptFailed = false
+        onSignal?(.receiving)
+        if was { onStateChange?() }
     }
 
     private func persistCursor() {
@@ -188,6 +194,7 @@ final class HostLink {
             // (caught live in the Phase-1 gate test: the banner re-check saw a
             // "healthy" link that was really stuck awaiting response headers).
             setState(.connecting)
+            if !attemptFailed { onSignal?(.connecting) }
             var receivedAny = false
             do {
                 for try await element in client.events(since: cursor) {
@@ -216,11 +223,11 @@ final class HostLink {
                 // healthy, retry immediately — the common case is the server
                 // coming right back, and the cursor makes the reconnect free.
                 attempt = receivedAny ? 0 : attempt + 1
-                if !receivedAny { markUnhealthy() }
+                if !receivedAny { markFailed("Connection closed") }
             } catch {
                 if Task.isCancelled { return }
                 // Stream died (network blip, stale watchdog, connect failure).
-                markUnhealthy()
+                markFailed("Connection lost")
                 attempt = receivedAny ? 1 : attempt + 1
             }
         }

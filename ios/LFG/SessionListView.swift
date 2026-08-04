@@ -481,9 +481,9 @@ struct SessionListView: View {
                         // aggregate is unhealthy that is every host — but deriving
                         // it rather than assuming it keeps the banner honest if the
                         // guard above ever loosens.
-                        ConnectionBanner(reachability: store.reachability,
+                        ConnectionBanner(state: store.fleetState,
                                          offlineHosts: settings.hosts.count > 1
-                                            ? settings.hosts.filter { store.reachabilityByHost[$0.id] != .ok }.map(\.label)
+                                            ? settings.hosts.filter { store.hostStateByHost[$0.id]?.isLive != true }.map(\.label)
                                             : [])
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(Tokens.screen)
@@ -736,7 +736,7 @@ private struct HeaderStatusLine: View {
                             .fixedSize()
                             .accessibilityHidden(true)
                     }
-                    HostHeaderToken(host: host, online: store.reachabilityByHost[host.id] == .ok)
+                    HostHeaderToken(host: host, online: store.hostStateByHost[host.id]?.isLive == true)
                 }
             } else {
                 let status = store.connectionStatus
@@ -1012,7 +1012,7 @@ struct StatusBadge: View {
             HStack(spacing: 12) {
                 ForEach(settings.hosts) { host in
                     HostStatusChip(host: host,
-                                   online: store.reachabilityByHost[host.id] == .ok)
+                                   online: store.hostStateByHost[host.id]?.isLive == true)
                 }
             }
         } else {

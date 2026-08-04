@@ -21,7 +21,7 @@ final class LiveActivityManager {
     func configure(settings: AppSettings) {
         self.settings = settings
         #if DEBUG
-        startMockSessionActivitiesIfRequested()
+        startMockFleetActivityIfRequested()
         #endif
         start()
     }
@@ -42,28 +42,28 @@ final class LiveActivityManager {
         guard pushToStartTask == nil, activityUpdatesTask == nil else { return }
 
         pushToStartTask = Task { @MainActor [weak self] in
-            for await token in Activity<LFGSessionAttributes>.pushToStartTokenUpdates {
+            for await token in Activity<LFGFleetAttributes>.pushToStartTokenUpdates {
                 await self?.sendStartToken(apnsTokenHex(token))
             }
         }
 
         activityUpdatesTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            for activity in Activity<LFGSessionAttributes>.activities {
+            for activity in Activity<LFGFleetAttributes>.activities {
                 self.track(activity)
             }
-            for await activity in Activity<LFGSessionAttributes>.activityUpdates {
+            for await activity in Activity<LFGFleetAttributes>.activityUpdates {
                 self.track(activity)
             }
         }
     }
 
     @available(iOS 17.2, *)
-    private func track(_ activity: Activity<LFGSessionAttributes>) {
+    private func track(_ activity: Activity<LFGFleetAttributes>) {
         guard activityTokenTasks[activity.id] == nil else { return }
         activityTokenTasks[activity.id] = Task { @MainActor [weak self] in
             for await token in activity.pushTokenUpdates {
-                await self?.sendUpdateToken(apnsTokenHex(token), sessionId: activity.attributes.sessionId)
+                await self?.sendUpdateToken(apnsTokenHex(token))
             }
         }
     }
@@ -79,116 +79,100 @@ final class LiveActivityManager {
         }
     }
 
-    private func sendUpdateToken(_ token: String, sessionId: String) async {
+    private func sendUpdateToken(_ token: String) async {
         guard let settings, let host = settings.defaultHost, let client = settings.client(for: host) else { return }
         do {
-            try await client.registerLiveActivityUpdateToken(token, env: liveActivityEnv, sessionId: sessionId)
+            try await client.registerLiveActivityUpdateToken(token, env: liveActivityEnv)
         } catch {
             log.error("live activity update-token register on \(host.label) failed: \(error.localizedDescription)")
         }
     }
 
     #if DEBUG
-    func startMockSessionActivitiesIfRequested() {
-        // "1" seeds all three variants. Passing a single state name
-        // ("working" / "blocked" / "finished") seeds just that one — iOS renders
-        // only one Live Activity per app on the Lock Screen at a time, so a
-        // single-variant seed is the only way to visually verify the other cards.
-        // "stressN" (e.g. "stress8") seeds N synthetic activities to measure how
-        // many ActivityKit will actually accept — the server's cap is derived
-        // from that ceiling, not from a guessed constant.
-        let mockMode = ProcessInfo.processInfo.environment["LFG_LA_MOCK"]
-        let wanted = ["working", "blocked", "finished"].first { $0 == mockMode }
-        let stressCount = (mockMode?.hasPrefix("stress") ?? false)
-            ? Int(mockMode!.dropFirst("stress".count)) ?? 8
-            : nil
-        guard mockMode == "1" || wanted != nil || stressCount != nil else { return }
+    /// Seeds the one fleet activity with synthetic content so the lock-screen card
+    /// can be screenshotted without driving five real sessions. Lock-screen Live
+    /// Activity text is not in the accessibility tree, so a screenshot is the only
+    /// way to verify this surface — in particular whether the header survives the
+    /// system's fixed ~160pt frame.
+    ///
+    /// `LFG_LA_MOCK` values:
+    ///   `1`          — frame 27's shape: 5 active, 3 rows + "2 More"
+    ///   `working`    — working only, no needs-input counter
+    ///   `needsInput` — needs-input only
+    ///   `single`     — one row, no overflow
+    func startMockFleetActivityIfRequested() {
+        guard let mode = ProcessInfo.processInfo.environment["LFG_LA_MOCK"] else { return }
         guard #available(iOS 17.2, *) else { return }
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
 
+        let now = Date().timeIntervalSince1970
+        func row(_ sid: String, _ title: String, _ state: String, _ minutesAgo: Double) -> LFGFleetAttributes.Row {
+            LFGFleetAttributes.Row(sid: sid, title: title, state: state, since: now - minutesAgo * 60)
+        }
+
+        let content: LFGFleetAttributes.ContentState
+        switch mode {
+        case "working":
+            content = .init(
+                working: 2,
+                needsInput: 0,
+                rows: [
+                    row("w1", "Read /Users/eugenechan/dev/personal/lfg/ios/LFG/Views/SessionListView.swift", "working", 2),
+                    row("w2", "Running xcodegen", "working", 6),
+                ],
+                more: 0,
+                updatedAt: now
+            )
+        case "needsInput":
+            content = .init(
+                working: 0,
+                needsInput: 2,
+                rows: [
+                    row("b1", "Does codex work for lfg?", "needsInput", 1),
+                    row("b2", "In the iOS client, can you add an option…", "needsInput", 4),
+                ],
+                more: 0,
+                updatedAt: now
+            )
+        case "single":
+            content = .init(
+                working: 1,
+                needsInput: 0,
+                rows: [row("w1", "Running xcodegen", "working", 3)],
+                more: 0,
+                updatedAt: now
+            )
+        default:
+            content = .init(
+                working: 4,
+                needsInput: 1,
+                rows: [
+                    row("b1", "Does codex work for lfg?", "needsInput", 1),
+                    row("w1", "Read /Users/eugenechan/dev/personal/lfg/ios/LFG/Views/SessionListView.swift", "working", 2),
+                    row("w2", "In the iOS client, can you add an option…", "working", 4),
+                ],
+                more: 2,
+                updatedAt: now
+            )
+        }
+
         Task { @MainActor in
-            for activity in Activity<LFGSessionAttributes>.activities {
-                await activity.end(nil, dismissalPolicy: .immediate)
-            }
             for activity in Activity<LFGFleetAttributes>.activities {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
-
-            let now = Date().timeIntervalSince1970
-            let states: [(LFGSessionAttributes, LFGSessionAttributes.ContentState)] = [
-                (
-                    LFGSessionAttributes(sessionId: "mock-working"),
-                    LFGSessionAttributes.ContentState(
-                        state: "working",
-                        title: "Read /Users/eugenechan/dev/personal/lfg/ios/LFG/Views/SessionListView.swift",
-                        dir: "lfg",
-                        host: "Eugenes-MacBook-Pro",
-                        since: now - 60,
-                        updatedAt: now,
-                        subtitle: "Running xcodegen"
-                    )
-                ),
-                (
-                    LFGSessionAttributes(sessionId: "mock-blocked"),
-                    LFGSessionAttributes.ContentState(
-                        state: "blocked",
-                        title: "Does codex work for lfg?",
-                        dir: "inbox",
-                        host: "Eugenes-MacBook-Pro",
-                        since: now - 60,
-                        updatedAt: now
-                    )
-                ),
-                (
-                    LFGSessionAttributes(sessionId: "mock-finished"),
-                    LFGSessionAttributes.ContentState(
-                        state: "finished",
-                        title: "can you take screenshots of all the states in the iOS client",
-                        dir: "lfg",
-                        host: "Air",
-                        since: now - 60,
-                        updatedAt: now,
-                        added: 142,
-                        removed: 38,
-                        files: 6
-                    )
-                ),
-            ]
-            // Per-request try/catch, NOT one around the loop: a single throw used
-            // to abort the remaining requests, so only the first mock card ever
-            // appeared and the blocked/finished variants were invisible. The
-            // inter-request pause keeps ActivityKit from rejecting a rapid burst.
-            var selected = wanted.map { w in states.filter { $0.1.state == w } } ?? states
-            if let n = stressCount {
-                selected = (1...n).map { i in
-                    (
-                        LFGSessionAttributes(sessionId: "mock-stress-\(i)"),
-                        LFGSessionAttributes.ContentState(
-                            state: "working",
-                            title: "Stress session \(i)",
-                            dir: "lfg",
-                            host: "Eugenes-MacBook-Pro",
-                            since: now - Double(i * 60),
-                            updatedAt: now
-                        )
-                    )
-                }
-            }
-            for (attributes, state) in selected {
-                do {
-                    _ = try Activity.request(
-                        attributes: attributes,
-                        content: .init(state: state, staleDate: nil),
-                        pushType: nil
-                    )
-                    print("[LFG_LA_MOCK] started \(attributes.sessionId)")
-                } catch {
-                    print("[LFG_LA_MOCK] FAILED \(attributes.sessionId): \(error)")
-                    log.error("mock live activity \(attributes.sessionId) failed: \(error.localizedDescription)")
-                }
-                try? await Task.sleep(for: .milliseconds(400))
+            do {
+                _ = try Activity.request(
+                    attributes: LFGFleetAttributes(fleetId: "fleet"),
+                    content: .init(state: content, staleDate: nil),
+                    pushType: nil
+                )
+                print("[LFG_LA_MOCK] started fleet activity mode=\(mode)")
+            } catch {
+                print("[LFG_LA_MOCK] FAILED: \(error)")
+                log.error("mock fleet live activity failed: \(error.localizedDescription)")
             }
         }
     }
+
     #endif
 }

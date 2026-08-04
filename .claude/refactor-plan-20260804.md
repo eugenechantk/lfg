@@ -175,3 +175,46 @@ never answers. Per the repo's own rule (`verify-ui-by-tapping`,
 `verify-real-seam-not-mocks`) a green unit suite is not "verified" for this.
 Guessing the display semantics and shipping it unverified would reproduce the
 class of bug the stage exists to remove.
+
+---
+
+## Stage 2c — done, 2026-08-04
+
+Resolved the open question by picking **option 2**: `reachabilityByHost` is
+deleted, and the views read `hostStateByHost` / `fleetState` directly.
+
+The `degraded` display problem turned out to have a better answer than any of
+the three options listed above. The UI already had a **tri-state** connection
+indicator (`connected / connecting / offline`), added by the instant-reconnect
+work so that "unknown" would stop rendering as "Offline" at launch. `degraded`
+maps straight onto its middle case: a host that is failing but still inside its
+grace window is **connecting** — not connected, not offline. No projection, no
+remembered previous value, no `wasLive` flag. The true state, and the UI already
+had a word for it.
+
+### Live verification (`ios/design/verify-stage2-20260804/`)
+
+Driven through the real onboarding and settings UI on the session simulator,
+against the real server:
+
+| # | Step | Result |
+|---|---|---|
+| 1 | Point at the live host | **Connected**, green dot, sessions load |
+| 2 | Repoint at a dead port | **yellow** dot — degraded, not "down" |
+| 3 | Same moment, main list | **"Connecting…"** — the false-offline regression is gone |
+| 4 | Wait out the 30s grace | **"Offline"** + "Host unreachable" banner carrying the failure reason; dot turns orange |
+| 5 | Make the host answer again | **Connected** immediately, banner gone |
+
+Step 5 used a TCP proxy putting the real server on the dead port, because the
+"Save" nav-bar button is absent from the accessibility tree (the toolbar-button
+trap recorded in `ios/CLAUDE.md`). That made the recovery genuine rather than a
+settings edit.
+
+### A bug the build could not have caught
+
+`link.onSignal` was initially never wired to the store. Everything compiled —
+it is an optional closure — but the entire state machine was inert: every host
+would have sat at `.unknown` forever, no banner would ever appear, and `isLive`
+would have been permanently false, blocking sends. Found by asking "what proves
+this is connected?" rather than by the green build. Sequence tests now cover the
+folds that wiring feeds.

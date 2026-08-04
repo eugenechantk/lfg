@@ -2,12 +2,9 @@ import XCTest
 @testable import LFGCore
 
 final class FleetActivitySnapshotTests: XCTestCase {
-    func testContentStateMapsSessionStoreInputsToFleetSnapshot() {
-        let hosts = [
-            Host(url: "http://studio:8766", name: "studio.local", displayName: "Studio Display", isDefault: true),
-            Host(url: "http://air:8766", name: "Air.local"),
-            Host(url: "http://mini:8766", displayName: "Mini"),
-        ]
+    private func prompt(_ q: String) -> AgentPrompt { AgentPrompt(question: q, options: []) }
+
+    func testCountsAndOrdersNeedsInputFirstAndCarriesElapsedTime() {
         let sessions = [
             Session(sessionId: "s1", title: "Approve deploy"),
             Session(sessionId: "s2", title: "Fix stale activity"),
@@ -15,35 +12,85 @@ final class FleetActivitySnapshotTests: XCTestCase {
             Session(sessionId: "s4", title: "Pick model"),
             Session(sessionId: "s5", title: "Idle session"),
         ]
+        // s2 keeps its start time; s1 flipped working -> needsInput so its timer
+        // restarts at `now` rather than inheriting the working row's.
         let priorRows = [
-            LFGFleetAttributes.Row(sid: "s1", title: "Old", host: "Studio Display", state: "working", since: 10),
-            LFGFleetAttributes.Row(sid: "s2", title: "Old", host: "Air", state: "working", since: 20),
-            LFGFleetAttributes.Row(sid: "s4", title: "Old", host: "Studio Display", state: "blocked", since: 40),
+            LFGFleetAttributes.Row(sid: "s1", title: "Old", state: "working", since: 10),
+            LFGFleetAttributes.Row(sid: "s2", title: "Old", state: "working", since: 20),
+            LFGFleetAttributes.Row(sid: "s4", title: "Old", state: "needsInput", since: 40),
         ]
 
         let state = FleetActivitySnapshot.contentState(
             sessions: sessions,
             busy: ["s1": true, "s2": true, "s3": true],
-            prompts: ["s1": AgentPrompt(question: "Deploy?", options: []), "s4": AgentPrompt(question: "Model?", options: [])],
-            hosts: hosts,
-            hostBySession: ["s1": hosts[0].id, "s2": hosts[1].id, "s3": hosts[2].id, "s4": hosts[0].id],
-            reachabilityByHost: [hosts[0].id: .ok, hosts[1].id: .hostUnreachable("timeout")],
+            prompts: ["s1": prompt("Deploy?"), "s4": prompt("Model?")],
             priorRows: priorRows,
             now: 200
         )
 
-        XCTAssertEqual(state.working, 2)
-        XCTAssertEqual(state.needsInput, 2)
+        XCTAssertEqual(state.working, 2)      // s2, s3
+        XCTAssertEqual(state.needsInput, 2)   // s1, s4 — a prompt outranks busy
         XCTAssertEqual(state.rows, [
-            LFGFleetAttributes.Row(sid: "s4", title: "Pick model", host: "Studio Display", state: "blocked", since: 40),
-            LFGFleetAttributes.Row(sid: "s1", title: "Approve deploy", host: "Studio Display", state: "blocked", since: 200),
-            LFGFleetAttributes.Row(sid: "s2", title: "Fix stale activity", host: "Air", state: "working", since: 20),
+            LFGFleetAttributes.Row(sid: "s4", title: "Pick model", state: "needsInput", since: 40),
+            LFGFleetAttributes.Row(sid: "s1", title: "Approve deploy", state: "needsInput", since: 200),
+            LFGFleetAttributes.Row(sid: "s2", title: "Fix stale activity", state: "working", since: 20),
         ])
-        XCTAssertEqual(state.hosts, [
-            LFGFleetAttributes.ContentState.HostStatus(name: "Studio Display", online: true),
-            LFGFleetAttributes.ContentState.HostStatus(name: "Air", online: false),
-            LFGFleetAttributes.ContentState.HostStatus(name: "Mini", online: false),
-        ])
+        XCTAssertEqual(state.more, 1)         // s3 folded into "1 More"
         XCTAssertEqual(state.updatedAt, 200)
+    }
+
+    func testIdleSessionsAreExcludedEntirely() {
+        let state = FleetActivitySnapshot.contentState(
+            sessions: [Session(sessionId: "a", title: "Done"), Session(sessionId: "b", title: "Also done")],
+            busy: ["a": false],
+            prompts: [:],
+            now: 5
+        )
+
+        XCTAssertEqual(state.working, 0)
+        XCTAssertEqual(state.needsInput, 0)
+        XCTAssertTrue(state.rows.isEmpty)
+        XCTAssertEqual(state.more, 0)
+    }
+
+    func testMoreCountsOnlyTheOverflowBeyondRenderedRows() {
+        let sessions = (1...7).map { Session(sessionId: "s\($0)", title: "Session \($0)") }
+        let busy = Dictionary(uniqueKeysWithValues: sessions.map { ($0.sessionId!, true) })
+
+        let state = FleetActivitySnapshot.contentState(
+            sessions: sessions, busy: busy, prompts: [:], now: 1
+        )
+
+        XCTAssertEqual(state.working, 7)
+        XCTAssertEqual(state.rows.count, FleetActivitySnapshot.maxRows)
+        XCTAssertEqual(state.more, 7 - FleetActivitySnapshot.maxRows)
+    }
+
+    func testFallsBackToTruncatedSessionIdWhenTitleIsEmpty() {
+        let state = FleetActivitySnapshot.contentState(
+            sessions: [Session(sessionId: "abcdefghijkl", title: "")],
+            busy: ["abcdefghijkl": true],
+            prompts: [:],
+            now: 1
+        )
+
+        XCTAssertEqual(state.rows.first?.title, "abcdefgh")
+    }
+
+    func testDuplicatePriorRowsDoNotTrap() {
+        let dupes = [
+            LFGFleetAttributes.Row(sid: "s1", title: "A", state: "working", since: 10),
+            LFGFleetAttributes.Row(sid: "s1", title: "B", state: "working", since: 99),
+        ]
+
+        let state = FleetActivitySnapshot.contentState(
+            sessions: [Session(sessionId: "s1", title: "One")],
+            busy: ["s1": true],
+            prompts: [:],
+            priorRows: dupes,
+            now: 300
+        )
+
+        XCTAssertEqual(state.rows.first?.since, 10)
     }
 }

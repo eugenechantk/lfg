@@ -72,7 +72,7 @@ struct SettingsView: View {
                             HostEditView(mode: .edit(host))
                         } label: {
                             HStack(spacing: 10) {
-                                ReachDot(reach: store.reachabilityByHost[host.id])
+                                ReachDot(state: store.hostStateByHost[host.id])
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(host.label).foregroundStyle(.primary)
                                     Text(host.url).font(.caption).foregroundStyle(.secondary)
@@ -317,14 +317,18 @@ struct NotificationStatusRow: View {
     }
 }
 
-/// A small per-host reachability dot (green ok / gray unknown / orange down).
+/// A small per-host health dot (green live / gray unknown / yellow connecting
+/// or degraded / orange down). `degraded` gets its own colour rather than
+/// borrowing "down": during the grace window the host may well be fine, and
+/// showing orange there is what made the dot contradict a fresh manual ping.
 struct ReachDot: View {
-    let reach: Reachability?
+    let state: HostState?
     private var color: Color {
-        switch reach {
-        case .ok: return .green
-        case .none: return .secondary
-        default: return .orange
+        switch state {
+        case .live: return .green
+        case .none, .unknown: return .secondary
+        case .connecting, .degraded: return .yellow
+        case .offline, .noNetwork: return .orange
         }
     }
     var body: some View { Circle().fill(color).frame(width: 9, height: 9) }

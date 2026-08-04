@@ -14,24 +14,31 @@ import LFGCore
     private let localStoreIsDurable: Bool
 
     private(set) var sessions: [Session] = []
-    /// Aggregate reachability: `.ok` if ANY configured host is reachable, else a
-    /// representative failure. The list/banner read this; per-host detail lives in
-    /// `reachabilityByHost`.
-    private(set) var reachability: Reachability?
-    /// Per-host reachability, keyed by `Host.id` (url). Drives the Settings
-    /// per-host dots and the reachable-set for default-host placement.
-    private(set) var reachabilityByHost: [String: Reachability] = [:]
+    /// Aggregate fleet health: `.live` if ANY configured host is live, else a
+    /// representative failure, `nil` when nothing has been observed yet. The
+    /// list/banner read this; per-host detail lives in `hostStateByHost`.
+    private(set) var fleetState: HostState?
+    /// **The** per-host health, keyed by `Host.id` (url) — one value, one clock.
+    ///
+    /// This replaced a stored `reachabilityByHost` projection plus a parallel
+    /// `unhealthySinceByHost` clock. Deriving a projection was considered and
+    /// rejected: the old rule was "inside the grace window, keep the previous
+    /// displayed value", and a projection has no "previous" — reproducing it
+    /// needed remembered display state, i.e. the very duplication being removed.
+    /// So the views read the real state instead.
+    private(set) var hostStateByHost: [String: HostState] = [:]
     /// Routing table: session `id` → owning `Host.id` (url). Every per-session op
     /// resolves the host's client through this. Rebuilt each refresh.
     private(set) var hostBySession: [String: String] = [:]
     var lastError: String?
 
-    /// Consecutive failed polls since the last success, PER host. Used to debounce
-    /// the visible `reachability` so a single transient blip (the single-event-loop
-    /// Bun server documented to stall HTTP 20s+ under PTY load, a tailnet reroute,
-    /// an app-just-foregrounded gap) doesn't flip a healthy host to "Offline" —
-    /// which then contradicts a fresh Settings ping. See
-    /// `.claude/diagnosis-settings-reachable-list-offline.md`.
+    /// Consecutive failed polls since the last success, PER host. Now used ONLY
+    /// to drive `HostHealth.shouldProbe`'s cold back-off — it no longer debounces
+    /// anything the user sees. Display debouncing is the state machine's grace
+    /// window, which is expressed in time rather than in poll counts, and is not
+    /// fooled by a poll interval that changes underneath it. See
+    /// `.claude/diagnosis-settings-reachable-list-offline.md` for the blip this
+    /// originally guarded against.
     private var failuresByHost: [String: Int] = [:]
     /// Failed polls to tolerate before surfacing "not reachable" from a
     /// currently-healthy state.
@@ -175,10 +182,7 @@ import LFGCore
     private var unknownSessionRefresh: Task<Void, Never>?
     /// Per-host delayed re-evaluation of the sustained-failure banner rule.
     private var bannerRecheck: [String: Task<Void, Never>] = [:]
-    /// Store-owned sustained-failure clock, keyed by configured host URL.
-    /// Unlike `HostLink.unhealthySince`, this survives link teardown/rebuild
-    /// while the app remains alive.
-    private var unhealthySinceByHost: [String: Date] = [:]
+
     /// Events replayed while a link is catching up are coalesced here so SwiftUI
     /// renders the final post-replay state instead of every intermediate flip.
     private var catchUpBuffers: [String: [LiveEvent]] = [:]
@@ -216,7 +220,7 @@ import LFGCore
     private var closedNextBeforeByHost: [String: Double] = [:]
     private(set) var isLoadingMoreClosed = false
     var canLoadMoreClosed: Bool {
-        settings.hosts.contains { reachabilityByHost[$0.id] == .ok && closedNextBeforeByHost[$0.id] != nil }
+        settings.hosts.contains { hostStateByHost[$0.id]?.isLive == true && closedNextBeforeByHost[$0.id] != nil }
     }
     private var resumeTick = 0
     /// Ids of closed sessions we've resumed this run. Claude resumes into a NEW
@@ -256,7 +260,7 @@ import LFGCore
     /// The marked default when it's reachable, else the first reachable host.
     ///
     /// Falling back to the marked default (even when it's down) matters for cold
-    /// start: before the first `refresh`, `reachabilityByHost` is empty and NOTHING
+    /// start: before the first `refresh`, `hostStateByHost` is empty and NOTHING
     /// looks reachable — resolving to nil there would strand the create flow with
     /// no directories on a perfectly healthy single-host setup.
     var agnosticHost: Host? {
@@ -286,7 +290,7 @@ import LFGCore
     }
 
     /// Whether a host is currently reachable (for default-host placement).
-    private func isReachable(_ host: Host) -> Bool { reachabilityByHost[host.id] == .ok }
+    private func isReachable(_ host: Host) -> Bool { hostStateByHost[host.id]?.isLive == true }
 
     /// Whether `id` is a closed/resumable session (host-agnostic, revivable anywhere).
     private func isClosed(_ id: String) -> Bool { session(id)?.closed == true }
@@ -348,25 +352,34 @@ import LFGCore
         }
     }
 
-    var isConnected: Bool { reachability == .ok }
+    var isConnected: Bool { fleetState?.isLive == true }
 
-    /// What the connection UI should say. Tri-state on purpose: `reachability`
-    /// is an optional whose `nil` means *unknown* (nothing probed yet), and
-    /// rendering that as "Offline" told the user the host was down during the
-    /// first seconds of every launch, before a single request had failed.
+    /// What the connection UI should say. Tri-state on purpose: rendering
+    /// "unknown" as "Offline" told the user the host was down during the first
+    /// seconds of every launch, before a single request had failed.
+    ///
+    /// `HostState` maps onto this exactly, which is what made deleting the old
+    /// `reachabilityByHost` projection possible. The awkward case was always
+    /// `degraded` — inside the grace window the old code had to "keep the
+    /// previous displayed value", which a projection cannot express. It has an
+    /// honest answer here: a host that is failing but still inside its grace
+    /// window is **connecting**, not connected and not offline. That is the
+    /// true state, and the UI already had a word for it.
     enum ConnectionStatus: Equatable { case connected, connecting, offline }
 
     var connectionStatus: ConnectionStatus {
-        if reachability == .ok { return .connected }
-        if reachability == nil || isReconnecting { return .connecting }
-        return .offline
+        switch fleetState {
+        case .live: return .connected
+        case .offline, .noNetwork: return isReconnecting ? .connecting : .offline
+        case nil, .unknown, .connecting, .degraded: return .connecting
+        }
     }
 
     /// Every configured host answered — the burst's exit condition. Deliberately
     /// stricter than the `.ok` aggregate (which is "any host"), so a two-host
     /// fleet keeps chasing the second machine.
     private var allHostsReachable: Bool {
-        !settings.hosts.isEmpty && settings.hosts.allSatisfy { reachabilityByHost[$0.id] == .ok }
+        !settings.hosts.isEmpty && settings.hosts.allSatisfy { hostStateByHost[$0.id]?.isLive == true }
     }
 
     // MARK: Lifecycle
@@ -904,8 +917,7 @@ import LFGCore
             flushCatchUpBuffer(for: id)
             link.stop()
             links[id] = nil
-            reachabilityByHost[id] = nil
-            unhealthySinceByHost[id] = nil
+            hostStateByHost[id] = nil
             catchUpBuffers[id] = nil
             bannerRecheck[id]?.cancel(); bannerRecheck[id] = nil
         }
@@ -918,6 +930,11 @@ import LFGCore
                 Task { [weak self] in await self?.refresh() }
             }
             link.onStateChange = { [weak self] in self?.linkStateChanged(hid) }
+            // The link's health reports. Without this the whole state machine is
+            // inert — every host sits at .unknown, the banner never appears, and
+            // isLive is permanently false. It type-checks fine either way, so it
+            // is covered by a test rather than trusted to review.
+            link.onSignal = { [weak self] sig in self?.signal(hid, sig) }
             links[hid] = link
             link.start()
             linkStateChanged(hid)
@@ -952,6 +969,10 @@ import LFGCore
         networkPathSatisfied = isSatisfied
         if isSatisfied {
             if previous == false {
+                // The device has a path again. That is not evidence any host is
+                // up, so hosts go to neutral, not healthy — the links' own
+                // bytes are what promote them back to live.
+                for id in settings.hosts.map(\.id) { signal(id, .networkRestored) }
                 for link in links.values { link.retryNow() }
             }
         } else {
@@ -960,15 +981,7 @@ import LFGCore
     }
 
     private func markNoNetwork(hostIds: [String], now: Date) {
-        for hostId in hostIds {
-            if unhealthySinceByHost[hostId] == nil {
-                unhealthySinceByHost[hostId] = now
-            }
-            reachabilityByHost[hostId] = .hostUnreachable("No network connection")
-            bannerRecheck[hostId]?.cancel(); bannerRecheck[hostId] = nil
-        }
-        reachability = HostHealth.aggregate(hostIds: settings.hosts.map(\.id),
-                                            health: reachabilityByHost)
+        for hostId in hostIds { signal(hostId, .networkLost, now: now) }
     }
 
     /// Live events from a host link. Same reducer as always (`apply`), plus:
@@ -1007,9 +1020,9 @@ import LFGCore
     /// Link state → per-host reachability. Bytes received by a link
     /// (`.catchingUp`/`.live` with no outstanding link failure) are evidence of
     /// health; a fresh `.connecting` link is neutral. Sustained failure is timed
-    /// by `unhealthySinceByHost` so background teardown/foreground rebuild cannot
-    /// reset the banner clock. The 60s REST reconcile keeps feeding the same map
-    /// through `applyHostFetch`; both writers converge.
+    /// by the state's own clock, so background teardown/foreground rebuild cannot
+    /// reset it. The 60s REST reconcile feeds the same reducer through
+    /// `applyHostFetch`; both sources converge on one value.
     ///
     /// The sustained-failure flip cannot wait for the NEXT state-change
     /// callback: during a black-holed stall those only arrive once per
@@ -1017,73 +1030,58 @@ import LFGCore
     /// and the banner could lag by most of a minute (caught live in the Phase 1
     /// gate test). While unhealthy-but-graced, a re-check is scheduled for the
     /// exact moment the grace expires.
-    private func markReachable(_ hostId: String) {
-        let wasReachable = reachabilityByHost[hostId] == .ok
-        reachabilityByHost[hostId] = .ok
-        // Whichever writer got here first (REST probe or link bytes), the fleet
-        // being healthy ends the "Connecting…" state immediately — the burst
-        // task itself may still be asleep between probes.
-        if allHostsReachable { isReconnecting = false }
-        if !wasReachable {
-            Task { await self.replayPendingOutbox(forHost: hostId) }
-        }
+    /// The ONE place a host's health changes. Every source — link signals, the
+    /// REST reconcile, the network path monitor — folds through here, so there is
+    /// exactly one reducer and one clock rather than a set of writers that must
+    /// agree with each other.
+    private func signal(_ hostId: String, _ sig: HostSignal, now: Date = Date()) {
+        let previous = hostStateByHost[hostId] ?? .unknown
+        setHostState(hostId, HostStateMachine.reduce(previous, sig, now: now), now: now)
     }
 
+    private func setHostState(_ hostId: String, _ state: HostState, now: Date = Date()) {
+        let settled = HostStateMachine.settle(state, now: now)
+        let wasLive = hostStateByHost[hostId]?.isLive == true
+        guard hostStateByHost[hostId] != settled || bannerRecheck[hostId] == nil else { return }
+        hostStateByHost[hostId] = settled
+
+        // The degraded -> offline promotion is driven by elapsed time, not by a
+        // signal, so schedule the exact moment it becomes due. The *decision*
+        // stays in HostStateMachine; this only wakes it up.
+        bannerRecheck[hostId]?.cancel(); bannerRecheck[hostId] = nil
+        if let due = HostStateMachine.timeUntilOffline(settled, now: now) {
+            bannerRecheck[hostId] = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(max(due + 0.5, 0.5)))
+                guard !Task.isCancelled else { return }
+                guard let self else { return }
+                self.bannerRecheck[hostId] = nil
+                if let current = self.hostStateByHost[hostId] {
+                    self.setHostState(hostId, current)
+                }
+            }
+        }
+
+        if settled.isLive {
+            // Whichever writer got here first (REST probe or link bytes), the
+            // fleet being healthy ends the "Connecting…" state immediately — the
+            // burst task itself may still be asleep between probes.
+            if allHostsReachable { isReconnecting = false }
+            if !wasLive { Task { await self.replayPendingOutbox(forHost: hostId) } }
+        }
+        recomputeFleetState()
+    }
+
+    private func recomputeFleetState() {
+        fleetState = HostStateMachine.aggregate(hostIds: settings.hosts.map(\.id),
+                                                states: hostStateByHost)
+    }
+
+    /// A link changed state. The link draws no conclusion; it only flushes the
+    /// catch-up buffer here. Health arrives separately via `onSignal`.
     private func linkStateChanged(_ hostId: String) {
         guard let link = links[hostId] else { return }
         if link.state != .catchingUp {
             flushCatchUpBuffer(for: hostId)
-        }
-        bannerRecheck[hostId]?.cancel(); bannerRecheck[hostId] = nil
-
-        switch link.state {
-        case .catchingUp, .live where link.unhealthySince == nil:
-            unhealthySinceByHost[hostId] = nil
-            markReachable(hostId)
-            failuresByHost[hostId] = 0
-        case .catchingUp, .live:
-            rememberHostUnhealthy(hostId, candidate: link.unhealthySince)
-        case .connecting:
-            if let since = link.unhealthySince {
-                rememberHostUnhealthy(hostId, candidate: since)
-            } else {
-                evaluateStoredUnhealthy(hostId)
-            }
-        case .backoff:
-            rememberHostUnhealthy(hostId, candidate: link.unhealthySince)
-        case .idle:
-            evaluateStoredUnhealthy(hostId)
-        }
-        reachability = HostHealth.aggregate(hostIds: settings.hosts.map(\.id),
-                                            health: reachabilityByHost)
-    }
-
-    private func rememberHostUnhealthy(_ hostId: String, candidate: Date?) {
-        let now = Date()
-        let since = candidate.map { min($0, now) } ?? now
-        if let existing = unhealthySinceByHost[hostId] {
-            if since < existing { unhealthySinceByHost[hostId] = since }
-        } else {
-            unhealthySinceByHost[hostId] = since
-        }
-        evaluateStoredUnhealthy(hostId)
-    }
-
-    private func evaluateStoredUnhealthy(_ hostId: String) {
-        guard let since = unhealthySinceByHost[hostId] else { return }
-        if HostLinkPolicy.showUnreachable(unhealthySince: since) {
-            let message = networkPathSatisfied == false ? "No network connection" : "Connection lost"
-            reachabilityByHost[hostId] = .hostUnreachable(message)
-        } else {
-            // Within the grace window — keep the previous value, but come back
-            // the moment the window closes.
-            let delay = HostLinkPolicy.bannerAfter - Date().timeIntervalSince(since) + 0.5
-            bannerRecheck[hostId] = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(max(delay, 0.5)))
-                guard !Task.isCancelled else { return }
-                self?.bannerRecheck[hostId] = nil
-                self?.linkStateChanged(hostId)
-            }
         }
     }
 
@@ -1254,7 +1252,7 @@ import LFGCore
 
     func loadMoreClosed() async {
         guard !isLoadingMoreClosed else { return }
-        let hosts = settings.hosts.filter { reachabilityByHost[$0.id] == .ok && closedNextBeforeByHost[$0.id] != nil }
+        let hosts = settings.hosts.filter { hostStateByHost[$0.id]?.isLive == true && closedNextBeforeByHost[$0.id] != nil }
         guard !hosts.isEmpty else { return }
         isLoadingMoreClosed = true
         defer { isLoadingMoreClosed = false }
@@ -1268,7 +1266,7 @@ import LFGCore
             if let next = page.nextBefore { closedNextBeforeByHost[page.host.id] = next }
             else { closedNextBeforeByHost[page.host.id] = nil }
         }
-        rebuildClosedCache(for: settings.hosts.filter { reachabilityByHost[$0.id] == .ok })
+        rebuildClosedCache(for: settings.hosts.filter { hostStateByHost[$0.id]?.isLive == true })
         rebuildSessions()
     }
 
@@ -1293,12 +1291,12 @@ import LFGCore
         await hydrateFromStoreIfNeeded()
         let hosts = settings.hosts
         guard !hosts.isEmpty else {
-            reachability = .badResponse("No host configured"); return
+            fleetState = nil; return
         }
         pollTick &+= 1
         // Snapshot health BEFORE this tick's probes so we can spot a host coming back
         // (down → ok) and resend anything that failed while it was gone.
-        let healthBefore = reachabilityByHost
+        let healthBefore = hostStateByHost
 
         // Probe healthy hosts every tick; a cold host (repeatedly failing) only every
         // ~10th tick. An offline Tailscale peer black-holes packets, so each probe of
@@ -1319,10 +1317,9 @@ import LFGCore
 
         // Prune state for hosts removed from settings.
         let hostIds = Set(hosts.map(\.id))
-        reachabilityByHost = reachabilityByHost.filter { hostIds.contains($0.key) }
         lastSessionsByHost = lastSessionsByHost.filter { hostIds.contains($0.key) }
         failuresByHost = failuresByHost.filter { hostIds.contains($0.key) }
-        unhealthySinceByHost = unhealthySinceByHost.filter { hostIds.contains($0.key) }
+        hostStateByHost = hostStateByHost.filter { hostIds.contains($0.key) }
         catchUpBuffers = catchUpBuffers.filter { hostIds.contains($0.key) }
         closedFirstPageByHost = closedFirstPageByHost.filter { hostIds.contains($0.key) }
         closedExtraPagesByHost = closedExtraPagesByHost.filter { hostIds.contains($0.key) }
@@ -1331,10 +1328,10 @@ import LFGCore
         // Derive the banner from the PERSISTED per-host health, not from this tick's
         // results — a cold host skipped this tick still has a remembered state, and
         // reading "no results" as "no host configured" would flash the wrong banner.
-        reachability = HostHealth.aggregate(hostIds: hosts.map(\.id), health: reachabilityByHost)
+        recomputeFleetState()
         lastError = nil
 
-        let anyOK = reachabilityByHost.values.contains(.ok)
+        let anyOK = hostStateByHost.values.contains { $0.isLive }
 
         // Heal the create flow: if the metadata load found no reachable host at
         // launch, retry it as soon as one answers. Without this, a client that
@@ -1348,7 +1345,7 @@ import LFGCore
         // reintroduce a black-hole stall.
         resumeTick += 1
         if resumeTick % 4 == 1 {
-            let okHosts = hosts.filter { reachabilityByHost[$0.id] == .ok }
+            let okHosts = hosts.filter { hostStateByHost[$0.id]?.isLive == true }
             for page in await fetchResumablePages(okHosts) {
                 closedFirstPageByHost[page.host.id] = page.sessions
                 // Only (re)seed the cursor while "Load more" hasn't paged deeper:
@@ -1375,7 +1372,7 @@ import LFGCore
         // awaited here: the sweep calls `refresh()`, and `refresh()` awaits
         // `refreshTask` — which is the task we are currently running. Awaiting it
         // from inside itself deadlocks the store.
-        let recovered = MultiHost.recoveredHosts(before: healthBefore, after: reachabilityByHost)
+        let recovered = HostStateMachine.recoveredHosts(before: healthBefore, after: hostStateByHost)
         if !recovered.isEmpty { scheduleResendAfterRecovery(recovered) }
     }
 
@@ -1445,24 +1442,22 @@ import LFGCore
                 try await store.upsertHosts([f.host])
                 try await store.upsertSessions(fetchedSessions, hostId: f.host.id)
             }
-            unhealthySinceByHost[f.host.id] = nil
-            bannerRecheck[f.host.id]?.cancel(); bannerRecheck[f.host.id] = nil
-            markReachable(f.host.id)
+            signal(f.host.id, .probeSucceeded)
             failuresByHost[f.host.id] = 0
             lastSessionsByHost[f.host.id] = fetchedSessions
         } else {
-            let n = (failuresByHost[f.host.id] ?? 0) + 1
-            failuresByHost[f.host.id] = n
-            if reachabilityByHost[f.host.id] != .ok || n >= failureThreshold {
-                reachabilityByHost[f.host.id] = f.reach
-            }
+            // failuresByHost now only feeds the cold-probe back-off. The visible
+            // debounce is the state machine's grace window: a probe failure
+            // cannot banner a host whose link is still delivering bytes, because
+            // every event or heartbeat (<=10s) re-signals .receiving.
+            failuresByHost[f.host.id] = (failuresByHost[f.host.id] ?? 0) + 1
+            signal(f.host.id, .probeFailed(reason: f.reach.message))
         }
         // Recompute the aggregate NOW rather than only after the whole fan-out
         // settles: a healthy host answering in 200ms shouldn't have its badge
         // held hostage by a black-holed host still burning its 4s timeout.
         // `performRefresh` recomputes it again afterwards — idempotent.
-        reachability = HostHealth.aggregate(hostIds: settings.hosts.map(\.id),
-                                            health: reachabilityByHost)
+        recomputeFleetState()
     }
 
     /// Rebuild the merged session list + routing table from each host's last-known
@@ -1476,7 +1471,7 @@ import LFGCore
         // (closedCache built against a previous rebuild's liveIds) let a session
         // fall through the live/closed gap after its host recovered from an
         // outage — present in neither bucket until app relaunch.
-        let okHosts = settings.hosts.filter { reachabilityByHost[$0.id] == .ok }
+        let okHosts = settings.hosts.filter { hostStateByHost[$0.id]?.isLive == true }
         let reconciled = MultiHost.reconcileSessionList(
             perHostLive: perHostLive,
             closedPerHost: closedPages(for: okHosts),
@@ -1506,7 +1501,7 @@ import LFGCore
         for s in fresh {
             guard let sid = s.sessionId, let b = s.busy else { continue }
             let hid = hostBySession[s.id]
-            if let hid, links[hid]?.isHealthy == true { continue }
+            if let hid, hostStateByHost[hid]?.isLive == true { continue }
             busy[sid] = b
         }
         // Snapshot the focused session while it's live so its detail view survives
@@ -1961,7 +1956,7 @@ import LFGCore
             guard pendingSends[sid]?.isEmpty == false else { continue }
             // Skip sessions whose owning host is down: this loop is sequential, and a
             // black-holed host would stall every later session behind a full timeout.
-            if let owner = host(forSession: sid), reachabilityByHost[owner.id] != .ok { continue }
+            if let owner = host(forSession: sid), hostStateByHost[owner.id]?.isLive != true { continue }
             guard let client = client(forSession: sid) else { continue }
             guard let q = try? await client.queue(sid) else { continue }
             queues[sid] = q

@@ -137,3 +137,68 @@ final class HostStateTests: XCTestCase {
         XCTAssertNil(HostStateMachine.aggregate(hostIds: [], states: [:]))
     }
 }
+
+/// The end-to-end sequences a real host goes through. These are the shapes that
+/// the old two-clock design got wrong; each drives the reducer the way
+/// `SessionStore` does, one signal at a time.
+final class HostStateSequenceTests: XCTestCase {
+    let t0 = Date(timeIntervalSince1970: 2_000_000)
+    func at(_ s: TimeInterval) -> Date { t0.addingTimeInterval(s) }
+
+    /// Fold a sequence the way the store does: reduce, then settle.
+    func run(_ signals: [(TimeInterval, HostSignal)], from: HostState = .unknown) -> HostState {
+        var s = from
+        for (dt, sig) in signals {
+            s = HostStateMachine.reduce(s, sig, now: at(dt))
+            s = HostStateMachine.settle(s, now: at(dt))
+        }
+        return s
+    }
+
+    func testColdLaunchAgainstAHealthyHostNeverShowsOffline() {
+        let s = run([(0, .connecting), (0.4, .receiving)])
+        XCTAssertEqual(s, .live)
+        XCTAssertFalse(s.showsOfflineBanner)
+    }
+
+    /// The reported symptom: host is up, app was backgrounded, path went cold.
+    /// The first dial fails, then succeeds. The banner must never appear.
+    func testBackgroundedThenColdPathRecoversWithoutEverBannering() {
+        var s = run([(0, .connecting), (1, .receiving)])          // healthy
+        s = HostStateMachine.reduce(s, .stopped, now: at(30))     // backgrounded
+        s = HostStateMachine.reduce(s, .connecting, now: at(120)) // foregrounded
+        XCTAssertFalse(HostStateMachine.settle(s, now: at(120)).showsOfflineBanner)
+        s = HostStateMachine.reduce(s, .failed(reason: "cold path"), now: at(121))
+        XCTAssertFalse(HostStateMachine.settle(s, now: at(126)).showsOfflineBanner,
+                       "a few seconds of cold path must not paint the banner")
+        s = HostStateMachine.reduce(s, .receiving, now: at(127))
+        XCTAssertEqual(s, .live)
+    }
+
+    /// A genuinely down host must reach the banner and stay there.
+    func testAGenuinelyDownHostBannersAndStays() {
+        var s = run([(0, .connecting), (1, .receiving)])
+        s = HostStateMachine.reduce(s, .failed(reason: "host down"), now: at(10))
+        for t in stride(from: 12.0, through: 40.0, by: 4.0) {
+            s = HostStateMachine.reduce(s, .connecting, now: at(t))
+            s = HostStateMachine.reduce(s, .failed(reason: "host down"), now: at(t + 1))
+        }
+        let final = HostStateMachine.settle(s, now: at(45))
+        XCTAssertTrue(final.showsOfflineBanner)
+        if case .offline(_, let reason) = final { XCTAssertEqual(reason, "host down") }
+        else { XCTFail("expected offline, got \(final)") }
+    }
+
+    /// A REST probe failure alone cannot banner a host whose link is streaming:
+    /// heartbeats arrive at most 10s apart, well inside the 30s grace window.
+    func testProbeFailuresCannotBannerAHostWhoseLinkIsStreaming() {
+        var s: HostState = .live
+        for t in stride(from: 0.0, through: 180.0, by: 10.0) {
+            s = HostStateMachine.reduce(s, .probeFailed(reason: "timeout"), now: at(t))
+            s = HostStateMachine.reduce(s, .receiving, now: at(t + 1))   // heartbeat
+            s = HostStateMachine.settle(s, now: at(t + 1))
+        }
+        XCTAssertEqual(s, .live)
+        XCTAssertFalse(s.showsOfflineBanner)
+    }
+}

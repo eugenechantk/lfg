@@ -340,10 +340,17 @@ public struct LFGClient: Sendable {
         ])
     }
 
-    public func registerLiveActivityUpdateToken(_ hex: String, env: String, sessionId: String) async throws {
-        _ = try await send("POST", "api/push/live-activity/update-token", json: [
-            "token": hex, "env": env, "sessionId": sessionId,
-        ])
+    /// There is exactly one (fleet) Live Activity per device, so the update token
+    /// needs no session targeting. `sessionId` remains accepted so an older
+    /// server that still keys tokens per session does not reject the call.
+    public func registerLiveActivityUpdateToken(
+        _ hex: String,
+        env: String,
+        sessionId: String? = nil
+    ) async throws {
+        var body = ["token": hex, "env": env]
+        if let sessionId { body["sessionId"] = sessionId }
+        _ = try await send("POST", "api/push/live-activity/update-token", json: body)
     }
 
     public func unregisterPush(token: String) async throws {

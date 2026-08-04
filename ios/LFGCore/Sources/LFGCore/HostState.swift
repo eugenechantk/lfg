@@ -186,3 +186,30 @@ public enum HostStateMachine {
         return nil
     }
 }
+
+public extension Reachability {
+    /// The human-readable cause carried into `HostState.offline(reason:)`.
+    /// `Reachability` remains the *transport's* result type — what a single ping
+    /// returned — while `HostState` is the host's health over time. This is the
+    /// one-way bridge between them.
+    var message: String {
+        switch self {
+        case .ok: return ""
+        case .hostUnreachable(let m), .badResponse(let m): return m
+        }
+    }
+}
+
+public extension HostStateMachine {
+    /// Hosts that were not live before and are live now. Drives the outbox
+    /// replay when a host comes back.
+    static func recoveredHosts(before: [String: HostState],
+                               after: [String: HostState]) -> Set<String> {
+        var out: Set<String> = []
+        for (id, now) in after where now.isLive {
+            guard let prev = before[id], !prev.isLive else { continue }
+            out.insert(id)
+        }
+        return out
+    }
+}

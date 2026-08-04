@@ -229,7 +229,7 @@ struct DirectoryEntry: Identifiable, Hashable {
 
 struct HostSheet: View {
     let hosts: [Host]
-    let reachability: [String: Reachability]
+    let hostStates: [String: HostState]
     let selectedHostID: String?
     let onSelect: (Host) -> Void
     let onConfirm: () -> Void
@@ -248,7 +248,7 @@ struct HostSheet: View {
         }
     }
 
-    private func isReachable(_ host: Host) -> Bool { reachability[host.id] == .ok }
+    private func isReachable(_ host: Host) -> Bool { hostStates[host.id]?.isLive == true }
 
     private func subtitle(_ host: Host) -> (String, Color) {
         guard isReachable(host) else { return ("Unreachable", NewSessionPalette.statusWarn) }

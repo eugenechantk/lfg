@@ -1,19 +1,27 @@
 import Foundation
 
+/// Reduces `SessionStore`'s live state into the single aggregate Live Activity
+/// content state. Pure so it can be unit-tested without ActivityKit, and shared
+/// by the app-driven controller and (in shape) the server's push reducer.
 public enum FleetActivitySnapshot {
+    /// How many rows the lock-screen card renders before folding the rest into
+    /// "N More". The lock screen is a fixed ~160pt frame that *center-clips*
+    /// overheight content — which silently drops the header — so this is a
+    /// height budget, not a style choice.
+    public static let maxRows = 3
+
     public static func contentState(
         sessions: [Session],
         busy: [String: Bool],
         prompts: [String: AgentPrompt],
-        hosts: [Host],
-        hostBySession: [String: String],
-        reachabilityByHost: [String: Reachability],
         priorRows: [LFGFleetAttributes.Row] = [],
         now: Double
     ) -> LFGFleetAttributes.ContentState {
-        let hostsById = Dictionary(uniqueKeysWithValues: hosts.map { ($0.id, $0) })
+        // Keyed by session *and* state so that a session changing state restarts
+        // its timer, rather than inheriting the elapsed time of its previous one.
         let priorBySessionAndState = Dictionary(
-            uniqueKeysWithValues: priorRows.map { (rowKey(sid: $0.sid, state: $0.state), $0) }
+            priorRows.map { (rowKey(sid: $0.sid, state: $0.state), $0) },
+            uniquingKeysWith: { first, _ in first }
         )
 
         var working = 0
@@ -24,49 +32,43 @@ public enum FleetActivitySnapshot {
             let sid = session.sessionId ?? session.id
             let state: String
             if prompts[sid] != nil {
-                state = "blocked"
+                state = "needsInput"
                 needsInput += 1
             } else if busy[sid] == true {
                 state = "working"
                 working += 1
             } else {
-                state = "idle"
+                // Idle. Never shown — which is also why there is no "unread"
+                // count here: unread is a property of idle sessions.
+                continue
             }
 
-            guard state != "idle" else { continue }
-            let host = hostBySession[sid].flatMap { hostsById[$0] }
             let prior = priorBySessionAndState[rowKey(sid: sid, state: state)]
             rows.append(
                 LFGFleetAttributes.Row(
                     sid: sid,
                     title: session.title.isEmpty ? fallbackTitle(for: sid) : session.title,
-                    host: host?.label ?? "lfg",
                     state: state,
                     since: prior?.since ?? now
                 )
             )
         }
 
-        let orderedRows = rows
-            .sorted { lhs, rhs in
-                let lhsRank = rowRank(lhs.state)
-                let rhsRank = rowRank(rhs.state)
-                if lhsRank != rhsRank { return lhsRank < rhsRank }
-                if lhs.since != rhs.since { return lhs.since < rhs.since }
-                return lhs.sid < rhs.sid
-            }
-            .prefix(3)
+        // Needs-input first so the actionable sessions survive truncation, then
+        // oldest-first within a state.
+        let ordered = rows.sorted { lhs, rhs in
+            let lhsRank = rowRank(lhs.state)
+            let rhsRank = rowRank(rhs.state)
+            if lhsRank != rhsRank { return lhsRank < rhsRank }
+            if lhs.since != rhs.since { return lhs.since < rhs.since }
+            return lhs.sid < rhs.sid
+        }
 
         return LFGFleetAttributes.ContentState(
             working: working,
             needsInput: needsInput,
-            rows: Array(orderedRows),
-            hosts: hosts.map { host in
-                LFGFleetAttributes.ContentState.HostStatus(
-                    name: host.label,
-                    online: reachabilityByHost[host.id] == .ok
-                )
-            },
+            rows: Array(ordered.prefix(maxRows)),
+            more: max(0, ordered.count - maxRows),
             updatedAt: now
         )
     }
@@ -76,11 +78,7 @@ public enum FleetActivitySnapshot {
     }
 
     private static func rowRank(_ state: String) -> Int {
-        switch state {
-        case "blocked": return 0
-        case "working": return 1
-        default: return 2
-        }
+        state == "needsInput" ? 0 : 1
     }
 
     private static func fallbackTitle(for sid: String) -> String {

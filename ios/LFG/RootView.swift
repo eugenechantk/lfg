@@ -157,7 +157,10 @@ struct DetailLoading: View {
 /// a multi-host setup `offlineHosts` names them so the copy says "all hosts",
 /// never a singular "host" that would misread one machine as the whole fleet.
 struct ConnectionBanner: View {
-    let reachability: Reachability?
+    /// The host's real state, not a projection of it. `degraded` deliberately
+    /// renders nothing: a host inside its grace window is a blip, and the whole
+    /// point of the window is not to alarm the user about one.
+    let state: HostState?
     /// Labels of the down hosts, supplied only in multi-host setups (empty for a
     /// single host). Drives the "all N hosts" pluralization + naming.
     var offlineHosts: [String] = []
@@ -174,16 +177,17 @@ struct ConnectionBanner: View {
     }
 
     var body: some View {
-        switch reachability {
-        case .ok, .none:
+        switch state {
+        case .live, .none, .unknown, .connecting, .degraded:
             EmptyView()
-        case .hostUnreachable(let detail):
+        case .noNetwork:
+            banner(icon: "wifi.slash", tint: .orange,
+                   title: "No network connection",
+                   detail: "This device has no network path. Reconnect to Wi-Fi or cellular.")
+        case .offline(_, let detail):
             banner(icon: "wifi.exclamationmark", tint: .orange,
                    title: unreachableTitle,
                    detail: multiHostPrefix + "Check that this device is on the same Tailscale tailnet and the host is running. \(detail)")
-        case .badResponse(let detail):
-            banner(icon: "exclamationmark.triangle.fill", tint: .red,
-                   title: "Connection problem", detail: detail)
         }
     }
 

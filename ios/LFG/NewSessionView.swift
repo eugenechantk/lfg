@@ -52,7 +52,7 @@ struct NewSessionView: View {
 
     private var selectedHostIsReachable: Bool {
         guard let selectedHost else { return false }
-        return store.reachabilityByHost[selectedHost.id] == .ok
+        return store.hostStateByHost[selectedHost.id]?.isLive == true
     }
 
     var body: some View {
@@ -136,7 +136,7 @@ struct NewSessionView: View {
             }
             if selectedHost == nil {
                 selectedHost = HostStore.defaultHost(settings.hosts) {
-                    store.reachabilityByHost[$0.id] == .ok
+                    store.hostStateByHost[$0.id]?.isLive == true
                 } ?? settings.hosts.first { $0.isDefault } ?? settings.hosts.first
             }
         }
@@ -179,7 +179,7 @@ struct NewSessionView: View {
         case .host:
             HostSheet(
                 hosts: settings.hosts,
-                reachability: store.reachabilityByHost,
+                hostStates: store.hostStateByHost,
                 selectedHostID: selectedHost?.id,
                 onSelect: { selectedHost = $0 },
                 onConfirm: closeSheet,
