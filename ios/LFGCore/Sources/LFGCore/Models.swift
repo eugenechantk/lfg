@@ -34,10 +34,19 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     /// transcript file's mtime and advances whenever anything touches the file,
     /// this only changes when the conversation does. See `ReadState.isUnread`.
     public var last: SessionMessage?
-    /// Client-synthesized (never sent by the server): a closed/resumable session
-    /// whose live pane is gone but whose transcript survives on disk. Surfaced in
-    /// the list from `/api/sessions/resumable` so it stays visible; sending to it
-    /// auto-resumes the conversation server-side. See `SessionStore.refresh`.
+    /// A closed/resumable session: its live process is gone but its transcript
+    /// survives on disk. Surfaced in the list from `/api/sessions/resumable` so it
+    /// stays visible; sending to it auto-resumes the conversation server-side.
+    ///
+    /// The value is **server-computed** (`ResumableSession.closed`) and carried
+    /// through by `SessionStore.closedSession(from:)` — it is not a client
+    /// invention. `/api/sessions` never sets it, because that endpoint only ever
+    /// returns live sessions.
+    ///
+    /// One caveat the server cannot resolve alone: transcripts are synced between
+    /// hosts and a server has no peer awareness, so each host reports "closed
+    /// *here*". `MultiHost.reconcileResumable` drops any id that is live on some
+    /// other host before these reach the list. See `SessionStore.refresh`.
     public var closed: Bool
 
     public var id: String { sessionId ?? tmuxName ?? title }
@@ -305,23 +314,34 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
     public var mtime: Double?
     public var agent: String?
     public var lastUserText: String?
+    /// Server-computed: this transcript has no live process **on the host that
+    /// served it**. Defaults to `true` because that is what appearing in
+    /// `/api/sessions/resumable` has always meant — an older server that omits
+    /// the field still yields the correct value.
+    ///
+    /// It is deliberately *not* the final answer. Transcripts are synced between
+    /// hosts and a server has no peer awareness, so host B reports host A's
+    /// running session as closed-here. `MultiHost.reconcileResumable` drops that
+    /// phantom using the live ids from every host.
+    public var closed: Bool
     public var id: String { sessionId }
 
     public init(sessionId: String, title: String? = nil, project: String? = nil,
                 cwd: String? = nil, mtime: Double? = nil, agent: String? = nil,
-                lastUserText: String? = nil) {
+                lastUserText: String? = nil, closed: Bool = true) {
         self.sessionId = sessionId; self.title = title; self.project = project
         self.cwd = cwd; self.mtime = mtime; self.agent = agent
-        self.lastUserText = lastUserText
+        self.lastUserText = lastUserText; self.closed = closed
     }
 
     enum CodingKeys: String, CodingKey {
-        case sessionId, title, project, cwd, mtime, agent, lastActivityAt, lastUserText
+        case sessionId, title, project, cwd, mtime, agent, lastActivityAt, lastUserText, closed
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         sessionId = (try c.decodeIfPresent(String.self, forKey: .sessionId)) ?? UUID().uuidString
+        closed = (try c.decodeIfPresent(Bool.self, forKey: .closed)) ?? true
         title = try c.decodeIfPresent(String.self, forKey: .title)
         project = try c.decodeIfPresent(String.self, forKey: .project)
         cwd = try c.decodeIfPresent(String.self, forKey: .cwd)
