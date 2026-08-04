@@ -1,6 +1,7 @@
 // Running Claude Code sessions: enumerate live `claude` processes and tail
 // their on-disk transcripts (~/.claude/projects/<proj>/<sessionId>.jsonl).
 import { readdir } from "node:fs/promises";
+import { scanBack, tail } from "./transcript.ts";
 import { statSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, basename } from "node:path";
 import { tmpdir } from "node:os";
@@ -919,33 +920,25 @@ function normalizeLineUnsafe(line: string): SessionMsg[] {
 // Last genuine user prompt — scan the tail backwards, skipping meta rows and
 // command/caveat wrappers (lines starting with "<"). Truncated for the card.
 async function lastUserText(path: string): Promise<string | null> {
-  try {
-    const file = Bun.file(path);
-    const size = file.size;
-    const start = Math.max(0, size - 256 * 1024);
-    const text = await file.slice(start).text();
-    const lines = text.split("\n").filter(Boolean);
-    for (let i = lines.length - 1; i >= 0; i--) {
-      let x: { type?: string; isMeta?: boolean; message?: { content?: unknown } };
-      try {
-        x = JSON.parse(lines[i]);
-      } catch {
-        continue;
-      }
-      const cm = normalizeCodexLine(lines[i]);
-      if (cm?.role === "user" && cm.kind === "text") {
-        const t = stripConversationPrefix(cm.text).trim().replace(/\s+/g, " ");
-        if (t && !t.startsWith("<")) return t.length > 140 ? t.slice(0, 139) + "…" : t;
-      }
-      if (x.type !== "user" || x.isMeta) continue;
-      let t = extractText(x.message?.content);
-      if (!t) continue;
-      t = stripHumanPrefix(t.trim().replace(/\s+/g, " "));
-      if (!t || t.startsWith("<")) continue;
-      return t.length > 140 ? t.slice(0, 139) + "…" : t;
+  return scanBack(path, (line) => {
+    let x: { type?: string; isMeta?: boolean; message?: { content?: unknown } };
+    try {
+      x = JSON.parse(line);
+    } catch {
+      return null;
     }
-  } catch {}
-  return null;
+    const cm = normalizeCodexLine(line);
+    if (cm?.role === "user" && cm.kind === "text") {
+      const t = stripConversationPrefix(cm.text).trim().replace(/\s+/g, " ");
+      if (t && !t.startsWith("<")) return t.length > 140 ? t.slice(0, 139) + "…" : t;
+    }
+    if (x.type !== "user" || x.isMeta) return null;
+    let t = extractText(x.message?.content);
+    if (!t) return null;
+    t = stripHumanPrefix(t.trim().replace(/\s+/g, " "));
+    if (!t || t.startsWith("<")) return null;
+    return t.length > 140 ? t.slice(0, 139) + "…" : t;
+  });
 }
 
 // The full (untruncated) text of the last genuine user turn, whitespace-collapsed.
@@ -954,33 +947,25 @@ async function lastUserText(path: string): Promise<string | null> {
 // the preamble OR the user's own scrolled-off prompt — matching it against this
 // tells them apart. Returns null when there's no user turn to compare.
 export async function lastUserPromptText(path: string): Promise<string | null> {
-  try {
-    const file = Bun.file(path);
-    const size = file.size;
-    const start = Math.max(0, size - 256 * 1024);
-    const text = await file.slice(start).text();
-    const lines = text.split("\n").filter(Boolean);
-    for (let i = lines.length - 1; i >= 0; i--) {
-      let x: { type?: string; isMeta?: boolean; message?: { content?: unknown } };
-      try {
-        x = JSON.parse(lines[i]);
-      } catch {
-        continue;
-      }
-      const cm = normalizeCodexLine(lines[i]);
-      if (cm?.role === "user" && cm.kind === "text") {
-        const t = stripConversationPrefix(cm.text).trim().replace(/\s+/g, " ");
-        if (t && !t.startsWith("<")) return t;
-      }
-      if (x.type !== "user" || x.isMeta) continue;
-      let t = extractText(x.message?.content);
-      if (!t) continue;
-      t = stripHumanPrefix(t.trim().replace(/\s+/g, " "));
-      if (!t || t.startsWith("<")) continue;
-      return t;
+  return scanBack(path, (line) => {
+    let x: { type?: string; isMeta?: boolean; message?: { content?: unknown } };
+    try {
+      x = JSON.parse(line);
+    } catch {
+      return null;
     }
-  } catch {}
-  return null;
+    const cm = normalizeCodexLine(line);
+    if (cm?.role === "user" && cm.kind === "text") {
+      const t = stripConversationPrefix(cm.text).trim().replace(/\s+/g, " ");
+      if (t && !t.startsWith("<")) return t;
+    }
+    if (x.type !== "user" || x.isMeta) return null;
+    let t = extractText(x.message?.content);
+    if (!t) return null;
+    t = stripHumanPrefix(t.trim().replace(/\s+/g, " "));
+    if (!t || t.startsWith("<")) return null;
+    return t;
+  });
 }
 
 // Collapse a full model id (e.g. "claude-opus-5", "claude-haiku-4-5") to
@@ -1011,23 +996,15 @@ export function managedFieldsForTmuxName(
 // mid-session `/model` switch (the launch `--model` arg goes stale). Returns
 // null for a session that hasn't produced an assistant turn yet.
 async function lastAssistantModel(path: string): Promise<string | null> {
-  try {
-    const file = Bun.file(path);
-    const size = file.size;
-    const start = Math.max(0, size - 256 * 1024);
-    const text = await file.slice(start).text();
-    const lines = text.split("\n").filter(Boolean);
-    for (let i = lines.length - 1; i >= 0; i--) {
-      let x: { type?: string; message?: { model?: string } };
-      try {
-        x = JSON.parse(lines[i]);
-      } catch {
-        continue;
-      }
-      if (x.type === "assistant" && x.message?.model) return x.message.model;
+  return scanBack(path, (line) => {
+    let x: { type?: string; message?: { model?: string } };
+    try {
+      x = JSON.parse(line);
+    } catch {
+      return null;
     }
-  } catch {}
-  return null;
+    return x.type === "assistant" && x.message?.model ? x.message.model : null;
+  });
 }
 
 // The short model alias (opus/sonnet/…) a now-closed session last ran on, read
@@ -1039,16 +1016,10 @@ export async function modelAliasForTranscript(path: string): Promise<string | nu
 }
 
 async function previewLast(path: string): Promise<SessionMsg | null> {
-  const file = Bun.file(path);
-  const size = file.size;
-  const start = Math.max(0, size - 32768);
-  const text = await file.slice(start).text();
-  const lines = text.split("\n").filter(Boolean);
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const msgs = normalizeLineMessages(lines[i]);
-    if (msgs.length) return msgs[msgs.length - 1];
-  }
-  return null;
+  return scanBack(path, (line) => {
+    const msgs = normalizeLineMessages(line);
+    return msgs.length ? msgs[msgs.length - 1] : null;
+  });
 }
 
 // Coalesce + briefly cache the session scan. The whole enrichment pass is a
@@ -1754,24 +1725,16 @@ export type PendingPrompt = {
 export async function pendingToolPrompt(
   path: string,
 ): Promise<PendingPrompt | null> {
-  let text: string;
-  try {
-    const file = Bun.file(path);
-    const size = file.size;
-    // Tail only — a pending prompt is always near the end. 128KB comfortably
-    // spans the last tool_use plus any tool_results after it. (If the slice
-    // cuts the first line mid-object, JSON.parse drops it; the live prompt's
-    // own line is intact at the tail.)
-    const start = Math.max(0, size - 128 * 1024);
-    text = await file.slice(start).text();
-  } catch {
-    return null;
-  }
+  // Tail only, and deliberately NOT scanBack: this walks *forward* pairing
+  // tool_use ids with their tool_results, so it needs a contiguous window in
+  // order rather than a newest-first scan. 128KB comfortably spans the last
+  // tool_use plus any tool_results after it, and a pending prompt is always
+  // near the end.
+  const { lines: promptLines } = await tail(path, 128 * 1024);
   // Walk forward tracking open AskUserQuestion tool_use ids; an id clears when
   // its tool_result lands. Whatever is still open at the end is unanswered.
   const open = new Map<string, unknown>();
-  for (const l of text.split("\n")) {
-    if (!l) continue;
+  for (const l of promptLines) {
     let x: { message?: { content?: unknown } };
     try {
       x = JSON.parse(l);
