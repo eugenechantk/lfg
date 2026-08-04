@@ -123,3 +123,55 @@ every later stage has to touch.
 Separately and immediately: **restart the Air's server** — unrelated to the
 refactor, but it is the difference between today's send fixes being live on one
 host or both.
+
+---
+
+## Status — 2026-08-04, end of the refactor session
+
+| Stage | Commit | State |
+|---|---|---|
+| 0 — free wins | `daafd81` | **done** |
+| 1 — retire the second pipeline | `883efff` | **done** — 11,408 lines deleted |
+| 3 — one transcript reader | `8da0413` | **done** |
+| 4 — structured status | `e295dcf` | **done** — found a real invisible outage (`auth_required`) |
+| 2a — derive the probe policy | `56fb61e` | **done** |
+| 2b — host state machine, pure core | `bf637ba` | **done**, 13 tests, nothing consumes it yet |
+| 2c — wire the state machine in | — | **not started**, blocked on one decision below |
+
+### The open decision blocking 2c
+
+`reachabilityByHost` is read in ~10 places (all `== .ok`) and written in 5.
+The plan was to make `hostStateByHost` the authority and derive
+`reachabilityByHost` from it, so no reader changes. That works for every case
+except one:
+
+**What does `degraded` display as?** The old code's rule is *"within the grace
+window, keep the previous value"* (`evaluateStoredUnhealthy` returns early and
+leaves the map untouched). A derived projection has no "previous".
+
+- `degraded` → `.ok` is right when we degraded **from live** — that is the whole
+  point of the grace window, not alarming the user about a blip.
+- `degraded` → `.ok` is **wrong** when the host has never connected: at cold
+  launch a first-dial failure would claim a host is reachable, which enables
+  sends against a host that has never answered.
+
+Three ways out, in my order of preference:
+
+1. **Have the state carry it** — `degraded(since:reason:wasLive:)`, or track
+   `everLive` per host in the store. Honest and explicit; slightly uglier type.
+2. **Change the ~10 readers to consume `HostState` directly** and delete
+   `reachabilityByHost` entirely. This is the correct end state — no projection,
+   no "keep previous" — but it touches the views (`OfflineComposerNotice`,
+   `Components.swift`) and is a materially bigger diff.
+3. Keep a remembered last-displayed value. Rejected: that is a second piece of
+   state, i.e. the exact pattern this stage exists to delete.
+
+### Why 2c was not attempted blind
+
+It interacts with `isReconnecting` and the tri-state "Connecting…" from the
+instant-reconnect work, so it is UI-affecting and needs live verification of
+**both** paths — a blip from a live host, and a cold launch against a host that
+never answers. Per the repo's own rule (`verify-ui-by-tapping`,
+`verify-real-seam-not-mocks`) a green unit suite is not "verified" for this.
+Guessing the display semantics and shipping it unverified would reproduce the
+class of bug the stage exists to remove.
