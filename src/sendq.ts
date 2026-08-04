@@ -449,6 +449,32 @@ function composerHoldsInput(target: string, needle: string): boolean | null {
   return n.includes(needle) || /pasted text/i.test(n);
 }
 
+// What to do when the insertion settle-loop never saw our draft in the composer.
+//
+// The distinction that matters is "the composer says our text isn't there"
+// (evidence of failure) versus "we cannot read the composer at all" (no
+// evidence either way). `composerHoldsInput` returns null for the latter — a
+// scrolled output view, an overlay, or simply a TUI shape the border parser
+// doesn't know yet. Treating null as failure is what strands sends whose
+// keystrokes landed perfectly: we clear the box and retype three times, then
+// give up with "message never left the input box after retries".
+//
+// So null falls through to Enter *unconfirmed* and lets the post-submit
+// authority (transcript growth, or the composer clearing) decide — the same
+// authority that already handles an unreadable composer after Enter. The one
+// exception is an open selector/overlay, where Enter would pick an option
+// instead of submitting a message; that still retries.
+export type InsertOutcome = "settled" | "retry" | "unconfirmed";
+
+export function insertionOutcome(
+  lastHeld: boolean | null,
+  selectorIsOpen: boolean,
+): InsertOutcome {
+  if (lastHeld === true) return "settled";
+  if (lastHeld === false) return "retry"; // composer readable, draft absent
+  return selectorIsOpen ? "retry" : "unconfirmed";
+}
+
 // Append a delivery failure (reason + a tail of the pane) to data/sendq.log so a
 // stuck send is diagnosable after the fact instead of only by catching it live.
 function logDeliverFailure(sessionId: string, msg: QueuedMsg, target: string | null): void {
@@ -719,19 +745,30 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<{ userTurnId:
       if (multiline) tmuxPaste(target, msg.text);
       else tmuxType(target, msg.text);
       let settled = false;
+      let lastHeld: boolean | null = null;
       for (let i = 0; i < 20; i++) {
         await sleep(150);
-        if (composerHoldsInput(target, needle) === true) {
+        lastHeld = composerHoldsInput(target, needle);
+        if (lastHeld === true) {
           settled = true;
           break;
         }
       }
       if (!settled) {
-        // Insertion didn't register (cold TUI, lost keys, dropped paste). Clear
-        // any partial and loop to retry from scratch.
-        tmuxClearInput(target);
-        await sleep(200);
-        continue;
+        const pane = capturePane(target);
+        const outcome = insertionOutcome(lastHeld, !!pane && selectorOpen(pane));
+        if (outcome === "retry") {
+          // Insertion didn't register (cold TUI, lost keys, dropped paste), or a
+          // selector is sitting where our Enter would go. Clear any partial and
+          // loop to retry from scratch.
+          tmuxClearInput(target);
+          await sleep(200);
+          continue;
+        }
+        // outcome === "unconfirmed": the composer is unreadable, so we have no
+        // evidence either way. Fall through and submit — the transcript probe
+        // below is the authority, and it retries on the next attempt if the
+        // text really never landed.
       }
     }
 
