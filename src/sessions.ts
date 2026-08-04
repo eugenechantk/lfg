@@ -4,7 +4,7 @@ import { readdir } from "node:fs/promises";
 import { statSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, basename } from "node:path";
 import { tmpdir } from "node:os";
-import { tmuxTargetForPid } from "./tmux";
+import { tmuxTargetForPid, paneTtyForTarget } from "./tmux";
 import { listManaged, patchManaged, type ManagedSession } from "./managed";
 import {
   listEntries as listAisdkEntries,
@@ -26,6 +26,7 @@ import {
   startTimeMsOf,
   procStartMatches,
   ppidOf as procPpidOf,
+  ttyOf,
 } from "./procinfo";
 
 const HOME = process.env.HOME ?? homedir();
@@ -1453,11 +1454,28 @@ async function listSessionsUncached(): Promise<Session[]> {
       (a.startedAt ?? 0) - (b.startedAt ?? 0) ||
       (a.sessionId ?? "").localeCompare(b.sessionId ?? ""),
   );
-  // Pane-collision guard: if two sessions resolve to the same pane we can't
-  // tell which is the live foreground, so sending input would risk hitting the
-  // wrong session. Drop the target from all of them rather than guess.
+  resolvePaneOwners(out);
+  return out;
+}
+
+// One pane, one sendable session. Several pids routinely resolve to the same
+// pane — a Claude TUI spawns a transient daemon, bg-pty-host/bg-spare workers,
+// and (in branch view) the detached child that actually fronts the pane, all
+// descendants of the pane's process.
+//
+// This used to drop the target from ALL of them rather than guess, which made
+// the pane unsendable and 409'd every follow-up with no explanation. Guessing
+// is in fact strictly better than refusing: the keys land in whatever the pane
+// fronts either way, so the only thing at stake is which row we label sendable
+// and which transcript deliver() confirms against — and a wrong guess merely
+// leaves the send unconfirmed ("queued") instead of blocking it outright.
+//
+// The fronted conversation is the one being written to, so rank by transcript
+// recency and keep the newest. Workers (no sessionId, no activity) can never
+// win. Exported for tests.
+export function resolvePaneOwners(sessions: Session[]): void {
   const byTarget = new Map<string, Session[]>();
-  for (const s of out) {
+  for (const s of sessions) {
     if (!s.tmuxTarget) continue;
     const g = byTarget.get(s.tmuxTarget);
     if (g) g.push(s);
@@ -1465,14 +1483,26 @@ async function listSessionsUncached(): Promise<Session[]> {
   }
   for (const [target, group] of byTarget) {
     if (group.length <= 1) continue;
+    // A real conversation has both an id and a transcript that has been written
+    // to; the daemon's helper processes have neither.
+    const live = group.filter((s) => s.sessionId && s.lastActivityAt != null);
+    let winner: Session | undefined;
+    if (live.length > 0) {
+      winner = live.reduce((a, b) =>
+        (b.lastActivityAt ?? 0) > (a.lastActivityAt ?? 0) ? b : a,
+      );
+    } else {
+      // Nothing looks live — fall back to whoever holds the pane's terminal.
+      const paneTty = paneTtyForTarget(target);
+      winner = group.find((s) => paneTty != null && ttyOf(s.pid) === paneTty);
+    }
     console.warn(
       `[sessions] ${group.length} sessions map to pane ${target} (pids ${group
         .map((g) => g.pid)
-        .join(", ")}) — ambiguous, dropping target from all`,
+        .join(", ")}) — fronting ${winner ? `pid ${winner.pid}` : "none"}`,
     );
-    for (const s of group) s.tmuxTarget = null;
+    for (const s of group) if (s !== winner) s.tmuxTarget = null;
   }
-  return out;
 }
 
 // `claude -p` / `--print` runs headless (no TUI). pgrep gives us the full

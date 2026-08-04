@@ -51,33 +51,65 @@ async function spawnTextAsync(cmd: string[]): Promise<string | null> {
 // of spawning once each — collapsing a ~26-spawn-per-scan storm to ~2.
 // Linux paths read /proc directly (no subprocess) and are left untouched.
 
-// ONE `ps -axo pid=,ppid=,lstart=,command=` snapshot of every process: pid →
-// {ppid, startMs, cmd}. lstart is the last-but-one column (fixed token shape
-// "Dow Mon DD HH:MM:SS YYYY"); command is the free-form remainder. Replaces the
-// old per-pid `ps -o ppid=` / `ps -o lstart=` spawns and the separate ppidMap.
+// ONE `ps -axo pid=,ppid=,tty=,lstart=,command=` snapshot of every process:
+// pid → {ppid, tty, startMs, cmd}. tty is a bare device name ("ttys011") or
+// "??" when the process has no controlling terminal; lstart is the next column
+// (fixed token shape "Dow Mon DD HH:MM:SS YYYY"); command is the free-form
+// remainder. Replaces the old per-pid `ps -o ppid=` / `ps -o lstart=` spawns
+// and the separate ppidMap.
 const PROC_SNAP_TTL_MS = 600;
+const PS_FORMAT = "pid=,ppid=,tty=,lstart=,command=";
 interface ProcRow {
   ppid: number;
+  tty: string | null;
   startMs: number | null;
   cmd: string;
 }
 let procSnap: { at: number; rows: Map<number, ProcRow> } | null = null;
-const LSTART = /^\s*(\d+)\s+(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+\d{2}:\d{2}:\d{2}\s+\d{4})\s+(.*)$/;
-function parsePsRows(out: string | null): Map<number, ProcRow> {
+const LSTART =
+  /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(\w{3}\s+\w{3}\s+\d+\s+\d{2}:\d{2}:\d{2}\s+\d{4})\s+(.*)$/;
+export function parsePsRows(out: string | null): Map<number, ProcRow> {
   const rows = new Map<number, ProcRow>();
   if (out) {
     for (const line of out.split("\n")) {
       const m = line.match(LSTART);
       if (!m) continue;
-      const startMs = Date.parse(m[3]);
+      const startMs = Date.parse(m[4]);
       rows.set(Number(m[1]), {
         ppid: Number(m[2]),
+        tty: normalizeTty(m[3]),
         startMs: Number.isFinite(startMs) ? startMs : null,
-        cmd: m[4].trim(),
+        cmd: m[5].trim(),
       });
     }
   }
   return rows;
+}
+
+// Canonical form of a terminal device for comparison: strip the `/dev/` prefix
+// so tmux's `pane_tty` ("/dev/ttys011", "/dev/pts/3") compares equal to what
+// `ps -o tty=` prints ("ttys011", "pts/3"). "??" / "-" / empty all mean "no
+// controlling terminal" and normalize to null.
+export function normalizeTty(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const s = raw.trim();
+  if (!s || s === "??" || s === "?" || s === "-") return null;
+  return s.startsWith("/dev/") ? s.slice(5) : s;
+}
+
+// Decode Linux /proc/<pid>/stat field 7 (tty_nr) into a device name. tty_nr
+// packs the device number as major = (n >> 8) & 0xfff, minor = (n & 0xff) |
+// ((n >> 12) & 0xfff00). 0 means no controlling terminal. Only pty majors are
+// worth naming — tmux panes are always pts (major 136) on Linux; anything else
+// is reported as a major/minor pair, which still compares stably against
+// itself but will simply never match a pane_tty (correct: it isn't one).
+export function ttyNameFromTtyNr(ttyNr: number): string | null {
+  if (!Number.isFinite(ttyNr) || ttyNr === 0) return null;
+  const major = (ttyNr >> 8) & 0xfff;
+  const minor = (ttyNr & 0xff) | ((ttyNr >> 12) & 0xfff00);
+  if (major === 136) return `pts/${minor}`;
+  if (major === 4) return `tty${minor}`;
+  return `${major}:${minor}`;
 }
 
 // Synchronous read of the ps snapshot. On the session-scan path it's a pure
@@ -87,7 +119,7 @@ function parsePsRows(out: string | null): Map<number, ProcRow> {
 function psSnapshot(): Map<number, ProcRow> {
   const now = Date.now();
   if (procSnap && now - procSnap.at < PROC_SNAP_TTL_MS) return procSnap.rows;
-  const rows = parsePsRows(spawnText(["ps", "-axo", "pid=,ppid=,lstart=,command="]));
+  const rows = parsePsRows(spawnText(["ps", "-axo", PS_FORMAT]));
   procSnap = { at: now, rows };
   return rows;
 }
@@ -100,9 +132,7 @@ export async function primeProcSnapshot(): Promise<void> {
   if (!IS_DARWIN) return;
   const now = Date.now();
   if (procSnap && now - procSnap.at < PROC_SNAP_TTL_MS) return;
-  const rows = parsePsRows(
-    await spawnTextAsync(["ps", "-axo", "pid=,ppid=,lstart=,command="]),
-  );
+  const rows = parsePsRows(await spawnTextAsync(["ps", "-axo", PS_FORMAT]));
   procSnap = { at: Date.now(), rows };
 }
 
@@ -293,6 +323,26 @@ export function ppidOf(pid: number): number | null {
     const fields = after.split(" ");
     const ppid = Number(fields[1]);
     return Number.isFinite(ppid) ? ppid : null;
+  } catch {
+    return null;
+  }
+}
+
+// Controlling terminal of a pid as a bare device name ("ttys011", "pts/3"), or
+// null when the process has none. A pid with no controlling terminal was
+// detached from any tmux pane — it cannot be a pane's foreground program, no
+// matter what its parent chain says. See tmuxTargetForPid.
+export function ttyOf(pid: number): string | null {
+  if (IS_DARWIN) {
+    // Shared ps-snapshot lookup — no per-pid spawn.
+    return psSnapshot().get(pid)?.tty ?? null;
+  }
+  try {
+    // /proc/<pid>/stat: fields after the last ')' start at field 3, so tty_nr
+    // (field 7) is index 4.
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+    return ttyNameFromTtyNr(Number(fields[4]));
   } catch {
     return null;
   }

@@ -3,7 +3,7 @@
 // its parent chain to the pane's top process, and `send-keys` into that pane.
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { ppidOf as procPpidOf } from "./procinfo";
+import { ppidOf as procPpidOf, ttyOf, normalizeTty } from "./procinfo";
 
 // Known-good Claude model to launch with when a caller doesn't specify one.
 // Never launch a managed `claude` bare — see spawnManagedSession. Pin the
@@ -86,8 +86,12 @@ function reposRoot(): string {
 // of redundant subprocess spawns per pass, all blocking the single event loop.
 // Memoize the map for a short TTL so one pass shares one snapshot.
 const PANE_MAP_TTL_MS = 1000;
-let paneMapSnap: { at: number; map: Map<number, string> } | null = null;
-function paneMap(): Map<number, string> {
+export interface PaneInfo {
+  target: string;
+  tty: string | null;
+}
+let paneMapSnap: { at: number; map: Map<number, PaneInfo> } | null = null;
+function paneMap(): Map<number, PaneInfo> {
   const now = Date.now();
   if (paneMapSnap && now - paneMapSnap.at < PANE_MAP_TTL_MS) return paneMapSnap.map;
   const m = buildPaneMap();
@@ -95,26 +99,35 @@ function paneMap(): Map<number, string> {
   return m;
 }
 
-function buildPaneMap(): Map<number, string> {
-  const m = new Map<number, string>();
+// Parse `tmux list-panes -a` output into pane_pid → {target, tty}. Split on the
+// LAST two spaces, not the first: a pane target never contains a space but this
+// keeps the parse anchored to the fixed-arity tail regardless of format order.
+export function parsePaneList(out: string): Map<number, PaneInfo> {
+  const m = new Map<number, PaneInfo>();
+  for (const line of out.split("\n")) {
+    const parts = line.trim().split(/\s+/);
+    if (parts.length < 3) continue;
+    const pid = Number(parts[0]);
+    const target = parts[1];
+    const tty = normalizeTty(parts[2]);
+    if (pid && target) m.set(pid, { target, tty });
+  }
+  return m;
+}
+
+function buildPaneMap(): Map<number, PaneInfo> {
   try {
     const r = Bun.spawnSync([
       "tmux",
       "list-panes",
       "-a",
       "-F",
-      "#{pane_pid} #{session_name}:#{window_index}.#{pane_index}",
+      "#{pane_pid} #{session_name}:#{window_index}.#{pane_index} #{pane_tty}",
     ]);
-    const out = new TextDecoder().decode(r.stdout);
-    for (const line of out.split("\n")) {
-      const sp = line.indexOf(" ");
-      if (sp < 0) continue;
-      const pid = Number(line.slice(0, sp));
-      const target = line.slice(sp + 1).trim();
-      if (pid && target) m.set(pid, target);
-    }
-  } catch {}
-  return m;
+    return parsePaneList(new TextDecoder().decode(r.stdout));
+  } catch {
+    return new Map();
+  }
 }
 
 // Parent pid for the pane→proc parent-chain walk. Platform branch (Linux /proc,
@@ -123,13 +136,33 @@ function ppidOf(pid: number): number | null {
   return procPpidOf(pid);
 }
 
+// Resolve a live pid to the tmux pane whose keystrokes reach it, or null.
+//
+// Deliberately a pure ancestry walk: a pane's keys do NOT always go to the
+// process holding its tty. Claude Code's branch view runs the fronted
+// conversation in a DETACHED child (spawned via the transient daemon, no
+// controlling terminal) and proxies the pane's input to it — so gating this on
+// a tty match made every branch conversation unsendable. Several pids therefore
+// legitimately resolve to one pane; picking which of them actually fronts it is
+// resolveePaneOwners()' job in sessions.ts, not this function's.
 export function tmuxTargetForPid(pid: number | null): string | null {
   if (!pid) return null;
   const panes = paneMap();
   let cur: number | null = pid;
   for (let i = 0; i < 12 && cur && cur > 1; i++) {
-    if (panes.has(cur)) return panes.get(cur) as string;
+    const pane = panes.get(cur);
+    if (pane) return pane.target;
     cur = ppidOf(cur);
+  }
+  return null;
+}
+
+// Controlling terminal of the process owning `target`'s pane, or null. Used as
+// a last-resort tiebreak when no candidate for a pane looks like a live
+// conversation.
+export function paneTtyForTarget(target: string): string | null {
+  for (const pane of paneMap().values()) {
+    if (pane.target === target) return pane.tty;
   }
   return null;
 }
@@ -977,37 +1010,60 @@ export function tmuxInterrupt(target: string): boolean {
 // placeholder/ghost hint text in an empty box doesn't matter. Returns null when
 // no composer box is visible (e.g. a modal/selector is up instead).
 //
-// A *named* session draws its name centered in the top border
-// (`──── my-session ──`), so a rule line isn't always pure dashes — it just
-// starts and ends with a run of them. Matching only `^─{3,}\s*$` missed that
-// border, so the composer went undetected and every send to a named session
-// typed-then-cleared in a retry loop. Allow an embedded label between the
-// leading and trailing dash runs.
-const RULE_RE = /^─{3,}.*─\s*$/;
+// A composer border line. Claude draws it three ways, and a matcher that only
+// accepted the first two silently broke sending:
+//   ─────────────────────   plain
+//   ──── my-session ──      named session (label centred between dash runs)
+//   (Branch) ──             branch view (label is a PREFIX; dashes only at the
+//                           end) — `^─{3,}` never matched this, so the top
+//                           border went unseen.
+// The invariant across all three is: the line ENDS in dashes, carries only a
+// short label besides them, and never holds composer content (`❯`). Requiring
+// two trailing dashes rather than three is what admits `(Branch) ──`.
+export function isRuleLine(line: string): boolean {
+  const s = line.replace(/[ \t]+$/, "");
+  if (!s.endsWith("─")) return false;
+  if (s.includes("❯")) return false;
+  const dashes = (s.match(/─/g) ?? []).length;
+  if (dashes < 2) return false;
+  // Cap the label so a wrapped transcript line that happens to end in a rule
+  // can't masquerade as a border.
+  return s.length - dashes <= 40;
+}
 
 export function inputBoxText(target: string): string | null {
   const pane = capturePane(target);
   if (pane == null) return null;
+  return inputBoxFromPane(pane);
+}
+
+// Extract the composer region from a captured pane. Split out from
+// inputBoxText so the border-scan can be tested against real captures.
+export function inputBoxFromPane(pane: string): string | null {
   const lines = pane.split("\n");
-  let bottom = -1;
-  let top = -1;
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (RULE_RE.test(lines[i])) {
-      if (bottom < 0) bottom = i;
-      else {
-        top = i;
-        break;
-      }
-    }
+  // Scan bottom-up for the composer's two borders. Crucially, a border DRAWN
+  // WIDER THAN THE PANE wraps into two consecutive rule lines — and pairing
+  // each rule line with the next one up made the wrap pair with its own first
+  // half, collapsing the composer region to the empty string. Every send then
+  // read as "our text never landed in the box", so deliver() retyped three
+  // times and failed with "message never left the input box after retries"
+  // even though the keys were arriving fine. Collapse each maximal RUN of rule
+  // lines into a single border instead.
+  let i = lines.length - 1;
+  while (i >= 0 && !isRuleLine(lines[i])) i--; // into the bottom border
+  if (i >= 0) {
+    while (i >= 0 && isRuleLine(lines[i])) i--; // skip the whole wrapped run
+    const contentEnd = i;
+    while (i >= 0 && !isRuleLine(lines[i])) i--; // into the top border
+    if (i >= 0) return lines.slice(i + 1, contentEnd + 1).join("\n");
   }
-  if (bottom >= 0 && top >= 0) return lines.slice(top + 1, bottom).join("\n");
 
   // Codex renders the composer as a single bottom prompt line:
   //   › message text
   // Ignore numbered selector rows (`› 1. ...`) so open prompts don't look like
   // an editable composer to the send queue.
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const m = lines[i].match(/^\s*›\s*(.*?)\s*$/);
+  for (let j = lines.length - 1; j >= 0; j--) {
+    const m = lines[j].match(/^\s*›\s*(.*?)\s*$/);
     if (!m) continue;
     const text = m[1] ?? "";
     if (/^\d+\.\s+/.test(text)) return null;
