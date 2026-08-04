@@ -202,3 +202,44 @@ final class HostStateSequenceTests: XCTestCase {
         XCTAssertFalse(s.showsOfflineBanner)
     }
 }
+
+/// Reads and writes route differently on purpose. Sharing one rule is what made
+/// an offline host's sessions unopenable.
+final class ReadRouteTests: XCTestCase {
+    let pro = LFGCore.Host(url: "http://pro")
+    let air = LFGCore.Host(url: "http://air")
+
+    func up(_ ids: Set<String>) -> (LFGCore.Host) -> Bool { { ids.contains($0.id) } }
+
+    func testReadPrefersTheOwnerWhenItIsUp() {
+        XCTAssertEqual(MultiHost.readRouteHost(owner: air, reachable: up(["http://air"]), agnostic: pro)?.id,
+                       "http://air")
+    }
+
+    func testReadFallsBackToAReachablePeerWhenTheOwnerIsDown() {
+        // The whole point: the Air is down, the Pro is up and has the same synced
+        // transcript. The read must go to the Pro.
+        XCTAssertEqual(MultiHost.readRouteHost(owner: air, reachable: up(["http://pro"]), agnostic: pro)?.id,
+                       "http://pro")
+    }
+
+    func testAWriteStillGoesToTheDownOwnerForALiveSession() {
+        // Contrast: only the owner has the tmux pane, so a send must not be
+        // rerouted — it has to fail honestly rather than address another agent.
+        XCTAssertEqual(MultiHost.routeHost(owner: air, isClosed: false,
+                                           reachable: up(["http://pro"]), agnostic: pro)?.id,
+                       "http://air")
+    }
+
+    func testReadFallsBackToTheOwnerWhenNothingIsReachable() {
+        // Single-host setup, host down: still hand back a client so the caller
+        // can try and then fall through to its local-store hydration.
+        XCTAssertEqual(MultiHost.readRouteHost(owner: air, reachable: up([]), agnostic: nil)?.id,
+                       "http://air")
+    }
+
+    func testReadWithNoOwnerUsesTheAgnosticHost() {
+        XCTAssertEqual(MultiHost.readRouteHost(owner: nil, reachable: up(["http://pro"]), agnostic: pro)?.id,
+                       "http://pro")
+    }
+}

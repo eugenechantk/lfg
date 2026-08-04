@@ -39,6 +39,64 @@ final class FleetActivitySnapshotTests: XCTestCase {
         XCTAssertEqual(state.updatedAt, 200)
     }
 
+    /// Regression: a session closed in the client kept rendering as "working"
+    /// forever. `closed` is client-synthesized and `busy` is only ever seeded for
+    /// live sessions — nothing clears it on close — so the stale `true` survived.
+    func testClosedSessionIsExcludedEvenWithAStaleBusyFlag() {
+        let state = FleetActivitySnapshot.contentState(
+            sessions: [
+                Session(sessionId: "e64271a9", title: "Ended but still busy", closed: true),
+                Session(sessionId: "live", title: "Actually working"),
+            ],
+            busy: ["e64271a9": true, "live": true],
+            prompts: [:],
+            now: 100
+        )
+
+        XCTAssertEqual(state.working, 1)
+        XCTAssertEqual(state.rows.map(\.sid), ["live"])
+    }
+
+    /// A closed session outranks even a pending prompt, matching `group(for:)`,
+    /// whose `.closed` branch comes before `.needsInput`.
+    func testClosedSessionIsExcludedEvenWithAPendingPrompt() {
+        let state = FleetActivitySnapshot.contentState(
+            sessions: [Session(sessionId: "c1", title: "Ended", closed: true)],
+            busy: [:],
+            prompts: ["c1": prompt("Still waiting?")],
+            now: 100
+        )
+
+        XCTAssertEqual(state.needsInput, 0)
+        XCTAssertTrue(state.rows.isEmpty)
+    }
+
+    /// "Paused" is neither working nor needs-input, and it outranks busy.
+    func testBlockedSessionIsExcluded() {
+        let state = FleetActivitySnapshot.contentState(
+            sessions: [Session(sessionId: "b1", title: "Paused", status: "blocked")],
+            busy: ["b1": true],
+            prompts: [:],
+            now: 100
+        )
+
+        XCTAssertEqual(state.working, 0)
+        XCTAssertTrue(state.rows.isEmpty)
+    }
+
+    /// ...but a paused session that is *asking* something is still actionable.
+    func testBlockedSessionWithAPromptStillCountsAsNeedsInput() {
+        let state = FleetActivitySnapshot.contentState(
+            sessions: [Session(sessionId: "b1", title: "Paused, asking", status: "blocked")],
+            busy: [:],
+            prompts: ["b1": prompt("Approve?")],
+            now: 100
+        )
+
+        XCTAssertEqual(state.needsInput, 1)
+        XCTAssertEqual(state.rows.map(\.sid), ["b1"])
+    }
+
     func testIdleSessionsAreExcludedEntirely() {
         let state = FleetActivitySnapshot.contentState(
             sessions: [Session(sessionId: "a", title: "Done"), Session(sessionId: "b", title: "Also done")],

@@ -31,9 +31,25 @@ public enum FleetActivitySnapshot {
         for session in sessions {
             let sid = session.sessionId ?? session.id
             let state: String
+
+            // This ladder MUST mirror `SessionStore.group(for:)`'s precedence, or
+            // the card contradicts the list the user is looking at. Two traps live
+            // in the order:
+            //
+            //  - `closed` is checked FIRST and is client-synthesized (the server
+            //    never sends it). `busy` is seeded only for *live* sessions and is
+            //    never cleared when one closes, so a session that was working when
+            //    you ended it keeps `busy == true` forever. Without this guard it
+            //    renders as "working" permanently.
+            //  - `isBlocked` ("Paused") outranks busy and is neither working nor
+            //    needs-input, so it does not belong on the card at all.
+            if session.closed { continue }
+
             if prompts[sid] != nil {
                 state = "needsInput"
                 needsInput += 1
+            } else if session.isBlocked {
+                continue
             } else if busy[sid] == true {
                 state = "working"
                 working += 1

@@ -123,6 +123,30 @@ public enum MultiHost {
         return agnostic
     }
 
+    /// Which host a per-session **read** should go to.
+    ///
+    /// A read has no host affinity: `~/.claude` is synced, so every host has the
+    /// transcript and any reachable one can serve
+    /// `GET /api/sessions/<id>/messages`. Prefer the owner when it is up (freshest,
+    /// and it is already streaming), otherwise any reachable host.
+    ///
+    /// This exists because reads and writes used to share `routeHost`, whose rule
+    /// for a live session on a down owner is "return the owner anyway, and fail
+    /// honestly rather than land somewhere surprising". That is right for a
+    /// **send** — only the owner has the tmux pane — and wrong for a **read**,
+    /// where it pinned the request to a machine that was down and left the user
+    /// looking at an empty transcript for a session whose text was sitting on the
+    /// host they *were* connected to. One correct rule silently broke the other
+    /// operation. See `.claude/brainstorm/offline-host-session-viewing.md`.
+    ///
+    /// Falls back to `owner` when nothing is reachable, so the caller still has a
+    /// client to try (and its own local-store fallback behind it).
+    public static func readRouteHost(owner: Host?, reachable: (Host) -> Bool,
+                                     agnostic: Host?) -> Host? {
+        if let owner, reachable(owner) { return owner }
+        return agnostic ?? owner
+    }
+
     /// Whether a session's work is currently unreachable — i.e. it is LIVE on a
     /// host that is down. Closed sessions are never "offline": any reachable host
     /// can revive their synced transcript. Drives the dimmed list row and the

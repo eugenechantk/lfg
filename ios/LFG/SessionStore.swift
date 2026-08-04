@@ -289,8 +289,34 @@ import LFGCore
         return target.flatMap { settings.client(for: $0) }
     }
 
+    /// The client for READING `id`'s transcript. Unlike `client(forSession:)`,
+    /// this falls back to any reachable host when the owner is down — the
+    /// transcript is synced everywhere, so an offline owner is no reason to show
+    /// an empty session. Rules live in `MultiHost.readRouteHost`.
+    func readClient(forSession id: String) -> LFGClient? {
+        MultiHost.readRouteHost(owner: host(forSession: id),
+                                reachable: isReachable,
+                                agnostic: agnosticHost)
+            .flatMap { settings.client(for: $0) }
+    }
+
     /// Whether a host is currently reachable (for default-host placement).
+    /// "Is this host delivering right now?" — the strict test. Use for deciding
+    /// what to fetch and whether the journal's value beats a REST snapshot.
     private func isReachable(_ host: Host) -> Bool { hostStateByHost[host.id]?.isLive == true }
+
+    /// "Should the UI treat this host as DOWN?" — deliberately weaker than
+    /// `isReachable`, and not its negation.
+    ///
+    /// A host that is dialling (`connecting`), never yet observed (`unknown`), or
+    /// failing but still inside its grace window (`degraded`) is **not down**.
+    /// Gating user-facing "unreachable" copy on `!isLive` puts the offline notice
+    /// on screen seconds into a blip — the same false-offline bug the grace window
+    /// exists to prevent, just wearing different clothes. Only `offline` and
+    /// `noNetwork` are down, which is exactly what `showsOfflineBanner` means.
+    private func isNotKnownDown(_ host: Host) -> Bool {
+        !(hostStateByHost[host.id]?.showsOfflineBanner ?? false)
+    }
 
     /// Whether `id` is a closed/resumable session (host-agnostic, revivable anywhere).
     private func isClosed(_ id: String) -> Bool { session(id)?.closed == true }
@@ -299,7 +325,7 @@ import LFGCore
     /// that is down. Drives the list's dimmed row treatment and the disabled
     /// composer, so no steering action silently fails.
     func isOffline(_ id: String) -> Bool {
-        MultiHost.isOffline(owner: host(forSession: id), isClosed: isClosed(id), reachable: isReachable)
+        MultiHost.isOffline(owner: host(forSession: id), isClosed: isClosed(id), reachable: isNotKnownDown)
     }
 
     /// Ask the UI to open a session (driven by a tapped push notification).
@@ -1827,7 +1853,8 @@ import LFGCore
     /// prompts show even in long, tool-heavy sessions where they'd otherwise be
     /// older than the live-stream backfill window.
     func ensureHistory(_ id: String) async {
-        guard let client = client(forSession: id) else {
+        // A READ: route to any reachable host, not to the (possibly down) owner.
+        guard let client = readClient(forSession: id) else {
             await hydrateTranscriptFromStoreIfEmpty(id)
             return
         }
