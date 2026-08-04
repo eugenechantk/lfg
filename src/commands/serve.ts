@@ -2479,15 +2479,6 @@ export async function cmdServe() {
         }
       }
 
-      {
-        const m = path.match(
-          /^\/api\/sessions\/([0-9a-fA-F-]{36})\/messages$/,
-        );
-        if (m && req.method === "GET") {
-          return messagesResponseForSession(m[1], url);
-        }
-      }
-
       // How recently a bare CLI session's transcript must have been written for
       // it to count as "running" when there's no pane to scrape. Bigger than the
       // 1s poll interval so brief gaps between streamed lines don't flicker it

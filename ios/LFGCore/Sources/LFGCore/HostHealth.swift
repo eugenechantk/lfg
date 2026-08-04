@@ -25,8 +25,10 @@ public struct HostProbePolicy: Sendable, Equatable {
     /// interval changes, re-derive this.
     public let coldProbeEveryNTicks: Int
     /// Per-host timeout for the poll path. Deliberately far below `LFGClient`'s 15s
-    /// user-initiated timeout: a poll that takes longer than this is useless anyway,
-    /// the next tick is 3s away.
+    /// user-initiated timeout: this loop is a background reconcile, not a user-
+    /// initiated fetch, so a poll slower than this is worth abandoning — the
+    /// `HostLink`s are what actually keep a host live, and the next reconcile tick
+    /// is 60s away (`SessionStore.start()`).
     public let pollTimeout: TimeInterval
 
     public init(failureThreshold: Int = 4, coldProbeEveryNTicks: Int = 5, pollTimeout: TimeInterval = 4) {

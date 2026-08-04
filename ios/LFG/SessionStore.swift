@@ -160,12 +160,11 @@ import LFGCore
     private static let migratedKey = "lfg.readStateMigratedToMessageID"
     private var needsReadStateMigration: Bool
 
-    // Live SSE streams, one per host (each host has its own /api/live/stream and
-    // its own 24-id cap). Keyed by Host.id (url).
-    // One HostLink per configured host (Phase 1): each owns its cursor-resumable
-    // /api/events stream, keepalive, and reconnect loop. Replaces the old
-    // per-host liveStream(ids:) management (streamTasks/streamedIDsByHost),
-    // whose id-set rebuilds were a major source of self-inflicted disconnects.
+    // One HostLink per configured host, keyed by Host.id (url): each owns its
+    // cursor-resumable /api/events stream, keepalive, and reconnect loop.
+    // Replaces the old per-host liveStream(ids:) management
+    // (streamTasks/streamedIDsByHost), whose id-set rebuilds were a major source
+    // of self-inflicted disconnects. There is no id-selected stream anymore.
     private var links: [String: HostLink] = [:]
     /// Throttle for "an event referenced a session we don't know" refreshes.
     private var unknownSessionRefresh: Task<Void, Never>?
