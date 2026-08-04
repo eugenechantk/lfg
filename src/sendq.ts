@@ -11,6 +11,7 @@
 // dropped type, and only marks a message failed when it truly never landed.
 
 import { randomBytes, randomUUID } from "node:crypto";
+import { nudgeJournalPump } from "./journal-pump.ts";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -794,6 +795,8 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<{ userTurnId:
         msg.status = "delivered";
         msg.error = undefined;
         persistMsg(sessionId, msg);
+        // The turn has started; say so now rather than up to a poll tick later.
+        nudgeJournalPump(sessionId);
         return { userTurnId: transcriptMatchesNow.newestId };
       }
       // held === false: composer visible and our draft is gone.
@@ -812,6 +815,7 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<{ userTurnId:
         msg.status = isCommand ? "delivered" : "queued";
         msg.error = undefined;
         persistMsg(sessionId, msg);
+        nudgeJournalPump(sessionId);
         return { userTurnId: null };
       }
     }

@@ -42,6 +42,24 @@ type Watched = {
   buf: string; // partial trailing line between ticks
 };
 
+// Set while a pump is running: re-scrape ONE session right now instead of
+// waiting up to POLL_TICK_MS for the next sweep.
+//
+// A confirmed send is the case that matters. The keystrokes have landed and the
+// pane is already busy, but the client cannot know that until the pump next
+// looks — so "I sent it" and "it is running" were separated by up to a second of
+// nothing, on top of the ~700ms the send itself takes. Measured before this:
+// delivered at 741ms, first busy event over SSE at 1486ms.
+//
+// This re-scrapes rather than fabricating a `busy: true` event: the pane is the
+// authority, so a nudge that arrives a beat early reports the truth instead of
+// asserting something the next tick would contradict.
+let nudgeOne: ((sid: string) => void) | null = null;
+
+export function nudgeJournalPump(sid: string): void {
+  nudgeOne?.(sid);
+}
+
 export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
   const deltas = new PumpDeltas();
   const watched = new Map<string, Watched>();
@@ -203,6 +221,25 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       pollTimer = setTimeout(pollLoop, POLL_TICK_MS);
     };
     pollTimer = setTimeout(pollLoop, POLL_TICK_MS);
+
+    // Coalesced per-session nudge. `inFlight` keeps a burst of sends from
+    // stacking scrapes of the same pane on the single event loop.
+    const inFlight = new Set<string>();
+    nudgeOne = (sid: string) => {
+      if (stopped || inFlight.has(sid)) return;
+      const w = watched.get(sid);
+      if (!w) return;
+      inFlight.add(sid);
+      void (async () => {
+        try {
+          await pollOne(w);
+          queueOne(w);
+        } catch {} finally {
+          inFlight.delete(sid);
+        }
+      })();
+    };
+
     const pruneTimer = setInterval(() => {
       if (!stopped) j.prune();
     }, 60 * 60 * 1000);
@@ -217,5 +254,8 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
     if (stopped) stop(); // stop() was requested before boot finished
   })();
 
-  return () => stop();
+  return () => {
+    nudgeOne = null;
+    stop();
+  };
 }

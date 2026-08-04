@@ -2146,6 +2146,18 @@ import LFGCore
     /// still grants the in-flight POST a grace period to finish. (Taking it
     /// inside the async Task would race the suspension and lose the message.)
     func dispatchSend(_ id: String, text: String, attachments: [ComposerAttachment]) {
+        // Optimistic "running", matching the optimistic bubble that already
+        // appears. Measured on a live host: the keystrokes land at ~740ms and the
+        // journal pump reports the turn at ~1490ms, so without this the row sits
+        // visibly idle for a second and a half after you hit send — long enough
+        // to read as "it didn't take". The authoritative busy event overwrites
+        // this within the second either way.
+        //
+        // Not for a host that is known down: that send is queued, not run, and
+        // claiming otherwise would contradict the "will send when it's back"
+        // notice sitting directly above the composer.
+        let ownerKnownDown = host(forSession: id).map { !isNotKnownDown($0) } ?? false
+        if !ownerKnownDown { busy[id] = true }
         let app = UIApplication.shared
         var bg: UIBackgroundTaskIdentifier = .invalid
         bg = app.beginBackgroundTask(withName: "lfg.send") {
