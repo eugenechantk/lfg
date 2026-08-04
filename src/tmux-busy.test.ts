@@ -47,3 +47,77 @@ describe("isBusy", () => {
     expect(isBusy(pane("⏺ The build completed (3s) successfully."))).toBe(false);
   });
 });
+
+// Regression: both markers used to be tested against the WHOLE pane, so an
+// agent that merely PRINTED one of them pinned itself busy forever. This bit a
+// real session (cy-163217-77946) whose own answer explained busy detection —
+// the phrase sat in the transcript, paneBusy stayed true past its TTL refresh
+// after refresh, and the client showed "running" indefinitely with the send
+// queue holding messages for an idle session.
+describe("isBusy ignores the transcript above the composer", () => {
+  const idleFooter = "  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents";
+  const busyFooter = "  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt · ← for …";
+  const withTranscript = (body: string, footer: string) =>
+    [body, "✻ Churned for 3m 54s", "─────", "❯ ", "─────", footer, "  /rc"].join("\n");
+
+  test("agent prose containing 'esc to interrupt' → idle", () => {
+    const body = [
+      "⏺ A session that is still live but hung — pane alive, still showing",
+      "  esc to interrupt — stays busy: true legitimately, because the pane is",
+      "  the authority and it still claims to be running.",
+    ].join("\n");
+    expect(isBusy(withTranscript(body, idleFooter))).toBe(false);
+  });
+
+  test("agent prose quoting a live meter → idle", () => {
+    const body = '⏺ The meter renders as "✶ Crunching… (5m 50s · ↓ 2.2k tokens)".';
+    expect(isBusy(withTranscript(body, idleFooter))).toBe(false);
+  });
+
+  // The prose must not suppress a genuine signal either.
+  test("prose mentions the hint while the footer really shows it → busy", () => {
+    const body = "⏺ We detect a turn by scraping esc to interrupt from the footer.";
+    expect(isBusy(withTranscript(body, busyFooter))).toBe(true);
+  });
+
+  // Real capture shape: the meter is separated from the composer by the tip and
+  // update-notice lines, so the lookback window has to clear them.
+  test("meter above tip + update notice → busy", () => {
+    const p = [
+      "⏺ Running the build.",
+      "",
+      "✶ Crunching… (5m 50s · ↓ 2.2k tokens)",
+      "  ⎿  Tip: Paste images into Claude Code using control+v (not cmd+v!)",
+      "                      Update available! Run: brew upgrade claude-code@latest",
+      "─────",
+      "❯ ",
+      "─────",
+      idleFooter,
+      "  /rc",
+    ].join("\n");
+    expect(isBusy(p)).toBe(true);
+  });
+
+  // A wide border wraps into two consecutive rule lines; collapsing the run is
+  // what keeps the lookback window anchored to the right side of the composer.
+  test("wrapped composer borders → meter still found", () => {
+    const p = [
+      "✶ Crunching… (45s · ↓ 1.2k tokens)",
+      "─────",
+      "──",
+      "❯ ",
+      "─────",
+      "──",
+      idleFooter,
+    ].join("\n");
+    expect(isBusy(p)).toBe(true);
+  });
+
+  // Codex renders a single `›` prompt line with no border box: fall back to the
+  // pane tail, never the whole scrollback.
+  test("borderless pane falls back to the tail, not the scrollback", () => {
+    const stale = Array.from({ length: 30 }, () => "⏺ mentions esc to interrupt").join("\n");
+    expect(isBusy(`${stale}\n${["", "", "", "", "", "› "].join("\n")}`)).toBe(false);
+    expect(isBusy(`⏺ done\n› working (12s · ↓ 1k tokens)`)).toBe(true);
+  });
+});

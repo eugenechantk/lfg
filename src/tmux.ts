@@ -850,9 +850,74 @@ export function questionSelectorOpen(pane: string): boolean {
 // clock + "·" (instead of "tokens") keeps busy true through thinking phases.
 // The "esc to interrupt" hint stays as a fallback for the first frame, before
 // the clock renders.
-const BUSY_METER = /\((?:\d+h\s+)?(?:\d+m\s+)?\d+s\b[^)]*·/;
+// The meter is also anchored to END OF LINE. The region check below narrows the
+// scan to the few lines above the composer, but an agent QUOTING a meter can
+// land inside that window ('… renders as "✶ Crunching… (5m 50s · ↓ 2.2k
+// tokens)".'). The real meter is the last thing on its line — it closes on the
+// paren, or on a "…" when the TUI truncates it to the pane width — whereas a
+// quote carries trailing prose. (A quote that is ITSELF truncated mid-clock
+// still slips through; the region check keeps that to a 6-line window.)
+const BUSY_METER = /\((?:\d+h\s+)?(?:\d+m\s+)?\d+s\b[^)]*·[^)]*[)…]\s*$/m;
+const ESC_HINT = /esc to interrupt/i;
+
+// Both markers are TUI CHROME: they only ever render in a fixed region around
+// the composer box, never in the transcript scrolling above it. Testing them
+// against the WHOLE pane let an agent's own output pin it busy — a session that
+// merely *wrote about* "esc to interrupt" (this repo discusses its own busy
+// detection, so its sessions do it constantly) read busy for as long as that
+// text stayed on screen. And since paneBusy overrides the transcript-age
+// fallback in listSessions, the session showed "running" forever, which also
+// made the send queue hold every message for a session that was plainly idle.
+//
+// The real layout, from a live capture of a busy pane:
+//
+//   ✶ Crunching… (5m 50s · ↓ 2.2k tokens)          ← meter, above the top border
+//     ⎿  Tip: …                                     ← 0-N optional interstitials
+//                    Update available! …            ┘
+//   ────────────────────────────────────            ← composer top border
+//   ❯ typed text                                    ← composer content
+//   ────────────────────────────────────            ← composer bottom border
+//     ⏵⏵ bypass permissions … · esc to interrupt …  ← footer, below the border
+//
+// So: scan for the hint strictly BELOW the composer's bottom border, and for
+// the meter in a short window immediately ABOVE its top border. Transcript
+// prose can reach neither.
+const METER_LOOKBACK_LINES = 6;
+
+// Split a captured pane into the two chrome regions isBusy is allowed to read.
+// Border runs are collapsed the same way inputBoxFromPane collapses them: a
+// border drawn wider than the pane wraps into two consecutive rule lines.
+export function busyChromeRegions(pane: string): { meter: string; footer: string } {
+  const lines = pane.split("\n");
+  let i = lines.length - 1;
+  while (i >= 0 && !isRuleLine(lines[i])) i--; // into the bottom border run
+  if (i < 0) {
+    // No composer box at all: a codex pane (single `›` prompt line) or a pane
+    // captured mid-render. Still refuse to read scrollback — the chrome is
+    // always at the bottom — so fall back to the tail for both regions.
+    const tail = lines.slice(-METER_LOOKBACK_LINES).join("\n");
+    return { meter: tail, footer: tail };
+  }
+  const footer = lines.slice(i + 1).join("\n");
+  while (i >= 0 && isRuleLine(lines[i])) i--; // skip the whole wrapped run
+  const aboveComposer = i;
+  while (i >= 0 && !isRuleLine(lines[i])) i--; // over the composer content
+  if (i < 0) {
+    // Only one border in the pane — treat everything above it as the meter
+    // region rather than losing the signal entirely.
+    i = aboveComposer;
+  } else {
+    while (i >= 0 && isRuleLine(lines[i])) i--; // skip the top border run
+  }
+  const meter = lines
+    .slice(Math.max(0, i - METER_LOOKBACK_LINES + 1), i + 1)
+    .join("\n");
+  return { meter, footer };
+}
+
 export function isBusy(pane: string): boolean {
-  return BUSY_METER.test(pane) || /esc to interrupt/i.test(pane);
+  const { meter, footer } = busyChromeRegions(pane);
+  return BUSY_METER.test(meter) || ESC_HINT.test(footer);
 }
 
 // Claude Code occasionally floats a session-rating overlay just above the
