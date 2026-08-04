@@ -7,25 +7,33 @@ import {
   type ApnsTransport,
 } from "./apns.ts";
 
-export const LIVE_ACTIVITY_ATTRIBUTES_TYPE = "LFGSessionAttributes";
+export const LIVE_ACTIVITY_ATTRIBUTES_TYPE = "LFGFleetAttributes";
 export const DEFAULT_APNS_TOPIC = "dev.omg.lfg";
 
-export type LiveActivitySessionState = {
-  state: "working" | "blocked" | "finished";
+/// One row of the aggregate card. `state` mirrors the client enum — note it is
+/// `needsInput`, not `blocked`: `blocked` means *paused* on the client and is a
+/// different colour.
+export type LiveActivityRow = {
+  sid: string;
   title: string;
-  dir: string;
-  host: string;
+  state: "working" | "needsInput";
   since: number;
-  updatedAt: number;
-  subtitle?: string;
-  added?: number;
-  removed?: number;
-  files?: number;
 };
 
-export type LiveActivityStartSession = {
-  contentState: LiveActivitySessionState;
-  sessionId: string;
+/// Content state of the single fleet Live Activity. There is deliberately no
+/// "unread" count: unread is a per-device client concept derived from *idle*
+/// sessions, so it is neither active nor knowable here.
+export type LiveActivityContentState = {
+  working: number;
+  needsInput: number;
+  rows: LiveActivityRow[];
+  more: number;
+  updatedAt: number;
+};
+
+export type LiveActivityStartFleet = {
+  contentState: LiveActivityContentState;
+  fleetId?: string;
   alertTitle?: string;
   alertBody?: string;
 };
@@ -42,9 +50,9 @@ export type LiveActivityBody = {
   aps: {
     timestamp: number;
     event: LiveActivityEvent;
-    "content-state"?: LiveActivitySessionState;
+    "content-state"?: LiveActivityContentState;
     "attributes-type"?: string;
-    attributes?: { sessionId: string };
+    attributes?: { fleetId: string };
     alert?: { title: string; body: string };
     "dismissal-date"?: number;
   };
@@ -67,26 +75,27 @@ function headers(bundleId = DEFAULT_APNS_TOPIC): LiveActivityHeaders {
   };
 }
 
-function contentState(input: LiveActivitySessionState): LiveActivitySessionState {
+// Normalises to exactly the wire shape, dropping anything extra a caller passed.
+function contentState(input: LiveActivityContentState): LiveActivityContentState {
   return {
-    state: input.state,
-    title: input.title,
-    dir: input.dir,
-    host: input.host,
-    since: input.since,
+    working: input.working,
+    needsInput: input.needsInput,
+    rows: input.rows.map((r) => ({
+      sid: r.sid,
+      title: r.title,
+      state: r.state,
+      since: r.since,
+    })),
+    more: input.more,
     updatedAt: input.updatedAt,
-    ...(typeof input.subtitle === "string" ? { subtitle: input.subtitle } : {}),
-    ...(typeof input.added === "number" ? { added: input.added } : {}),
-    ...(typeof input.removed === "number" ? { removed: input.removed } : {}),
-    ...(typeof input.files === "number" ? { files: input.files } : {}),
   };
 }
 
 export function buildStart(
-  session: LiveActivityStartSession,
+  fleet: LiveActivityStartFleet,
   attributesType = LIVE_ACTIVITY_ATTRIBUTES_TYPE,
 ): LiveActivityPush {
-  const state = contentState(session.contentState);
+  const state = contentState(fleet.contentState);
   return {
     headers: headers(),
     body: {
@@ -95,17 +104,17 @@ export function buildStart(
         event: "start",
         "content-state": state,
         "attributes-type": attributesType,
-        attributes: { sessionId: session.sessionId },
+        attributes: { fleetId: fleet.fleetId ?? "fleet" },
         alert: {
-          title: session.alertTitle ?? "lfg",
-          body: session.alertBody ?? "LFG session is active.",
+          title: fleet.alertTitle ?? "lfg",
+          body: fleet.alertBody ?? "LFG sessions are active.",
         },
       },
     },
   };
 }
 
-export function buildUpdate(content: LiveActivitySessionState): LiveActivityPush {
+export function buildUpdate(content: LiveActivityContentState): LiveActivityPush {
   const state = contentState(content);
   return {
     headers: headers(),
@@ -120,7 +129,7 @@ export function buildUpdate(content: LiveActivitySessionState): LiveActivityPush
 }
 
 export function buildEnd(
-  content?: LiveActivitySessionState,
+  content?: LiveActivityContentState,
   dismissalDate?: number,
 ): LiveActivityPush {
   const state = content ? contentState(content) : undefined;

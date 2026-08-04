@@ -1,5 +1,7 @@
-// Registry of APNs Live Activity tokens. Push-to-start tokens are device-level;
-// activity update tokens are per Live Activity instance and keyed by session.
+// Registry of APNs Live Activity tokens. Both kinds are device-level: there is
+// exactly one (fleet) Live Activity per device, so update tokens need no session
+// keying. `sessionId` is still tolerated on input so an older client that sends
+// it does not fail registration.
 // Persisted as a small JSON file following the device push store conventions.
 import { dirname, join } from "node:path";
 import { mkdir } from "node:fs/promises";
@@ -43,6 +45,7 @@ export async function upsertLiveActivityToken(input: {
   const record: LiveActivityToken = {
     token: input.token,
     kind: input.kind,
+    // Recorded for debugging only — nothing selects on it any more.
     ...(input.kind === "activityUpdate" && input.sessionId ? { sessionId: input.sessionId } : {}),
     env: input.env,
     updatedAt: Date.now(),
@@ -63,10 +66,8 @@ export async function listPushToStartTokens(): Promise<LiveActivityToken[]> {
   return (await listLiveActivityTokens()).filter((t) => t.kind === "pushToStart");
 }
 
-export async function listActivityUpdateTokens(sessionId: string): Promise<LiveActivityToken[]> {
-  return (await listLiveActivityTokens()).filter(
-    (t) => t.kind === "activityUpdate" && t.sessionId === sessionId,
-  );
+export async function listActivityUpdateTokens(): Promise<LiveActivityToken[]> {
+  return (await listLiveActivityTokens()).filter((t) => t.kind === "activityUpdate");
 }
 
 export async function removeLiveActivityToken(token: string): Promise<void> {

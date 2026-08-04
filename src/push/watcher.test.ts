@@ -1,9 +1,9 @@
 import { test, expect, describe } from "bun:test";
 import {
   reduceTransition,
-  reduceSessionLiveActivities,
-  orderSessionLiveActivityCandidates,
-  MAX_CONCURRENT_LIVE_ACTIVITIES,
+  reduceFleetLiveActivity,
+  orderFleetRows,
+  MAX_FLEET_ROWS,
   liveActivitiesEnabled,
   buildPayload,
   runPushTick,
@@ -93,137 +93,163 @@ describe("buildPayload", () => {
   });
 });
 
-describe("reduceSessionLiveActivities", () => {
-  test("starts when a session first becomes active", () => {
-    const r = reduceSessionLiveActivities({
-      observations: [{ session: { sessionId: "s1", title: "Job", cwd: "/Users/eugene/lfg" }, observed: obs(true, false) }],
-      active: new Map(),
+describe("reduceFleetLiveActivity", () => {
+  test("starts one activity when the first session becomes active", () => {
+    const r = reduceFleetLiveActivity({
+      observations: [{ session: { sessionId: "s1", title: "Job" }, observed: obs(true, false) }],
+      active: null,
       now: 1_700,
-      hostName: "mac",
     });
-    expect(r.decisions.length).toBe(1);
-    expect(r.decisions[0].action?.event).toBe("start");
-    expect(r.decisions[0].nextActive?.startedAt).toBe(1_700);
-    expect(r.decisions[0].action?.push.body.aps).toMatchObject({
+    expect(r.action?.event).toBe("start");
+    expect(r.nextActive?.startedAt).toBe(1_700);
+    expect(r.action?.push.body.aps).toMatchObject({
       event: "start",
       "content-state": {
-        state: "working",
-        title: "Job",
-        dir: "lfg",
-        host: "mac",
-        since: 1_700,
+        working: 1,
+        needsInput: 0,
+        rows: [{ sid: "s1", title: "Job", state: "working", since: 1_700 }],
+        more: 0,
         updatedAt: 1_700,
       },
-      attributes: { sessionId: "s1" },
-      "attributes-type": "LFGSessionAttributes",
+      attributes: { fleetId: "fleet" },
+      "attributes-type": "LFGFleetAttributes",
     });
   });
 
-  test("does not start for an idle session with no transition", () => {
-    const r = reduceSessionLiveActivities({
+  test("does nothing when nothing is active and nothing is live", () => {
+    const r = reduceFleetLiveActivity({
       observations: [{ session: { sessionId: "s1", title: "Job" }, observed: obs(false, false) }],
-      active: new Map(),
+      active: null,
       now: 1_700,
-      hostName: "mac",
     });
-    expect(r.decisions).toEqual([]);
+    expect(r.action).toBeNull();
+    expect(r.nextActive).toBeNull();
   });
 
-  test("updates a selected active session and preserves since for matching state", () => {
-    const active = new Map<string, LiveActivityActive>([
-      ["s1", {
-        sessionId: "s1",
-        startedAt: 1_700,
-        contentState: {
-          state: "working",
-          title: "Old title",
-          dir: "lfg",
-          host: "mac",
-          since: 1_650,
-          updatedAt: 1_700,
-        },
-      }],
-    ]);
-    const r = reduceSessionLiveActivities({
-      observations: [{ session: { sessionId: "s1", title: "New title", cwd: "/tmp/lfg" }, observed: obs(true, true) }],
+  test("a pending prompt outranks busy, matching the client's grouping", () => {
+    const r = reduceFleetLiveActivity({
+      observations: [{ session: { sessionId: "s1", title: "Job" }, observed: obs(true, true) }],
+      active: null,
+      now: 1_700,
+    });
+    expect(r.action?.push.body.aps["content-state"]).toMatchObject({
+      working: 0,
+      needsInput: 1,
+      rows: [{ sid: "s1", state: "needsInput" }],
+    });
+  });
+
+  test("updates and preserves since while a session holds its state", () => {
+    const active: LiveActivityActive = {
+      startedAt: 1_700,
+      contentState: {
+        working: 1,
+        needsInput: 0,
+        rows: [{ sid: "s1", title: "Old title", state: "working", since: 1_650 }],
+        more: 0,
+        updatedAt: 1_700,
+      },
+      since: { s1: { state: "working", at: 1_650 } },
+    };
+    const r = reduceFleetLiveActivity({
+      observations: [{ session: { sessionId: "s1", title: "New title" }, observed: obs(true, false) }],
       active,
       now: 1_710,
-      hostName: "mac",
     });
-    expect(r.decisions[0].action?.event).toBe("update");
-    expect(r.decisions[0].nextActive?.contentState).toEqual({
-      state: "working",
-      title: "New title",
-      dir: "lfg",
-      host: "mac",
-      since: 1_650,
+    expect(r.action?.event).toBe("update");
+    expect(r.nextActive?.contentState).toEqual({
+      working: 1,
+      needsInput: 0,
+      rows: [{ sid: "s1", title: "New title", state: "working", since: 1_650 }],
+      more: 0,
       updatedAt: 1_710,
     });
   });
 
-  test("ends an active session that transitions to finished with an eight-minute dismissal date", () => {
-    const active = new Map<string, LiveActivityActive>([
-      ["s1", {
-        sessionId: "s1",
-        startedAt: 1_700,
-        contentState: {
-          state: "working",
-          title: "Job",
-          dir: "lfg",
-          host: "mac",
-          since: 1_700,
-          updatedAt: 1_700,
-        },
-      }],
-    ]);
-    const r = reduceSessionLiveActivities({
-      observations: [{ session: { sessionId: "s1", title: "Job", cwd: "/tmp/lfg" }, observed: obs(false, false), previous: seed(true, false) }],
+  test("a state change restarts that session's timer", () => {
+    const active: LiveActivityActive = {
+      startedAt: 1_700,
+      since: { s1: { state: "working", at: 1_650 } },
+    };
+    const r = reduceFleetLiveActivity({
+      observations: [{ session: { sessionId: "s1", title: "Job" }, observed: obs(false, true) }],
       active,
-      now: 1_730,
-      hostName: "mac",
+      now: 1_710,
     });
-    expect(r.decisions[0].action?.event).toBe("end");
-    expect(r.decisions[0].nextActive).toBeNull();
-    expect(r.decisions[0].action?.push.body.aps["content-state"]).toEqual({
-      state: "finished",
-      title: "Job",
-      dir: "lfg",
-      host: "mac",
-      since: 1_730,
-      updatedAt: 1_730,
+    expect(r.nextActive?.contentState?.rows[0]).toEqual({
+      sid: "s1", title: "Job", state: "needsInput", since: 1_710,
     });
-    expect(r.decisions[0].action?.push.body.aps["dismissal-date"]).toBe(2_210);
   });
 
-  test("orders blocked first, then working, then finished, and caps at the ActivityKit maximum", () => {
-    expect(
-      orderSessionLiveActivityCandidates([
-        { sessionId: "w2", contentState: { state: "working", title: "Work 2", dir: "lfg", host: "mac", since: 20, updatedAt: 30 } },
-        { sessionId: "f1", contentState: { state: "finished", title: "Done", dir: "lfg", host: "mac", since: 1, updatedAt: 30 } },
-        { sessionId: "b2", contentState: { state: "blocked", title: "Block 2", dir: "lfg", host: "mac", since: 12, updatedAt: 30 } },
-        { sessionId: "b1", contentState: { state: "blocked", title: "Block 1", dir: "lfg", host: "mac", since: 10, updatedAt: 30 } },
-        { sessionId: "w1", contentState: { state: "working", title: "Work 1", dir: "lfg", host: "mac", since: 5, updatedAt: 30 } },
-      ]).map((c) => c.sessionId),
-    ).toEqual(["b1", "b2", "w1", "w2", "f1"]);
+  test("sends nothing when only updatedAt would change", () => {
+    const contentState = {
+      working: 1,
+      needsInput: 0,
+      rows: [{ sid: "s1", title: "Job", state: "working" as const, since: 1_650 }],
+      more: 0,
+      updatedAt: 1_700,
+    };
+    const r = reduceFleetLiveActivity({
+      observations: [{ session: { sessionId: "s1", title: "Job" }, observed: obs(true, false) }],
+      active: { startedAt: 1_700, contentState, since: { s1: { state: "working", at: 1_650 } } },
+      now: 9_999,
+    });
+    expect(r.action).toBeNull();
+    expect(r.nextActive).not.toBeNull();
+  });
 
-    // Six candidates against a ceiling of five: the lowest-priority one (the
-    // finished session) is the one that must be dropped.
-    expect(MAX_CONCURRENT_LIVE_ACTIVITIES).toBe(5);
-    const r = reduceSessionLiveActivities({
+  test("ends the activity when the last session goes idle", () => {
+    const active: LiveActivityActive = {
+      startedAt: 1_700,
+      contentState: {
+        working: 1,
+        needsInput: 0,
+        rows: [{ sid: "s1", title: "Job", state: "working", since: 1_700 }],
+        more: 0,
+        updatedAt: 1_700,
+      },
+      since: { s1: { state: "working", at: 1_700 } },
+    };
+    const r = reduceFleetLiveActivity({
+      observations: [{ session: { sessionId: "s1", title: "Job" }, observed: obs(false, false) }],
+      active,
+      now: 1_730,
+    });
+    expect(r.action?.event).toBe("end");
+    expect(r.nextActive).toBeNull();
+    expect(r.action?.push.body.aps["content-state"]).toMatchObject({
+      working: 0, needsInput: 0, rows: [], more: 0,
+    });
+  });
+
+  test("orders needs-input first, then oldest, and folds the rest into more", () => {
+    expect(
+      orderFleetRows([
+        { sid: "w2", title: "Work 2", state: "working", since: 20 },
+        { sid: "b2", title: "Block 2", state: "needsInput", since: 12 },
+        { sid: "b1", title: "Block 1", state: "needsInput", since: 10 },
+        { sid: "w1", title: "Work 1", state: "working", since: 5 },
+      ]).map((r) => r.sid),
+    ).toEqual(["b1", "b2", "w1", "w2"]);
+
+    expect(MAX_FLEET_ROWS).toBe(3);
+    const r = reduceFleetLiveActivity({
       observations: [
         { session: { sessionId: "w2", title: "Work 2" }, observed: obs(true, false) },
-        { session: { sessionId: "f1", title: "Done" }, observed: obs(false, false), previous: seed(true, false) },
         { session: { sessionId: "b2", title: "Block 2" }, observed: obs(false, true) },
         { session: { sessionId: "b1", title: "Block 1" }, observed: obs(false, true) },
         { session: { sessionId: "w1", title: "Work 1" }, observed: obs(true, false) },
         { session: { sessionId: "b3", title: "Block 3" }, observed: obs(false, true) },
       ],
-      active: new Map(),
+      active: null,
       now: 30,
-      hostName: "mac",
     });
-    expect(r.decisions.map((d) => d.sessionId)).toEqual(["b1", "b2", "b3", "w1", "w2"]);
-    expect(r.dropped).toEqual(["f1"]);
+    const content = r.action!.push.body.aps["content-state"]!;
+    // All five counted; only the three most urgent rendered.
+    expect(content.working).toBe(2);
+    expect(content.needsInput).toBe(3);
+    expect(content.rows.map((row) => row.sid)).toEqual(["b1", "b2", "b3"]);
+    expect(content.more).toBe(2);
   });
 });
 
@@ -396,7 +422,7 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
   test("Live Activity deps can start even when regular APNs devices are absent", async () => {
     const sent: { token: string; push: LiveActivityPush }[] = [];
     const prior = new Map<string, PriorState>();
-    const active = new Map<string, LiveActivityActive>();
+    const active: { current: LiveActivityActive | null } = { current: null };
     const deps: TickDeps = {
       sessions: async () => [{ sessionId: "s1", title: "Job", tmuxTarget: "t" }],
       observe: async () => obs(true, false),
@@ -418,27 +444,25 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
     await runPushTick(prior, deps);
     expect(sent.map((s) => s.token)).toEqual(["start"]);
     expect(sent[0].push.body.aps.event).toBe("start");
-    expect(active.has("s1")).toBe(true);
+    expect(active.current?.contentState?.rows.map((row) => row.sid)).toEqual(["s1"]);
   });
 
-  test("Live Activity updates are sent only to the matching session update token", async () => {
+  test("Live Activity updates go to every registered update token", async () => {
     const sent: { token: string; push: LiveActivityPush }[] = [];
-    const lookedUp: string[] = [];
     const prior = new Map<string, PriorState>();
-    const active = new Map<string, LiveActivityActive>([
-      ["s1", {
-        sessionId: "s1",
+    const active: { current: LiveActivityActive | null } = {
+      current: {
         startedAt: 1_700,
         contentState: {
-          state: "working",
-          title: "Old",
-          dir: "",
-          host: "mac",
-          since: 1_700,
+          working: 1,
+          needsInput: 0,
+          rows: [{ sid: "s1", title: "Old", state: "working", since: 1_700 }],
+          more: 0,
           updatedAt: 1_700,
         },
-      }],
-    ]);
+        since: { s1: { state: "working", at: 1_700 } },
+      },
+    };
     const deps: TickDeps = {
       sessions: async () => [{ sessionId: "s1", title: "New", tmuxTarget: "t" }],
       observe: async () => obs(true, false),
@@ -449,10 +473,10 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
       liveActivities: {
         active,
         pushToStartTokens: async () => [],
-        activityUpdateTokens: async (sessionId) => {
-          lookedUp.push(sessionId);
-          return [{ token: "u1", env: "sandbox" }];
-        },
+        activityUpdateTokens: async () => [
+          { token: "u1", env: "sandbox" },
+          { token: "u2", env: "production" },
+        ],
         send: async (d, push) => {
           sent.push({ token: d.token, push });
           return { ok: true, status: 200 };
@@ -461,15 +485,14 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
       now: () => 1_710_000,
     };
     await runPushTick(prior, deps);
-    expect(lookedUp).toEqual(["s1"]);
-    expect(sent.map((s) => s.token)).toEqual(["u1"]);
+    expect(sent.map((s) => s.token)).toEqual(["u1", "u2"]);
     expect(sent[0].push.body.aps.event).toBe("update");
   });
 
-  test("Live Activity cap logs dropped sessions", async () => {
-    const logs: string[] = [];
+  test("many active sessions still produce exactly one activity", async () => {
+    const sent: LiveActivityPush[] = [];
     const prior = new Map<string, PriorState>();
-    const active = new Map<string, LiveActivityActive>();
+    const active: { current: LiveActivityActive | null } = { current: null };
     const deps: TickDeps = {
       sessions: async () => [
         { sessionId: "s1", title: "One", tmuxTarget: "t" },
@@ -488,12 +511,21 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
         active,
         pushToStartTokens: async () => [{ token: "start", env: "sandbox" }],
         activityUpdateTokens: async () => [],
-        send: async () => ({ ok: true, status: 200 }),
+        send: async (_d, push) => {
+          sent.push(push);
+          return { ok: true, status: 200 };
+        },
       },
       now: () => 1_700_000,
-      log: (line) => logs.push(line),
     };
     await runPushTick(prior, deps);
-    expect(logs).toContain("[liveactivity] cap dropped s6");
+    // The retired per-session design capped at 5 and logged the rest as
+    // dropped. One aggregate activity counts all six and renders three.
+    expect(sent.length).toBe(1);
+    const content = sent[0].body.aps["content-state"]!;
+    expect(content.working).toBe(6);
+    expect(content.rows.length).toBe(3);
+    expect(content.more).toBe(3);
   });
+
 });

@@ -30,11 +30,15 @@ describe("fleet activity active-state persistence", () => {
         working: 1,
         needsInput: 1,
         rows: [
-          { sid: "s1", title: "Approve", host: "Studio", state: "blocked", since: 1_690 },
-          { sid: "s2", title: "Build", host: "Air", state: "working", since: 1_695 },
+          { sid: "s1", title: "Approve", state: "needsInput", since: 1_690 },
+          { sid: "s2", title: "Build", state: "working", since: 1_695 },
         ],
-        hosts: [{ name: "Studio", online: true }],
+        more: 0,
         updatedAt: 1_700,
+      },
+      since: {
+        s1: { state: "needsInput", at: 1_690 },
+        s2: { state: "working", at: 1_695 },
       },
     };
 

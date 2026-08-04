@@ -17,19 +17,19 @@ const cfg: ApnsConfig = { key: pem, keyId: "ABC123", teamId: "TEAM456", topic: "
 afterEach(() => _resetApnsJwtCache());
 
 describe("Live Activity payload builders", () => {
+  const contentState = {
+    working: 2,
+    needsInput: 1,
+    rows: [
+      { sid: "s2", title: "Approve deploy", state: "needsInput" as const, since: 1_690 },
+      { sid: "s1", title: "Build", state: "working" as const, since: 1_600 },
+    ],
+    more: 1,
+    updatedAt: 1_701,
+  };
+
   test("buildStart produces the pinned liveactivity header/body shape", () => {
-    const contentState = {
-      state: "blocked" as const,
-      title: "Approve",
-      dir: "lfg",
-      host: "mac",
-      since: 1_690,
-      updatedAt: 1_701,
-    };
-    const push = buildStart(
-      { contentState, sessionId: "s2" },
-      LIVE_ACTIVITY_ATTRIBUTES_TYPE,
-    );
+    const push = buildStart({ contentState }, LIVE_ACTIVITY_ATTRIBUTES_TYPE);
     expect(push).toEqual({
       headers: {
         "apns-push-type": "liveactivity",
@@ -41,47 +41,32 @@ describe("Live Activity payload builders", () => {
           timestamp: 1_701,
           event: "start",
           "content-state": contentState,
-          "attributes-type": "LFGSessionAttributes",
-          attributes: { sessionId: "s2" },
-          alert: { title: "lfg", body: "LFG session is active." },
+          "attributes-type": "LFGFleetAttributes",
+          attributes: { fleetId: "fleet" },
+          alert: { title: "lfg", body: "LFG sessions are active." },
         },
       },
     });
   });
 
-  test("content-state omits undefined optional fields", () => {
+  test("content-state is normalised to exactly the wire shape", () => {
     const push = buildUpdate({
-      state: "working",
-      title: "Build",
-      dir: "lfg",
-      host: "mac",
-      since: 1_700,
-      updatedAt: 1_701,
-      subtitle: undefined,
-      added: undefined,
-      removed: undefined,
-      files: undefined,
-    });
+      ...contentState,
+      rows: [{ sid: "s1", title: "Build", state: "working", since: 1_600, host: "mac" } as never],
+      // A stray field from an older caller must not reach the wire.
+      hosts: [{ name: "mac", online: true }],
+    } as never);
 
     expect(push.body.aps["content-state"]).toEqual({
-      state: "working",
-      title: "Build",
-      dir: "lfg",
-      host: "mac",
-      since: 1_700,
+      working: 2,
+      needsInput: 1,
+      rows: [{ sid: "s1", title: "Build", state: "working", since: 1_600 }],
+      more: 1,
       updatedAt: 1_701,
     });
   });
 
   test("buildUpdate produces the pinned update shape", () => {
-    const contentState = {
-      state: "blocked" as const,
-      title: "Build",
-      dir: "inbox",
-      host: "mac",
-      since: 1_700,
-      updatedAt: 1_701,
-    };
     expect(buildUpdate(contentState)).toEqual({
       headers: {
         "apns-push-type": "liveactivity",
@@ -99,15 +84,8 @@ describe("Live Activity payload builders", () => {
   });
 
   test("buildEnd produces the pinned end shape with optional dismissal date", () => {
-    const contentState = {
-      state: "finished" as const,
-      title: "Build",
-      dir: "lfg",
-      host: "mac",
-      since: 1_700,
-      updatedAt: 1_702,
-    };
-    expect(buildEnd(contentState, 1_800)).toEqual({
+    const ended = { ...contentState, working: 0, needsInput: 0, rows: [], more: 0, updatedAt: 1_702 };
+    expect(buildEnd(ended, 1_800)).toEqual({
       headers: {
         "apns-push-type": "liveactivity",
         "apns-topic": `${DEFAULT_APNS_TOPIC}.push-type.liveactivity`,
@@ -117,7 +95,7 @@ describe("Live Activity payload builders", () => {
         aps: {
           timestamp: 1_702,
           event: "end",
-          "content-state": contentState,
+          "content-state": ended,
           "dismissal-date": 1_800,
         },
       },
@@ -133,11 +111,10 @@ describe("sendLiveActivity", () => {
       return { ok: true, status: 200 };
     };
     const push = buildUpdate({
-      state: "working",
-      title: "Build",
-      dir: "lfg",
-      host: "mac",
-      since: 1_700,
+      working: 1,
+      needsInput: 0,
+      rows: [{ sid: "s1", title: "Build", state: "working", since: 1_700 }],
+      more: 0,
       updatedAt: 1_700,
     });
     await sendLiveActivity({ token: "tok", env: "sandbox" }, push, cfg, transport);

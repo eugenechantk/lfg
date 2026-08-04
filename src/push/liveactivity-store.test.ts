@@ -63,8 +63,9 @@ describe("Live Activity token store", () => {
     });
 
     expect((await s.listPushToStartTokens()).map((t) => t.token)).toEqual(["start"]);
-    expect((await s.listActivityUpdateTokens("s1")).map((t) => t.token)).toEqual(["u1"]);
-    expect((await s.listActivityUpdateTokens("s2")).map((t) => t.token)).toEqual(["u2"]);
+    // Update tokens are device-level now — there is one fleet activity per
+    // device, so every registered update token is a target.
+    expect((await s.listActivityUpdateTokens()).map((t) => t.token)).toEqual(["u1", "u2"]);
   });
 
   test("lookup and remove operate by token", async () => {

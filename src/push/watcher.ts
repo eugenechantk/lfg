@@ -35,11 +35,12 @@ import {
   buildStart,
   buildUpdate,
   sendLiveActivity,
-  type LiveActivitySessionState,
+  type LiveActivityContentState,
+  type LiveActivityRow,
   type LiveActivityPush,
 } from "./liveactivity.ts";
 import { unregisterDevice } from "./store.ts";
-import { loadSessionLiveActivitiesActive, saveSessionLiveActivitiesActive } from "./session-active-store.ts";
+import { loadFleetActivityActive, saveFleetActivityActive } from "./fleet-active-store.ts";
 import { basename } from "node:path";
 
 // One observation of a session at a single tick.
@@ -129,10 +130,13 @@ export type PayloadSessionInput = {
   lastActivityAt?: number | null;
 };
 
+/// State of the one fleet Live Activity between ticks. `since` is tracked for
+/// every active session, not just the rendered rows, so a session that scrolls
+/// out of the visible rows and back keeps its elapsed time.
 export type LiveActivityActive = {
-  sessionId: string;
   startedAt: number;
-  contentState?: LiveActivitySessionState;
+  contentState?: LiveActivityContentState;
+  since?: Record<string, { state: LiveActivityRow["state"]; at: number }>;
 };
 
 export type LiveActivityAction = {
@@ -141,158 +145,130 @@ export type LiveActivityAction = {
 };
 
 export type LiveActivityDecision = {
-  sessionId: string;
   action: LiveActivityAction | null;
   nextActive: LiveActivityActive | null;
 };
 
-export type LiveActivityReduction = {
-  decisions: LiveActivityDecision[];
-  dropped: string[];
-};
-
-function liveActivityState(
-  next: SessionState,
-  previous?: PriorState,
-): LiveActivitySessionState["state"] | null {
+/// Mirrors the client's `FleetActivitySnapshot`: a pending prompt outranks busy,
+/// and everything else is idle and therefore absent from the card.
+function fleetRowState(next: SessionState): LiveActivityRow["state"] | null {
+  if (next.promptPresent) return "needsInput";
   if (next.busy) return "working";
-  if (next.promptPresent) return "blocked";
-  if (previous?.busy) return "finished";
   return null;
 }
 
-function sameSessionContentState(a: LiveActivitySessionState | undefined, b: LiveActivitySessionState): boolean {
-  return !!a &&
-    a.state === b.state &&
-    a.title === b.title &&
-    a.dir === b.dir &&
-    a.host === b.host &&
-    a.since === b.since &&
-    a.subtitle === b.subtitle &&
-    a.added === b.added &&
-    a.removed === b.removed &&
-    a.files === b.files;
+function sameFleetContentState(
+  a: LiveActivityContentState | undefined,
+  b: LiveActivityContentState,
+): boolean {
+  if (!a) return false;
+  if (a.working !== b.working || a.needsInput !== b.needsInput || a.more !== b.more) return false;
+  if (a.rows.length !== b.rows.length) return false;
+  // `updatedAt` deliberately excluded — it changes every tick and would make
+  // every tick a push.
+  return a.rows.every((row, i) =>
+    row.sid === b.rows[i]!.sid &&
+    row.title === b.rows[i]!.title &&
+    row.state === b.rows[i]!.state &&
+    row.since === b.rows[i]!.since
+  );
 }
 
-function sessionDirectory(cwd?: string | null): string {
-  const trimmed = (cwd ?? "").trim();
-  return trimmed ? basename(trimmed) : "";
-}
-
-type SessionLiveActivityCandidate = {
-  sessionId: string;
-  contentState: LiveActivitySessionState;
-};
-
-export function orderSessionLiveActivityCandidates(
-  candidates: SessionLiveActivityCandidate[],
-): SessionLiveActivityCandidate[] {
-  const rank = (state: LiveActivitySessionState["state"]) =>
-    state === "blocked" ? 0 : state === "working" ? 1 : 2;
-  return [...candidates].sort(
-    (a, b) =>
-      rank(a.contentState.state) - rank(b.contentState.state) ||
-      a.contentState.since - b.contentState.since ||
-      a.sessionId.localeCompare(b.sessionId),
+/// Needs-input first so the actionable sessions survive truncation, then
+/// oldest-first within a state.
+export function orderFleetRows(rows: LiveActivityRow[]): LiveActivityRow[] {
+  const rank = (state: LiveActivityRow["state"]) => (state === "needsInput" ? 0 : 1);
+  return [...rows].sort(
+    (a, b) => rank(a.state) - rank(b.state) || a.since - b.since || a.sid.localeCompare(b.sid),
   );
 }
 
 /**
- * ActivityKit's hard per-app ceiling. Measured, not guessed: seeding activities
- * one at a time on an iPhone 17 Pro simulator, requests 1–5 succeed and the 6th
- * throws `targetMaximumExceeded`. Going over doesn't degrade gracefully — the
- * extra requests simply fail — so the reducer truncates here and logs what it
- * dropped. Sessions are ordered blocked → working → finished first, so the five
- * that survive are always the most urgent.
+ * How many rows the lock-screen card renders before folding the rest into
+ * "N More". Must match `FleetActivitySnapshot.maxRows` on the client — the lock
+ * screen is a fixed ~160pt frame that center-clips overheight content, silently
+ * dropping the header.
  */
-export const MAX_CONCURRENT_LIVE_ACTIVITIES = 5;
+export const MAX_FLEET_ROWS = 3;
 
-export function reduceSessionLiveActivities(args: {
-  observations: Array<{ session: PayloadSessionInput; observed: SessionState; previous?: PriorState }>;
-  active: Map<string, LiveActivityActive>;
+/**
+ * Reduce this tick's observations into at most one Live Activity action.
+ *
+ * Note there is no per-app ceiling to respect any more: the retired per-session
+ * design had to truncate at ActivityKit's hard limit of 5 concurrent activities
+ * and log the sessions it dropped. One aggregate activity can never hit it.
+ */
+export function reduceFleetLiveActivity(args: {
+  observations: Array<{ session: PayloadSessionInput; observed: SessionState }>;
+  active: LiveActivityActive | null;
   now: number;
-  hostName: string;
-}): LiveActivityReduction {
-  const hostName = clip(args.hostName || "lfg", 28);
-  const candidates = orderSessionLiveActivityCandidates(
-    args.observations.flatMap(({ session, observed, previous }) => {
-      const sessionId = session.sessionId ?? "";
-      if (!sessionId) return [];
-      const state = liveActivityState(observed, previous);
-      if (!state) return [];
-      const prior = args.active.get(sessionId)?.contentState;
-      return [{
-        sessionId,
-        contentState: {
-          state,
-          title: clip(session.title || session.tmuxName || sessionId.slice(0, 8) || "Session", 80),
-          dir: sessionDirectory(session.cwd),
-          host: hostName,
-          since: prior?.state === state ? prior.since : args.now,
-          updatedAt: args.now,
-        },
-      }];
-    }),
-  );
+}): LiveActivityDecision {
+  const priorSince = args.active?.since ?? {};
+  const since: Record<string, { state: LiveActivityRow["state"]; at: number }> = {};
 
-  const selected = candidates.slice(0, MAX_CONCURRENT_LIVE_ACTIVITIES);
-  const dropped = candidates.slice(MAX_CONCURRENT_LIVE_ACTIVITIES).map((c) => c.sessionId);
-  const selectedIds = new Set(selected.map((c) => c.sessionId));
-  const decisions: LiveActivityDecision[] = [];
+  let working = 0;
+  let needsInput = 0;
+  const rows: LiveActivityRow[] = [];
 
-  for (const candidate of selected) {
-    const active = args.active.get(candidate.sessionId);
-    if (!active) {
-      decisions.push({
-        sessionId: candidate.sessionId,
-        action: {
-          event: "start",
-          push: buildStart({ contentState: candidate.contentState, sessionId: candidate.sessionId }),
-        },
-        nextActive: {
-          sessionId: candidate.sessionId,
-          startedAt: args.now,
-          contentState: candidate.contentState,
-        },
-      });
-      continue;
-    }
+  for (const { session, observed } of args.observations) {
+    const sid = session.sessionId ?? "";
+    if (!sid) continue;
+    const state = fleetRowState(observed);
+    if (!state) continue;
 
-    if (candidate.contentState.state === "finished") {
-      decisions.push({
-        sessionId: candidate.sessionId,
-        action: {
-          event: "end",
-          push: buildEnd(candidate.contentState, args.now + 480),
-        },
-        nextActive: null,
-      });
-      continue;
-    }
+    if (state === "needsInput") needsInput++;
+    else working++;
 
-    const nextActive: LiveActivityActive = { ...active, contentState: candidate.contentState };
-    decisions.push({
-      sessionId: candidate.sessionId,
-      action: sameSessionContentState(active.contentState, candidate.contentState)
-        ? null
-        : { event: "update", push: buildUpdate(candidate.contentState) },
-      nextActive,
+    // A session changing state restarts its timer rather than inheriting the
+    // elapsed time of its previous one.
+    const prior = priorSince[sid];
+    const at = prior && prior.state === state ? prior.at : args.now;
+    since[sid] = { state, at };
+
+    rows.push({
+      sid,
+      title: clip(session.title || session.tmuxName || sid.slice(0, 8) || "Session", 80),
+      state,
+      since: at,
     });
   }
 
-  for (const [sessionId, active] of args.active) {
-    if (selectedIds.has(sessionId)) continue;
-    decisions.push({
-      sessionId,
-      action: {
-        event: "end",
-        push: buildEnd(active.contentState, args.now),
-      },
+  const ordered = orderFleetRows(rows);
+  const contentState: LiveActivityContentState = {
+    working,
+    needsInput,
+    rows: ordered.slice(0, MAX_FLEET_ROWS),
+    more: Math.max(0, ordered.length - MAX_FLEET_ROWS),
+    updatedAt: args.now,
+  };
+
+  const total = working + needsInput;
+
+  if (!args.active) {
+    if (total === 0) return { action: null, nextActive: null };
+    return {
+      action: { event: "start", push: buildStart({ contentState }) },
+      nextActive: { startedAt: args.now, contentState, since },
+    };
+  }
+
+  if (total === 0) {
+    return {
+      action: { event: "end", push: buildEnd(contentState, args.now) },
       nextActive: null,
-    });
+    };
   }
 
-  return { decisions, dropped };
+  if (sameFleetContentState(args.active.contentState, contentState)) {
+    // Nothing renderable changed — keep the refreshed `since` map but send
+    // nothing.
+    return { action: null, nextActive: { ...args.active, since } };
+  }
+
+  return {
+    action: { event: "update", push: buildUpdate(contentState) },
+    nextActive: { ...args.active, contentState, since },
+  };
 }
 
 // Compact session snapshot embedded in the push so the client can render the
@@ -382,16 +358,18 @@ export type TickDeps = {
   hostId?: () => string;
   hostName?: () => string;
   liveActivities?: {
-    active: Map<string, LiveActivityActive>;
+    /// The one fleet activity, or null when none is live. A box (not a bare
+    /// value) so the tick can swap it and the caller observes the change.
+    active: { current: LiveActivityActive | null };
     pushToStartTokens: () => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
-    activityUpdateTokens: (sessionId: string) => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
+    activityUpdateTokens: () => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
     send: (
       device: { token: string; env: "sandbox" | "production" },
       push: LiveActivityPush,
       cfg: ApnsConfig,
     ) => Promise<{ ok: boolean; status: number; reason?: string }>;
     onDeadToken?: (token: string) => Promise<void> | void;
-    persistActive?: (active: Map<string, LiveActivityActive>) => Promise<void> | void;
+    persistActive?: (active: LiveActivityActive | null) => Promise<void> | void;
   };
   now?: () => number;
   log?: (line: string) => void;
@@ -440,31 +418,22 @@ async function applyLiveActivityDecision(
   log?: (line: string) => void,
 ): Promise<void> {
   if (!decision.action) {
-    if (decision.nextActive) deps.active.set(decision.sessionId, decision.nextActive);
-    else deps.active.delete(decision.sessionId);
+    // No push, but the reducer may still have refreshed bookkeeping (the
+    // `since` map). Keep it in memory; it is not worth a disk write.
+    deps.active.current = decision.nextActive;
     return;
   }
 
-  if (decision.action.event === "start") {
-    const sent = await sendLiveActivityToTokens(startTokens, decision.action.push, deps, cfg, log);
-    if (sent > 0 && decision.nextActive) {
-      deps.active.set(decision.sessionId, decision.nextActive);
-      await deps.persistActive?.(deps.active);
-    }
-    return;
-  }
+  const tokens = decision.action.event === "start"
+    ? startTokens
+    : await deps.activityUpdateTokens();
+  if (!tokens.length) return;
 
-  const updateTokens = await deps.activityUpdateTokens(decision.sessionId);
-  if (!updateTokens.length) return;
-  const sent = await sendLiveActivityToTokens(updateTokens, decision.action.push, deps, cfg, log);
+  const sent = await sendLiveActivityToTokens(tokens, decision.action.push, deps, cfg, log);
   if (sent <= 0) return;
-  if (decision.nextActive) {
-    deps.active.set(decision.sessionId, decision.nextActive);
-    await deps.persistActive?.(deps.active);
-  } else {
-    deps.active.delete(decision.sessionId);
-    await deps.persistActive?.(deps.active);
-  }
+
+  deps.active.current = decision.nextActive;
+  await deps.persistActive?.(decision.nextActive);
 }
 
 /**
@@ -528,24 +497,18 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
   // Drop memory for sessions that no longer exist.
   for (const k of [...prior.keys()]) if (!seen.has(k)) prior.delete(k);
   if (liveActivities) {
-    const reduction = reduceSessionLiveActivities({
+    const decision = reduceFleetLiveActivity({
       observations: liveActivityObservations,
-      active: liveActivities.active,
+      active: liveActivities.active.current,
       now: Math.floor(now() / 1000),
-      hostName: deps.hostName?.() ?? "lfg",
     });
-    if (reduction.dropped.length) {
-      deps.log?.(`[liveactivity] cap dropped ${reduction.dropped.join(", ")}`);
-    }
-    for (const decision of reduction.decisions) {
-      await applyLiveActivityDecision(
-        decision,
-        liveActivities,
-        deps.cfg,
-        liveStartTokens,
-        deps.log,
-      );
-    }
+    await applyLiveActivityDecision(
+      decision,
+      liveActivities,
+      deps.cfg,
+      liveStartTokens,
+      deps.log,
+    );
   }
 }
 
@@ -569,15 +532,15 @@ export function startPushWatcher(
   const cfg = apnsConfigFromEnv();
   if (!cfg) return; // push not configured → feature is off
   const prior = new Map<string, PriorState>();
-  const active = new Map<string, LiveActivityActive>();
-  let sessionActivitiesLoaded = false;
-  const sessionActivitiesLoad = loadSessionLiveActivitiesActive()
+  const active: { current: LiveActivityActive | null } = { current: null };
+  let fleetActiveLoaded = false;
+  const fleetActiveLoad = loadFleetActivityActive()
     .then((loaded) => {
-      for (const [sessionId, record] of loaded) active.set(sessionId, record);
-      sessionActivitiesLoaded = true;
+      active.current = loaded;
+      fleetActiveLoaded = true;
     })
     .catch(() => {
-      sessionActivitiesLoaded = true;
+      fleetActiveLoaded = true;
     });
   const deps: TickDeps = {
     sessions: listSessions,
@@ -598,7 +561,7 @@ export function startPushWatcher(
       activityUpdateTokens: listActivityUpdateTokens,
       send: sendLiveActivity,
       onDeadToken: removeLiveActivityToken,
-      persistActive: saveSessionLiveActivitiesActive,
+      persistActive: saveFleetActivityActive,
     };
   }
   let running = false;
@@ -606,7 +569,7 @@ export function startPushWatcher(
     if (running) return; // skip if the previous tick is still going (slow panes)
     running = true;
     try {
-      if (deps.liveActivities && !sessionActivitiesLoaded) await sessionActivitiesLoad;
+      if (deps.liveActivities && !fleetActiveLoaded) await fleetActiveLoad;
       await runPushTick(prior, deps);
     } catch (e) {
       log(`[push] tick error: ${(e as Error).message}`);

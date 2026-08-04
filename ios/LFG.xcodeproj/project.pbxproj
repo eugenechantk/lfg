@@ -9,11 +9,9 @@
 /* Begin PBXBuildFile section */
 		042B67FEFC81B19353989F4A /* NewSessionAtoms.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4FDFAEC4C595AA92D818A8C /* NewSessionAtoms.swift */; };
 		0B5E6EC8D0198C245E872599 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 847BA9F87A178565C0EEC901 /* SettingsView.swift */; };
-		0D46DEDB3AF8664A7E8DEF2E /* LFGSessionAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB446B012E8694721414FE8 /* LFGSessionAttributes.swift */; };
 		16B0F6A79CE890FBF2B0E5E2 /* LFGFleetAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */; };
 		17E5CC9417E33D6CADF1F707 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25CBF3AE8C40F2EE10BB4BD0 /* Theme.swift */; };
 		50F6EF746AAEB80DB6229E05 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 073FCBCA797989A55F83BAE4 /* MessageComposer.swift */; };
-		524B5CC79B3BBA73827C7B05 /* LFGSessionActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5674F88F214C41CB36C903F6 /* LFGSessionActivityWidget.swift */; };
 		53041C690C2CB5A6B7ADFAD5 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 76672CAA13A7F7B59D2B0A72 /* SwiftUI.framework */; };
 		55469BC6D5744CDBA92DC030 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20B34D8A3106C01BA13F2DC2 /* SessionStore.swift */; };
 		5942295A0F639DE68C4FF451 /* BackgroundSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D1BD4A3061EFB2858AB2A4B /* BackgroundSender.swift */; };
@@ -26,23 +24,24 @@
 		7254BB93C3886BB66A1304A2 /* LFGCore in Frameworks */ = {isa = PBXBuildFile; productRef = 672BDBCB9E1F5950E1DB7012 /* LFGCore */; };
 		82025CF8CCB55348A7EFF3D9 /* NewSessionTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FE8624A330AAE0215211005 /* NewSessionTheme.swift */; };
 		85C03A175F9DF48F0DAF9D6E /* RichContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C22EA76E51E2B0A745EE8847 /* RichContent.swift */; };
-		8821C63FDF8794E982827658 /* SessionActivityViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8479E5DC07DAF4ADA27C90 /* SessionActivityViews.swift */; };
 		8950528E1385EF07CB2814AD /* LFGApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909139FA5D9B976298B7AA3F /* LFGApp.swift */; };
 		8A8BAA0AADCD3A860CCA5B39 /* HostLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */; };
 		8D3E23D31117026A9BF00460 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 649DB6E8EC8E3C5852C813C8 /* LaunchScreen.storyboard */; };
 		A541589C33833A613D05AD8B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6461434AE6C2B0858AC679ED /* RootView.swift */; };
+		A716F8EE7E18B6F5630135D0 /* LFGFleetActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 491B12C3F1E687BB82CC93AE /* LFGFleetActivityWidget.swift */; };
 		A9769E2F571F58BFBE480AB0 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAECB64072CE4F5286C7591E /* LiveActivityManager.swift */; };
 		A9CABFDC3E306F17D2F69E33 /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */; };
 		B7E724FEC05D4CD4CE0E1F9A /* NewSessionSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB9F7C4ADF1BED07B550BD99 /* NewSessionSheets.swift */; };
-		BBA9DA9482B7D2A76656E8BB /* LFGSessionAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB446B012E8694721414FE8 /* LFGSessionAttributes.swift */; };
 		BD04341584A4B9AA76A55AC4 /* UnreadBadges.swift in Sources */ = {isa = PBXBuildFile; fileRef = B256A006CA36864233180E24 /* UnreadBadges.swift */; };
 		BF6314DDC10C441712E87E2E /* FleetActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 565F8BC62A1D403CDD690340 /* FleetActivityController.swift */; };
 		C189723845E8FF48DC379B21 /* NewSessionPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 527BBB8AABCE2FF8891A9B59 /* NewSessionPresentation.swift */; };
 		C1B5BCFA6FA382188AFC753C /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */; };
 		D2F9456B4314172C7546226F /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */; };
 		D34242B9518E03AED793C989 /* SessionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2641AAFED0A103CF2409D79C /* SessionListView.swift */; };
+		D8A5A082EB39555E1426606E /* FleetActivityViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80338C36975F1F607F2D9487 /* FleetActivityViews.swift */; };
 		D9DD48F43B87E8793C27102F /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 512247CB20DB703CAE731727 /* SessionDetailView.swift */; };
 		EF7A801ECD3C787CEC6ECA82 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 36D7D08CD0B7C101A085BC11 /* Assets.xcassets */; };
+		F2BF12A27D8AF0AA5A35222B /* RetiredSessionActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDCC421082566E268167E6E7 /* RetiredSessionActivity.swift */; };
 		F550F9A23975E3A96952B92F /* LFGWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F903FB2EEB4D545099929559 /* PushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34FFA2FCDA2FF018358CB220 /* PushManager.swift */; };
 		FDC78A1C6A82751D9F56E521 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4C23B1D7493D21B0344531F /* Components.swift */; };
@@ -79,21 +78,20 @@
 		25CBF3AE8C40F2EE10BB4BD0 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		2641AAFED0A103CF2409D79C /* SessionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionListView.swift; sourceTree = "<group>"; };
 		27C81E2B22DECF886C37B1A7 /* NewSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionView.swift; sourceTree = "<group>"; };
-		2BB446B012E8694721414FE8 /* LFGSessionAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGSessionAttributes.swift; sourceTree = "<group>"; };
 		34FFA2FCDA2FF018358CB220 /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
 		36D7D08CD0B7C101A085BC11 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGFleetAttributes.swift; sourceTree = "<group>"; };
+		491B12C3F1E687BB82CC93AE /* LFGFleetActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGFleetActivityWidget.swift; sourceTree = "<group>"; };
 		512247CB20DB703CAE731727 /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
 		527BBB8AABCE2FF8891A9B59 /* NewSessionPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionPresentation.swift; sourceTree = "<group>"; };
 		565F8BC62A1D403CDD690340 /* FleetActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FleetActivityController.swift; sourceTree = "<group>"; };
-		5674F88F214C41CB36C903F6 /* LFGSessionActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGSessionActivityWidget.swift; sourceTree = "<group>"; };
 		5C0AF429850CD7F98D54334E /* LFG.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LFG.entitlements; sourceTree = "<group>"; };
-		5E8479E5DC07DAF4ADA27C90 /* SessionActivityViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionActivityViews.swift; sourceTree = "<group>"; };
 		6461434AE6C2B0858AC679ED /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		649DB6E8EC8E3C5852C813C8 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		6FE8624A330AAE0215211005 /* NewSessionTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionTheme.swift; sourceTree = "<group>"; };
 		716A5CB7BF742B16562A7EF8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		76672CAA13A7F7B59D2B0A72 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		80338C36975F1F607F2D9487 /* FleetActivityViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FleetActivityViews.swift; sourceTree = "<group>"; };
 		847BA9F87A178565C0EEC901 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		909139FA5D9B976298B7AA3F /* LFGApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGApp.swift; sourceTree = "<group>"; };
 		90C243BC659878B4353ED8C8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -102,6 +100,7 @@
 		B256A006CA36864233180E24 /* UnreadBadges.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnreadBadges.swift; sourceTree = "<group>"; };
 		C22EA76E51E2B0A745EE8847 /* RichContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichContent.swift; sourceTree = "<group>"; };
 		CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
+		CDCC421082566E268167E6E7 /* RetiredSessionActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetiredSessionActivity.swift; sourceTree = "<group>"; };
 		D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = SharedAssets.xcassets; sourceTree = "<group>"; };
 		D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LFGWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E4FDFAEC4C595AA92D818A8C /* NewSessionAtoms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionAtoms.swift; sourceTree = "<group>"; };
@@ -175,6 +174,7 @@
 				073FCBCA797989A55F83BAE4 /* MessageComposer.swift */,
 				27C81E2B22DECF886C37B1A7 /* NewSessionView.swift */,
 				34FFA2FCDA2FF018358CB220 /* PushManager.swift */,
+				CDCC421082566E268167E6E7 /* RetiredSessionActivity.swift */,
 				C22EA76E51E2B0A745EE8847 /* RichContent.swift */,
 				6461434AE6C2B0858AC679ED /* RootView.swift */,
 				512247CB20DB703CAE731727 /* SessionDetailView.swift */,
@@ -200,7 +200,6 @@
 			isa = PBXGroup;
 			children = (
 				45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */,
-				2BB446B012E8694721414FE8 /* LFGSessionAttributes.swift */,
 				D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */,
 			);
 			path = Shared;
@@ -230,9 +229,9 @@
 		FA8FE8245D3AF81F2B302E13 /* LFGWidgets */ = {
 			isa = PBXGroup;
 			children = (
+				80338C36975F1F607F2D9487 /* FleetActivityViews.swift */,
 				90C243BC659878B4353ED8C8 /* Info.plist */,
-				5674F88F214C41CB36C903F6 /* LFGSessionActivityWidget.swift */,
-				5E8479E5DC07DAF4ADA27C90 /* SessionActivityViews.swift */,
+				491B12C3F1E687BB82CC93AE /* LFGFleetActivityWidget.swift */,
 			);
 			path = LFGWidgets;
 			sourceTree = "<group>";
@@ -253,6 +252,8 @@
 			dependencies = (
 			);
 			name = LFGWidgets;
+			packageProductDependencies = (
+			);
 			productName = LFGWidgets;
 			productReference = D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -355,7 +356,6 @@
 				8A8BAA0AADCD3A860CCA5B39 /* HostLink.swift in Sources */,
 				8950528E1385EF07CB2814AD /* LFGApp.swift in Sources */,
 				16B0F6A79CE890FBF2B0E5E2 /* LFGFleetAttributes.swift in Sources */,
-				BBA9DA9482B7D2A76656E8BB /* LFGSessionAttributes.swift in Sources */,
 				A9769E2F571F58BFBE480AB0 /* LiveActivityManager.swift in Sources */,
 				50F6EF746AAEB80DB6229E05 /* MessageComposer.swift in Sources */,
 				042B67FEFC81B19353989F4A /* NewSessionAtoms.swift in Sources */,
@@ -365,6 +365,7 @@
 				82025CF8CCB55348A7EFF3D9 /* NewSessionTheme.swift in Sources */,
 				680725D02451A3EEFF5A9F28 /* NewSessionView.swift in Sources */,
 				F903FB2EEB4D545099929559 /* PushManager.swift in Sources */,
+				F2BF12A27D8AF0AA5A35222B /* RetiredSessionActivity.swift in Sources */,
 				85C03A175F9DF48F0DAF9D6E /* RichContent.swift in Sources */,
 				A541589C33833A613D05AD8B /* RootView.swift in Sources */,
 				D9DD48F43B87E8793C27102F /* SessionDetailView.swift in Sources */,
@@ -380,10 +381,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D8A5A082EB39555E1426606E /* FleetActivityViews.swift in Sources */,
+				A716F8EE7E18B6F5630135D0 /* LFGFleetActivityWidget.swift in Sources */,
 				6D57951618DB68F747829455 /* LFGFleetAttributes.swift in Sources */,
-				524B5CC79B3BBA73827C7B05 /* LFGSessionActivityWidget.swift in Sources */,
-				0D46DEDB3AF8664A7E8DEF2E /* LFGSessionAttributes.swift in Sources */,
-				8821C63FDF8794E982827658 /* SessionActivityViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -467,8 +467,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFGWidgets/Info.plist;
@@ -480,7 +479,6 @@
 				);
 				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -493,8 +491,8 @@
 				APS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
@@ -505,7 +503,6 @@
 				);
 				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -518,8 +515,8 @@
 				APS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
@@ -530,7 +527,6 @@
 				);
 				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -541,8 +537,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFGWidgets/Info.plist;
@@ -554,7 +549,6 @@
 				);
 				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";

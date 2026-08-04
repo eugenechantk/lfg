@@ -1,3 +1,6 @@
+// Persists the one fleet Live Activity's state across server restarts, so a
+// restart doesn't push a duplicate `start` for an activity the device already
+// has (and doesn't lose every row's elapsed-time baseline).
 import { dirname, join } from "node:path";
 import { mkdir, unlink } from "node:fs/promises";
 import { PATHS } from "../config.ts";
