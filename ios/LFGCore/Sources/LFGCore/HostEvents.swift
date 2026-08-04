@@ -103,6 +103,15 @@ public enum HostLinkPolicy {
     /// RTT sample and bidirectional fast death detection.
     public static let keepaliveInterval: TimeInterval = 10
 
+    /// How quiet an apparently-healthy stream may be before a foreground kick
+    /// force-redials it. The server heartbeats every 10s, so anything past this
+    /// has already missed one — and after a process suspension a link can *read*
+    /// healthy (`.live`, no failure recorded) while its socket is long dead,
+    /// because its watchdogs were frozen along with everything else. Waiting for
+    /// the 20s stale watchdog to notice is exactly the "not connected for a
+    /// while" the user sees on reopening the app.
+    public static let quietRedialAfter: TimeInterval = 12
+
     /// Reconnect back-off: immediate first retry (the common case is a clean
     /// server restart or a momentary path blip — waiting helps nobody), then
     /// gentle growth capped at 30s so a genuinely-down host costs little.

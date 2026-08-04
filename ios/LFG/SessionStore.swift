@@ -186,6 +186,17 @@ import LFGCore
     /// app-switch keeps every stream alive).
     private var backgroundStopTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
+    /// Launch/foreground reconnect burst — see `startReconnectBurst`.
+    private var reconnectBurstTask: Task<Void, Never>?
+    /// True while that burst is in flight and some configured host still hasn't
+    /// answered. The UI reads this as "Connecting…": before the burst is done,
+    /// nothing has actually failed — showing "Offline" there is a lie that made
+    /// every launch look like an outage.
+    private(set) var isReconnecting = false
+    /// Delays (seconds) between the burst's probes; total ≈ 15s. After it, the
+    /// 60s reconcile and the links' own back-off own recovery, and the UI is
+    /// allowed to say "Offline".
+    private static let reconnectBurstDelays: [Double] = [0, 0.5, 1, 2, 4, 8]
     private var focusedID: String?
     private var storeHydrationTask: Task<Void, Never>?
     private var storeHydrationCompleted = false
@@ -335,11 +346,37 @@ import LFGCore
 
     var isConnected: Bool { reachability == .ok }
 
+    /// What the connection UI should say. Tri-state on purpose: `reachability`
+    /// is an optional whose `nil` means *unknown* (nothing probed yet), and
+    /// rendering that as "Offline" told the user the host was down during the
+    /// first seconds of every launch, before a single request had failed.
+    enum ConnectionStatus: Equatable { case connected, connecting, offline }
+
+    var connectionStatus: ConnectionStatus {
+        if reachability == .ok { return .connected }
+        if reachability == nil || isReconnecting { return .connecting }
+        return .offline
+    }
+
+    /// Every configured host answered — the burst's exit condition. Deliberately
+    /// stricter than the `.ok` aggregate (which is "any host"), so a two-host
+    /// fleet keeps chasing the second machine.
+    private var allHostsReachable: Bool {
+        !settings.hosts.isEmpty && settings.hosts.allSatisfy { reachabilityByHost[$0.id] == .ok }
+    }
+
     // MARK: Lifecycle
 
     func start() {
         backgroundStopTask?.cancel(); backgroundStopTask = nil
         startPathMonitor()
+        // Dial FIRST, synchronously. The links are the fastest possible proof of
+        // life (one RTT to the server's connect heartbeat), and they depend on
+        // nothing local — queueing them behind local-store hydration and the
+        // outbox replay, as this used to, put seconds of disk and network work
+        // in front of the one thing the user is waiting to see.
+        syncLinks()
+        startReconnectBurst()
         guard pollTask == nil else { return }
         // Slow reconcile only: live delivery is the links' job now. This loop
         // is belt-and-braces (list membership, closed sessions, anything an
@@ -361,9 +398,38 @@ import LFGCore
     /// backgrounded past its grace window (iOS is about to suspend us anyway;
     /// stopping explicitly prevents half-finished work racing the foreground
     /// restart) — and never for host-list edits, which go through `syncLinks`.
+    /// Probe every host on a fast escalating schedule until they all answer.
+    ///
+    /// The 60s poll loop is a *reconcile*, not a connection strategy: one missed
+    /// probe at launch/foreground (the phone's tailnet path is routinely cold
+    /// after a suspension and the first packets get dropped) used to mean a full
+    /// minute of a stale "Offline" badge, because the links' own recovery can't
+    /// prove reachability any faster than the server's next heartbeat. This burst
+    /// is the fast path: ~6 probes over ~15s, stopping the moment the fleet is
+    /// healthy.
+    private func startReconnectBurst() {
+        guard !settings.hosts.isEmpty else { return }
+        reconnectBurstTask?.cancel()
+        isReconnecting = !allHostsReachable
+        reconnectBurstTask = Task { [weak self] in
+            for delay in Self.reconnectBurstDelays {
+                if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+                guard !Task.isCancelled, let self else { return }
+                await self.refresh()
+                guard !Task.isCancelled else { return }
+                if self.allHostsReachable { break }
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.isReconnecting = false
+            self.reconnectBurstTask = nil
+        }
+    }
+
     func stop() {
         pollTask?.cancel(); pollTask = nil
         refreshTask?.cancel(); refreshTask = nil
+        reconnectBurstTask?.cancel(); reconnectBurstTask = nil
+        isReconnecting = false
         autoResendTask?.cancel(); autoResendTask = nil
         backgroundStopTask?.cancel(); backgroundStopTask = nil
         stopPathMonitor()
@@ -950,6 +1016,10 @@ import LFGCore
     private func markReachable(_ hostId: String) {
         let wasReachable = reachabilityByHost[hostId] == .ok
         reachabilityByHost[hostId] = .ok
+        // Whichever writer got here first (REST probe or link bytes), the fleet
+        // being healthy ends the "Connecting…" state immediately — the burst
+        // task itself may still be asleep between probes.
+        if allHostsReachable { isReconnecting = false }
         if !wasReachable {
             Task { await self.replayPendingOutbox(forHost: hostId) }
         }
@@ -1041,10 +1111,17 @@ import LFGCore
 
     /// Foregrounding: cancel any pending teardown, restart links (cursor resume
     /// makes this one cheap round-trip per host), and reconcile immediately.
+    ///
+    /// Everything here exists to make "open the app" mean "be connected now":
+    /// the failure counts are cleared so the probe policy can't cold-skip a host
+    /// that has been unreachable for a while, each link is kicked out of any
+    /// remaining back-off (and redialed if its stream went quiet across the
+    /// suspension), and `start()` runs the reconnect burst rather than leaving
+    /// recovery to the 60s tick.
     func enterForeground() {
-        let alreadyRunning = pollTask != nil
         start()
-        if alreadyRunning { Task { await refresh() } }
+        failuresByHost.removeAll()
+        for link in links.values { link.resumeNow() }
     }
 
     /// Background delta sync — the Phase-2 wake path (push wake / BGAppRefresh).
@@ -1376,6 +1453,12 @@ import LFGCore
                 reachabilityByHost[f.host.id] = f.reach
             }
         }
+        // Recompute the aggregate NOW rather than only after the whole fan-out
+        // settles: a healthy host answering in 200ms shouldn't have its badge
+        // held hostage by a black-holed host still burning its 4s timeout.
+        // `performRefresh` recomputes it again afterwards — idempotent.
+        reachability = HostHealth.aggregate(hostIds: settings.hosts.map(\.id),
+                                            health: reachabilityByHost)
     }
 
     /// Rebuild the merged session list + routing table from each host's last-known

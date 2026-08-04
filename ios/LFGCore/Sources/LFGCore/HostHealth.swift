@@ -17,19 +17,28 @@ public struct HostProbePolicy: Sendable, Equatable {
     /// banner would never appear.
     public let failureThreshold: Int
     /// Once cold, probe only on ticks where `tick % coldProbeEveryNTicks == 0`.
+    ///
+    /// **This is a tick count, so its meaning is coupled to the poll interval in
+    /// `SessionStore.start()`.** That loop is now a 60s belt-and-braces reconcile
+    /// (live delivery moved to the `HostLink`s), not the original 3s poll — at 10
+    /// ticks a cold host was being retried every 10 MINUTES. Whenever the poll
+    /// interval changes, re-derive this.
     public let coldProbeEveryNTicks: Int
     /// Per-host timeout for the poll path. Deliberately far below `LFGClient`'s 15s
     /// user-initiated timeout: a poll that takes longer than this is useless anyway,
     /// the next tick is 3s away.
     public let pollTimeout: TimeInterval
 
-    public init(failureThreshold: Int = 4, coldProbeEveryNTicks: Int = 10, pollTimeout: TimeInterval = 4) {
+    public init(failureThreshold: Int = 4, coldProbeEveryNTicks: Int = 5, pollTimeout: TimeInterval = 4) {
         self.failureThreshold = failureThreshold
         self.coldProbeEveryNTicks = coldProbeEveryNTicks
         self.pollTimeout = pollTimeout
     }
 
-    /// 3s poll cadence → cold hosts are retried every ~30s.
+    /// 60s poll cadence → cold hosts are retried every ~5min. The back-off only
+    /// governs the slow background reconcile: the links reconnect on their own
+    /// schedule, and foreground/user-initiated refreshes bypass it entirely
+    /// (`SessionStore` clears the failure counts when the app comes forward).
     public static let `default` = HostProbePolicy()
 }
 

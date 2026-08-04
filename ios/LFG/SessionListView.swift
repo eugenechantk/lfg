@@ -471,7 +471,11 @@ struct SessionListView: View {
                 // leaves the aggregate `.ok` (some host still answers), so this
                 // stays hidden and the app keeps working; the top-bar per-host
                 // chips carry the partial-outage story instead.
-                if store.reachability != .ok, store.reachability != nil {
+                // …and never while a launch/foreground reconnect burst is still
+                // running: a probe that hasn't been retried yet is not an outage,
+                // and a banner that appears for a second on every cold launch
+                // trains you to ignore it.
+                if store.connectionStatus == .offline {
                     Section {
                         // Name only the hosts that are actually down. When the
                         // aggregate is unhealthy that is every host — but deriving
@@ -735,13 +739,15 @@ private struct HeaderStatusLine: View {
                     HostHeaderToken(host: host, online: store.reachabilityByHost[host.id] == .ok)
                 }
             } else {
+                let status = store.connectionStatus
                 Circle()
-                    .fill(store.isConnected ? Color(.systemGreen) : Color(.systemOrange))
+                    .fill(status.dotColor)
                     .frame(width: 7, height: 7)
                     .fixedSize()
-                Text(store.isConnected ? "Connected" : "Offline")
+                Text(status.label)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(store.isConnected ? Tokens.label : Color(.systemOrange))
+                    .foregroundStyle(status.textColor(connected: Tokens.label,
+                                                      connecting: Tokens.labelSecondary))
                     .lineLimit(1)
                 if store.runningCount > 0 {
                     Text("·")
@@ -962,9 +968,41 @@ struct SessionRow: View {
     }
 }
 
-/// Top-bar connection status. Single host → a "Connected/Offline" badge plus the
-/// running count. Multiple hosts → one dot+label chip per host so you can see at
-/// a glance which host is online (green) and which is offline (orange).
+/// Presentation for the tri-state connection status. "Connecting…" is its own
+/// state on purpose: an unknown or still-being-established connection is not an
+/// outage, and painting it orange made every cold launch look like one.
+extension SessionStore.ConnectionStatus {
+    var label: String {
+        switch self {
+        case .connected: return "Connected"
+        case .connecting: return "Connecting…"
+        case .offline: return "Offline"
+        }
+    }
+
+    var dotColor: Color {
+        switch self {
+        case .connected: return Color(.systemGreen)
+        case .connecting: return Color(.systemGray)
+        case .offline: return Color(.systemOrange)
+        }
+    }
+
+    /// Offline is always orange; the other two take the caller's palette (the
+    /// list header and the toolbar badge use different label tokens).
+    func textColor(connected: Color, connecting: Color) -> Color {
+        switch self {
+        case .connected: return connected
+        case .connecting: return connecting
+        case .offline: return Color(.systemOrange)
+        }
+    }
+}
+
+/// Top-bar connection status. Single host → a "Connected/Connecting/Offline"
+/// badge plus the running count. Multiple hosts → one dot+label chip per host so
+/// you can see at a glance which host is online (green) and which is offline
+/// (orange).
 struct StatusBadge: View {
     @Environment(SessionStore.self) private var store
     @Environment(AppSettings.self) private var settings
@@ -978,13 +1016,14 @@ struct StatusBadge: View {
                 }
             }
         } else {
+            let status = store.connectionStatus
             HStack(spacing: 6) {
                 Circle()
-                    .fill(store.isConnected ? Color(.systemGreen) : Color(.systemOrange))
+                    .fill(status.dotColor)
                     .frame(width: 7, height: 7)
-                Text(store.isConnected ? "Connected" : "Offline")
+                Text(status.label)
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(store.isConnected ? Color.primary : Color(.systemOrange))
+                    .foregroundStyle(status.textColor(connected: .primary, connecting: .secondary))
                 if store.runningCount > 0 {
                     Text("· \(store.runningCount) running")
                         .font(.caption)

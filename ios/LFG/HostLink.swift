@@ -31,6 +31,10 @@ final class HostLink {
     private(set) var state: State = .idle
     /// When the link last left the healthy states; nil while healthy.
     private(set) var unhealthySince: Date?
+    /// When the last stream element (event or heartbeat) arrived. The freshness
+    /// signal `resumeNow` uses — `state` alone can't tell a live stream from one
+    /// frozen by a process suspension.
+    private(set) var lastElementAt: Date?
     private(set) var lastRTT: TimeInterval?
 
     var onEvent: ((LiveEvent) -> Void)?
@@ -84,10 +88,42 @@ final class HostLink {
         case .idle:
             start()
         case .connecting, .backoff:
-            runTask?.cancel()
-            runTask = nil
-            startRunTask()
+            redial()
         }
+    }
+
+    /// Foreground kick — "the user just opened the app, be connected NOW".
+    ///
+    /// Stronger than `retryNow()` in two places, both of which cost the user
+    /// seconds of a stale "Offline" badge otherwise:
+    ///   - a link in `.backoff` skips the rest of its wait (up to 30s);
+    ///   - a link that *looks* healthy but has been quiet past one heartbeat
+    ///     interval is redialed rather than left to the 20s stale watchdog. A
+    ///     suspended process's link always reads healthy on resume (its
+    ///     watchdogs were frozen too), so freshness has to come from
+    ///     `lastElementAt`, not from `state`.
+    /// A dial that is genuinely in flight is left alone — cancelling it to start
+    /// an identical one only adds latency.
+    func resumeNow(now: Date = Date()) {
+        switch state {
+        case .idle:
+            start()
+        case .backoff:
+            redial()
+        case .connecting:
+            // A dial that has already failed at least once; a fresh one
+            // (unhealthySince == nil) is left to complete.
+            if unhealthySince != nil { redial() }
+        case .catchingUp, .live:
+            let quietFor = now.timeIntervalSince(lastElementAt ?? now)
+            if quietFor > HostLinkPolicy.quietRedialAfter { redial() }
+        }
+    }
+
+    private func redial() {
+        runTask?.cancel()
+        runTask = nil
+        startRunTask()
     }
 
     private func startRunTask() {
@@ -157,6 +193,7 @@ final class HostLink {
                 for try await element in client.events(since: cursor) {
                     if Task.isCancelled { return }
                     receivedAny = true
+                    lastElementAt = Date()
                     markReceiving()
                     switch element {
                     case .event(let seq, let ev):

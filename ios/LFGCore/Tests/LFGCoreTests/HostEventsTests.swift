@@ -104,6 +104,14 @@ final class HostEventsTests: XCTestCase {
         XCTAssertGreaterThan(HostLinkPolicy.staleTimeout, 2 * HostLinkPolicy.keepaliveInterval - 5)
     }
 
+    /// The foreground kick must fire before the stale watchdog would, and only
+    /// after a heartbeat has actually been missed — otherwise it either never
+    /// helps (too late) or churns healthy streams (too eager).
+    func testQuietRedialSitsBetweenOneHeartbeatAndTheStaleWatchdog() {
+        XCTAssertGreaterThan(HostLinkPolicy.quietRedialAfter, HostLinkPolicy.keepaliveInterval)
+        XCTAssertLessThan(HostLinkPolicy.quietRedialAfter, HostLinkPolicy.staleTimeout)
+    }
+
     func testUnreachableBannerOnlyAfterSustainedFailure() {
         let now = Date()
         XCTAssertFalse(HostLinkPolicy.showUnreachable(unhealthySince: nil, now: now))

@@ -42,11 +42,11 @@ final class HostHealthTests: XCTestCase {
     }
 
     func testColdHostProbedOnlyOnEveryNthTick() {
-        let policy = HostProbePolicy.default   // coldProbeEveryNTicks == 10
+        let policy = HostProbePolicy.default   // coldProbeEveryNTicks == 5
         let probed = (1...30).filter {
             HostHealth.shouldProbe(consecutiveFailures: 5, tick: $0, policy: policy)
         }
-        XCTAssertEqual(probed, [10, 20, 30])
+        XCTAssertEqual(probed, [5, 10, 15, 20, 25, 30])
     }
 
     func testColdBackoffRespectsCustomInterval() {
@@ -65,7 +65,7 @@ final class HostHealthTests: XCTestCase {
     }
 
     func testRecoveredHostIsProbedOnTheVeryNextTick() {
-        // Cold at tick 11 (not divisible by 10) → skipped.
+        // Cold at tick 11 (not divisible by 5) → skipped.
         XCTAssertFalse(HostHealth.shouldProbe(consecutiveFailures: 4, tick: 11))
         // A successful probe resets failures to 0 → the same tick would now probe.
         XCTAssertTrue(HostHealth.shouldProbe(consecutiveFailures: 0, tick: 11))
