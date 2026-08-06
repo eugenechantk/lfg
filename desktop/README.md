@@ -78,8 +78,11 @@ has no Xcode test bundle:
 ```sh
 build/lfg.app/Contents/MacOS/lfg --desktop-feature-test
 build/lfg.app/Contents/MacOS/lfg --status-snapshots /tmp/lfg-status-snapshots
+build/lfg.app/Contents/MacOS/lfg --rename-test <sessionId> <hostURL> "<title>"
 ```
 
 The second command renders inspectable single-host and multi-host status-bar
 fixtures off-screen, so visual verification still works while the login session
-is locked.
+is locked. The third drives the same `MoveCoordinator.rename` the row's
+"Rename…" context menu calls, against a live host — an empty title clears the
+override — because a locked login session can't be driven through the menu.

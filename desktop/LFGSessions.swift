@@ -521,6 +521,19 @@ final class SessionStore: ObservableObject {
         return nil
     }
 
+    /// Sets the user title override on the session's own host. An empty title
+    /// clears the override, and the server falls back to the first-prompt title.
+    func rename(item: SessionItem, to title: String) async -> String? {
+        guard item.session.sessionId != nil else {
+            return "Rename failed: this session has no session id."
+        }
+        if let err = await MoveCoordinator.rename(item: item, to: title) {
+            return err
+        }
+        await refresh()
+        return nil
+    }
+
     private func isLocalURL(_ url: String) -> Bool {
         guard let host = URL(string: url)?.host?.lowercased() else { return false }
         return host == "localhost" || host == "127.0.0.1" || host == "::1"
@@ -669,6 +682,29 @@ enum MoveCoordinator {
         return nil
     }
 
+    /// The title override is stored per host (`~/.lfg/session-titles.json`), so it
+    /// PUTs to the host the session actually lives on — not whichever host the
+    /// list was last refreshed from.
+    static func rename(item: SessionItem, to title: String) async -> String? {
+        guard let sessionId = item.session.sessionId else {
+            return "Rename failed: this session has no session id."
+        }
+        do {
+            var req = try request(
+                baseURL: item.hostURL,
+                path: "/api/sessions/\(sessionId)/title",
+                method: "PUT"
+            )
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: ["title": title])
+            let (data, response) = try await sharedSession.data(for: req)
+            try validateHTTP(response, data: data)
+        } catch {
+            return "Rename failed: \(detail(for: error))"
+        }
+        return nil
+    }
+
     private static func postClose(sourceURL: String, sessionId: String) async throws {
         let (data, response) = try await sharedSession.data(for: try request(
             baseURL: sourceURL,
@@ -785,7 +821,9 @@ enum MoveCoordinator {
 enum MoveTestCLI {
     static func runIfRequested() {
         let args = CommandLine.arguments
-        guard args.count > 1, args[1] == "--move-test" else { return }
+        guard args.count > 1 else { return }
+        if args[1] == "--rename-test" { runRenameTest(args) }
+        guard args[1] == "--move-test" else { return }
         guard args.count == 5 else {
             writeResult(ok: false, error: "usage: lfg --move-test <sessionId> <sourceURL> <targetURL>")
             Darwin.exit(1)
@@ -798,6 +836,38 @@ enum MoveTestCLI {
         Task.detached {
             let ok = await run(sessionId: sessionId, sourceURL: sourceURL, targetURL: targetURL)
             Darwin.exit(ok ? 0 : 1)
+        }
+        dispatchMain()
+    }
+
+    /// Exercises the same `MoveCoordinator.rename` the context menu calls, against a
+    /// live host — the GUI gesture can't be driven while the login session is locked,
+    /// and this keeps the network seam verifiable either way.
+    private static func runRenameTest(_ args: [String]) -> Never {
+        guard args.count == 5 else {
+            writeResult(ok: false, error: "usage: lfg --rename-test <sessionId> <hostURL> <title>")
+            Darwin.exit(1)
+        }
+        let sessionId = args[2]
+        let hostURL = args[3]
+        let title = args[4]
+
+        Task.detached {
+            let session = await fetchSourceSession(sessionId: sessionId, sourceURL: hostURL)
+            let item = SessionItem(
+                session: session ?? fallbackSession(sessionId: sessionId),
+                hostURL: hostURL,
+                hostId: "source",
+                hostLabel: hostLabel(for: hostURL),
+                hostIsLocal: false,
+                hostSSHTarget: nil
+            )
+            if let error = await MoveCoordinator.rename(item: item, to: title) {
+                writeResult(ok: false, error: error)
+                Darwin.exit(1)
+            }
+            writeResult(ok: true, error: nil)
+            Darwin.exit(0)
         }
         dispatchMain()
     }
@@ -1832,6 +1902,8 @@ struct ContentView: View {
     @State private var expandedAgentParents: Set<String> = []
     @State private var pendingMove: PendingMove?
     @State private var pendingClose: SessionItem?
+    @State private var pendingRename: SessionItem?
+    @State private var renameText = ""
     private let timer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
 
     private struct ListSection: Identifiable {
@@ -2062,6 +2134,12 @@ struct ContentView: View {
         .disabled(isMoving)
         .contextMenu {
             if !isMoving {
+                if item.session.sessionId != nil {
+                    Button("Rename…") {
+                        renameText = item.session.title
+                        pendingRename = item
+                    }
+                }
                 if !item.hostIsLocal, item.session.sessionId != nil {
                     Button("Resume locally") {
                         resumeLocally(item)
@@ -2097,6 +2175,15 @@ struct ContentView: View {
     private func startClose(_ item: SessionItem) {
         Task {
             let err = await store.close(item: item)
+            if let err {
+                alertMessage = err
+            }
+        }
+    }
+
+    private func startRename(_ item: SessionItem, to title: String) {
+        Task {
+            let err = await store.rename(item: item, to: title)
             if let err {
                 alertMessage = err
             }
@@ -2296,6 +2383,23 @@ struct ContentView: View {
             }
         } message: {
             Text("The session is mid-turn. Closing ends its process now — the transcript is kept, so you can resume it later.")
+        }
+        .alert("Rename session", isPresented: .init(
+            get: { pendingRename != nil },
+            set: { if !$0 { pendingRename = nil } }
+        )) {
+            TextField("Title", text: $renameText)
+            Button("Save") {
+                if let pendingRename {
+                    startRename(pendingRename, to: renameText)
+                }
+                pendingRename = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingRename = nil
+            }
+        } message: {
+            Text("An empty title clears the override and restores the session's first prompt as its name.")
         }
     }
 
