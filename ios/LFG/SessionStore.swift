@@ -1793,6 +1793,15 @@ import LFGCore
         case .reset(let sid):
             if transcripts[sid]?.isEmpty == false { loadHistory(sid) }
         case .prompt(let sid, let prompt):
+            // Equality-guarded: an unconditional write dirties `prompts` for
+            // @Observable even when nothing changed, and every dirty fires
+            // SessionDetailView's `onChange(of: prompt)` → animated scrollTo over
+            // a LazyVStack holding the whole transcript. The server no longer
+            // republishes a prompt whose only difference is its pane-scraped
+            // `context`, but this is the cheap defence in depth: a repeat prompt
+            // event must cost the open session nothing. See
+            // `.claude/diagnosis-needs-input-slow-transcript-20260806.md`.
+            guard prompts[sid] != prompt else { return }
             if let prompt { prompts[sid] = prompt } else { prompts[sid] = nil }
         case .busy(let sid, let value):
             busy[sid] = value

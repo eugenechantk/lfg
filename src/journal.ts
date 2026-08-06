@@ -161,6 +161,27 @@ export class Journal {
 }
 
 /**
+ * Split a serialized prompt into its volatile `context` and everything else, so
+ * `promptChanged` can compare the stable half exactly and the scraped half
+ * loosely. Returns null for anything that isn't a parseable prompt object — the
+ * caller then falls back to comparing the raw signatures.
+ */
+function promptParts(sig: string): { context: string; rest: string } | null {
+  let p: Record<string, unknown>;
+  try {
+    p = JSON.parse(sig) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  if (!p || typeof p !== "object" || Array.isArray(p)) return null;
+  const { context, ...rest } = p;
+  return {
+    context: typeof context === "string" ? context : "",
+    rest: JSON.stringify(rest),
+  };
+}
+
+/**
  * Pure delta tracker for the pump's state-shaped events (busy/prompt/queue).
  * The journal must record CHANGES, not samples — a 1 Hz poll of an unchanged
  * pane must journal nothing. First sight of a session in a pump lifetime
@@ -181,9 +202,40 @@ export class PumpDeltas {
     return true;
   }
 
+  /**
+   * Returns true when this prompt should be journaled.
+   *
+   * The signature deliberately EXCLUDES `context`. That field is scraped live
+   * from the pane (the assistant prose above the selector) and is not stable
+   * across captures: the "⏺ …" preamble line drifts in and out of the scraper's
+   * search window as the TUI redraws, so a session parked at ONE unanswered
+   * prompt alternated between two payloads differing only in `context` and
+   * journaled a prompt event every ~1.7s for as long as it sat there. Every one
+   * of those repainted the client's whole transcript (`onChange(of: prompt)` →
+   * animated `scrollTo` over a LazyVStack holding the full history), which is
+   * what made "Needs input" sessions feel like they never finish loading. See
+   * `.claude/diagnosis-needs-input-slow-transcript-20260806.md`.
+   *
+   * A context-only change is still journaled ONCE when it strictly GROWS (the
+   * old context is a substring of the new). The preamble is the only live source
+   * of the model's explanation — it isn't in the transcript until the question is
+   * answered — so dropping context updates outright would strand the user on
+   * whichever half-scraped variant happened to land first. Growth-only converges
+   * in a couple of events instead of flapping forever.
+   */
   promptChanged(sid: string, prompt: unknown): boolean {
     const sig = prompt ? JSON.stringify(prompt) : "";
-    if (this.lastPrompt.get(sid) === sig) return false;
+    const prev = this.lastPrompt.get(sid);
+    if (prev === sig) return false;
+    if (prev !== undefined && prev !== "" && sig !== "") {
+      const a = promptParts(prev);
+      const b = promptParts(sig);
+      // Same question and options: only a strictly longer context is worth an event.
+      if (a && b && a.rest === b.rest && !(b.context.length > a.context.length &&
+          b.context.includes(a.context))) {
+        return false;
+      }
+    }
     this.lastPrompt.set(sid, sig);
     return true;
   }

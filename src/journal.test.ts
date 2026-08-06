@@ -126,6 +126,50 @@ describe("PumpDeltas", () => {
     expect(d.promptChanged("s1", null)).toBe(true); // prompt cleared
   });
 
+  test("a flapping pane-scraped context does not re-emit the same prompt", () => {
+    const d = new PumpDeltas();
+    const q = { question: "Do you want to proceed?", options: [{ index: 1, label: "Yes" }] };
+    const short = { ...q, context: "Running 1 shell command… ⎿  $ touch /tmp/probe" };
+    const long = { ...q, context: "I'll run that command.\n\nRunning 1 shell command… ⎿  $ touch /tmp/probe" };
+    expect(d.promptChanged("s1", short)).toBe(true); // first sight
+    // Context GREW — worth one event: the preamble is only live in the pane.
+    expect(d.promptChanged("s1", long)).toBe(true);
+    // ...and now the scrape flaps back and forth forever. Silence, both ways.
+    expect(d.promptChanged("s1", short)).toBe(false);
+    expect(d.promptChanged("s1", long)).toBe(false);
+    expect(d.promptChanged("s1", short)).toBe(false);
+    // A real change still gets through.
+    expect(d.promptChanged("s1", { ...long, question: "Approve the plan?" })).toBe(true);
+    expect(d.promptChanged("s1", null)).toBe(true);
+  });
+
+  test("a selection change is a real change even though context is unchanged", () => {
+    const d = new PumpDeltas();
+    const ctx = "⏺ picking one";
+    d.promptChanged("s1", {
+      question: "q",
+      options: [{ index: 1, selected: true }, { index: 2, selected: false }],
+      context: ctx,
+    });
+    expect(
+      d.promptChanged("s1", {
+        question: "q",
+        options: [{ index: 1, selected: false }, { index: 2, selected: true }],
+        context: ctx,
+      }),
+    ).toBe(true);
+  });
+
+  test("suppressed context does not become the baseline (no phantom growth event)", () => {
+    const d = new PumpDeltas();
+    const q = { question: "q", options: [] };
+    expect(d.promptChanged("s1", { ...q, context: "aaa" })).toBe(true);
+    expect(d.promptChanged("s1", { ...q, context: "bb" })).toBe(false); // shrank: ignored
+    // "bb" was never journaled, so "aaa" — what the client already has — is still
+    // the baseline and must not re-emit.
+    expect(d.promptChanged("s1", { ...q, context: "aaa" })).toBe(false);
+  });
+
   test("queue compares by content", () => {
     const d = new PumpDeltas();
     expect(d.queueChanged("s1", [])).toBe(true); // baseline
