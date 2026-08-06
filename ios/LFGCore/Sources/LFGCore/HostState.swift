@@ -37,27 +37,49 @@ public enum HostState: Equatable, Sendable {
     case degraded(since: Date, reason: String)
     /// Failing for longer than the grace window. This is what paints the banner.
     case offline(since: Date, reason: String)
-    /// The device has no network path at all. Distinct from `offline` because
-    /// it is not the host's fault and the remedy the user is shown differs.
-    case noNetwork
+    /// The device has had no network path since `since`, but still inside the
+    /// grace window — the UI keeps showing whatever it showed before. The
+    /// path-monitor analogue of `degraded`, and the fix for a real bug: on
+    /// cellular `NWPathMonitor` reports transient unsatisfied paths routinely
+    /// (5G↔LTE handover, VPN re-attach, resume from suspension), and this state
+    /// used to banner INSTANTLY while every other failure route got 30s of
+    /// grace. On LAN Wi-Fi the path never flaps, which is exactly why the bug
+    /// was invisible at home and constant on 5G.
+    case noNetwork(since: Date)
+    /// No network path for longer than the grace window. Distinct from
+    /// `offline` because it is not the host's fault and the remedy differs.
+    case noNetworkSustained(since: Date)
 
     /// True when this host is usable right now.
     public var isLive: Bool { self == .live }
 
-    /// When the current failure began, if any. The single clock.
+    /// When the current failure began, if any. The single clock — and it now
+    /// covers path loss too, so "the phone lost signal for 2s" and "the host
+    /// died" are debounced by the same rule instead of two.
     public var failingSince: Date? {
         switch self {
         case .degraded(let since, _): return since
         case .offline(let since, _): return since
-        case .unknown, .connecting, .live, .noNetwork: return nil
+        case .noNetwork(let since): return since
+        case .noNetworkSustained(let since): return since
+        case .unknown, .connecting, .live: return nil
         }
     }
 
     /// Whether the UI should paint the "unreachable" treatment.
     public var showsOfflineBanner: Bool {
         switch self {
-        case .offline, .noNetwork: return true
-        case .unknown, .connecting, .live, .degraded: return false
+        case .offline, .noNetworkSustained: return true
+        case .unknown, .connecting, .live, .degraded, .noNetwork: return false
+        }
+    }
+
+    /// Whether this state is a device-path problem rather than a host problem.
+    /// The banner uses it to choose the remedy copy.
+    public var isNetworkPathProblem: Bool {
+        switch self {
+        case .noNetwork, .noNetworkSustained: return true
+        case .unknown, .connecting, .live, .degraded, .offline: return false
         }
     }
 }
@@ -80,6 +102,17 @@ public enum HostSignal: Equatable, Sendable {
     /// Device-level network path changes.
     case networkLost
     case networkRestored
+    /// The app came back to the foreground.
+    ///
+    /// Its only job is to discard a *path* verdict measured before the
+    /// suspension. iOS tears the network path down for a suspended process on
+    /// cellular, so a `noNetwork` state latched at background time says nothing
+    /// about the device's connectivity now — yet it used to survive into the
+    /// first frame after reopening and paint "No network connection" over a
+    /// perfectly good radio. Host-health states (`degraded`/`offline`) are NOT
+    /// cleared: those are facts about the host that suspension does not
+    /// invalidate.
+    case foregrounded
 }
 
 /// The pure reducer. No networking, no UIKit, no clock of its own — `now` is
@@ -100,12 +133,33 @@ public enum HostStateMachine {
             return .live
 
         case .networkLost:
-            return .noNetwork
+            // Debounced like every other failure. Losing the path is evidence
+            // of a problem, not proof of a sustained one — and on cellular the
+            // overwhelming majority of these clear within a second or two.
+            let since = state.failingSince ?? now
+            return settle(.noNetwork(since: since), now: now, graceWindow: graceWindow)
 
         case .networkRestored:
             // The device has a path again, but nothing has been heard from the
             // host yet. Neutral, not healthy — and not offline either.
-            return state == .noNetwork ? .connecting : state
+            //
+            // Crucially this does NOT reset the failure clock, for the same
+            // reason `.connecting` doesn't: a path that flaps
+            // restored→lost→restored every few seconds would otherwise restart
+            // its own grace window forever and never reach the banner, leaving
+            // a phone with no usable signal reading "connected". What changes is
+            // only the *reason* — the device has a path now, so blaming the
+            // radio would be the wrong remedy; what we actually know is that we
+            // have not heard from the host.
+            guard state.isNetworkPathProblem, let since = state.failingSince else { return state }
+            return settle(.degraded(since: since, reason: "Network path restored; host not reachable yet"),
+                          now: now, graceWindow: graceWindow)
+
+        case .foregrounded:
+            // Only a path verdict is stale after suspension; host health is not.
+            // The clock goes with it: time spent suspended is not time we spent
+            // observing the radio, so counting it would banner on reopening.
+            return state.isNetworkPathProblem ? .connecting : state
 
         case .connecting:
             switch state {
@@ -116,12 +170,17 @@ public enum HostStateMachine {
                 // every retry is how a host that reconnects-and-dies in a loop
                 // never reaches the banner.
                 return state
-            case .noNetwork:
-                return .noNetwork
+            case .noNetwork, .noNetworkSustained:
+                return state
             }
 
         case .failed(let reason), .probeFailed(let reason):
-            if state == .noNetwork { return .noNetwork }
+            // A failure while the device has no path stays "no network" —
+            // blaming the host for the phone's radio shows the wrong remedy.
+            // The clock keeps running underneath, so a real outage still lands.
+            if state.isNetworkPathProblem {
+                return settle(state, now: now, graceWindow: graceWindow)
+            }
             // Keep the ORIGINAL failure time; only the first failure starts the
             // clock. Then let elapsed time decide degraded vs offline.
             let since = state.failingSince ?? now
@@ -133,7 +192,7 @@ public enum HostStateMachine {
             // and returning must not restart the grace window (the teardown/
             // rebuild case `unhealthySinceByHost` existed to cover).
             switch state {
-            case .degraded, .offline, .noNetwork: return state
+            case .degraded, .offline, .noNetwork, .noNetworkSustained: return state
             case .unknown, .connecting, .live: return .unknown
             }
         }
@@ -149,6 +208,15 @@ public enum HostStateMachine {
         now: Date,
         graceWindow: TimeInterval = HostLinkPolicy.bannerAfter
     ) -> HostState {
+        // Path loss settles on the same clock, into its own sustained variant so
+        // the banner can still offer the right remedy ("check your signal", not
+        // "check the host is running").
+        if case .noNetwork(let since) = state {
+            return now.timeIntervalSince(since) >= graceWindow
+                ? .noNetworkSustained(since: since) : state
+        }
+        if case .noNetworkSustained = state { return state }
+
         let reason: String
         switch state {
         case .degraded(_, let r): reason = r
@@ -169,7 +237,12 @@ public enum HostStateMachine {
         now: Date,
         graceWindow: TimeInterval = HostLinkPolicy.bannerAfter
     ) -> TimeInterval? {
-        guard case .degraded(let since, _) = state else { return nil }
+        let since: Date
+        switch state {
+        case .degraded(let s, _): since = s
+        case .noNetwork(let s): since = s
+        default: return nil   // live/unknown need no re-check; already-settled states are final
+        }
         return max(0, graceWindow - now.timeIntervalSince(since))
     }
 

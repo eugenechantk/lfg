@@ -178,9 +178,12 @@ struct ConnectionBanner: View {
 
     var body: some View {
         switch state {
-        case .live, .none, .unknown, .connecting, .degraded:
+        // `noNetwork` renders as nothing: it is a path blip still inside the
+        // grace window, and bannering those instantly is the bug this build
+        // fixes. Only `noNetworkSustained` has earned the treatment.
+        case .live, .none, .unknown, .connecting, .degraded, .noNetwork:
             EmptyView()
-        case .noNetwork:
+        case .noNetworkSustained:
             banner(icon: "wifi.slash", tint: .orange,
                    title: "No network connection",
                    detail: "This device has no network path. Reconnect to Wi-Fi or cellular.")

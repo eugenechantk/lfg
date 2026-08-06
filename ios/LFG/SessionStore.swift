@@ -75,16 +75,29 @@ import LFGCore
     private(set) var transcripts: [String: [SessionMessage]] = [:]
     private(set) var prompts: [String: AgentPrompt] = [:]
     private(set) var busy: [String: Bool] = [:]
-    /// Sessions whose `busy` has been stated by the journal at least once.
+    /// When the journal last stated each session's `busy`, so a journal value can
+    /// out-vote the REST baseline — but only while it is still plausibly current.
     ///
     /// The journal emits a `busy` event only when the value CHANGES
     /// (`deltas.busyChanged`, src/journal-pump.ts). A session that was already
     /// running before this client connected — and keeps running — therefore
     /// produces no event at all, so "the link is healthy" does NOT imply "we know
-    /// this session's busy". Without this set the REST baseline was skipped for
+    /// this session's busy". Without this the REST baseline was skipped for
     /// every session on a live host, and a freshly-opened app rendered every
     /// already-running agent as idle until it happened to change state.
-    private var busyFromJournal: Set<String> = []
+    ///
+    /// WHY IT EXPIRES. Change-only delivery means silence is ambiguous: it reads
+    /// identically whether nothing changed or the producer died. On 2026-08-06 the
+    /// server's poll loop stopped, and because this was a bare `Set` the veto was
+    /// permanent — two codex sessions that were mid-turn at that instant rendered
+    /// "Running" for hours while every `/api/sessions` response in between
+    /// correctly said `busy: false`. The right answer was in hand the whole time
+    /// and this threw it away. Past `JournalFreshness.defaultTTL` the snapshot
+    /// wins: a value minutes old is no longer "fresher than the snapshot", which
+    /// was the entire premise. The rule itself lives in `LFGCore`
+    /// (`JournalFreshness`) with its tests.
+    /// See `.claude/diagnosis-codex-stuck-running-20260806.md`.
+    private var busyStatedAt: [String: Date] = [:]
     private(set) var queues: [String: [QueueItem]] = [:]
     /// Latest browser screenshot metadata per session. Bytes remain on the
     /// owning host and are fetched only while its detail view is visible.
@@ -109,16 +122,16 @@ import LFGCore
         /// from `failed` (a real send attempt that errored → red + Retry).
         var queuedOffline: Bool = false
         var serverQueueID: String? = nil   // set once correlated to a server queue item
-        /// Render as a user bubble in the transcript. Every send sets this: a
-        /// message you just typed belongs in the conversation immediately, in
-        /// its own bubble, whatever the session is doing. State that used to
-        /// justify hiding it (queued behind a running turn, waking, offline)
-        /// is carried by the flags below and annotated under the bubble.
+        /// Render as a user bubble in the transcript rather than as a row in the
+        /// pending bar above the composer. Set for sends the agent takes
+        /// immediately — a session kickoff, or a follow-up to an idle session —
+        /// and for a wake-up send (muted until the resume returns). A send that
+        /// has to wait leaves this false and lives in the bar, so an accent
+        /// bubble always means the host has the message.
         var showSent: Bool = false
         /// Accepted but not yet picked up: the session was mid-turn at send
-        /// time, so the agent runs it after the current turn. The bubble is
-        /// normal-looking and captioned "Queued", and stays tappable for
-        /// remove / edit / send-now while it waits.
+        /// time, so the agent runs it after the current turn. Waits in the
+        /// pending bar, tappable for remove / edit / send-now.
         var queuedBehindTurn: Bool = false
         /// Whether the backend has accepted this send yet. `true` for the normal
         /// path (the agent picks an idle/live session up instantly, so the bubble
@@ -213,6 +226,10 @@ import LFGCore
     private static let catchUpBufferLimit = 2_000
     private var pathMonitor: NWPathMonitor?
     private let pathMonitorQueue = DispatchQueue(label: "lfg.network-path")
+    /// When the app was last backgrounded, so the connection log can state the
+    /// suspension length — the number that decides whether a stale-looking link
+    /// on resume is expected or a bug.
+    private var backgroundedAt: Date?
     private var networkPathSatisfied: Bool?
     /// Pending delayed teardown while backgrounded (grace window so a quick
     /// app-switch keeps every stream alive).
@@ -434,8 +451,10 @@ import LFGCore
     var connectionStatus: ConnectionStatus {
         switch fleetState {
         case .live: return .connected
-        case .offline, .noNetwork: return isReconnecting ? .connecting : .offline
-        case nil, .unknown, .connecting, .degraded: return .connecting
+        case .offline, .noNetworkSustained: return isReconnecting ? .connecting : .offline
+        // `noNetwork` sits with `degraded` on purpose: both are failures inside
+        // the grace window, and "connecting" is the honest word for both.
+        case nil, .unknown, .connecting, .degraded, .noNetwork: return .connecting
         }
     }
 
@@ -849,7 +868,10 @@ import LFGCore
                 ts: row.createdAt,
                 failed: failed,
                 queuedOffline: hasAttachmentSidecars && !failed,
-                showSent: true,
+                // Only a row the host actually acked (`sent`) may render as a
+                // bubble; anything still waiting on transport — or failed —
+                // is restored into the pending bar, same as when it was typed.
+                showSent: row.state == "sent" && !failed,
                 confirmed: row.state == "sent" || failed
             )
         )
@@ -1012,6 +1034,13 @@ import LFGCore
         let monitor = NWPathMonitor()
         monitor.pathUpdateHandler = { [weak self] path in
             let isSatisfied = path.status == .satisfied
+            // Log EVERY update, including ones that don't change satisfaction.
+            // On cellular the interesting events are often interface changes at
+            // constant satisfaction (5G↔LTE, Wi-Fi→cellular handoff, the VPN
+            // tunnel re-attaching) — those move the local endpoint and kill
+            // sockets while `status` never flinches, so a satisfaction-only log
+            // would show a clean path either side of an unexplained drop.
+            ConnectionLog.shared.log(.path, Self.describe(path))
             Task { @MainActor [weak self] in
                 self?.networkPathChanged(isSatisfied: isSatisfied)
             }
@@ -1026,6 +1055,45 @@ import LFGCore
         networkPathSatisfied = nil
     }
 
+    /// Everything `NWPath` knows, in one line. Interfaces and the
+    /// expensive/constrained flags are what identify the radio the phone is
+    /// actually on; without them a cellular timeline is indistinguishable from
+    /// a Wi-Fi one, which is the whole question.
+    /// `nonisolated`: this runs on the path-monitor queue, inside
+    /// `pathUpdateHandler`, before anything hops to the main actor. Logging the
+    /// raw path there rather than after the hop is deliberate — the hop is
+    /// exactly what a suspended process delays, so a main-actor-only record
+    /// would lose the timing of the event we care most about.
+    nonisolated private static func describe(_ path: NWPath) -> String {
+        let status: String
+        switch path.status {
+        case .satisfied: status = "satisfied"
+        case .unsatisfied: status = "UNSATISFIED"
+        case .requiresConnection: status = "requiresConnection"
+        @unknown default: status = "unknown"
+        }
+        let ifaces = path.availableInterfaces.map { iface -> String in
+            switch iface.type {
+            case .wifi: return "wifi"
+            case .cellular: return "cellular"
+            case .wiredEthernet: return "wired"
+            case .loopback: return "loopback"
+            case .other: return "other(\(iface.name))"   // Tailscale's utun lands here
+            @unknown default: return "unknown"
+            }
+        }
+        var parts = ["path=\(status)",
+                     "ifaces=\(ifaces.isEmpty ? "none" : ifaces.joined(separator: ","))"]
+        if path.isExpensive { parts.append("expensive") }
+        if path.isConstrained { parts.append("constrained(LowDataMode)") }
+        parts.append("v4=\(path.supportsIPv4) v6=\(path.supportsIPv6)")
+        if let reason = path.unsatisfiedReason as NWPath.UnsatisfiedReason?,
+           path.status != .satisfied {
+            parts.append("why=\(reason)")
+        }
+        return parts.joined(separator: " ")
+    }
+
     private func networkPathChanged(isSatisfied: Bool) {
         let previous = networkPathSatisfied
         guard previous != isSatisfied else { return }
@@ -1036,7 +1104,16 @@ import LFGCore
                 // up, so hosts go to neutral, not healthy — the links' own
                 // bytes are what promote them back to live.
                 for id in settings.hosts.map(\.id) { signal(id, .networkRestored) }
-                for link in links.values { link.retryNow() }
+                // `resumeNow`, NOT `retryNow`. A path change moves the local
+                // endpoint, so a stream that still reads `.live` is holding a
+                // dead socket — and `retryNow` explicitly refuses to touch
+                // those ("do not churn a healthy stream"), leaving the 18s
+                // URLSession idle timeout / 20s stale watchdog to notice. That
+                // was ~20s of dead air on every cellular handover, and exactly
+                // zero cost on LAN, where the path never changes. `resumeNow`
+                // checks stream FRESHNESS instead of state, so a genuinely live
+                // stream is still left alone.
+                for link in links.values { link.resumeNow(cause: "path-restored") }
             }
         } else {
             markNoNetwork(hostIds: settings.hosts.map(\.id), now: Date())
@@ -1099,7 +1176,53 @@ import LFGCore
     /// agree with each other.
     private func signal(_ hostId: String, _ sig: HostSignal, now: Date = Date()) {
         let previous = hostStateByHost[hostId] ?? .unknown
-        setHostState(hostId, HostStateMachine.reduce(previous, sig, now: now), now: now)
+        let next = HostStateMachine.reduce(previous, sig, now: now)
+        // Log the transition, not just the signal: the reducer is where a
+        // reported symptom ("it said offline") becomes a decision we can argue
+        // about, and the causing signal is the half that was never recoverable
+        // after the fact.
+        if HostStateMachine.settle(next, now: now) != HostStateMachine.settle(previous, now: now) {
+            ConnectionLog.shared.log(.state,
+                "\(describe(previous)) -> \(describe(HostStateMachine.settle(next, now: now))) via \(describe(sig))",
+                host: hostLabel(hostId), at: now)
+        }
+        setHostState(hostId, next, now: now)
+    }
+
+    /// Compact state rendering for the log — the associated `Date`s would push
+    /// every line off a phone screen and the elapsed time is already implied by
+    /// the entry's own timestamp.
+    private func describe(_ s: HostState) -> String {
+        switch s {
+        case .unknown: return "unknown"
+        case .connecting: return "connecting"
+        case .live: return "live"
+        case .degraded(_, let r): return "degraded(\(r))"
+        case .offline(_, let r): return "OFFLINE(\(r))"
+        case .noNetwork: return "noNetwork"
+        case .noNetworkSustained: return "NO-NETWORK-SUSTAINED"
+        }
+    }
+
+    private func describe(_ sig: HostSignal) -> String {
+        switch sig {
+        case .connecting: return "connecting"
+        case .receiving: return "receiving"
+        case .failed(let r): return "failed(\(r))"
+        case .stopped: return "stopped"
+        case .probeSucceeded: return "probeSucceeded"
+        case .probeFailed(let r): return "probeFailed(\(r))"
+        case .networkLost: return "networkLost"
+        case .networkRestored: return "networkRestored"
+        case .foregrounded: return "foregrounded"
+        }
+    }
+
+    /// `logLabel`, not `label`: display names change under us (resolved from
+    /// `/api/info`, or edited by the user), and a timeline that calls one
+    /// machine two different names cannot be correlated.
+    private func hostLabel(_ hostId: String) -> String {
+        settings.hosts.first { $0.id == hostId }?.logLabel ?? hostId
     }
 
     private func setHostState(_ hostId: String, _ state: HostState, now: Date = Date()) {
@@ -1154,6 +1277,12 @@ import LFGCore
     /// the cursor makes the eventual foreground reconnect lossless anyway.
     func enterBackground() {
         guard backgroundStopTask == nil else { return }
+        backgroundedAt = Date()
+        ConnectionLog.shared.log(.lifecycle, "background — holding links for 25s grace")
+        // Get everything on disk NOW. Past the grace window iOS may suspend or
+        // kill us without another chance to write, and the minutes either side
+        // of that are precisely the window a cellular investigation needs.
+        ConnectionLog.shared.flush()
         let app = UIApplication.shared
         var bgTask: UIBackgroundTaskIdentifier = .invalid
         bgTask = app.beginBackgroundTask(withName: "lfg.linger") { [weak self] in
@@ -1184,9 +1313,23 @@ import LFGCore
     /// suspension), and `start()` runs the reconnect burst rather than leaving
     /// recovery to the 60s tick.
     func enterForeground() {
+        let away = backgroundedAt.map { Date().timeIntervalSince($0) }
+        ConnectionLog.shared.log(.lifecycle, away.map {
+            String(format: "foreground after %.0fs backgrounded", $0)
+        } ?? "foreground")
+        backgroundedAt = nil
+
         start()
         failuresByHost.removeAll()
-        for link in links.values { link.resumeNow() }
+        // Discard any `noNetwork` verdict measured before the suspension. iOS
+        // tears the network path down for a suspended process on cellular, so
+        // that verdict describes a radio state from minutes ago — and it used to
+        // survive into the first frame after reopening and paint "No network
+        // connection" over a working connection. This is the "especially when I
+        // leave the app and come back" half of the cellular report. Host-health
+        // states are deliberately left alone: a host that was down still is.
+        for id in settings.hosts.map(\.id) { signal(id, .foregrounded) }
+        for link in links.values { link.resumeNow(cause: "foreground") }
     }
 
     /// Background delta sync — the Phase-2 wake path (push wake / BGAppRefresh).
@@ -1570,19 +1713,23 @@ import LFGCore
         // agent as idle, the list disagreed with the Live Activity, and it
         // resolved only when a session happened to change state.
         //
-        // Keying on `busyFromJournal` instead of link health keeps the original
+        // Keying on `busyStatedAt` instead of link health keeps the original
         // intent — a journal value is fresher than this snapshot and must not be
-        // clobbered — without the false premise.
+        // clobbered — without the false premise. The veto expires (see
+        // `busyStatedAt`) so it holds only while that premise is still true.
+        let now = Date()
         for s in fresh {
             guard let sid = s.sessionId, let b = s.busy else { continue }
-            if busyFromJournal.contains(sid) { continue }
+            guard JournalFreshness.snapshotWins(journalStatedAt: busyStatedAt[sid], now: now)
+            else { continue }
             busy[sid] = b
         }
         // Forget sessions that left the live list: if one comes back (pane
         // relaunched, host recovered) its journal history is no longer a reason to
         // refuse the REST baseline, or the bug above returns for exactly the
         // sessions that just recovered.
-        busyFromJournal.formIntersection(Set(fresh.compactMap(\.sessionId)))
+        let liveIDs = Set(fresh.compactMap(\.sessionId))
+        busyStatedAt = busyStatedAt.filter { liveIDs.contains($0.key) }
         // Snapshot the focused session while it's live so its detail view survives
         // the session later dropping out of the live list.
         if let f = focusedID, let live = fresh.first(where: { $0.sessionId == f }) {
@@ -1805,9 +1952,10 @@ import LFGCore
             if let prompt { prompts[sid] = prompt } else { prompts[sid] = nil }
         case .busy(let sid, let value):
             busy[sid] = value
-            // Remember that the journal has spoken for this session, so the REST
-            // baseline stops seeding it. See `busyFromJournal`.
-            busyFromJournal.insert(sid)
+            // Remember WHEN the journal spoke, so the REST baseline stands down —
+            // but only for as long as this value can still be the fresher one.
+            // See `busyStatedAt`.
+            busyStatedAt[sid] = Date()
         case .queue(let sid, let q):
             queues[sid] = q
             correlatePending(sid, q)
@@ -2271,13 +2419,13 @@ import LFGCore
         let typed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !typed.isEmpty || !attachments.isEmpty else { return }
 
-        // 1) Show the bubble right now, before any await — for EVERY send, not
-        //    just the idle case. A follow-up typed while the agent is mid-turn
-        //    used to land in a one-line "Sending…" bar above the composer, so
-        //    the message you just wrote never appeared in the conversation
-        //    until the agent got around to it. It is your message either way;
-        //    it belongs in the transcript immediately. `idle` now only decides
-        //    whether the bubble is captioned as queued.
+        // 1) Show something right now, before any await. `idle` decides WHICH
+        //    surface: a send the agent will take immediately becomes a finished
+        //    user bubble in the transcript, while a send that has to wait (the
+        //    session is mid-turn or sitting on a prompt) waits in the one-line
+        //    pending bar above the composer and only becomes a blue bubble once
+        //    the real user turn comes back from the host. Keeping the two
+        //    distinct is the point: an accent-coloured bubble means received.
         let idle = prompts[id] == nil && busy[id] != true
         // A wake-up send: the target isn't in the live list — it's a closed
         // session whose detail we're carrying forward, either because its pane
@@ -2301,7 +2449,7 @@ import LFGCore
                         displayText: typed.isEmpty ? "📎 Attachment" : typed,
                         matchText: typed,
                         ts: nowMs,
-                        showSent: true,
+                        showSent: idle || isWakeUp,
                         queuedBehindTurn: !idle && !isWakeUp,
                         confirmed: !isWakeUp))
 
@@ -2327,9 +2475,10 @@ import LFGCore
                 $0.matchText = typed
                 $0.queuedOffline = true
                 $0.confirmed = false
-                // Stays a bubble (muted, captioned "Will send when reachable")
-                // rather than dropping to the bar — an unsent message is still
-                // part of the conversation you're composing.
+                // Nothing has reached a host, so this cannot read as received:
+                // it waits in the pending bar ("Queued") until the reconnect
+                // replay sends it, whatever the session looked like at send time.
+                $0.showSent = false
                 $0.queuedBehindTurn = false
             }
             return
@@ -2420,11 +2569,34 @@ import LFGCore
     }
     func answer(_ id: String, _ index: Int) async { await run("Answer", for: id) { try await $0.answer(id, index: index) } }
     func dismissPrompt(_ id: String) async { await run("Dismiss", for: id) { try await $0.dismiss(id) } }
-    func interrupt(_ id: String) async { await run("Stop", for: id) { try await $0.interrupt(id) } }
+    /// Stop the current turn, and say so when it didn't stop.
+    ///
+    /// The server now confirms the interrupt against the pane instead of reporting
+    /// `tmux send-keys`' exit code, so a wedged agent that swallows the Escape is
+    /// finally distinguishable from one that acted on it. Reporting that is the
+    /// whole point: silently "succeeding" is what made Stop feel broken.
+    func interrupt(_ id: String) async {
+        guard let client = client(forSession: id) else { return }
+        do {
+            let stopped = try await client.interrupt(id)
+            await refresh()
+            if stopped == false {
+                lastError = "Stop didn't take — the agent isn't responding. Try ending the session."
+            }
+        } catch {
+            lastError = "Stop failed: \(error.localizedDescription)"
+        }
+    }
     func setModel(_ id: String, _ model: String) async { await run("Switch model", for: id) { try await $0.setModel(id, model: model) } }
     func rename(_ id: String, _ title: String) async { await run("Rename", for: id) { try await $0.rename(id, title: title) } }
     func assign(_ id: String, _ user: String?) async { await run("Assign", for: id) { try await $0.assign(id, user: user) } }
-    func close(_ id: String) async { await run("End session", for: id) { try await $0.close(id) } }
+    /// End the session. Returns whether it actually ended — the server now 502s
+    /// when a pane survives the kill, so callers must not dismiss the UI on a
+    /// failure (see `SessionDetailView`'s "End session" button).
+    @discardableResult
+    func close(_ id: String) async -> Bool {
+        await run("End session", for: id) { try await $0.close(id) }
+    }
     func retry(_ id: String, _ messageID: String) async { await run("Retry", for: id) { try await $0.retryQueued(id, messageID: messageID) } }
 
     /// Create a session on a specific host (defaults to the reachable default —

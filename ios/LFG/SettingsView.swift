@@ -115,6 +115,17 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        ConnectionLogView()
+                    } label: {
+                        Label("Connection Log", systemImage: "waveform.path.ecg")
+                    }
+                    .accessibilityIdentifier("connectionLogLink")
+                } header: { Text("Diagnostics") } footer: {
+                    Text("A timestamped record of every network path change, host state transition and event-stream connect. Kept across launches — open it after a drop and share it.")
+                }
+
+                Section {
                     NotificationStatusRow(state: PushManager.shared.state)
                 } header: { Text("Notifications") } footer: {
                     Text("Get a push when one of your sessions finishes a turn or needs your input. Requires the host to have APNs configured (LFG_APNS_*).")
@@ -327,8 +338,10 @@ struct ReachDot: View {
         switch state {
         case .live: return .green
         case .none, .unknown: return .secondary
-        case .connecting, .degraded: return .yellow
-        case .offline, .noNetwork: return .orange
+        // `noNetwork` is the pre-grace path blip: still amber, because the app
+        // has no reason yet to claim anything is wrong.
+        case .connecting, .degraded, .noNetwork: return .yellow
+        case .offline, .noNetworkSustained: return .orange
         }
     }
     var body: some View { Circle().fill(color).frame(width: 9, height: 9) }

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		02F689F65D6FDF5099FADF31 /* ConnectionLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D48FAC07EBFC6249487EAEB9 /* ConnectionLogView.swift */; };
 		037A25ADA39F6E527D36B73D /* BrowserPreviewCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B465BA01F1A3FC7DAF7ADF56 /* BrowserPreviewCard.swift */; };
 		042B67FEFC81B19353989F4A /* NewSessionAtoms.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4FDFAEC4C595AA92D818A8C /* NewSessionAtoms.swift */; };
 		0B5E6EC8D0198C245E872599 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 847BA9F87A178565C0EEC901 /* SettingsView.swift */; };
@@ -103,6 +104,7 @@
 		C22EA76E51E2B0A745EE8847 /* RichContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichContent.swift; sourceTree = "<group>"; };
 		CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
 		CDCC421082566E268167E6E7 /* RetiredSessionActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetiredSessionActivity.swift; sourceTree = "<group>"; };
+		D48FAC07EBFC6249487EAEB9 /* ConnectionLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionLogView.swift; sourceTree = "<group>"; };
 		D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = SharedAssets.xcassets; sourceTree = "<group>"; };
 		D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LFGWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E4FDFAEC4C595AA92D818A8C /* NewSessionAtoms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionAtoms.swift; sourceTree = "<group>"; };
@@ -167,6 +169,7 @@
 				9D1BD4A3061EFB2858AB2A4B /* BackgroundSender.swift */,
 				B465BA01F1A3FC7DAF7ADF56 /* BrowserPreviewCard.swift */,
 				F4C23B1D7493D21B0344531F /* Components.swift */,
+				D48FAC07EBFC6249487EAEB9 /* ConnectionLogView.swift */,
 				565F8BC62A1D403CDD690340 /* FleetActivityController.swift */,
 				9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */,
 				716A5CB7BF742B16562A7EF8 /* Info.plist */,
@@ -356,6 +359,7 @@
 				5942295A0F639DE68C4FF451 /* BackgroundSender.swift in Sources */,
 				037A25ADA39F6E527D36B73D /* BrowserPreviewCard.swift in Sources */,
 				FDC78A1C6A82751D9F56E521 /* Components.swift in Sources */,
+				02F689F65D6FDF5099FADF31 /* ConnectionLogView.swift in Sources */,
 				BF6314DDC10C441712E87E2E /* FleetActivityController.swift in Sources */,
 				8A8BAA0AADCD3A860CCA5B39 /* HostLink.swift in Sources */,
 				8950528E1385EF07CB2814AD /* LFGApp.swift in Sources */,

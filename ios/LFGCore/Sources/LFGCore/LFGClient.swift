@@ -49,6 +49,49 @@ public struct LFGClient: Sendable {
         self.init(baseURL: url, session: session)
     }
 
+    /// Short name for this host in the connection log — the timeline is read on
+    /// a phone, so the full URL would push every message off the screen.
+    /// Must match `Host.logLabel` exactly (port included) or the same machine
+    /// shows up under two names in one timeline.
+    public var logLabel: String {
+        guard let h = baseURL.host else { return baseURL.absoluteString }
+        return baseURL.port.map { "\(h):\($0)" } ?? h
+    }
+
+    /// A network error rendered for a human reading a timeline at 11pm.
+    ///
+    /// `localizedDescription` alone loses the one field that actually
+    /// discriminates cellular failure modes: a `URLError.Code` of
+    /// `.networkConnectionLost` (path yanked mid-request), `.notConnectedToInternet`
+    /// (no path at dial time), `.timedOut` (black hole) and `.cannotConnectToHost`
+    /// (refused) all read as vague prose but mean completely different things
+    /// about whose fault the drop was.
+    public static func describe(_ error: Error) -> String {
+        if let u = error as? URLError {
+            return "URLError.\(u.code.rawValue) \(urlErrorName(u.code)) — \(u.localizedDescription)"
+        }
+        if case LFGError.http(let status, _) = error { return "HTTP \(status)" }
+        let ns = error as NSError
+        return "\(ns.domain).\(ns.code) — \(ns.localizedDescription)"
+    }
+
+    private static func urlErrorName(_ code: URLError.Code) -> String {
+        switch code {
+        case .networkConnectionLost: return "networkConnectionLost"
+        case .notConnectedToInternet: return "notConnectedToInternet"
+        case .timedOut: return "timedOut"
+        case .cannotConnectToHost: return "cannotConnectToHost"
+        case .cannotFindHost: return "cannotFindHost"
+        case .dnsLookupFailed: return "dnsLookupFailed"
+        case .internationalRoamingOff: return "internationalRoamingOff"
+        case .dataNotAllowed: return "dataNotAllowed"
+        case .callIsActive: return "callIsActive"
+        case .secureConnectionFailed: return "secureConnectionFailed"
+        case .cancelled: return "cancelled"
+        default: return "other"
+        }
+    }
+
     // MARK: URL building
 
     private func url(_ path: String, query: [URLQueryItem] = []) -> URL {
@@ -114,14 +157,27 @@ public struct LFGClient: Sendable {
     // MARK: Reachability
 
     public func ping() async -> Reachability {
+        let started = Date()
         do {
             _ = try await get("api/sessions", as: SessionsResponse.self)
+            ConnectionLog.shared.log(.probe,
+                String(format: "ok in %.2fs", Date().timeIntervalSince(started)), host: logLabel)
             return .ok
         } catch let LFGError.http(status, _) {
+            ConnectionLog.shared.log(.probe,
+                String(format: "HTTP %d after %.2fs", status, Date().timeIntervalSince(started)),
+                host: logLabel)
             return .badResponse("HTTP \(status)")
         } catch let LFGError.notReachable(u) {
+            ConnectionLog.shared.log(.probe,
+                String(format: "unreachable after %.2fs — %@", Date().timeIntervalSince(started), u),
+                host: logLabel)
             return .hostUnreachable(u)
         } catch {
+            ConnectionLog.shared.log(.probe,
+                String(format: "failed after %.2fs — %@",
+                       Date().timeIntervalSince(started), LFGClient.describe(error)),
+                host: logLabel)
             return .badResponse(error.localizedDescription)
         }
     }
@@ -287,8 +343,18 @@ public struct LFGClient: Sendable {
         _ = try await send("POST", "api/sessions/\(id)/dismiss")
     }
 
-    public func interrupt(_ id: String) async throws {
-        _ = try await send("POST", "api/sessions/\(id)/interrupt")
+    /// Interrupt the current turn.
+    ///
+    /// Returns whether the turn actually STOPPED — the server confirms against
+    /// the pane rather than reporting the exit code of `tmux send-keys`, which
+    /// only ever proved the pane existed. `nil` means the server could not tell
+    /// (pane unscrapeable, or an older server that doesn't send the field), which
+    /// callers must treat as "unknown", never as success.
+    @discardableResult
+    public func interrupt(_ id: String) async throws -> Bool? {
+        let data = try await send("POST", "api/sessions/\(id)/interrupt")
+        struct InterruptResponse: Decodable { let stopped: Bool? }
+        return (try? JSONDecoder().decode(InterruptResponse.self, from: data))?.stopped
     }
 
     /// Remove a not-yet-delivered queued message (held in lfg's queue).
@@ -389,8 +455,12 @@ public struct LFGClient: Sendable {
         let target = url("api/events", query: [URLQueryItem(name: "since", value: String(since))])
         let session = self.session
         let staleTimeout = HostLinkPolicy.staleTimeout
+        let label = logLabel
+        let log = ConnectionLog.shared
         return AsyncThrowingStream { continuation in
             let task = Task {
+                let dialedAt = Date()
+                log.log(.stream, "dial since=\(since)", host: label)
                 var req = URLRequest(url: target)
                 req.httpMethod = "GET"
                 // NOT .infinity: URLSession's timeoutInterval is an IDLE timeout
@@ -405,6 +475,14 @@ public struct LFGClient: Sendable {
                 req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
                 do {
                     let (bytes, resp) = try await session.bytes(for: req)
+                    let status = (resp as? HTTPURLResponse)?.statusCode ?? -1
+                    // Time-to-headers is the number that separates "the host is
+                    // gone" from "the Tailscale path is cold": a re-punch or DERP
+                    // failover shows up here as seconds, not milliseconds.
+                    log.log(.stream,
+                            String(format: "headers status=%d in %.2fs", status,
+                                   Date().timeIntervalSince(dialedAt)),
+                            host: label)
                     if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                         throw LFGError.http(status: http.statusCode, body: "")
                     }
@@ -414,7 +492,11 @@ public struct LFGClient: Sendable {
                             try? await Task.sleep(for: .seconds(5))
                             if Task.isCancelled { return }
                             let last = lastActivity.withLock { $0 }
-                            if Date().timeIntervalSince(last) > staleTimeout {
+                            let quiet = Date().timeIntervalSince(last)
+                            if quiet > staleTimeout {
+                                log.log(.stream,
+                                        String(format: "STALL — no bytes for %.1fs, giving up", quiet),
+                                        host: label)
                                 continuation.finish(throwing: LFGError.streamStalled)
                                 return
                             }
@@ -425,23 +507,56 @@ public struct LFGClient: Sendable {
                     var parser = SSEParser()
                     var lineBytes = [UInt8]()
                     lineBytes.reserveCapacity(256)
+                    var events = 0
+                    var heartbeats = 0
                     for try await byte in bytes {
                         if Task.isCancelled { break }
                         if byte == 0x0A {
-                            lastActivity.withLock { $0 = Date() }
+                            let previous = lastActivity.withLock { was -> Date in
+                                let prior = was; was = Date(); return prior
+                            }
                             var line = String(decoding: lineBytes, as: UTF8.self)
                             if line.hasSuffix("\r") { line.removeLast() }
                             lineBytes.removeAll(keepingCapacity: true)
                             if let frame = parser.feedLine(line),
                                let element = HostStreamDecoder.decode(frame) {
+                                switch element {
+                                case .heartbeat(let head):
+                                    heartbeats += 1
+                                    // The single most useful line in the whole
+                                    // log: `gap` is the observable that turns
+                                    // "it felt like it dropped" into a number.
+                                    log.log(.stream,
+                                            String(format: "hb head=%@ gap=%.1fs",
+                                                   head.map(String.init) ?? "?",
+                                                   Date().timeIntervalSince(previous)),
+                                            host: label)
+                                case .event(let seq, _):
+                                    events += 1
+                                    if events == 1 {
+                                        log.log(.stream, "first event seq=\(seq)", host: label)
+                                    }
+                                case .resync(let head):
+                                    log.log(.stream, "RESYNC head=\(head) (cursor unserviceable)", host: label)
+                                }
                                 continuation.yield(element)
                             }
                         } else {
                             lineBytes.append(byte)
                         }
                     }
+                    log.log(.stream,
+                            String(format: "closed cleanly after %.0fs — %d events, %d heartbeats",
+                                   Date().timeIntervalSince(dialedAt), events, heartbeats),
+                            host: label)
                     continuation.finish()
                 } catch {
+                    if !(error is CancellationError) {
+                        log.log(.stream,
+                                String(format: "ERROR after %.1fs — %@",
+                                       Date().timeIntervalSince(dialedAt), LFGClient.describe(error)),
+                                host: label)
+                    }
                     continuation.finish(throwing: error)
                 }
             }
@@ -454,8 +569,22 @@ public struct LFGClient: Sendable {
     public func keepalivePing(timeout: TimeInterval = 5) async throws -> (head: Int64, rtt: TimeInterval) {
         struct P: Decodable { let seq: Int64? }
         let started = Date()
-        let p = try await get("api/ping", timeout: timeout, as: P.self)
-        return (head: p.seq ?? 0, rtt: Date().timeIntervalSince(started))
+        do {
+            let p = try await get("api/ping", timeout: timeout, as: P.self)
+            let rtt = Date().timeIntervalSince(started)
+            // RTT is how a DERP relay outs itself: a direct Tailscale path is
+            // single-digit ms on LAN and tens of ms on a punched cellular path,
+            // while a relayed one lands in the hundreds.
+            ConnectionLog.shared.log(.keepalive,
+                String(format: "rtt=%.0fms head=%lld", rtt * 1000, p.seq ?? 0), host: logLabel)
+            return (head: p.seq ?? 0, rtt: rtt)
+        } catch {
+            ConnectionLog.shared.log(.keepalive,
+                String(format: "FAILED after %.2fs — %@",
+                       Date().timeIntervalSince(started), LFGClient.describe(error)),
+                host: logLabel)
+            throw error
+        }
     }
 
     /// One bounded page of journaled events — the background-wake fetch shape

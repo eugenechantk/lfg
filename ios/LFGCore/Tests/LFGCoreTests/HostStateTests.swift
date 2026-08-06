@@ -14,7 +14,8 @@ final class HostStateTests: XCTestCase {
             .unknown, .connecting, .live,
             .degraded(since: t0, reason: "x"),
             .offline(since: t0, reason: "Connection lost"),
-            .noNetwork,
+            .noNetwork(since: t0),
+            .noNetworkSustained(since: t0),
         ]
         for s in states {
             XCTAssertEqual(HostStateMachine.reduce(s, .receiving, now: at(60)), .live,
@@ -89,12 +90,118 @@ final class HostStateTests: XCTestCase {
 
     func testNoNetworkOverridesAndRestoreGoesToNeutralNotHealthy() {
         let s = HostStateMachine.reduce(.live, .networkLost, now: t0)
-        XCTAssertEqual(s, .noNetwork)
+        XCTAssertEqual(s, .noNetwork(since: t0))
         // A failure while the device has no path stays "no network" — blaming
         // the host for the phone's radio shows the user the wrong remedy.
-        XCTAssertEqual(HostStateMachine.reduce(s, .failed(reason: "x"), now: at(1)), .noNetwork)
-        // Restoring the path is not evidence the host is up.
-        XCTAssertEqual(HostStateMachine.reduce(s, .networkRestored, now: at(2)), .connecting)
+        XCTAssertEqual(HostStateMachine.reduce(s, .failed(reason: "x"), now: at(1)), .noNetwork(since: t0))
+        // Restoring the path is not evidence the host is up — it must not go
+        // `.live`, and it must not banner either.
+        let restored = HostStateMachine.reduce(s, .networkRestored, now: at(2))
+        XCTAssertFalse(restored.isLive)
+        XCTAssertFalse(restored.showsOfflineBanner)
+    }
+
+    // MARK: defect A — a transient path loss must not banner instantly
+
+    /// The cellular bug in one test. `NWPathMonitor` reports brief unsatisfied
+    /// paths routinely on 5G (handover, VPN re-attach); this used to paint "No
+    /// network connection" on the FIRST one, with no debounce at all, while
+    /// every other failure route got 30s of grace.
+    func testATransientPathLossIsDebouncedLikeEveryOtherFailure() {
+        let lost = HostStateMachine.reduce(.live, .networkLost, now: t0)
+        XCTAssertFalse(lost.showsOfflineBanner, "one path blip must not banner")
+        XCTAssertFalse(HostStateMachine.settle(lost, now: at(29)).showsOfflineBanner)
+        XCTAssertTrue(HostStateMachine.settle(lost, now: at(30)).showsOfflineBanner,
+                      "sustained path loss must still reach the banner")
+    }
+
+    func testAPathBlipThatClearsNeverBannersAndReturnsToLive() {
+        var s = HostStateMachine.reduce(.live, .networkLost, now: t0)
+        s = HostStateMachine.settle(s, now: at(1.5))
+        XCTAssertFalse(s.showsOfflineBanner)
+        s = HostStateMachine.reduce(s, .networkRestored, now: at(2))
+        XCTAssertFalse(s.showsOfflineBanner)
+        s = HostStateMachine.reduce(s, .receiving, now: at(2.4))
+        XCTAssertEqual(s, .live)
+    }
+
+    /// Repeated flapping must still converge on the banner — otherwise a phone
+    /// with genuinely no usable signal reads "connected" forever. This is the
+    /// path-monitor twin of `testRedialingDoesNotResetTheFailureClock`: the
+    /// first version of the debounce let `networkRestored` clear the clock, so
+    /// a lost→restored→lost cycle restarted its own grace window every few
+    /// seconds and never banner.
+    func testRepeatedPathFlappingStillReachesTheBanner() {
+        var s: HostState = .live
+        s = HostStateMachine.reduce(s, .networkLost, now: t0)
+        for t in stride(from: 4.0, through: 40.0, by: 4.0) {
+            s = HostStateMachine.reduce(s, .networkRestored, now: at(t))
+            s = HostStateMachine.reduce(s, .networkLost, now: at(t + 1))
+            s = HostStateMachine.settle(s, now: at(t + 1))
+        }
+        XCTAssertTrue(s.showsOfflineBanner)
+        XCTAssertEqual(s.failingSince, t0, "flapping must not restart its own grace window")
+    }
+
+    /// …but a blip that ends with real bytes must never banner, and must never
+    /// blame the radio once the radio is demonstrably back.
+    func testRestoredPathStopsBlamingTheRadioButKeepsTheClock() {
+        var s = HostStateMachine.reduce(.live, .networkLost, now: t0)
+        XCTAssertTrue(s.isNetworkPathProblem)
+        s = HostStateMachine.reduce(s, .networkRestored, now: at(2))
+        XCTAssertFalse(s.isNetworkPathProblem,
+                       "the device has a path — telling the user to check their signal is wrong")
+        XCTAssertEqual(s.failingSince, t0, "the clock survives; only the reason changed")
+        XCTAssertFalse(s.showsOfflineBanner)
+        s = HostStateMachine.reduce(s, .receiving, now: at(2.4))
+        XCTAssertEqual(s, .live)
+    }
+
+    func testSustainedPathLossIsStillDistinguishableFromAHostOutage() {
+        let net = HostStateMachine.settle(
+            HostStateMachine.reduce(.live, .networkLost, now: t0), now: at(31))
+        let host = HostStateMachine.settle(
+            HostStateMachine.reduce(.live, .failed(reason: "boom"), now: t0), now: at(31))
+        XCTAssertTrue(net.showsOfflineBanner)
+        XCTAssertTrue(host.showsOfflineBanner)
+        XCTAssertTrue(net.isNetworkPathProblem)
+        XCTAssertFalse(host.isNetworkPathProblem)
+    }
+
+    func testPathLossRecheckIsScheduledLikeADegradedHost() throws {
+        let lost = HostStateMachine.reduce(.live, .networkLost, now: t0)
+        XCTAssertEqual(try XCTUnwrap(HostStateMachine.timeUntilOffline(lost, now: at(10))), 20, accuracy: 0.001)
+        XCTAssertNil(HostStateMachine.timeUntilOffline(
+            HostStateMachine.settle(lost, now: at(31)), now: at(60)),
+            "already sustained needs no re-check")
+    }
+
+    // MARK: defect C — a path verdict measured before suspension is stale
+
+    /// iOS tears the network path down for a suspended process on cellular, so
+    /// the `noNetwork` latched at background time describes the radio as it was
+    /// minutes ago. It used to survive into the first frame after reopening.
+    func testForegroundingDiscardsAPathVerdictMeasuredBeforeSuspension() {
+        var s = HostStateMachine.settle(
+            HostStateMachine.reduce(.live, .networkLost, now: t0), now: at(31))
+        XCTAssertTrue(s.showsOfflineBanner)
+        s = HostStateMachine.reduce(s, .foregrounded, now: at(600))
+        XCTAssertEqual(s, .connecting, "reopening must not assert the old radio verdict")
+        XCTAssertFalse(s.showsOfflineBanner)
+    }
+
+    func testForegroundingDoesNotEraseAGenuineHostOutage() {
+        // Contrast with the above: the host being down is not invalidated by the
+        // app having been suspended, so this state must survive untouched.
+        let down = HostStateMachine.settle(
+            HostStateMachine.reduce(.live, .failed(reason: "host down"), now: t0), now: at(31))
+        XCTAssertEqual(HostStateMachine.reduce(down, .foregrounded, now: at(600)), down)
+    }
+
+    func testForegroundingAHealthyHostChangesNothing() {
+        XCTAssertEqual(HostStateMachine.reduce(.live, .foregrounded, now: at(5)), .live)
+        XCTAssertEqual(HostStateMachine.reduce(.unknown, .foregrounded, now: at(5)), .unknown)
+        XCTAssertEqual(HostStateMachine.reduce(.connecting, .foregrounded, now: at(5)), .connecting)
     }
 
     // MARK: settle is idempotent and preserves the original reason

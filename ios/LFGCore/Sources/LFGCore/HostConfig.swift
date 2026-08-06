@@ -22,6 +22,20 @@ public struct Host: Codable, Sendable, Hashable, Identifiable {
 
     public var id: String { url }
 
+    /// The host's name in the connection log, and ONLY there.
+    ///
+    /// Deliberately not `label`: display names are mutable — `name` is resolved
+    /// from `/api/info` after connecting and `displayName` is user-editable — so
+    /// the same machine appears under two or three different names across one
+    /// timeline depending on which component logged the line and when. That is
+    /// fatal for a diagnostic whose entire job is correlating events across
+    /// components. Derived from the configured URL's authority, which never
+    /// changes for the life of a host entry.
+    public var logLabel: String {
+        guard let comps = URLComponents(string: url), let h = comps.host else { return url }
+        return comps.port.map { "\(h):\($0)" } ?? h
+    }
+
     public init(url: String, hostId: String? = nil, name: String? = nil,
                 displayName: String? = nil, isDefault: Bool = false) {
         self.url = url

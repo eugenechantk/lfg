@@ -88,15 +88,23 @@ final class HostLink {
         case .catchingUp, .live:
             // Bytes are flowing. Do not churn a healthy stream just because the
             // system path changed.
+            //
+            // NOTE: this is only safe when the caller knows the socket is still
+            // valid. After a network PATH change it is not — see `resumeNow`,
+            // which is what the path-restored handler calls now.
+            log("retryNow: ignored, stream is \(state)")
             return
         case .idle:
+            log("retryNow: starting from idle")
             start()
         case .connecting, .backoff:
+            log("retryNow: redialing from \(state)")
             redial()
         }
     }
 
-    /// Foreground kick — "the user just opened the app, be connected NOW".
+    /// Be connected NOW — the app just came forward, or the device's network
+    /// path just changed underneath us.
     ///
     /// Stronger than `retryNow()` in two places, both of which cost the user
     /// seconds of a stale "Offline" badge otherwise:
@@ -108,20 +116,49 @@ final class HostLink {
     ///     `lastElementAt`, not from `state`.
     /// A dial that is genuinely in flight is left alone — cancelling it to start
     /// an identical one only adds latency.
-    func resumeNow(now: Date = Date()) {
+    ///
+    /// The same freshness argument applies to a **network path change**, which is
+    /// why the path-restored handler calls this and not `retryNow()`: after the
+    /// device's interface moves (5G↔LTE handover, VPN re-attach, Wi-Fi→cellular)
+    /// the local endpoint has changed, so a socket that still reads `.live` is
+    /// already dead and just hasn't noticed. `retryNow()` deliberately leaves
+    /// those alone, which cost ~20s of dead air per path change — invisible on
+    /// LAN, where paths don't change, and constant on cellular.
+    ///
+    /// - Parameter cause: recorded in the connection log so the timeline shows
+    ///   *why* a redial happened, not just that one did.
+    func resumeNow(now: Date = Date(), cause: String = "foreground") {
         switch state {
         case .idle:
+            log("resumeNow(\(cause)): starting from idle")
             start()
-        case .backoff:
+        case .backoff(let attempt):
+            log("resumeNow(\(cause)): skipping backoff (attempt \(attempt))")
             redial()
         case .connecting:
             // A dial that has already failed at least once; a fresh one is left
             // to complete.
-            if attemptFailed { redial() }
+            if attemptFailed {
+                log("resumeNow(\(cause)): redialing a dial that already failed")
+                redial()
+            } else {
+                log("resumeNow(\(cause)): leaving a fresh dial in flight")
+            }
         case .catchingUp, .live:
             let quietFor = now.timeIntervalSince(lastElementAt ?? now)
-            if quietFor > HostLinkPolicy.quietRedialAfter { redial() }
+            if quietFor > HostLinkPolicy.quietRedialAfter {
+                log(String(format: "resumeNow(%@): stream READS %@ but has been quiet %.1fs — redialing",
+                           cause, String(describing: state), quietFor))
+                redial()
+            } else {
+                log(String(format: "resumeNow(%@): stream is fresh (quiet %.1fs) — left alone",
+                           cause, quietFor))
+            }
         }
+    }
+
+    private func log(_ message: String) {
+        ConnectionLog.shared.log(.link, message, host: host.logLabel)
     }
 
     private func redial() {
@@ -147,6 +184,7 @@ final class HostLink {
 
     private func setState(_ s: State) {
         guard state != s else { return }
+        log("\(state) -> \(s)")
         state = s
         onStateChange?()
     }
@@ -180,6 +218,7 @@ final class HostLink {
         while !Task.isCancelled {
             let delay = HostLinkPolicy.reconnectDelay(attempt: attempt)
             if delay > 0 {
+                log(String(format: "backoff %.0fs before attempt %d", delay, attempt))
                 setState(.backoff(attempt))
                 try? await Task.sleep(for: .seconds(delay))
                 if Task.isCancelled { return }

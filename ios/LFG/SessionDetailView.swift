@@ -50,12 +50,20 @@ struct SessionDetailView: View {
     /// appears the matching placeholder drops out of the same render pass — no
     /// visible duplicate. Mirrors the store's reconcile matching.
     private var unmatchedSentBubbles: [SessionStore.PendingSend] {
-        return pending.filter { p in
-            guard p.showSent else { return false }
-            return !OptimisticSendReconciliation.containsMatchingUserTurn(
-                matchText: p.matchText,
-                in: messages)
-        }
+        pending.filter { $0.showSent && !hasLanded($0) }
+    }
+
+    /// Sends still waiting on the host: the one-line bars above the composer.
+    /// Filtered against the transcript for the same reason the bubbles are — the
+    /// bar must clear in the SAME render pass the real user turn appears, so the
+    /// message visibly *moves* into the conversation instead of briefly existing
+    /// twice.
+    private var pendingBars: [SessionStore.PendingSend] {
+        pending.filter { !$0.showSent && !hasLanded($0) }
+    }
+
+    private func hasLanded(_ p: SessionStore.PendingSend) -> Bool {
+        OptimisticSendReconciliation.containsMatchingUserTurn(matchText: p.matchText, in: messages)
     }
 
     var body: some View {
@@ -80,9 +88,15 @@ struct SessionDetailView: View {
             .animation(.easeOut(duration: 0.2), value: store.browserFrames[sid]?.frameId)
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 8) {
-                    // No pending strip: every send now renders as its own bubble
-                    // in the transcript, carrying its queued/offline/failed state
-                    // as a caption there rather than as a separate bar here.
+                    // A send the backend hasn't taken yet (queued behind a running
+                    // turn, offline, or failed) waits here as a one-line bar — not
+                    // as a transcript bubble. It becomes a blue bubble only when
+                    // the real user turn comes back from the host, so "queued" and
+                    // "received" never look the same.
+                    PendingStripView(sessionID: sid, items: pendingBars) { tapped in
+                        queueAction = tapped
+                    }
+                    .padding(.horizontal, 16)
                     // This session is LIVE on a host that is currently unreachable.
                     // Keep the draft editable; the store queues sends durably until
                     // the owning host comes back.
@@ -154,7 +168,13 @@ struct SessionDetailView: View {
             Text(item.displayText)
         }
         .confirmationDialog("End this session?", isPresented: $confirmEnd, titleVisibility: .visible) {
-            Button("End session", role: .destructive) { Task { await store.close(sid); onEnded() } }
+            // Gated on the result: `close` returns false and sets `lastError` when
+            // the server could not reap the agent. Dismissing regardless made a
+            // failed close indistinguishable from a successful one — the view
+            // closed, the row stayed, and the session was still running.
+            Button("End session", role: .destructive) {
+                Task { if await store.close(sid) { onEnded() } }
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("The agent's tmux session will be closed.")
@@ -186,19 +206,15 @@ struct SessionDetailView: View {
                         }
                     }
 
-                    // Every send — kickoff or follow-up, delivered or queued
-                    // behind a running turn — shows as a user bubble right away,
-                    // until the real user turn reconciles it. Filtered against
-                    // the live transcript so the placeholder disappears in the
-                    // SAME render pass that the real user turn appears —
-                    // otherwise the two overlap for a beat (the "momentary
-                    // duplicate") until the store's reconcile mutates
-                    // pendingSends a tick later.
-                    ForEach(unmatchedSentBubbles) { item in
-                        OptimisticUserBubble(sessionID: sid, pending: item) {
-                            queueAction = item
-                        }
-                    }
+                    // Sends the agent takes immediately (kickoff, or a follow-up
+                    // to an idle session) show as a finished user bubble right
+                    // away — everything still waiting sits in the pending bar
+                    // above the composer instead. Filtered against the live
+                    // transcript so the placeholder disappears in the SAME render
+                    // pass that the real user turn appears — otherwise the two
+                    // overlap for a beat (the "momentary duplicate") until the
+                    // store's reconcile mutates pendingSends a tick later.
+                    ForEach(unmatchedSentBubbles) { OptimisticUserBubble(sessionID: sid, pending: $0) }
 
                     // "Running" now lives in the nav-bar header (below the title),
                     // not inline in the transcript.

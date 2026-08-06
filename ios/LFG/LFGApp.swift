@@ -17,6 +17,13 @@ struct LFGApp: App {
         )
         _settings = State(initialValue: s)
         _store = State(initialValue: st)
+        // First line of every run. The connection log outlives the process, so
+        // without this banner a reader silently counts events across a restart
+        // boundary — the exact misreading that cost a previous investigation.
+        let info = Bundle.main.infoDictionary
+        ConnectionLog.shared.logLaunch(
+            version: info?["CFBundleShortVersionString"] as? String ?? "?",
+            build: info?["CFBundleVersion"] as? String ?? "?")
         // Bridge the push manager (used by the UIKit AppDelegate) to the same
         // settings/store the SwiftUI views observe.
         PushManager.shared.configure(settings: s, store: st)
