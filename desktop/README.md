@@ -16,10 +16,11 @@ windows are stretched to the full visible height of the display they open on.
 
 ## UI
 
-- **Toolbar** (Liquid Glass, per the HIG toolbar groupings) — the Status /
-  Directory segmented control sits in the center area; refresh and search are
-  grouped on the trailing edge. Search collapses to a glass icon and expands
-  into a field when clicked.
+- **Toolbar** (Liquid Glass, per the HIG toolbar groupings) — host connection
+  status replaces the static title on the leading edge, the Status / Directory
+  segmented control sits in the center area, and refresh + search sit on the
+  trailing edge. A single host shows Connected/Connecting/Offline; multiple
+  hosts get one named green/gray/orange status chip each.
 - **Search** — filters on title, project, last user message, model, agent, host.
 - **Status / Directory segments** — group like the iOS client: by status
   (Working / Paused / Idle) or by directory (collapsible sections, most
@@ -32,13 +33,26 @@ windows are stretched to the full visible height of the display they open on.
 `~/.config/lfg-desktop/hosts.json` (seeded with localhost on first run):
 
 ```json
-{ "hosts": ["http://localhost:8766", "http://100.75.162.40:8766"] }
+{
+  "hosts": [
+    "http://localhost:8766",
+    {
+      "url": "http://100.75.162.40:8766",
+      "ssh": "eugene@100.75.162.40",
+      "displayName": "Mac Studio"
+    }
+  ]
+}
 ```
 
 Each entry is one `lfg serve` machine (Tailscale IP or MagicDNS name). The
 host whose URL is loopback — or whose reported hostname matches this machine —
 is treated as local. Hosts reached twice (localhost + Tailscale IP) are
 deduped by `hostId`. Unreachable hosts are listed at the bottom of the window.
+The optional `displayName` can be edited in Settings and overrides the reported
+machine hostname everywhere the host is labeled. Leaving it blank restores the
+hostname/URL fallback. Legacy string entries and objects containing only `url`
+and `ssh` remain supported.
 
 ## Build
 
@@ -53,3 +67,19 @@ project. Targets macOS 26 (for the Liquid Glass toolbar APIs —
 Developer ID identity when available (falls back to ad-hoc) so the macOS
 automation permission for iTerm2 survives rebuilds; expect exactly one
 "lfg wants to control iTerm" consent prompt after the signing identity changes.
+
+For UI automation, set `LFG_DESKTOP_CONFIG_DIR` to a disposable directory. The
+app will read and write `hosts.json` there instead of touching the user's real
+`~/.config/lfg-desktop` configuration.
+
+Headless verification hooks are built into the executable because this target
+has no Xcode test bundle:
+
+```sh
+build/lfg.app/Contents/MacOS/lfg --desktop-feature-test
+build/lfg.app/Contents/MacOS/lfg --status-snapshots /tmp/lfg-status-snapshots
+```
+
+The second command renders inspectable single-host and multi-host status-bar
+fixtures off-screen, so visual verification still works while the login session
+is locked.

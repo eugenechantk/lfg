@@ -108,6 +108,7 @@ struct HostInfoResponse: Decodable { let hostId: String; let hostName: String }
 struct HostState: Identifiable {
     let url: String
     let sshTarget: String?
+    var displayName: String?
     var info: HostInfoResponse?
     var sessions: [APISession] = []
     var closedSessions: [APISession] = []
@@ -117,10 +118,34 @@ struct HostState: Identifiable {
     var id: String { url }
 
     var label: String {
-        if let name = info?.hostName {
-            return String(name.split(separator: ".").first ?? Substring(name))
+        Config.HostEntry(url: url, displayName: displayName)
+            .displayLabel(reportedHostName: info?.hostName)
+    }
+}
+
+enum HostConnectionStatus: Equatable {
+    case connected, connecting, offline
+
+    var label: String {
+        switch self {
+        case .connected: return "Connected"
+        case .connecting: return "Connecting…"
+        case .offline: return "Offline"
         }
-        return url.replacingOccurrences(of: "http://", with: "")
+    }
+}
+
+/// Pure connection-presentation rules shared by the title-bar UI and the
+/// desktop feature tests. An unresolved host is connecting, never offline.
+enum ConnectionPresentation {
+    static func status(resolved: Bool, reachable: Bool) -> HostConnectionStatus {
+        guard resolved else { return .connecting }
+        return reachable ? .connected : .offline
+    }
+
+    static func aggregate(configured: Int, resolved: Int, reachable: Int) -> HostConnectionStatus {
+        guard configured > 0, resolved >= configured else { return .connecting }
+        return reachable > 0 ? .connected : .offline
     }
 }
 
@@ -163,24 +188,42 @@ struct SessionItem: Identifiable {
     }
 }
 
+enum SessionSearch {
+    static func matches(_ item: SessionItem, query: String) -> Bool {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return true }
+        let session = item.session
+        return [session.title, session.project, session.lastUserText, session.model,
+                session.agent, item.hostLabel]
+            .compactMap { $0?.lowercased() }
+            .contains { $0.contains(q) }
+    }
+}
+
 // MARK: - Config
 
 enum Config {
     static var dir: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/lfg-desktop", isDirectory: true)
+        directory(
+            environment: ProcessInfo.processInfo.environment,
+            homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+        )
     }
     static var hostsFile: URL { dir.appendingPathComponent("hosts.json") }
 
-    struct HostEntry: Codable, Equatable {
-        let url: String
-        let ssh: String?
+    struct HostEntry: Codable, Equatable, Identifiable {
+        var url: String
+        var ssh: String?
+        var displayName: String?
 
-        enum CodingKeys: String, CodingKey { case url, ssh }
+        var id: String { url }
 
-        init(url: String, ssh: String? = nil) {
+        enum CodingKeys: String, CodingKey { case url, ssh, displayName }
+
+        init(url: String, ssh: String? = nil, displayName: String? = nil) {
             self.url = url
             self.ssh = ssh
+            self.displayName = displayName
         }
 
         init(from decoder: Decoder) throws {
@@ -188,15 +231,18 @@ enum Config {
             if let url = try? single.decode(String.self) {
                 self.url = url
                 self.ssh = nil
+                self.displayName = nil
                 return
             }
             let c = try decoder.container(keyedBy: CodingKeys.self)
             url = try c.decode(String.self, forKey: .url)
             ssh = try c.decodeIfPresent(String.self, forKey: .ssh)
+            displayName = try c.decodeIfPresent(String.self, forKey: .displayName)
         }
 
         func encode(to encoder: Encoder) throws {
-            if ssh == nil {
+            let name = Config.normalizedDisplayName(displayName)
+            if ssh == nil && name == nil {
                 var single = encoder.singleValueContainer()
                 try single.encode(url)
                 return
@@ -204,16 +250,42 @@ enum Config {
             var c = encoder.container(keyedBy: CodingKeys.self)
             try c.encode(url, forKey: .url)
             try c.encodeIfPresent(ssh, forKey: .ssh)
+            try c.encodeIfPresent(name, forKey: .displayName)
+        }
+
+        func displayLabel(reportedHostName: String?) -> String {
+            if let displayName = Config.normalizedDisplayName(displayName) {
+                return displayName
+            }
+            if let reportedHostName, !reportedHostName.isEmpty {
+                return String(reportedHostName.split(separator: ".").first ?? Substring(reportedHostName))
+            }
+            if let components = URLComponents(string: url), let host = components.host {
+                return components.port.map { "\(host):\($0)" } ?? host
+            }
+            if let range = url.range(of: "://") { return String(url[range.upperBound...]) }
+            return url
         }
     }
 
     struct HostsFile: Codable { var hosts: [HostEntry] }
 
+    /// Production uses the standard home-directory location. The explicit
+    /// override gives UI automation a disposable config root so it never has
+    /// to edit the user's real host list.
+    static func directory(environment: [String: String], homeDirectory: URL) -> URL {
+        if let override = environment["LFG_DESKTOP_CONFIG_DIR"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !override.isEmpty {
+            return URL(fileURLWithPath: override, isDirectory: true)
+        }
+        return homeDirectory.appendingPathComponent(".config/lfg-desktop", isDirectory: true)
+    }
+
     static func loadHosts() -> [HostEntry] {
-        if let data = try? Data(contentsOf: hostsFile),
-           let parsed = try? JSONDecoder().decode(HostsFile.self, from: data),
-           !parsed.hosts.isEmpty {
-            return parsed.hosts
+        if let hosts = loadHosts(from: dir),
+           !hosts.isEmpty {
+            return hosts
         }
         // Seed a default config so the file is discoverable/editable.
         let seed = HostsFile(hosts: [HostEntry(url: "http://localhost:8766")])
@@ -233,9 +305,35 @@ enum Config {
     }
 
     static func saveHosts(_ hosts: [HostEntry]) throws {
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let data = try JSONEncoder().encode(HostsFile(hosts: hosts))
-        try data.write(to: hostsFile, options: .atomic)
+        try saveHosts(hosts, to: dir)
+    }
+
+    static func loadHosts(from directory: URL) -> [HostEntry]? {
+        let file = directory.appendingPathComponent("hosts.json")
+        guard let data = try? Data(contentsOf: file) else { return nil }
+        return decodeHosts(data)
+    }
+
+    static func saveHosts(_ hosts: [HostEntry], to directory: URL) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let data = try encodeHosts(hosts)
+        try data.write(to: directory.appendingPathComponent("hosts.json"), options: .atomic)
+    }
+
+    static func decodeHosts(_ data: Data) -> [HostEntry]? {
+        try? JSONDecoder().decode(HostsFile.self, from: data).hosts
+    }
+
+    static func encodeHosts(_ hosts: [HostEntry]) throws -> Data {
+        let normalized = hosts.map {
+            HostEntry(url: $0.url, ssh: $0.ssh, displayName: normalizedDisplayName($0.displayName))
+        }
+        return try JSONEncoder().encode(HostsFile(hosts: normalized))
+    }
+
+    static func normalizedDisplayName(_ name: String?) -> String? {
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
@@ -243,6 +341,7 @@ enum Config {
 
 @MainActor
 final class SessionStore: ObservableObject {
+    @Published var configuredHosts: [Config.HostEntry] = Config.loadHosts()
     @Published var hosts: [HostState] = []
     @Published var duplicateHostsByURL: [String: HostState] = [:]
     @Published var refreshing = false
@@ -287,6 +386,30 @@ final class SessionStore: ObservableObject {
 
     var multipleHosts: Bool { hosts.filter { $0.error == nil }.count > 1 }
 
+    var runningCount: Int { items.filter { $0.status == .working }.count }
+
+    var connectionStatus: HostConnectionStatus {
+        let states = configuredHosts.map(resolvedState(for:))
+        return ConnectionPresentation.aggregate(
+            configured: configuredHosts.count,
+            resolved: states.compactMap { $0 }.count,
+            reachable: states.compactMap { $0 }.filter { $0.error == nil }.count
+        )
+    }
+
+    func connectionStatus(for entry: Config.HostEntry) -> HostConnectionStatus {
+        let state = resolvedState(for: entry)
+        return ConnectionPresentation.status(resolved: state != nil, reachable: state?.error == nil)
+    }
+
+    func displayLabel(for entry: Config.HostEntry) -> String {
+        entry.displayLabel(reportedHostName: resolvedState(for: entry)?.info?.hostName)
+    }
+
+    func reloadConfiguration() {
+        applyConfiguration(Config.loadHosts())
+    }
+
     private var localHostname: String = {
         var name = ProcessInfo.processInfo.hostName.lowercased()
         for suffix in [".local", ".lan", ".home"] where name.hasSuffix(suffix) {
@@ -307,6 +430,7 @@ final class SessionStore: ObservableObject {
         refreshing = true
         defer { refreshing = false; lastRefreshed = Date() }
         let entries = Config.loadHosts()
+        applyConfiguration(entries)
         var results: [HostState] = []
         await withTaskGroup(of: HostState.self) { group in
             for entry in entries {
@@ -411,9 +535,28 @@ final class SessionStore: ObservableObject {
         return name == localHostname
     }
 
+    private func resolvedState(for entry: Config.HostEntry) -> HostState? {
+        hosts.first { $0.url == entry.url } ?? duplicateHostsByURL[entry.url]
+    }
+
+    func applyConfiguration(_ entries: [Config.HostEntry]) {
+        configuredHosts = entries
+        var namesByURL: [String: String] = [:]
+        for entry in entries {
+            namesByURL[entry.url] = Config.normalizedDisplayName(entry.displayName)
+        }
+        for index in hosts.indices {
+            hosts[index].displayName = namesByURL[hosts[index].url]
+        }
+    }
+
     private static func fetchHost(entry: Config.HostEntry) async -> HostState {
         let url = entry.url
-        var state = HostState(url: url, sshTarget: Config.sshTarget(for: entry))
+        var state = HostState(
+            url: url,
+            sshTarget: Config.sshTarget(for: entry),
+            displayName: Config.normalizedDisplayName(entry.displayName)
+        )
         let session = URLSession(configuration: {
             let c = URLSessionConfiguration.ephemeral
             c.timeoutIntervalForRequest = 4
@@ -768,6 +911,333 @@ enum MoveTestCLI {
     }()
 }
 
+// MARK: - Headless desktop-feature tests
+
+/// Deterministic coverage for host-config compatibility and connection-status
+/// presentation. Kept in the production source because this app intentionally
+/// has no Xcode project or separate test target.
+enum DesktopFeatureTestCLI {
+    @MainActor
+    static func runIfRequested() {
+        guard CommandLine.arguments.dropFirst().first == "--desktop-feature-test" else { return }
+        do {
+            try run()
+            print("{\"ok\":true,\"tests\":24}")
+            fflush(stdout)
+            Darwin.exit(0)
+        } catch {
+            print("{\"ok\":false,\"error\":\"\(error.localizedDescription)\"}")
+            fflush(stdout)
+            Darwin.exit(1)
+        }
+    }
+
+    @MainActor
+    private static func run() throws {
+        let legacyData = Data(#"{"hosts":["http://localhost:8766",{"url":"http://studio:8766","ssh":"me@studio"}]}"#.utf8)
+        let legacy = try require(Config.decodeHosts(legacyData), "legacy config decodes")
+        try expect(legacy.count == 2, "legacy string and object entries load")
+        try expect(legacy[0].displayName == nil, "legacy string has no display name")
+        try expect(legacy[1].ssh == "me@studio", "legacy object keeps SSH target")
+        let isolatedDirectory = Config.directory(
+            environment: ["LFG_DESKTOP_CONFIG_DIR": "/tmp/lfg-desktop-ui-audit"],
+            homeDirectory: URL(fileURLWithPath: "/Users/example")
+        )
+        try expect(isolatedDirectory.path == "/tmp/lfg-desktop-ui-audit",
+                   "UI audit can isolate config from the user's home directory")
+
+        let named = Config.HostEntry(
+            url: "http://studio:8766",
+            ssh: "me@studio",
+            displayName: "  Creative Studio  "
+        )
+        let encoded = try Config.encodeHosts([named])
+        let roundTripped = try require(Config.decodeHosts(encoded)?.first, "named config round-trips")
+        try expect(roundTripped.displayName == "Creative Studio", "display name is normalized on persistence")
+        try expect(roundTripped.ssh == "me@studio", "named config keeps SSH target")
+        try expect(roundTripped.displayLabel(reportedHostName: "Mac-Studio.local") == "Creative Studio",
+                   "display name wins over reported hostname")
+
+        let blankName = Config.HostEntry(url: "http://studio:8766", displayName: "  ")
+        try expect(blankName.displayLabel(reportedHostName: "Mac-Studio.local") == "Mac-Studio",
+                   "blank display name falls back to short hostname")
+        try expect(blankName.displayLabel(reportedHostName: nil) == "studio:8766",
+                   "missing hostname falls back to compact URL")
+        let namedState = HostState(
+            url: "http://studio:8766",
+            sshTarget: nil,
+            displayName: "Creative Studio",
+            info: HostInfoResponse(hostId: "studio-id", hostName: "Mac-Studio.local")
+        )
+        try expect(namedState.label == "Creative Studio", "live host state uses configured display name")
+        let fallbackState = HostState(
+            url: "http://studio:8766",
+            sshTarget: nil,
+            displayName: nil,
+            info: HostInfoResponse(hostId: "studio-id", hostName: "Mac-Studio.local")
+        )
+        try expect(fallbackState.label == "Mac-Studio", "live host state falls back to reported hostname")
+
+        let persistenceDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lfg-desktop-feature-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: persistenceDirectory) }
+        try Config.saveHosts([named], to: persistenceDirectory)
+        let persistedNamed = try require(
+            Config.loadHosts(from: persistenceDirectory)?.first,
+            "saved custom display name reloads from disk"
+        )
+        try expect(persistedNamed.displayName == "Creative Studio",
+                   "custom display name persists on disk")
+        try expect(persistedNamed.displayLabel(reportedHostName: "Mac-Studio.local") == "Creative Studio",
+                   "reloaded custom display name remains authoritative")
+        try Config.saveHosts([blankName], to: persistenceDirectory)
+        let persistedBlank = try require(
+            Config.loadHosts(from: persistenceDirectory)?.first,
+            "saved blank display name reloads from disk"
+        )
+        try expect(persistedBlank.displayName == nil, "blank display name persists as nil/omitted")
+        try expect(persistedBlank.displayLabel(reportedHostName: "Mac-Studio.local") == "Mac-Studio",
+                   "reloaded blank display name restores hostname fallback")
+
+        let sourceSession = APISession(
+            agent: "claude",
+            pid: 42,
+            cwd: "/tmp/project",
+            project: "project",
+            title: "Session",
+            sessionId: "session-1",
+            busy: true,
+            lastActivityAt: 1,
+            tmuxName: "lfg-session",
+            model: "opus",
+            status: nil,
+            lastUserText: "Ship it"
+        )
+        let store = SessionStore()
+        store.hosts = [
+            HostState(
+                url: "http://source:8766",
+                sshTarget: nil,
+                displayName: nil,
+                info: HostInfoResponse(hostId: "source-id", hostName: "Alpha.local"),
+                sessions: [sourceSession]
+            ),
+            HostState(
+                url: "http://target:8766",
+                sshTarget: nil,
+                displayName: nil,
+                info: HostInfoResponse(hostId: "target-id", hostName: "Beta.local")
+            )
+        ]
+        let renamedConfiguration = [
+            Config.HostEntry(url: "http://source:8766", displayName: "Creative Studio"),
+            Config.HostEntry(url: "http://target:8766", displayName: "Render Farm")
+        ]
+        try Config.saveHosts(renamedConfiguration, to: persistenceDirectory)
+        let reloadedRenamedConfiguration = try require(
+            Config.loadHosts(from: persistenceDirectory),
+            "renamed store configuration reloads from disk"
+        )
+        store.applyConfiguration(reloadedRenamedConfiguration)
+        let renamedItem = try require(store.items.first, "renamed session item exists")
+        try expect(renamedItem.hostLabel == "Creative Studio",
+                   "items immediately use saved display name before refresh")
+        try expect(SessionSearch.matches(renamedItem, query: "creative studio"),
+                   "session search matches saved display name")
+        try expect(store.moveTargets(for: renamedItem).first?.label == "Render Farm",
+                   "move target immediately uses saved display name")
+        store.hosts[1].error = "unreachable"
+        try expect(store.unreachableHosts == ["Render Farm"],
+                   "unreachable-host copy uses saved display name")
+        let blankStoreConfiguration = [
+            Config.HostEntry(url: "http://source:8766", displayName: "  "),
+            renamedConfiguration[1]
+        ]
+        try Config.saveHosts(blankStoreConfiguration, to: persistenceDirectory)
+        let reloadedBlankStoreConfiguration = try require(
+            Config.loadHosts(from: persistenceDirectory),
+            "blank store configuration reloads from disk"
+        )
+        store.applyConfiguration(reloadedBlankStoreConfiguration)
+        try expect(store.hosts[0].label == "Alpha",
+                   "blank saved name immediately restores live hostname fallback")
+
+        try expect(ConnectionPresentation.aggregate(configured: 1, resolved: 0, reachable: 0) == .connecting,
+                   "unresolved host is connecting")
+        try expect(ConnectionPresentation.aggregate(configured: 1, resolved: 1, reachable: 1) == .connected,
+                   "reachable host is connected")
+        try expect(ConnectionPresentation.aggregate(configured: 1, resolved: 1, reachable: 0) == .offline,
+                   "resolved unreachable host is offline")
+        try expect(ConnectionPresentation.status(resolved: false, reachable: false) == .connecting,
+                   "unresolved per-host chip is connecting")
+    }
+
+    private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
+        guard condition() else { throw TestFailure(message) }
+    }
+
+    private static func require<T>(_ value: T?, _ message: String) throws -> T {
+        guard let value else { throw TestFailure(message) }
+        return value
+    }
+
+    private struct TestFailure: LocalizedError {
+        let message: String
+        init(_ message: String) { self.message = message }
+        var errorDescription: String? { message }
+    }
+}
+
+/// Off-screen status-bar fixtures for visual auditing when a macOS login
+/// session is locked and ScreenCaptureKit cannot inspect live windows.
+enum DesktopStatusSnapshotCLI {
+    @MainActor
+    static func runIfRequested() {
+        let args = CommandLine.arguments
+        guard args.dropFirst().first == "--status-snapshots" else { return }
+        guard args.count == 3 else {
+            print("{\"ok\":false,\"error\":\"usage: lfg --status-snapshots <output-directory>\"}")
+            Darwin.exit(1)
+        }
+        do {
+            let directory = URL(fileURLWithPath: args[2], isDirectory: true)
+            try renderFixtures(to: directory)
+            print("{\"ok\":true,\"snapshots\":4,\"directory\":\"\(directory.path)\"}")
+            fflush(stdout)
+            Darwin.exit(0)
+        } catch {
+            print("{\"ok\":false,\"error\":\"\(error.localizedDescription)\"}")
+            fflush(stdout)
+            Darwin.exit(1)
+        }
+    }
+
+    @MainActor
+    private static func renderFixtures(to directory: URL) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        _ = NSApplication.shared
+
+        let oneHost = Config.HostEntry(url: "http://studio:8766", displayName: "Creative Studio")
+        let working = APISession(
+            agent: "claude",
+            pid: 1,
+            cwd: "/tmp/project",
+            project: "project",
+            title: "Working",
+            sessionId: "working-1",
+            busy: true,
+            lastActivityAt: 1,
+            tmuxName: "lfg-working",
+            model: "opus",
+            status: nil,
+            lastUserText: nil
+        )
+        try render(
+            store: makeStore(
+                configured: [oneHost],
+                states: [HostState(
+                    url: oneHost.url,
+                    sshTarget: nil,
+                    displayName: oneHost.displayName,
+                    info: HostInfoResponse(hostId: "studio-id", hostName: "Studio.local"),
+                    sessions: [working]
+                )]
+            ),
+            width: 320,
+            to: directory.appendingPathComponent("single-connected-running.png")
+        )
+        try render(
+            store: makeStore(configured: [oneHost], states: []),
+            width: 240,
+            to: directory.appendingPathComponent("single-connecting.png")
+        )
+        var offline = HostState(
+            url: oneHost.url,
+            sshTarget: nil,
+            displayName: oneHost.displayName,
+            info: HostInfoResponse(hostId: "studio-id", hostName: "Studio.local")
+        )
+        offline.error = "unreachable"
+        try render(
+            store: makeStore(configured: [oneHost], states: [offline]),
+            width: 240,
+            to: directory.appendingPathComponent("single-offline.png")
+        )
+
+        let connected = Config.HostEntry(url: "http://connected:8766", displayName: "Studio")
+        let unreachable = Config.HostEntry(url: "http://offline:8766", displayName: "Travel Mac")
+        let longName = Config.HostEntry(
+            url: "http://long:8766",
+            displayName: "Extremely Long Creative Production Mac Studio Host"
+        )
+        var unreachableState = HostState(
+            url: unreachable.url,
+            sshTarget: nil,
+            displayName: unreachable.displayName,
+            info: HostInfoResponse(hostId: "offline-id", hostName: "Offline.local")
+        )
+        unreachableState.error = "unreachable"
+        try render(
+            store: makeStore(
+                configured: [connected, unreachable, longName],
+                states: [
+                    HostState(
+                        url: connected.url,
+                        sshTarget: nil,
+                        displayName: connected.displayName,
+                        info: HostInfoResponse(hostId: "connected-id", hostName: "Connected.local")
+                    ),
+                    unreachableState,
+                    HostState(
+                        url: longName.url,
+                        sshTarget: nil,
+                        displayName: longName.displayName,
+                        info: HostInfoResponse(hostId: "long-id", hostName: "Long.local")
+                    )
+                ]
+            ),
+            width: 520,
+            to: directory.appendingPathComponent("multi-connected-offline-truncated.png")
+        )
+    }
+
+    @MainActor
+    private static func makeStore(
+        configured: [Config.HostEntry],
+        states: [HostState]
+    ) -> SessionStore {
+        let store = SessionStore()
+        store.configuredHosts = configured
+        store.hosts = states
+        return store
+    }
+
+    @MainActor
+    private static func render(store: SessionStore, width: CGFloat, to url: URL) throws {
+        let content = DesktopConnectionStatusBar()
+            .environmentObject(store)
+            .padding(.horizontal, 16)
+            .frame(width: width, height: 52, alignment: .leading)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .preferredColorScheme(.dark)
+        let renderer = ImageRenderer(content: content)
+        renderer.scale = 2
+        guard let image = renderer.nsImage,
+              let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let png = bitmap.representation(using: .png, properties: [:]) else {
+            throw SnapshotFailure("Could not render \(url.lastPathComponent)")
+        }
+        try png.write(to: url, options: .atomic)
+    }
+
+    private struct SnapshotFailure: LocalizedError {
+        let message: String
+        init(_ message: String) { self.message = message }
+        var errorDescription: String? { message }
+    }
+}
+
 // MARK: - Opening sessions in iTerm2
 
 enum Opener {
@@ -1103,7 +1573,15 @@ struct HostsSettingsView: View {
                         badge("this Mac", color: .blue)
                     }
                 }
-                Text(detailText(state: state, duplicate: duplicate))
+                TextField(
+                    displayNamePlaceholder(state: state, duplicate: duplicate),
+                    text: displayNameBinding(for: row.index)
+                )
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("Display name for \(row.entry.url)")
+                    .accessibilityIdentifier("host_display_name_field_\(row.index)")
+                    .onSubmit { persist(configuredHosts) }
+                Text(detailText(entry: row.entry, state: state, duplicate: duplicate))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -1113,6 +1591,15 @@ struct HostsSettingsView: View {
                     .lineLimit(1)
             }
             Spacer()
+            Button {
+                persist(configuredHosts)
+            } label: {
+                Image(systemName: "checkmark.circle")
+            }
+            .buttonStyle(.borderless)
+            .help("Save display name")
+            .accessibilityLabel("Save display name for \(row.entry.url)")
+            .accessibilityIdentifier("save_host_display_name_button_\(row.index)")
             Button {
                 removeHost(at: row.index)
             } label: {
@@ -1131,15 +1618,38 @@ struct HostsSettingsView: View {
         return .red
     }
 
-    private func detailText(state: HostState?, duplicate: HostState?) -> String {
+    private func detailText(entry: Config.HostEntry, state: HostState?, duplicate: HostState?) -> String {
         if let state {
             if state.error != nil { return "Unreachable" }
-            return "\(state.label) · \(sessionCountText(state.sessions.count))"
+            return "\(entry.displayLabel(reportedHostName: state.info?.hostName)) · \(sessionCountText(state.sessions.count))"
         }
         if let duplicate {
-            return "Reachable duplicate of \(duplicate.label) · \(sessionCountText(duplicate.sessions.count))"
+            let label = entry.displayLabel(reportedHostName: duplicate.info?.hostName)
+            return "Reachable duplicate of \(label) · \(sessionCountText(duplicate.sessions.count))"
         }
         return "Unreachable"
+    }
+
+    private func displayNamePlaceholder(state: HostState?, duplicate: HostState?) -> String {
+        let hostName = state?.info?.hostName ?? duplicate?.info?.hostName
+        if let hostName, !hostName.isEmpty {
+            return String(hostName.split(separator: ".").first ?? Substring(hostName))
+        }
+        return "Display name (optional)"
+    }
+
+    private func displayNameBinding(for index: Int) -> Binding<String> {
+        Binding(
+            get: {
+                guard configuredHosts.indices.contains(index) else { return "" }
+                return configuredHosts[index].displayName ?? ""
+            },
+            set: { value in
+                guard configuredHosts.indices.contains(index) else { return }
+                configuredHosts[index].displayName = value
+                saveError = nil
+            }
+        )
     }
 
     private func sessionCountText(_ count: Int) -> String {
@@ -1204,10 +1714,90 @@ struct HostsSettingsView: View {
         do {
             try Config.saveHosts(hosts)
             configuredHosts = Config.loadHosts()
+            store.reloadConfiguration()
             Task { await store.refresh() }
         } catch {
             saveError = "Couldn't save hosts: \(error.localizedDescription)"
         }
+    }
+}
+
+/// iOS-parity connection status in the leading title-bar slot. One host gets
+/// the aggregate Connected/Connecting/Offline label and running count; a fleet
+/// gets one compact named chip per configured host.
+struct DesktopConnectionStatusBar: View {
+    @EnvironmentObject private var store: SessionStore
+
+    var body: some View {
+        Group {
+            if store.configuredHosts.count > 1 {
+                HStack(spacing: 12) {
+                    ForEach(Array(store.configuredHosts.enumerated()), id: \.offset) { _, host in
+                        hostChip(host)
+                    }
+                }
+            } else {
+                let status = store.connectionStatus
+                HStack(spacing: 6) {
+                    statusDot(status)
+                    Text(status.label)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(statusTextColor(status))
+                    if store.runningCount > 0 {
+                        Text("· \(store.runningCount) running")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(singleHostAccessibilityLabel(status))
+            }
+        }
+        .lineLimit(1)
+        .accessibilityIdentifier("host_connection_status")
+    }
+
+    private func hostChip(_ host: Config.HostEntry) -> some View {
+        let status = store.connectionStatus(for: host)
+        return HStack(spacing: 5) {
+            statusDot(status)
+            Text(store.displayLabel(for: host))
+                .font(.caption.weight(.medium))
+                .foregroundStyle(statusTextColor(status))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 120, alignment: .leading)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(store.displayLabel(for: host)) \(status.label.lowercased())")
+    }
+
+    private func statusDot(_ status: HostConnectionStatus) -> some View {
+        Circle()
+            .fill(statusColor(status))
+            .frame(width: 7, height: 7)
+            .accessibilityHidden(true)
+    }
+
+    private func statusColor(_ status: HostConnectionStatus) -> Color {
+        switch status {
+        case .connected: return .green
+        case .connecting: return .secondary
+        case .offline: return .orange
+        }
+    }
+
+    private func statusTextColor(_ status: HostConnectionStatus) -> Color {
+        switch status {
+        case .connected: return .primary
+        case .connecting: return .secondary
+        case .offline: return .orange
+        }
+    }
+
+    private func singleHostAccessibilityLabel(_ status: HostConnectionStatus) -> String {
+        guard store.runningCount > 0 else { return status.label }
+        return "\(status.label), \(store.runningCount) running"
     }
 }
 
@@ -1252,12 +1842,7 @@ struct ContentView: View {
     private var matchingItems: [SessionItem] {
         let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         guard !q.isEmpty else { return store.items }
-        return store.items.filter { item in
-            let s = item.session
-            return ([s.title, s.project, s.lastUserText, s.model, s.agent, item.hostLabel]
-                .compactMap { $0?.lowercased() } + [item.hostLabel.lowercased()])
-                .contains { $0.contains(q) }
-        }
+        return store.items.filter { SessionSearch.matches($0, query: q) }
     }
 
     private var sections: [ListSection] {
@@ -1595,13 +2180,18 @@ struct ContentView: View {
             }
         }
         .listStyle(.inset)
-        // 660, not 640: in the last ~20pt above the toolbar's fit width the
-        // system squeezes the principal item ~14pt off the window centerline.
-        .frame(minWidth: 660, minHeight: 420)
-        .navigationTitle("lfg")
+        // The leading host-status cluster is wider than the old static title.
+        // 760 keeps the principal picker centered beside two 120pt-capped host
+        // labels and the fixed trailing refresh/search cluster.
+        .frame(minWidth: 760, minHeight: 420)
+        .navigationTitle("")
         // HIG "Toolbars" item groupings: common view controls in the center
         // area, search + actions on the trailing edge.
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                DesktopConnectionStatusBar()
+            }
+            .sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .principal) {
                 Picker("Group by", selection: $groupMode) {
                     ForEach(GroupMode.allCases) { mode in
@@ -1750,6 +2340,8 @@ struct ContentView: View {
 struct LFGSessionsApp: App {
     @StateObject private var store = SessionStore()
     init() {
+        DesktopFeatureTestCLI.runIfRequested()
+        DesktopStatusSnapshotCLI.runIfRequested()
         MoveTestCLI.runIfRequested()
     }
 
