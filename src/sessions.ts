@@ -1070,8 +1070,25 @@ async function previewLast(path: string): Promise<SessionMsg | null> {
 // and the message appears to hang ("can't send to an idle session"). This
 // returns the in-flight promise to concurrent callers and reuses a fresh result
 // for a short window, so overlapping requests share one scan.
-const LIST_TTL_MS = 600;
-let listCache: { at: number; promise: Promise<Session[]> } | null = null;
+// How long a COMPLETED scan is served before a new one runs. Measured from the
+// moment the scan settles, not the moment it starts: stamping the start meant a
+// scan slower than the TTL burned its own cache window, so the cache never once
+// served a finished result and a fresh overlapping scan launched every TTL
+// forever. On a busy host (49 sessions) that was ~6 concurrent scans, each
+// re-running the whole ps/lsof/tmux fan-out and slowing the others.
+const LIST_TTL_MS = 1_500;
+// Backstop for a scan that never settles (a wedged `tmux`/`lsof` child). Callers
+// share an in-flight scan with no TTL — that's what kills the pile-up — so a hang
+// would otherwise block every caller forever with no way to retry. Past this, a
+// new caller is allowed to start a fresh scan.
+const LIST_INFLIGHT_MAX_MS = 15_000;
+type ListCacheEntry = {
+  startedAt: number;
+  /** null while the scan is in flight; set when it settles (ok or error). */
+  settledAt: number | null;
+  promise: Promise<Session[]>;
+};
+let listCache: ListCacheEntry | null = null;
 // Last successful scan. The enrichment fans out dozens of synchronous
 // `Bun.spawnSync` calls (ps/lsof/tmux), and under a spawn storm — many SSE
 // pollers + a list request landing on the single event loop at once — spawnSync
@@ -1083,23 +1100,38 @@ let listCache: { at: number; promise: Promise<Session[]> } | null = null;
 let lastGood: Session[] | null = null;
 export function listSessions(): Promise<Session[]> {
   const now = Date.now();
-  if (listCache && now - listCache.at < LIST_TTL_MS) return listCache.promise;
+  if (listCache) {
+    // In flight → always share it, regardless of TTL. Two scans of the same host
+    // can only make each other slower, and the old start-stamped TTL guaranteed
+    // exactly that once a scan outran it.
+    if (listCache.settledAt == null) {
+      if (now - listCache.startedAt < LIST_INFLIGHT_MAX_MS) return listCache.promise;
+      // Wedged past the backstop — fall through and start a fresh scan.
+    } else if (now - listCache.settledAt < LIST_TTL_MS) {
+      // Settled and still fresh → resolved promise, returns immediately.
+      return listCache.promise;
+    }
+  }
   // A rejected scan must not be served stale for the whole TTL — drop the cache
   // so the next caller retries — but don't surface the throw to the client if we
   // have a recent good result to fall back to. The cache holds this guarded
-  // promise so overlapping callers within the TTL share the same fallback.
-  const guarded: Promise<Session[]> = listSessionsUncached()
+  // promise so overlapping callers share the same fallback.
+  const entry = { startedAt: now, settledAt: null } as ListCacheEntry;
+  entry.promise = listSessionsUncached()
     .then((sessions) => {
       lastGood = sessions;
       return sessions;
     })
     .catch((e) => {
-      if (listCache?.promise === guarded) listCache = null;
+      if (listCache === entry) listCache = null;
       if (lastGood) return lastGood;
       throw e;
+    })
+    .finally(() => {
+      entry.settledAt = Date.now();
     });
-  listCache = { at: now, promise: guarded };
-  return guarded;
+  listCache = entry;
+  return entry.promise;
 }
 
 async function listSessionsUncached(): Promise<Session[]> {

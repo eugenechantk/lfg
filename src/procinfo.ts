@@ -58,6 +58,12 @@ async function spawnTextAsync(cmd: string[]): Promise<string | null> {
 // remainder. Replaces the old per-pid `ps -o ppid=` / `ps -o lstart=` spawns
 // and the separate ppidMap.
 const PROC_SNAP_TTL_MS = 600;
+// How stale the snapshot may get before a synchronous read pays for a blocking
+// refresh anyway. Between TTL and ceiling, psSnapshot() serves the stale rows and
+// kicks an async prime — the whole point being to keep a full-box `ps` off the
+// event loop. The ceiling is only a correctness backstop for a caller reading
+// pids outside any scan (where nothing else would ever prime).
+const PROC_SNAP_STALE_CEILING_MS = 30_000;
 const PS_FORMAT = "pid=,ppid=,tty=,lstart=,command=";
 interface ProcRow {
   ppid: number;
@@ -119,6 +125,21 @@ export function ttyNameFromTtyNr(ttyNr: number): string | null {
 function psSnapshot(): Map<number, ProcRow> {
   const now = Date.now();
   if (procSnap && now - procSnap.at < PROC_SNAP_TTL_MS) return procSnap.rows;
+  // Stale but present → serve it and kick an async refresh, rather than firing a
+  // BLOCKING full-box `ps`. A scan takes longer than PROC_SNAP_TTL_MS, so the
+  // snapshot primed at its top goes stale mid-scan and every per-pid accessor
+  // below (ppidOf/ttyOf/commOf/listProcs, called across ~90 candidate pids) used
+  // to spawnSync its own `ps -axo` over 1200 processes — 0.5–4s of frozen event
+  // loop each. That is what turned a 3.7s scan into a 95s one and stalled every
+  // concurrent HTTP request. A snapshot a second or two old is harmless here:
+  // ppid/tty/start/cmd of a live pid don't change, and the scan already treats
+  // this as a point-in-time snapshot.
+  if (procSnap && now - procSnap.at < PROC_SNAP_STALE_CEILING_MS) {
+    void primeProcSnapshot();
+    return procSnap.rows;
+  }
+  // No snapshot at all (or one too old to trust) — a cold non-scan caller. Pay
+  // the sync spawn once.
   const rows = parsePsRows(spawnText(["ps", "-axo", PS_FORMAT]));
   procSnap = { at: now, rows };
   return rows;
@@ -128,12 +149,26 @@ function psSnapshot(): Map<number, ProcRow> {
 // top of a session scan before anything reads psSnapshot(), so the one ps that
 // feeds ppidOf/startTimeMsOf/commOf/listProcs runs off the event loop instead of
 // freezing all HTTP for its duration. psSnapshot() then just reads the cache.
+// Coalesced: the cache is only written AFTER the spawn returns, so without this
+// every caller arriving during the 0.5–4s window of an in-flight `ps` saw a stale
+// cache and launched its own. On a busy host that meant ~10 concurrent full-box
+// `ps` snapshots (observed, two of them at ~69% CPU), each making the others
+// slower — a thundering herd. Concurrent callers now await the one in flight.
+let procSnapInflight: Promise<void> | null = null;
 export async function primeProcSnapshot(): Promise<void> {
   if (!IS_DARWIN) return;
   const now = Date.now();
   if (procSnap && now - procSnap.at < PROC_SNAP_TTL_MS) return;
-  const rows = parsePsRows(await spawnTextAsync(["ps", "-axo", PS_FORMAT]));
-  procSnap = { at: Date.now(), rows };
+  if (procSnapInflight) return procSnapInflight;
+  procSnapInflight = (async () => {
+    try {
+      const rows = parsePsRows(await spawnTextAsync(["ps", "-axo", PS_FORMAT]));
+      procSnap = { at: Date.now(), rows };
+    } finally {
+      procSnapInflight = null;
+    }
+  })();
+  return procSnapInflight;
 }
 
 // Batch-prime the cwd cache for many pids with ONE `lsof -a -p p1,p2,… -d cwd
