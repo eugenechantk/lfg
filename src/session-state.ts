@@ -31,7 +31,45 @@ export type StateVerdict = {
   state: TurnState;
   /** Which layer decided. Carried for logging and for the state debug endpoint. */
   source: "hook" | "transcript";
+  /**
+   * The verdict said `running`, but whichever layer said it last spoke more than
+   * `STALL_MS` ago, so `state` was demoted to `idle`. Carried for the state debug
+   * endpoint and `data/ops.log`; the display ladder does not read it (see below).
+   */
+  stalled?: true;
 };
+
+/**
+ * How long a `running` verdict may go without either layer writing again before
+ * it stops counting as a turn in flight.
+ *
+ * WHY THIS EXISTS. Every layer here is EDGE-TRIGGERED on a turn boundary, and a
+ * turn that dies mid-flight emits no closing edge in any of them:
+ *
+ *   hook        `UserPromptSubmit` opens it; `Stop` fires only on a CLEAN end
+ *   transcript  a user row opens it; `turn_duration` is never written
+ *   pane        the spinner is painted once and never repainted
+ *
+ * So a session wedged by an upstream error (logged out, out of credits) reported
+ * `busy` forever — `.claude/diagnosis-stop-close-noop-20260806.md`, where one sat
+ * "running" for 8 hours with a dead process behind it. Two staleness rules already
+ * existed (`REST_BUSY_WINDOW_MS`, `BARE_BUSY_WINDOW_MS`) but both are wired as a
+ * fallback for the ABSENCE of a verdict, so neither could ever fire on a session
+ * that had one. This is the level-triggered check that was missing.
+ *
+ * WHY 15 MINUTES. A live turn is silent for the length of one tool call, and Bash
+ * alone permits a 10-minute timeout, so the 12s used for the no-verdict fallback
+ * would flap constantly. 15 minutes is the first threshold that cannot be reached
+ * by a turn that is merely quiet.
+ *
+ * WHY NOT PERSISTED. Stall is a pure function of (verdict, last write, now), and
+ * all three are already in hand here — computed at read time it cannot go stale.
+ * Writing it into the lease instead would break that file's two-writer ownership
+ * split (`state` is the hook's), would always be the newest `stateAt` and so would
+ * permanently out-vote the transcript below, and would propagate a derived
+ * judgement into the SYNCED tree for the peer host to read back as fact.
+ */
+export const STALL_MS = 15 * 60_000;
 
 /**
  * `running` / `idle` with the layer that decided, or `null` when neither layer
@@ -44,28 +82,65 @@ export type StateVerdict = {
 export async function sessionTurnState(args: {
   sessionId?: string | null;
   transcriptPath?: string | null;
+  /** Test seam. Real callers use the clock. */
+  now?: number;
 }): Promise<StateVerdict | null> {
+  const now = args.now ?? Date.now();
   const [hook, transcript] = await Promise.all([
     args.sessionId ? hookState(args.sessionId, args.transcriptPath) : Promise.resolve(null),
     args.transcriptPath ? transcriptTurnState(args.transcriptPath) : Promise.resolve(null),
   ]);
+
+  // The stall check needs the timestamp of the layer that DECIDED, not the newest
+  // timestamp available — a fresh hook heartbeat must not vouch for a transcript
+  // that stopped growing, and vice versa. `decide` pairs every verdict with the
+  // moment its own layer last spoke.
+  //
+  // Both candidates are agent-sourced. `hook.at` is `stateAt`, stamped by the hook
+  // when the agent transitioned; the transcript's is its mtime, stamped when the
+  // agent last wrote. Deliberately NOT the lease's `heartbeatAt`: that is written
+  // by `startLeaseHeartbeat` from lfg's own enumeration, so it proves only that
+  // this host can still see the pane.
+  const decide = (state: TurnState, source: "hook" | "transcript", at: number): StateVerdict =>
+    state === "running" && now - at > STALL_MS
+      ? { state: "idle", source, stalled: true }
+      : { state, source };
 
   // `ended` is a lifecycle fact, not a turn fact. For "is a turn in flight" a
   // finished process is idle; whether the session should disappear from the list
   // is `closed`, computed elsewhere.
   const hookTurn: TurnState | null = hook ? (hook.state === "ended" ? "idle" : hook.state) : null;
 
-  if (hookTurn == null) return transcript ? { state: transcript, source: "transcript" } : null;
-  if (transcript == null) return { state: hookTurn, source: "hook" };
+  // A transcript-only verdict still needs a timestamp to be stall-checked, so the
+  // stat that used to happen only in the arbitration branch now happens whenever
+  // the transcript has an opinion. It is one stat per session per poll against a
+  // file `transcriptTurnState` just read — cheap next to the `ps`/`tmux` spawns in
+  // the same pass.
+  let transcriptAt: number | null = null;
+  if (transcript != null && args.transcriptPath) {
+    try {
+      transcriptAt = (await stat(args.transcriptPath)).mtimeMs;
+    } catch {
+      transcriptAt = null;
+    }
+  }
 
-  let transcriptAt = 0;
-  try {
-    transcriptAt = (await stat(args.transcriptPath!)).mtimeMs;
-  } catch {
+  if (hookTurn == null) {
+    if (transcript == null) return null;
+    // Unreadable mtime (rotated, unlinked) means we cannot prove staleness. Report
+    // the verdict as-is rather than demoting on a guess — this function may add
+    // certainty, never invent it.
+    return transcriptAt == null
+      ? { state: transcript, source: "transcript" }
+      : decide(transcript, "transcript", transcriptAt);
+  }
+  if (transcript == null) return decide(hookTurn, "hook", hook!.at);
+
+  if (transcriptAt == null) {
     // The transcript answered a moment ago but can't be stat'd now (rotated,
     // unlinked). Without a timestamp it cannot win a recency contest, so defer
     // to the layer that can prove when it spoke.
-    return { state: hookTurn, source: "hook" };
+    return decide(hookTurn, "hook", hook!.at);
   }
 
   // Ties go to the transcript. The two are written within ~200ms of each other at
@@ -73,8 +148,8 @@ export async function sessionTurnState(args: {
   // was interrupted" — a tie is far more likely to be that boundary than a hook
   // arriving late.
   return hook!.at > transcriptAt
-    ? { state: hookTurn, source: "hook" }
-    : { state: transcript, source: "transcript" };
+    ? decide(hookTurn, "hook", hook!.at)
+    : decide(transcript, "transcript", transcriptAt);
 }
 
 // ---- the display ladder ----

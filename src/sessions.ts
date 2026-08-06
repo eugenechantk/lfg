@@ -2,7 +2,7 @@
 // their on-disk transcripts (~/.claude/projects/<proj>/<sessionId>.jsonl).
 import { readdir } from "node:fs/promises";
 import { scanBack, tail } from "./transcript.ts";
-import { transcriptTurnState } from "./turn-state.ts";
+import { sessionTurnState } from "./session-state.ts";
 import { statSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, basename } from "node:path";
 import { tmpdir } from "node:os";
@@ -126,10 +126,23 @@ export type Session = {
 // that (and the out-of-credits 400) so the UI can explain the pause instead of
 // showing a spinner forever. `liveModel` is the raw model string off the last
 // assistant line ("<synthetic>" for these synthetic errors).
+// `lastAssistant` is the last ASSISTANT turn, not the last message. Reading the
+// last message instead was a latch in the other direction: sending into a
+// wedged session made its own user row the tail, which short-circuited this
+// function to "ok" and erased the very error that explained the wedge. A 403 two
+// rows up is still a 403 (`.claude/diagnosis-stop-close-noop-20260806.md`).
+//
+// The scan is bounded by correctness, not by a window: it returns the NEWEST
+// assistant turn, so a successful reply after the error clears `blocked` on its
+// own. The residual case is the few seconds between submitting a prompt and the
+// first assistant row of the new turn, during which a previously-errored session
+// still reports blocked. That is honest — the last thing the agent actually said
+// was an error — and it self-clears the moment the new turn produces output.
 function computeStatus(
-  last: SessionMsg | null,
+  lastAssistant: SessionMsg | null,
   liveModel: string | null,
 ): { status: "ok" | "blocked"; statusReason: Session["statusReason"]; statusDetail: string | null } {
+  const last = lastAssistant;
   const text = last && last.role === "assistant" ? last.text : "";
   // Only a genuine upstream API-error turn can block the build. Claude Code
   // stamps those with `isApiErrorMessage: true` (surfaced here as last.apiError);
@@ -193,6 +206,12 @@ function computeStatus(
 // Test seam: computeStatus is private, but it is the whole of the status
 // contract, so the tests drive it directly rather than standing up listSessions.
 export const statusForTest = computeStatus;
+
+// Test seam for the OTHER half of the status contract: which message
+// `computeStatus` is handed. Passing the wrong one is what made a wedged session
+// report healthy, and that bug is invisible to a test that calls computeStatus
+// directly — it lives entirely in the selection.
+export const lastAssistantForTest = (path: string) => lastAssistantMsg(path);
 
 const UUID = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
 // Whole-string variant for validating a bare id (e.g. a transcript filename).
@@ -1047,6 +1066,25 @@ async function lastAssistantModel(path: string): Promise<string | null> {
   });
 }
 
+// The model a codex rollout is running on. Codex writes no per-message model
+// (unlike Claude's `message.model`) — it stamps one `turn_context` row per turn
+// carrying the model that turn used, so the newest one is the live model even
+// after a mid-session `/model` switch. A TUI codex launched with no `--model`
+// arg (the common case: `codex --yolo`) has NOTHING else to read it from, which
+// is why the list row showed no model at all for codex sessions. Returns null
+// before the first turn — the launch arg is the caller's fallback.
+export async function lastCodexModel(path: string): Promise<string | null> {
+  return scanBack(path, (line) => {
+    let x: { type?: string; payload?: { model?: string } };
+    try {
+      x = JSON.parse(line);
+    } catch {
+      return null;
+    }
+    return x.type === "turn_context" && x.payload?.model ? x.payload.model : null;
+  });
+}
+
 // The short model alias (opus/sonnet/…) a now-closed session last ran on, read
 // straight from its transcript. Used when auto-resuming a session on a send so
 // it relaunches on the same model the conversation was using rather than the
@@ -1059,6 +1097,21 @@ async function previewLast(path: string): Promise<SessionMsg | null> {
   return scanBack(path, (line) => {
     const msgs = normalizeLineMessages(line);
     return msgs.length ? msgs[msgs.length - 1] : null;
+  });
+}
+
+// The newest ASSISTANT turn — what `computeStatus` classifies. Separate from
+// `previewLast` (newest message of any role, which is what the list previews)
+// because the two answer different questions and conflating them is what let a
+// user row erase a session's blocked status. `scanBack` grows its window on a
+// miss, so this reaches past a run of user/attachment rows.
+async function lastAssistantMsg(path: string): Promise<SessionMsg | null> {
+  return scanBack(path, (line) => {
+    const msgs = normalizeLineMessages(line);
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === "assistant") return msgs[i];
+    }
+    return null;
   });
 }
 
@@ -1220,6 +1273,7 @@ async function listSessionsUncached(): Promise<Session[]> {
       }
     }
     let last: SessionMsg | null = null;
+    let lastAssistant: SessionMsg | null = null;
     let lastActivityAt: number | null = null;
     let lastUser: string | null = null;
     let liveModel: string | null = null;
@@ -1238,12 +1292,13 @@ async function listSessionsUncached(): Promise<Session[]> {
       lastActivityAt = last?.ts ?? mtimeMs;
       lastUser = await lastUserText(transcriptPath).catch(() => null);
       liveModel = await lastAssistantModel(transcriptPath).catch(() => null);
+      lastAssistant = await lastAssistantMsg(transcriptPath).catch(() => null);
     }
     // Prefer the transcript's live model; fall back to the launch `--model` arg
     // (always present on a lfg-managed session, so the badge shows instantly
     // before the first assistant turn).
     const model = modelAlias(liveModel) ?? modelAlias(e.cmd.match(/--model\s+(\S+)/)?.[1]);
-    const health = computeStatus(last, liveModel);
+    const health = computeStatus(lastAssistant, liveModel);
     const project = projectName(e.cwd);
     let title = (sessionId && overrides[sessionId]) || null;
     if (!title && transcriptPath) title = await firstPromptTitle(transcriptPath);
@@ -1255,14 +1310,22 @@ async function listSessionsUncached(): Promise<Session[]> {
       lastActivityAt != null && Date.now() - lastActivityAt < REST_BUSY_WINDOW_MS;
     const delegated = sessionId ? delegatedSessionIds.has(sessionId) : false;
     const paneBusy = sessionId ? lastPaneBusy(sessionId) : null;
-    // The transcript's turn boundary beats the pane scrape when it has an
-    // opinion (see turn-state.ts — the pane can be spoofed by an agent's own
-    // output). Pane-backed sessions ONLY: a live pane is the proof the process
-    // still exists. Without it, a transcript that simply ends mid-turn —
-    // crashed, or a stale row sitting on a recycled pid — would read "running"
-    // forever, which is the exact latch this change exists to remove.
+    // The agent's own turn boundary beats the pane scrape when it has an opinion
+    // (see turn-state.ts — the pane can be spoofed by an agent's own output).
+    // Pane-backed sessions ONLY: a live pane is the proof the process still
+    // exists. Without it, a transcript that simply ends mid-turn — crashed, or a
+    // stale row sitting on a recycled pid — would read "running" forever, which
+    // is the exact latch this change exists to remove.
+    //
+    // `sessionTurnState`, not `transcriptTurnState`: this site used to read the
+    // transcript alone while `journal-pump.ts` read hook+transcript, so the REST
+    // baseline and the SSE journal derived `busy` from different inputs and could
+    // disagree about the same session. It also carries the stall guard, and a
+    // guard only one of the two consumers has is not a guard.
     const turn =
-      tmuxTarget && transcriptPath ? await transcriptTurnState(transcriptPath) : null;
+      tmuxTarget && transcriptPath
+        ? await sessionTurnState({ sessionId, transcriptPath })
+        : null;
     out.push({
       agent: "claude",
       pid: e.pid,
@@ -1275,7 +1338,7 @@ async function listSessionsUncached(): Promise<Session[]> {
       startedAt: e.startedAt,
       transcriptPath,
       lastActivityAt,
-      busy: delegated || (turn != null ? turn === "running" : (paneBusy ?? transcriptRecent)),
+      busy: delegated || (turn != null ? turn.state === "running" : (paneBusy ?? transcriptRecent)),
       last,
       // A headless `claude -p` (the report runner, or a dispatched agent
       // before it moved to its own tmux session) is a *descendant* of
@@ -1366,6 +1429,7 @@ async function listSessionsUncached(): Promise<Session[]> {
     let last: SessionMsg | null = null;
     let lastActivityAt: number | null = null;
     let lastUser: string | null = null;
+    let liveModel: string | null = null;
     if (transcriptPath) {
       // Conversation activity from the last message's ts, mtime only as
       // fallback — same rationale as the claude site above (synced mtimes lie).
@@ -1376,6 +1440,7 @@ async function listSessionsUncached(): Promise<Session[]> {
       last = await previewLast(transcriptPath).catch(() => null);
       lastActivityAt = last?.ts ?? mtimeMs;
       lastUser = await lastUserText(transcriptPath).catch(() => null);
+      liveModel = await lastCodexModel(transcriptPath).catch(() => null);
     }
     const project = projectName(cwd);
     let title = (sessionId && overrides[sessionId]) || null;
@@ -1403,9 +1468,11 @@ async function listSessionsUncached(): Promise<Session[]> {
       tmuxName,
       ...managedFieldsForTmuxName(tmuxName, managedByName),
       assignedUser: tmuxName ? (assigns[tmuxName] ?? null) : null,
-      // Codex model isn't switchable mid-session from lfg; surface the launch
-      // arg verbatim (its names are catalog-driven, not the Claude aliases).
-      model: p.cmd.match(/--model\s+(\S+)/)?.[1] ?? null,
+      // Prefer the rollout's live model (`turn_context`), fall back to the
+      // launch arg — a TUI codex is usually started bare (`codex --yolo`), so
+      // the arg alone left the row with no model at all. Names are surfaced
+      // verbatim: codex slugs are catalog-driven, not the Claude aliases.
+      model: liveModel ?? p.cmd.match(/--model\s+(\S+)/)?.[1] ?? null,
       ...computeStatus(last, null),
     });
   }

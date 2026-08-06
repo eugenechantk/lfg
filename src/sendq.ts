@@ -68,6 +68,10 @@ export type QueueListMsg = Omit<QueuedMsg, "clientId">;
 
 type SessionQueue = { msgs: QueuedMsg[]; running: boolean };
 
+// Messages whose "held behind a running turn" line is already in the trace log.
+// Keyed on the object so it needs no cleanup — a pruned message is collected.
+const heldTraced = new WeakSet<QueuedMsg>();
+
 const queues = new Map<string, SessionQueue>();
 let store: SendqStore | null = null;
 let recovered = false;
@@ -252,6 +256,7 @@ export function enqueueMessage(sessionId: string, text: string, opts: EnqueueOpt
   };
   s.msgs.push(msg);
   persistMsg(sessionId, msg);
+  traceQueue(sessionId, msg, "enqueue");
   pruneTerminal(s);
   store?.pruneTerminal(sessionId, KEEP_TERMINAL);
   if (opts.autoKick !== false) kick(sessionId);
@@ -332,10 +337,20 @@ function kick(sessionId: string) {
         // our queue rather than pushing it into Claude's native queue. The pump
         // re-kicks once the agent goes idle. This keeps the message fully under
         // lfg's control so it can be removed/edited/sent-now from the client.
-        if (await agentBusy(sessionId)) break;
+        if (await agentBusy(sessionId)) {
+          // Once per message, not once per pump tick — this is the state a
+          // "my message never arrived" report lands in, and the trace has to
+          // show that we chose to wait rather than that nothing happened.
+          if (!heldTraced.has(next)) {
+            heldTraced.add(next);
+            traceQueue(sessionId, next, "hold", { reason: "agent busy" });
+          }
+          break;
+        }
         next.status = "sending";
         next.updatedAt = Date.now();
         persistMsg(sessionId, next);
+        traceQueue(sessionId, next, "deliver-start");
         let deliveredUserTurnId: string | null = null;
         try {
           const result = await deliver(sessionId, next);
@@ -347,6 +362,7 @@ function kick(sessionId: string) {
         next.updatedAt = Date.now();
         persistMsg(sessionId, next);
         const status = (next as QueuedMsg).status;
+        traceQueue(sessionId, next, `deliver-${status}`, { error: next.error });
         if (status === "delivered") journalDelivered(sessionId, next, deliveredUserTurnId);
         else if (status === "failed") journalFailed(sessionId, next);
         pruneTerminal(s);
@@ -474,6 +490,45 @@ export function insertionOutcome(
   if (lastHeld === true) return "settled";
   if (lastHeld === false) return "retry"; // composer readable, draft absent
   return selectorIsOpen ? "retry" : "unconfirmed";
+}
+
+// One line per lifecycle event, appended to data/sendq.log and never pruned.
+//
+// Why this exists: the queue rows themselves are the only record of what
+// happened to a send, and `pruneTerminal`/`KEEP_TERMINAL` erase them — so a
+// "my message never arrived" report an hour later has nothing left to read,
+// and the answer (held behind a long turn? never enqueued? failed and pruned?)
+// has to be re-derived by live repro. The trace is deliberately boring and
+// cheap: no pane capture, one JSON line, and a hold is logged ONCE per message
+// rather than on every pump tick (the pump re-evaluates every second).
+function traceQueue(
+  sessionId: string,
+  msg: QueuedMsg,
+  event: string,
+  extra: Record<string, unknown> = {},
+): void {
+  // The unit tests drive real enqueues; without this they append hundreds of
+  // synthetic lines to the host's own trace, which is the file someone reads
+  // to explain a real lost message.
+  if (process.env.NODE_ENV === "test") return;
+  try {
+    mkdirSync(PATHS.data, { recursive: true });
+    appendFileSync(
+      join(PATHS.data, "sendq.log"),
+      JSON.stringify({
+        t: new Date().toISOString(),
+        event,
+        sessionId,
+        id: msg.id,
+        status: msg.status,
+        attempts: msg.attempts,
+        redeliveries: msg.redeliveries ?? 0,
+        ageMs: Date.now() - msg.createdAt,
+        text: msg.text.slice(0, 80),
+        ...extra,
+      }) + "\n",
+    );
+  } catch {}
 }
 
 // Append a delivery failure (reason + a tail of the pane) to data/sendq.log so a
@@ -639,6 +694,11 @@ export async function reconcileQueued(sessionId: string): Promise<boolean> {
         continue;
       }
       persistMsg(sessionId, m);
+      traceQueue(sessionId, m, `reconcile-${m.status}`, {
+        from: prev.status,
+        idleConfirmed,
+        error: m.error,
+      });
       if (prev.status !== "delivered" && m.status === "delivered") {
         const needle = norm(m.text).slice(0, NEEDLE_LEN);
         const match = [...recentUserMsgs].reverse().find((r) => norm(r.text).includes(needle));

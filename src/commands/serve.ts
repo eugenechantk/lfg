@@ -76,7 +76,8 @@ import { rootDir, inboxDir, setInbox, createDir } from "../dirs.ts";
 import { detectUrls } from "../links.ts";
 import type { ServerWebSocket } from "bun";
 import { appendCmd as appendAisdkCmd, removeEntry as removeAisdkEntry, readEntry as readAisdkEntry, findEntryByAnyId as findAisdkEntryByAnyId } from "../aisdk-registry.ts";
-import { markClosed } from "../closing.ts";
+import { closeAll, defaultCloseDeps, interruptAndConfirm, markClosed } from "../closing.ts";
+import { logOp } from "../ops-log.ts";
 import { assignUser, userRoster } from "../users.ts";
 import { acquireLease, ensureLease, foreignFresh, releaseLease } from "../leases.ts";
 import { registerDevice, unregisterDevice, deviceCount } from "../push/store.ts";
@@ -2353,15 +2354,39 @@ export async function cmdServe() {
           // the next turn once the running one is interrupted. We deliberately
           // don't drop pending sends — that would discard the message the user
           // is steering with.
-          if (!tmuxInterrupt(sess.tmuxTarget)) return err(502, "interrupt failed");
-          return json({ ok: true });
+          //
+          // Then CONFIRM. `send-keys` exiting 0 only proves the pane existed; a
+          // wedged agent swallows the key and the old code reported success
+          // anyway. `stopped` is the honest answer, and the client shows it.
+          const started = Date.now();
+          const r = await interruptAndConfirm(sess.tmuxTarget, {
+            escape: tmuxInterrupt,
+            capture: capturePaneAsync,
+            busy: isBusy,
+            wait: (ms) => new Promise((res) => setTimeout(res, ms)),
+          });
+          void logOp({
+            op: "interrupt",
+            sessionId: m[1],
+            ok: r.stopped === true,
+            ms: Date.now() - started,
+            target: sess.tmuxTarget,
+            pid: sess.pid,
+            sent: r.sent,
+            stopped: r.stopped,
+          });
+          if (!r.sent) return err(502, "interrupt failed");
+          // 200 either way: the Escape was delivered, and a turn that ignores it
+          // is not a server error. `stopped` carries the truth.
+          return json({ ok: true, stopped: r.stopped });
         }
       }
 
       {
         const m = path.match(/^\/api\/sessions\/([0-9a-fA-F-]{36})\/close$/);
         if (m && req.method === "POST") {
-          const sess = (await listSessions()).find((s) => s.sessionId === m[1]);
+          const all = (await listSessions()).filter((s) => s.sessionId === m[1]);
+          const sess = all[0];
           if (!sess) return err(404, "session not found");
           if (
             sess.agent === "aisdk" ||
@@ -2373,6 +2398,10 @@ export async function cmdServe() {
             // session drops out of the list immediately. For codex-aisdk the
             // live-view id is the threadId — map it back to the key the command
             // file and registry entry are named by.
+            //
+            // Single-row by construction: a harness session is keyed in the aisdk
+            // registry, not discovered per-pane, so it cannot have the duplicate
+            // rows the tmux path below has to sweep.
             const key = findAisdkEntryByAnyId(m[1])?.sessionId ?? m[1];
             appendAisdkCmd(key, { type: "close" });
             if (sess.tmuxName) tmuxKillSession(sess.tmuxName);
@@ -2386,28 +2415,52 @@ export async function cmdServe() {
             await releaseLease(m[1]);
             return json({ ok: true });
           }
-          if (!sess.tmuxTarget)
+          // EVERY pane backing this session, not just the first. A transcript
+          // resumed into a second pane gives one sessionId two live panes; killing
+          // `.find()`'s match left the other running, so the row came straight
+          // back and "End session" looked like a no-op.
+          const panes = all.filter((s) => s.tmuxTarget || s.tmuxName);
+          if (!panes.length)
             return err(409, "session is not in a tmux pane — cannot close");
-          // A session lfg started owns its whole tmux session (one managed
-          // claude, no sibling panes) — kill the session and deregister it.
-          // Attached sessions might share a tmux session with the user's other
-          // panes, so only kill the one pane.
-          const ok =
-            sess.managed && sess.tmuxName
-              ? tmuxKillSession(sess.tmuxName)
-              : tmuxKillPane(sess.tmuxTarget);
-          if (!ok) return err(502, "close failed");
-          // Tombstone the pid so the session drops out of listSessions() at once
-          // — the process lingers briefly after the SIGHUP and would otherwise
-          // flicker back for a poll or two before pgrep stops seeing it.
-          markClosed(sess.pid);
-          if (sess.managed && sess.tmuxName) {
-            removeManaged(sess.tmuxName);
-            assignUser(sess.tmuxName, null); // a managed name is unique + now gone
+          const started = Date.now();
+          const outcomes = await closeAll(
+            panes.map((s) => ({
+              pid: s.pid,
+              tmuxTarget: s.tmuxTarget,
+              tmuxName: s.tmuxName,
+              managed: s.managed,
+            })),
+            { killSession: tmuxKillSession, killPane: tmuxKillPane, ...defaultCloseDeps },
+          );
+          // Tombstone every pid we tried, killed or not: the process lingers
+          // briefly after the SIGHUP and would otherwise flicker back for a poll
+          // or two. A survivor resurfaces when the tombstone expires, which is
+          // honest — it really is still running.
+          for (const o of outcomes) markClosed(o.pid);
+          for (const s of panes) {
+            if (s.managed && s.tmuxName) {
+              removeManaged(s.tmuxName);
+              assignUser(s.tmuxName, null); // a managed name is unique + now gone
+            }
           }
           clearResolved(m[1]);
           await releaseLease(m[1]);
-          return json({ ok: true });
+          const allKilled = outcomes.every((o) => o.killed);
+          void logOp({
+            op: "close",
+            sessionId: m[1],
+            ok: allKilled,
+            ms: Date.now() - started,
+            panes: outcomes.length,
+            outcomes,
+          });
+          // Report the outcome, not the transport. A pane we could not reap must
+          // not answer 200 — that is precisely the lie this fix removes.
+          if (!allKilled) {
+            const alive = outcomes.filter((o) => !o.killed).map((o) => o.pid);
+            return err(502, `close failed — still running: pid ${alive.join(", ")}`);
+          }
+          return json({ ok: true, panes: outcomes.length });
         }
       }
 

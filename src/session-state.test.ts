@@ -2,7 +2,7 @@ import { test, expect, describe, beforeEach } from "bun:test";
 import { mkdtempSync, writeFileSync, utimesSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sessionTurnState } from "./session-state.ts";
+import { sessionTurnState, STALL_MS } from "./session-state.ts";
 import { __resetHookStateCache } from "./hook-state.ts";
 import { __resetTurnStateCache } from "./turn-state.ts";
 
@@ -13,21 +13,39 @@ require("node:fs").mkdirSync(stateDir, { recursive: true });
 
 let n = 0;
 
+/**
+ * Fixture timestamps are RELATIVE ORDERING, not absolute time — `1_000` vs
+ * `9_000` only ever meant "the hook spoke before the transcript". Anchoring them
+ * near `now` became load-bearing when `sessionTurnState` gained the STALL_MS
+ * guard: at the raw epoch values these fixtures used to carry, every `running`
+ * verdict is ~56 years stale and would be demoted, so the arbitration tests would
+ * pass for entirely the wrong reason. Offsets stay as written; the base moves.
+ */
+const BASE = Date.now() - 10_000;
+const at = (offset: number) => BASE + offset;
+
 /** Write hook-owned fields into the LEASE, where the hook now writes them.
  *  Every fixture transcript lives in `dir`, so the lease path for any of them is
  *  `dir/<sid>.lease.json`. lfg's liveness fields are included to prove the
  *  arbitration reads the shared record without disturbing them. */
-const hook = (sid: string, state: string, at: number) =>
+const hook = (sid: string, state: string, offset: number) =>
   writeFileSync(
     join(dir, `${sid}.lease.json`),
-    JSON.stringify({ hostId: "host-a", pid: 1, acquiredAt: 1, heartbeatAt: 1, state, stateAt: at }),
+    JSON.stringify({
+      hostId: "host-a",
+      pid: 1,
+      acquiredAt: 1,
+      heartbeatAt: 1,
+      state,
+      stateAt: at(offset),
+    }),
   );
 
-/** Write a transcript whose mtime is pinned to `mtimeMs`. */
-const transcript = (lines: unknown[], mtimeMs: number): string => {
+/** Write a transcript whose mtime is pinned to `BASE + offset`. */
+const transcript = (lines: unknown[], offset: number): string => {
   const p = join(dir, `t${n++}.jsonl`);
   writeFileSync(p, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
-  utimesSync(p, new Date(mtimeMs), new Date(mtimeMs));
+  utimesSync(p, new Date(at(offset)), new Date(at(offset)));
   return p;
 };
 
@@ -110,9 +128,79 @@ describe("sessionTurnState arbitration", () => {
     expect((await sessionTurnState({ sessionId: "h8", transcriptPath: tp }))?.state).toBe("running");
     // Turn ends: transcript gains a boundary and stays the newest writer.
     writeFileSync(tp, [assistantRec, turnEnd].map((l) => JSON.stringify(l)).join("\n") + "\n");
-    utimesSync(tp, new Date(3_000), new Date(3_000));
+    utimesSync(tp, new Date(at(3_000)), new Date(at(3_000)));
     __resetTurnStateCache();
     expect((await sessionTurnState({ sessionId: "h8", transcriptPath: tp }))?.state).toBe("idle");
+  });
+});
+
+/**
+ * The stall guard. Every layer here is edge-triggered on a turn boundary, so a
+ * turn that dies mid-flight (upstream 403, killed child) leaves BOTH the hook and
+ * the transcript stranded at "running" with no closing edge to ever arrive. These
+ * pin the level-triggered check that demotes it.
+ * See `.claude/diagnosis-stop-close-noop-20260806.md`.
+ */
+describe("stall guard", () => {
+  const OLD = -(STALL_MS + 60_000); // one minute past the threshold
+
+  test("a running transcript verdict that stopped growing is demoted to idle", async () => {
+    const tp = transcript([assistantRec], OLD);
+    const got = await sessionTurnState({ sessionId: "s1", transcriptPath: tp });
+    expect(got).toEqual({ state: "idle", source: "transcript", stalled: true });
+  });
+
+  test("a running HOOK verdict that stopped speaking is demoted too", async () => {
+    // The exact shape that latched: `UserPromptSubmit` wrote running, the turn
+    // died before `Stop` could fire, and the hook had no closing edge either.
+    hook("s2", "running", OLD);
+    const got = await sessionTurnState({ sessionId: "s2", transcriptPath: join(dir, "gone.jsonl") });
+    expect(got).toEqual({ state: "idle", source: "hook", stalled: true });
+  });
+
+  test("BOTH layers stale and both saying running → still idle", async () => {
+    hook("s3", "running", OLD);
+    const tp = transcript([assistantRec], OLD + 1_000);
+    expect((await sessionTurnState({ sessionId: "s3", transcriptPath: tp }))?.state).toBe("idle");
+  });
+
+  test("a quiet but live turn is NOT stalled — one long tool call must survive", async () => {
+    // 14 minutes of silence is a Bash call with a 10-minute timeout, not a stall.
+    const tp = transcript([assistantRec], -(14 * 60_000));
+    const got = await sessionTurnState({ sessionId: "s4", transcriptPath: tp });
+    expect(got).toEqual({ state: "running", source: "transcript" });
+  });
+
+  test("idle is never 'demoted' — the guard only ever touches running", async () => {
+    const tp = transcript([assistantRec, turnEnd], OLD);
+    const got = await sessionTurnState({ sessionId: "s5", transcriptPath: tp });
+    expect(got).toEqual({ state: "idle", source: "transcript" });
+    expect(got?.stalled).toBeUndefined(); // a finished turn is not a stalled one
+  });
+
+  test("the DECIDING layer's clock is used, not the freshest one", async () => {
+    // A fresh hook must not vouch for a transcript that stopped growing. Here the
+    // transcript is newer than the hook, so the transcript decides — and it is
+    // stale, so the verdict is stalled even though `hook.at` is recent.
+    hook("s6", "idle", OLD - 5_000);
+    const tp = transcript([assistantRec], OLD);
+    const got = await sessionTurnState({ sessionId: "s6", transcriptPath: tp });
+    expect(got).toEqual({ state: "idle", source: "transcript", stalled: true });
+  });
+
+  test("an unstat-able transcript is reported as-is, never demoted on a guess", async () => {
+    const tp = transcript([assistantRec], 0);
+    rmSync(tp);
+    __resetTurnStateCache();
+    // Nothing readable at all now → no opinion, not a fabricated idle.
+    expect(await sessionTurnState({ sessionId: "s7", transcriptPath: tp })).toBeNull();
+  });
+
+  test("the threshold is honoured exactly at the boundary", async () => {
+    const tp = transcript([assistantRec], -STALL_MS);
+    // now - at === STALL_MS, and the guard is a strict `>`, so this still counts.
+    const got = await sessionTurnState({ sessionId: "s8", transcriptPath: tp, now: at(0) });
+    expect(got?.state).toBe("running");
   });
 });
 

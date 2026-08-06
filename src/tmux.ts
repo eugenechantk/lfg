@@ -895,17 +895,108 @@ const ESC_HINT = /esc to interrupt/i;
 // prose can reach neither.
 const METER_LOOKBACK_LINES = 6;
 
+// ── codex TUI ────────────────────────────────────────────────────────────────
+//
+// Everything above describes CLAUDE's shape. Codex draws a different TUI and the
+// Claude-shaped scans silently mis-read it — which is what stranded every codex
+// send as "queued" and then "not sent" (see
+// .claude/diagnosis-codex-send-not-sent-20260806.md). A real busy codex pane:
+//
+//   • Running the requested command now.              ← agent output
+//   • Working (1m 16s • esc to interrupt) · 1 back…   ← meter
+//   • Messages to be submitted after next tool call…  ← codex's OWN queue notice
+//     ↳ the queued message                            ┘ (only renders mid-turn)
+//   › typed text                                      ← the composer: ONE line
+//     gpt-5.6-sol high fast · ~/dev/personal/lfg      ← status footer
+//
+// Two consequences, both load-bearing:
+//
+//   * There is no bordered composer, so `busyChromeRegions` fell through to a
+//     6-line tail. That fits a plain busy pane but NOT one showing the queue
+//     notice, which pushes the meter to 6 lines above the composer — so the
+//     marker went unseen and a busy codex read idle. Self-reinforcing: the
+//     notice only appears once something is queued, so the first queued message
+//     is what blinds us.
+//   * Codex still prints rule lines — `─ Worked for 1m 17s ─` after every turn,
+//     plus plain runs in agent output. With two or more on screen the composer
+//     scan paired them and returned the AGENT'S OUTPUT as "the composer".
+//
+// Discriminator: a `›` composer line lying BELOW the last rule line. Claude's
+// composer content sits *between* two rule lines, so only codex puts one there.
+const CODEX_PROMPT = /^\s*›\s*(.*?)\s*$/;
+
+// How far above the codex composer its chrome can reach (meter + queue notice +
+// blank lines). Bounded so an unbounded pane never lets transcript prose in.
+const CODEX_CHROME_LOOKBACK = 10;
+
+// Codex chrome markers. Deliberately TIGHTER than the bare `esc to interrupt`
+// hint: the codex chrome region is not fenced by a border, so it can include a
+// line or two of agent prose, and this repo's own sessions discuss busy
+// detection constantly. A parenthesised elapsed clock immediately followed by
+// the interrupt hint is chrome in practice; prose quoting it is not.
+const CODEX_BUSY_METER = /\((?:\d+h\s*)?(?:\d+m\s*)?\d+s\s*[•·]\s*esc to interrupt\)/i;
+// Only rendered while a turn is in flight, so it is a positive busy signal in
+// its own right — and it is exactly the frame the old 6-line window missed.
+const CODEX_QUEUE_NOTICE = /messages? to be submitted after next tool call/i;
+
+/**
+ * Index of the codex composer line, or null if this pane isn't a codex TUI.
+ *
+ * Requires the `›` line to sit below every rule line — that is what separates a
+ * codex composer from a Claude composer's contents. Numbered rows (`› 1. …`)
+ * are selector options, not an editable composer, so they disqualify the pane
+ * (the send queue must not treat an open selector as somewhere to type).
+ */
+export function codexComposerIndex(lines: string[]): number | null {
+  let lastRule = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (isRuleLine(lines[i])) {
+      lastRule = i;
+      break;
+    }
+  }
+  for (let i = lines.length - 1; i > lastRule; i--) {
+    const m = lines[i].match(CODEX_PROMPT);
+    if (!m) continue;
+    if (/^\d+\.\s+/.test(m[1] ?? "")) return null;
+    return i;
+  }
+  return null;
+}
+
+// The codex chrome block: from just under the last rule line (never into
+// scrollback) or a bounded lookback above the composer, through the end of the
+// pane. Returns null when the pane isn't a codex TUI.
+function codexChrome(lines: string[]): string | null {
+  const composer = codexComposerIndex(lines);
+  if (composer == null) return null;
+  let lastRule = -1;
+  for (let i = composer - 1; i >= 0; i--) {
+    if (isRuleLine(lines[i])) {
+      lastRule = i;
+      break;
+    }
+  }
+  const start = Math.max(lastRule + 1, composer - CODEX_CHROME_LOOKBACK, 0);
+  return lines.slice(start).join("\n");
+}
+
 // Split a captured pane into the two chrome regions isBusy is allowed to read.
 // Border runs are collapsed the same way inputBoxFromPane collapses them: a
 // border drawn wider than the pane wraps into two consecutive rule lines.
 export function busyChromeRegions(pane: string): { meter: string; footer: string } {
   const lines = pane.split("\n");
+  // Codex first: its rule lines are transcript separators, not composer
+  // borders, so the border pairing below would fence off the wrong region and
+  // the 6-line tail is too short whenever the queue notice is on screen.
+  const codex = codexChrome(lines);
+  if (codex != null) return { meter: codex, footer: codex };
   let i = lines.length - 1;
   while (i >= 0 && !isRuleLine(lines[i])) i--; // into the bottom border run
   if (i < 0) {
-    // No composer box at all: a codex pane (single `›` prompt line) or a pane
-    // captured mid-render. Still refuse to read scrollback — the chrome is
-    // always at the bottom — so fall back to the tail for both regions.
+    // No composer box and no codex prompt: a pane captured mid-render. Still
+    // refuse to read scrollback — the chrome is always at the bottom — so fall
+    // back to the tail for both regions.
     const tail = lines.slice(-METER_LOOKBACK_LINES).join("\n");
     return { meter: tail, footer: tail };
   }
@@ -927,6 +1018,20 @@ export function busyChromeRegions(pane: string): { meter: string; footer: string
 }
 
 export function isBusy(pane: string): boolean {
+  const lines = pane.split("\n");
+  const codex = codexChrome(lines);
+  // Codex renders neither Claude's meter nor its footer hint in a fenced
+  // region, so match its own chrome instead of the loose `esc to interrupt`
+  // hint — the codex region can contain a line of agent prose. BUSY_METER rides
+  // along because it is end-of-line anchored (prose carries trailing text) and
+  // the two failure modes are not symmetric: reading a busy agent as IDLE is
+  // what re-drove messages and failed them, while reading an idle agent as busy
+  // only holds the send until the next poll.
+  if (codex != null) {
+    return (
+      CODEX_BUSY_METER.test(codex) || CODEX_QUEUE_NOTICE.test(codex) || BUSY_METER.test(codex)
+    );
+  }
   const { meter, footer } = busyChromeRegions(pane);
   return BUSY_METER.test(meter) || ESC_HINT.test(footer);
 }
@@ -1117,6 +1222,14 @@ export function inputBoxText(target: string): string | null {
 // inputBoxText so the border-scan can be tested against real captures.
 export function inputBoxFromPane(pane: string): string | null {
   const lines = pane.split("\n");
+  // Codex before the border scan, NOT as its fallback. Codex prints rule lines
+  // of its own (`─ Worked for 1m 17s ─` after every turn, plus plain runs in
+  // agent output), so with two or more on screen the pairing below succeeded
+  // and handed back the AGENT'S OUTPUT as "the composer" — the send queue then
+  // read every draft as absent and failed with "message never left the input
+  // box after retries". The `›` line below the last rule IS the composer.
+  const codexIdx = codexComposerIndex(lines);
+  if (codexIdx != null) return lines[codexIdx].match(CODEX_PROMPT)?.[1] ?? "";
   // Scan bottom-up for the composer's two borders. Crucially, a border DRAWN
   // WIDER THAN THE PANE wraps into two consecutive rule lines — and pairing
   // each rule line with the next one up made the wrap pair with its own first
