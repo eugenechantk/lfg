@@ -82,6 +82,10 @@ import { acquireLease, ensureLease, foreignFresh, releaseLease } from "../leases
 import { registerDevice, unregisterDevice, deviceCount } from "../push/store.ts";
 import { upsertLiveActivityToken } from "../push/liveactivity-store.ts";
 import { startPushWatcher, pushConfigured } from "../push/watcher.ts";
+import {
+  BrowserFrameStore,
+  publishBrowserFrame,
+} from "../browser-preview.ts";
 
 // Where the user keeps the repos lfg can launch agents into. Scanned for git
 // repos at runtime; defaults to ~/repos. The lfg repo itself (PATHS.root) is
@@ -860,10 +864,12 @@ export async function cmdServe() {
   // busy/prompt fix lands in one place instead of two. See src/journal.ts.
   const journalPath = join(PATHS.data, "journal.db");
   const journal = Journal.open(journalPath);
+  const browserFrames = new BrowserFrameStore();
   setSendqJournal(journal);
   setSendqStore(SendqStore.open(journalPath));
   startJournalPump(journal, {
     resolvePrompt: (tp, pane) => resolveSessionPrompt(tp, pane),
+    browserFrames,
   });
   startLeaseHeartbeat();
   const ensurePushWatcher = () =>
@@ -949,6 +955,38 @@ export async function cmdServe() {
     async fetch(req, server) {
       const url = new URL(req.url);
       const path = url.pathname;
+
+      // Latest browser screenshot for a session. Metadata rides the durable SSE
+      // journal; the potentially-large bytes stay process-local and are fetched
+      // only by a detail screen that is actually showing the preview.
+      if (path === "/api/browser/frame" && req.method === "GET") {
+        const sessionId = url.searchParams.get("sessionId");
+        if (!sessionId) return err(400, "sessionId query param required");
+        return browserFrames.response(sessionId, url.searchParams.get("frameId"));
+      }
+
+      if (path === "/api/browser/frame/meta" && req.method === "GET") {
+        const sessionId = url.searchParams.get("sessionId");
+        if (!sessionId) return err(400, "sessionId query param required");
+        return browserFrames.metadataResponse(sessionId);
+      }
+
+      // Prototype seam for visible end-to-end verification. Production frames
+      // enter through transcript extraction above; this endpoint exercises the
+      // identical journal + image-fetch path with a known screenshot.
+      if (path === "/api/browser/frame" && req.method === "POST") {
+        const sessionId = url.searchParams.get("sessionId");
+        if (!sessionId) return err(400, "sessionId query param required");
+        const contentType = (req.headers.get("content-type") ?? "").split(";")[0];
+        const data = new Uint8Array(await req.arrayBuffer());
+        const meta = publishBrowserFrame(journal, browserFrames, sessionId, {
+          data,
+          contentType,
+          source: "prototype",
+        });
+        if (!meta) return err(400, "unsupported, empty, oversized, or duplicate frame");
+        return json(meta, { status: 201 });
+      }
 
       // ---- browser terminal (websocket upgrade) ----
       if (path === "/api/term") {

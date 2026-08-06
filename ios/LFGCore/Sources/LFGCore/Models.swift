@@ -456,6 +456,25 @@ public struct SendResponse: Codable, Sendable {
 
 // MARK: - Live SSE event
 
+/// Metadata for the latest action-synchronized browser screenshot. The image
+/// bytes deliberately travel through `/api/browser/frame`, not the journal.
+public struct BrowserFrame: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var frameId: String
+    public var capturedAt: Double
+    public var contentType: String
+    public var source: String
+
+    public init(sessionId: String, frameId: String, capturedAt: Double,
+                contentType: String, source: String) {
+        self.sessionId = sessionId
+        self.frameId = frameId
+        self.capturedAt = capturedAt
+        self.contentType = contentType
+        self.source = source
+    }
+}
+
 public enum LiveEvent: Sendable, Equatable {
     case message(sid: String, message: SessionMessage)
     case reset(sid: String)
@@ -463,6 +482,7 @@ public enum LiveEvent: Sendable, Equatable {
     case busy(sid: String, busy: Bool)
     case queue(sid: String, queue: [QueueItem])
     case queueAck(sid: String?, ack: QueueAck)
+    case browserFrame(BrowserFrame)
     case heartbeat
 }
 

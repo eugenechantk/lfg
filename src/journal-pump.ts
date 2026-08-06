@@ -26,6 +26,11 @@ import { forgetTurnState } from "./turn-state.ts";
 import { forgetHookState } from "./hook-state.ts";
 import { sessionTurnState } from "./session-state.ts";
 import { statSync } from "node:fs";
+import {
+  BrowserFrameExtractor,
+  type BrowserFrameStore,
+  publishBrowserFrame,
+} from "./browser-preview.ts";
 
 const MSG_TICK_MS = 700;
 const POLL_TICK_MS = 1000;
@@ -36,6 +41,7 @@ const BARE_BUSY_WINDOW_MS = 4000;
 export type PumpDeps = {
   /** serve.ts's resolveSessionPrompt — structured transcript prompt, else pane scrape. */
   resolvePrompt: (tp: string | null, pane: string | null) => Promise<unknown>;
+  browserFrames?: BrowserFrameStore;
 };
 
 type Watched = {
@@ -43,6 +49,7 @@ type Watched = {
   tp: string;
   target: string | null;
   buf: string; // partial trailing line between ticks
+  frameExtractor: BrowserFrameExtractor;
 };
 
 // Set while a pump is running: re-scrape ONE session right now instead of
@@ -133,7 +140,13 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       const tp = await resolveTranscript(sid).catch(() => null);
       if (!tp) continue;
       j.setOffset(sid, initialOffset(sid, tp));
-      watched.set(sid, { sid, tp, target: s.tmuxTarget ?? null, buf: "" });
+      watched.set(sid, {
+        sid,
+        tp,
+        target: s.tmuxTarget ?? null,
+        buf: "",
+        frameExtractor: new BrowserFrameExtractor(),
+      });
     }
     if (bootSids) bootSids = null; // boot trust window is one enumeration only
     for (const sid of Array.from(watched.keys())) {
@@ -167,6 +180,8 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       w.buf = lines.pop() ?? "";
       for (const l of lines) {
         if (!l) continue;
+        const frame = w.frameExtractor.consume(l);
+        if (frame && deps.browserFrames) publishBrowserFrame(j, deps.browserFrames, w.sid, frame);
         for (const m of normalizeLineMessages(l)) {
           j.append(w.sid, "msg", { sid: w.sid, m });
         }

@@ -30,6 +30,7 @@ struct SessionDetailView: View {
     // BOTTOM-anchor debounce from mistaking a still-loading transcript for a
     // deliberate scroll-up and freezing auto-follow before the view settles.
     @State private var pinningToBottom = false
+    @State private var dismissedBrowserFrameID: String?
 
     private var sid: String { session.sessionId ?? "" }
     private var messages: [SessionMessage] { store.transcripts[sid] ?? [] }
@@ -66,6 +67,17 @@ struct SessionDetailView: View {
             .overlay(alignment: .top) {
                 if showFullTitle { fullTitleCard }
             }
+            .overlay {
+                if let frame = store.browserFrames[sid],
+                   frame.frameId != dismissedBrowserFrameID,
+                   let url = store.browserFrameURL(for: sid) {
+                    BrowserPreviewOverlay(frame: frame, url: url) {
+                        dismissedBrowserFrameID = frame.frameId
+                    }
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: store.browserFrames[sid]?.frameId)
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 8) {
                     // No pending strip: every send now renders as its own bubble
@@ -104,6 +116,7 @@ struct SessionDetailView: View {
         .task(id: sid) {
             isAtBottom = true
             store.focus(sid)
+            await store.loadBrowserFrame(sid)
             store.loadHistory(sid)   // store-owned: not cancelled by view churn
             // Open at the latest message. The transcript loads asynchronously and
             // incrementally (stream backfill, then the full history), and a big
@@ -327,6 +340,16 @@ struct SessionDetailView: View {
 
                 Button { newTitle = session.title; renaming = true } label: {
                     Label("Rename", systemImage: "pencil")
+                }
+
+                if let frame = store.browserFrames[sid],
+                   frame.frameId == dismissedBrowserFrameID {
+                    Button {
+                        dismissedBrowserFrameID = nil
+                    } label: {
+                        Label("Show Browser Preview", systemImage: "safari")
+                    }
+                    .accessibilityIdentifier("showBrowserPreviewButton")
                 }
 
                 // Fork branches this conversation into a new session: the source

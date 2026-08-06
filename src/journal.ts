@@ -24,7 +24,7 @@ import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-export type JournalEventType = "msg" | "busy" | "prompt" | "queue";
+export type JournalEventType = "msg" | "busy" | "prompt" | "queue" | "browser_frame";
 
 export type JournalRow = {
   seq: number;

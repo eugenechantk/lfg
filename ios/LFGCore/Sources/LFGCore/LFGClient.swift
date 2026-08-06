@@ -132,6 +132,21 @@ public struct LFGClient: Sendable {
         try await get("api/sessions", timeout: timeout, as: SessionsResponse.self).sessions
     }
 
+    /// Versioned latest-frame URL. The frame id prevents URLCache/AsyncImage
+    /// from presenting an older browser action after new metadata arrives.
+    public func browserFrameURL(sessionId: String, frameId: String) -> URL {
+        url("api/browser/frame", query: [
+            URLQueryItem(name: "sessionId", value: sessionId),
+            URLQueryItem(name: "frameId", value: frameId),
+        ])
+    }
+
+    public func browserFrameMetadata(sessionId: String) async throws -> BrowserFrame {
+        try await get("api/browser/frame/meta", query: [
+            URLQueryItem(name: "sessionId", value: sessionId),
+        ], as: BrowserFrame.self)
+    }
+
     public func repos() async throws -> [Repo] {
         try await get("api/repos", as: ReposResponse.self).repos
     }

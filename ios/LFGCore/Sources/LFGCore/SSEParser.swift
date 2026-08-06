@@ -134,6 +134,10 @@ public enum LiveEventDecoder {
             if let p = try? dec.decode(QueuePayload.self, from: data) {
                 return .queue(sid: p.sid, queue: p.queue)
             }
+        case "browser_frame":
+            if let frame = try? dec.decode(BrowserFrame.self, from: data) {
+                return .browserFrame(frame)
+            }
         default:
             return nil
         }

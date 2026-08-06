@@ -86,6 +86,9 @@ import LFGCore
     /// already-running agent as idle until it happened to change state.
     private var busyFromJournal: Set<String> = []
     private(set) var queues: [String: [QueueItem]] = [:]
+    /// Latest browser screenshot metadata per session. Bytes remain on the
+    /// owning host and are fetched only while its detail view is visible.
+    private(set) var browserFrames: [String: BrowserFrame] = [:]
 
     /// Locally-originated sends shown optimistically as user bubbles the instant
     /// the user hits send — before any network round-trip. Each is removed once
@@ -308,6 +311,20 @@ import LFGCore
                                          reachable: isReachable,
                                          agnostic: agnosticHost)
         return target.flatMap { settings.client(for: $0) }
+    }
+
+    func browserFrameURL(for sessionId: String) -> URL? {
+        guard let frame = browserFrames[sessionId] else { return nil }
+        return client(forSession: sessionId)?.browserFrameURL(
+            sessionId: sessionId,
+            frameId: frame.frameId
+        )
+    }
+
+    func loadBrowserFrame(_ sessionId: String) async {
+        guard let client = client(forSession: sessionId),
+              let frame = try? await client.browserFrameMetadata(sessionId: sessionId) else { return }
+        browserFrames[sessionId] = frame
     }
 
     /// The client for READING `id`'s transcript. Unlike `client(forSession:)`,
@@ -1787,6 +1804,8 @@ import LFGCore
             correlatePending(sid, q)
         case .queueAck(let sid, let ack):
             applyQueueAck(sid: sid, ack: ack)
+        case .browserFrame(let frame):
+            browserFrames[frame.sessionId] = frame
         case .heartbeat:
             break
         }

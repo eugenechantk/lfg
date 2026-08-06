@@ -118,6 +118,20 @@ final class SSEParserTests: XCTestCase {
         XCTAssertNil(ack.userTurnId)
     }
 
+    func testDecodeBrowserFrameEvent() {
+        let frame = SSEFrame(event: "browser_frame", data: """
+        {"sessionId":"s1","frameId":"frame-42","capturedAt":1722912345000,"contentType":"image/jpeg","source":"claude"}
+        """)
+        guard case let .browserFrame(meta)? = LiveEventDecoder.decode(frame) else {
+            return XCTFail("expected browser frame event")
+        }
+        XCTAssertEqual(meta.sessionId, "s1")
+        XCTAssertEqual(meta.frameId, "frame-42")
+        XCTAssertEqual(meta.capturedAt, 1_722_912_345_000)
+        XCTAssertEqual(meta.contentType, "image/jpeg")
+        XCTAssertEqual(meta.source, "claude")
+    }
+
     func testMultipleFramesInOneChunk() {
         var p = SSEParser()
         // Explicit trailing "\n\n" so the second frame's terminating blank line
