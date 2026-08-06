@@ -6,6 +6,7 @@
 - [ ] 2026-08-04 — `flowdeck ui simulator screen --output <relative>` reported success but wrote nothing
 - [ ] 2026-08-04 — Burned ~4 turns tapping a SwiftUI send button by coordinate; sheet a11y tree was empty
 - [x] 2026-08-04 — Memory `live-activity-lockscreen-height-budget` was stale (said cap at 2 rows; 3 now fit) — memory updated
+- [ ] 2026-08-04 — Shipped a bug: re-derived session classification instead of mirroring `group(for:)`, so closed sessions showed as "running" forever
 
 ## Log
 
@@ -81,3 +82,32 @@ measured* alongside the conclusion, so a future layout can be re-measured rather
 impossible. Updated the memory to state the real constraint (the ~160pt frame and the
 center-clip failure mode) and to note that the row count depends on row height — with the
 verified data point that frame 27's lean rows fit three.
+
+### 2026-08-04 — Re-derived session classification instead of mirroring `group(for:)`
+
+**What happened:** Eugene reported session `e64271a9` showing as "running" on the Live
+Activity forever, despite being closed in the client. Cause: `FleetActivitySnapshot`
+classified sessions with its own ladder — `prompts` → `busy` → skip — while the app's real
+grouping, `SessionStore.group(for:)`, checks `closed` FIRST and `isBlocked` before `busy`.
+Two states diverged. `closed` is client-synthesized and `busy` is only ever *seeded* for live
+sessions and never cleared on close, so a session that was working when it ended kept
+`busy == true` permanently → rendered as working forever. Paused (`isBlocked`) sessions had
+the same problem in a milder form.
+
+**Why this was wrong:** I had `group(for:)` open in this very session — I quoted its
+precedence when reasoning about unread, and I *still* wrote a parallel classifier next to it
+instead of mirroring it. Duplicating a state machine that already exists is a guaranteed
+future divergence; here it diverged immediately, in the same session, on the branch I had
+already read. The unit tests I wrote passed because I tested my ladder against itself: every
+fixture used a live session, so the missing `closed` branch was invisible.
+
+**What better looks like:**
+- When a view derives from state a store already classifies, **reuse the classifier** or, if
+  it can't be reached (here `group(for:)` lives in the app target and pulls in read-state that
+  doesn't belong in LFGCore), mirror it *branch for branch* with a comment naming the function
+  it mirrors and why the order matters. Both are now in place.
+- Test the **precedence**, not just the happy path: for any classifier with an ordered ladder,
+  write one fixture per branch that a *higher* branch must beat (closed+busy, closed+prompt,
+  blocked+busy, blocked+prompt). All four now exist and all four would have caught this.
+- Fixtures that only ever exercise the common case (live sessions) prove nothing about the
+  guards. When a model has a flag like `closed`, at least one fixture must set it.

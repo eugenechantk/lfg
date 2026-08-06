@@ -922,7 +922,7 @@ enum DesktopFeatureTestCLI {
         guard CommandLine.arguments.dropFirst().first == "--desktop-feature-test" else { return }
         do {
             try run()
-            print("{\"ok\":true,\"tests\":24}")
+            print("{\"ok\":true,\"tests\":25}")
             fflush(stdout)
             Darwin.exit(0)
         } catch {
@@ -1070,6 +1070,27 @@ enum DesktopFeatureTestCLI {
                    "resolved unreachable host is offline")
         try expect(ConnectionPresentation.status(resolved: false, reachable: false) == .connecting,
                    "unresolved per-host chip is connecting")
+
+        _ = NSApplication.shared
+        let shortStatusWidth = statusBarWidth(displayNames: ["Studio", "Travel Mac"])
+        let longStatusWidth = statusBarWidth(displayNames: [
+            "Extremely Long Creative Production Mac Studio Host",
+            "Travel Mac"
+        ])
+        try expect(longStatusWidth - shortStatusWidth > 180,
+                   "long status display names retain their intrinsic width")
+    }
+
+    @MainActor
+    private static func statusBarWidth(displayNames: [String]) -> CGFloat {
+        let store = SessionStore()
+        store.configuredHosts = displayNames.enumerated().map { index, name in
+            Config.HostEntry(url: "http://host-\(index):8766", displayName: name)
+        }
+        let content = DesktopConnectionStatusBar()
+            .environmentObject(store)
+            .fixedSize(horizontal: true, vertical: false)
+        return ImageRenderer(content: content).nsImage?.size.width ?? 0
     }
 
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
@@ -1196,8 +1217,8 @@ enum DesktopStatusSnapshotCLI {
                     )
                 ]
             ),
-            width: 520,
-            to: directory.appendingPathComponent("multi-connected-offline-truncated.png")
+            width: 720,
+            to: directory.appendingPathComponent("multi-connected-offline-full-name.png")
         )
     }
 
@@ -1765,8 +1786,7 @@ struct DesktopConnectionStatusBar: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(statusTextColor(status))
                 .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: 120, alignment: .leading)
+                .fixedSize(horizontal: true, vertical: false)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(store.displayLabel(for: host)) \(status.label.lowercased())")
@@ -2181,8 +2201,8 @@ struct ContentView: View {
         }
         .listStyle(.inset)
         // The leading host-status cluster is wider than the old static title.
-        // 760 keeps the principal picker centered beside two 120pt-capped host
-        // labels and the fixed trailing refresh/search cluster.
+        // 760 keeps common two-host names alongside the centered picker and
+        // fixed trailing refresh/search cluster.
         .frame(minWidth: 760, minHeight: 420)
         .navigationTitle("")
         // HIG "Toolbars" item groupings: common view controls in the center
