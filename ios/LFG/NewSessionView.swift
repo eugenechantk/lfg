@@ -154,13 +154,50 @@ struct NewSessionView: View {
     // MARK: Pickers
 
     /// Every directory the picker can offer: the Root/Inbox fallbacks the shipping
-    /// menu had, plus the host's scanned repos.
+    /// menu had, the host's scanned repos, and every directory that actually has a
+    /// session (see `sessionDirectories`).
     private var allDirectories: [DirectoryEntry] {
         var out: [DirectoryEntry] = []
         if !store.root.isEmpty { out.append(DirectoryEntry(name: "Root", path: store.root)) }
         if !store.inbox.isEmpty { out.append(DirectoryEntry(name: "Inbox", path: store.inbox)) }
         out.append(contentsOf: store.repos.map { DirectoryEntry(name: $0.name, path: $0.cwd) })
+        // Appended, not interleaved: the scanned repos keep the order the host
+        // sorted them in, and the extras land underneath rather than shuffling a
+        // list the user has built muscle memory for. Search covers both.
+        let known = Set(out.map(\.path))
+        out.append(contentsOf: sessionDirectories.filter { !known.contains($0.path) })
         return out
+    }
+
+    /// Directories that have (or had) a session, derived from the session list.
+    ///
+    /// `store.repos` is a one-level scan of the host's repos root for `.git`
+    /// directories, so it misses every other place work actually happens: a
+    /// session started from the CLI or a tmux pane on the host, a subdirectory of
+    /// a repo, a scratch folder, or a path this client itself typed into "Add
+    /// directory by path…". Those were unpickable — you could start a session
+    /// there once and then never select that directory again.
+    ///
+    /// `store.sessions` is live + optimistic + closed, already fanned out across
+    /// every configured host, so this covers host-started sessions too: their
+    /// transcripts carry a `cwd` and surface in the closed/resumable set. It is
+    /// deliberately NOT filtered to `selectedHost` — closed sessions carry no host
+    /// attribution at all (`hostBySession` is populated for live sessions only), so
+    /// filtering would silently drop most of this list rather than sharpen it.
+    private var sessionDirectories: [DirectoryEntry] {
+        var seen = Set<String>()
+        var out: [DirectoryEntry] = []
+        for session in store.sessions {
+            guard let path = session.cwd?.trimmingCharacters(in: .whitespaces),
+                  !path.isEmpty, seen.insert(path).inserted else { continue }
+            let name = (path as NSString).lastPathComponent
+            out.append(DirectoryEntry(name: name.isEmpty ? path : name, path: path))
+        }
+        return out.sorted {
+            // Basename first so it reads like the rest of the list, then full path
+            // to keep two same-named directories in a stable, predictable order.
+            ($0.name.lowercased(), $0.path) < ($1.name.lowercased(), $1.path)
+        }
     }
 
     /// MRU entries, resolved to a display name. Falls back to the last path
