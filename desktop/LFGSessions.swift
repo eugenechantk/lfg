@@ -224,12 +224,13 @@ struct MenuBarSessionProjection {
     let runningCount: Int
     let recentCount: Int
 
-    init(items: [SessionItem]) {
-        let actionable = items.filter { $0.status == .needsInput }
+    init(items: [SessionItem], query: String = "") {
+        let matchingItems = items.filter { SessionSearch.matches($0, query: query) }
+        let actionable = matchingItems.filter { $0.status == .needsInput }
             .sorted(by: Self.oldestFirst)
-        let active = items.filter { $0.status == .working }
+        let active = matchingItems.filter { $0.status == .working }
             .sorted(by: Self.newestFirst)
-        let remainder = items.filter { $0.status != .needsInput && $0.status != .working }
+        let remainder = matchingItems.filter { $0.status != .needsInput && $0.status != .working }
             .sorted(by: Self.newestFirst)
 
         needsInputCount = actionable.count
@@ -1067,7 +1068,7 @@ enum DesktopFeatureTestCLI {
         guard CommandLine.arguments.dropFirst().first == "--desktop-feature-test" else { return }
         do {
             try run()
-            print("{\"ok\":true,\"tests\":34}")
+            print("{\"ok\":true,\"tests\":37}")
             fflush(stdout)
             Darwin.exit(0)
         } catch {
@@ -1275,6 +1276,23 @@ enum DesktopFeatureTestCLI {
                    "needs-input rows are capped while retaining the full count")
         try expect(capped.recent.count == MenuBarSessionProjection.recentLimit && capped.recentCount == 7,
                    "recent rows are capped while retaining the full count")
+
+        let searchableItems = [
+            menuTestItem(id: "needle-input", lastActivity: 100, needsInput: true),
+            menuTestItem(id: "needle-running", lastActivity: 300, busy: true),
+            menuTestItem(id: "needle-recent", lastActivity: 200),
+            menuTestItem(id: "other-recent", lastActivity: 400),
+        ]
+        let filtered = MenuBarSessionProjection(items: searchableItems, query: "  NEEDLE \n")
+        try expect(filtered.needsInput.map(\.session.id) == ["needle-input"] &&
+                   filtered.running.map(\.session.id) == ["needle-running"] &&
+                   filtered.recent.map(\.session.id) == ["needle-recent"],
+                   "menu search filters all sections case-insensitively after trimming")
+        try expect(filtered.needsInputCount == 1 && filtered.runningCount == 1 && filtered.recentCount == 1,
+                   "filtered section counts describe only matching sessions")
+        let restored = MenuBarSessionProjection(items: searchableItems, query: " \n")
+        try expect(restored.needsInputCount + restored.runningCount + restored.recentCount == searchableItems.count,
+                   "clearing menu search restores every session")
     }
 
     @MainActor
@@ -1790,6 +1808,8 @@ struct MenuBarQuickAccessView: View {
     @EnvironmentObject private var store: SessionStore
     @Environment(\.openWindow) private var openWindow
     @State private var alertMessage: String?
+    @State private var searchText = ""
+    @FocusState private var searchFocused: Bool
     private let timer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
     private let snapshotMode: Bool
 
@@ -1798,7 +1818,11 @@ struct MenuBarQuickAccessView: View {
     }
 
     private var projection: MenuBarSessionProjection {
-        MenuBarSessionProjection(items: store.items)
+        MenuBarSessionProjection(items: store.items, query: searchText)
+    }
+
+    private var hasSearchQuery: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var connectionColor: Color {
@@ -1835,7 +1859,7 @@ struct MenuBarQuickAccessView: View {
             projection.recentCount > projection.recent.count,
         ].filter { $0 }.count
         let ideal = CGFloat(visibleRows * 49 + visibleSections * 23 + overflowLines * 18 + 20)
-        return min(430, max(104, ideal))
+        return min(380, max(104, ideal))
     }
 
     var body: some View {
@@ -1876,6 +1900,48 @@ struct MenuBarQuickAccessView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
+
+            Divider()
+
+            HStack(spacing: 7) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+
+                if snapshotMode {
+                    Text("Search sessions")
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    TextField("Search sessions", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .focused($searchFocused)
+                        .accessibilityIdentifier("menu_bar_search_field")
+                }
+
+                if hasSearchQuery {
+                    Button {
+                        searchText = ""
+                        searchFocused = true
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clear search")
+                    .accessibilityIdentifier("menu_bar_search_clear_button")
+                }
+            }
+            .padding(.horizontal, 9)
+            .frame(height: 30)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
 
             Divider()
 
@@ -1945,6 +2011,18 @@ struct MenuBarQuickAccessView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 30)
                 .accessibilityIdentifier("menu_bar_empty_state")
+            } else if projection.needsInputCount + projection.runningCount + projection.recentCount == 0 {
+                VStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.secondary)
+                    Text("No matching sessions")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 30)
+                .accessibilityIdentifier("menu_bar_search_empty_state")
             } else {
                 sessionSection(
                     title: "Needs Input",

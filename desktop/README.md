@@ -21,7 +21,9 @@ windows are stretched to the full visible height of the display they open on.
   from the server's live prompt state (not the separate Paused/error state).
   Rows use the same iTerm2 attach/resume path as the main window, and Open All
   Sessions reveals the single main app window. The panel shows up to four
-  actionable/running rows and five recent rows, with full counts in each header.
+  actionable/running rows and five recent rows, with full counts in each header;
+  its search field filters every section using the same matching rules as the
+  main window.
   Its monochrome template icon is generated from the canonical iOS logo at
   build time, so macOS supplies the correct menu-bar tint in light and dark mode.
 - **Toolbar** (Liquid Glass, per the HIG toolbar groupings) — host connection
