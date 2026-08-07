@@ -48,6 +48,16 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     /// *here*". `MultiHost.reconcileResumable` drops any id that is live on some
     /// other host before these reach the list. See `SessionStore.refresh`.
     public var closed: Bool
+    /// The question this session is currently parked at, from the REST snapshot.
+    ///
+    /// The live source is the journal's `prompt` event, but that is a DELTA and a
+    /// client's cursor starts at the journal head — so a question asked before
+    /// this client connected never arrives as an event. Without a baseline the
+    /// session rendered as plain "Running" with no panel, and because Claude Code
+    /// does not flush the asking turn to its transcript until the question is
+    /// answered, the explanation the user needs to answer was nowhere on screen.
+    /// `SessionStore.refresh` seeds `prompts[sid]` from this.
+    public var prompt: AgentPrompt?
 
     public var id: String { sessionId ?? tmuxName ?? title }
 
@@ -63,7 +73,8 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         assignedUser: String? = nil, parentSessionId: String? = nil, lastUserText: String? = nil,
         startedAt: Double? = nil, lastActivityAt: Double? = nil,
         tmuxTarget: String? = nil, tmuxName: String? = nil, managed: Bool? = nil,
-        busy: Bool? = nil, last: SessionMessage? = nil, closed: Bool = false
+        busy: Bool? = nil, last: SessionMessage? = nil, closed: Bool = false,
+        prompt: AgentPrompt? = nil
     ) {
         self.sessionId = sessionId; self.title = title; self.agent = agent
         self.model = model; self.project = project; self.cwd = cwd
@@ -73,6 +84,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         self.startedAt = startedAt; self.lastActivityAt = lastActivityAt
         self.tmuxTarget = tmuxTarget; self.tmuxName = tmuxName; self.managed = managed
         self.busy = busy; self.last = last; self.closed = closed
+        self.prompt = prompt
     }
 
     public init(from decoder: Decoder) throws {
@@ -98,6 +110,9 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         // Never let a malformed preview line fail the whole session decode.
         last = (try? c.decodeIfPresent(SessionMessage.self, forKey: .last)) ?? nil
         closed = (try c.decodeIfPresent(Bool.self, forKey: .closed)) ?? false
+        // Same tolerance as `last`: a malformed prompt must not fail the whole
+        // session decode and blank the list.
+        prompt = (try? c.decodeIfPresent(AgentPrompt.self, forKey: .prompt)) ?? nil
     }
 }
 

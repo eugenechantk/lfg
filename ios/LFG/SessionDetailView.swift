@@ -216,6 +216,23 @@ struct SessionDetailView: View {
                     // store's reconcile mutates pendingSends a tick later.
                     ForEach(unmatchedSentBubbles) { OptimisticUserBubble(sessionID: sid, pending: $0) }
 
+                    // What the model said just before asking. While the question
+                    // is live this is NOT in the transcript — Claude Code holds
+                    // that turn back until it's answered — so it arrives scraped
+                    // from the pane on `prompt.context`. It is still the model
+                    // answering, so it renders as an ordinary assistant bubble
+                    // here rather than as a caption inside the panel below: same
+                    // markdown and typography as every other turn, and the thread
+                    // reads continuously into the question. Drops out of the same
+                    // render pass in which the real turn lands (see
+                    // `PromptPreamble.shouldSynthesize`), so there is no doubled
+                    // beat when the question is answered.
+                    if let preamble = PromptPreamble.message(
+                        for: prompt, sessionID: sid, transcriptTail: messages
+                    ) {
+                        TranscriptMessageView(message: preamble).id(preamble.stableID)
+                    }
+
                     // "Running" now lives in the nav-bar header (below the title),
                     // not inline in the transcript.
                     if let prompt { PromptPanelView(sessionID: sid, prompt: prompt) }

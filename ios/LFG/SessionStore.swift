@@ -98,6 +98,10 @@ import LFGCore
     /// (`JournalFreshness`) with its tests.
     /// See `.claude/diagnosis-codex-stuck-running-20260806.md`.
     private var busyStatedAt: [String: Date] = [:]
+    /// Same arbitration as `busyStatedAt`, for `prompt`. `Session.prompt` is the
+    /// REST baseline for a question the journal already asserted before this
+    /// client connected; a journal event that is still fresh must out-vote it.
+    private var promptStatedAt: [String: Date] = [:]
     private(set) var queues: [String: [QueueItem]] = [:]
     /// Latest browser screenshot metadata per session. Bytes remain on the
     /// owning host and are fetched only while its detail view is visible.
@@ -1736,12 +1740,31 @@ import LFGCore
             else { continue }
             busy[sid] = b
         }
+        // Seed `prompt` from the same baseline, for the same reason. The pump
+        // journals a prompt only when it CHANGES, and a client's cursor starts at
+        // the journal head — so a session already parked at a question when this
+        // client connected never receives an event for it. Without this the panel
+        // simply never appeared, and since Claude Code withholds the asking turn
+        // from the transcript until it is answered, the prose explaining the
+        // question was not on screen either. That is the long-standing "the
+        // response before the question only appears after I answer" report.
+        for s in fresh {
+            guard let sid = s.sessionId else { continue }
+            guard JournalFreshness.snapshotWins(journalStatedAt: promptStatedAt[sid], now: now)
+            else { continue }
+            // Equality-guarded like `apply(.prompt)`: an unconditional write
+            // dirties @Observable every refresh and re-animates a scrollTo over
+            // the whole transcript. See
+            // `.claude/diagnosis-needs-input-slow-transcript-20260806.md`.
+            if prompts[sid] != s.prompt { prompts[sid] = s.prompt }
+        }
         // Forget sessions that left the live list: if one comes back (pane
         // relaunched, host recovered) its journal history is no longer a reason to
         // refuse the REST baseline, or the bug above returns for exactly the
         // sessions that just recovered.
         let liveIDs = Set(fresh.compactMap(\.sessionId))
         busyStatedAt = busyStatedAt.filter { liveIDs.contains($0.key) }
+        promptStatedAt = promptStatedAt.filter { liveIDs.contains($0.key) }
         // Snapshot the focused session while it's live so its detail view survives
         // the session later dropping out of the live list.
         if let f = focusedID, let live = fresh.first(where: { $0.sessionId == f }) {
@@ -1960,6 +1983,10 @@ import LFGCore
             // `context`, but this is the cheap defence in depth: a repeat prompt
             // event must cost the open session nothing. See
             // `.claude/diagnosis-needs-input-slow-transcript-20260806.md`.
+            // Stamp before the equality guard: a repeated assertion is still the
+            // journal speaking, and it must keep out-voting the REST baseline
+            // (which is only a fallback for what the journal never said).
+            promptStatedAt[sid] = Date()
             guard prompts[sid] != prompt else { return }
             if let prompt { prompts[sid] = prompt } else { prompts[sid] = nil }
         case .busy(let sid, let value):
