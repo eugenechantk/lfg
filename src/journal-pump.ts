@@ -24,7 +24,7 @@ import { findEntryByAnyId as findAisdkEntryByAnyId } from "./aisdk-registry.ts";
 import { codexDelegationSessionIds, notePaneBusy } from "./activity.ts";
 import { forgetTurnState } from "./turn-state.ts";
 import { forgetHookState } from "./hook-state.ts";
-import { sessionTurnState } from "./session-state.ts";
+import { resolveBusy, sessionTurnState } from "./session-state.ts";
 import { statSync } from "node:fs";
 import {
   BrowserFrameExtractor,
@@ -393,7 +393,7 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       // in the pane-backed branch, so the process is known to exist; these layers
       // answer "is a turn in flight", not "is this alive".
       const verdict = await sessionTurnState({ sessionId: w.sid, transcriptPath: w.tp });
-      const busy = (verdict != null ? verdict.state === "running" : paneBusy) || delegated;
+      const busy = resolveBusy({ verdict, paneBusy, delegated });
       if (deltas.busyChanged(w.sid, busy)) j.append(w.sid, "busy", { sid: w.sid, busy });
     } catch {}
   };

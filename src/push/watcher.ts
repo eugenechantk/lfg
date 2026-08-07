@@ -16,7 +16,6 @@ import {
 import { capturePaneAsync, isBusy, parsePrompt, type PanePrompt } from "../tmux.ts";
 import { findEntryByAnyId } from "../aisdk-registry.ts";
 import { codexDelegationSessionIds } from "../activity.ts";
-import { transcriptTurnState } from "../turn-state.ts";
 import { listDevices } from "./store.ts";
 import {
   listActivityUpdateTokens,
@@ -42,7 +41,7 @@ import {
 } from "./liveactivity.ts";
 import { unregisterDevice } from "./store.ts";
 import { loadFleetActivityActive, saveFleetActivityActive } from "./fleet-active-store.ts";
-import { sessionDisplayState } from "../session-state.ts";
+import { resolveBusy, sessionDisplayState, sessionTurnState } from "../session-state.ts";
 import { basename } from "node:path";
 
 // One observation of a session at a single tick.
@@ -348,10 +347,13 @@ async function observeSession(s: {
   const tp = s.sessionId ? await resolveTranscript(s.sessionId) : null;
   let prompt: PendingPrompt | PanePrompt | null = tp ? await pendingToolPrompt(tp) : null;
   if (!prompt && pane) prompt = parsePrompt(pane);
-  // Transcript first, pane as backstop — a "Finished" push must not hinge on
-  // whether the agent happened to print the words the pane scraper looks for.
-  const turn = tp ? await transcriptTurnState(tp) : null;
-  const busy = (turn != null ? turn === "running" : pane ? isBusy(pane) : false) || delegated;
+  // The SAME derivation the journal pump runs (`journal-pump.ts`), through the
+  // same two functions — not a second implementation of the same idea. This used
+  // to call `transcriptTurnState` directly, which skipped the hook layer and the
+  // STALL_MS demotion, so this card counted a session working long after the app's
+  // own list had let it go. See `session-state.ts`'s `resolveBusy`.
+  const verdict = await sessionTurnState({ sessionId: s.sessionId, transcriptPath: tp });
+  const busy = resolveBusy({ verdict, paneBusy: pane ? isBusy(pane) : false, delegated });
   return { busy, promptPresent: !!prompt, promptQuestion: prompt?.question ?? null };
 }
 
@@ -533,8 +535,97 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
 let timer: ReturnType<typeof setInterval> | null = null;
 type StartPushWatcherDeps = Pick<Partial<TickDeps>, "head" | "hostId" | "hostName">;
 
+/**
+ * The live fleet activity, at module scope rather than inside `startPushWatcher`,
+ * because the CLIENT can end the card and the server has to hear about it — see
+ * `noteFleetActivityEnded`.
+ */
+const fleetActive: { current: LiveActivityActive | null } = { current: null };
+
+/**
+ * Set when the client reports the card gone, cleared once that report has been
+ * honoured by the boot-time load. Without it, an "ended" arriving while
+ * `loadFleetActivityActive()` is still in flight is overwritten by the on-disk
+ * state a moment later, resurrecting the card the client just told us is dead.
+ */
+let fleetEndedReported = false;
+
+/**
+ * The client ended (or replaced) the fleet card; forget the one we think is live.
+ *
+ * WHY THE SERVER CANNOT WORK THIS OUT ALONE. `FleetActivityController` ends the
+ * card when the APP's active count reaches zero. The watcher's count is computed
+ * independently and does not have to reach zero at the same moment, so the server
+ * can be left believing a card exists that the device has already dismissed. It
+ * then sends `update` forever — and since a dead Live Activity token still
+ * answers 200, nothing ever tells it otherwise. Only the client knows.
+ *
+ * Clearing `current` makes the next tick take the `!args.active` branch and send
+ * a **push-to-start**, which is the one event that can put a card back on a
+ * suspended device.
+ * See `.claude/diagnosis-live-activity-background-updates.md`.
+ */
+export async function noteFleetActivityEnded(): Promise<void> {
+  fleetActive.current = null;
+  fleetEndedReported = true;
+  await saveFleetActivityActive(null);
+}
+
+/**
+ * A client registered an `activityUpdate` token, which is proof that a card
+ * exists on that device right now — ActivityKit only issues one for a live
+ * activity.
+ *
+ * Adopt it instead of leaving `current` null, or the next tick would take the
+ * `!args.active` branch and **push-to-start a second card** next to the one the
+ * app just created. Adopting with no `contentState` is deliberate:
+ * `sameFleetContentState(undefined, …)` is false, so the very next tick pushes
+ * the current content to the freshly registered token rather than waiting for
+ * something to change.
+ */
+export function noteFleetActivityStarted(now: () => number = Date.now): void {
+  if (fleetActive.current) return; // already tracking a card; keep its baselines
+  fleetActive.current = { startedAt: Math.floor(now() / 1000) };
+  fleetEndedReported = false;
+}
+
+/**
+ * Test seam. `noteFleetActivityEnded`/`noteFleetActivityStarted` are called from
+ * HTTP handlers and mutate module state that the watcher's tick reads, so a test
+ * needs the same box the server passes into `runPushTick` to observe them.
+ */
+export function currentFleetActivity(): { current: LiveActivityActive | null } {
+  return fleetActive;
+}
+
 export function liveActivitiesEnabled(env = process.env): boolean {
   return env.LFG_LIVE_ACTIVITIES === "1";
+}
+
+/**
+ * The port the primary server binds. `serve.ts` defaults `LFG_PORT` to this, so
+ * "is this the primary?" and "is this on the canonical port?" are the same
+ * question.
+ */
+export const CANONICAL_SERVE_PORT = 8766;
+
+/**
+ * Whether THIS server should push to real devices.
+ *
+ * Agents routinely start a second `lfg serve` on a spare port to poke at an
+ * endpoint. That scratch server reads the same `~/.lfg` token store as the
+ * primary, so it happily sent real APNs Live Activity pushes to a real phone —
+ * with its own in-memory `active.current`, meaning two watchers fighting over one
+ * card. One was found doing exactly that mid-investigation.
+ *
+ * So: default to pushing only from the canonical port, and make the override
+ * explicit in both directions (`LFG_PUSH_WATCHER=1` for a primary deliberately
+ * moved to another port, `=0` to silence one that is on the canonical port).
+ */
+export function pushWatcherEnabled(port: number, env = process.env): boolean {
+  if (env.LFG_PUSH_WATCHER === "1") return true;
+  if (env.LFG_PUSH_WATCHER === "0") return false;
+  return port === CANONICAL_SERVE_PORT;
 }
 
 /**
@@ -550,11 +641,14 @@ export function startPushWatcher(
   const cfg = apnsConfigFromEnv();
   if (!cfg) return; // push not configured → feature is off
   const prior = new Map<string, PriorState>();
-  const active: { current: LiveActivityActive | null } = { current: null };
+  const active = fleetActive;
+  fleetEndedReported = false;
   let fleetActiveLoaded = false;
   const fleetActiveLoad = loadFleetActivityActive()
     .then((loaded) => {
-      active.current = loaded;
+      // A client "ended" report that landed mid-load is NEWER than what is on
+      // disk. Honour it and drop the stale snapshot.
+      if (!fleetEndedReported) active.current = loaded;
       fleetActiveLoaded = true;
     })
     .catch(() => {

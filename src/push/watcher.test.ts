@@ -1,17 +1,26 @@
-import { test, expect, describe } from "bun:test";
+import { test, expect, describe, beforeEach, afterEach } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   reduceTransition,
   reduceFleetLiveActivity,
   orderFleetRows,
   MAX_FLEET_ROWS,
   liveActivitiesEnabled,
+  pushWatcherEnabled,
+  CANONICAL_SERVE_PORT,
   buildPayload,
+  currentFleetActivity,
+  noteFleetActivityEnded,
+  noteFleetActivityStarted,
   runPushTick,
   type LiveActivityActive,
   type PriorState,
   type SessionState,
   type TickDeps,
 } from "./watcher.ts";
+import { loadFleetActivityActive, saveFleetActivityActive } from "./fleet-active-store.ts";
 import { apnsBody, type ApnsConfig, type ApnsPayload } from "./apns.ts";
 import type { LiveActivityPush } from "./liveactivity.ts";
 
@@ -557,4 +566,184 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
     expect(content.more).toBe(3);
   });
 
+});
+
+/**
+ * SC4 — the client owns the card's existence, the server owns its content.
+ *
+ * `FleetActivityController` ends the card when the APP's active count hits zero.
+ * The watcher's count is derived separately and need not hit zero at the same
+ * moment, so the server can be left addressing an activity the device already
+ * dismissed. It then sends `update` forever, and because a dead Live Activity
+ * token still answers 200, nothing else ever corrects it.
+ * See `.claude/diagnosis-live-activity-background-updates.md`.
+ */
+describe("client-reported card end (SC4)", () => {
+  // The stored title differs from the one `sessions()` returns, so there IS a
+  // renderable change to push — otherwise `sameFleetContentState` short-circuits
+  // the tick and both branches would send nothing for uninteresting reasons.
+  const liveCard: LiveActivityActive = {
+    startedAt: 1_700,
+    contentState: {
+      working: 1,
+      needsInput: 0,
+      rows: [{ sid: "s1", title: "Old", state: "working", since: 1_700 }],
+      more: 0,
+      updatedAt: 1_700,
+    },
+    since: { s1: { state: "working", at: 1_700 } },
+  };
+
+  const tickWith = async (active: { current: LiveActivityActive | null }) => {
+    const sent: { token: string; push: LiveActivityPush }[] = [];
+    const deps: TickDeps = {
+      sessions: async () => [{ sessionId: "s1", title: "Job", tmuxTarget: "t" }],
+      observe: async () => obs(true, false),
+      devices: async () => [],
+      cfg,
+      send: async () => ({ ok: true, status: 200 }),
+      liveActivities: {
+        active,
+        pushToStartTokens: async () => [{ token: "start", env: "sandbox" }],
+        activityUpdateTokens: async () => [{ token: "update", env: "sandbox" }],
+        send: async (d, push) => {
+          sent.push({ token: d.token, push });
+          return { ok: true, status: 200 };
+        },
+      },
+      now: () => 1_700_000,
+    };
+    await runPushTick(new Map<string, PriorState>(), deps);
+    return sent;
+  };
+
+  test("while the server still believes a card is live it only ever sends update", async () => {
+    // The broken behaviour, pinned: the same session, the same tick — the ONLY
+    // difference downstream is whether `active.current` was cleared.
+    const sent = await tickWith({ current: { ...liveCard } });
+    expect(sent.map((s) => s.push.body.aps.event)).toEqual(["update"]);
+    expect(sent.map((s) => s.token)).toEqual(["update"]);
+  });
+
+  test("once the card is reported ended the next tick sends push-to-start", async () => {
+    // `start` is the only event that can put a card back on a SUSPENDED device;
+    // an update into a dismissed activity is silently dropped.
+    const sent = await tickWith({ current: null });
+    expect(sent.map((s) => s.push.body.aps.event)).toEqual(["start"]);
+    expect(sent.map((s) => s.token)).toEqual(["start"]);
+  });
+
+  test("noteFleetActivityEnded clears the persisted state", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "lfg-fleet-active-"));
+    const statePath = join(dir, "fleet-activity-state.json");
+    process.env.LFG_FLEET_ACTIVITY_STATE = statePath;
+    try {
+      await saveFleetActivityActive(liveCard);
+      expect(await loadFleetActivityActive()).not.toBeNull();
+
+      await noteFleetActivityEnded();
+
+      // Cleared on disk too, so a server restart cannot resurrect the dead card.
+      expect(await loadFleetActivityActive()).toBeNull();
+    } finally {
+      delete process.env.LFG_FLEET_ACTIVITY_STATE;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+/**
+ * The other half of SC4. Clearing `active.current` on an "ended" report is only
+ * safe if something re-adopts the card the app creates for itself — otherwise the
+ * next tick push-to-starts a SECOND card next to it.
+ */
+describe("client-reported card start", () => {
+  // `noteFleetActivityEnded` unlinks the state file. Redirect it at a temp dir
+  // for the whole block — without this the suite would delete the REAL
+  // `~/.lfg/fleet-activity-state.json` out from under a running server.
+  let stateDir: string;
+  beforeEach(() => {
+    stateDir = mkdtempSync(join(tmpdir(), "lfg-fleet-adopt-"));
+    process.env.LFG_FLEET_ACTIVITY_STATE = join(stateDir, "fleet-activity-state.json");
+  });
+  afterEach(() => {
+    delete process.env.LFG_FLEET_ACTIVITY_STATE;
+    rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  test("adopting a card stops the next tick from push-to-starting a duplicate", async () => {
+    const sent: { token: string; push: LiveActivityPush }[] = [];
+    await noteFleetActivityEnded(); // card gone, server forgot it
+    noteFleetActivityStarted(() => 1_700_000); // app made its own, token registered
+
+    const deps: TickDeps = {
+      sessions: async () => [{ sessionId: "s1", title: "Job", tmuxTarget: "t" }],
+      observe: async () => obs(true, false),
+      devices: async () => [],
+      cfg,
+      send: async () => ({ ok: true, status: 200 }),
+      liveActivities: {
+        active: currentFleetActivity(),
+        pushToStartTokens: async () => [{ token: "start", env: "sandbox" }],
+        activityUpdateTokens: async () => [{ token: "update", env: "sandbox" }],
+        send: async (d, push) => {
+          sent.push({ token: d.token, push });
+          return { ok: true, status: 200 };
+        },
+      },
+      now: () => 1_700_000,
+    };
+    await runPushTick(new Map<string, PriorState>(), deps);
+
+    // update, not start — and it goes to the token the client just registered.
+    expect(sent.map((s) => s.push.body.aps.event)).toEqual(["update"]);
+    expect(sent.map((s) => s.token)).toEqual(["update"]);
+  });
+
+  test("an adopted card carries no content, so the first tick pushes the truth", async () => {
+    // A freshly created card renders whatever the app seeded it with. Adopting
+    // with `contentState: undefined` makes `sameFleetContentState` false, so the
+    // server refreshes it immediately instead of waiting for a change.
+    await noteFleetActivityEnded();
+    noteFleetActivityStarted(() => 1_700_000);
+    expect(currentFleetActivity().current?.contentState).toBeUndefined();
+    expect(currentFleetActivity().current?.startedAt).toBe(1_700);
+  });
+
+  test("adopting twice keeps the first card's baselines", async () => {
+    await noteFleetActivityEnded();
+    noteFleetActivityStarted(() => 1_700_000);
+    noteFleetActivityStarted(() => 9_900_000);
+    expect(currentFleetActivity().current?.startedAt).toBe(1_700);
+  });
+});
+
+/**
+ * SC5 — a scratch server must not push to real devices. Agents routinely start a
+ * second `lfg serve` on a spare port; it reads the same `~/.lfg` token store, so
+ * without this gate it pushes real Live Activity updates to a real phone with its
+ * own independent `active.current`. One was caught doing exactly that.
+ */
+describe("pushWatcherEnabled (SC5)", () => {
+  const env = (o: Record<string, string>) => o as unknown as NodeJS.ProcessEnv;
+
+  test("the canonical port pushes; a scratch port does not", () => {
+    expect(pushWatcherEnabled(CANONICAL_SERVE_PORT, env({}))).toBe(true);
+    expect(pushWatcherEnabled(8767, env({}))).toBe(false);
+    expect(pushWatcherEnabled(3000, env({}))).toBe(false);
+  });
+
+  test("LFG_PUSH_WATCHER=1 opts a deliberately-relocated primary back in", () => {
+    expect(pushWatcherEnabled(9999, env({ LFG_PUSH_WATCHER: "1" }))).toBe(true);
+  });
+
+  test("LFG_PUSH_WATCHER=0 silences even the canonical port", () => {
+    expect(pushWatcherEnabled(CANONICAL_SERVE_PORT, env({ LFG_PUSH_WATCHER: "0" }))).toBe(false);
+  });
+
+  test("only the exact strings count — anything else falls through to the port", () => {
+    // Same convention as `liveActivitiesEnabled`: no truthiness guessing.
+    expect(pushWatcherEnabled(8767, env({ LFG_PUSH_WATCHER: "true" }))).toBe(false);
+    expect(pushWatcherEnabled(CANONICAL_SERVE_PORT, env({ LFG_PUSH_WATCHER: "yes" }))).toBe(true);
+  });
 });

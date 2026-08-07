@@ -434,6 +434,18 @@ public struct LFGClient: Sendable {
         _ = try await send("POST", "api/push/live-activity/update-token", json: body)
     }
 
+    /// Tell the server the fleet Live Activity is gone.
+    ///
+    /// The app ends the card when ITS active count reaches zero; the server's
+    /// count is derived separately and need not reach zero at the same moment, so
+    /// without this it keeps pushing updates into a dismissed activity — and a
+    /// dead Live Activity token still answers 200, so nothing else corrects it.
+    /// On receipt the server forgets the card and push-to-starts a new one, which
+    /// is the only way a card can reappear while the app is suspended.
+    public func reportLiveActivityEnded() async throws {
+        _ = try await send("POST", "api/push/live-activity/ended", json: [:])
+    }
+
     public func unregisterPush(token: String) async throws {
         _ = try await send("POST", "api/push/unregister", json: ["token": token])
     }

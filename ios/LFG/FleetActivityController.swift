@@ -122,6 +122,7 @@ final class FleetActivityController {
             if activeTotal == 0 {
                 await Self.endCurrentActivity(state: state)
                 lastSyncedSnapshot = nil
+                await reportActivityEnded()
                 return
             }
 
@@ -133,6 +134,32 @@ final class FleetActivityController {
             }
         } catch {
             log.error("fleet live activity sync failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Tell the server the card is gone.
+    ///
+    /// Only this app knows: it ends the card when ITS active count reaches zero,
+    /// and the server's count is derived independently, so the server can be left
+    /// pushing updates into an activity the device has already dismissed — a dead
+    /// Live Activity token still answers 200 from APNs, so nothing else would ever
+    /// correct it. Once told, the server forgets the card and push-to-starts a new
+    /// one, which is the only way a card can reappear while this app is suspended.
+    ///
+    /// Reported to the DEFAULT host only, matching `LiveActivityManager`'s token
+    /// registration: telling every host would have each of them push-to-start its
+    /// own card and put two on the Lock Screen.
+    /// See `.claude/diagnosis-live-activity-background-updates.md`.
+    private func reportActivityEnded() async {
+        guard let settings,
+              let host = settings.defaultHost,
+              let client = settings.client(for: host) else { return }
+        do {
+            try await client.reportLiveActivityEnded()
+        } catch {
+            // Best-effort: the next update-token registration also re-anchors the
+            // server, so a missed report self-heals rather than wedging the card.
+            log.error("reporting fleet live activity end failed: \(error.localizedDescription)")
         }
     }
 

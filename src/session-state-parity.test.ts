@@ -52,3 +52,61 @@ describe("sessionDisplayState / SessionDisplayState.resolve parity", () => {
     expect(sessionDisplayState({ busy: true, blocked: null })).toBe("working");
   });
 });
+
+/**
+ * The OTHER half of the same drift. `sessionDisplayState` consolidated the
+ * precedence ladder; these two call sites had also each grown their own copy of
+ * the step BEFORE it — turning a verdict plus its fallbacks into `busy`.
+ *
+ * The copies diverged silently: the journal pump (what the session list renders)
+ * asked `sessionTurnState`, while the push watcher (what the Live Activity
+ * renders) asked `transcriptTurnState` directly, missing the hook layer and the
+ * STALL_MS demotion. Result: the Lock Screen counter kept sessions that the list
+ * had already released, and it took a diff of the two live signals to find it.
+ *
+ * A behavioural test cannot catch this — both implementations agree on the happy
+ * path, which is exactly why it survived. So assert the STRUCTURE: both call
+ * sites go through the shared pair, and neither reaches past it.
+ * See `.claude/diagnosis-live-activity-background-updates.md`.
+ */
+describe("busy derivation has one implementation", () => {
+  const sources = {
+    "journal-pump.ts": import.meta.dir + "/journal-pump.ts",
+    "push/watcher.ts": import.meta.dir + "/push/watcher.ts",
+  };
+
+  /**
+   * Comments in these files legitimately NAME `transcriptTurnState` while
+   * explaining why they must not call it, so match code and not prose: line
+   * comments go, then we look for a call `foo(` or an import of the module.
+   * Assertions are on booleans, not on the source string — a failure should read
+   * as one line, not dump the whole file into the runner output.
+   */
+  const code = (src: string): string =>
+    src
+      .split("\n")
+      .map((l) => l.replace(/\/\/.*$/, "").replace(/^\s*\*.*$/, ""))
+      .join("\n");
+
+  for (const [label, path] of Object.entries(sources)) {
+    test(`${label} derives busy through sessionTurnState + resolveBusy`, async () => {
+      const src = code(await Bun.file(path).text());
+      expect(src.includes("sessionTurnState("), `${label} must ask the full arbitration`).toBe(
+        true,
+      );
+      expect(src.includes("resolveBusy("), `${label} must use the shared last step`).toBe(true);
+    });
+
+    test(`${label} does not reach past it to the transcript layer`, async () => {
+      const src = code(await Bun.file(path).text());
+      // Only `session-state.ts` may call the transcript layer directly; going
+      // straight to it from here is what dropped the hook layer and the stall
+      // guard last time.
+      // Scoped to the SYMBOL, not the module: `forgetTurnState` (cache eviction)
+      // is a legitimate import from `turn-state.ts` and says nothing about busy.
+      expect(src.includes("transcriptTurnState"), `${label} references transcriptTurnState`).toBe(
+        false,
+      );
+    });
+  }
+});

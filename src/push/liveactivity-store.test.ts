@@ -68,6 +68,77 @@ describe("Live Activity token store", () => {
     expect((await s.listActivityUpdateTokens()).map((t) => t.token)).toEqual(["u1", "u2"]);
   });
 
+  /**
+   * The store used to APPEND: every rotation or re-created card left its old
+   * token behind, and the live store reached 8 `activityUpdate` tokens for one
+   * device. That is not merely untidy — a dead Live Activity token still answers
+   * **200** from APNs, so the watcher counted a push to a corpse as delivered and
+   * never re-established an addressable card.
+   * See `.claude/diagnosis-live-activity-background-updates.md`.
+   */
+  describe("activityUpdate tokens supersede per env (SC3)", () => {
+    test("a newer update token replaces the previous one for that env", async () => {
+      const s = await store();
+      await s.upsertLiveActivityToken({ token: "old", kind: "activityUpdate", env: "production" });
+      await s.upsertLiveActivityToken({ token: "new", kind: "activityUpdate", env: "production" });
+
+      expect((await s.listActivityUpdateTokens()).map((t) => t.token)).toEqual(["new"]);
+    });
+
+    test("the two APNs environments do not evict each other", async () => {
+      // A debug build (sandbox) and a TestFlight build (production) are different
+      // installs with different cards; one must not knock the other out.
+      const s = await store();
+      await s.upsertLiveActivityToken({ token: "sand", kind: "activityUpdate", env: "sandbox" });
+      await s.upsertLiveActivityToken({ token: "prod", kind: "activityUpdate", env: "production" });
+
+      expect((await s.listActivityUpdateTokens()).map((t) => t.token).sort()).toEqual([
+        "prod",
+        "sand",
+      ]);
+    });
+
+    test("push-to-start tokens are untouched by an update-token registration", async () => {
+      // Push-to-start is a capability of the INSTALL, not of any one card, so it
+      // outlives every activity and must not be swept up by the supersede.
+      const s = await store();
+      await s.upsertLiveActivityToken({ token: "start", kind: "pushToStart", env: "production" });
+      await s.upsertLiveActivityToken({ token: "u1", kind: "activityUpdate", env: "production" });
+      await s.upsertLiveActivityToken({ token: "u2", kind: "activityUpdate", env: "production" });
+
+      expect((await s.listPushToStartTokens()).map((t) => t.token)).toEqual(["start"]);
+      expect((await s.listActivityUpdateTokens()).map((t) => t.token)).toEqual(["u2"]);
+    });
+
+    test("re-registering the SAME token is a refresh, not a churn", async () => {
+      const s = await store();
+      const first = await s.upsertLiveActivityToken({
+        token: "same",
+        kind: "activityUpdate",
+        env: "production",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      const again = await s.upsertLiveActivityToken({
+        token: "same",
+        kind: "activityUpdate",
+        env: "production",
+      });
+
+      expect((await s.listActivityUpdateTokens()).map((t) => t.token)).toEqual(["same"]);
+      expect(again.updatedAt).toBeGreaterThan(first.updatedAt);
+    });
+
+    test("promoting a pushToStart token to activityUpdate does not evict itself", async () => {
+      // The same hex can legitimately arrive under both kinds; the supersede must
+      // not delete the record it is in the middle of writing.
+      const s = await store();
+      await s.upsertLiveActivityToken({ token: "dual", kind: "pushToStart", env: "sandbox" });
+      await s.upsertLiveActivityToken({ token: "dual", kind: "activityUpdate", env: "sandbox" });
+
+      expect((await s.listActivityUpdateTokens()).map((t) => t.token)).toEqual(["dual"]);
+    });
+  });
+
   test("lookup and remove operate by token", async () => {
     const s = await store();
     await s.upsertLiveActivityToken({ token: "start", kind: "pushToStart", env: "sandbox" });

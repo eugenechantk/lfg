@@ -2,7 +2,7 @@ import { test, expect, describe, beforeEach } from "bun:test";
 import { mkdtempSync, writeFileSync, utimesSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sessionTurnState, STALL_MS } from "./session-state.ts";
+import { sessionTurnState, resolveBusy, STALL_MS } from "./session-state.ts";
 import { __resetHookStateCache } from "./hook-state.ts";
 import { __resetTurnStateCache } from "./turn-state.ts";
 
@@ -216,6 +216,50 @@ describe("SC3 — real interrupted transcript", () => {
     hook("real", "running", 1);
     const got = await sessionTurnState({ sessionId: "real", transcriptPath: real });
     expect(got?.state).toBe("idle");
+  });
+});
+
+/**
+ * `resolveBusy` is the shared last step of the derivation. It exists because the
+ * journal pump and the push watcher each had their own copy and the copies
+ * drifted — the watcher's skipped the hook layer and the stall guard, so the Live
+ * Activity counter climbed and never came down.
+ * See `.claude/diagnosis-live-activity-background-updates.md`.
+ */
+describe("resolveBusy", () => {
+  test("a running verdict is busy, and the pane does not get a vote", () => {
+    const verdict = { state: "running", source: "transcript" } as const;
+    expect(resolveBusy({ verdict, paneBusy: false })).toBe(true);
+  });
+
+  test("an idle verdict is NOT busy even when the pane still shows a spinner", () => {
+    // The pane keeps the last frame it painted, so it reads busy long after the
+    // turn ends. A layer that actually has an opinion must out-rank it.
+    const verdict = { state: "idle", source: "transcript" } as const;
+    expect(resolveBusy({ verdict, paneBusy: true })).toBe(false);
+  });
+
+  test("only an abstaining verdict falls through to the pane", () => {
+    expect(resolveBusy({ verdict: null, paneBusy: true })).toBe(true);
+    expect(resolveBusy({ verdict: null, paneBusy: false })).toBe(false);
+  });
+
+  test("delegation overrides every layer — the codex child owns the pane", () => {
+    const verdict = { state: "idle", source: "hook" } as const;
+    expect(resolveBusy({ verdict, paneBusy: false, delegated: true })).toBe(true);
+    expect(resolveBusy({ verdict: null, paneBusy: false, delegated: true })).toBe(true);
+  });
+
+  test("SC2: a STALLED verdict is not busy — the regression that inflated the card", async () => {
+    // End-to-end through the real arbitration: a transcript whose last record is
+    // `assistant` (a turn in flight) that stopped growing past the threshold.
+    // `transcriptTurnState` alone still calls this "running"; that bare call is
+    // what the push watcher used to make, and why finished sessions kept their
+    // slot on the Lock Screen counter.
+    const tp = transcript([assistantRec], -(STALL_MS + 60_000));
+    const verdict = await sessionTurnState({ sessionId: "stalled", transcriptPath: tp });
+    expect(verdict).toEqual({ state: "idle", source: "transcript", stalled: true });
+    expect(resolveBusy({ verdict, paneBusy: true })).toBe(false);
   });
 });
 

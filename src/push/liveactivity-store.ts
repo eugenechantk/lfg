@@ -51,11 +51,42 @@ export async function upsertLiveActivityToken(input: {
     updatedAt: Date.now(),
   };
   const existing = list.find((t) => t.token === input.token);
-  const next = existing
+  const replaced = existing
     ? list.map((t) => (t.token === input.token ? record : t))
     : [...list, record];
-  await writeTokens(next);
+  await writeTokens(supersede(replaced, record));
   return record;
+}
+
+/**
+ * A device has exactly one fleet Live Activity, so it has exactly one live
+ * `activityUpdate` token per APNs environment. Registering a new one means the
+ * previous card (or the previous rotation of this one) is gone — drop it.
+ *
+ * WHY THIS IS NOT JUST HOUSEKEEPING. A dead Live Activity token does not answer
+ * `410`/`BadDeviceToken`; APNs accepts it and drops the payload. `isDeadApnsToken`
+ * in `watcher.ts` therefore never fires for one, nothing prunes it, and — worse —
+ * `sendLiveActivityToTokens` counts its **200** as a delivery. One corpse in the
+ * list is enough to convince the watcher its update landed, so it advances
+ * `active.current`, never re-sends `start`, and the real card silently stops
+ * updating until the app is opened. Keeping the list to the one token that can
+ * actually be live is what makes that 200 mean something.
+ * See `.claude/diagnosis-live-activity-background-updates.md`.
+ *
+ * Scoped to `env` because a debug (sandbox) and a TestFlight (production) install
+ * are different cards. `pushToStart` is deliberately exempt: it is a property of
+ * the install, not of any one activity, and outlives every card.
+ *
+ * KNOWN LIMIT: two devices on the same env would fight over the single slot. The
+ * registration payload carries no device identifier, so that cannot be
+ * distinguished here today; it needs a device id on the wire.
+ */
+function supersede(list: LiveActivityToken[], record: LiveActivityToken): LiveActivityToken[] {
+  if (record.kind !== "activityUpdate") return list;
+  return list.filter(
+    (t) =>
+      t.token === record.token || t.kind !== "activityUpdate" || t.env !== record.env,
+  );
 }
 
 export async function lookupLiveActivityToken(token: string): Promise<LiveActivityToken | null> {

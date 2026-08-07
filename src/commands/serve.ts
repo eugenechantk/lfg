@@ -82,7 +82,14 @@ import { assignUser, userRoster } from "../users.ts";
 import { acquireLease, ensureLease, foreignFresh, releaseLease } from "../leases.ts";
 import { registerDevice, unregisterDevice, deviceCount } from "../push/store.ts";
 import { upsertLiveActivityToken } from "../push/liveactivity-store.ts";
-import { startPushWatcher, pushConfigured } from "../push/watcher.ts";
+import {
+  startPushWatcher,
+  pushConfigured,
+  pushWatcherEnabled,
+  noteFleetActivityEnded,
+  noteFleetActivityStarted,
+  CANONICAL_SERVE_PORT,
+} from "../push/watcher.ts";
 import {
   BrowserFrameStore,
   publishBrowserFrame,
@@ -310,7 +317,7 @@ async function forkSession(opts: {
   return { ok: true, tmuxName, cwd, newId, agent: "claude" };
 }
 
-const PORT = Number(process.env.LFG_PORT ?? 8766);
+const PORT = Number(process.env.LFG_PORT ?? CANONICAL_SERVE_PORT);
 // Bind to loopback by default — the UI is meant to be reached over Tailscale
 // (via `tailscale serve`), never the public internet. Override LFG_HOST only
 // if you understand the exposure.
@@ -873,12 +880,17 @@ export async function cmdServe() {
     browserFrames,
   });
   startLeaseHeartbeat();
-  const ensurePushWatcher = () =>
+  // A scratch server on a spare port shares this host's `~/.lfg` token store, so
+  // letting it run a watcher means real pushes to a real phone from a throwaway
+  // process — and two watchers fighting over one Live Activity.
+  const ensurePushWatcher = () => {
+    if (!pushWatcherEnabled(PORT)) return;
     startPushWatcher((l) => console.log(l), {
       head: () => journal.head(),
       hostId: () => hostInfo().hostId,
       hostName: () => hostInfo().hostName,
     });
+  };
 
   const server = Bun.serve({
     port: PORT,
@@ -1744,8 +1756,23 @@ export async function cmdServe() {
           kind: "activityUpdate",
           ...(sessionId ? { sessionId } : {}),
         });
+        // An update token only exists for a LIVE activity, so this is the
+        // client telling us a card is on screen. Adopt it rather than
+        // push-to-starting a second one alongside it.
+        noteFleetActivityStarted();
         ensurePushWatcher();
         return json({ ok: true, kind: record.kind, env: record.env });
+      }
+      // The client ended its fleet card. Only it can know: the app ends the card
+      // on ITS active count reaching zero, which need not coincide with the
+      // server's. Without this the server keeps sending `update` into a dismissed
+      // activity — and a dead Live Activity token still answers 200, so nothing
+      // else would ever tell it.
+      // See `.claude/diagnosis-live-activity-background-updates.md`.
+      if (path === "/api/push/live-activity/ended" && req.method === "POST") {
+        await noteFleetActivityEnded();
+        ensurePushWatcher();
+        return json({ ok: true });
       }
       if (path === "/api/push/unregister" && req.method === "POST") {
         const body = (await req.json().catch(() => null)) as { token?: string } | null;

@@ -152,6 +152,35 @@ export async function sessionTurnState(args: {
     : decide(transcript, "transcript", transcriptAt);
 }
 
+/**
+ * Turn a verdict plus its two fallbacks into the single boolean every consumer
+ * calls `busy`.
+ *
+ * WHY THIS IS A FUNCTION AND NOT A LINE OF CODE IN EACH CALLER. It was a line of
+ * code in each caller, and they drifted. `journal-pump.ts` (what the app renders)
+ * asked `sessionTurnState`; `push/watcher.ts` (what the Live Activity renders)
+ * asked `transcriptTurnState` directly. Same shape, one layer short: the watcher
+ * saw neither the hook layer nor — the one that actually bit — the `STALL_MS`
+ * demotion, so a session whose transcript ended mid-turn counted as working
+ * forever. The card's counter climbed and never came down, and because the app
+ * ends the card when ITS count reaches zero while the server's never did, the
+ * server was left pushing updates into an activity that no longer existed.
+ * See `.claude/diagnosis-live-activity-background-updates.md`.
+ *
+ * `verdict == null` means both layers abstained (no hooks, unreadable
+ * transcript) — only then does the pane get a vote, and it is the caller's job to
+ * have captured it. `delegated` is an override, not a layer: a codex child owns
+ * the pane and neither layer can see it.
+ */
+export function resolveBusy(args: {
+  verdict: StateVerdict | null;
+  paneBusy: boolean;
+  delegated?: boolean;
+}): boolean {
+  const decided = args.verdict != null ? args.verdict.state === "running" : args.paneBusy;
+  return decided || !!args.delegated;
+}
+
 // ---- the display ladder ----
 //
 // Three consumers used to re-derive this precedence independently:
