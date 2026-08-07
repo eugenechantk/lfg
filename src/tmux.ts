@@ -11,6 +11,72 @@ import { ppidOf as procPpidOf, ttyOf, normalizeTty } from "./procinfo";
 // provider default.
 export const DEFAULT_MODEL = "claude-opus-5";
 
+// Geometry for every tmux session lfg owns. NOT cosmetic — it is the only
+// reason a question's preamble is readable in the client at all.
+//
+// Claude Code does not flush the assistant turn containing an interactive tool
+// (AskUserQuestion, a permission prompt, plan approval) to its transcript JSONL
+// until the user answers. While the question is live, the prose the model wrote
+// right before asking exists ONLY in Claude's memory and on the pane — it is on
+// disk nowhere (verified: a phrase unique to that prose matched nothing under
+// ~/.claude). `parsePrompt`'s `context` scrape is therefore the only way the
+// client can show it, and the scrape can only see what fits on the pane.
+//
+// And it cannot see more: Claude Code runs in the ALTERNATE SCREEN, so the pane
+// has `history_size == 0` and `capture-pane -S -500` returns exactly the same
+// rows as a plain capture. There is no scrollback to fall back on.
+//
+// At tmux's default 80x24 a two-paragraph preamble plus a selector box does not
+// fit, so the top of the turn — including the `⏺` bullet `contextAbovePrompt`
+// keys off — was simply gone, and the client got a mid-sentence fragment or
+// nothing. Hence "the response before the question is cut off". Rows are what
+// matter; columns only reduce wrapping. Capture cost barely moves, because
+// `capture-pane` emits an unused row as an empty string, not as padding.
+export const PANE_COLS = 120;
+export const PANE_ROWS = 200;
+
+// Size flags for `tmux new-session`. tmux records these as the session's
+// `default-size`, so a detached session keeps them.
+export function paneSizeArgs(): string[] {
+  return ["-x", String(PANE_COLS), "-y", String(PANE_ROWS)];
+}
+
+/**
+ * Restore a pane to {@link PANE_ROWS} when it has been shrunk.
+ *
+ * Load-bearing, and the reason earlier fixes here regressed: tmux does NOT
+ * restore `default-size` after a client detaches. Measured —
+ *
+ *   before: w=200 h=60 → during attach: w=80 h=23 → after detach: w=80 h=23
+ *
+ * so a single visit to the Terminal tab (or any `tmux attach`) permanently
+ * re-breaks preamble capture for that session. Creating sessions at the right
+ * size is therefore not enough; the size has to be reconciled.
+ *
+ * Skips attached sessions on purpose — resizing a window a human is looking at
+ * would yank their terminal. They get the size back when they detach.
+ *
+ * Returns true when a resize was issued.
+ */
+export function ensurePaneRows(target: string, minRows = PANE_ROWS): boolean {
+  try {
+    const r = Bun.spawnSync([
+      "tmux", "display-message", "-p", "-t", target,
+      "#{window_height} #{session_attached}",
+    ]);
+    if (r.exitCode !== 0) return false;
+    const [h, attached] = new TextDecoder().decode(r.stdout).trim().split(/\s+/);
+    if (Number(attached) > 0) return false; // a human is looking at it
+    if (!(Number(h) < minRows)) return false; // already tall enough (or unreadable)
+    const resize = Bun.spawnSync([
+      "tmux", "resize-window", "-t", target, "-x", String(PANE_COLS), "-y", String(minRows),
+    ]);
+    return resize.exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
 // claude shows a blocking "Is this a project you trust?" dialog the first time
 // it opens an untrusted cwd. It is NOT bypassed by --dangerously-skip-permissions
 // and it renders BEFORE the TUI starts — so a spawned session hangs on it and
@@ -236,6 +302,7 @@ export function spawnAgentSession(opts: {
     "tmux",
     "new-session",
     "-d",
+    ...paneSizeArgs(),
     "-s",
     opts.name,
     "-c",
@@ -271,7 +338,7 @@ export function managedSessionArgv(opts: {
   resume?: string;
   fork?: boolean;
 }): string[] {
-  const argv = ["tmux", "new-session", "-d", "-s", opts.name, "-c", opts.cwd,
+  const argv = ["tmux", "new-session", "-d", ...paneSizeArgs(), "-s", opts.name, "-c", opts.cwd,
     claudeBin(), "--dangerously-skip-permissions", "--add-dir", reposRoot()];
   // Resume the prior conversation when asked. Placed before --model so the flags
   // read like relaunchSessionWithModel's argv; order is irrelevant to claude.
@@ -360,6 +427,7 @@ export function managedCodexSessionArgv(opts: {
     "tmux",
     "new-session",
     "-d",
+    ...paneSizeArgs(),
     "-s",
     opts.name,
     "-c",
@@ -430,7 +498,7 @@ export function spawnManagedAisdkSession(opts: {
   // dependency on the rest of the command surface.
   const harnessPath = `${import.meta.dir}/agents/backends/aisdk-session.ts`;
   const argv = [
-    "tmux", "new-session", "-d", "-s", opts.name, "-c", opts.cwd,
+    "tmux", "new-session", "-d", ...paneSizeArgs(), "-s", opts.name, "-c", opts.cwd,
     process.execPath, harnessPath,
     "--session", opts.sessionId,
     "--model", opts.model,
@@ -466,7 +534,7 @@ export function spawnManagedCodexAisdkSession(opts: {
   // dependency on the rest of the command surface.
   const harnessPath = `${import.meta.dir}/agents/backends/codex-aisdk-session.ts`;
   const argv = [
-    "tmux", "new-session", "-d", "-s", opts.name, "-c", opts.cwd,
+    "tmux", "new-session", "-d", ...paneSizeArgs(), "-s", opts.name, "-c", opts.cwd,
     process.execPath, harnessPath,
     "--key", opts.key,
     "--model", opts.model,
@@ -502,7 +570,7 @@ export function spawnManagedOpencodeAisdkSession(opts: {
   // dependency on the rest of the command surface.
   const harnessPath = `${import.meta.dir}/agents/backends/opencode-aisdk-session.ts`;
   const argv = [
-    "tmux", "new-session", "-d", "-s", opts.name, "-c", opts.cwd,
+    "tmux", "new-session", "-d", ...paneSizeArgs(), "-s", opts.name, "-c", opts.cwd,
     process.execPath, harnessPath,
     "--key", opts.key,
     "--model", opts.model,
@@ -656,6 +724,10 @@ const SELECTOR_SEP_RE = /^[╌─—_=-]{5,}$/;
 // -indented continuation lines for wrapped prose.
 const ASSISTANT_BULLET = "⏺";
 
+// How far above a selector `contextAbovePrompt` will walk. Sized to PANE_ROWS —
+// the pane is the true limit, so anything smaller just re-introduces the clip.
+const CONTEXT_SCAN_MAX_LINES = PANE_ROWS * 2;
+
 // Scrape the assistant prose shown directly above a selector's top separator
 // (`sepIdx`) — the explanation the model wrote right before asking. Claude
 // renders it as "⏺ <text>" with wrap-continuation lines and blank-line
@@ -685,7 +757,9 @@ function contextAbovePrompt(
   while (i >= 0 && !lines[i].trim()) i--; // skip blanks adjacent to the box
   let consecutiveBlank = 0;
   let foundBullet = false;
-  for (let scanned = 0; i >= 0 && scanned < 40; i--, scanned++) {
+  // Cap generously: the pane itself is the real bound (PANE_ROWS), and a cap
+  // below it silently re-clips the preamble the tall pane exists to preserve.
+  for (let scanned = 0; i >= 0 && scanned < CONTEXT_SCAN_MAX_LINES; i--, scanned++) {
     const trimmed = lines[i].trim();
     if (!trimmed) {
       if (++consecutiveBlank >= 2) break; // a real gap ends the block

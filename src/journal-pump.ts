@@ -18,7 +18,7 @@
 import { Journal, PumpDeltas } from "./journal.ts";
 import { listSessions, resolveTranscript, normalizeLineMessages } from "./sessions.ts";
 import type { SessionMsg } from "./sessions.ts";
-import { capturePaneAsync, isBusy } from "./tmux.ts";
+import { capturePaneAsync, ensurePaneRows, isBusy, PANE_ROWS } from "./tmux.ts";
 import { listQueue, reconcileQueued } from "./sendq.ts";
 import { findEntryByAnyId as findAisdkEntryByAnyId } from "./aisdk-registry.ts";
 import { codexDelegationSessionIds, notePaneBusy } from "./activity.ts";
@@ -37,6 +37,9 @@ const POLL_TICK_MS = 1000;
 // Same semantics as the old per-connection loop: a pane-less bare-CLI session
 // counts as busy while its transcript was written within this window.
 const BARE_BUSY_WINDOW_MS = 4000;
+// Don't re-attempt a pane resize more often than this. A pane we can't grow
+// (a human is attached to it) must not cost two tmux spawns every tick.
+const RESIZE_RETRY_MS = 30_000;
 
 /**
  * How long one session's work in a sweep may take before the sweep stops waiting
@@ -276,6 +279,9 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
   const tailStep = new StepRunner("tail", STEP_TIMEOUT_MS, (m) => console.log(m));
   const pollStep = new StepRunner("poll", STEP_TIMEOUT_MS, (m) => console.log(m));
 
+  // Last pane-resize attempt per session — see `reconcilePaneRows`.
+  const lastResizeAttempt = new Map<string, number>();
+
   const initialOffset = (sid: string, tp: string): number => {
     let size = 0;
     try {
@@ -302,6 +308,11 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       const sid = s.sessionId;
       if (!sid) continue;
       seen.add(sid);
+      // Size the pane from the enumeration, not only from the poll loop: a
+      // session whose transcript hasn't materialized yet is never watched (the
+      // `!tp` skip below), so a poll-only reconcile leaves it at whatever size
+      // it was spawned with — forever, for an adopted CLI session.
+      if (s.tmuxTarget) tryEnsurePaneRows(sid, s.tmuxTarget);
       const existing = watched.get(sid);
       if (existing) {
         existing.target = s.tmuxTarget ?? null; // pane can (re)appear
@@ -328,6 +339,7 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
         deltas.forget(sid); // if it comes back, it re-states its baseline
         tailStep.forget(sid);
         pollStep.forget(sid);
+        lastResizeAttempt.delete(sid);
       }
     }
   };
@@ -382,6 +394,7 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
         return;
       }
       const pane = await capturePaneAsync(w.target);
+      reconcilePaneRows(w.sid, w.target, pane);
       const prompt = (await deps.resolvePrompt(w.tp, pane)) ?? null;
       if (deltas.promptChanged(w.sid, prompt))
         j.append(w.sid, "prompt", { sid: w.sid, prompt });
@@ -396,6 +409,30 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       const busy = resolveBusy({ verdict, paneBusy, delegated });
       if (deltas.busyChanged(w.sid, busy)) j.append(w.sid, "busy", { sid: w.sid, busy });
     } catch {}
+  };
+
+  // Keep panes tall enough that a question's preamble is still on screen when we
+  // scrape it. See `ensurePaneRows` — tmux does not restore `default-size` after
+  // a client detaches, so sizing sessions at creation is not enough; without this
+  // one Terminal-tab visit permanently re-breaks preamble capture. Also what
+  // retro-fits sessions that already existed when this shipped.
+  //
+  // The detection is free: `capture-pane` emits exactly one line per pane row, so
+  // the capture we already did tells us the height. `ensurePaneRows` re-checks
+  // authoritatively (and skips attached sessions), so this is only a filter that
+  // keeps its two spawnSync calls off the 1 Hz path. Rate-limited because a pane
+  // we can't grow — an attached one — would otherwise retry every tick forever.
+  const tryEnsurePaneRows = (sid: string, target: string) => {
+    const now = Date.now();
+    if (now - (lastResizeAttempt.get(sid) ?? 0) < RESIZE_RETRY_MS) return;
+    lastResizeAttempt.set(sid, now);
+    ensurePaneRows(target);
+  };
+
+  const reconcilePaneRows = (sid: string, target: string, pane: string | null) => {
+    if (pane == null) return;
+    if (pane.split("\n").length >= PANE_ROWS) return;
+    tryEnsurePaneRows(sid, target);
   };
 
   const queueOne = (w: Watched) => {

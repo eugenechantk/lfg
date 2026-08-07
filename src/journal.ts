@@ -150,13 +150,34 @@ export class Journal {
 
   /** Current actionable-prompt state as last stated by the global pump. */
   promptPresent(sessionId: string): boolean {
+    return this.latestPrompt(sessionId) != null;
+  }
+
+  /**
+   * The prompt this session is currently parked at, as last stated by the pump
+   * — or null when it isn't parked at one.
+   *
+   * This is the REST *baseline* for prompt state, and without it the client has
+   * none. A prompt reaches clients as a journal `prompt` event, but a client's
+   * cursor starts at the journal head, so any client that connects (or is
+   * installed, or has its cursor pruned) AFTER the question was asked never
+   * sees that event. `/api/sessions` carried no prompt field at all, so there
+   * was nothing to recover it from: the session showed as merely "Running",
+   * with no panel — and since Claude Code has not flushed the turn to the
+   * transcript either, the explanation the user needs is nowhere on screen.
+   * That is the "it only appears after the question is answered" report.
+   *
+   * Free to read: the pump already durably stated it, so this costs one indexed
+   * row rather than a `tmux capture-pane` per session per caller.
+   */
+  latestPrompt(sessionId: string): unknown | null {
     const row = this.latestPromptStmt.get(sessionId) as { payload: string } | null;
-    if (!row) return false;
+    if (!row) return null;
     try {
       const payload = JSON.parse(row.payload) as { prompt?: unknown };
-      return payload.prompt != null;
+      return payload.prompt ?? null;
     } catch {
-      return false;
+      return null;
     }
   }
 

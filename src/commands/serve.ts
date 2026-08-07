@@ -1672,7 +1672,19 @@ export async function cmdServe() {
       }
 
       if (path === "/api/sessions") {
-        return json({ sessions: await listSessions() });
+        // Carry the pump's current prompt on the row. The journal event is a
+        // DELTA — a client whose cursor starts at the head (fresh launch, new
+        // install, pruned journal) never receives a prompt asserted before it
+        // connected, and would show a parked session as plain "Running" with no
+        // panel and no preamble (the turn isn't in the transcript yet either).
+        // Reading the pump's last durable statement costs one indexed row per
+        // session; re-scraping panes here would not be affordable.
+        const sessions = await listSessions();
+        return json({
+          sessions: sessions.map((s) =>
+            s.sessionId ? { ...s, prompt: journal.latestPrompt(s.sessionId) } : s,
+          ),
+        });
       }
 
       // Compact current-state contract for lightweight clients such as the
