@@ -1675,6 +1675,21 @@ export async function cmdServe() {
         return json({ sessions: await listSessions() });
       }
 
+      // Compact current-state contract for lightweight clients such as the
+      // macOS menu-bar window. Prompt state already belongs to the one global
+      // journal pump; reading its latest durable value avoids re-scraping every
+      // tmux pane once per connected client.
+      if (path === "/api/session-states") {
+        const sessions = await listSessions();
+        return json({
+          needsInputSessionIds: sessions.flatMap((session) =>
+            session.sessionId && journal.promptPresent(session.sessionId)
+              ? [session.sessionId]
+              : [],
+          ),
+        });
+      }
+
       // Claude subscription usage (5-hour + 7-day windows) via the OAuth usage
       // endpoint, authed with the local Claude Code credentials. Cached for a
       // minute so reopening the new-session dialog doesn't hammer Anthropic.

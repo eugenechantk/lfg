@@ -47,6 +47,7 @@ export class Journal {
   private oldestStmt;
   private getOffsetStmt;
   private setOffsetStmt;
+  private latestPromptStmt;
 
   constructor(db: Database) {
     this.db = db;
@@ -82,6 +83,9 @@ export class Journal {
     this.setOffsetStmt = db.prepare(
       "INSERT INTO pump_state (sessionId, offset) VALUES (?, ?) " +
         "ON CONFLICT(sessionId) DO UPDATE SET offset = excluded.offset",
+    );
+    this.latestPromptStmt = db.prepare(
+      "SELECT payload FROM events WHERE sessionId = ? AND type = 'prompt' ORDER BY seq DESC LIMIT 1",
     );
   }
 
@@ -142,6 +146,18 @@ export class Journal {
   subscribe(fn: Listener): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
+  }
+
+  /** Current actionable-prompt state as last stated by the global pump. */
+  promptPresent(sessionId: string): boolean {
+    const row = this.latestPromptStmt.get(sessionId) as { payload: string } | null;
+    if (!row) return false;
+    try {
+      const payload = JSON.parse(row.payload) as { prompt?: unknown };
+      return payload.prompt != null;
+    } catch {
+      return false;
+    }
   }
 
   // -- pump offsets (persisted so a server restart never re-journals history) --

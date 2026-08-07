@@ -16,6 +16,14 @@ windows are stretched to the full visible height of the display they open on.
 
 ## UI
 
+- **Menu-bar quick access** — the status item opens a compact window with
+  de-duplicated Needs Input, Running, and Recent sections. Needs Input comes
+  from the server's live prompt state (not the separate Paused/error state).
+  Rows use the same iTerm2 attach/resume path as the main window, and Open All
+  Sessions reveals the single main app window. The panel shows up to four
+  actionable/running rows and five recent rows, with full counts in each header.
+  Its monochrome template icon is generated from the canonical iOS logo at
+  build time, so macOS supplies the correct menu-bar tint in light and dark mode.
 - **Toolbar** (Liquid Glass, per the HIG toolbar groupings) — host connection
   status replaces the static title on the leading edge, the Status / Directory
   segmented control sits in the center area, and refresh + search sit on the
@@ -78,11 +86,12 @@ has no Xcode test bundle:
 ```sh
 build/lfg.app/Contents/MacOS/lfg --desktop-feature-test
 build/lfg.app/Contents/MacOS/lfg --status-snapshots /tmp/lfg-status-snapshots
+build/lfg.app/Contents/MacOS/lfg --menu-bar-snapshot /tmp/lfg-menu-bar.png
 build/lfg.app/Contents/MacOS/lfg --rename-test <sessionId> <hostURL> "<title>"
 ```
 
-The second command renders inspectable single-host and multi-host status-bar
+The second and third commands render inspectable status-bar and menu-bar-window
 fixtures off-screen, so visual verification still works while the login session
-is locked. The third drives the same `MoveCoordinator.rename` the row's
+is locked. The fourth drives the same `MoveCoordinator.rename` the row's
 "Rename…" context menu calls, against a live host — an empty title clears the
 override — because a locked login session can't be driven through the menu.

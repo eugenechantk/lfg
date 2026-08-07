@@ -5,6 +5,7 @@ cd "$(dirname "$0")"
 
 APP="build/lfg.app"
 ICON_SRC="../ios/LFG/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"
+MENU_ICON_SRC="../ios/LFG/Assets.xcassets/LaunchIcon.imageset/LaunchIcon.png"
 MODULE_CACHE="build/ModuleCache"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$MODULE_CACHE"
@@ -42,6 +43,18 @@ Image.open(source).convert("RGBA").save(
 PY
   fi
   rm -rf "$ICONSET" "$ICON_TMP"
+fi
+
+# Menu-bar template image: crop the transparent canonical mark tightly enough
+# to read at 18pt, then provide native 1x/2x resources. SwiftUI renders its
+# alpha as a template so macOS supplies the correct light/dark menu-bar tint.
+if [[ -f "$MENU_ICON_SRC" ]]; then
+  MENU_ICON_CROP="build/MenuBarIcon-crop.png"
+  rm -f "$MENU_ICON_CROP"
+  sips -c 700 700 "$MENU_ICON_SRC" --out "$MENU_ICON_CROP" >/dev/null
+  sips -z 18 18 "$MENU_ICON_CROP" --out "$APP/Contents/Resources/MenuBarIcon.png" >/dev/null
+  sips -z 36 36 "$MENU_ICON_CROP" --out "$APP/Contents/Resources/MenuBarIcon@2x.png" >/dev/null
+  rm -f "$MENU_ICON_CROP"
 fi
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'

@@ -59,6 +59,24 @@ describe("journal core", () => {
     const a = j.append("s1", "busy", { sid: "s1", busy: true });
     expect(got).toEqual([a]);
   });
+
+  test("latest prompt presence follows set, update, and clear events", () => {
+    expect(j.promptPresent("s1")).toBe(false);
+    j.append("s1", "prompt", {
+      sid: "s1",
+      prompt: { question: "Approve the plan?", options: [] },
+    });
+    expect(j.promptPresent("s1")).toBe(true);
+    j.append("s1", "busy", { sid: "s1", busy: false });
+    expect(j.promptPresent("s1")).toBe(true);
+    j.append("s1", "prompt", {
+      sid: "s1",
+      prompt: { question: "Choose a target", options: [{ index: 1, label: "Mac" }] },
+    });
+    expect(j.promptPresent("s1")).toBe(true);
+    j.append("s1", "prompt", { sid: "s1", prompt: null });
+    expect(j.promptPresent("s1")).toBe(false);
+  });
 });
 
 describe("canServe (resync boundaries)", () => {

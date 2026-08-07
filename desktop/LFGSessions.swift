@@ -102,6 +102,7 @@ struct ResumableAPISession: Decodable {
 }
 struct ResumableResponse: Decodable { let sessions: [ResumableAPISession] }
 struct HostInfoResponse: Decodable { let hostId: String; let hostName: String }
+struct SessionStatesResponse: Decodable { let needsInputSessionIds: [String] }
 
 // MARK: - Host state
 
@@ -112,6 +113,7 @@ struct HostState: Identifiable {
     var info: HostInfoResponse?
     var sessions: [APISession] = []
     var closedSessions: [APISession] = []
+    var needsInputSessionIds: Set<String> = []
     var error: String?
     var isLocal: Bool = false
 
@@ -157,6 +159,25 @@ struct SessionItem: Identifiable {
     let hostLabel: String
     let hostIsLocal: Bool
     let hostSSHTarget: String?
+    let needsInput: Bool
+
+    init(
+        session: APISession,
+        hostURL: String,
+        hostId: String,
+        hostLabel: String,
+        hostIsLocal: Bool,
+        hostSSHTarget: String?,
+        needsInput: Bool = false
+    ) {
+        self.session = session
+        self.hostURL = hostURL
+        self.hostId = hostId
+        self.hostLabel = hostLabel
+        self.hostIsLocal = hostIsLocal
+        self.hostSSHTarget = hostSSHTarget
+        self.needsInput = needsInput
+    }
 
     var id: String { "\(hostId)-\(session.id)" }
 
@@ -169,9 +190,10 @@ struct SessionItem: Identifiable {
     }
 
     enum Status: Int, CaseIterable {
-        case paused, working, idle, closed
+        case needsInput, paused, working, idle, closed
         var title: String {
             switch self {
+            case .needsInput: return "Needs Input"
             case .paused: return "Paused"
             case .working: return "Working"
             case .idle: return "Idle"
@@ -182,9 +204,52 @@ struct SessionItem: Identifiable {
 
     var status: Status {
         if session.closed { return .closed }
+        if needsInput { return .needsInput }
         if session.status == "blocked" { return .paused }
         if session.busy { return .working }
         return .idle
+    }
+}
+
+/// Compact, deterministic slices for the menu-bar window. A row appears once:
+/// actionable first, then active, then the most recent remainder.
+struct MenuBarSessionProjection {
+    static let activeLimit = 4
+    static let recentLimit = 5
+
+    let needsInput: [SessionItem]
+    let running: [SessionItem]
+    let recent: [SessionItem]
+    let needsInputCount: Int
+    let runningCount: Int
+    let recentCount: Int
+
+    init(items: [SessionItem]) {
+        let actionable = items.filter { $0.status == .needsInput }
+            .sorted(by: Self.oldestFirst)
+        let active = items.filter { $0.status == .working }
+            .sorted(by: Self.newestFirst)
+        let remainder = items.filter { $0.status != .needsInput && $0.status != .working }
+            .sorted(by: Self.newestFirst)
+
+        needsInputCount = actionable.count
+        runningCount = active.count
+        recentCount = remainder.count
+        needsInput = Array(actionable.prefix(Self.activeLimit))
+        running = Array(active.prefix(Self.activeLimit))
+        recent = Array(remainder.prefix(Self.recentLimit))
+    }
+
+    private static func oldestFirst(_ lhs: SessionItem, _ rhs: SessionItem) -> Bool {
+        let left = lhs.session.lastActivityAt ?? 0
+        let right = rhs.session.lastActivityAt ?? 0
+        return left == right ? lhs.id < rhs.id : left < right
+    }
+
+    private static func newestFirst(_ lhs: SessionItem, _ rhs: SessionItem) -> Bool {
+        let left = lhs.session.lastActivityAt ?? 0
+        let right = rhs.session.lastActivityAt ?? 0
+        return left == right ? lhs.id < rhs.id : left > right
     }
 }
 
@@ -358,7 +423,8 @@ final class SessionStore: ObservableObject {
                     hostId: host.info?.hostId ?? host.url,
                     hostLabel: host.label,
                     hostIsLocal: host.isLocal,
-                    hostSSHTarget: host.sshTarget
+                    hostSSHTarget: host.sshTarget,
+                    needsInput: $0.sessionId.map(host.needsInputSessionIds.contains) ?? false
                 )
             }
         }
@@ -427,6 +493,7 @@ final class SessionStore: ObservableObject {
     }
 
     func refresh() async {
+        guard !refreshing else { return }
         refreshing = true
         defer { refreshing = false; lastRefreshed = Date() }
         let entries = Config.loadHosts()
@@ -578,7 +645,8 @@ final class SessionStore: ObservableObject {
         do {
             guard let infoURL = URL(string: url + "/api/info"),
                   let sessURL = URL(string: url + "/api/sessions"),
-                  let resumableURL = URL(string: url + "/api/sessions/resumable?limit=100") else {
+                  let resumableURL = URL(string: url + "/api/sessions/resumable?limit=100"),
+                  let statesURL = URL(string: url + "/api/session-states") else {
                 state.error = "bad URL"
                 return state
             }
@@ -588,6 +656,13 @@ final class SessionStore: ObservableObject {
             let parsed = try JSONDecoder().decode(SessionsResponse.self, from: sessData)
             state.sessions = parsed.sessions.sorted {
                 ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0)
+            }
+            // Older lfg hosts do not expose this lightweight endpoint yet.
+            // Keep the host usable; only its Needs Input section is absent.
+            if let (statesData, statesResponse) = try? await session.data(from: statesURL),
+               (statesResponse as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) == true,
+               let states = try? JSONDecoder().decode(SessionStatesResponse.self, from: statesData) {
+                state.needsInputSessionIds = Set(states.needsInputSessionIds)
             }
             if let (resumableData, _) = try? await session.data(from: resumableURL),
                let resumable = try? JSONDecoder().decode(ResumableResponse.self, from: resumableData) {
@@ -992,7 +1067,7 @@ enum DesktopFeatureTestCLI {
         guard CommandLine.arguments.dropFirst().first == "--desktop-feature-test" else { return }
         do {
             try run()
-            print("{\"ok\":true,\"tests\":25}")
+            print("{\"ok\":true,\"tests\":33}")
             fflush(stdout)
             Darwin.exit(0)
         } catch {
@@ -1149,6 +1224,55 @@ enum DesktopFeatureTestCLI {
         ])
         try expect(longStatusWidth - shortStatusWidth > 180,
                    "long status display names retain their intrinsic width")
+
+        let needsInput = menuTestItem(
+            id: "needs-input",
+            lastActivity: 100,
+            busy: true,
+            status: "blocked",
+            needsInput: true
+        )
+        try expect(needsInput.status == .needsInput,
+                   "needs input outranks paused and working")
+        let paused = menuTestItem(
+            id: "paused",
+            lastActivity: 150,
+            busy: true,
+            status: "blocked"
+        )
+        try expect(paused.status == .paused,
+                   "upstream failure remains paused when no prompt is present")
+
+        let projected = MenuBarSessionProjection(items: [
+            menuTestItem(id: "needs-newer", lastActivity: 200, needsInput: true),
+            needsInput,
+            menuTestItem(id: "working-old", lastActivity: 250, busy: true),
+            menuTestItem(id: "working-new", lastActivity: 300, busy: true),
+            menuTestItem(id: "recent-old", lastActivity: 10),
+            paused,
+            menuTestItem(id: "recent-new", lastActivity: 20),
+        ])
+        try expect(projected.needsInput.map(\.session.id) == ["needs-input", "needs-newer"],
+                   "needs-input rows are oldest-waiting first")
+        try expect(projected.running.map(\.session.id) == ["working-new", "working-old"],
+                   "running rows are newest-active first")
+        try expect(projected.recent.map(\.session.id) == ["paused", "recent-new", "recent-old"],
+                   "recent rows exclude actionable/running duplicates and sort by recency")
+        try expect(projected.needsInputCount == 2 && projected.runningCount == 2 && projected.recentCount == 3,
+                   "section totals describe the uncapped projection")
+
+        let capped = MenuBarSessionProjection(items:
+            (0..<7).map {
+                menuTestItem(id: "needs-\($0)", lastActivity: Double($0), needsInput: true)
+            } +
+            (0..<7).map {
+                menuTestItem(id: "recent-\($0)", lastActivity: Double($0))
+            }
+        )
+        try expect(capped.needsInput.count == MenuBarSessionProjection.activeLimit && capped.needsInputCount == 7,
+                   "needs-input rows are capped while retaining the full count")
+        try expect(capped.recent.count == MenuBarSessionProjection.recentLimit && capped.recentCount == 7,
+                   "recent rows are capped while retaining the full count")
     }
 
     @MainActor
@@ -1161,6 +1285,37 @@ enum DesktopFeatureTestCLI {
             .environmentObject(store)
             .fixedSize(horizontal: true, vertical: false)
         return ImageRenderer(content: content).nsImage?.size.width ?? 0
+    }
+
+    private static func menuTestItem(
+        id: String,
+        lastActivity: Double,
+        busy: Bool = false,
+        status: String? = nil,
+        needsInput: Bool = false
+    ) -> SessionItem {
+        SessionItem(
+            session: APISession(
+                agent: "claude",
+                pid: id.hashValue,
+                cwd: "/tmp/project",
+                project: "project",
+                title: id,
+                sessionId: id,
+                busy: busy,
+                lastActivityAt: lastActivity,
+                tmuxName: "lfg-\(id)",
+                model: "opus",
+                status: status,
+                lastUserText: nil
+            ),
+            hostURL: "http://localhost:8766",
+            hostId: "host",
+            hostLabel: "This Mac",
+            hostIsLocal: true,
+            hostSSHTarget: nil,
+            needsInput: needsInput
+        )
     }
 
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
@@ -1511,8 +1666,9 @@ struct SessionRow: View {
 
     private var dotColor: Color {
         switch item.status {
+        case .needsInput: return .orange
         case .working: return .green
-        case .paused: return .orange
+        case .paused: return .red
         case .idle, .closed: return Color.secondary.opacity(0.35)
         }
     }
@@ -1569,6 +1725,299 @@ struct SessionRow: View {
             .background(color.opacity(0.15))
             .foregroundStyle(color)
             .clipShape(Capsule())
+    }
+}
+
+struct MenuBarSessionRow: View {
+    let item: SessionItem
+    let showHost: Bool
+    let action: () -> Void
+
+    private var statusColor: Color {
+        switch item.status {
+        case .needsInput: return .orange
+        case .paused: return .red
+        case .working: return .green
+        case .idle, .closed: return Color.secondary.opacity(0.35)
+        }
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 8, height: 8)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.session.title)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text(item.session.project)
+                        if let model = item.session.model {
+                            Text("·")
+                            Text(model)
+                        }
+                        if showHost || !item.hostIsLocal {
+                            Text("·")
+                            Text(item.hostLabel)
+                        }
+                    }
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "arrow.up.forward.square")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(item.canOpen ? Color.accentColor : Color.secondary.opacity(0.35))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!item.canOpen)
+        .opacity(item.canOpen ? 1 : 0.55)
+        .accessibilityIdentifier("menu_bar_session_\(item.id)")
+    }
+}
+
+struct MenuBarQuickAccessView: View {
+    @EnvironmentObject private var store: SessionStore
+    @Environment(\.openWindow) private var openWindow
+    @State private var alertMessage: String?
+    private let timer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
+    private let snapshotMode: Bool
+
+    init(snapshotMode: Bool = false) {
+        self.snapshotMode = snapshotMode
+    }
+
+    private var projection: MenuBarSessionProjection {
+        MenuBarSessionProjection(items: store.items)
+    }
+
+    private var connectionColor: Color {
+        switch store.connectionStatus {
+        case .connected: return .green
+        case .connecting: return .orange
+        case .offline: return .red
+        }
+    }
+
+    private var connectionSummary: String {
+        let status = store.connectionStatus.label
+        let actionable = projection.needsInputCount
+        if actionable > 0 {
+            return "\(status) · \(actionable) need\(actionable == 1 ? "s" : "") input"
+        }
+        if projection.runningCount > 0 {
+            return "\(status) · \(projection.runningCount) running"
+        }
+        return status
+    }
+
+    private var sessionContentHeight: CGFloat {
+        guard !store.items.isEmpty else { return 104 }
+        let visibleRows = projection.needsInput.count + projection.running.count + projection.recent.count
+        let visibleSections = [
+            projection.needsInputCount,
+            projection.runningCount,
+            projection.recentCount,
+        ].filter { $0 > 0 }.count
+        let overflowLines = [
+            projection.needsInputCount > projection.needsInput.count,
+            projection.runningCount > projection.running.count,
+            projection.recentCount > projection.recent.count,
+        ].filter { $0 }.count
+        let ideal = CGFloat(visibleRows * 49 + visibleSections * 23 + overflowLines * 18 + 20)
+        return min(430, max(104, ideal))
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("lfg")
+                        .font(.system(size: 15, weight: .semibold))
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(connectionColor)
+                            .frame(width: 6, height: 6)
+                        Text(connectionSummary)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                if snapshotMode {
+                    Image(systemName: "arrow.clockwise")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 20, height: 20)
+                } else {
+                    Button {
+                        Task { await store.refresh() }
+                    } label: {
+                        if store.refreshing {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(store.refreshing)
+                    .help("Refresh sessions")
+                    .accessibilityIdentifier("menu_bar_refresh_button")
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+
+            Divider()
+
+            Group {
+                if snapshotMode {
+                    sessionListContent
+                } else {
+                    ScrollView {
+                        sessionListContent
+                    }
+                }
+            }
+            .frame(height: sessionContentHeight)
+
+            Divider()
+
+            Button {
+                openWindow(id: "sessions")
+                NSApplication.shared.activate(ignoringOtherApps: true)
+            } label: {
+                HStack {
+                    Image(systemName: "macwindow")
+                    Text("Open All Sessions")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("menu_bar_open_all_button")
+        }
+        .frame(width: 380)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .task {
+            if store.lastRefreshed == nil {
+                await store.refresh()
+            }
+        }
+        .onReceive(timer) { _ in
+            Task { await store.refresh() }
+        }
+        .alert("Can't open session", isPresented: .init(
+            get: { alertMessage != nil },
+            set: { if !$0 { alertMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(alertMessage ?? "")
+        }
+    }
+
+    private var sessionListContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if store.items.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: store.refreshing ? "arrow.clockwise" : "rectangle.stack")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.secondary)
+                    Text(store.refreshing ? "Loading sessions…" : "No sessions")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 30)
+                .accessibilityIdentifier("menu_bar_empty_state")
+            } else {
+                sessionSection(
+                    title: "Needs Input",
+                    symbol: "exclamationmark.bubble.fill",
+                    color: .orange,
+                    items: projection.needsInput,
+                    total: projection.needsInputCount
+                )
+                sessionSection(
+                    title: "Running",
+                    symbol: "bolt.fill",
+                    color: .green,
+                    items: projection.running,
+                    total: projection.runningCount
+                )
+                sessionSection(
+                    title: "Recent",
+                    symbol: "clock",
+                    color: .secondary,
+                    items: projection.recent,
+                    total: projection.recentCount
+                )
+            }
+        }
+        .padding(10)
+    }
+
+    @ViewBuilder
+    private func sessionSection(
+        title: String,
+        symbol: String,
+        color: Color,
+        items: [SessionItem],
+        total: Int
+    ) -> some View {
+        if total > 0 {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Image(systemName: symbol)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(color)
+                    Text(title)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(total)")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 8)
+
+                ForEach(items) { item in
+                    MenuBarSessionRow(item: item, showHost: store.multipleHosts) {
+                        open(item)
+                    }
+                }
+
+                if total > items.count {
+                    Text("\(total - items.count) more in All Sessions")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 8)
+                        .padding(.top, 1)
+                }
+            }
+        }
+    }
+
+    private func open(_ item: SessionItem) {
+        Task.detached {
+            let error = Opener.open(item)
+            if let error {
+                await MainActor.run { alertMessage = error }
+            }
+        }
     }
 }
 
@@ -2028,7 +2477,7 @@ struct ContentView: View {
     }
 
     private func statusAgentParentId(for item: SessionItem) -> String? {
-        guard item.status != .paused, item.status != .closed else { return nil }
+        guard item.status != .needsInput, item.status != .paused, item.status != .closed else { return nil }
         return normalizedId(item.session.parentSessionId)
     }
 
@@ -2460,20 +2909,164 @@ struct ContentView: View {
     }
 }
 
+/// Off-screen fixture for visual verification without opening the status item.
+enum DesktopMenuBarSnapshotCLI {
+    @MainActor
+    static func runIfRequested() {
+        let args = CommandLine.arguments
+        guard args.dropFirst().first == "--menu-bar-snapshot" else { return }
+        guard args.count == 3 else {
+            print("{\"ok\":false,\"error\":\"usage: lfg --menu-bar-snapshot <output-file>\"}")
+            Darwin.exit(1)
+        }
+        do {
+            let output = URL(fileURLWithPath: args[2])
+            try render(to: output)
+            print("{\"ok\":true,\"snapshot\":\"\(output.path)\"}")
+            fflush(stdout)
+            Darwin.exit(0)
+        } catch {
+            print("{\"ok\":false,\"error\":\"\(error.localizedDescription)\"}")
+            fflush(stdout)
+            Darwin.exit(1)
+        }
+    }
+
+    @MainActor
+    private static func render(to output: URL) throws {
+        _ = NSApplication.shared
+        let store = SessionStore()
+        store.configuredHosts = [
+            Config.HostEntry(url: "http://studio:8766", displayName: "Creative Studio")
+        ]
+        store.lastRefreshed = Date()
+        store.hosts = [
+            HostState(
+                url: "http://studio:8766",
+                sshTarget: nil,
+                displayName: "Creative Studio",
+                info: HostInfoResponse(hostId: "studio", hostName: "Studio.local"),
+                sessions: [
+                    session(
+                        id: "needs-input",
+                        title: "Choose the launch direction",
+                        project: "lfg",
+                        busy: true,
+                        status: "blocked",
+                        activity: 100
+                    ),
+                    session(
+                        id: "working",
+                        title: "Build menu-bar quick access",
+                        project: "lfg",
+                        busy: true,
+                        activity: 300
+                    ),
+                    session(
+                        id: "paused",
+                        title: "Restore remote authentication",
+                        project: "inbox",
+                        status: "blocked",
+                        activity: 250
+                    ),
+                    session(
+                        id: "recent",
+                        title: "Polish onboarding copy",
+                        project: "studio",
+                        activity: 200
+                    ),
+                ],
+                needsInputSessionIds: ["needs-input"],
+                isLocal: true
+            )
+        ]
+
+        let content = MenuBarQuickAccessView(snapshotMode: true)
+            .environmentObject(store)
+            .preferredColorScheme(.dark)
+        let renderer = ImageRenderer(content: content)
+        renderer.scale = 2
+        renderer.proposedSize = ProposedViewSize(width: 380, height: 410)
+        guard let image = renderer.nsImage,
+              let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let png = bitmap.representation(using: .png, properties: [:]) else {
+            throw SnapshotFailure("Could not render the menu-bar fixture")
+        }
+        try FileManager.default.createDirectory(
+            at: output.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try png.write(to: output, options: .atomic)
+    }
+
+    private static func session(
+        id: String,
+        title: String,
+        project: String,
+        busy: Bool = false,
+        status: String? = nil,
+        activity: Double
+    ) -> APISession {
+        APISession(
+            agent: "claude",
+            pid: id.hashValue,
+            cwd: "/Users/eugene/dev/\(project)",
+            project: project,
+            title: title,
+            sessionId: id,
+            busy: busy,
+            lastActivityAt: activity,
+            tmuxName: "lfg-\(id)",
+            model: "opus",
+            status: status,
+            lastUserText: nil
+        )
+    }
+
+    private struct SnapshotFailure: LocalizedError {
+        let message: String
+        init(_ message: String) { self.message = message }
+        var errorDescription: String? { message }
+    }
+}
+
 @main
 struct LFGSessionsApp: App {
     @StateObject private var store = SessionStore()
     init() {
         DesktopFeatureTestCLI.runIfRequested()
         DesktopStatusSnapshotCLI.runIfRequested()
+        DesktopMenuBarSnapshotCLI.runIfRequested()
         MoveTestCLI.runIfRequested()
     }
 
     var body: some Scene {
-        WindowGroup {
+        Window("lfg", id: "sessions") {
             ContentView()
                 .environmentObject(store)
         }
+        MenuBarExtra {
+            MenuBarQuickAccessView()
+                .environmentObject(store)
+        } label: {
+            let projection = MenuBarSessionProjection(items: store.items)
+            HStack(spacing: 3) {
+                Image("MenuBarIcon")
+                    .renderingMode(.template)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 18, height: 18)
+                if projection.needsInputCount > 0 {
+                    Text("\(projection.needsInputCount)")
+                }
+            }
+            .accessibilityLabel(projection.needsInputCount > 0
+                                ? "lfg, \(projection.needsInputCount) need input"
+                                : "lfg")
+            .accessibilityIdentifier("menu_bar_status_item")
+        }
+        .menuBarExtraStyle(.window)
         Settings {
             HostsSettingsView()
                 .environmentObject(store)
