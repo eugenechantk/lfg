@@ -20,6 +20,26 @@ public enum LFGError: Error, LocalizedError, Sendable {
         case .streamStalled: return "Live stream stalled — reconnecting."
         }
     }
+
+    /// A short line fit to show the user inline, next to a failed message.
+    ///
+    /// `errorDescription` is diagnostic — it pastes the raw response body, so a
+    /// rejected create reads `Server error 400: {"error":"directory not found:
+    /// ~/dev/inbox"}`. The server sends `{"error": "..."}` on every failure, so
+    /// unwrap that one field and show the sentence by itself.
+    public var userMessage: String {
+        guard case .http(_, let body) = self else {
+            return errorDescription ?? "Something went wrong."
+        }
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let data = trimmed.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let message = obj["error"] as? String,
+           !message.isEmpty {
+            return message
+        }
+        return trimmed.isEmpty ? (errorDescription ?? "Something went wrong.") : trimmed
+    }
 }
 
 public enum Reachability: Sendable, Equatable {

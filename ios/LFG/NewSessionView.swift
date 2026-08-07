@@ -107,7 +107,16 @@ struct NewSessionView: View {
             }
         }
         .alert("Add directory", isPresented: $showAddDirectory) {
+            // A filesystem path is not prose. Left with the alert's defaults this
+            // field autocapitalizes and autocorrects, so typing a real path on the
+            // software keyboard quietly rewrites directory names ("eugenechan"
+            // draws a spellcheck underline) and the send then 400s on a path the
+            // user never typed. `.URL` also puts "/" and "." on the main keyboard.
             TextField("/Users/you/project", text: $addDirectoryPath)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.URL)
+                .textContentType(.URL)
             Button("Cancel", role: .cancel) { addDirectoryPath = "" }
             Button("Use") {
                 let p = addDirectoryPath.trimmingCharacters(in: .whitespaces)

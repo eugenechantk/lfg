@@ -419,11 +419,23 @@ struct OptimisticUserBubble: View {
                     Text("Waking session…").font(.caption2).foregroundStyle(.secondary)
                 }
             } else if pending.failed {
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red)
-                    Text("Not sent").font(.caption2).foregroundStyle(.secondary)
-                    Button("Retry") { Task { await store.retryPending(sessionID, pending) } }
-                        .font(.caption2).buttonStyle(.bordered).controlSize(.mini)
+                VStack(alignment: .trailing, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red)
+                        Text("Not sent").font(.caption2).foregroundStyle(.secondary)
+                        Button("Retry") { Task { await store.retryPending(sessionID, pending) } }
+                            .font(.caption2).buttonStyle(.bordered).controlSize(.mini)
+                    }
+                    // "Not sent" alone leaves the user guessing. The host's own
+                    // sentence ("directory not found: /Uzers/…") is usually the
+                    // whole diagnosis.
+                    if let reason = pending.failureReason, !reason.isEmpty {
+                        Text(reason)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
+                            .lineLimit(3)
+                    }
                 }
             }
         }

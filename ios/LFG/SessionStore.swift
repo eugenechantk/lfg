@@ -140,6 +140,18 @@ import LFGCore
         /// (a real 1–6s round-trip), so the bubble renders muted/gray until the
         /// send returns, then animates to the confirmed accent color.
         var confirmed: Bool = true
+        /// Why this send failed, shown under "Not sent". `lastError` is set on
+        /// every failure path but rendered nowhere, so a rejected create (a
+        /// mistyped directory, say) used to surface as a bare "Not sent" with no
+        /// way to tell what the host objected to. Nil for the offline/queued
+        /// cases, which already explain themselves.
+        var failureReason: String? = nil
+    }
+
+    /// The one-line "why" shown under a failed send. Server rejections carry a
+    /// useful sentence; anything else falls back to the system description.
+    static func pendingFailureReason(_ error: Error) -> String {
+        (error as? LFGError)?.userMessage ?? error.localizedDescription
     }
 
     private enum OutboxAttachmentError: LocalizedError {
@@ -2533,7 +2545,8 @@ import LFGCore
             reconcilePending(eff)
         } catch {
             lastError = "Send failed: \(error.localizedDescription)"
-            mutatePending(id, pid) { $0.failed = true }
+            let reason = Self.pendingFailureReason(error)
+            mutatePending(id, pid) { $0.failed = true; $0.failureReason = reason }
             await markOutboxState(clientId, state: "failed")
         }
     }
@@ -2673,8 +2686,12 @@ import LFGCore
         } catch {
             lastError = "Create failed: \(error.localizedDescription)"
             busy[placeholder] = false
+            let reason = Self.pendingFailureReason(error)
             if var pend = pendingSends[placeholder] {
-                for i in pend.indices { pend[i].failed = true }
+                for i in pend.indices {
+                    pend[i].failed = true
+                    pend[i].failureReason = reason
+                }
                 pendingSends[placeholder] = pend
             }
         }
