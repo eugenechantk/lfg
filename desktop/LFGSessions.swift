@@ -1067,7 +1067,7 @@ enum DesktopFeatureTestCLI {
         guard CommandLine.arguments.dropFirst().first == "--desktop-feature-test" else { return }
         do {
             try run()
-            print("{\"ok\":true,\"tests\":33}")
+            print("{\"ok\":true,\"tests\":34}")
             fflush(stdout)
             Darwin.exit(0)
         } catch {
@@ -1215,6 +1215,8 @@ enum DesktopFeatureTestCLI {
                    "resolved unreachable host is offline")
         try expect(ConnectionPresentation.status(resolved: false, reachable: false) == .connecting,
                    "unresolved per-host chip is connecting")
+        try expect(MenuBarArtwork.resourceURL != nil && MenuBarArtwork.templateImage.isTemplate,
+                   "menu-bar artwork loads explicitly from the app bundle as a template image")
 
         _ = NSApplication.shared
         let shortStatusWidth = statusBarWidth(displayNames: ["Studio", "Travel Mac"])
@@ -3031,6 +3033,24 @@ enum DesktopMenuBarSnapshotCLI {
     }
 }
 
+private enum MenuBarArtwork {
+    static let resourceURL = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png")
+
+    static let templateImage: NSImage = {
+        guard let url = resourceURL,
+              let image = NSImage(contentsOf: url) else {
+            let fallback = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "lfg")
+                ?? NSImage(size: NSSize(width: 18, height: 18))
+            fallback.isTemplate = true
+            return fallback
+        }
+
+        image.size = NSSize(width: 18, height: 18)
+        image.isTemplate = true
+        return image
+    }()
+}
+
 @main
 struct LFGSessionsApp: App {
     @StateObject private var store = SessionStore()
@@ -3052,8 +3072,7 @@ struct LFGSessionsApp: App {
         } label: {
             let projection = MenuBarSessionProjection(items: store.items)
             HStack(spacing: 3) {
-                Image("MenuBarIcon")
-                    .renderingMode(.template)
+                Image(nsImage: MenuBarArtwork.templateImage)
                     .resizable()
                     .interpolation(.high)
                     .frame(width: 18, height: 18)
