@@ -72,7 +72,7 @@ import {
 import { addManaged, forkLineageForSession, normalizeParentSessionId, patchManaged, removeManaged } from "../managed.ts";
 import { PtyBridge, termSessionName } from "../pty.ts";
 import { capturePaneScroll, capturePaneEscaped, paneWidth, ensureFolderTrusted } from "../tmux.ts";
-import { rootDir, inboxDir, setInbox, createDir } from "../dirs.ts";
+import { rootDir, inboxDir, setInbox, createDir, expandUserPath } from "../dirs.ts";
 import { detectUrls } from "../links.ts";
 import type { ServerWebSocket } from "bun";
 import { appendCmd as appendAisdkCmd, removeEntry as removeAisdkEntry, readEntry as readAisdkEntry, findEntryByAnyId as findAisdkEntryByAnyId } from "../aisdk-registry.ts";
@@ -1923,7 +1923,11 @@ export async function cmdServe() {
         // folder?" dialog for any untrusted cwd, which hangs session startup. The
         // lfg-sessions skill is installed user-level (~/.claude/skills) so the
         // voice/orchestrator agent gets it regardless of cwd.
-        const requestedCwd = body?.cwd?.trim() || SELF_REPO;
+        // Expand `~` and strip trailing slashes first: this cwd is typed by hand
+        // in the client's "Add directory by path…" field, and nothing between
+        // that TextField and `statSync` is a shell, so an unexpanded `~/dev/foo`
+        // 400s as "directory not found" for a directory that plainly exists.
+        const requestedCwd = expandUserPath(body?.cwd ?? "") || SELF_REPO;
         // Accept a scanned repo, the root/inbox fallbacks, or any existing
         // directory (so newly-created dirs work). Pre-trust it so claude's
         // folder-trust dialog doesn't hang startup.
@@ -1933,7 +1937,9 @@ export async function cmdServe() {
             if (statSync(requestedCwd).isDirectory()) cwd = requestedCwd;
           } catch {}
         }
-        if (!cwd) return err(400, "directory not found");
+        // Name the path in the error. The only way to tell "you typo'd" from
+        // "that's not a directory" is to see what the server actually looked at.
+        if (!cwd) return err(400, `directory not found: ${requestedCwd}`);
         ensureFolderTrusted(cwd);
         const parentSessionId = normalizeParentSessionId(body?.parentSessionId);
         const tmuxName = `lfg-${randomBytes(3).toString("hex")}`;
