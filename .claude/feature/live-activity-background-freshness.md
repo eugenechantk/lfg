@@ -129,22 +129,31 @@ Run 2026-08-07, `Eugenes-MacBook-Pro`.
 | Build (client core) | `cd ios/LFGCore && swift build && swift test` | **PASS** 11 tests / 2 suites |
 | Build (app) | `flowdeck build --scheme LFG --simulator "iPhone 17 Pro"` | **PASS** Build Completed |
 
-## Not yet verified
+## Deployed 2026-08-07
 
-Two things cannot be closed from this machine alone, and are called out rather
-than quietly counted as done:
+Committed as `ee8b056`, pushed to `main`.
 
-1. **The production deploy.** The primary server (pid 13962, started 09:32) is
-   still running pre-fix code. It was deliberately NOT restarted: another agent
-   session is investigating a memory leak and that process — now at 1.36 GB RSS —
-   is its subject, which a restart destroys and which takes hours to reproduce.
-   The fix is unverified in production until it is restarted.
-2. **The end-to-end device behaviour** (user flow steps 3–5: counter drops, card
-   ends, card reappears while the app stays suspended). That needs the deploy
-   above plus Eugene's phone; a simulator cannot receive real APNs pushes.
+**Server** — restarted and confirmed running the new code:
 
-Everything else is verified above, including both new endpoints over real HTTP
-and the port gate with real APNs credentials loaded.
+- `POST /api/push/live-activity/ended` → **200** (returned 404 before the restart,
+  which is the cleanest proof the new build is live).
+- The token store collapsed from **8** `activityUpdate` tokens to **1** the moment
+  the client re-registered — the supersede working on real data.
+- **SC1 in production:** card and journal now agree exactly —
+  card `working=1 rows=[284eede0]` vs journal `busy count=1 [284eede0]`.
+
+**Client** — TestFlight build **202608071032** on train **1.2.0**, built from a
+clean worktree at `ee8b056` (the working tree held other agents' in-flight code
+that must not ship). `fastlane ios verify_testflight_build` DoD: ipa ground truth
+OK → `VALID` → highest train → `internalBuildState=IN_BETA_TESTING`.
+
+## Still unverified
+
+**End-to-end device behaviour** — user flow steps 3–5 (counter drops as sessions
+finish, card ends, card reappears while the app stays suspended). This needs
+Eugene's phone with build 202608071032 installed and a real backgrounded run; a
+simulator cannot receive APNs pushes. Everything it depends on is verified
+individually above.
 
 ## Bugs
 
