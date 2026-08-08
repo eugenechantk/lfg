@@ -42,7 +42,9 @@ import {
 import { unregisterDevice } from "./store.ts";
 import { loadFleetActivityActive, saveFleetActivityActive } from "./fleet-active-store.ts";
 import { resolveBusy, sessionDisplayState, sessionTurnState } from "../session-state.ts";
-import { basename } from "node:path";
+import { basename, join } from "node:path";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { PATHS } from "../config.ts";
 
 // One observation of a session at a single tick.
 export type SessionState = {
@@ -409,6 +411,33 @@ function isDeadApnsToken(r: { ok: boolean; status: number; reason?: string }): b
   return !r.ok && (r.status === 410 || r.reason === "BadDeviceToken" || r.reason === "Unregistered");
 }
 
+/**
+ * One JSON line per Live Activity decision and per token send, appended to
+ * `~/.lfg/liveactivity.log` and never pruned. Same bargain as `sendq.log`.
+ *
+ * WHY THIS EXISTS. The watcher logged only FAILURES, and the failure mode here
+ * produces none: a dead Live Activity token answers 200, so a card that silently
+ * stopped updating left behind exactly zero evidence. Three separate
+ * investigations of "the card is stale" had to be re-derived by live repro
+ * because nothing recorded what the server actually sent, to how many tokens, or
+ * what came back. `end` in particular was completely invisible — the state file
+ * is unlinked when it fires, so even the after-the-fact artifact is destroyed.
+ *
+ * Deliberately boring: no payload bodies, tokens truncated to 8 chars, and
+ * nothing logged on the (very common) tick where the reducer decides to send
+ * nothing.
+ */
+function traceLiveActivity(event: string, extra: Record<string, unknown> = {}): void {
+  if (process.env.NODE_ENV === "test") return;
+  try {
+    mkdirSync(PATHS.data, { recursive: true });
+    appendFileSync(
+      join(PATHS.data, "liveactivity.log"),
+      JSON.stringify({ t: new Date().toISOString(), event, ...extra }) + "\n",
+    );
+  } catch {}
+}
+
 async function sendLiveActivityToTokens(
   tokens: Array<{ token: string; env: "sandbox" | "production" }>,
   push: LiveActivityPush,
@@ -419,6 +448,16 @@ async function sendLiveActivityToTokens(
   let sent = 0;
   for (const token of tokens) {
     const r = await deps.send(token, push, cfg);
+    // Logged on SUCCESS too: a 200 here does not mean the card updated (a dead
+    // Live Activity token answers 200), so the useful signal is which token got
+    // what, over time — not just the failures.
+    traceLiveActivity("send", {
+      apnsEvent: push.body.aps.event,
+      token: token.token.slice(0, 8),
+      env: token.env,
+      status: r.status,
+      ...(r.reason ? { reason: r.reason } : {}),
+    });
     if (r.ok) {
       sent++;
     } else if (isDeadApnsToken(r)) {
@@ -447,10 +486,30 @@ async function applyLiveActivityDecision(
   const tokens = decision.action.event === "start"
     ? startTokens
     : await deps.activityUpdateTokens();
-  if (!tokens.length) return;
+
+  const content = decision.action.push.body.aps["content-state"];
+  traceLiveActivity("decide", {
+    apnsEvent: decision.action.event,
+    tokens: tokens.length,
+    working: content?.working,
+    needsInput: content?.needsInput,
+    rows: content?.rows.map((r) => `${r.sid.slice(0, 8)}:${r.state}`),
+    more: content?.more,
+  });
+
+  // No token = no way to address the card. Worth a line of its own: it is
+  // otherwise indistinguishable from "nothing to say", and it is exactly the
+  // state a suspended app leaves behind when its token rotates.
+  if (!tokens.length) {
+    traceLiveActivity("no-tokens", { apnsEvent: decision.action.event });
+    return;
+  }
 
   const sent = await sendLiveActivityToTokens(tokens, decision.action.push, deps, cfg, log);
-  if (sent <= 0) return;
+  if (sent <= 0) {
+    traceLiveActivity("none-accepted", { apnsEvent: decision.action.event, tokens: tokens.length });
+    return;
+  }
 
   deps.active.current = decision.nextActive;
   await deps.persistActive?.(decision.nextActive);
