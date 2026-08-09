@@ -19,6 +19,7 @@ import { Journal, PumpDeltas } from "./journal.ts";
 import { listSessions, resolveTranscript, normalizeLineMessages } from "./sessions.ts";
 import type { SessionMsg } from "./sessions.ts";
 import { capturePaneAsync, ensurePaneRows, isBusy, PANE_ROWS } from "./tmux.ts";
+import { PaneStitcher } from "./pane-history.ts";
 import { listQueue, reconcileQueued } from "./sendq.ts";
 import { findEntryByAnyId as findAisdkEntryByAnyId } from "./aisdk-registry.ts";
 import { codexDelegationSessionIds, notePaneBusy } from "./activity.ts";
@@ -211,12 +212,55 @@ export type PumpDeps = {
   browserFrames?: BrowserFrameStore;
 };
 
+/**
+ * Reset the pane reconstruction when a new turn starts.
+ *
+ * The idle→busy edge is the turn boundary: everything the stitcher holds
+ * belongs to the turn that just ended, and letting it survive would let one
+ * answer's prose be served as the next question's preamble. Busy stays TRUE
+ * while a session is parked at a question (the process is mid-turn waiting on
+ * the user), so this deliberately does not fire between asking and answering —
+ * which is exactly the window the preamble has to survive.
+ */
+export function noteTurnEdge(w: { stitcher: PaneStitcher; wasBusy: boolean }, busy: boolean): void {
+  if (busy && !w.wasBusy) w.stitcher.reset();
+  w.wasBusy = busy;
+}
+
+/**
+ * Upgrade a pane-scraped prompt's `context` with the reconstructed preamble.
+ *
+ * The live scrape can only see what currently fits on the pane, which for any
+ * substantial answer is a mid-sentence tail — or nothing, when the walk hits a
+ * boundary before collecting anything. The stitcher saw the same turn from its
+ * first line. Prefer it whenever it has more, and never regress: if the
+ * reconstruction is somehow shorter (pump started mid-answer), keep the scrape.
+ */
+export function withStitchedPreamble<T>(prompt: T, w: { stitcher: PaneStitcher }): T {
+  if (!prompt || typeof prompt !== "object") return prompt;
+  const p = prompt as { question?: unknown; context?: unknown };
+  // Only pane-scraped prompts carry `context`; a structured transcript prompt
+  // has its own fields and must not be touched.
+  if (!("question" in p)) return prompt;
+  const stitched = w.stitcher.preamble();
+  if (!stitched) return prompt;
+  const current = typeof p.context === "string" ? p.context : "";
+  if (stitched.length <= current.length) return prompt;
+  return { ...(prompt as object), context: stitched } as T;
+}
+
 type Watched = {
   sid: string;
   tp: string;
   target: string | null;
   buf: string; // partial trailing line between ticks
   frameExtractor: BrowserFrameExtractor;
+  /** Rebuilt scrollback for this pane — the only way to recover a question's
+   *  preamble once it has scrolled off. See `pane-history.ts`. */
+  stitcher: PaneStitcher;
+  /** Last busy value seen by the poll loop, to find the idle→busy edge that
+   *  starts a new turn (and so resets the stitcher). */
+  wasBusy: boolean;
 };
 
 // Set while a pump is running: re-scrape ONE session right now instead of
@@ -327,6 +371,8 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
         target: s.tmuxTarget ?? null,
         buf: "",
         frameExtractor: new BrowserFrameExtractor(),
+        stitcher: new PaneStitcher(),
+        wasBusy: false,
       });
     }
     if (bootSids) bootSids = null; // boot trust window is one enumeration only
@@ -390,12 +436,18 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
           }
         }
         const busy = baseBusy || delegated;
+        noteTurnEdge(w, busy);
         if (deltas.busyChanged(w.sid, busy)) j.append(w.sid, "busy", { sid: w.sid, busy });
         return;
       }
       const pane = await capturePaneAsync(w.target);
       reconcilePaneRows(w.sid, w.target, pane);
-      const prompt = (await deps.resolvePrompt(w.tp, pane)) ?? null;
+      // Retain what this capture is about to lose. A question's preamble is
+      // routinely taller than the pane (78x59 for an iTerm-hosted session), so
+      // by the time the selector renders the top of the turn is gone — but it
+      // WAS on screen a few captures ago. See `pane-history.ts`.
+      w.stitcher.consume(pane);
+      const prompt = withStitchedPreamble(await deps.resolvePrompt(w.tp, pane), w);
       if (deltas.promptChanged(w.sid, prompt))
         j.append(w.sid, "prompt", { sid: w.sid, prompt });
       const paneBusy = pane ? isBusy(pane) : false;
@@ -407,6 +459,7 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       // answer "is a turn in flight", not "is this alive".
       const verdict = await sessionTurnState({ sessionId: w.sid, transcriptPath: w.tp });
       const busy = resolveBusy({ verdict, paneBusy, delegated });
+      noteTurnEdge(w, busy);
       if (deltas.busyChanged(w.sid, busy)) j.append(w.sid, "busy", { sid: w.sid, busy });
     } catch {}
   };
