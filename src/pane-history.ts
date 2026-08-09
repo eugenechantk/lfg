@@ -40,7 +40,10 @@ const ASSISTANT_BULLET = "⏺";
  * of near-identical spinner lines and the real prose is buried.
  */
 const CHROME = [
-  /^[✻✽✢✳*·⏺]?\s*\w+…\s*\(\d+[sm]/, // "✽ Fermenting… (27s · ↓ 1.2k tokens)"
+  // Spinner. The glyph rotates through a set Claude Code can extend, so match
+  // ANY leading non-word glyph rather than an enumerated class — an unlisted
+  // one ("✶ Levitating…") leaked straight into the reconstructed prose.
+  /^\W?\s*\w[\w ]*…\s*\(\d+[sm]/,
   /^[╌─—_=-]{5,}$/, // box rule
   /^❯/, // composer / selected option
   /Enter to (select|confirm)/i,
@@ -50,9 +53,18 @@ const CHROME = [
   /Update available!/i,
   /^\s*⏵⏵/,
   /^\s*⧉/,
-  /^\s*\d+\.\s/, // selector option lines
-  /^\s*☐/, // question box header
+  // NOTE: numbered lines and the "☐" box header are deliberately NOT filtered
+  // here. They were, and it silently deleted every numbered list from the
+  // preamble — "1. Cost at read time" is indistinguishable from a selector
+  // option by shape alone, and the agents write numbered lists constantly.
+  // `contentAboveSelector` removes the box structurally instead, which is the
+  // only way to tell them apart.
   /^\s*←.*✔\s*Submit/, // multi-question nav bar
+  // Box-drawing table rows. The TUI re-renders a table repeatedly as it streams
+  // and each intermediate width is a distinct line, so keeping them stacks
+  // several half-drawn copies of the same table into one unreadable run. The
+  // real table arrives correctly formatted once the turn flushes.
+  /[│┌┐└┘├┤┬┴┼╭╮╰╯]/,
   /^\s*\/\w+$/, // "/rc" hint
   /^●\s+\w+\s+·\s+\/effort/, // model/effort chip
 ];
@@ -65,26 +77,35 @@ function isChrome(line: string): boolean {
 }
 
 const SEP_RE = /^[╌─—_=-]{5,}$/;
-const OPT_LINE_RE = /^\s*(❯|›)?\s*\d+\.\s+\S/;
+/** A selector option carrying the TUI cursor — "❯ 1. Yes". The cursor is what
+ *  distinguishes a live selector from a numbered list in the model's prose. */
+const CURSOR_OPT_RE = /^\s*[❯›]\s*\d+\.\s+\S/;
 
 /**
- * Everything above an open question box.
+ * Everything above an open selector box.
  *
- * Once the selector renders, the question text and the option descriptions sit
- * BELOW the prose but are still plain indented lines — so without this they get
- * recorded as part of the preamble and the client shows the options twice: once
- * as prose, once in the panel. Measured at +30% spurious text.
+ * Once the box renders, the question text and the option descriptions sit BELOW
+ * the prose but are still plain indented lines, so without this they get
+ * recorded as preamble and the client shows the options twice — once as prose,
+ * once in the panel (+30% spurious text, measured).
+ *
+ * Detection keys off the CURSOR ("❯ 1.") rather than a footer string, so it
+ * covers AskUserQuestion, permission prompts and plan approval alike — and,
+ * critically, so a numbered list in the model's own prose is never mistaken for
+ * a selector. Prose lists have no cursor.
  */
 export function contentAboveSelector(pane: string): string {
-  if (!/Enter to select/i.test(pane)) return pane;
   const lines = pane.split("\n");
-  const firstOpt = lines.findIndex((l) => OPT_LINE_RE.test(l));
-  if (firstOpt < 0) return pane;
-  for (let i = firstOpt; i >= 0; i--) {
+  const cursorOpt = lines.findIndex((l) => CURSOR_OPT_RE.test(l));
+  if (cursorOpt < 0) return pane;
+  for (let i = cursorOpt; i >= 0; i--) {
     if (SEP_RE.test(lines[i].trim())) return lines.slice(0, i).join("\n");
   }
-  return lines.slice(0, firstOpt).join("\n");
+  return lines.slice(0, cursorOpt).join("\n");
 }
+
+/** A markdown list item the model wrote: "- x", "* x", "• x", "1. x", "2) x". */
+const LIST_ITEM_RE = /^([-*•]|\d+[.)])\s+\S/;
 
 /**
  * Rebuilds a pane's lost scrollback from successive captures.
@@ -125,10 +146,15 @@ export class PaneStitcher {
         continue;
       }
       if (isChrome(line)) {
-        // A spinner or status line between two prose lines is not a paragraph
-        // break ("✻ Brewed for 27s" comes and goes mid-stream).
-        pendingBlank = false;
-        prev = null;
+        // A separator is usually the model's own "---" rule, and dropping it
+        // must not also drop the paragraph break around it — so leave the
+        // pending state alone and let the blanks either side still register.
+        // Anything else (a spinner, a status line) is transient chrome that
+        // appears BETWEEN two prose lines and must not split them.
+        if (!SEP_RE.test(key)) {
+          pendingBlank = false;
+          prev = null;
+        }
         continue;
       }
       if (this.seen.has(key)) {
@@ -185,22 +211,7 @@ export class PaneStitcher {
       .map((l, i) =>
         i === 0 ? l.trim().replace(new RegExp(`^${ASSISTANT_BULLET}\\s*`), "") : l,
       );
-    // Rejoin the pane's hard wrap. A line indented two spaces is a continuation
-    // of the paragraph above it; anything flush-left starts a new one.
-    const paragraphs: string[] = [];
-    let current: string[] = [];
-    for (const line of body) {
-      const t = line.trim();
-      if (!t) {
-        if (current.length) paragraphs.push(current.join(" "));
-        current = [];
-        continue;
-      }
-      current.push(t);
-    }
-    if (current.length) paragraphs.push(current.join(" "));
-    const text = paragraphs.join("\n\n").trim();
-    return text || null;
+    return rejoinWrap(body);
   }
 
   /** Start a fresh turn. Called on the idle→busy edge, so one turn's prose can
@@ -214,4 +225,51 @@ export class PaneStitcher {
   size(): number {
     return this.lines.length;
   }
+}
+
+/**
+ * Undo the pane's hard wrap without destroying the model's own line structure.
+ *
+ * The naive version joined every consecutive non-blank line with a space, which
+ * turned a bulleted list into one run-on sentence. A list item has to start a
+ * new line, and its own wrapped continuations have to fold back into it — the
+ * TUI marks that difference with indentation: the marker sits at the item's
+ * indent, its wrap sits deeper.
+ */
+export function rejoinWrap(body: string[]): string | null {
+  const out: string[] = []; // finished logical lines; "" is a paragraph break
+  let current: string[] = [];
+  let itemIndent: number | null = null; // indent of the list item being built
+
+  const flush = () => {
+    if (current.length) out.push(current.join(" "));
+    current = [];
+  };
+
+  for (const raw of body) {
+    const t = raw.trim();
+    if (!t) {
+      flush();
+      if (out.length && out[out.length - 1] !== "") out.push("");
+      itemIndent = null;
+      continue;
+    }
+    const indent = raw.length - raw.trimStart().length;
+    if (LIST_ITEM_RE.test(t)) {
+      flush(); // a new item always starts its own line
+      itemIndent = indent;
+      current.push(t);
+      continue;
+    }
+    // Inside a list item, every following non-marker line is that item's wrap.
+    // Indent is NOT a reliable discriminator here: the TUI wraps a list item
+    // back to the marker's own column, so an indent test split every wrapped
+    // item onto a second line. A blank or the next marker ends the item.
+    void indent;
+    current.push(t); // wrapped continuation of prose or of the current item
+  }
+  flush();
+  while (out.length && out[out.length - 1] === "") out.pop();
+  const text = out.join("\n").trim();
+  return text || null;
 }

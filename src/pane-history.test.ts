@@ -154,6 +154,67 @@ describe("contentAboveSelector", () => {
   });
 });
 
+// The agents write lists constantly, and the first cut of the chrome filter
+// deleted every numbered one — "1. Cost at read time" is indistinguishable from
+// a selector option by shape alone.
+describe("the model's own list structure survives", () => {
+  const prose = [
+    "⏺ Here is the **recommendation**, with the `flags` that matter.",
+    "",
+    "  Three things drive the decision:",
+    "",
+    "  1. Cost at read time, which dominates and keeps dominating as the",
+    "     library grows past the first few thousand assets.",
+    "  2. Storage growth, which compounds.",
+    "  3. Invalidation, which is the hard one.",
+    "",
+    "  - a bulleted point",
+    "  - another bulleted point",
+    "",
+    "  ────────────────────────",
+    "",
+    "  Final note about the tradeoff.",
+  ].join("\n");
+
+  const out = (() => {
+    const s = new PaneStitcher();
+    s.consume(prose);
+    return s.preamble()!;
+  })();
+
+  test("numbered list items are not eaten as selector options", () => {
+    expect(out).toContain("1. Cost at read time");
+    expect(out).toContain("2. Storage growth, which compounds.");
+    expect(out).toContain("3. Invalidation, which is the hard one.");
+  });
+
+  test("each list item keeps its own line instead of collapsing into prose", () => {
+    expect(out).toContain("\n2. Storage growth");
+    expect(out).toContain("\n- another bulleted point");
+  });
+
+  test("a wrapped list item folds back into that item, not into a new one", () => {
+    expect(out).toContain("dominates and keeps dominating as the library grows");
+  });
+
+  test("inline markdown is passed through verbatim for the client to render", () => {
+    expect(out).toContain("**recommendation**");
+    expect(out).toContain("`flags`");
+  });
+
+  test("a horizontal rule is dropped but its paragraph break is not", () => {
+    expect(out).toContain("point\n\nFinal note");
+  });
+
+  test("a numbered list is still not mistaken for a live selector", () => {
+    // No cursor → not a selector → nothing is cut.
+    expect(contentAboveSelector("⏺ prose\n  1. one\n  2. two")).toContain("2. two");
+    // Cursor → a real selector → cut.
+    expect(contentAboveSelector("⏺ prose\n" + "─".repeat(78) + "\n❯ 1. Yes\n  2. No"))
+      .not.toContain("Yes");
+  });
+});
+
 describe("pump integration", () => {
   test("the idle→busy edge resets, but staying busy at a question does not", () => {
     const w = { stitcher: new PaneStitcher(), wasBusy: false };
