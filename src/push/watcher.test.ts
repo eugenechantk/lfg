@@ -7,6 +7,7 @@ import {
   reduceFleetLiveActivity,
   orderFleetRows,
   MAX_FLEET_ROWS,
+  END_DEBOUNCE_S,
   liveActivitiesEnabled,
   pushWatcherEnabled,
   CANONICAL_SERVE_PORT,
@@ -22,7 +23,7 @@ import {
 } from "./watcher.ts";
 import { loadFleetActivityActive, saveFleetActivityActive } from "./fleet-active-store.ts";
 import { apnsBody, type ApnsConfig, type ApnsPayload } from "./apns.ts";
-import type { LiveActivityPush } from "./liveactivity.ts";
+import type { LiveActivityContentState, LiveActivityPush } from "./liveactivity.ts";
 
 const seed = (
   busy: boolean,
@@ -236,8 +237,15 @@ describe("reduceFleetLiveActivity", () => {
     expect(r.nextActive).not.toBeNull();
   });
 
-  test("ends the activity when the last session goes idle", () => {
-    const active: LiveActivityActive = {
+  /**
+   * The end debounce. Ending on the FIRST empty tick churned a new activity — and
+   * a new, frequently unreachable, push token — on every gap between two turns.
+   * The real trace showed 19 starts against 90 end decisions, 76 of which had no
+   * token left to send to, which is how the card ended up stranded reading
+   * "1 running session". See `END_DEBOUNCE_S`.
+   */
+  describe("ending the activity when the fleet empties", () => {
+    const active = (): LiveActivityActive => ({
       startedAt: 1_700,
       contentState: {
         working: 1,
@@ -247,16 +255,76 @@ describe("reduceFleetLiveActivity", () => {
         updatedAt: 1_700,
       },
       since: { s1: { state: "working", at: 1_700 } },
-    };
-    const r = reduceFleetLiveActivity({
-      observations: [{ session: { sessionId: "s1", title: "Job" }, observed: obs(false, false) }],
-      active,
-      now: 1_730,
     });
-    expect(r.action?.event).toBe("end");
-    expect(r.nextActive).toBeNull();
-    expect(r.action?.push.body.aps["content-state"]).toMatchObject({
-      working: 0, needsInput: 0, rows: [], more: 0,
+    const idle = [{ session: { sessionId: "s1", title: "Job" }, observed: obs(false, false) }];
+
+    test("does NOT end on the first empty tick — it starts the clock", () => {
+      const r = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730 });
+      expect(r.action?.event).toBe("update"); // counter drops to 0 immediately…
+      expect(r.nextActive).not.toBeNull(); // …but the card (and its token) survive
+      expect(r.nextActive?.zeroSince).toBe(1_730);
+    });
+
+    test("the counter reads zero while we wait — the card must not keep claiming work", () => {
+      const r = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730 });
+      expect(r.action?.push.body.aps["content-state"]).toMatchObject({
+        working: 0, needsInput: 0, rows: [], more: 0,
+      });
+    });
+
+    test("ends once the fleet has been empty for the debounce", () => {
+      const waited: LiveActivityActive = { ...active(), zeroSince: 1_730 };
+      const r = reduceFleetLiveActivity({
+        observations: idle,
+        active: waited,
+        now: 1_730 + END_DEBOUNCE_S,
+      });
+      expect(r.action?.event).toBe("end");
+      expect(r.nextActive).toBeNull();
+      expect(r.action?.push.body.aps["content-state"]).toMatchObject({
+        working: 0, needsInput: 0, rows: [], more: 0,
+      });
+    });
+
+    test("work resuming inside the window cancels the end and clears the clock", () => {
+      // The exact case the debounce exists for: the gap between two turns. State
+      // is modelled as it really is at that moment — the card is already showing
+      // the zeroed content pushed on the first empty tick.
+      const zeroed: LiveActivityContentState = {
+        working: 0, needsInput: 0, rows: [], more: 0, updatedAt: 1_730,
+      };
+      const waited: LiveActivityActive = {
+        startedAt: 1_700, contentState: zeroed, since: {}, zeroSince: 1_730,
+      };
+      const r = reduceFleetLiveActivity({
+        observations: [{ session: { sessionId: "s1", title: "Job" }, observed: obs(true, false) }],
+        active: waited,
+        now: 1_760,
+      });
+      expect(r.action?.event).toBe("update"); // counter goes back up
+      expect(r.nextActive?.zeroSince).toBeUndefined(); // clock cancelled
+      expect(r.nextActive).not.toBeNull(); // SAME activity, same token — the point
+    });
+
+    test("a no-op tick inside the window keeps the clock running, not restarts it", () => {
+      // Otherwise the card could never end: every quiet tick would reset it.
+      const zeroed: LiveActivityContentState = {
+        working: 0, needsInput: 0, rows: [], more: 0, updatedAt: 1_730,
+      };
+      const waited: LiveActivityActive = {
+        startedAt: 1_700, contentState: zeroed, since: {}, zeroSince: 1_730,
+      };
+      const r = reduceFleetLiveActivity({ observations: idle, active: waited, now: 1_800 });
+      expect(r.action).toBeNull(); // nothing renderable changed
+      expect(r.nextActive?.zeroSince).toBe(1_730); // clock preserved
+    });
+
+    test("the debounce is honoured exactly at the boundary", () => {
+      const waited: LiveActivityActive = { ...active(), zeroSince: 1_730 };
+      const at = (now: number) =>
+        reduceFleetLiveActivity({ observations: idle, active: waited, now }).action?.event;
+      expect(at(1_730 + END_DEBOUNCE_S - 1)).toBe("update"); // still waiting
+      expect(at(1_730 + END_DEBOUNCE_S)).toBe("end"); // elapsed
     });
   });
 
@@ -745,5 +813,70 @@ describe("pushWatcherEnabled (SC5)", () => {
     // Same convention as `liveActivitiesEnabled`: no truthiness guessing.
     expect(pushWatcherEnabled(8767, env({ LFG_PUSH_WATCHER: "true" }))).toBe(false);
     expect(pushWatcherEnabled(CANONICAL_SERVE_PORT, env({ LFG_PUSH_WATCHER: "yes" }))).toBe(true);
+  });
+});
+
+// A session appearing TWICE in one tick — two live processes each holding an
+// authoritative pidfile for the same sessionId (see sessions-session-owner.test.ts).
+// `prior` is keyed by sessionId, so the two rows overwrite each other's memory
+// every tick and their differing observations read as a genuine transition. On
+// the real host this notified "🙋 reelly" every ~12s for a session that was not
+// asking anything: one pane sat on an AskUserQuestion, the other idle at the
+// composer.
+describe("duplicate sessionId in one tick (phantom-notification storm)", () => {
+  const dupDeps = (sent: ApnsPayload[], rows: Array<{ id: string; state: SessionState }>): TickDeps => ({
+    sessions: async () => rows.map((r, i) => ({ sessionId: r.id, title: "reelly", tmuxTarget: `pane${i}` })),
+    observe: async (s) => rows.find((r, i) => `pane${i}` === (s as { tmuxTarget?: string }).tmuxTarget)!.state,
+    devices: async () => [{ token: "tok", env: "sandbox" }],
+    cfg,
+    send: async (_d, p) => {
+      sent.push(p);
+      return { ok: true, status: 200 };
+    },
+    now: () => 1000,
+  });
+
+  // The two panes verbatim: pid 36372 on an AskUserQuestion, pid 18071 idle.
+  const collidingRows = () => [
+    { id: "d1a3496d", state: obs(false, true, "Pick one") },
+    { id: "d1a3496d", state: obs(false, false) },
+  ];
+
+  test("never sends, however many ticks run", async () => {
+    const sent: ApnsPayload[] = [];
+    const prior = new Map<string, PriorState>();
+    const deps = dupDeps(sent, collidingRows());
+    for (let i = 0; i < 10; i++) await runPushTick(prior, deps);
+    expect(sent).toEqual([]);
+  });
+
+  test("the first row wins the tick, so the survivor's own transitions still fire", async () => {
+    const sent: ApnsPayload[] = [];
+    const prior = new Map<string, PriorState>();
+    const rows = [
+      { id: "d1a3496d", state: obs(true, false) }, // working
+      { id: "d1a3496d", state: obs(false, true, "Pick one") }, // the ignored twin
+    ];
+    const deps = dupDeps(sent, rows);
+    await runPushTick(prior, deps); // seed from row 0
+    expect(prior.get("d1a3496d")?.busy).toBe(true);
+    rows[0]!.state = obs(false, false); // row 0 genuinely finishes
+    await runPushTick(prior, deps);
+    expect(sent.map((p) => p.kind)).toEqual(["finished"]);
+  });
+
+  test("the fleet card renders one row, not two conflicting ones", () => {
+    const d = reduceFleetLiveActivity({
+      observations: [
+        { session: { sessionId: "d1a3496d", title: "reelly" }, observed: obs(false, true) },
+        { session: { sessionId: "d1a3496d", title: "reelly" }, observed: obs(true, false) },
+      ],
+      active: null,
+      now: 100,
+    });
+    const content = d.action!.push.body.aps["content-state"]!;
+    expect(content.rows).toHaveLength(1);
+    expect(content.needsInput).toBe(1);
+    expect(content.working).toBe(0);
   });
 });
