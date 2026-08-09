@@ -636,9 +636,34 @@ class Semaphore {
 // capturePane() for the one-shot send/confirm flows where ordering matters.
 const captureLimiter = new Semaphore(6);
 export function capturePaneAsync(target: string): Promise<string | null> {
+  return capturePaneAsyncStyled(target).then((t) => (t == null ? null : stripAnsi(t)));
+}
+
+/** SGR/CSI escape sequences tmux emits under `-e`. */
+const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
+
+/** The plain text a `-e` capture would have produced without `-e`. */
+export function stripAnsi(text: string): string {
+  return text.replace(ANSI_RE, "");
+}
+
+/**
+ * Capture WITH escape sequences (`-e`).
+ *
+ * The styling is the only surviving trace of the model's markdown: by the time
+ * text reaches the pane the TUI has already rendered `**bold**` as SGR 1 and
+ * `` `code` `` as a 256-colour span, and a plain capture throws that away — which
+ * is why a recovered preamble read as flat prose. `PaneStitcher` maps it back
+ * (see `ansiToMarkdown`).
+ *
+ * One capture serves both needs: everything that wants plain text goes through
+ * `capturePaneAsync`, which strips. Capturing twice would double the tmux
+ * spawns on the 1 Hz poll path for every session.
+ */
+export function capturePaneAsyncStyled(target: string): Promise<string | null> {
   return captureLimiter.run(async () => {
     try {
-      const proc = Bun.spawn(["tmux", "capture-pane", "-t", target, "-p"], {
+      const proc = Bun.spawn(["tmux", "capture-pane", "-t", target, "-p", "-e"], {
         stdout: "pipe",
         stderr: "ignore",
       });

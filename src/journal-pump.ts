@@ -18,7 +18,7 @@
 import { Journal, PumpDeltas } from "./journal.ts";
 import { listSessions, resolveTranscript, normalizeLineMessages } from "./sessions.ts";
 import type { SessionMsg } from "./sessions.ts";
-import { capturePaneAsync, ensurePaneRows, isBusy, PANE_ROWS } from "./tmux.ts";
+import { capturePaneAsyncStyled, ensurePaneRows, isBusy, PANE_ROWS, stripAnsi } from "./tmux.ts";
 import { PaneStitcher } from "./pane-history.ts";
 import { listQueue, reconcileQueued } from "./sendq.ts";
 import { findEntryByAnyId as findAisdkEntryByAnyId } from "./aisdk-registry.ts";
@@ -440,13 +440,18 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
         if (deltas.busyChanged(w.sid, busy)) j.append(w.sid, "busy", { sid: w.sid, busy });
         return;
       }
-      const pane = await capturePaneAsync(w.target);
+      // ONE capture serves both: the styled form is the only place the model's
+      // markdown still exists (the TUI renders `**bold**` away before it ever
+      // reaches us), and everything else wants it plain. Capturing twice would
+      // double the tmux spawns on this 1 Hz per-session path.
+      const styled = await capturePaneAsyncStyled(w.target);
+      const pane = styled == null ? null : stripAnsi(styled);
       reconcilePaneRows(w.sid, w.target, pane);
       // Retain what this capture is about to lose. A question's preamble is
       // routinely taller than the pane (78x59 for an iTerm-hosted session), so
       // by the time the selector renders the top of the turn is gone — but it
       // WAS on screen a few captures ago. See `pane-history.ts`.
-      w.stitcher.consume(pane);
+      w.stitcher.consume(styled);
       const prompt = withStitchedPreamble(await deps.resolvePrompt(w.tp, pane), w);
       if (deltas.promptChanged(w.sid, prompt))
         j.append(w.sid, "prompt", { sid: w.sid, prompt });

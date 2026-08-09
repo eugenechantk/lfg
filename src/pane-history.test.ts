@@ -5,7 +5,7 @@
 // client shows a mid-sentence fragment (or nothing). Measured on a real 78x59
 // iTerm-hosted session — the size Eugene's `cy` sessions actually get.
 import { test, expect, describe } from "bun:test";
-import { PaneStitcher, MAX_LINES, contentAboveSelector } from "./pane-history.ts";
+import { PaneStitcher, MAX_LINES, contentAboveSelector, ansiToMarkdown, isCodeLine, healSpans } from "./pane-history.ts";
 import { noteTurnEdge, withStitchedPreamble } from "./journal-pump.ts";
 
 /** A pane frame: the last `rows` content lines plus the chrome a real pane draws. */
@@ -212,6 +212,150 @@ describe("the model's own list structure survives", () => {
     // Cursor → a real selector → cut.
     expect(contentAboveSelector("⏺ prose\n" + "─".repeat(78) + "\n❯ 1. Yes\n  2. No"))
       .not.toContain("Yes");
+  });
+});
+
+// The TUI renders markdown away before it reaches the pane, so a plain capture
+// yields flat prose. These are the real byte sequences from a live pane.
+describe("recovering markdown from the pane's ANSI", () => {
+  const E = "\x1b";
+
+  test("bold becomes **", () => {
+    const line = `  4. ${E}[1mWhole-file retry versus resumable chunks.${E}[0m For files above`;
+    expect(ansiToMarkdown(line).trim())
+      .toBe("4. **Whole-file retry versus resumable chunks.** For files above");
+  });
+
+  test("an inline-code span becomes backticks", () => {
+    const line = `  - Always honor ${E}[38;5;153mRetry-After${E}[39m when the server sends it`;
+    expect(ansiToMarkdown(line).trim())
+      .toBe("- Always honor `Retry-After` when the server sends it");
+  });
+
+  test("a span the pane wrapped mid-way is closed, never left dangling", () => {
+    // Unbalanced markers would corrupt everything after them in the client.
+    const out = ansiToMarkdown(`${E}[1mbold that runs off the edge of the pane`);
+    expect(out).toBe("**bold that runs off the edge of the pane**");
+    expect((out.match(/\*\*/g) || []).length % 2).toBe(0);
+  });
+
+  test("plain text is untouched, and stray escapes are dropped", () => {
+    expect(ansiToMarkdown("just prose")).toBe("just prose");
+    expect(ansiToMarkdown(`${E}[38;5;246mgrey${E}[39m`)).toBe("grey");
+  });
+
+  test("syntax-highlighted rows are recognised as code", () => {
+    expect(isCodeLine(`${E}[34mtype${E}[39m ${E}[34mOutcome${E}[39m = ${E}[31m"x"${E}[39m`)).toBe(true);
+    expect(isCodeLine("ordinary prose")).toBe(false);
+    // One stray colour in prose is not a code block.
+    expect(isCodeLine(`prose with ${E}[31mone${E}[39m coloured word`)).toBe(false);
+  });
+
+  test("a code run is fenced and never wrap-joined", () => {
+    const s = new PaneStitcher();
+    s.consume(
+      [
+        "⏺ Here is the shape:",
+        "",
+        `  ${E}[34mfunction${E}[39m ${E}[33mclassify${E}[39m(e): ${E}[34mOutcome${E}[39m {`,
+        `  ${E}[34mreturn${E}[39m ${E}[31m"retry"${E}[39m; ${E}[34mconst${E}[39m x = ${E}[32m1${E}[39m;`,
+        "",
+        "  Closing prose.",
+      ].join("\n"),
+    );
+    const out = s.preamble()!;
+    expect(out).toContain("```");
+    // Two code rows stay two rows rather than folding into one line.
+    expect(out).toContain("function classify(e): Outcome {\nreturn");
+    expect(out).toContain("Closing prose.");
+  });
+});
+
+describe("defects found by looking at real output", () => {
+  const E = "\x1b";
+
+  test("a bold phrase the pane wrapped is healed, not left with stray asterisks", () => {
+    // Real output was: "**all ** **failures as equivalent**"
+    expect(healSpans("**all ** **failures as equivalent**"))
+      .toBe("**all failures as equivalent**");
+    expect(healSpans("`some flag ` `and more`")).toBe("`some flag and more`");
+    // A genuine end-then-start of two different spans keeps its space.
+    expect(healSpans("**one** and **two**")).toBe("**one** and **two**");
+  });
+
+  test("a spinner with an apostrophe is still chrome", () => {
+    // "✽ Beboppin'… (19s · ↓ 815 tokens)" leaked into the prose.
+    const s = new PaneStitcher();
+    s.consume("⏺ prose line\n✽ Beboppin'… (19s · ↓ 815 tokens)\n✶ Beboppin'… (22s · ↓ 1.0k tokens)");
+    expect(s.preamble()).toBe("prose line");
+  });
+
+  test("the question box is cut even in the frame before its cursor renders", () => {
+    // The box paints header+options first; that frame recorded the whole box.
+    const noCursorYet = [
+      "⏺ the preamble.",
+      "",
+      "☐ Retry strategy",
+      "",
+      "Which retry strategy should we adopt?",
+      "",
+      "  1. Chunked",
+      "     a description",
+      "Enter to select · Esc to cancel",
+    ].join("\n");
+    const s = new PaneStitcher();
+    s.consume(noCursorYet);
+    const out = s.preamble()!;
+    expect(out).toBe("the preamble.");
+    expect(out).not.toContain("Which retry strategy");
+    expect(out).not.toContain("Chunked");
+  });
+
+  test("the box is cut even when the capture is STYLED", () => {
+    // Regression: switching to `-e` captures put an escape sequence in front of
+    // every marker, so the cursor/"☐"/footer patterns stopped matching and the
+    // whole question box leaked back into the prose.
+    const styledBox = [
+      "⏺ the preamble.",
+      `${E}[38;5;246m${"─".repeat(78)}${E}[39m`,
+      `${E}[1m${E}[38;5;231m ☐ Retry${E}[0m`,
+      "",
+      `${E}[1mWhich retry strategy?${E}[0m`,
+      "",
+      `${E}[38;5;153m❯ 1. Chunked${E}[39m`,
+      "     a description",
+      "Enter to select · Esc to cancel",
+    ].join("\n");
+    const s = new PaneStitcher();
+    s.consume(styledBox);
+    const out = s.preamble()!;
+    expect(out).toBe("the preamble.");
+    expect(out).not.toContain("Retry strategy");
+    expect(out).not.toContain("☐");
+  });
+
+  test("a STYLED bullet line still locates the turn", () => {
+    // `ansiToMarkdown` puts "**" in front of the bullet when the TUI styles that
+    // line; a naive startsWith then finds no turn at all and reports no preamble.
+    const s = new PaneStitcher();
+    s.consume(`${E}[1m⏺ the preamble.${E}[0m`);
+    expect(s.preamble()).toBe("**the preamble.**");
+  });
+
+  test("a code fence is not broken by a row with too little syntax colour", () => {
+    const s = new PaneStitcher();
+    s.consume(
+      [
+        "⏺ Shape:",
+        "",
+        `  ${E}[34mfunction${E}[39m ${E}[33mupload${E}[39m(c): ${E}[34mvoid${E}[39m {`,
+        "    }",
+        `  ${E}[34mconst${E}[39m x = ${E}[32m1${E}[39m;`,
+      ].join("\n"),
+    );
+    const out = s.preamble()!;
+    // Exactly one open + one close fence, not three fragments.
+    expect((out.match(/```/g) || []).length).toBe(2);
   });
 });
 
