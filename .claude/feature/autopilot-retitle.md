@@ -270,6 +270,30 @@ in the file worth noticing.
 throwaway dir before any test file loads. Verified: full suite leaves the real file
 byte-identical (same md5 before and after).
 
+### FIXED — both hosts retitled the same live session, to different names
+
+**Symptom:** minutes after deploying to the Air, session `01e32dd7` had been
+retitled by the Pro to "GBrain atoms and concepts" and by the Air to "gbrain
+atoms indexing".
+
+**Cause:** candidate selection exempted live sessions from the host check,
+reasoning that a live session is "on this host by construction". It is not —
+`~/.claude` is synced, so one sessionId reads as live on both boxes at once.
+`gatherCandidates` compounded it by hardcoding `leaseHost: hostInfo().hostId`
+for live rows, so the filter asserted the very fact it needed to test.
+
+**Fix:** every candidate goes through the lease now, live or not, and live rows
+CLAIM it via `ensureLease` rather than assuming — that primitive already refuses
+when another host holds a fresh lease. Verified in production: the Air now sees 6
+live sessions, recognises 2 as the Pro's, and skips them.
+
+**Residual, by design:** a lease is fresh for 90s, so this is one host AT A TIME,
+not one host ever. Two hosts that both see a session as live will alternate
+ownership, and since `~/.lfg` is per-machine each will still retitle it once and
+keep its own title. Duplicate work is bounded; titles diverge per host. Making
+them converge means moving title state into the synced tree beside the transcript
+— a larger change, not attempted here.
+
 ### FIXED — a truncating write could erase every override
 
 Found while investigating the above (and *not* its cause). `updateTitleRecord`
