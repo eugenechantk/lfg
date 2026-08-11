@@ -265,11 +265,23 @@ public struct LFGClient: Sendable {
         try await get("api/info", as: HostInfo.self)
     }
 
+    /// One page of closed/resumable sessions, newest first.
+    ///
+    /// `q` widens the CORPUS, not the response: with a query the host searches
+    /// every transcript it has rather than only the newest page, and returns the
+    /// same page shape with the same `before`/`nextBefore` cursor. That is what
+    /// lets search have its own pagination instead of being limited to whatever
+    /// the list had already loaded. A host that predates the parameter simply
+    /// ignores it and returns its normal page.
     public func resumable(limit: Int = 30,
                           before: Double? = nil,
+                          q: String? = nil,
                           timeout: TimeInterval = LFGClient.readTimeout) async throws -> ResumableResponse {
         var query = [URLQueryItem(name: "limit", value: String(limit))]
         if let before { query.append(URLQueryItem(name: "before", value: String(before))) }
+        if let q, !q.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            query.append(URLQueryItem(name: "q", value: q))
+        }
         return try await get("api/sessions/resumable",
                              query: query,
                              timeout: timeout,

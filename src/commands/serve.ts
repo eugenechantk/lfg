@@ -45,6 +45,7 @@ import {
   pendingToolPrompt,
   lastUserPromptText,
   listResumable,
+  searchResumable,
   cwdForTranscript,
   modelAliasForTranscript,
   type Session,
@@ -1842,10 +1843,15 @@ export async function cmdServe() {
         const limit = Number(url.searchParams.get("limit")) || 30;
         const rawBefore = url.searchParams.get("before");
         const before = rawBefore == null ? null : Number.parseFloat(rawBefore);
-        const page = await listResumable({
-          limit,
-          before: before != null && Number.isFinite(before) ? before : null,
-        });
+        const cursor = before != null && Number.isFinite(before) ? before : null;
+        // `q` widens the corpus, not the response: search pages the SAME shape
+        // with the SAME cursor, so the client's cross-host reconcile is
+        // unchanged and a client that never sends `q` behaves exactly as before.
+        // Without it, search could only ever see the pages already loaded.
+        const q = (url.searchParams.get("q") ?? "").trim();
+        const page = q
+          ? await searchResumable({ q, limit, before: cursor })
+          : await listResumable({ limit, before: cursor });
         return json(page);
       }
 

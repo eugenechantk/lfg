@@ -83,19 +83,37 @@ struct SessionListView: View {
     }
 
     /// Sessions passing the user filter + host filter + search query.
+    ///
+    /// While searching this is a UNION of two sources, because the loaded list is
+    /// not the whole population. Live sessions are matched here — the client
+    /// holds all of them — and closed ones come from `store.searchResults`, which
+    /// the host matched across every transcript it has rather than across the
+    /// pages that happen to be in memory. Before that, typing a word only ever
+    /// searched the ~60 closed sessions per host the user had already paged in.
     private var matchingSessions: [Session] {
-        let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
-        return store.filteredSessions.filter { s in
+        let terms = SessionSearch.terms(searchText)
+        let local = store.filteredSessions.filter { s in
             // Host filter (multi-host): keep the selected host's live sessions;
             // closed sessions are host-agnostic, so they always pass.
             if let hf = settings.hostFilter, !s.closed, store.hostBySession[s.id] != hf {
                 return false
             }
-            guard !q.isEmpty else { return true }
-            return [s.title, s.project, s.lastUserText, s.model, s.assignedUser]
-                .compactMap { $0?.lowercased() }
-                .contains { $0.contains(q) }
+            return SessionSearch.matches(
+                terms: terms,
+                fields: [s.title, s.project, s.cwd, s.lastUserText, s.model, s.assignedUser])
         }
+        guard !terms.isEmpty else { return local }
+
+        // Dedupe by id: a match the host returned may already be on screen as a
+        // loaded closed row, and two rows for one conversation would break List
+        // selection as well as looking wrong.
+        var seen = Set(local.map(\.id))
+        var out = local
+        for s in store.searchResults where !seen.contains(s.id) {
+            seen.insert(s.id)
+            out.append(s)
+        }
+        return out
     }
 
     /// The matching sessions grouped per the active `GroupMode`.
@@ -450,6 +468,43 @@ struct SessionListView: View {
         "\(count) \(count == 1 ? "agent" : "agents")"
     }
 
+    /// The footer that pulls another page — shared by the closed list and by
+    /// search, which paginate independently of each other.
+    @ViewBuilder
+    private func loadMoreRow(title: String,
+                             loading: Bool,
+                             identifier: String,
+                             action: @escaping () async -> Void) -> some View {
+        Button {
+            Task { await action() }
+        } label: {
+            HStack(spacing: 8) {
+                if loading {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "chevron.down.circle")
+                }
+                Text(loading ? "Loading more" : title)
+                Spacer()
+            }
+            .foregroundStyle(.tint)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 15)
+            // Hit-test the whole row, Spacer included: a plain button's default
+            // content shape skips transparent space, so taps there fell through
+            // to List selection with no valid tag (a stuck "Opening session…"
+            // push).
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(loading)
+        .accessibilityIdentifier(identifier)
+        .listRowInsets(EdgeInsets())
+        .listRowSeparator(.hidden)
+        .listRowBackground(Tokens.screen)
+    }
+
     var body: some View {
         @Bindable var settings = settings
         VStack(spacing: 0) {
@@ -481,7 +536,41 @@ struct SessionListView: View {
                 }
 
                 let sections = visibleSections
-                if sections.isEmpty {
+                if sections.isEmpty, isSearching, store.isSearchLoading {
+                    // The host is still walking its transcripts. "No sessions"
+                    // here would be a lie — the answer just hasn't landed.
+                    Section {
+                        HStack(spacing: 10) {
+                            ProgressView().controlSize(.small)
+                            Text("Searching all sessions…")
+                                .foregroundStyle(Tokens.meta)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 24)
+                        .accessibilityIdentifier("searchInFlight")
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Tokens.screen)
+                    }
+                } else if sections.isEmpty, isSearching {
+                    Section {
+                        VStack(spacing: 6) {
+                            Text("No matching sessions")
+                                .font(.headline)
+                                .foregroundStyle(Tokens.label)
+                            Text("Searched every session on your hosts.")
+                                .font(.subheadline)
+                                .foregroundStyle(Tokens.meta)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
+                        .accessibilityIdentifier("searchNoResults")
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Tokens.screen)
+                    }
+                } else if sections.isEmpty {
                     Section {
                         EmptyListState(connected: store.isConnected) {
                             openNewSession(focusComposer: false)
@@ -509,36 +598,27 @@ struct SessionListView: View {
                                 ForEach(renderedRows(for: section)) { row in
                                     sessionRow(row)
                                 }
-                                if section.group == .closed, store.canLoadMoreClosed {
-                                    Button {
-                                        Task { await store.loadMoreClosed() }
-                                    } label: {
-                                        HStack(spacing: 8) {
-                                            if store.isLoadingMoreClosed {
-                                                ProgressView()
-                                                    .controlSize(.small)
-                                            } else {
-                                                Image(systemName: "chevron.down.circle")
+                                // Search has its OWN pagination — the host is
+                                // walking every transcript it has, not the list's
+                                // loaded pages — so while searching this footer
+                                // pulls the next page of MATCHES, not the next
+                                // page of closed sessions.
+                                if section.group == .closed {
+                                    if isSearching {
+                                        if store.canLoadMoreSearch {
+                                            loadMoreRow(title: "Load more results",
+                                                        loading: store.isLoadingMoreSearch,
+                                                        identifier: "loadMoreSearchButton") {
+                                                await store.loadMoreSearchResults()
                                             }
-                                            Text(store.isLoadingMoreClosed ? "Loading more" : "Load more")
-                                            Spacer()
                                         }
-                                        .foregroundStyle(.tint)
-                                        .padding(.horizontal, 20)
-                                        .padding(.vertical, 15)
-                                        // Hit-test the whole row, Spacer included: a
-                                        // plain button's default content shape skips
-                                        // transparent space, so taps there fell through
-                                        // to List selection with no valid tag (a stuck
-                                        // "Opening session…" push).
-                                        .contentShape(Rectangle())
+                                    } else if store.canLoadMoreClosed {
+                                        loadMoreRow(title: "Load more",
+                                                    loading: store.isLoadingMoreClosed,
+                                                    identifier: "loadMoreClosedButton") {
+                                            await store.loadMoreClosed()
+                                        }
                                     }
-                                    .buttonStyle(.plain)
-                                    .disabled(store.isLoadingMoreClosed)
-                                    .accessibilityIdentifier("loadMoreClosedButton")
-                                    .listRowInsets(EdgeInsets())
-                                    .listRowSeparator(.hidden)
-                                    .listRowBackground(Tokens.screen)
                                 }
                             }
                         }
@@ -559,6 +639,15 @@ struct SessionListView: View {
         // so it gets the platform's minimize/expand behaviour for free; older
         // OSes have no such API and fall back to a hand-built equivalent.
         .bottomSearchChrome(text: $searchText) { openNewSession(focusComposer: false) }
+        // Hand every keystroke to the store, which debounces and queries the
+        // hosts. Local filtering alone can't answer "search all my sessions" —
+        // it only ever sees what pagination has loaded.
+        .onChange(of: searchText) { _, q in store.setSearchQuery(q) }
+        // Re-sync rather than clear: on iPhone this view disappears whenever a
+        // session is pushed, and clearing there would strand a still-populated
+        // field with no results and no keystroke left to trigger a re-query.
+        // `setSearchQuery` no-ops when the query is unchanged.
+        .onAppear { store.setSearchQuery(searchText) }
     }
 
     private func openNewSession(focusComposer: Bool) {

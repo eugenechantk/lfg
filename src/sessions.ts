@@ -17,6 +17,15 @@ import {
 import { isClosing } from "./closing";
 import { userAssignments } from "./users";
 import { PATHS } from "./config";
+import {
+  applyTitleOverrides,
+  matchingEntries,
+  parseIndexFile,
+  planRefresh,
+  queryTerms,
+  serializeIndex,
+  type IndexEntry,
+} from "./session-index";
 import { anyFreshAt, ensureLease } from "./leases";
 import { homedir } from "node:os";
 import { codexDelegationSessionIds, lastPaneBusy } from "./activity.ts";
@@ -1707,23 +1716,30 @@ export type ResumablePage = {
 // though all the transcripts survive on disk. This reads those transcripts so
 // the UI can offer to resume one. Newest first, cursor-paged — enriching every
 // historical transcript in a single response would be needlessly slow.
-export async function listResumable(
-  opts: { limit?: number; before?: number | null } = {},
-): Promise<ResumablePage> {
-  const limit = Math.max(1, Math.min(100, opts.limit ?? 30));
-  // ONE definition of closed: nothing holds a fresh lease. There is no second
-  // liveness input here — no caller-supplied live-id set, no local process check.
-  //
-  // For that to be SAFE rather than merely tidy, the read guarantees its own
-  // precondition: every session this host can currently see gets its lease made
-  // current right now. Otherwise the invariant "a live session is never returned
-  // as closed" would depend on a 30s background loop having already run, and the
-  // failure direction is the bad one — hiding a live agent and offering a resume
-  // that would double-spawn.
-  //
-  // This is not hot (it backs the resumable page, not the session list), so an
-  // enumeration plus N stat-sized lease ops is the right price for removing a
-  // whole class of disagreement.
+type ResumableCandidate = {
+  agent: "claude" | "codex";
+  id: string;
+  path: string;
+  mtime: number;
+  cwdHint?: string | null;
+  firstUserText?: string | null;
+};
+
+/**
+ * Make every session this host can currently see hold a current lease.
+ *
+ * This is the precondition behind the ONE definition of closed: nothing holds a
+ * fresh lease. There is no second liveness input — no caller-supplied live-id
+ * set, no local process check. Without refreshing leases here the invariant "a
+ * live session is never returned as closed" would depend on a 30s background
+ * loop having already run, and the failure direction is the bad one: hiding a
+ * live agent and offering a resume that would double-spawn.
+ *
+ * Neither caller is hot (they back the resumable page and search, not the
+ * session list), so an enumeration plus N stat-sized lease ops is the right
+ * price for removing a whole class of disagreement.
+ */
+async function refreshLeasesForLiveSessions(): Promise<void> {
   try {
     for (const s of await listSessions()) {
       if (s.sessionId) await ensureLease(s.sessionId, s.pid);
@@ -1733,26 +1749,24 @@ export async function listResumable(
     // lease is still fresh for up to LEASE_FRESH_MS, so a transient failure
     // cannot flip a running session to closed.
   }
-  const before = typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
-  type Candidate = {
-    agent: "claude" | "codex";
-    id: string;
-    path: string;
-    mtime: number;
-    cwdHint?: string | null;
-    firstUserText?: string | null;
-  };
+}
+
+/**
+ * Every transcript on this host as an unenriched candidate, newest first.
+ *
+ * Cheap by construction — a readdir plus one stat per file — so callers only pay
+ * the title/cwd read cost for the rows they actually return. A synced transcript
+ * can exist under more than one encoded project directory; sessionId is
+ * authoritative and the newest copy wins, so pagination never returns the same
+ * conversation twice.
+ */
+async function collectResumableCandidates(): Promise<ResumableCandidate[]> {
   let dirs: string[] = [];
   const projectsDir = claudeProjectsDir();
   try {
     dirs = await readdir(projectsDir);
   } catch {}
-  // Cheap first pass: collect (id, path, mtime) for every transcript, skipping
-  // live ones, so we only pay the title/cwd read cost for the newest `limit`.
-  // A synced transcript can occasionally exist under more than one encoded
-  // project directory; treat sessionId as authoritative and keep the newest copy
-  // so pagination never returns the same conversation twice.
-  const byId = new Map<string, Candidate>();
+  const byId = new Map<string, ResumableCandidate>();
   for (const d of dirs) {
     let files: string[];
     try {
@@ -1793,9 +1807,44 @@ export async function listResumable(
       });
     }
   }
-  const candidates = [...byId.values()].filter((c) => before == null || c.mtime < before);
+  const candidates = [...byId.values()];
   candidates.sort((a, b) => b.mtime - a.mtime);
-  const page: typeof candidates = [];
+  return candidates;
+}
+
+/** Read a candidate's searchable/displayable metadata off its transcript. */
+async function enrichCandidate(
+  c: ResumableCandidate,
+  overrides: Record<string, string>,
+): Promise<ResumableSession> {
+  const cwd = c.cwdHint ?? (await cwdForTranscript(c.path).catch(() => null));
+  let title = overrides[c.id] || null;
+  if (!title) title = await firstPromptTitle(c.path).catch(() => null);
+  if (!title) title = c.firstUserText?.slice(0, TITLE_MAX) ?? null;
+  if (!title) title = cwd ? basename(cwd) : "—";
+  return {
+    agent: c.agent,
+    sessionId: c.id,
+    cwd,
+    project: projectName(cwd),
+    title,
+    lastActivityAt: c.mtime,
+    lastUserText: await lastUserText(c.path).catch(() => null),
+    // Earned, not assumed: nothing holds a fresh lease on this session.
+    closed: true,
+  };
+}
+
+export async function listResumable(
+  opts: { limit?: number; before?: number | null } = {},
+): Promise<ResumablePage> {
+  const limit = Math.max(1, Math.min(100, opts.limit ?? 30));
+  await refreshLeasesForLiveSessions();
+  const before = typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
+  const candidates = (await collectResumableCandidates()).filter(
+    (c) => before == null || c.mtime < before,
+  );
+  const page: ResumableCandidate[] = [];
   let nextBefore: number | null = null;
   for (let i = 0; i < candidates.length; i++) {
     const c = candidates[i];
@@ -1813,25 +1862,197 @@ export async function listResumable(
   }
   const overrides = await readTitleOverrides();
   const out: ResumableSession[] = [];
-  for (const c of page) {
-    const cwd = c.cwdHint ?? (await cwdForTranscript(c.path).catch(() => null));
-    let title = overrides[c.id] || null;
-    if (!title) title = await firstPromptTitle(c.path).catch(() => null);
-    if (!title) title = c.firstUserText?.slice(0, TITLE_MAX) ?? null;
-    if (!title) title = cwd ? basename(cwd) : "—";
-    out.push({
-      agent: c.agent,
-      sessionId: c.id,
-      cwd,
-      project: projectName(cwd),
-      title,
-      lastActivityAt: c.mtime,
-      lastUserText: await lastUserText(c.path).catch(() => null),
-      // Earned, not assumed: nothing holds a fresh lease on this session.
-      closed: true,
-    });
-  }
+  for (const c of page) out.push(await enrichCandidate(c, overrides));
   return { sessions: out, nextBefore };
+}
+
+// ---------------------------------------------------------------------------
+// Search across EVERY session, not just the page the client has loaded.
+// ---------------------------------------------------------------------------
+//
+// `listResumable` enriches only the newest `limit` transcripts, which is why the
+// client's search could only ever see what it had already paged in. Search needs
+// the searchable fields for the whole corpus, so it keeps a metadata index
+// (`src/session-index.ts`) and refreshes it incrementally: a stat pass over
+// every transcript, then a read of only the ones whose (path, mtime) changed.
+//
+// Measured on the real corpus (5,318 transcripts, 1.4 GB): enumerate 10 ms, full
+// cold build 431 ms at concurrency 24, steady-state refresh a stat pass plus a
+// handful of reads. That is cheap enough to run inline on a search request —
+// which is deliberate. A background `setInterval` over a growing collection is
+// exactly the fan-out this repo bans on the single Bun event loop.
+
+// Exported for tests: `PATHS.data` is resolved when `config.ts` is first
+// imported, so a test that recomputes this path from its own env can disagree
+// with the module under test depending on file load order.
+export const SEARCH_INDEX_PATH = join(PATHS.data, "session-search-index.json");
+/** How many transcripts to enrich at once. Bounded so a cold build yields. */
+const SEARCH_ENRICH_CONCURRENCY = 24;
+
+/**
+ * How long a just-refreshed index is served without re-checking the disk.
+ *
+ * Search is typed, so one query is a BURST of requests, and the enumeration is
+ * not free even when nothing changed: `codexThreads()` reads the head of every
+ * rollout file, measured at ~170 ms on the real corpus. Paying that per
+ * keystroke would stall the single Bun event loop that serves all HTTP. Results
+ * being up to this stale is invisible — a session that ended two seconds ago is
+ * still in the live list.
+ *
+ * Zero under `bun test` so fixtures written mid-test are seen immediately.
+ */
+let searchIndexTtlMs = process.env.NODE_ENV === "test" ? 0 : 3_000;
+
+let searchIndexCache: IndexEntry[] | null = null;
+let searchIndexFreshUntil = 0;
+let searchRefreshInFlight: Promise<IndexEntry[]> | null = null;
+
+async function loadSearchIndex(): Promise<IndexEntry[]> {
+  if (searchIndexCache) return searchIndexCache;
+  try {
+    const f = Bun.file(SEARCH_INDEX_PATH);
+    searchIndexCache = (await f.exists()) ? parseIndexFile(await f.json()) : [];
+  } catch {
+    // A truncated or half-written index costs one rebuild, never a failed search.
+    searchIndexCache = [];
+  }
+  return searchIndexCache;
+}
+
+async function persistSearchIndex(entries: IndexEntry[]): Promise<void> {
+  try {
+    await Bun.write(SEARCH_INDEX_PATH, JSON.stringify(serializeIndex(entries)));
+  } catch {
+    // Persisting is an optimization; an unwritable data dir must not fail a search.
+  }
+}
+
+/**
+ * Bring the index up to date with the transcripts on disk and return it.
+ *
+ * Coalesced: concurrent searches (a client types four characters) share one
+ * refresh rather than each walking the corpus.
+ */
+async function refreshSearchIndex(): Promise<IndexEntry[]> {
+  if (searchIndexCache && Date.now() < searchIndexFreshUntil) return searchIndexCache;
+  if (searchRefreshInFlight) return searchRefreshInFlight;
+  const run = (async () => {
+    const prev = await loadSearchIndex();
+    const candidates = await collectResumableCandidates();
+    const plan = planRefresh(
+      prev,
+      candidates.map((c) => ({ agent: c.agent, sessionId: c.id, path: c.path, mtime: c.mtime })),
+    );
+    if (plan.stale.length === 0 && plan.dropped === 0) {
+      searchIndexFreshUntil = Date.now() + searchIndexTtlMs;
+      return prev;
+    }
+
+    const byId = new Map(candidates.map((c) => [c.id, c]));
+    const enriched: IndexEntry[] = [];
+    // No title overrides here: they live in their own file and change without
+    // touching the transcript, so baking one in would freeze a renamed session's
+    // old title into the index. They are overlaid at query time instead.
+    const noOverrides: Record<string, string> = {};
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(SEARCH_ENRICH_CONCURRENCY, plan.stale.length) }, async () => {
+        while (next < plan.stale.length) {
+          const item = plan.stale[next++];
+          const candidate = byId.get(item.sessionId);
+          if (!candidate) continue;
+          try {
+            const s = await enrichCandidate(candidate, noOverrides);
+            enriched.push({
+              agent: item.agent,
+              sessionId: item.sessionId,
+              path: item.path,
+              mtime: item.mtime,
+              cwd: s.cwd,
+              project: s.project,
+              title: s.title,
+              lastUserText: s.lastUserText,
+            });
+          } catch {
+            // A transcript that vanished mid-refresh (Syncthing churn) simply
+            // doesn't enter the index; the next refresh picks it up if it returns.
+          }
+        }
+      }),
+    );
+
+    const merged = [...plan.reuse, ...enriched];
+    searchIndexCache = merged;
+    searchIndexFreshUntil = Date.now() + searchIndexTtlMs;
+    await persistSearchIndex(merged);
+    return merged;
+  })();
+  searchRefreshInFlight = run;
+  try {
+    return await run;
+  } finally {
+    if (searchRefreshInFlight === run) searchRefreshInFlight = null;
+  }
+}
+
+/**
+ * Closed sessions matching `q`, drawn from the entire corpus, newest first and
+ * cursor-paged exactly like `listResumable` — same page shape, same `before` /
+ * `nextBefore` contract, same "closed = nothing holds a fresh lease" rule. The
+ * client can therefore feed the result through the same cross-host reconcile.
+ */
+export async function searchResumable(
+  opts: { q: string; limit?: number; before?: number | null },
+): Promise<ResumablePage> {
+  const limit = Math.max(1, Math.min(100, opts.limit ?? 30));
+  const before =
+    typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
+  const terms = queryTerms(opts.q ?? "");
+  if (terms.length === 0) return listResumable({ limit, before });
+
+  await refreshLeasesForLiveSessions();
+  const overrides = await readTitleOverrides();
+  const index = applyTitleOverrides(await refreshSearchIndex(), overrides);
+  const matches = matchingEntries(index, terms, before);
+
+  const page: IndexEntry[] = [];
+  let nextBefore: number | null = null;
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    if (await anyFreshAt(m.sessionId, m.path)) continue;
+    page.push(m);
+    if (page.length >= limit) {
+      nextBefore = matches.length > i + 1 ? m.mtime : null;
+      break;
+    }
+  }
+
+  return {
+    sessions: page.map((m) => ({
+      agent: m.agent,
+      sessionId: m.sessionId,
+      cwd: m.cwd,
+      project: m.project,
+      title: m.title,
+      lastActivityAt: m.mtime,
+      lastUserText: m.lastUserText,
+      closed: true,
+    })),
+    nextBefore,
+  };
+}
+
+/** Test seam: drop the in-process index so the next search rereads from disk. */
+export function resetSearchIndexCacheForTests(): void {
+  searchIndexCache = null;
+  searchIndexFreshUntil = 0;
+  searchRefreshInFlight = null;
+}
+
+/** Test seam: exercise the burst-coalescing window, which is 0 under `bun test`. */
+export function setSearchIndexTtlForTests(ms: number): void {
+  searchIndexTtlMs = ms;
+  searchIndexFreshUntil = 0;
 }
 
 // Recent normalized messages for an initial render (tail of the file).

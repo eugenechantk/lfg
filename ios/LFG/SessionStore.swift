@@ -1441,7 +1441,9 @@ import LFGCore
     /// Fan out `GET /api/sessions/resumable` to the given (reachable) hosts. Because
     /// `~/.claude/projects` is synced these lists overlap heavily — the cache rebuild
     /// path dedupes + drops live ids.
-    private func fetchResumablePages(_ hosts: [Host], beforeByHost: [String: Double?] = [:]) async -> [HostResumableFetch] {
+    private func fetchResumablePages(_ hosts: [Host],
+                                     beforeByHost: [String: Double?] = [:],
+                                     q: String? = nil) async -> [HostResumableFetch] {
         let pairs: [(Int, LFGClient?)] = hosts.enumerated().map { ($0, settings.client(for: $1)) }
         let results = await withTaskGroup(of: (Int, HostResumableFetch?).self) { group -> [(Int, HostResumableFetch?)] in
             for (i, c) in pairs {
@@ -1449,7 +1451,7 @@ import LFGCore
                 let before = beforeByHost[host.id] ?? nil
                 group.addTask {
                     guard let c else { return (i, nil) }
-                    guard let page = try? await c.resumable(limit: 60, before: before) else { return (i, nil) }
+                    guard let page = try? await c.resumable(limit: 60, before: before, q: q) else { return (i, nil) }
                     return (i, HostResumableFetch(host: host, sessions: page.sessions, nextBefore: page.nextBefore))
                 }
             }
@@ -1490,6 +1492,134 @@ import LFGCore
         }
         rebuildClosedCache(for: settings.hosts.filter { hostStateByHost[$0.id]?.isLive == true })
         rebuildSessions()
+    }
+
+    // MARK: - Search across every session, not just the loaded pages
+    //
+    // The list's own filtering can only ever see `sessions` — the live sessions
+    // plus however many pages of closed ones the user has scrolled through. So a
+    // conversation from three weeks ago was unfindable no matter what you typed.
+    //
+    // Search therefore has its own query against the host (`?q=`), its own
+    // per-host cursor, and its own "load more": the server matches over every
+    // transcript it has and pages the results. Live sessions are NOT part of this
+    // — the client already holds all of them, and `SessionListView` filters those
+    // locally, so asking the host for them again would only create duplicates.
+
+    /// Debounce before a typed query hits the network. Long enough that a normal
+    /// word is one request instead of six, short enough to feel immediate.
+    private static let searchDebounce: Duration = .milliseconds(250)
+
+    private(set) var searchQuery = ""
+    /// Closed matches for `searchQuery`, host-agnostic and already reconciled.
+    private(set) var searchResults: [Session] = []
+    /// A query is typed but its first page hasn't landed yet — the list shows a
+    /// spinner rather than "no results", which would be a lie mid-flight.
+    private(set) var isSearchLoading = false
+    private(set) var isLoadingMoreSearch = false
+    private var searchTask: Task<Void, Never>?
+    private var searchPagesByHost: [String: [ResumableSession]] = [:]
+    private var searchNextBeforeByHost: [String: Double] = [:]
+
+    var canLoadMoreSearch: Bool {
+        !searchQuery.isEmpty
+            && settings.hosts.contains {
+                hostStateByHost[$0.id]?.isLive == true && searchNextBeforeByHost[$0.id] != nil
+            }
+    }
+
+    /// Point the search at a new query. Cheap to call on every keystroke: it
+    /// debounces, and an unchanged query is a no-op so a view re-render can't
+    /// re-issue the same fan-out.
+    func setSearchQuery(_ raw: String) {
+        let q = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q != searchQuery else { return }
+        searchQuery = q
+        searchTask?.cancel()
+        searchPagesByHost = [:]
+        searchNextBeforeByHost = [:]
+        guard !q.isEmpty else {
+            searchResults = []
+            isSearchLoading = false
+            return
+        }
+        isSearchLoading = true
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.searchDebounce)
+            guard !Task.isCancelled else { return }
+            await self?.performSearch(q)
+        }
+    }
+
+    /// Re-run the current query against the hosts — used when a host comes back
+    /// or the live set changes underneath a standing search.
+    func refreshSearchIfActive() {
+        guard !searchQuery.isEmpty else { return }
+        let q = searchQuery
+        searchTask?.cancel()
+        searchTask = Task { [weak self] in await self?.performSearch(q) }
+    }
+
+    private func performSearch(_ q: String) async {
+        let hosts = settings.hosts.filter { hostStateByHost[$0.id]?.isLive == true }
+        guard !hosts.isEmpty else {
+            isSearchLoading = false
+            return
+        }
+        let pages = await fetchResumablePages(hosts, q: q)
+        // A query that changed while this fan-out was in flight owns the state
+        // now; dropping the stale answer keeps the list from flashing results
+        // for a word the user already finished typing past.
+        guard q == searchQuery, !Task.isCancelled else { return }
+        for page in pages {
+            searchPagesByHost[page.host.id] = page.sessions
+            searchNextBeforeByHost[page.host.id] = page.nextBefore
+        }
+        isSearchLoading = false
+        rebuildSearchResults()
+    }
+
+    func loadMoreSearchResults() async {
+        guard !isLoadingMoreSearch, !searchQuery.isEmpty else { return }
+        let q = searchQuery
+        let hosts = settings.hosts.filter {
+            hostStateByHost[$0.id]?.isLive == true && searchNextBeforeByHost[$0.id] != nil
+        }
+        guard !hosts.isEmpty else { return }
+        isLoadingMoreSearch = true
+        defer { isLoadingMoreSearch = false }
+
+        let beforeByHost = Dictionary(uniqueKeysWithValues: hosts.compactMap { host in
+            searchNextBeforeByHost[host.id].map { (host.id, Optional($0)) }
+        })
+        let pages = await fetchResumablePages(hosts, beforeByHost: beforeByHost, q: q)
+        guard q == searchQuery else { return }
+        for page in pages {
+            searchPagesByHost[page.host.id, default: []].append(contentsOf: page.sessions)
+            searchNextBeforeByHost[page.host.id] = page.nextBefore
+        }
+        rebuildSearchResults()
+    }
+
+    /// Collapse the per-host search pages into one list, through the SAME
+    /// cross-host reconcile the unsearched closed list uses: `~/.claude/projects`
+    /// is synced, so every host returns the same transcripts, and a session that
+    /// is live on ANY host is not closed no matter which host reported it.
+    ///
+    /// The match is re-applied here rather than trusted, because `?q=` is a
+    /// REQUEST, not a guarantee. A host running a build that predates the
+    /// parameter ignores it silently and answers with its ordinary newest-page —
+    /// 60 unrelated rows that would otherwise be merged straight into the
+    /// results as if they had matched. Re-filtering costs nothing and makes a
+    /// half-deployed fleet degrade to "that host contributes less" instead of
+    /// "that host contributes garbage".
+    private func rebuildSearchResults() {
+        searchResults = SessionSearch.reconcile(
+            perHost: settings.hosts.map { searchPagesByHost[$0.id] ?? [] },
+            terms: SessionSearch.terms(searchQuery),
+            liveIds: liveIds)
+            .filter { !resumedIds.contains($0.sessionId) }
+            .map(Self.closedSession(from:))
     }
 
     /// Refresh, coalescing concurrent callers onto one in-flight run.
@@ -1595,7 +1725,13 @@ import LFGCore
         // `refreshTask` — which is the task we are currently running. Awaiting it
         // from inside itself deadlocks the store.
         let recovered = HostStateMachine.recoveredHosts(before: healthBefore, after: hostStateByHost)
-        if !recovered.isEmpty { scheduleResendAfterRecovery(recovered) }
+        if !recovered.isEmpty {
+            scheduleResendAfterRecovery(recovered)
+            // A search only ever queries the hosts that were live when it ran, so
+            // one typed while a host was down permanently under-reports until the
+            // user edits the query. Re-ask now that the host answers again.
+            refreshSearchIfActive()
+        }
     }
 
     /// The host this session's next send would be routed to, if any.
