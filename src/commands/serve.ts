@@ -33,6 +33,7 @@ import {
 } from "../auto/store.ts";
 import { runAutoAgent } from "../auto/runner.ts";
 import { startAutoScheduler } from "../auto/scheduler.ts";
+import { startAutopilot } from "../autopilot/tick.ts";
 import {
   listSessions,
   resolveTranscript,
@@ -2542,6 +2543,10 @@ export async function cmdServe() {
   });
 
   startAutoScheduler((l) => console.log(l));
+  // Periodic maintenance over lfg's own state (session retitling today). Runs
+  // here rather than as a separate daemon because this process already owns the
+  // files those tasks mutate. LFG_AUTOPILOT=0 disables it.
+  startAutopilot((l) => console.log(l));
   // Background push watcher — no-op unless APNs is configured (LFG_APNS_*).
   ensurePushWatcher();
   // Client-independent queue pump: drains the hold-in-lfg outbound queue when

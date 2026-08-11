@@ -1,6 +1,6 @@
 // Running Claude Code sessions: enumerate live `claude` processes and tail
 // their on-disk transcripts (~/.claude/projects/<proj>/<sessionId>.jsonl).
-import { readdir } from "node:fs/promises";
+import { readdir, rename } from "node:fs/promises";
 import { scanBack, tail } from "./transcript.ts";
 import { sessionTurnState } from "./session-state.ts";
 import { statSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -27,6 +27,13 @@ import {
   type IndexEntry,
 } from "./session-index";
 import { anyFreshAt, ensureLease } from "./leases";
+import {
+  flattenTitles,
+  parseTitleFile,
+  type TitleFile,
+  type TitleRecord,
+  type TitleSource,
+} from "./autopilot/titles.ts";
 import { homedir } from "node:os";
 import { codexDelegationSessionIds, lastPaneBusy } from "./activity.ts";
 import {
@@ -276,26 +283,102 @@ function projectName(cwd: string | null): string {
   return cwd.replace(/[/.]/g, "-").replace(/^-/, "");
 }
 
-// User-set title overrides, keyed by sessionId (data/session-titles.json).
-export async function readTitleOverrides(): Promise<Record<string, string>> {
+// Title overrides, keyed by sessionId (~/.lfg/session-titles.json). Each row
+// carries its provenance so the autopilot can rename sessions without ever
+// clobbering a name the human chose — see `src/autopilot/titles.ts` for the
+// record shape and the legacy-string upgrade.
+export async function readTitleRecords(): Promise<TitleFile> {
+  return (await readTitleFileStrict()).records;
+}
+
+/**
+ * The read that a WRITER must use.
+ *
+ * `readTitleRecords` degrades an unreadable file to "no overrides", which is the
+ * right call for display — a corrupt file should cost a title, not a request.
+ * For a read-modify-write it is catastrophic: the writer would treat the file as
+ * empty and then persist only its own row, silently destroying every other
+ * override. `ok: false` lets the writer abort instead.
+ */
+async function readTitleFileStrict(): Promise<{ records: TitleFile; ok: boolean }> {
+  const f = Bun.file(PATHS.sessionTitles);
   try {
-    const f = Bun.file(PATHS.sessionTitles);
-    if (!(await f.exists())) return {};
-    return (await f.json()) as Record<string, string>;
+    if (!(await f.exists())) return { records: {}, ok: true }; // absent ≠ corrupt
+    return { records: parseTitleFile(await f.json()), ok: true };
   } catch {
-    return {};
+    return { records: {}, ok: false };
   }
+}
+
+/** The flat `id → title` map the session list and search index consume. */
+export async function readTitleOverrides(): Promise<Record<string, string>> {
+  return flattenTitles(await readTitleRecords());
 }
 
 export async function setSessionTitle(
   sessionId: string,
   title: string,
+  opts: { source?: TitleSource; basis?: string } = {},
 ): Promise<void> {
-  const all = await readTitleOverrides();
-  const t = title.trim();
-  if (t) all[sessionId] = t.slice(0, 200);
-  else delete all[sessionId]; // empty title clears the override
-  await Bun.write(PATHS.sessionTitles, JSON.stringify(all, null, 2));
+  await updateTitleRecord(sessionId, (prev) => {
+    const t = title.trim();
+    if (!t) return null; // empty title clears the override
+    return {
+      ...prev,
+      title: t.slice(0, 200),
+      // Defaults to "user": the only caller that doesn't pass a source is the
+      // client's rename endpoint, and a human rename must pin the title.
+      source: opts.source ?? "user",
+      setAt: Date.now(),
+      ...(opts.basis ? { basis: opts.basis } : {}),
+    };
+  });
+}
+
+/**
+ * Read-modify-write one row. `mutate` returns the next record, or null to drop
+ * the row; returning the previous record unchanged is a no-op write.
+ *
+ * Three things protect the other rows in this file, and every one of them is
+ * load-bearing because a bad write here destroys titles the human chose:
+ *
+ *   1. In-process serialization (`titleWriteChain`). The autopilot updates many
+ *      rows in a batch while the client's rename endpoint can land at any
+ *      moment; without this the two read-modify-writes lose whichever wrote
+ *      first.
+ *   2. ATOMIC replace (temp file + rename). `Bun.write` truncates in place, so a
+ *      reader — including the OTHER process, since `lfg autopilot` and `lfg
+ *      serve` both write this file and a promise chain cannot span processes —
+ *      can observe a half-written file. `rename(2)` is atomic within a
+ *      filesystem, so a reader sees either the old file or the new one.
+ *   3. Abort on an unreadable file (2). Truncation and clobbering compound: a
+ *      reader that parses a partial file falls back to `{}` and the next write
+ *      persists only its own row. Refusing to write is always recoverable;
+ *      writing over everything is not.
+ */
+let titleWriteChain: Promise<unknown> = Promise.resolve();
+
+export function updateTitleRecord(
+  sessionId: string,
+  mutate: (prev: Partial<TitleRecord>) => TitleRecord | null,
+): Promise<void> {
+  const run = titleWriteChain.catch(() => {}).then(async () => {
+    const { records: all, ok } = await readTitleFileStrict();
+    if (!ok) {
+      throw new Error(
+        `refusing to write ${PATHS.sessionTitles}: existing file is unreadable ` +
+          `(writing would drop every other title override)`,
+      );
+    }
+    const next = mutate(all[sessionId] ?? {});
+    if (next) all[sessionId] = next;
+    else delete all[sessionId];
+    const tmp = `${PATHS.sessionTitles}.tmp-${process.pid}`;
+    await Bun.write(tmp, JSON.stringify(all, null, 2));
+    await rename(tmp, PATHS.sessionTitles);
+  });
+  titleWriteChain = run.catch(() => {});
+  return run;
 }
 
 // Claude's /resume picker titles a session by its first real user prompt; mirror
@@ -1009,6 +1092,84 @@ async function lastUserText(path: string): Promise<string | null> {
   });
 }
 
+/**
+ * The last `n` genuine user turns, oldest-first, each truncated to `maxChars`.
+ *
+ * `lastUserText` answers "what did they say" for a card; this answers "what is
+ * this conversation ABOUT NOW", which needs several turns — the subject of a
+ * long session drifts, and one turn is as likely to be "yes do that" as to name
+ * the topic.
+ *
+ * The window GROWS, and that is the whole difficulty. Human turns are sparse in
+ * an agentic session: measured on this corpus, a 2.4 MB transcript from a busy
+ * session had ZERO human turns in its last 192 KB — the tail is all assistant
+ * output and tool results, and the human's last message is megabytes back. A
+ * fixed window silently returns "nothing to judge" for exactly the long sessions
+ * whose titles drift most. So this widens like `scanBack` until it has `n` turns,
+ * bounded by `maxBytes` so a huge transcript can't turn one call into a full read.
+ */
+export async function recentUserTurns(
+  path: string,
+  n = 6,
+  {
+    maxChars = 240,
+    startBytes = 256 * 1024,
+    maxBytes = 4 * 1024 * 1024,
+  }: { maxChars?: number; startBytes?: number; maxBytes?: number } = {},
+): Promise<string[]> {
+  let bytes = Math.min(startBytes, maxBytes);
+  let best: string[] = [];
+  while (true) {
+    let window: Awaited<ReturnType<typeof tail>>;
+    try {
+      window = await tail(path, bytes);
+    } catch {
+      return best;
+    }
+    best = collectUserTurns(window.lines, n, maxChars);
+    if (best.length >= n || window.atHead || bytes >= maxBytes) return best;
+    bytes = Math.min(bytes * 4, maxBytes);
+  }
+}
+
+/** Newest-last list of genuine human turns found in `lines`. */
+function collectUserTurns(lines: string[], n: number, maxChars: number): string[] {
+  const out: string[] = [];
+  for (let i = lines.length - 1; i >= 0 && out.length < n; i--) {
+    const line = lines[i];
+    let x: {
+      type?: string;
+      isMeta?: boolean;
+      toolUseResult?: unknown;
+      message?: { content?: unknown };
+    };
+    try {
+      x = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    let t: string | null = null;
+    const cm = normalizeCodexLine(line);
+    if (cm?.role === "user" && cm.kind === "text") {
+      t = stripConversationPrefix(cm.text).trim().replace(/\s+/g, " ");
+    } else if (x.type === "user" && !x.isMeta) {
+      // A tool result is recorded as a `user` turn. `extractText` drops the
+      // `tool_result` blocks themselves, but a record can carry a stray text
+      // block alongside — so exclude the record outright rather than trusting
+      // the content shape. These outnumber real turns by an order of magnitude.
+      if (x.toolUseResult !== undefined) continue;
+      const raw = extractText(x.message?.content);
+      t = raw ? stripHumanPrefix(raw.trim().replace(/\s+/g, " ")) : null;
+    }
+    // "<" opens the command/caveat wrappers Claude Code injects as user turns
+    // (`<command-name>`, `<local-command-stdout>`); they are machinery, not the
+    // human, and they'd otherwise dominate the digest of an active session.
+    if (!t || t.startsWith("<")) continue;
+    out.push(t.length > maxChars ? t.slice(0, maxChars - 1) + "…" : t);
+  }
+  return out.reverse();
+}
+
 // The full (untruncated) text of the last genuine user turn, whitespace-collapsed.
 // Used to disambiguate the pane-scraped prompt "context": when the assistant
 // preamble's "⏺" bullet has scrolled off, the block above the selector could be
@@ -1716,7 +1877,7 @@ export type ResumablePage = {
 // though all the transcripts survive on disk. This reads those transcripts so
 // the UI can offer to resume one. Newest first, cursor-paged — enriching every
 // historical transcript in a single response would be needlessly slow.
-type ResumableCandidate = {
+export type ResumableCandidate = {
   agent: "claude" | "codex";
   id: string;
   path: string;
@@ -1760,7 +1921,7 @@ async function refreshLeasesForLiveSessions(): Promise<void> {
  * authoritative and the newest copy wins, so pagination never returns the same
  * conversation twice.
  */
-async function collectResumableCandidates(): Promise<ResumableCandidate[]> {
+export async function collectResumableCandidates(): Promise<ResumableCandidate[]> {
   let dirs: string[] = [];
   const projectsDir = claudeProjectsDir();
   try {
