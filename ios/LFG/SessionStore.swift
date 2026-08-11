@@ -185,6 +185,17 @@ import LFGCore
     /// the placeholder. Bounded: entries are only added by `remap`, which runs
     /// once per created session.
     private var remappedIds: [String: String] = [:]
+    /// Reverse of `remappedIds`, for sessions created in this app run: server id
+    /// -> the placeholder id navigation opened them under.
+    ///
+    /// Navigation identity has to be STABLE across the create remap. The compact
+    /// split view pushes the detail off `List(selection:)`, so renaming the row's
+    /// tag out from under a live selection makes SwiftUI clear the selection and
+    /// re-push — which is how one send produced two stacked detail screens (and,
+    /// when the clear won the race, an empty "No session selected" on top). The
+    /// row keeps its placeholder tag instead, `session(_:)` redirects it to the
+    /// real session, and navigation never moves. See `navID`.
+    private var navAliasByRealID: [String: String] = [:]
     /// The host each placeholder create targets, so a retry re-creates on the
     /// same machine the user picked.
     private var pendingCreateHost: [String: Host] = [:]
@@ -332,7 +343,9 @@ import LFGCore
     /// The host that currently owns a session (nil if unknown → falls back to
     /// default). Used for op routing, the list host chip, and transfer targeting.
     func host(forSession id: String) -> Host? {
-        guard let hid = hostBySession[id] else { return nil }
+        // `id` may still be the placeholder a just-created session was opened
+        // under (see `navID`); its routing entry moved to the real id in `remap`.
+        guard let hid = hostBySession[id] ?? remappedIds[id].flatMap({ hostBySession[$0] }) else { return nil }
         return settings.hosts.first { $0.id == hid }
     }
 
@@ -400,7 +413,14 @@ import LFGCore
     }
 
     /// Ask the UI to open a session (driven by a tapped push notification).
-    func requestSelection(_ sid: String) { requestedSelection = sid }
+    func requestSelection(_ sid: String) { requestedSelection = navID(sid) }
+
+    /// The id navigation (list row tags + RootView's `selection`) uses for a
+    /// session. Identical to `sessionId` except for a session created in this app
+    /// run, which keeps the placeholder id its detail was pushed under — see
+    /// `navAliasByRealID`. Callers that need the session itself go through
+    /// `session(_:)`, which resolves either direction.
+    func navID(_ sid: String) -> String { navAliasByRealID[sid] ?? sid }
     func clearRequestedSelection() { requestedSelection = nil }
 
     /// Route a tapped push notification to its session. A tap frequently
@@ -426,7 +446,7 @@ import LFGCore
             if let snapshot, snapshot.sessionId == sid, self.session(sid) == nil {
                 self.deepLinkSession = snapshot
             }
-            self.requestedSelection = sid
+            self.requestedSelection = self.navID(sid)
             await self.resolveDeepLink(sid)
         }
     }
@@ -671,6 +691,23 @@ import LFGCore
         }
     }
 
+    /// Rehydrate a stored row into a `Session` for the cold-launch snapshot.
+    ///
+    /// `busy` is deliberately dropped rather than restored. It is an assertion
+    /// about what an agent is doing *right now*, and a row read back off disk is
+    /// by definition not now — the server itself will not call a session busy
+    /// unless its transcript moved in the last 12 seconds
+    /// (`REST_BUSY_WINDOW_MS` in `src/sessions.ts`), so a `busy: true` that has
+    /// been sitting in SQLite for a week is a claim no live source would ever
+    /// make. Restoring it is how the list showed week-old sessions as Working
+    /// whenever their host was unreachable at launch.
+    ///
+    /// Nothing is lost by dropping it: if the session really is running, the
+    /// host's next successful fetch re-asserts `busy` within one poll. The
+    /// unreachable-host retraction in `rebuildSessions` covers the same corpse
+    /// once the host is *known* down, but it cannot cover this — for the first
+    /// 30s after launch the host sits in `.unknown`/`.degraded`, where
+    /// `isNotKnownDown` is still true and the retraction deliberately holds off.
     private static func session(from stored: LFGStoredSession) -> Session {
         let last: SessionMessage?
         if stored.lastMessageId != nil || stored.lastMessagePreview != nil || stored.lastMessageRole != nil || stored.lastActivityAt != nil {
@@ -693,7 +730,7 @@ import LFGCore
             cwd: stored.cwd,
             assignedUser: stored.assignedUser,
             lastActivityAt: stored.lastActivityAt,
-            busy: stored.busy,
+            busy: false,
             last: last,
             closed: stored.closed
         )
@@ -1844,7 +1881,13 @@ import LFGCore
             let fetchedSessions = f.sessions ?? []
             writeThrough { store in
                 try await store.upsertHosts([f.host])
-                try await store.upsertSessions(fetchedSessions, hostId: f.host.id)
+                // Replace, not merge: `fetchedSessions` IS this host's complete
+                // live list, exactly as the `lastSessionsByHost` assignment two
+                // lines down assumes. Merging instead let the table accumulate
+                // every session the host had ever reported, which `hydrateFromStore`
+                // then served as a cold-launch snapshot whenever the host was
+                // unreachable — see `replaceSessions`.
+                try await store.replaceSessions(fetchedSessions, hostId: f.host.id)
             }
             signal(f.host.id, .probeSucceeded)
             failuresByHost[f.host.id] = 0
@@ -1916,8 +1959,45 @@ import LFGCore
         // clobbered — without the false premise. The veto expires (see
         // `busyStatedAt`) so it holds only while that premise is still true.
         let now = Date()
+        // A host we cannot reach makes NO live claim, so neither of the two
+        // sources below may speak for its sessions.
+        //
+        // `busy` and `prompt` are assertions about what an agent is doing *right
+        // now*, and both of this client's sources for them go silent together when
+        // a host drops: the journal stops (no events can be delivered) and
+        // `lastSessionsByHost` deliberately keeps serving that host's last good
+        // snapshot so a blip doesn't empty the list (see its doc comment). The
+        // second one is the trap. `JournalFreshness` was designed for "the journal
+        // died but REST is live"; when the HOST died its fallback is a frozen
+        // `busy: true` from minutes or hours ago, and once the journal's word ages
+        // past the TTL that corpse is re-asserted into `busy[sid]` on every single
+        // rebuild. Nothing ever un-latches it — the app showed a handful of the
+        // Air's sessions as Working for as long as the Air stayed down, and a cold
+        // launch rehydrated the same frozen snapshot from GRDB.
+        //
+        // So retract, don't merely stop — the same contract `journal-pump.ts`'s
+        // `appendDisappearanceRetractions` honours server-side for a session that
+        // vanishes on a LIVE host. This is the case it structurally cannot cover:
+        // when the host itself is unreachable, no journal event can arrive at all.
+        //
+        // Retract only what was actually asserted, and gate on `isNotKnownDown`
+        // (offline/noNetwork only, never a host inside its grace window) — the same
+        // predicate that dims the row and disables the composer, so a dimmed row
+        // can no longer sit in Working. Clearing the stamps lets the REST baseline
+        // reseed immediately on recovery instead of waiting out the TTL.
+        let unreachable = MultiHost.unreachableLiveSessionIds(
+            live: fresh,
+            owner: { [weak self] in self?.host(forSession: $0) },
+            reachable: isNotKnownDown)
+        for sid in unreachable {
+            if busy[sid] == true { busy[sid] = false }
+            if prompts[sid] != nil { prompts[sid] = nil }
+            busyStatedAt[sid] = nil
+            promptStatedAt[sid] = nil
+        }
         for s in fresh {
             guard let sid = s.sessionId, let b = s.busy else { continue }
+            guard !unreachable.contains(sid) else { continue }
             guard JournalFreshness.snapshotWins(journalStatedAt: busyStatedAt[sid], now: now)
             else { continue }
             busy[sid] = b
@@ -1932,6 +2012,7 @@ import LFGCore
         // response before the question only appears after I answer" report.
         for s in fresh {
             guard let sid = s.sessionId else { continue }
+            guard !unreachable.contains(sid) else { continue }
             guard JournalFreshness.snapshotWins(journalStatedAt: promptStatedAt[sid], now: now)
             else { continue }
             // Equality-guarded like `apply(.prompt)`: an unconditional write
@@ -2931,8 +3012,11 @@ import LFGCore
             }
             pendingCreates[placeholder] = nil
             pendingCreateHost[placeholder] = nil
-            remap(from: placeholder, to: realId)
-            requestSelection(realId)        // swap the open detail from placeholder → real
+            // Deliberately no `requestSelection(realId)`: the detail is already
+            // open on the placeholder, which `navID` keeps as this session's
+            // navigation identity. Re-pointing navigation at the real id here is
+            // what pushed a SECOND detail on top of the first.
+            remap(from: placeholder, to: realId, aliasNavigation: true)
             await refresh()
             if !attachments.isEmpty {
                 await sendWithAttachments(realId, text: "", attachments: attachments)
@@ -2954,8 +3038,15 @@ import LFGCore
     /// Move every per-session keyed value from a placeholder id to the
     /// server-assigned id once an optimistic create lands, then drop the
     /// placeholder session so only the real one remains.
-    private func remap(from old: String, to new: String) {
+    /// Move every piece of per-session state from `old` to `new`.
+    ///
+    /// `aliasNavigation` is for the create flow only: the detail is already open
+    /// on `old`, so `old` stays this session's navigation id (`navID`) and the
+    /// swap becomes invisible to the navigation stack. Transfer/resume pass false
+    /// — those deliberately re-point navigation at the new id.
+    private func remap(from old: String, to new: String, aliasNavigation: Bool = false) {
         guard old != new else { return }
+        if aliasNavigation { navAliasByRealID[new] = navID(old) }
 
         // A resumed closed session's old transcript lingers on disk; remember it
         // so the merge in `refresh` doesn't re-add it as a stale "Closed" card.
@@ -2989,7 +3080,14 @@ import LFGCore
             hostBySession[new] = v
         }
         reconcilePending(new)
-        optimisticSessions.removeAll { $0.sessionId == old }
+        // Rename the optimistic copy rather than dropping it: the refresh that
+        // follows a create routinely returns a server list that doesn't carry the
+        // brand-new session yet, and losing the row there made the already-open
+        // detail flash "Opening session…" for a beat. `reconcileSessionList`
+        // retires this entry by itself once the live list does carry the id.
+        if let i = optimisticSessions.firstIndex(where: { $0.sessionId == old }) {
+            optimisticSessions[i].sessionId = new
+        }
         // Rename the session in place (rather than removing it) so it stays
         // visible under the new id with no "no session selected" flash before
         // the authoritative copy arrives on the next refresh.
