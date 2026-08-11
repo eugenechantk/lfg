@@ -1,0 +1,5 @@
+[test]
+# Forces LFG_DATA to a throwaway dir before any test file loads, so the suite can
+# never resolve PATHS to the real ~/.lfg and delete live state. See the comment
+# in src/test-preload.ts — running `bun test` used to wipe session-titles.json.
+preload = ["./src/test-preload.ts"]
