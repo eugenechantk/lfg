@@ -44,6 +44,13 @@ final class HostLink {
     /// frozen by a process suspension.
     private(set) var lastElementAt: Date?
     private(set) var lastRTT: TimeInterval?
+    /// Rolling RTT estimate for this host, and the timeout scaling derived from
+    /// it. Owned here because the keepalive that samples it is owned here; read
+    /// by `SessionStore` so the reconcile poll can size its own timeout per host.
+    private(set) var pathQuality = PathQuality()
+    /// Last grade written to the connection log, so a transition is logged once
+    /// rather than once per 10s sample.
+    private var loggedGrade: PathQuality.Grade = .unknown
 
     var onEvent: ((LiveEvent) -> Void)?
     /// Something happened that bears on this host's health. The store folds it
@@ -236,7 +243,7 @@ final class HostLink {
             if !attemptFailed { onSignal?(.connecting) }
             var receivedAny = false
             do {
-                for try await element in client.events(since: cursor) {
+                for try await element in client.events(since: cursor, quality: pathQuality) {
                     if Task.isCancelled { return }
                     receivedAny = true
                     lastElementAt = Date()
@@ -276,16 +283,45 @@ final class HostLink {
     /// mapping warm (idle expiry is what causes Tailscale re-punch flaps) and
     /// samples RTT. Failures are ignored — the stream watchdog is the authority
     /// on liveness, and a lost ping alone shouldn't churn state.
+    ///
+    /// The ping's own timeout is derived from the estimate it feeds, which sounds
+    /// circular but is the fix for a real trap: at a fixed 5s, every ping on a
+    /// relayed path times out, so no sample is ever recorded and the estimate
+    /// stays pinned at the LAN default precisely where it is most wrong. The
+    /// floor at 1.0× means the loop can only widen from there, never tighten.
     private func keepalive() async {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(HostLinkPolicy.keepaliveInterval))
             if Task.isCancelled { return }
             switch state {
             case .catchingUp, .live:
-                if let r = try? await client.keepalivePing() { lastRTT = r.rtt }
+                let timeout = HostLinkPolicy.keepaliveTimeout(for: pathQuality)
+                if let r = try? await client.keepalivePing(timeout: timeout) {
+                    lastRTT = r.rtt
+                    pathQuality.record(rtt: r.rtt)
+                    noteGradeChange()
+                }
             default:
                 break
             }
         }
+    }
+
+    /// Log the path grade when it changes — once per transition, not per sample.
+    /// This is what makes "the connection is iffy on 5G" a value you can read
+    /// back from the log instead of something you have to be holding the phone
+    /// to notice.
+    private func noteGradeChange() {
+        let grade = pathQuality.grade
+        guard grade != loggedGrade else { return }
+        let was = loggedGrade
+        loggedGrade = grade
+        ConnectionLog.shared.log(
+            .keepalive,
+            String(format: "path %@ -> %@ (%@); poll=%.0fs stale=%.0fs",
+                   was.rawValue, grade.rawValue, pathQuality.summary,
+                   HostProbePolicy.default.pollTimeout(for: pathQuality),
+                   HostLinkPolicy.staleTimeout(for: pathQuality)),
+            host: host.logLabel)
     }
 }
