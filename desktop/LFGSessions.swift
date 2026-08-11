@@ -100,7 +100,12 @@ struct ResumableAPISession: Decodable {
     let lastActivityAt: Double?
     let lastUserText: String?
 }
-struct ResumableResponse: Decodable { let sessions: [ResumableAPISession] }
+struct ResumableResponse: Decodable {
+    let sessions: [ResumableAPISession]
+    /// Cursor for the next page, or nil when this page exhausted the matches.
+    /// Optional because an older host omits it entirely.
+    let nextBefore: Double?
+}
 struct HostInfoResponse: Decodable { let hostId: String; let hostName: String }
 struct SessionStatesResponse: Decodable { let needsInputSessionIds: [String] }
 
@@ -254,15 +259,46 @@ struct MenuBarSessionProjection {
     }
 }
 
+/// How a typed query is matched against a session.
+///
+/// Two callers, and they have to agree. The host matches closed sessions across
+/// its whole corpus (`GET /api/sessions/resumable?q=`, see `src/session-index.ts`)
+/// while live sessions are matched here, because the app already holds all of
+/// them and asking the host again would only duplicate rows. Different rules
+/// would mean `fix preamble` finding the closed conversations about both words
+/// and silently dropping the live one.
+///
+/// The rule, mirroring the host: lowercase, split on whitespace, every term must
+/// appear somewhere. Terms AND and may land in different fields.
 enum SessionSearch {
+    static func terms(_ query: String) -> [String] {
+        query.lowercased().split(whereSeparator: { $0.isWhitespace }).map(String.init)
+    }
+
     static func matches(_ item: SessionItem, query: String) -> Bool {
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return true }
+        matches(item, terms: terms(query))
+    }
+
+    static func matches(_ item: SessionItem, terms: [String]) -> Bool {
+        guard !terms.isEmpty else { return true }
         let session = item.session
-        return [session.title, session.project, session.lastUserText, session.model,
-                session.agent, item.hostLabel]
-            .compactMap { $0?.lowercased() }
-            .contains { $0.contains(q) }
+        return matches(fields: [session.title, session.project, session.cwd, session.lastUserText,
+                                session.model, session.agent, item.hostLabel, session.sessionId],
+                       terms: terms)
+    }
+
+    static func matches(_ session: ResumableAPISession, terms: [String]) -> Bool {
+        matches(fields: [session.title, session.project, session.cwd, session.lastUserText,
+                         session.sessionId],
+                terms: terms)
+    }
+
+    private static func matches(fields: [String?], terms: [String]) -> Bool {
+        guard !terms.isEmpty else { return true }
+        let hay = fields.compactMap { $0 }.filter { !$0.isEmpty }
+            .joined(separator: "\n").lowercased()
+        guard !hay.isEmpty else { return false }
+        return terms.allSatisfy { hay.contains($0) }
     }
 }
 
@@ -414,6 +450,143 @@ final class SessionStore: ObservableObject {
     @Published var lastRefreshed: Date?
     @Published var movingIds: Set<String> = []
     @Published var closingIds: Set<String> = []
+
+    // MARK: Search across every session on every host
+    //
+    // The list holds each host's newest 100 closed sessions, so filtering
+    // `items` locally could only ever find what that page happened to include —
+    // a conversation from three weeks ago was unfindable no matter what you
+    // typed. A query therefore goes to the hosts (`?q=`), which match across
+    // every transcript they have and page the results with their own cursor.
+    // Live sessions stay local: the app already has all of them.
+
+    @Published var searchQuery = ""
+    /// Closed matches from every host, deduped and live-filtered.
+    @Published var searchClosed: [SessionItem] = []
+    /// A query is typed but its first page hasn't landed — the list says so
+    /// rather than showing "no results", which would be a lie mid-flight.
+    @Published var searchLoading = false
+    @Published var searchLoadingMore = false
+
+    private var searchTask: Task<Void, Never>?
+    private var searchPagesByHost: [String: [ResumableAPISession]] = [:]
+    private var searchNextBeforeByHost: [String: Double] = [:]
+
+    /// Debounce before a typed query hits the network — a normal word becomes
+    /// one request per host instead of six.
+    private static let searchDebounceNanos: UInt64 = 250_000_000
+    /// Matches per host per page. The list has no infinite scroll, so this is
+    /// deliberately larger than the iOS client's 60.
+    static let searchPageSize = 100
+
+    var canLoadMoreSearch: Bool {
+        !searchQuery.isEmpty && !searchNextBeforeByHost.isEmpty
+    }
+
+    /// Point the search at a new query. Cheap to call per keystroke: it
+    /// debounces, and an unchanged query is a no-op.
+    func setSearchQuery(_ raw: String) {
+        let q = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q != searchQuery else { return }
+        searchQuery = q
+        searchTask?.cancel()
+        searchPagesByHost = [:]
+        searchNextBeforeByHost = [:]
+        guard !q.isEmpty else {
+            searchClosed = []
+            searchLoading = false
+            return
+        }
+        searchLoading = true
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.searchDebounceNanos)
+            guard !Task.isCancelled else { return }
+            await self?.performSearch(q)
+        }
+    }
+
+    private func performSearch(_ q: String) async {
+        let entries = Config.loadHosts()
+        var pages: [(String, [ResumableAPISession], Double?)] = []
+        await withTaskGroup(of: (String, [ResumableAPISession], Double?).self) { group in
+            for entry in entries {
+                group.addTask {
+                    let page = await Self.fetchSearchPage(entry: entry, query: q, before: nil)
+                    return (entry.url, page.sessions, page.nextBefore)
+                }
+            }
+            for await r in group { pages.append(r) }
+        }
+        // A query that moved on while this was in flight owns the state now.
+        guard q == searchQuery, !Task.isCancelled else { return }
+        for (url, sessions, next) in pages {
+            searchPagesByHost[url] = sessions
+            searchNextBeforeByHost[url] = next
+        }
+        searchLoading = false
+        rebuildSearchResults()
+    }
+
+    func loadMoreSearch() async {
+        guard !searchLoadingMore, !searchQuery.isEmpty else { return }
+        let q = searchQuery
+        let cursors = searchNextBeforeByHost
+        guard !cursors.isEmpty else { return }
+        searchLoadingMore = true
+        defer { searchLoadingMore = false }
+
+        let entries = Config.loadHosts().filter { cursors[$0.url] != nil }
+        var pages: [(String, [ResumableAPISession], Double?)] = []
+        await withTaskGroup(of: (String, [ResumableAPISession], Double?).self) { group in
+            for entry in entries {
+                let before = cursors[entry.url]
+                group.addTask {
+                    let page = await Self.fetchSearchPage(entry: entry, query: q, before: before)
+                    return (entry.url, page.sessions, page.nextBefore)
+                }
+            }
+            for await r in group { pages.append(r) }
+        }
+        guard q == searchQuery else { return }
+        for (url, sessions, next) in pages {
+            searchPagesByHost[url, default: []].append(contentsOf: sessions)
+            searchNextBeforeByHost[url] = next
+        }
+        rebuildSearchResults()
+    }
+
+    /// Collapse every host's search page into one list.
+    ///
+    /// Same three jobs as the normal closed merge — dedupe the transcripts both
+    /// machines enumerate (`~/.claude/projects` is synced), drop anything live on
+    /// ANY host, sort newest first — plus one specific to search: **re-apply the
+    /// match**. `?q=` is a request, not a guarantee; a host on a build predating
+    /// the parameter ignores it and answers with its ordinary newest-first page,
+    /// and those rows would otherwise be shown as though they had matched.
+    private func rebuildSearchResults() {
+        let terms = SessionSearch.terms(searchQuery)
+        let liveIds = Set(hosts.flatMap { $0.sessions.compactMap(\.sessionId) })
+        let hostByURL = Dictionary(uniqueKeysWithValues: hosts.map { ($0.url, $0) })
+        var seen = Set<String>()
+        var out: [SessionItem] = []
+        for entry in Config.loadHosts() {
+            guard let page = searchPagesByHost[entry.url] else { continue }
+            let host = hostByURL[entry.url]
+            for r in page {
+                guard SessionSearch.matches(r, terms: terms) else { continue }
+                guard !liveIds.contains(r.sessionId), seen.insert(r.sessionId).inserted else { continue }
+                out.append(SessionItem(
+                    session: Self.closedSession(from: r),
+                    hostURL: entry.url,
+                    hostId: host?.info?.hostId ?? entry.url,
+                    hostLabel: host?.label ?? entry.url,
+                    hostIsLocal: host?.isLocal ?? false,
+                    hostSSHTarget: Config.sshTarget(for: entry),
+                    needsInput: false))
+            }
+        }
+        searchClosed = out.sorted { ($0.session.lastActivityAt ?? 0) > ($1.session.lastActivityAt ?? 0) }
+    }
 
     var items: [SessionItem] {
         let all = hosts.flatMap { host in
@@ -667,23 +840,7 @@ final class SessionStore: ObservableObject {
             }
             if let (resumableData, _) = try? await session.data(from: resumableURL),
                let resumable = try? JSONDecoder().decode(ResumableResponse.self, from: resumableData) {
-                state.closedSessions = resumable.sessions.map { r in
-                    APISession(
-                        agent: "claude",
-                        pid: -1,
-                        cwd: r.cwd,
-                        project: r.project ?? Self.projectName(for: r.cwd),
-                        title: r.title,
-                        sessionId: r.sessionId,
-                        busy: false,
-                        lastActivityAt: r.lastActivityAt,
-                        tmuxName: nil,
-                        model: nil,
-                        status: nil,
-                        lastUserText: r.lastUserText,
-                        closed: true
-                    )
-                }
+                state.closedSessions = resumable.sessions.map(Self.closedSession(from:))
             }
         } catch {
             state.error = "unreachable"
@@ -694,6 +851,57 @@ final class SessionStore: ObservableObject {
     private static func projectName(for cwd: String?) -> String {
         guard let cwd, !cwd.isEmpty else { return "Session" }
         return URL(fileURLWithPath: cwd).lastPathComponent
+    }
+
+    /// A resumable row as a displayable closed session. Shared by the normal
+    /// list fetch and by search so the two can't drift into different rows.
+    static func closedSession(from r: ResumableAPISession) -> APISession {
+        APISession(
+            agent: "claude",
+            pid: -1,
+            cwd: r.cwd,
+            project: r.project ?? projectName(for: r.cwd),
+            title: r.title,
+            sessionId: r.sessionId,
+            busy: false,
+            lastActivityAt: r.lastActivityAt,
+            tmuxName: nil,
+            model: nil,
+            status: nil,
+            lastUserText: r.lastUserText,
+            closed: true
+        )
+    }
+
+    /// One page of a host's matches. Isolated from `fetchHost` because search
+    /// asks a different question and must not disturb the list's own state: a
+    /// host that fails here simply contributes nothing to this query.
+    static func fetchSearchPage(
+        entry: Config.HostEntry,
+        query: String,
+        before: Double?
+    ) async -> (sessions: [ResumableAPISession], nextBefore: Double?) {
+        var comps = URLComponents(string: entry.url + "/api/sessions/resumable")
+        var q = [
+            URLQueryItem(name: "limit", value: String(searchPageSize)),
+            URLQueryItem(name: "q", value: query),
+        ]
+        if let before { q.append(URLQueryItem(name: "before", value: String(before))) }
+        comps?.queryItems = q
+        guard let url = comps?.url else { return ([], nil) }
+        // Searching a large corpus costs the host a real read on the first
+        // query, so this gets a longer budget than the 4s list poll.
+        let session = URLSession(configuration: {
+            let c = URLSessionConfiguration.ephemeral
+            c.timeoutIntervalForRequest = 20
+            return c
+        }())
+        guard let (data, response) = try? await session.data(from: url),
+              (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) == true,
+              let page = try? JSONDecoder().decode(ResumableResponse.self, from: data) else {
+            return ([], nil)
+        }
+        return (page.sessions, page.nextBefore)
     }
 }
 
@@ -1293,6 +1501,62 @@ enum DesktopFeatureTestCLI {
         let restored = MenuBarSessionProjection(items: searchableItems, query: " \n")
         try expect(restored.needsInputCount + restored.runningCount + restored.recentCount == searchableItems.count,
                    "clearing menu search restores every session")
+
+        try runSearchTests()
+    }
+
+    /// Search spans every session on every host, so the rules that keep that
+    /// honest are worth pinning down.
+    @MainActor
+    private static func runSearchTests() throws {
+        let item = menuTestItem(id: "fix the pump", lastActivity: 1)
+
+        try expect(SessionSearch.matches(item, query: "PUMP"),
+                   "search is case-insensitive")
+        try expect(SessionSearch.matches(item, query: "  fix   pump  "),
+                   "terms AND together and extra whitespace is ignored")
+        try expect(!SessionSearch.matches(item, query: "fix marmalade"),
+                   "every term must match, not just one")
+        try expect(SessionSearch.matches(item, query: "   "),
+                   "an empty query matches everything")
+
+        // The host is asked to filter, but `?q=` is a REQUEST, not a guarantee:
+        // a host on a build predating the parameter answers with its ordinary
+        // newest-first page. Those rows never matched and must not be shown as
+        // though they had.
+        let terms = SessionSearch.terms("preamble")
+        let genuine = resumableRow(id: "match", title: "the preamble investigation")
+        let unrelated = resumableRow(id: "stale", title: "something else entirely")
+        try expect(SessionSearch.matches(genuine, terms: terms),
+                   "a genuine match from any host is kept")
+        try expect(!SessionSearch.matches(unrelated, terms: terms),
+                   "an unfiltered row from a host that ignored the query is rejected")
+
+        // Matching reaches the fields a user actually remembers a session by.
+        try expect(SessionSearch.matches(
+            resumableRow(id: "x", title: "untitled", cwd: "/Users/eugene/dev/lfg"),
+            terms: SessionSearch.terms("dev/lfg")),
+                   "a path fragment matches")
+        try expect(SessionSearch.matches(
+            resumableRow(id: "x", title: "untitled", lastUserText: "restart the pump"),
+            terms: SessionSearch.terms("restart")),
+                   "the last user message matches")
+    }
+
+    private static func resumableRow(
+        id: String,
+        title: String,
+        cwd: String? = "/tmp/project",
+        lastUserText: String? = nil
+    ) -> ResumableAPISession {
+        ResumableAPISession(
+            sessionId: id,
+            cwd: cwd,
+            project: "project",
+            title: title,
+            lastActivityAt: 1,
+            lastUserText: lastUserText
+        )
     }
 
     @MainActor
@@ -2460,10 +2724,24 @@ struct ContentView: View {
     }
 
     /// Sessions passing the search query.
+    ///
+    /// While searching this is a UNION of two sources, because the loaded list
+    /// is not the whole population: the live sessions matched here (the app
+    /// holds all of them) plus `store.searchClosed`, which the hosts matched
+    /// across every transcript they have rather than across the newest 100 this
+    /// app happened to fetch.
     private var matchingItems: [SessionItem] {
-        let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return store.items }
-        return store.items.filter { SessionSearch.matches($0, query: q) }
+        let terms = SessionSearch.terms(searchText)
+        guard !terms.isEmpty else { return store.items }
+        let local = store.items.filter { SessionSearch.matches($0, terms: terms) }
+        // Dedupe by id: a match a host returned may already be on screen as a
+        // loaded closed row.
+        var seen = Set(local.map(\.id))
+        return local + store.searchClosed.filter { seen.insert($0.id).inserted }
+    }
+
+    private var isSearching: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var sections: [ListSection] {
@@ -2804,10 +3082,43 @@ struct ContentView: View {
                     sectionHeader(section)
                 }
             }
-            if sections.isEmpty {
-                Text(searchText.isEmpty ? "No sessions." : "No sessions match “\(searchText)”.")
+            if sections.isEmpty, isSearching, store.searchLoading {
+                // The hosts are still walking their transcripts. "No sessions
+                // match" here would be a lie — the answer hasn't landed.
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Searching every session…")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityIdentifier("search_in_flight")
+            } else if sections.isEmpty {
+                Text(searchText.isEmpty
+                     ? "No sessions."
+                     : "No sessions match “\(searchText)” on any host.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
+            }
+            // Search pages independently of the list, so this pulls the next
+            // page of MATCHES — never the next page of the closed list.
+            if isSearching, store.canLoadMoreSearch {
+                Button {
+                    Task { await store.loadMoreSearch() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if store.searchLoadingMore {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "chevron.down.circle")
+                        }
+                        Text(store.searchLoadingMore ? "Loading more" : "Load more results")
+                            .font(.system(size: 12))
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+                .disabled(store.searchLoadingMore)
+                .accessibilityIdentifier("load_more_search")
             }
             if !store.unreachableHosts.isEmpty {
                 Text("Unreachable: \(store.unreachableHosts.joined(separator: ", "))")
@@ -2820,6 +3131,10 @@ struct ContentView: View {
         // 760 keeps common two-host names alongside the centered picker and
         // fixed trailing refresh/search cluster.
         .frame(minWidth: 760, minHeight: 420)
+        // Hand every keystroke to the store, which debounces and asks the hosts.
+        // Filtering `store.items` alone can't answer "search all my sessions" —
+        // it only ever sees each host's newest 100 closed rows.
+        .onChange(of: searchText) { _, q in store.setSearchQuery(q) }
         .navigationTitle("")
         // HIG "Toolbars" item groupings: common view controls in the center
         // area, search + actions on the trailing edge.
@@ -3129,11 +3444,60 @@ private enum MenuBarArtwork {
     }()
 }
 
+/// Runs a real search against the real configured hosts and prints what came
+/// back. Exists because the `--window-shot` harness renders fixtures, so it can
+/// prove the LAYOUT of search but never the SEAM: whether this app actually
+/// asks the hosts and whether they actually answer. Same spirit as
+/// `--desktop-feature-test` — a CLI entry point in the production source,
+/// because this app has no separate test target.
+///
+///     lfg --search-probe "preamble"
+enum SearchProbeCLI {
+    @MainActor
+    static func runIfRequested() {
+        let args = CommandLine.arguments
+        guard args.dropFirst().first == "--search-probe" else { return }
+        guard let query = args.dropFirst(2).first, !query.isEmpty else {
+            print("{\"ok\":false,\"error\":\"usage: lfg --search-probe <query>\"}")
+            fflush(stdout)
+            Darwin.exit(1)
+        }
+        let store = SessionStore()
+        let done = DispatchSemaphore(value: 0)
+        var line = "{\"ok\":false}"
+        Task { @MainActor in
+            await store.refresh()                    // live ids, so live rows are excluded
+            store.setSearchQuery(query)
+            // The store debounces, then fans out. Poll rather than sleep a fixed
+            // amount so a slow first search (cold index) still reports honestly.
+            for _ in 0..<80 {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                if !store.searchLoading { break }
+            }
+            let titles = store.searchClosed.prefix(5).map {
+                "\"\($0.session.title.replacingOccurrences(of: "\"", with: "'").prefix(60))\""
+            }
+            let hosts = store.hosts.filter { $0.error == nil }.count
+            line = "{\"ok\":true,\"query\":\"\(query)\",\"hostsReachable\":\(hosts)," +
+                   "\"matches\":\(store.searchClosed.count),\"canLoadMore\":\(store.canLoadMoreSearch)," +
+                   "\"titles\":[\(titles.joined(separator: ","))]}"
+            done.signal()
+        }
+        while done.wait(timeout: .now() + 0.05) == .timedOut {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+        }
+        print(line)
+        fflush(stdout)
+        Darwin.exit(0)
+    }
+}
+
 @main
 struct LFGSessionsApp: App {
     @StateObject private var store = SessionStore()
     init() {
         DesktopFeatureTestCLI.runIfRequested()
+        SearchProbeCLI.runIfRequested()
         DesktopStatusSnapshotCLI.runIfRequested()
         DesktopMenuBarSnapshotCLI.runIfRequested()
         MoveTestCLI.runIfRequested()

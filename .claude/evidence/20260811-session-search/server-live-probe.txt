@@ -1,0 +1,53 @@
+=== Live corpus probe (5,318 claude transcripts + 372 codex rollouts), 2026-08-11 ===
+{
+  "query": "preamble",
+  "coldBuildMs": 2785,
+  "warmSearchMs": 566,
+  "page1": [
+    {
+      "id": "360d5d84",
+      "when": "2026-08-09T08:59",
+      "inLoadedPage": false,
+      "title": "In ONE single turn, no tool calls: write a ~500 word markdow"
+    },
+    {
+      "id": "c406b30d",
+      "when": "2026-08-09T08:57",
+      "inLoadedPage": false,
+      "title": "In ONE single turn, no tool calls: write a ~500 word markdow"
+    },
+    {
+      "id": "cbea4795",
+      "when": "2026-08-09T08:37",
+      "inLoadedPage": false,
+      "title": "In ONE single turn, no tool calls: write a long (~600 word) "
+    },
+    {
+      "id": "c037369f",
+      "when": "2026-08-09T08:37",
+      "inLoadedPage": false,
+      "title": "In ONE single turn, no tool calls: write a long (~600 word) "
+    },
+    {
+      "id": "4148343f",
+      "when": "2026-08-09T08:34",
+      "inLoadedPage": false,
+      "title": "In ONE single turn, with no tool calls at all: write exactly"
+    }
+  ],
+  "page1NextBefore": 1786264471067.5269,
+  "page2": [
+    {
+      "id": "0e26d3b1",
+      "when": "2026-08-09T08:27",
+      "inLoadedPage": false,
+      "title": "In ONE single turn, with no tool calls at all: write exactly"
+    }
+  ],
+  "overlap": 0,
+  "page2AllOlder": true,
+  "oldestLoadedRow": "2026-08-11T05:12"
+}
+
+=== Typed-burst latency after the coalescing window ===
+[{"q":"p","ms":38,"hits":5},{"q":"pr","ms":35,"hits":5},{"q":"pre","ms":34,"hits":5},{"q":"prea","ms":35,"hits":5},{"q":"pream","ms":33,"hits":5},{"q":"preamb","ms":31,"hits":5}]

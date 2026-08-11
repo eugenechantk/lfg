@@ -169,23 +169,70 @@ through the app's own onboarding screen.
 **This feature is therefore not yet live for the real client** — see "Deploying"
 below.
 
-## Deploying — BOTH hosts
+## Deployed — both hosts, 2026-08-11
 
 Search fans out to every live host, so every host has to serve it. A host still
 running the old build answers `?q=` with its ordinary page; the client's
 re-filter keeps that honest, but that host contributes only the matches that
 happen to fall inside its newest 60 — i.e. it is effectively not searched.
 
-Neither host runs this code yet:
+Both are now live on `af0ea61`:
 
-| Host | Server started | Live sessions | State |
+| Host | Restarted | Live sessions after | Probe |
 | --- | --- | --- | --- |
-| Pro (this machine) | Aug 9 17:00 | 22 | code is here, uncommitted |
-| Air | Aug 10 18:38 | 6 | at commit `142bce2`, needs pull |
+| Air | 14:45:16 | 6 (unchanged) | `?q=zzz-definitely-no-match` → 0 rows (pre-restart it returned 5 unfiltered); `?q=preamble` → 3 hits |
+| Pro | 14:45:51 | 22 (all recovered) | same nonsense query → 0 rows; `?q=preamble` → 5 hits in 0.23 s |
 
-Full deploy = commit + push on the Pro, pull on the Air, restart both servers.
-Each restart drops that machine's in-memory session tracking (the tmux panes and
-`claude` processes survive). Not done unprompted — it needs Eugene's go-ahead.
+The Pro's first search after the restart took 0.23 s rather than the 2.8 s cold
+build — the persisted index survived the process restart, which is the whole
+point of writing it to `~/.lfg`.
+
+Final end-to-end check: the simulator client pointed at BOTH production hosts
+(`localhost:8766` + `100.75.162.40:8766`), both chips green, searching
+`preamble` returns the matches deduped across the two synced corpora —
+`09-live-both-production-hosts.jpg`.
+
+### Commit hygiene note
+
+The working tree held several other sessions' in-flight changes in the same
+files (`sessions.ts` duplicate-sessionId work, `serve.ts` memory instrumentation,
+`SessionStore.swift` nav-alias work). The commit contains ONLY this feature's
+change blocks, spliced onto HEAD and staged as blobs so the working files were
+never rewritten. The staged content was then materialized in a throwaway
+worktree and independently verified before committing: `bun test` 474/0,
+`swift test` 246/0, and a full `flowdeck build` of the app.
+
+
+## Surfaces
+
+| Surface | State |
+| --- | --- |
+| Servers (Pro + Air) | **Live** on `af0ea61` since 14:45. |
+| iPhone | **Build 202608111752 (v1.2.0) on TestFlight**, verified VALID / highest train / `IN_BETA_TESTING`. Archived from a clean worktree at `af0ea61`, never from the shared working tree. |
+| macOS desktop (`desktop/`) | **Built and installed** to `/Applications/lfg.app`. Searches via `?q=` with its own cursor and a "Load more results" footer, re-applying the match client-side like iOS. 59 inline assertions pass; live probe against the real host returns the 6 `preamble` matches. |
+
+### Desktop verification
+
+The display is asleep (a `screencapture -x` came back pure black), so GUI
+automation was out, and the `--window-shot` harness renders FIXTURES — it can
+prove the layout of search but never the seam. Added `lfg --search-probe <query>`,
+a CLI entry point in the same spirit as the existing `--desktop-feature-test` and
+`--window-fit` harnesses, which runs the real store against the real configured
+hosts:
+
+    $ /Applications/lfg.app/Contents/MacOS/lfg --search-probe "preamble"
+    {"ok":true,"query":"preamble","hostsReachable":1,"matches":6,"canLoadMore":false,...}
+    $ ... --search-probe "the"
+    matches: 31  canLoadMore: True      # cursor works
+
+### Caveat on the installed desktop build
+
+`desktop/LFGSessions.swift` also holds another session's in-flight work (mosh
+remote-attach, the compact/narrow-window toolbar). The installed app was built
+from the working tree, so it contains that work as well as this feature. It is
+self-consistent (all 59 assertions pass) but it is not mine and not reviewed
+here. Rebuilding from `HEAD` + only this feature's blocks is a one-command
+alternative if that is not wanted.
 
 ## Bugs
 
