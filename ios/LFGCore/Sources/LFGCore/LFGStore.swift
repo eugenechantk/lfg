@@ -65,6 +65,44 @@ public final class LFGStore: @unchecked Sendable {
         }
     }
 
+    /// Replaces a host's stored sessions with `sessions`, which must be that
+    /// host's **complete** live list — rows the snapshot omits are deleted.
+    ///
+    /// This is the write to use for a `GET /api/sessions` result, and the reason
+    /// it exists is that `upsertSessions` never forgets. Left to merge, this table
+    /// accumulates every session a host has ever reported; `hydrateFromStore`
+    /// seeds `lastSessionsByHost` from it at a cold launch, and while the owning
+    /// host is unreachable no live fetch ever overwrites that seed — so the list
+    /// fills with long-dead sessions, some frozen at `busy: true`, that are
+    /// invisible whenever the host is actually up. See
+    /// `.claude/diagnosis-offline-host-resurrects-dead-sessions-20260811.md`.
+    ///
+    /// The delete is scoped to `hostId` so one host's snapshot cannot evict
+    /// another's: `~/.claude/projects` is synced, two hosts can report the same
+    /// session id, and the row's `hostId` follows whichever fetch landed last.
+    ///
+    /// `messages` and `readState` are deliberately left alone (the v1 schema
+    /// declares no foreign keys, so nothing cascades). A session that ends and is
+    /// later resumed keeps its cached transcript and its read mark.
+    public func replaceSessions(_ sessions: [Session], hostId: String) async throws {
+        try await dbQueue.write { db in
+            var keep: [String] = []
+            for session in sessions {
+                guard let record = SessionUpsertRecord(session, hostId: hostId) else { continue }
+                try db.execute(sql: Self.upsertSessionSQL, arguments: Self.sessionArguments(record))
+                keep.append(record.sessionId)
+            }
+            // Built by hand rather than with a `NOT IN (...)` list because the
+            // empty case has to delete everything, and `NOT IN ()` is a syntax
+            // error. An unreachable host legitimately reports zero sessions.
+            let placeholders = keep.isEmpty ? "" : " AND sessionId NOT IN (\(databaseQuestionMarks(count: keep.count)))"
+            try db.execute(
+                sql: "DELETE FROM sessions WHERE hostId = ?\(placeholders)",
+                arguments: StatementArguments([hostId] + keep)
+            )
+        }
+    }
+
     /// Appends transcript messages and keeps only the newest `messageLimit` rows for that session.
     public func appendMessages(sessionId: String, _ messages: [Message]) async throws {
         guard LFGStoreRecordHelpers.nonEmpty(sessionId) != nil else { return }

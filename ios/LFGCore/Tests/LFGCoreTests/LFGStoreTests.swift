@@ -209,6 +209,67 @@ final class LFGStoreTests: XCTestCase {
         let observedMessages = try await messageProbe.nextValue()
         XCTAssertEqual(observedMessages.map(\.id), ["m1"])
     }
+
+    /// A host fetch is a complete snapshot of that host's live sessions, so a
+    /// session the snapshot omits has ended and must not survive in the store.
+    ///
+    /// Left to accumulate, these rows are what `hydrateFromStore` seeds
+    /// `lastSessionsByHost` from at a cold launch, and when the owning host is
+    /// unreachable no live fetch ever overwrites that seed — so every session the
+    /// host has ever had comes back onto the list, some of them frozen at
+    /// `busy: true`. See
+    /// `.claude/diagnosis-offline-host-resurrects-dead-sessions-20260811.md`.
+    func testReplaceSessionsDropsSessionsMissingFromTheSnapshot() async throws {
+        let store = try LFGStore.inMemory()
+        try await store.replaceSessions([
+            Session(sessionId: "old", title: "Ended weeks ago", lastActivityAt: 1, busy: true),
+            Session(sessionId: "live", title: "Still running", lastActivityAt: 2, busy: true),
+        ], hostId: "air")
+
+        try await store.replaceSessions([
+            Session(sessionId: "live", title: "Still running", lastActivityAt: 3, busy: true),
+        ], hostId: "air")
+
+        let sessions = try await store.sessions()
+        XCTAssertEqual(sessions.map(\.sessionId), ["live"])
+    }
+
+    /// The delete is scoped to the fetching host. `~/.claude/projects` is synced,
+    /// so two hosts can report the same session id and the row's `hostId` follows
+    /// whichever fetch landed last — one host's snapshot must never evict another
+    /// host's sessions.
+    func testReplaceSessionsOnlyEvictsWithinTheSameHost() async throws {
+        let store = try LFGStore.inMemory()
+        try await store.replaceSessions([Session(sessionId: "onPro", title: "Pro", lastActivityAt: 1)], hostId: "pro")
+        try await store.replaceSessions([Session(sessionId: "onAir", title: "Air", lastActivityAt: 2)], hostId: "air")
+
+        try await store.replaceSessions([], hostId: "air")
+
+        let sessions = try await store.sessions()
+        XCTAssertEqual(sessions.map(\.sessionId), ["onPro"])
+    }
+
+    /// Dropping a session must not take its cached transcript or read mark with
+    /// it: the session may well come back on the host's next poll, and re-fetching
+    /// history it already had (or re-showing messages already read) is a
+    /// regression the user would see immediately.
+    func testReplaceSessionsKeepsTranscriptAndReadStateForEvictedSessions() async throws {
+        let store = try LFGStore.inMemory()
+        try await store.replaceSessions([Session(sessionId: "s1", title: "One", lastActivityAt: 1)], hostId: "air")
+        try await store.appendMessages(sessionId: "s1", [
+            SessionMessage(id: "m1", role: "assistant", kind: "text", text: "hello", ts: 1),
+        ])
+        try await store.markSeen(sessionId: "s1", lastSeenMessageId: "m1", openedAt: 10)
+
+        try await store.replaceSessions([], hostId: "air")
+
+        let sessions = try await store.sessions()
+        let messages = try await store.messages(sessionId: "s1")
+        let read = try await store.readState(sessionId: "s1")
+        XCTAssertEqual(sessions.count, 0)
+        XCTAssertEqual(messages.map(\.id), ["m1"])
+        XCTAssertEqual(read?.lastSeenMessageId, "m1")
+    }
 }
 
 private extension LFGStoreTests {

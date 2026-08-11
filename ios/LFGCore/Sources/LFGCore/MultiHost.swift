@@ -156,6 +156,42 @@ public enum MultiHost {
         return !reachable(owner) && !isClosed
     }
 
+    /// Ids of the live sessions whose `busy`/`prompt` this client may no longer
+    /// believe, because the host that owns them is down.
+    ///
+    /// Both of a client's sources for those two fields go silent together when a
+    /// host drops — the journal because no event can be delivered, and the REST
+    /// snapshot because the merged list deliberately keeps serving that host's
+    /// LAST GOOD sessions so a blip doesn't empty the list. The second is the
+    /// trap: the frozen snapshot still says `busy: true`, and once the journal's
+    /// last word ages past `JournalFreshness.defaultTTL` that corpse is
+    /// re-asserted on every rebuild. Nothing un-latches it, so an offline host's
+    /// mid-turn sessions read "Working" for as long as it stays down — and a cold
+    /// launch rehydrates the same frozen snapshot from the local store.
+    ///
+    /// The caller retracts these rather than merely ceasing to update them, which
+    /// is the same contract `journal-pump.ts`'s `appendDisappearanceRetractions`
+    /// honours server-side for a session that vanishes on a LIVE host. This is the
+    /// case that one structurally cannot cover.
+    ///
+    /// `reachable` must be the known-down predicate (offline/noNetwork only), NOT
+    /// `isLive` — a host inside its grace window is blipping, and retracting there
+    /// would flicker the list on every transient stall. It is the same predicate
+    /// that dims the row and disables the composer, so a dimmed row can no longer
+    /// sit in the Working group.
+    public static func unreachableLiveSessionIds(
+        live: [Session],
+        owner: (String) -> Host?,
+        reachable: (Host) -> Bool
+    ) -> Set<String> {
+        var out: Set<String> = []
+        for s in live {
+            guard let sid = s.sessionId, let host = owner(sid) else { continue }
+            if !reachable(host) { out.insert(sid) }
+        }
+        return out
+    }
+
     /// Host ids that went from a **known-unreachable** state to reachable between
     /// two health snapshots. Drives the "resend what failed while you were down"
     /// path.
