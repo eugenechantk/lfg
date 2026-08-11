@@ -109,7 +109,12 @@ struct SessionListView: View {
         // selection as well as looking wrong.
         var seen = Set(local.map(\.id))
         var out = local
-        for s in store.searchResults where !seen.contains(s.id) {
+        // Re-apply the directory mute list at read time (the store filters it into
+        // `searchResults` too). Both are needed: the store-side filter runs when a
+        // search PAGE arrives, this one when the MUTE LIST changes — toggling a
+        // directory while a search is on screen otherwise leaves stale rows up.
+        for s in store.searchResults
+        where !seen.contains(s.id) && !settings.hiddenDirs.hides(cwd: s.cwd) {
             seen.insert(s.id)
             out.append(s)
         }
@@ -429,11 +434,91 @@ struct SessionListView: View {
                 .padding(.leading, row.indent + 39)
         }
         .contentShape(Rectangle())
-        .tag(row.session.sessionId ?? "")
+        // Tagged by NAV id, not session id: a session created in this run keeps
+        // the placeholder tag its detail was pushed under, so the create remap
+        // doesn't yank the tag out from under a live selection (which made the
+        // list clear the selection and the split view push a second detail).
+        .tag(store.navID(row.session.sessionId ?? ""))
         .accessibilityIdentifier("sessionRow-\(row.session.id)")
         .listRowInsets(EdgeInsets())
         .listRowSeparator(.hidden)
         .listRowBackground(Tokens.screen)
+        // Build the mute list from the thing that's annoying you, in one gesture.
+        // Typing `/Users/…/.gbrain` into Settings is the same operation, but no
+        // one does it — this is where you actually notice the noise.
+        .swipeActions(edge: .trailing) {
+            if let dir = row.session.cwd.flatMap(HiddenDirs.normalize) {
+                Button {
+                    settings.hideDirectory(dir)
+                } label: {
+                    Label("Hide \(HiddenDirs.displayName(for: dir))", systemImage: "eye.slash")
+                }
+                .tint(.secondary)
+                .accessibilityIdentifier("hideDirectory-\(row.session.id)")
+
+                // A scratch directory whose name ends in a pid — `gbrain` autopilot
+                // works out of `$TMPDIR/gbrain-claude-cli-cwd-<pid>`. Hiding the
+                // literal path would mute exactly one run, so offer the pattern
+                // that mutes the whole family. Only ever offered, never applied.
+                if let pattern = HiddenDirs.suggestedPattern(for: dir) {
+                    Button {
+                        settings.hideDirectory(pattern)
+                    } label: {
+                        Label("Hide all like this", systemImage: "eye.slash.circle")
+                    }
+                    .tint(.orange)
+                    .accessibilityIdentifier("hideDirectoryPattern-\(row.session.id)")
+                }
+            }
+        }
+    }
+
+    /// Header chip: "N hidden", tap to unhide any muted directory.
+    ///
+    /// A filter with no visible trace is a bug report waiting to happen — months
+    /// after muting `~/.gbrain` the sessions are simply *absent* and nothing says
+    /// why. It sits in the header rather than at the foot of the list because the
+    /// list is long and paginated: a footer under the closed section is a
+    /// disclosure nobody ever scrolls to. Absent entirely when nothing is hidden.
+    @ViewBuilder
+    private var hiddenDirectoriesChip: some View {
+        let count = store.hiddenLiveSessionCount
+        // Shown whenever anything is muted, even with no live session in those
+        // directories right now — the point is to disclose that a filter is on,
+        // and a disclosure that comes and goes is worse than none.
+        if !settings.hiddenDirs.isEmpty {
+            Menu {
+                Section("Hidden") {
+                    ForEach(settings.hiddenDirs.paths, id: \.self) { dir in
+                        Button {
+                            settings.unhideDirectory(dir)
+                        } label: {
+                            Label("Show \(HiddenDirs.displayName(for: dir))", systemImage: "eye")
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "eye.slash").font(.system(size: 12, weight: .medium))
+                    if count > 0 {
+                        Text("\(count)").font(.system(size: 13, weight: .semibold))
+                    }
+                }
+                .foregroundStyle(Tokens.labelSecondary)
+                // The header row squeezes its chrome to fit the status line; without
+                // `fixedSize` the count is the first thing compressed away, leaving a
+                // bare icon that discloses the filter but not its size.
+                .fixedSize()
+                .padding(.horizontal, count > 0 ? 11 : 0)
+                .frame(minWidth: 38, minHeight: 38)
+                .glassOrRaised(in: Capsule(), fallback: Tokens.raised, interactive: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(count > 0
+                ? "\(count) running sessions hidden"
+                : "Hidden directories, none running")
+            .accessibilityIdentifier("hiddenSessionsChip")
+        }
     }
 
     private func agentDisclosure(parentId: String, children: [Session]) -> some View {
@@ -672,6 +757,7 @@ struct SessionListView: View {
                 HStack(spacing: 10) {
                     // No search toggle here anymore — search lives in the bottom
                     // bar, where the system puts it on iOS 26.
+                    hiddenDirectoriesChip
                     groupSortMenu(groupMode: groupMode, sortMode: sortMode)
                     headerButton("gearshape", size: 16, weight: .regular) { showSettings = true }
                         .accessibilityIdentifier("sessionSettingsButton")

@@ -71,6 +71,10 @@ final class FleetActivityController {
             _ = store.sessions
             _ = store.busy
             _ = store.prompts
+            // The snapshot reads `filteredSessions`, so the mute list is one of
+            // its inputs — untracked, muting a directory wouldn't reach the card
+            // until some unrelated session state happened to change.
+            _ = settings?.hiddenDirs
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -84,7 +88,10 @@ final class FleetActivityController {
     private func makeSnapshot(now: Double) -> LFGCore.LFGFleetAttributes.ContentState? {
         guard let store else { return nil }
         return FleetActivitySnapshot.contentState(
-            sessions: store.sessions,
+            // Muted directories are excluded here too: a Live Activity counting
+            // sessions the list refuses to show is the same parallel-ladder bug
+            // class the repo notes warn about — two surfaces, two answers.
+            sessions: store.filteredSessions,
             busy: store.busy,
             prompts: store.prompts,
             priorRows: lastSnapshot?.rows ?? [],

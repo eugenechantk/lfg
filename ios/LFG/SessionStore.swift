@@ -1620,6 +1620,10 @@ import LFGCore
             liveIds: liveIds)
             .filter { !resumedIds.contains($0.sessionId) }
             .map(Self.closedSession(from:))
+            // Search spans EVERY transcript on every host, so without this a muted
+            // directory reappears the moment the user types — the list would hide
+            // `~/.gbrain` and the search field would hand it straight back.
+            .filter { !settings.hiddenDirs.hides(cwd: $0.cwd) }
     }
 
     /// Refresh, coalescing concurrent callers onto one in-flight run.
@@ -2190,12 +2194,45 @@ import LFGCore
     }
 
     var filteredSessions: [Session] {
-        sessions.filter { settings.userFilter.matches($0) }
+        sessions.filter { settings.userFilter.matches($0) && !settings.hiddenDirs.hides(cwd: $0.cwd) }
+    }
+
+    /// How many LIVE sessions the directory mute list is holding back — the same
+    /// population "N running" describes.
+    ///
+    /// Closed sessions are excluded deliberately. Counting them made the header
+    /// read "63 hidden" against a handful of live agents, and worse, the number
+    /// climbed every time the closed list paginated — a disclosure that changes
+    /// when you scroll teaches the user to ignore it.
+    var hiddenLiveSessionCount: Int {
+        guard !settings.hiddenDirs.isEmpty else { return 0 }
+        return sessions.filter {
+            !$0.closed && settings.userFilter.matches($0) && settings.hiddenDirs.hides(cwd: $0.cwd)
+        }.count
+    }
+
+    /// Every working directory this client has seen a session in — live, optimistic
+    /// or closed, across all hosts. Feeds the Settings picker so muting `~/.gbrain`
+    /// is a tap on a directory you can see rather than a typed path. Hidden
+    /// directories are included, since they are exactly the ones being managed.
+    var knownDirectories: [String] {
+        var seen = Set<String>()
+        for s in sessions {
+            guard let p = s.cwd.flatMap(HiddenDirs.normalize) else { continue }
+            seen.insert(p)
+        }
+        return seen.sorted {
+            (HiddenDirs.displayName(for: $0).lowercased(), $0) < (HiddenDirs.displayName(for: $1).lowercased(), $1)
+        }
     }
 
     /// Number of sessions currently working (busy) — shown in the top bar.
+    ///
+    /// Reads the FILTERED list: a count sitting above a list must agree with the
+    /// list. (It used to read `sessions`, which also made it disagree with
+    /// `unreadCount` whenever a user filter was set.)
     var runningCount: Int {
-        sessions.filter { group(for: $0) == .working }.count
+        filteredSessions.filter { group(for: $0) == .working }.count
     }
 
     /// Matches the user filter and status grouping. Host filtering is owned by

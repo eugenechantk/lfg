@@ -116,6 +116,22 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink {
+                        HiddenDirectoriesView()
+                    } label: {
+                        LabeledContent {
+                            Text(settings.hiddenDirs.isEmpty ? "None" : "\(settings.hiddenDirs.paths.count)")
+                                .foregroundStyle(.secondary)
+                        } label: {
+                            Label("Hidden directories", systemImage: "eye.slash")
+                        }
+                    }
+                    .accessibilityIdentifier("hiddenDirectoriesLink")
+                } header: { Text("Filtering") } footer: {
+                    Text("Sessions running in a hidden directory (and its subdirectories) are kept out of the list, the counts and search on this device. They keep running, and a notification still opens them.")
+                }
+
+                Section {
+                    NavigationLink {
                         ConnectionLogView()
                     } label: {
                         Label("Connection Log", systemImage: "waveform.path.ecg")
@@ -167,6 +183,102 @@ struct SettingsView: View {
                 await store.resolveHostIdentities()
             }
         }
+    }
+}
+
+/// The directory mute list: which working directories are kept out of this
+/// device's session list, plus the two ways to add one.
+///
+/// The picker of seen directories is the important half. The motivating case —
+/// `gbrain` autopilot filling the list with `~/.gbrain` sessions — is a directory
+/// the client is already staring at, so muting it should be a tap on a name, not
+/// a hand-typed absolute path. The text field is the fallback for a directory no
+/// session has surfaced yet.
+struct HiddenDirectoriesView: View {
+    @Environment(AppSettings.self) private var settings
+    @Environment(SessionStore.self) private var store
+
+    @State private var pathDraft = ""
+
+    private var addable: [String] {
+        store.knownDirectories.filter { !settings.hiddenDirs.hides(cwd: $0) }
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                if settings.hiddenDirs.isEmpty {
+                    Text("Nothing hidden — every session shows.")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    ForEach(settings.hiddenDirs.paths, id: \.self) { dir in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(HiddenDirs.displayName(for: dir))
+                            Text(dir).font(.caption.monospaced()).foregroundStyle(.secondary)
+                                .lineLimit(1).truncationMode(.head)
+                        }
+                        .swipeActions {
+                            Button(role: .destructive) {
+                                settings.unhideDirectory(dir)
+                            } label: { Label("Show", systemImage: "eye") }
+                        }
+                        .accessibilityIdentifier("hiddenDir-\(dir)")
+                    }
+                }
+            } header: { Text("Hidden") } footer: {
+                Text("Swipe a directory to show it again. Hiding covers subdirectories too.")
+            }
+
+            if !addable.isEmpty {
+                Section {
+                    ForEach(addable, id: \.self) { dir in
+                        Button {
+                            settings.hideDirectory(dir)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(HiddenDirs.displayName(for: dir)).foregroundStyle(.primary)
+                                    Text(dir).font(.caption.monospaced()).foregroundStyle(.secondary)
+                                        .lineLimit(1).truncationMode(.head)
+                                }
+                                Spacer()
+                                Image(systemName: "eye.slash").foregroundStyle(.secondary)
+                            }
+                        }
+                        .accessibilityIdentifier("hideCandidate-\(dir)")
+                        .swipeActions {
+                            if let pattern = HiddenDirs.suggestedPattern(for: dir) {
+                                Button {
+                                    settings.hideDirectory(pattern)
+                                } label: { Label("Hide all like this", systemImage: "eye.slash.circle") }
+                                    .tint(.orange)
+                            }
+                        }
+                    }
+                } header: { Text("Directories in use") } footer: {
+                    Text("Every directory this device has seen a session in, across all hosts. Tap to hide one; swipe a per-run scratch folder to hide the whole family.")
+                }
+            }
+
+            Section {
+                HStack {
+                    TextField("/Users/you/some/dir  or  */scratch-*", text: $pathDraft)
+                        .font(.caption.monospaced())
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .accessibilityIdentifier("hiddenDirPathField")
+                    Button("Hide") {
+                        settings.hideDirectory(pathDraft)
+                        pathDraft = ""
+                    }
+                    .font(.caption)
+                    .disabled(HiddenDirs.normalize(pathDraft) == nil)
+                }
+            } header: { Text("Add by path or pattern") } footer: {
+                Text("An absolute path on the host — this device can't resolve ~ against a host's home directory. Or a pattern: * matches anything, ? one character. Use a pattern for directories that change every run, e.g. */gbrain-claude-cli-cwd-* for gbrain autopilot's temp folders.")
+            }
+        }
+        .navigationTitle("Hidden directories")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

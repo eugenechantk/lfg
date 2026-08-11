@@ -66,6 +66,7 @@ struct LFGApp: App {
     private static let groupModeKey = "lfg.groupMode"
     private static let sortModeKey = "lfg.sortMode"
     private static let recentDirsKey = "lfg.recentDirs"
+    private static let hiddenDirsKey = "lfg.hiddenDirs"
 
     /// Configured backend hosts. Persisted as JSON; exactly one is `isDefault`.
     var hosts: [Host] {
@@ -91,6 +92,20 @@ struct LFGApp: App {
     func noteRecentDir(_ path: String) {
         recentDirs = RecentDirs.pushing(path, onto: recentDirs)
     }
+
+    /// Directories muted on THIS device: a session whose `cwd` is at or under one
+    /// of them is kept out of the list, the counts, search and the Live Activity.
+    ///
+    /// Persisted, unlike `userFilter` — a mute list you have to re-apply every
+    /// launch isn't a mute list. Hiding is a viewing preference only: the session
+    /// keeps running, the desktop app still shows it, and a notification
+    /// deep-link into it still opens (see `SessionStore.session(_:)`).
+    var hiddenDirs: HiddenDirs {
+        didSet { defaults.set(hiddenDirs.paths, forKey: Self.hiddenDirsKey) }
+    }
+
+    func hideDirectory(_ path: String) { hiddenDirs = hiddenDirs.adding(path) }
+    func unhideDirectory(_ path: String) { hiddenDirs = hiddenDirs.removing(path) }
 
     /// Live user filter (not persisted — session-local).
     var userFilter: UserFilter = .all
@@ -136,6 +151,7 @@ struct LFGApp: App {
         groupMode = GroupMode(rawValue: defaults.string(forKey: Self.groupModeKey) ?? "") ?? .status
         sortMode = SortMode(rawValue: defaults.string(forKey: Self.sortModeKey) ?? "") ?? .recentActivity
         recentDirs = defaults.stringArray(forKey: Self.recentDirsKey) ?? []
+        hiddenDirs = HiddenDirs(defaults.stringArray(forKey: Self.hiddenDirsKey) ?? [])
         // Persist the migrated list so later launches read the new key directly
         // (didSet doesn't fire during init; all stored props must be set first).
         defaults.set(HostStore.encode(hosts), forKey: Self.hostsKey)
