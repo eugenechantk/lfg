@@ -494,17 +494,26 @@ public struct LFGClient: Sendable {
     ///
     /// Byte handling: manual `\n` splitting (`.lines` swallows SSE's blank
     /// dispatch boundaries) and a silent-stall watchdog —
-    /// at `HostLinkPolicy.staleTimeout` (20s ≈ two missed 10s heartbeats).
-    public func events(since: Int64) -> AsyncThrowingStream<HostStreamElement, Error> {
+    /// at `HostLinkPolicy.staleTimeout` (20s ≈ two missed 10s heartbeats), widened
+    /// up to 2× on a slow path — see `PathQuality`. `quality` defaults to "nothing
+    /// measured", which reproduces the fixed 20s exactly.
+    public func events(since: Int64,
+                       quality: PathQuality = PathQuality()) -> AsyncThrowingStream<HostStreamElement, Error> {
         let target = url("api/events", query: [URLQueryItem(name: "since", value: String(since))])
         let session = self.session
-        let staleTimeout = HostLinkPolicy.staleTimeout
+        let staleTimeout = HostLinkPolicy.staleTimeout(for: quality)
         let label = logLabel
         let log = ConnectionLog.shared
         return AsyncThrowingStream { continuation in
             let task = Task {
                 let dialedAt = Date()
-                log.log(.stream, "dial since=\(since)", host: label)
+                // The quality and the watchdog it bought are logged on every dial
+                // so a stall in the timeline can be read against the timeout that
+                // was actually in force, not the one in the source.
+                log.log(.stream,
+                        String(format: "dial since=%lld %@ stale=%.0fs",
+                               since, quality.summary, staleTimeout),
+                        host: label)
                 var req = URLRequest(url: target)
                 req.httpMethod = "GET"
                 // NOT .infinity: URLSession's timeoutInterval is an IDLE timeout

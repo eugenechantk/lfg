@@ -95,7 +95,34 @@ public enum HostLinkPolicy {
     /// How long the events stream may go silent (no bytes at all — the server
     /// heartbeats every 10s, so this is ~two missed heartbeats) before the link
     /// declares it dead and reconnects. Phase-1 target: detection ≤ 20s.
+    ///
+    /// This is the LAN number. On a relayed path use `staleTimeout(for:)`.
     public static let staleTimeout: TimeInterval = 20
+
+    /// The stall watchdog, widened for a slow path.
+    ///
+    /// 20s is two missed heartbeats on a ~5ms LAN. Over a DERP relay, where one
+    /// lost packet head-of-line blocks the tunnel, a 20s gap is a stream that is
+    /// slow rather than dead — and dropping it costs a full relay re-dial, which
+    /// makes the next gap more likely, not less.
+    ///
+    /// Capped at 2× deliberately. Detection has to stay bounded: 40s ≈ four
+    /// missed heartbeats, and beyond that the user is staring at dead air for
+    /// longer than a redial would have cost.
+    public static func staleTimeout(for quality: PathQuality) -> TimeInterval {
+        staleTimeout * quality.scale(max: 2)
+    }
+
+    /// Keepalive request timeout, widened for a slow path.
+    ///
+    /// The ping is the **only** source of RTT samples, so a fixed 5s timeout is a
+    /// feedback trap: on the exact path where the estimate matters, every ping
+    /// times out, no samples are recorded, and the estimator stays pinned at the
+    /// LAN default forever. Capped at `keepaliveInterval` so a slow ping can
+    /// never overlap the next one.
+    public static func keepaliveTimeout(for quality: PathQuality) -> TimeInterval {
+        min(5 * quality.scale(max: 2), keepaliveInterval)
+    }
 
     /// Keepalive ping cadence per live host. Primary purpose is keeping the
     /// phone-side carrier-NAT mapping warm (idle bindings expire in ~30s and

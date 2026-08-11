@@ -1463,11 +1463,15 @@ import LFGCore
     /// `ensureStream()` call at the end of `refresh`, stalling every foreground and
     /// notification tap. Streaming the results means a dead host costs nothing but its
     /// own late callback.
-    private func fetchSessionsStreaming(_ hosts: [Host], timeout: TimeInterval,
+    ///
+    /// `timeout` is a function of the host, not a constant, so a relayed host
+    /// cannot lengthen a LAN host's probe on the same tick — they run
+    /// concurrently in one task group and used to share one number.
+    private func fetchSessionsStreaming(_ hosts: [Host], timeout: (Host) -> TimeInterval,
                                         onResult: (HostFetch) -> Void) async {
-        let pairs: [(Host, LFGClient?)] = hosts.map { ($0, settings.client(for: $0)) }
+        let pairs: [(Host, LFGClient?, TimeInterval)] = hosts.map { ($0, settings.client(for: $0), timeout($0)) }
         await withTaskGroup(of: HostFetch.self) { group in
-            for (h, c) in pairs {
+            for (h, c, timeout) in pairs {
                 group.addTask {
                     guard let c else { return HostFetch(host: h, sessions: nil, reach: .badResponse("Invalid URL")) }
                     do { return HostFetch(host: h, sessions: try await c.sessions(timeout: timeout), reach: .ok) }
@@ -1707,7 +1711,16 @@ import LFGCore
         // Apply each host's result AS IT ARRIVES: a healthy host's sessions render
         // immediately, even while a dead host is still hanging on its timeout.
         // (Live streaming is the HostLinks' job now — nothing to re-establish here.)
-        await fetchSessionsStreaming(toProbe, timeout: probePolicy.pollTimeout) { [weak self] f in
+        // Per host: a host we've only ever reached over a DERP relay gets a
+        // wider window than one on the LAN. A relayed `/api/sessions` can go
+        // seconds without a byte during a head-of-line stall, and every 4s
+        // timeout here used to increment that host's failure count and feed the
+        // offline clock — the loop manufacturing evidence that a live host was
+        // dying. See `.claude/diagnosis-cellular-vs-wifi-20260811.md`.
+        let policy = probePolicy
+        await fetchSessionsStreaming(toProbe, timeout: { [weak self] host in
+            policy.pollTimeout(for: self?.links[host.id]?.pathQuality ?? PathQuality())
+        }) { [weak self] f in
             guard let self else { return }
             self.applyHostFetch(f)
             self.rebuildSessions()

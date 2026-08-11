@@ -47,7 +47,24 @@ public struct HostProbePolicy: Sendable, Equatable {
     /// user-initiated timeout: this loop is a background reconcile, not a user-
     /// initiated fetch, so a poll slower than this is worth abandoning — the
     /// `HostLink`s are what actually keep a host live.
+    ///
+    /// This is the LAN number. On a relayed path use `pollTimeout(for:)`.
     public let pollTimeout: TimeInterval
+
+    /// The poll timeout, widened for a slow path.
+    ///
+    /// 4s is generous against a ~5ms LAN and nearly a coin flip against a DERP
+    /// relay, where `/api/sessions` can easily go 4s without a byte during a
+    /// head-of-line stall. Every such timeout increments the host's failure
+    /// count and feeds the offline clock, so on cellular the reconcile loop was
+    /// manufacturing evidence that a perfectly live host was dying.
+    ///
+    /// Capped at 3×: 12s stays under both the 60s poll interval and `LFGClient`'s
+    /// 15s user-initiated timeout, so the invariants the constant was chosen for
+    /// still hold at the top of the range.
+    public func pollTimeout(for quality: PathQuality) -> TimeInterval {
+        pollTimeout * quality.scale(max: 3)
+    }
 
     public init(displayFailureThreshold: Int = 3,
                 coldProbeInterval: TimeInterval = 300,
