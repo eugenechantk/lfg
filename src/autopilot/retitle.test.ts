@@ -67,9 +67,22 @@ describe("selectRetitleCandidates", () => {
     expect(select([cand({ leaseHost: null })])).toEqual([]);
   });
 
-  test("a live session is in scope regardless of lease or age", () => {
-    const live = cand({ sessionId: "live", live: true, leaseHost: null, mtime: NOW - 30 * DAY });
+  test("a live session this host holds the lease for ignores the age window", () => {
+    const live = cand({ sessionId: "live", live: true, mtime: NOW - 30 * DAY });
     expect(select([live]).map((c) => c.sessionId)).toEqual(["live"]);
+  });
+
+  test("a LIVE session the other host holds the lease for is skipped", () => {
+    // The regression this exists for: `~/.claude` is synced, so one sessionId
+    // can read as live on BOTH boxes at once. An earlier version exempted live
+    // sessions from the lease check on the theory that live implied local, and
+    // the Pro and the Air each retitled session 01e32dd7 to a different name.
+    const live = cand({ sessionId: "live", live: true, leaseHost: "host-air" });
+    expect(select([live])).toEqual([]);
+  });
+
+  test("a live session with no lease at all is skipped", () => {
+    expect(select([cand({ sessionId: "live", live: true, leaseHost: null })])).toEqual([]);
   });
 
   test("skips sessions with no new transcript bytes since the last look", () => {

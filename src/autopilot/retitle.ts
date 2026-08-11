@@ -25,7 +25,7 @@ import { basename, join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { PATHS } from "../config.ts";
 import { hostInfo } from "../hostinfo.ts";
-import { leasePathForTranscript, parseLease } from "../leases.ts";
+import { ensureLease, leasePathForTranscript, parseLease } from "../leases.ts";
 import {
   collectResumableCandidates,
   listSessions,
@@ -94,17 +94,21 @@ export function selectRetitleCandidates(
     // A human named it. That decision outranks anything the model would say.
     if (!autopilotMayRename(titles[c.sessionId])) return false;
 
-    // Live sessions are always in scope: they're on this host by construction,
-    // and they're where drift is actively happening.
-    if (!c.live) {
-      if (now - c.mtime > windowMs) return false;
-      // Not live and owned by the other box — let that box title it.
-      if (c.leaseHost && c.leaseHost !== opts.hostId) return false;
-      // No lease at all means no host ever claimed it (transcripts predating
-      // leases). Skipped rather than guessed: with a synced corpus, "unclaimed"
-      // on this host is equally unclaimed on the other, and both would take it.
-      if (!c.leaseHost) return false;
-    }
+    // The lease decides ownership for EVERY session, live ones included.
+    //
+    // An earlier version exempted live sessions, reasoning they were "on this
+    // host by construction". They are not: `~/.claude` is synced, so one
+    // sessionId can read as live on both boxes at once — observed on
+    // 01e32dd7, which the Pro and the Air each retitled, to different names.
+    // `ensureLease` is the existing mutual-exclusion primitive (it refuses when
+    // another host holds a fresh lease), so asking it is both correct and the
+    // answer the rest of lfg already uses.
+    //
+    // No lease at all means no host has claimed it — skipped rather than
+    // guessed, because "unclaimed here" is equally unclaimed on the peer and
+    // both boxes would otherwise take it.
+    if (c.leaseHost !== opts.hostId) return false;
+    if (!c.live && now - c.mtime > windowMs) return false;
 
     // Nothing new written since the last look — re-reading it would cost an LLM
     // slot to reach the same conclusion.
@@ -262,7 +266,8 @@ export async function gatherCandidates(now: number): Promise<RetitleCandidate[]>
       cwd: s.cwd,
       title: s.title,
       live: true,
-      leaseHost: hostInfo().hostId,
+      // Resolved below by claiming the lease — NOT assumed to be this host.
+      leaseHost: null,
     });
   }
 
@@ -284,13 +289,27 @@ export async function gatherCandidates(now: number): Promise<RetitleCandidate[]>
     });
   }
 
+  const livePid = new Map(live.filter((s) => s.sessionId).map((s) => [s.sessionId!, s.pid]));
+  const me = hostInfo().hostId;
+
   const out = [...byId.values()];
   await Promise.all(
     out.map(async (c) => {
       try {
         c.bytes = Bun.file(c.path).size;
       } catch {}
-      if (!c.live) c.leaseHost = await leaseHostFor(c.sessionId, c.path);
+      if (c.live) {
+        // CLAIM it, don't assume it. `ensureLease` returns false when another
+        // host already holds a fresh lease — which is exactly the case that made
+        // both boxes retitle one session, since a synced `~/.claude` lets one
+        // sessionId read as live on both at once.
+        const held = await ensureLease(c.sessionId, livePid.get(c.sessionId) ?? 0).catch(
+          () => false,
+        );
+        c.leaseHost = held ? me : await leaseHostFor(c.sessionId, c.path);
+      } else {
+        c.leaseHost = await leaseHostFor(c.sessionId, c.path);
+      }
     }),
   );
   return out;
