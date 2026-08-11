@@ -152,6 +152,29 @@ final class LFGStoreTests: XCTestCase {
         XCTAssertNil(deliveredRow)
     }
 
+    /// `failed` must not be a black hole. `pendingOutbox` hides those rows on
+    /// purpose, but the replay paths read `retryableOutbox` so a host coming back
+    /// can re-attempt them — and so a relaunch still restores the bubble instead
+    /// of losing the message with no trace in the UI.
+    func testRetryableOutboxIncludesFailedButNotDelivered() async throws {
+        let store = try LFGStore.inMemory()
+
+        try await store.enqueueOutbox(clientId: "c1", sessionId: "s1", hostId: "h1", text: "queued")
+        try await store.enqueueOutbox(clientId: "c2", sessionId: "s1", hostId: "h1", text: "burned")
+        try await store.enqueueOutbox(clientId: "c3", sessionId: "s1", hostId: "h1", text: "gone")
+
+        try await store.markOutbox(clientId: "c2", state: "failed")
+        try await store.markOutbox(clientId: "c3", state: "delivered")
+
+        let stillPending = try await store.pendingOutbox()
+        XCTAssertEqual(stillPending.map(\.clientId), ["c1"])
+
+        let retryable = try await store.retryableOutbox()
+        XCTAssertEqual(retryable.map(\.clientId), ["c1", "c2"])
+        XCTAssertEqual(retryable.first { $0.clientId == "c2" }?.state, "failed")
+        XCTAssertEqual(retryable.first { $0.clientId == "c2" }?.text, "burned")
+    }
+
     func testDeleteOutbox() async throws {
         let store = try LFGStore.inMemory()
 

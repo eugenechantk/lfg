@@ -350,9 +350,15 @@ struct PendingStripView: View {
                             .font(.caption).lineLimit(1).foregroundStyle(.secondary)
                         Spacer(minLength: 0)
                         if item.queuedOffline {
+                            // An offline-queued message is waiting on the phone,
+                            // not on the host — but the user still needs to be
+                            // able to force it through or take it back, same as
+                            // one held behind a running turn. Carry the same
+                            // ellipsis affordance so the row reads as tappable.
                             Text("Queued")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
+                            Image(systemName: "ellipsis.circle").font(.caption).foregroundStyle(.tertiary)
                         } else if item.failed {
                             Button("Retry") { Task { await store.retryPending(sessionID, item) } }
                                 .font(.caption2).buttonStyle(.bordered).controlSize(.mini)
@@ -365,7 +371,9 @@ struct PendingStripView: View {
                     .background(.quaternary.opacity(0.4), in: Capsule())
                     .contentShape(Capsule())
                     .accessibilityIdentifier("pendingStripRow")
-                    .onTapGesture { if !item.failed && !item.queuedOffline { onTap(item) } }
+                    // Failed rows carry their own inline Retry button, so a tap
+                    // there would compete with it; everything else opens the menu.
+                    .onTapGesture { if !item.failed { onTap(item) } }
                 }
             }
         }

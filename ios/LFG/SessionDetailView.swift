@@ -160,7 +160,12 @@ struct SessionDetailView: View {
             titleVisibility: .visible,
             presenting: queueAction
         ) { item in
-            Button("Send now (interrupt)") { Task { await store.sendQueuedNow(sid, item) } }
+            // An offline-queued message never reached the host, so there is no
+            // running turn to interrupt — "send now" just means try the host
+            // again instead of waiting for the reconnect drain.
+            Button(item.queuedOffline ? "Try sending now" : "Send now (interrupt)") {
+                Task { await store.sendQueuedNow(sid, item) }
+            }
             Button("Edit") { Task { draft = await store.editQueued(sid, item) } }
             Button("Remove", role: .destructive) { Task { await store.removeQueued(sid, item) } }
             Button("Cancel", role: .cancel) {}

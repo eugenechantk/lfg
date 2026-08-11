@@ -902,7 +902,10 @@ import LFGCore
         guard let store = localStore else { return }
         let rows: [LFGOutboxRow]
         do {
-            rows = try await store.pendingOutbox()
+            // `retryableOutbox`, not `pendingOutbox`: a row marked `failed` by a
+            // previous attempt must still be restored here, or the bubble simply
+            // doesn't come back and the message is gone with no trace in the UI.
+            rows = try await store.retryableOutbox()
         } catch {
             Logger(subsystem: "dev.omg.lfg", category: "outbox")
                 .error("pending outbox fetch failed: \(error.localizedDescription)")
@@ -925,16 +928,29 @@ import LFGCore
         }
     }
 
-    /// Replay this host's still-pending outbox rows now that it is reachable again.
+    /// Replay this host's still-unsent outbox rows now that it is reachable again.
+    ///
+    /// Includes rows a previous attempt marked `failed`. This is the drain that
+    /// actually runs in the field — the `HostLink` flips a host live within its
+    /// ≤30s backoff, which is almost always *between* 60s poll ticks, so
+    /// `performRefresh`'s own `recoveredHosts` sweep (the only other thing that
+    /// retries failed rows) sees `healthBefore` already live and does nothing.
+    /// If this path skipped `failed`, a row that burned on one bad attempt would
+    /// never be retried by anything.
     private func replayPendingOutbox(forHost hostId: String) async {
         guard let store = localStore else { return }
-        let rows = ((try? await store.pendingOutbox()) ?? []).filter { $0.hostId == hostId }
+        let rows = ((try? await store.retryableOutbox()) ?? []).filter { $0.hostId == hostId }
+        let now = Date().timeIntervalSince1970 * 1000
         for row in rows where !replayingOutbox.contains(row.clientId) {
+            // The cap belongs on every replay path, not just the launch one: a
+            // host that stays down for days would otherwise have this path
+            // re-posting week-old messages the moment it answers.
+            guard now - row.updatedAt <= Self.outboxRetryCapMs else { continue }
             replayingOutbox.insert(row.clientId)
-            // Clear the "queued offline" chrome on the existing bubble; retryOutboxRow
-            // reconciles it to sent/confirmed from here.
+            // Clear the "queued offline" / failed chrome on the existing bubble;
+            // retryOutboxRow reconciles it to sent/confirmed from here.
             if let loc = pendingLocation(clientId: row.clientId) {
-                mutatePending(loc.sid, loc.pid) { $0.queuedOffline = false }
+                mutatePending(loc.sid, loc.pid) { $0.queuedOffline = false; $0.failed = false }
             }
             await retryOutboxRow(row)
             replayingOutbox.remove(row.clientId)
@@ -979,19 +995,45 @@ import LFGCore
             reconcilePending(eff)
         } catch {
             lastError = "Outbox retry failed: \(error.localizedDescription)"
-            if !outboxAttachmentFiles(clientId: row.clientId).isEmpty {
-                if let loc = pendingLocation(clientId: row.clientId) {
-                    mutatePending(loc.sid, loc.pid) {
-                        $0.failed = false
-                        $0.queuedOffline = true
-                        $0.confirmed = false
-                    }
-                }
-                return
-            }
-            markPendingFailed(clientId: row.clientId)
-            await markOutboxState(row.clientId, state: "failed")
+            await settleSendFailure(clientId: row.clientId, hostId: row.hostId)
         }
+    }
+
+    /// Record the outcome of a send that threw — as either "still queued" or
+    /// "failed", which are very different promises to the user.
+    ///
+    /// `failed` is terminal-ish: it paints the red bubble and hands the message
+    /// back to the human ("Retry"). That is only honest when the HOST answered
+    /// and the message is what went wrong. A throw against a host that is itself
+    /// unreachable says nothing about the message — it is exactly the state the
+    /// composer would have queued it in had the user typed it a second later, so
+    /// keep it queued and let the reconnect drain own it. Without this, any
+    /// replay that raced a cold path (the drain fires on the FIRST byte from a
+    /// host, and a foreground tailnet path routinely drops its first packets)
+    /// silently converted "will send when reachable" into "needs a manual tap".
+    ///
+    /// Attachments take the same branch regardless: their bytes are still on
+    /// disk as sidecars, so the send is genuinely replayable no matter why it
+    /// threw, and burning the row would strand the sidecars too.
+    private func settleSendFailure(clientId: String, hostId: String?) async {
+        let hostStillDown = hostId.map { !(hostStateByHost[$0]?.isLive ?? false) } ?? false
+        let hasAttachments = !outboxAttachmentFiles(clientId: clientId).isEmpty
+        guard hostStillDown || hasAttachments else {
+            markPendingFailed(clientId: clientId)
+            await markOutboxState(clientId, state: "failed")
+            return
+        }
+        if let loc = pendingLocation(clientId: clientId) {
+            mutatePending(loc.sid, loc.pid) {
+                $0.failed = false
+                $0.queuedOffline = true
+                $0.confirmed = false
+                $0.showSent = false
+            }
+        }
+        // Re-arm the row so the next drain picks it up as pending rather than
+        // leaving whatever state the attempt wrote.
+        await markOutboxState(clientId, state: "pending")
     }
 
     private func persistCursor(_ cursor: Int64, for host: Host) {
@@ -2480,6 +2522,10 @@ import LFGCore
         mutatePending(sid, pending.id) {
             $0.clientId = clientId
             $0.failed = false
+            // Show the attempt as in-flight. An offline-queued row reaches here
+            // via "Send now"; leaving it on the static "Queued" capsule would
+            // make the tap look like it did nothing.
+            $0.queuedOffline = false
         }
         if let qid = pending.serverQueueID {
             guard let hostId = routeHostId(forSession: sid),
@@ -2489,10 +2535,7 @@ import LFGCore
             }
             let ok = await run("Retry", for: sid) { try await $0.retryQueued(sid, messageID: qid) }
             if ok { await markOutboxState(clientId, state: "sent") }
-            else {
-                mutatePending(sid, pending.id) { $0.failed = true }
-                await markOutboxState(clientId, state: "failed")
-            }
+            else { await settleSendFailure(clientId: clientId, hostId: hostId) }
         } else if let client = client(forSession: sid) {
             do {
                 // Same background transport as the composer send — a retry must
@@ -2515,8 +2558,7 @@ import LFGCore
                 }
                 await refresh(); reconcilePending(eff)
             } catch {
-                mutatePending(sid, pending.id) { $0.failed = true }
-                await markOutboxState(clientId, state: "failed")
+                await settleSendFailure(clientId: clientId, hostId: routeHostId(forSession: sid))
             }
         }
     }
@@ -2746,8 +2788,11 @@ import LFGCore
         } catch {
             lastError = "Send failed: \(error.localizedDescription)"
             let reason = Self.pendingFailureReason(error)
-            mutatePending(id, pid) { $0.failed = true; $0.failureReason = reason }
-            await markOutboxState(clientId, state: "failed")
+            mutatePending(id, pid) { $0.failureReason = reason }
+            // The host may have gone down between `isOffline(id)` reading false
+            // at the top of this function and the POST landing — in which case
+            // this is a queued message, not a failed one.
+            await settleSendFailure(clientId: clientId, hostId: hostId)
         }
     }
 
@@ -2776,8 +2821,17 @@ import LFGCore
     }
 
     /// Interrupt the current turn and deliver this queued message immediately.
+    ///
+    /// A message queued while the host was OFFLINE has no server queue entry to
+    /// promote — it never left the phone. "Send now" there means "stop waiting
+    /// for the reconnect drain and try the host right now", which is exactly
+    /// `retryPending`. Early-returning instead (the old behaviour) made the
+    /// button a no-op precisely when the user had the least other recourse.
     func sendQueuedNow(_ sid: String, _ pending: PendingSend) async {
-        guard let qid = pending.serverQueueID else { return }
+        guard let qid = pending.serverQueueID else {
+            await retryPending(sid, pending)
+            return
+        }
         await run("Send now", for: sid) { try await $0.sendQueuedNow(sid, qid) }
     }
     func answer(_ id: String, _ index: Int) async { await run("Answer", for: id) { try await $0.answer(id, index: index) } }

@@ -250,6 +250,33 @@ public final class LFGStore: @unchecked Sendable {
         }
     }
 
+    /// Fetches every outbox row auto-replay may still retry — including rows a
+    /// previous attempt marked `failed`.
+    ///
+    /// `pendingOutbox()` deliberately excludes `failed`, and for a long time it
+    /// was the only reader, which made `failed` terminal in the worst possible
+    /// way: the host-recovery drain could no longer see the row, AND a relaunch
+    /// no longer restored its bubble, so a message the user watched sit in
+    /// "Queued" simply vanished. `failed` is set on ANY transport error — most
+    /// often just "the host is still down" — so reaching it is routine, not
+    /// exceptional. Retry eligibility is a decision for the caller (which knows
+    /// the 24h cap and whether the host is up), not for the query.
+    public func retryableOutbox() async throws -> [LFGOutboxRow] {
+        try await dbQueue.read { db in
+            try OutboxRecord
+                .fetchAll(
+                    db,
+                    sql: """
+                    SELECT clientId, sessionId, hostId, text, state, createdAt, updatedAt
+                    FROM outbox
+                    WHERE state IS NULL OR state <> 'delivered'
+                    ORDER BY COALESCE(createdAt, 0) ASC, clientId ASC
+                    """
+                )
+                .map(\.stored)
+        }
+    }
+
     /// Deletes an outbox row after a delivered ack or explicit local cleanup.
     public func deleteOutbox(clientId: String) async throws {
         guard LFGStoreRecordHelpers.nonEmpty(clientId) != nil else { return }
