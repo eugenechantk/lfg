@@ -870,8 +870,15 @@ private struct HeaderStatusLine: View {
     var body: some View {
         HStack(spacing: 6) {
             if settings.hosts.count > 1 {
-                ForEach(settings.hosts.indices, id: \.self) { index in
-                    let host = settings.hosts[index]
+                // Iterate the ELEMENTS, keyed by host id — never `hosts.indices`
+                // with a `hosts[index]` lookup inside. SwiftUI evaluates a row's
+                // body against the identity it already has, so when the array
+                // shrinks (removing a host in Settings) an index-keyed ForEach
+                // re-runs the body for the departing index and subscripts past
+                // the end: `Array._checkSubscript` trap, app gone. Removing the
+                // second of two hosts crashed reliably this way. Carrying the
+                // host in the tuple means there is no lookup left to go stale.
+                ForEach(Array(settings.hosts.enumerated()), id: \.element.id) { index, host in
                     if index > 0 {
                         Text("·")
                             .font(.system(size: 14, weight: .semibold))
