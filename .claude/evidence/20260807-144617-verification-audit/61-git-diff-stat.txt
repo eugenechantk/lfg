@@ -1,0 +1,19 @@
+ desktop/LFGSessions.swift                          |  92 +++++++++++++++--
+ desktop/README.md                                  |   4 +-
+ improvement-log/improvement-log-20260806-113301.md |  29 ++++++
+ ...ent-log-c5e720ec-f96a-472f-87f2-1a9939f3ef0d.md |   7 ++
+ ios/LFG.xcodeproj/project.pbxproj                  |  20 ++--
+ ios/LFG/Components.swift                           |  22 +++-
+ ios/LFG/NewSession/NewSessionPresentation.swift    |  79 ++++++--------
+ ios/LFG/NewSessionView.swift                       |  48 ++++++++-
+ ios/LFG/RichContent.swift                          |  54 +++++++++-
+ ios/LFG/RootView.swift                             |   7 +-
+ ios/LFG/SessionListView.swift                      |   6 +-
+ ios/LFG/SessionStore.swift                         |  72 +++++++++++--
+ ios/LFGCore/Sources/LFGCore/LFGClient.swift        |  20 ++++
+ scripts/serve-forever.sh                           | 114 +++++++++++++++++++--
+ src/browser-preview.ts                             |   8 ++
+ src/commands/serve.ts                              |  33 +++++-
+ src/dirs.ts                                        |  27 ++++-
+ src/journal.ts                                     |   6 ++
+ 18 files changed, 551 insertions(+), 97 deletions(-)

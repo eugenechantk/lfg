@@ -1,0 +1,5 @@
+Timestamp: 2026-08-07 14:46:17 HKT
+Repository: /Users/eugenechan/dev/personal/lfg
+App: /Applications/lfg.app
+BundleID: com.eugenechan.lfg-desktop
+AXDriver: /Users/eugenechan/.claude/skills/macos-test/axdriver/bin/axdriver

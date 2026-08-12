@@ -1,0 +1,36 @@
+ M desktop/LFGSessions.swift
+ M desktop/README.md
+ M improvement-log/improvement-log-20260806-113301.md
+ M improvement-log/improvement-log-c5e720ec-f96a-472f-87f2-1a9939f3ef0d.md
+ M ios/LFG.xcodeproj/project.pbxproj
+ M ios/LFG/Components.swift
+ M ios/LFG/NewSession/NewSessionPresentation.swift
+ M ios/LFG/NewSessionView.swift
+ M ios/LFG/RichContent.swift
+ M ios/LFG/RootView.swift
+ M ios/LFG/SessionListView.swift
+ M ios/LFG/SessionStore.swift
+ M ios/LFGCore/Sources/LFGCore/LFGClient.swift
+ M scripts/serve-forever.sh
+ M src/browser-preview.ts
+ M src/commands/serve.ts
+ M src/dirs.ts
+ M src/journal.ts
+?? .claude/evidence/
+?? .claude/video-fullscreen/
+?? .codex/brainstorm/browser-preview-visual-history.md
+?? .codex/feature/menu-bar-session-search.md
+?? desktop/.syncthing.README.md.tmp
+?? improvement-log/.syncthing.improvement-log-c5e720ec-f96a-472f-87f2-1a9939f3ef0d.md.tmp
+?? improvement-log/improvement-log-20260806-124817.md
+?? improvement-log/improvement-log-20260806-125012.md
+?? improvement-log/improvement-log-20260806-162528.md
+?? improvement-log/improvement-log-20260806-162845.md
+?? improvement-log/improvement-log-20260806-162903.md
+?? improvement-log/improvement-log-20260806-173418.md
+?? improvement-log/improvement-log-20260806-193000.md
+?? improvement-log/improvement-log-20260807-003000.md
+?? improvement-log/improvement-log-20260807-035422.md
+?? improvement-log/improvement-log-20260807-035432.md
+?? improvement-log/improvement-log-20260807-052227.md
+?? src/dirs-expand.test.ts

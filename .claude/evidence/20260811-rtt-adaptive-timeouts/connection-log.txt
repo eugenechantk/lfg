@@ -1,0 +1,126 @@
+17:49:16.481 APP === launch v1.2.0 (1) — 2026-08-11 17:49:16.481 +0800 ===
+17:49:55.201 APP === launch v1.2.0 (1) — 2026-08-11 17:49:55.201 +0800 ===
+17:49:55.478 NET path=satisfied ifaces=wifi v4=false v6=false
+17:49:55.483 LNK [127.0.0.1:8777] idle -> connecting
+17:49:55.483 STA [127.0.0.1:8777] unknown -> connecting via connecting
+17:49:55.484 STR [127.0.0.1:8777] dial since=0 grade=unknown (no samples) stale=20s
+17:49:55.812 STR [127.0.0.1:8777] headers status=200 in 0.33s
+17:49:55.813 STR [127.0.0.1:8777] RESYNC head=112201 (cursor unserviceable)
+17:49:55.814 STR [127.0.0.1:8777] hb head=112201 gap=0.0s
+17:49:55.818 STA [127.0.0.1:8777] connecting -> live via receiving
+17:49:55.819 LNK [127.0.0.1:8777] connecting -> catchingUp
+17:49:55.822 LNK [127.0.0.1:8777] catchingUp -> live
+17:50:13.782 APP === launch v1.2.0 (1) — 2026-08-11 17:50:13.782 +0800 ===
+17:50:14.121 NET path=satisfied ifaces=wifi v4=false v6=false
+17:50:14.125 LNK [127.0.0.1:8777] idle -> connecting
+17:50:14.125 STA [127.0.0.1:8777] unknown -> connecting via connecting
+17:50:14.126 STR [127.0.0.1:8777] dial since=112201 grade=unknown (no samples) stale=20s
+17:50:14.446 STR [127.0.0.1:8777] headers status=200 in 0.32s
+17:50:14.448 STR [127.0.0.1:8777] first event seq=112202
+17:50:14.448 STA [127.0.0.1:8777] connecting -> live via receiving
+17:50:14.449 LNK [127.0.0.1:8777] connecting -> catchingUp
+17:50:14.452 STR [127.0.0.1:8777] hb head=112216 gap=0.0s
+17:50:14.476 LNK [127.0.0.1:8777] catchingUp -> live
+17:50:24.296 STR [127.0.0.1:8777] hb head=112220 gap=8.9s
+17:50:25.080 KAL [127.0.0.1:8777] rtt=311ms head=112223
+17:50:25.081 KAL [127.0.0.1:8777] path unknown -> relayed (grade=relayed rtt=311ms); poll=12s stale=40s
+17:50:34.298 STR [127.0.0.1:8777] hb head=112230 gap=0.7s
+17:50:36.032 KAL [127.0.0.1:8777] rtt=306ms head=112232
+17:50:44.300 STR [127.0.0.1:8777] hb head=112239 gap=0.8s
+17:50:46.839 KAL [127.0.0.1:8777] rtt=306ms head=112243
+17:57:15.593 APP === launch v1.2.0 (1) — 2026-08-11 17:57:15.593 +0800 ===
+17:57:16.113 NET path=satisfied ifaces=wifi v4=false v6=false
+17:57:16.132 LNK [127.0.0.1:8777] idle -> connecting
+17:57:16.133 STA [127.0.0.1:8777] unknown -> connecting via connecting
+17:57:16.134 STR [127.0.0.1:8777] dial since=112232 grade=unknown (no samples) stale=20s
+17:57:16.446 STR [127.0.0.1:8777] headers status=200 in 0.31s
+17:57:16.450 STR [127.0.0.1:8777] first event seq=112233
+17:57:16.455 STA [127.0.0.1:8777] connecting -> live via receiving
+17:57:16.459 LNK [127.0.0.1:8777] connecting -> catchingUp
+17:57:16.480 STR [127.0.0.1:8777] hb head=112477 gap=0.0s
+17:57:16.786 LNK [127.0.0.1:8777] catchingUp -> live
+17:57:26.298 STR [127.0.0.1:8777] hb head=112480 gap=5.6s
+17:57:26.624 KAL [127.0.0.1:8777] rtt=313ms head=112480
+17:57:26.625 KAL [127.0.0.1:8777] path unknown -> relayed (grade=relayed rtt=313ms); poll=12s stale=40s
+17:57:36.298 STR [127.0.0.1:8777] hb head=112482 gap=3.7s
+17:57:36.958 KAL [127.0.0.1:8777] rtt=311ms head=112482
+17:57:46.299 STR [127.0.0.1:8777] hb head=112483 gap=6.7s
+17:57:47.402 KAL [127.0.0.1:8777] rtt=307ms head=112483
+17:57:56.300 STR [127.0.0.1:8777] hb head=112487 gap=2.6s
+17:57:57.718 KAL [127.0.0.1:8777] rtt=308ms head=112487
+17:58:06.301 STR [127.0.0.1:8777] hb head=112487 gap=10.0s
+17:58:08.653 KAL [127.0.0.1:8777] rtt=306ms head=112491
+17:58:09.062 STR [127.0.0.1:8777] closed cleanly after 53s — 259 events, 6 heartbeats
+17:58:09.065 LNK [127.0.0.1:8777] live -> connecting
+17:58:09.066 STA [127.0.0.1:8777] live -> connecting via connecting
+17:58:09.067 STR [127.0.0.1:8777] dial since=112491 grade=relayed rtt=308ms stale=40s
+17:58:09.075 STR [127.0.0.1:8777] ERROR after 0.0s — URLError.-1004 cannotConnectToHost — Could not connect to the server.
+17:58:09.082 STA [127.0.0.1:8777] connecting -> degraded(Connection lost) via failed(Connection lost)
+17:58:09.082 LNK [127.0.0.1:8777] backoff 1s before attempt 1
+17:58:09.084 LNK [127.0.0.1:8777] connecting -> backoff(1)
+17:58:10.143 LNK [127.0.0.1:8777] backoff(1) -> connecting
+17:58:10.145 STR [127.0.0.1:8777] dial since=112491 grade=relayed rtt=308ms stale=40s
+17:58:10.150 STR [127.0.0.1:8777] ERROR after 0.0s — URLError.-1004 cannotConnectToHost — Could not connect to the server.
+17:58:10.151 LNK [127.0.0.1:8777] backoff 2s before attempt 2
+17:58:10.152 LNK [127.0.0.1:8777] connecting -> backoff(2)
+17:58:12.238 LNK [127.0.0.1:8777] backoff(2) -> connecting
+17:58:12.240 STR [127.0.0.1:8777] dial since=112491 grade=relayed rtt=308ms stale=40s
+17:58:12.244 STR [127.0.0.1:8777] ERROR after 0.0s — URLError.-1004 cannotConnectToHost — Could not connect to the server.
+17:58:12.245 LNK [127.0.0.1:8777] backoff 5s before attempt 3
+17:58:12.245 LNK [127.0.0.1:8777] connecting -> backoff(3)
+17:58:17.469 LNK [127.0.0.1:8777] backoff(3) -> connecting
+17:58:17.471 STR [127.0.0.1:8777] dial since=112491 grade=relayed rtt=308ms stale=40s
+17:58:17.799 STR [127.0.0.1:8777] headers status=200 in 0.33s
+17:58:17.802 STR [127.0.0.1:8777] first event seq=112492
+17:58:17.803 STR [127.0.0.1:8777] hb head=112493 gap=0.0s
+) -> live via receiving
+17:58:17.805 LNK [127.0.0.1:8777] connecting -> catchingUp
+17:58:17.825 LNK [127.0.0.1:8777] catchingUp -> live
+17:58:19.039 KAL [127.0.0.1:8777] rtt=306ms head=112493
+17:58:27.646 STR [127.0.0.1:8777] hb head=112495 gap=3.1s
+17:58:29.786 KAL [127.0.0.1:8777] rtt=309ms head=112500
+17:58:37.648 STR [127.0.0.1:8777] hb head=112504 gap=6.0s
+17:58:40.699 KAL [127.0.0.1:8777] rtt=315ms head=112504
+17:58:47.647 STR [127.0.0.1:8777] hb head=112510 gap=4.1s
+17:58:51.035 KAL [127.0.0.1:8777] rtt=305ms head=112512
+17:58:52.265 STR [127.0.0.1:8777] closed cleanly after 35s — 23 events, 4 heartbeats
+17:58:52.268 LNK [127.0.0.1:8777] live -> connecting
+17:58:52.268 STA [127.0.0.1:8777] live -> connecting via connecting
+17:58:52.269 STR [127.0.0.1:8777] dial since=112514 grade=relayed rtt=306ms stale=40s
+17:58:52.273 STR [127.0.0.1:8777] ERROR after 0.0s — URLError.-1004 cannotConnectToHost — Could not connect to the server.
+17:58:52.281 STA [127.0.0.1:8777] connecting -> degraded(Connection lost) via failed(Connection lost)
+17:58:52.282 LNK [127.0.0.1:8777] backoff 1s before attempt 1
+17:58:52.282 LNK [127.0.0.1:8777] connecting -> backoff(1)
+17:58:53.343 LNK [127.0.0.1:8777] backoff(1) -> connecting
+17:58:53.345 STR [127.0.0.1:8777] dial since=112514 grade=relayed rtt=306ms stale=40s
+17:58:53.350 STR [127.0.0.1:8777] ERROR after 0.0s — URLError.-1004 cannotConnectToHost — Could not connect to the server.
+17:58:53.351 LNK [127.0.0.1:8777] backoff 2s before attempt 2
+17:58:53.352 LNK [127.0.0.1:8777] connecting -> backoff(2)
+17:58:55.484 LNK [127.0.0.1:8777] backoff(2) -> connecting
+17:58:55.486 STR [127.0.0.1:8777] dial since=112514 grade=relayed rtt=306ms stale=40s
+17:58:55.502 STR [127.0.0.1:8777] headers status=200 in 0.02s
+17:58:55.503 STR [127.0.0.1:8777] first event seq=112515
+17:58:55.504 STA [127.0.0.1:8777] degraded(Connection lost) -> live via receiving
+17:58:55.505 STR [127.0.0.1:8777] hb head=112516 gap=0.0s
+17:58:55.506 LNK [127.0.0.1:8777] connecting -> catchingUp
+17:58:55.525 LNK [127.0.0.1:8777] catchingUp -> live
+17:59:01.540 KAL [127.0.0.1:8777] rtt=8ms head=112521
+17:59:05.500 STR [127.0.0.1:8777] hb head=112521 gap=7.1s
+17:59:11.737 KAL [127.0.0.1:8777] rtt=4ms head=112524
+17:59:15.501 STR [127.0.0.1:8777] hb head=112528 gap=2.4s
+17:59:22.125 KAL [127.0.0.1:8777] rtt=6ms head=112532
+17:59:22.126 KAL [127.0.0.1:8777] path relayed -> direct (grade=direct rtt=8ms); poll=4s stale=20s
+17:59:25.504 STR [127.0.0.1:8777] hb head=112535 gap=2.3s
+17:59:32.430 KAL [127.0.0.1:8777] rtt=4ms head=112540
+17:59:35.504 STR [127.0.0.1:8777] hb head=112542 gap=1.3s
+17:59:42.639 KAL [127.0.0.1:8777] rtt=4ms head=112551
+17:59:45.506 STR [127.0.0.1:8777] hb head=112553 gap=0.8s
+17:59:52.965 KAL [127.0.0.1:8777] rtt=7ms head=112554
+17:59:55.506 STR [127.0.0.1:8777] hb head=112554 gap=10.0s
+18:00:03.057 KAL [127.0.0.1:8777] rtt=7ms head=112558
+18:00:05.513 STR [127.0.0.1:8777] hb head=112558 gap=6.7s
+18:00:08.044 STR [127.0.0.1:8777] closed cleanly after 73s — 50 events, 8 heartbeats
+18:00:08.045 LNK [127.0.0.1:8777] live -> connecting
+18:00:08.046 STA [127.0.0.1:8777] live -> connecting via connecting
+18:00:08.046 STR [127.0.0.1:8777] dial since=112564 grade=direct rtt=6ms stale=20s
+18:00:08.048 STR [127.0.0.1:8777] ERROR after 0.0s — URLError.-1004 cannotConnectToHost — Could not connect to the server.
