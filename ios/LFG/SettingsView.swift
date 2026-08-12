@@ -116,22 +116,6 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink {
-                        HiddenDirectoriesView()
-                    } label: {
-                        LabeledContent {
-                            Text(settings.hiddenDirs.isEmpty ? "None" : "\(settings.hiddenDirs.paths.count)")
-                                .foregroundStyle(.secondary)
-                        } label: {
-                            Label("Hidden directories", systemImage: "eye.slash")
-                        }
-                    }
-                    .accessibilityIdentifier("hiddenDirectoriesLink")
-                } header: { Text("Filtering") } footer: {
-                    Text("Sessions running in a hidden directory (and its subdirectories) are kept out of the list, the counts and search on this device. They keep running, and a notification still opens them.")
-                }
-
-                Section {
-                    NavigationLink {
                         ConnectionLogView()
                     } label: {
                         Label("Connection Log", systemImage: "waveform.path.ecg")
@@ -186,8 +170,12 @@ struct SettingsView: View {
     }
 }
 
-/// The directory mute list: which working directories are kept out of this
+/// The directory filter panel: which working directories are kept out of this
 /// device's session list, plus the two ways to add one.
+///
+/// Reached from the session list's header button, NOT from Settings — which
+/// directories you want to look at is a display choice that changes with the
+/// task, like grouping and sorting, not a client setting you configure once.
 ///
 /// The picker of seen directories is the important half. The motivating case —
 /// `gbrain` autopilot filling the list with `~/.gbrain` sessions — is a directory
@@ -226,7 +214,7 @@ struct HiddenDirectoriesView: View {
                     }
                 }
             } header: { Text("Hidden") } footer: {
-                Text("Swipe a directory to show it again. Hiding covers subdirectories too.")
+                Text("Sessions in a hidden directory (and its subdirectories) stay out of the list, the counts and search on this device. They keep running, and a notification still opens them. Swipe a directory to show it again.")
             }
 
             if !addable.isEmpty {
@@ -277,7 +265,7 @@ struct HiddenDirectoriesView: View {
                 Text("An absolute path on the host — this device can't resolve ~ against a host's home directory. Or a pattern: * matches anything, ? one character. Use a pattern for directories that change every run, e.g. */gbrain-claude-cli-cwd-* for gbrain autopilot's temp folders.")
             }
         }
-        .navigationTitle("Hidden directories")
+        .navigationTitle("Filter directories")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -56,6 +56,9 @@ struct SessionListView: View {
     @Binding var focusNewSessionComposer: Bool
     @State private var searchText = ""
     @State private var sortMenuHighlight = false
+    /// Directory-filter panel. A sheet rather than a menu because the panel needs
+    /// a text field for a path or pattern, which a `Menu` cannot host.
+    @State private var showDirectoryFilter = false
 
     /// Collapsible UI state is in-memory per the current run. Sections default
     /// expanded, and only store their id here after the user collapses them.
@@ -473,52 +476,45 @@ struct SessionListView: View {
         }
     }
 
-    /// Header chip: "N hidden", tap to unhide any muted directory.
+    /// Header button for directory filtering — always present, badged with the
+    /// number of live sessions currently hidden.
     ///
-    /// A filter with no visible trace is a bug report waiting to happen — months
-    /// after muting `~/.gbrain` the sessions are simply *absent* and nothing says
-    /// why. It sits in the header rather than at the foot of the list because the
-    /// list is long and paginated: a footer under the closed section is a
-    /// disclosure nobody ever scrolls to. Absent entirely when nothing is hidden.
-    @ViewBuilder
-    private var hiddenDirectoriesChip: some View {
+    /// This is a **display** control, not configuration: which directories you
+    /// want to look at right now changes with what you're doing, in the same
+    /// breath as grouping and sorting, so it belongs beside them in the header
+    /// rather than several taps away in Settings.
+    ///
+    /// Being permanent also makes it the feature's disclosure. A filter with no
+    /// visible trace is a bug report waiting to happen — months after muting
+    /// `~/.gbrain` the sessions are simply *absent* and nothing says why. The
+    /// badge answers that at a glance, and an always-present button means the
+    /// control never has to be discovered twice.
+    private var hiddenDirectoriesButton: some View {
         let count = store.hiddenLiveSessionCount
-        // Shown whenever anything is muted, even with no live session in those
-        // directories right now — the point is to disclose that a filter is on,
-        // and a disclosure that comes and goes is worse than none.
-        if !settings.hiddenDirs.isEmpty {
-            Menu {
-                Section("Hidden") {
-                    ForEach(settings.hiddenDirs.paths, id: \.self) { dir in
-                        Button {
-                            settings.unhideDirectory(dir)
-                        } label: {
-                            Label("Show \(HiddenDirs.displayName(for: dir))", systemImage: "eye")
-                        }
-                    }
+        return Button {
+            showDirectoryFilter = true
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: count > 0 ? "eye.slash.fill" : "eye.slash")
+                    .font(.system(size: 13, weight: .medium))
+                if count > 0 {
+                    Text("\(count)").font(.system(size: 13, weight: .semibold))
                 }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "eye.slash").font(.system(size: 12, weight: .medium))
-                    if count > 0 {
-                        Text("\(count)").font(.system(size: 13, weight: .semibold))
-                    }
-                }
-                .foregroundStyle(Tokens.labelSecondary)
-                // The header row squeezes its chrome to fit the status line; without
-                // `fixedSize` the count is the first thing compressed away, leaving a
-                // bare icon that discloses the filter but not its size.
-                .fixedSize()
-                .padding(.horizontal, count > 0 ? 11 : 0)
-                .frame(minWidth: 38, minHeight: 38)
-                .glassOrRaised(in: Capsule(), fallback: Tokens.raised, interactive: true)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(count > 0
-                ? "\(count) running sessions hidden"
-                : "Hidden directories, none running")
-            .accessibilityIdentifier("hiddenSessionsChip")
+            .foregroundStyle(count > 0 ? Tokens.accent : Tokens.label)
+            // The header squeezes its chrome to fit the status line; without
+            // `fixedSize` the badge is the first thing compressed away, leaving a
+            // bare icon that hides the one number worth showing.
+            .fixedSize()
+            .padding(.horizontal, count > 0 ? 11 : 0)
+            .frame(minWidth: 38, minHeight: 38)
+            .glassOrRaised(in: Capsule(), fallback: Tokens.raised, interactive: true)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(count > 0
+            ? "Filter directories, \(count) running sessions hidden"
+            : "Filter directories")
+        .accessibilityIdentifier("directoryFilterButton")
     }
 
     private func agentDisclosure(parentId: String, children: [Session]) -> some View {
@@ -733,6 +729,17 @@ struct SessionListView: View {
         // field with no results and no keystroke left to trigger a re-query.
         // `setSearchQuery` no-ops when the query is unchanged.
         .onAppear { store.setSearchQuery(searchText) }
+        .sheet(isPresented: $showDirectoryFilter) {
+            NavigationStack {
+                HiddenDirectoriesView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showDirectoryFilter = false }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
+        }
     }
 
     private func openNewSession(focusComposer: Bool) {
@@ -757,7 +764,7 @@ struct SessionListView: View {
                 HStack(spacing: 10) {
                     // No search toggle here anymore — search lives in the bottom
                     // bar, where the system puts it on iOS 26.
-                    hiddenDirectoriesChip
+                    hiddenDirectoriesButton
                     groupSortMenu(groupMode: groupMode, sortMode: sortMode)
                     headerButton("gearshape", size: 16, weight: .regular) { showSettings = true }
                         .accessibilityIdentifier("sessionSettingsButton")

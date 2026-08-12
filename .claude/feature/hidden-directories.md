@@ -106,6 +106,24 @@ Deliberately **not** applied at:
 - The new-session directory picker. Hiding `~/.gbrain` from the list is not a
   declaration that you'll never start a session there by hand.
 
+### Where the control lives: the top bar, not Settings
+
+Eugene's correction, and it was right: **filtering is a display option, not a client
+setting.** Which directories you want to look at changes with what you're doing —
+the same kind of choice as grouping and sorting, which already live in the view's
+chrome. Settings is for things you configure once (hosts, default owner,
+notifications). Burying a per-task control there costs several taps every time.
+
+So on both clients the entry point is a top-bar button that carries the count, and
+the Settings entry is gone entirely. Being permanent also makes the button the
+feature's disclosure, which replaced two earlier one-off indicators (the iOS
+conditional chip and the desktop list-header notice) — one control that both opens
+the panel and says what it's doing beats a control plus a separate sign that a
+filter exists.
+
+The panel is a **sheet** on iOS and a **popover** on macOS rather than a menu,
+because it needs a text field for a path or pattern and a `Menu` cannot host one.
+
 ### Affordances
 
 1. **Row swipe → "Hide"** in the session list. Hides that session's directory,
@@ -147,6 +165,57 @@ Live against the real host (iPhone 17 Pro sim, `flowdeck`), evidence in
 The autopilot temp-dir pattern was exercised end-to-end: swipe → "Hide all like
 this" → `*/gbrain-claude-cli-cwd-*` stored → the live temp-dir session disappeared
 from the list and from the "directories in use" picker.
+
+## The macOS desktop client
+
+Same primitive, same rules — because it is literally the same file.
+`desktop/build.sh` compiles `ios/LFGCore/Sources/LFGCore/HiddenDirs.swift` into the
+single-file app rather than copying it. Two clients quietly disagreeing about which
+sessions a pattern hides would be a bug nobody thinks to look for, and `HiddenDirs`
+is Foundation-only, so it needs no other part of the package. Its LFGCore unit tests
+therefore cover the desktop build too.
+
+What is desktop-specific:
+
+| Concern | Decision |
+| --- | --- |
+| Persistence | `~/.config/lfg-desktop/hidden-dirs.json`, beside `hosts.json` — so `LFG_DESKTOP_CONFIG_DIR` isolates it for automation exactly like the host list, and it stays a hand-editable file. Decoding accepts a bare array as well as `{"hidden":[…]}`, and a corrupt file hides nothing rather than crashing. |
+| Where the filter applies | `SessionStore.items` — the one point the window's sections, its counts, **and the menu-bar projection** all derive from. Filtering per-view would have let the menu bar keep advertising sessions the window refuses to show; a test asserts it can't. Plus `searchClosed`, since search reaches every transcript rather than the loaded pages. |
+| Affordance | Row context menu → "Hide *dir*", plus "Hide all like this (*pattern*)" on a per-run scratch directory. Settings becomes a two-tab pane (Hosts / Filtering); `HostsSettingsView` is untouched, which matters in a file several agents edit concurrently. |
+| Disclosure | The toolbar button itself (`eye.slash`, filled when hiding). It replaced an earlier list-header notice row. |
+| Toolbar budget | Adding the button cost real layout work, exactly as `.claude/CLAUDE.md` warns. `--window-fit` showed the first attempt dropping **three** items into `»` at the 440pt minimum and the search field at 760pt. Fixes: the compact toolbar reaches the panel through the **grouping menu** instead of a fifth item (it has ~140pt for everything and already spent 125), and `compactToolbarWidth` rose 760 → 820 so the full-size cluster only appears where it fits. Verified fitting at 440/470/640/760/810/820/900/1200/1600. **Re-measure after touching any toolbar item.** |
+| Not shared with iOS | Hiding is a per-device viewing preference, and the desktop app is deliberately the surface where you can still see everything. |
+
+### Verifying it — `--window-shot` cannot do this job
+
+`lfg --window-shot` builds the window with **fixture** sessions. It proves layout
+(the notice row renders, nothing overflows) and nothing whatsoever about filtering
+real data — a shot taken with gbrain muted looked plausible while showing four
+invented rows.
+
+So the feature ships with a live headless probe instead, `lfg --hidden-dirs-probe`,
+which refreshes against the real hosts and reports per-entry hit counts. Run with
+the two gbrain entries muted:
+
+```json
+{"ok":true,"hostsReachable":1,
+ "liveTotal":30,"liveHidden":4,"liveVisible":26,"hiddenLiveCount":4,
+ "entries":[{"entry":"/Users/eugenechan/.gbrain","hides":2},
+            {"entry":"*/gbrain-claude-cli-cwd-*","hides":2}],
+ "visibleDirs":["/Users/eugenechan","/Users/eugenechan/dev/inbox", …]}
+```
+
+Both entries earn their place, `visibleDirs` no longer contains either gbrain
+directory, and `hiddenLiveCount` — the number the UI shows — agrees with the
+independently computed `liveHidden`. Per-entry counts matter: they make a pattern
+that silently matches nothing show up as a `0` instead of disappearing into a total.
+
+Desktop results: `--desktop-feature-test` 69 assertions pass (13 new: persistence
+round-trip, hand-edited/corrupt files, the filter, prefix-sibling survival, and
+menu-bar parity). Screenshots in
+`.claude/evidence/20260811-hidden-directories/desktop-{before,after}-hiding.png`
+(the "after" one is the fixture-data shot — it evidences the notice row, not the
+filtering).
 
 ## Out of scope (flagged, not silently dropped)
 
