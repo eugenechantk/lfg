@@ -10,11 +10,19 @@ MODULE_CACHE="build/ModuleCache"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$MODULE_CACHE"
 
+# HiddenDirs.swift is compiled in from the iOS client's LFGCore rather than
+# copied: the directory mute list is one primitive with one set of matching
+# rules (segment boundaries, case-insensitivity, glob patterns), and two
+# clients quietly disagreeing about which sessions a pattern hides is a bug
+# nobody would think to look for. Its unit tests live with LFGCore
+# (`cd ios/LFGCore && swift test`) and cover this build too. Foundation-only,
+# so it needs no other part of the package.
 swiftc -O -parse-as-library \
   -module-cache-path "$MODULE_CACHE" \
   -target arm64-apple-macosx26.0 \
   -o "$APP/Contents/MacOS/lfg" \
-  LFGSessions.swift
+  LFGSessions.swift \
+  ../ios/LFGCore/Sources/LFGCore/HiddenDirs.swift
 
 # App icon: reuse the iOS client's 1024px icon, converted to .icns.
 if [[ -f "$ICON_SRC" ]]; then

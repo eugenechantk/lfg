@@ -4,8 +4,10 @@
 //
 //   - Session on THIS machine with a tmux pane  -> iTerm2 window attached to
 //     that same tmux session (`tmux attach -t <name>`).
-//   - Session on ANOTHER machine with a tmux pane -> iTerm2 window ssh-attached
-//     to that same remote tmux session.
+//   - Session on ANOTHER machine with a tmux pane -> iTerm2 window attached to
+//     that same remote tmux session over mosh (falling back to ssh when mosh
+//     isn't installed). mosh survives IP changes, sleep, and packet loss, so
+//     the window outlives roaming between networks.
 //   - Session with no tmux pane -> iTerm2 window with a fresh local tmux
 //     session running `claude --resume <id>` in the session's cwd. Works
 //     because ~/.claude/projects syncs between hosts, so the transcript is
@@ -312,6 +314,7 @@ enum Config {
         )
     }
     static var hostsFile: URL { dir.appendingPathComponent("hosts.json") }
+    static var hiddenDirsFile: URL { dir.appendingPathComponent("hidden-dirs.json") }
 
     struct HostEntry: Codable, Equatable, Identifiable {
         var url: String
@@ -437,6 +440,50 @@ enum Config {
         let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
     }
+
+    // MARK: Hidden directories
+
+    /// The directory mute list, persisted beside `hosts.json` in the same
+    /// config dir — so `LFG_DESKTOP_CONFIG_DIR` isolates it for UI automation
+    /// exactly like the host list, and it is a plain editable file.
+    ///
+    /// Deliberately NOT shared with the iOS client: hiding is a per-device
+    /// viewing preference, and the whole point of the desktop app is to be the
+    /// surface where you can still see everything.
+    struct HiddenDirsFile: Codable { var hidden: [String] }
+
+    static func loadHiddenDirs() -> HiddenDirs { loadHiddenDirs(from: dir) }
+
+    static func loadHiddenDirs(from directory: URL) -> HiddenDirs {
+        let file = directory.appendingPathComponent("hidden-dirs.json")
+        guard let data = try? Data(contentsOf: file) else { return HiddenDirs() }
+        return decodeHiddenDirs(data)
+    }
+
+    static func saveHiddenDirs(_ dirs: HiddenDirs) throws { try saveHiddenDirs(dirs, to: dir) }
+
+    static func saveHiddenDirs(_ dirs: HiddenDirs, to directory: URL) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try encodeHiddenDirs(dirs)
+            .write(to: directory.appendingPathComponent("hidden-dirs.json"), options: .atomic)
+    }
+
+    /// Tolerant of a hand-edited file: a bare JSON array works as well as the
+    /// `{"hidden": […]}` object this writes, and `HiddenDirs` drops entries that
+    /// aren't absolute paths or patterns rather than storing them broken.
+    static func decodeHiddenDirs(_ data: Data) -> HiddenDirs {
+        if let object = try? JSONDecoder().decode(HiddenDirsFile.self, from: data) {
+            return HiddenDirs(object.hidden)
+        }
+        if let array = try? JSONDecoder().decode([String].self, from: data) {
+            return HiddenDirs(array)
+        }
+        return HiddenDirs()
+    }
+
+    static func encodeHiddenDirs(_ dirs: HiddenDirs) throws -> Data {
+        try JSONEncoder().encode(HiddenDirsFile(hidden: dirs.paths))
+    }
 }
 
 // MARK: - Store
@@ -444,6 +491,8 @@ enum Config {
 @MainActor
 final class SessionStore: ObservableObject {
     @Published var configuredHosts: [Config.HostEntry] = Config.loadHosts()
+    /// Directories muted on THIS Mac — see `Config.loadHiddenDirs`.
+    @Published var hiddenDirs: HiddenDirs = Config.loadHiddenDirs()
     @Published var hosts: [HostState] = []
     @Published var duplicateHostsByURL: [String: HostState] = [:]
     @Published var refreshing = false
@@ -585,7 +634,12 @@ final class SessionStore: ObservableObject {
                     needsInput: false))
             }
         }
-        searchClosed = out.sorted { ($0.session.lastActivityAt ?? 0) > ($1.session.lastActivityAt ?? 0) }
+        // Search reaches every transcript each host has, not the pages already
+        // loaded, so it needs the mute list applied independently — otherwise a
+        // muted directory reappears the moment you type.
+        searchClosed = Self.visible(
+            out.sorted { ($0.session.lastActivityAt ?? 0) > ($1.session.lastActivityAt ?? 0) },
+            hiddenDirs: hiddenDirs)
     }
 
     var items: [SessionItem] {
@@ -617,7 +671,57 @@ final class SessionStore: ObservableObject {
                 order.append(item.id)
             }
         }
-        return order.compactMap { byId[$0] }
+        // The mute list is applied HERE, at the single point every surface
+        // derives from — the main window's sections and counts, and the
+        // menu-bar projection. Filtering per-view would have let the menu bar
+        // keep advertising sessions the window refuses to show.
+        return Self.visible(order.compactMap { byId[$0] }, hiddenDirs: hiddenDirs)
+    }
+
+    /// Pure so the feature test can exercise it without a live store or network.
+    static func visible(_ items: [SessionItem], hiddenDirs: HiddenDirs) -> [SessionItem] {
+        guard !hiddenDirs.isEmpty else { return items }
+        return items.filter { !hiddenDirs.hides(cwd: $0.session.cwd) }
+    }
+
+    /// Live sessions the mute list is holding back — the number the disclosure
+    /// shows. Closed rows are excluded: counting them would make the figure
+    /// climb as closed pages load, and a count that moves on its own teaches
+    /// you to ignore it.
+    var hiddenLiveCount: Int {
+        guard !hiddenDirs.isEmpty else { return 0 }
+        return hosts
+            .flatMap(\.sessions)
+            .filter { !$0.closed && hiddenDirs.hides(cwd: $0.cwd) }
+            .count
+    }
+
+    /// Every working directory this app has seen a session in, across all hosts,
+    /// hidden ones included — they are the entries being managed. Feeds the
+    /// settings picker so muting a directory is a click, not a typed path.
+    var knownDirectories: [String] {
+        var seen = Set<String>()
+        for host in hosts {
+            for session in host.sessions {
+                if let p = session.cwd.flatMap(HiddenDirs.normalize) { seen.insert(p) }
+            }
+        }
+        for item in searchClosed {
+            if let p = item.session.cwd.flatMap(HiddenDirs.normalize) { seen.insert(p) }
+        }
+        return seen.sorted {
+            (HiddenDirs.displayName(for: $0).lowercased(), $0)
+                < (HiddenDirs.displayName(for: $1).lowercased(), $1)
+        }
+    }
+
+    func hideDirectory(_ path: String) { setHiddenDirs(hiddenDirs.adding(path)) }
+    func unhideDirectory(_ path: String) { setHiddenDirs(hiddenDirs.removing(path)) }
+
+    private func setHiddenDirs(_ next: HiddenDirs) {
+        guard next != hiddenDirs else { return }
+        hiddenDirs = next
+        try? Config.saveHiddenDirs(next)
     }
 
     var unreachableHosts: [String] {
@@ -1276,7 +1380,7 @@ enum DesktopFeatureTestCLI {
         guard CommandLine.arguments.dropFirst().first == "--desktop-feature-test" else { return }
         do {
             try run()
-            print("{\"ok\":true,\"tests\":37}")
+            print("{\"ok\":true,\"tests\":\(assertionCount)}")
             fflush(stdout)
             Darwin.exit(0)
         } catch {
@@ -1311,6 +1415,100 @@ enum DesktopFeatureTestCLI {
         try expect(roundTripped.ssh == "me@studio", "named config keeps SSH target")
         try expect(roundTripped.displayLabel(reportedHostName: "Mac-Studio.local") == "Creative Studio",
                    "display name wins over reported hostname")
+
+        // Remote attach prefers mosh, and must wrap the remote command in an
+        // explicit `sh -c`: mosh execs its `--` argv with no shell and sshd's
+        // PATH has no Homebrew, so a bare `tmux` is not found.
+        let moshAttach = Opener.remoteAttachCommand(
+            sshTarget: "me@studio",
+            tmuxName: "lfg-abc123",
+            moshPath: "/opt/homebrew/bin/mosh"
+        )
+        try expect(moshAttach.hasPrefix("'/opt/homebrew/bin/mosh' "), "remote attach runs mosh when installed")
+        try expect(moshAttach.contains("'--server=PATH=/opt/homebrew/bin:/usr/local/bin:$PATH exec mosh-server'"),
+                   "mosh-server is resolved through the remote login shell's PATH")
+        try expect(moshAttach.contains("'--ssh=ssh -o ConnectTimeout=5'"), "mosh keeps the fail-fast connect timeout")
+        try expect(moshAttach.contains(" 'me@studio' -- /bin/sh -c "), "mosh wraps the remote command in a shell")
+        try expect(moshAttach.contains("attach-session -t 'lfg-abc123'"), "mosh attaches the requested tmux session")
+
+        let sshAttach = Opener.remoteAttachCommand(
+            sshTarget: "me@studio",
+            tmuxName: "lfg-abc123",
+            moshPath: nil
+        )
+        try expect(sshAttach.hasPrefix("ssh -t -o ConnectTimeout=5 'me@studio' "),
+                   "remote attach falls back to ssh when mosh is missing")
+        try expect(sshAttach.contains("attach-session -t 'lfg-abc123'"), "ssh fallback attaches the same session")
+        try expect(!sshAttach.contains("mosh"), "ssh fallback doesn't reference mosh")
+
+        // Every attach hands the window size back to the client first. The pump's
+        // `resize-window` latches `window-size manual` on the far side, and a
+        // manual window ignores the attaching terminal forever — that is the
+        // "text doesn't wrap in the mosh window" bug. See `attachCommand`.
+        let localAttach = Opener.attachCommand(tmuxCommand: "'/opt/homebrew/bin/tmux'", tmuxName: "lfg-abc123")
+        try expect(localAttach.contains("set-option -w -t 'lfg-abc123' window-size latest"),
+                   "attach releases the window back to the client's size")
+        try expect(localAttach.hasSuffix("';' attach-session -t 'lfg-abc123'"),
+                   "the tmux command separator is a single-quoted argument — iTerm tokenizes, no shell")
+        try expect(localAttach.range(of: "window-size latest")!.upperBound
+                    < localAttach.range(of: "attach-session")!.lowerBound,
+                   "the option flip precedes the attach, so the attach is what resizes the window")
+        for remote in [moshAttach, sshAttach] {
+            try expect(remote.contains("set-option -w -t 'lfg-abc123' window-size latest"),
+                       "remote attach releases the window too — this is where the bug shows up")
+        }
+
+        // MARK: Hidden directories
+        //
+        // The matching rules themselves are tested with the primitive in
+        // LFGCore (`cd ios/LFGCore && swift test` — HiddenDirsTests), which this
+        // build compiles the very same file from. What is desktop-specific, and
+        // therefore tested here, is the persistence format and the fact that the
+        // filter is applied at the one point every surface derives from.
+        let hiddenRoundTrip = Config.decodeHiddenDirs(
+            try Config.encodeHiddenDirs(HiddenDirs(["/Users/me/.gbrain", "*/gbrain-claude-cli-cwd-*"])))
+        try expect(hiddenRoundTrip.paths == ["/Users/me/.gbrain", "*/gbrain-claude-cli-cwd-*"],
+                   "hidden directories round-trip, patterns included")
+        try expect(Config.decodeHiddenDirs(Data(#"["/Users/me/.gbrain"]"#.utf8)).paths
+                       == ["/Users/me/.gbrain"],
+                   "a hand-edited bare array is accepted as well as the object form")
+        try expect(Config.decodeHiddenDirs(Data("not json".utf8)).isEmpty,
+                   "a corrupt mute list hides nothing rather than crashing the app")
+        try expect(Config.loadHiddenDirs(from: URL(fileURLWithPath: "/tmp/lfg-desktop-no-such-dir")).isEmpty,
+                   "a missing file means nothing is hidden")
+
+        // Persistence through the real file, in an isolated config dir.
+        let hiddenTmp = URL(fileURLWithPath: "/tmp/lfg-desktop-hidden-dirs-test", isDirectory: true)
+        try? FileManager.default.removeItem(at: hiddenTmp)
+        try Config.saveHiddenDirs(HiddenDirs(["/Users/me/.gbrain"]), to: hiddenTmp)
+        try expect(Config.loadHiddenDirs(from: hiddenTmp).hides(cwd: "/Users/me/.gbrain/vault"),
+                   "a saved mute list survives a reload and covers subdirectories")
+        try? FileManager.default.removeItem(at: hiddenTmp)
+
+        let mixed = [
+            menuTestItem(id: "real-work", lastActivity: 300, cwd: "/Users/me/dev/lfg"),
+            menuTestItem(id: "gbrain-stable", lastActivity: 200, cwd: "/Users/me/.gbrain"),
+            menuTestItem(id: "gbrain-autopilot", lastActivity: 100,
+                         cwd: "/private/var/folders/cd/xyz/T/gbrain-claude-cli-cwd-24267"),
+            menuTestItem(id: "sibling", lastActivity: 50, cwd: "/Users/me/.gbrainstorm")
+        ]
+        try expect(SessionStore.visible(mixed, hiddenDirs: HiddenDirs()).count == 4,
+                   "an empty mute list is inert")
+        let muted = HiddenDirs(["/Users/me/.gbrain", "*/gbrain-claude-cli-cwd-*"])
+        let survivors = SessionStore.visible(mixed, hiddenDirs: muted).map(\.session.id)
+        try expect(survivors == ["real-work", "sibling"],
+                   "both gbrain populations are hidden and nothing else is")
+        try expect(survivors.contains("sibling"),
+                   ".gbrainstorm shares a prefix with .gbrain and must survive")
+
+        // The menu bar reads the same filtered list as the window, so a muted
+        // session cannot linger in the menu-bar projection.
+        let mutedProjection = MenuBarSessionProjection(items: SessionStore.visible(mixed, hiddenDirs: muted))
+        let mutedMenuIds = (mutedProjection.needsInput + mutedProjection.running + mutedProjection.recent)
+            .map { $0.session.id }
+        try expect(!mutedMenuIds.contains("gbrain-stable") && !mutedMenuIds.contains("gbrain-autopilot"),
+                   "the menu bar cannot show a session the window hides")
+        try expect(mutedMenuIds.contains("real-work"), "real work still reaches the menu bar")
 
         let blankName = Config.HostEntry(url: "http://studio:8766", displayName: "  ")
         try expect(blankName.displayLabel(reportedHostName: "Mac-Studio.local") == "Mac-Studio",
@@ -1436,6 +1634,29 @@ enum DesktopFeatureTestCLI {
         try expect(longStatusWidth - shortStatusWidth > 180,
                    "long status display names retain their intrinsic width")
 
+        // A narrow window must not pay for host names: the compact cluster is
+        // dots only, so its width is the same no matter how long the names are.
+        let compactShort = statusBarWidth(displayNames: ["Studio", "Travel Mac"], compact: true)
+        let compactLong = statusBarWidth(displayNames: [
+            "Extremely Long Creative Production Mac Studio Host",
+            "Travel Mac"
+        ], compact: true)
+        try expect(abs(compactLong - compactShort) < 1,
+                   "compact status chips drop the labels, so host names cost no width")
+        try expect(compactShort < 40,
+                   "compact two-host status cluster stays dot-sized")
+
+        // Labels are dropped because they don't fit, not because the window is
+        // narrow — short host names survive a third-of-the-screen window.
+        try expect(ContentView.hostLabelsFit(clusterWidth: 67, windowWidth: 490),
+                   "short host names keep their labels at a third of a 13\" Air")
+        try expect(!ContentView.hostLabelsFit(clusterWidth: 67, windowWidth: 440),
+                   "at the 440pt minimum even short labels give way to dots")
+        try expect(!ContentView.hostLabelsFit(clusterWidth: 300, windowWidth: 700),
+                   "long host names drop to dots rather than push an item into the overflow")
+        try expect(ContentView.hostLabelsFit(clusterWidth: 300, windowWidth: 900),
+                   "a full-size window always keeps the labels")
+
         let needsInput = menuTestItem(
             id: "needs-input",
             lastActivity: 100,
@@ -1560,12 +1781,12 @@ enum DesktopFeatureTestCLI {
     }
 
     @MainActor
-    private static func statusBarWidth(displayNames: [String]) -> CGFloat {
+    private static func statusBarWidth(displayNames: [String], compact: Bool = false) -> CGFloat {
         let store = SessionStore()
         store.configuredHosts = displayNames.enumerated().map { index, name in
             Config.HostEntry(url: "http://host-\(index):8766", displayName: name)
         }
-        let content = DesktopConnectionStatusBar()
+        let content = DesktopConnectionStatusBar(compact: compact)
             .environmentObject(store)
             .fixedSize(horizontal: true, vertical: false)
         return ImageRenderer(content: content).nsImage?.size.width ?? 0
@@ -1576,13 +1797,14 @@ enum DesktopFeatureTestCLI {
         lastActivity: Double,
         busy: Bool = false,
         status: String? = nil,
-        needsInput: Bool = false
+        needsInput: Bool = false,
+        cwd: String = "/tmp/project"
     ) -> SessionItem {
         SessionItem(
             session: APISession(
                 agent: "claude",
                 pid: id.hashValue,
-                cwd: "/tmp/project",
+                cwd: cwd,
                 project: "project",
                 title: id,
                 sessionId: id,
@@ -1602,7 +1824,12 @@ enum DesktopFeatureTestCLI {
         )
     }
 
+    /// Counted at runtime — a hand-maintained literal silently under-reports
+    /// the moment someone adds or drops an assertion.
+    private nonisolated(unsafe) static var assertionCount = 0
+
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
+        assertionCount += 1
         guard condition() else { throw TestFailure(message) }
     }
 
@@ -1775,6 +2002,39 @@ enum Opener {
     static let tmux = resolve("tmux", fallback: "/opt/homebrew/bin/tmux")
     static let claude = resolve("claude", fallback: "/opt/homebrew/bin/claude")
 
+    /// Local mosh, when installed — nil means remote attach falls back to ssh.
+    /// mosh is preferred because it survives IP changes, sleep, and packet
+    /// loss, so an attached window outlives roaming between networks the way
+    /// ssh's single long-lived TCP stream can't. Same transport as the
+    /// `air`/`pro` aliases in ~/.zshrc.
+    static let mosh: String? = resolveOptional("mosh")
+
+    /// Badge text for a remote row: which transport its window will use.
+    static var remoteTransportLabel: String { mosh == nil ? "ssh" : "mosh" }
+
+    /// Resolving `mosh` spawns a login zsh, so warm the lazy static off the
+    /// main thread — otherwise the first list render blocks on it.
+    static func warmTransportProbe() {
+        Task.detached(priority: .utility) { _ = mosh }
+    }
+
+    /// PATH prefix for anything we run on the far side. Both transports land
+    /// the remote command in sshd's non-interactive env, whose PATH is
+    /// /usr/bin:/bin:/usr/sbin:/sbin with no Homebrew — so a bare `tmux` or
+    /// `mosh-server` is simply not found.
+    private static let remotePATH = "/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+    /// `--server` value for mosh. mosh hands this to the remote *login shell*,
+    /// so a PATH prefix works and is strictly better than the hardcoded
+    /// /opt/homebrew/bin/mosh-server the shell aliases use: it also resolves
+    /// on Intel Homebrew hosts, where it lives in /usr/local/bin.
+    private static let remoteMoshServer = "PATH=\(remotePATH) exec mosh-server"
+
+    private static func resolveOptional(_ tool: String) -> String? {
+        let resolved = resolve(tool, fallback: "")
+        return resolved.isEmpty ? nil : resolved
+    }
+
     private static func resolve(_ tool: String, fallback: String) -> String {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
@@ -1795,13 +2055,15 @@ enum Opener {
     static func open(_ item: SessionItem) -> String? {
         let s = item.session
         if item.hostIsLocal, let name = s.tmuxName {
-            return runInNewITermWindow("\(shq(tmux)) attach-session -t \(shq(name))")
+            return runInNewITermWindow(attachCommand(tmuxCommand: shq(tmux), tmuxName: name))
         }
         if !item.hostIsLocal, let name = s.tmuxName {
             guard let target = item.hostSSHTarget else {
                 return "This host has no SSH target configured and no URL host to derive one from."
             }
-            return runInNewITermWindow(sshAttachCommand(sshTarget: target, tmuxName: name))
+            return runInNewITermWindow(
+                remoteAttachCommand(sshTarget: target, tmuxName: name, moshPath: mosh)
+            )
         }
         return resumeLocally(item)
     }
@@ -1826,9 +2088,61 @@ enum Opener {
         return runInNewITermWindow(cmd)
     }
 
-    static func sshAttachCommand(sshTarget: String, tmuxName: String) -> String {
-        let remote = "PATH=/opt/homebrew/bin:/usr/local/bin:$PATH tmux attach-session -t \(shq(tmuxName))"
-        return "ssh -t -o ConnectTimeout=5 \(shq(sshTarget)) \(itermDoubleQuoted(remote))"
+    /// tmux invocation that attaches to `tmuxName` after handing the window's
+    /// size back to the attaching client.
+    ///
+    /// The `set-option` is load-bearing, not hygiene. The server's journal pump
+    /// holds detached panes at 120x200 (`ensurePaneRows` in src/tmux.ts) so a
+    /// question's preamble is still on screen when it scrapes, and it does that
+    /// with `resize-window` — which, per tmux(1), "will automatically set
+    /// window-size to manual in the window options". Nothing ever sets it back,
+    /// so the window stops following clients *permanently*: attaching shows a
+    /// fixed 120-col window inside your terminal, and long lines run off the
+    /// right edge instead of wrapping at your width. Measured on tmux 3.6b —
+    /// a 90x30 client attaching to such a session left the window at 120x200;
+    /// with the flip it became 90x29.
+    ///
+    /// Self-healing in both directions, so pane capture is not sacrificed: on
+    /// detach the window keeps this client's (short) size, so the pump's next
+    /// tick sees rows < 200, restores 120x200 and re-stamps `manual`. Manual
+    /// while detached, latest while a human is looking.
+    ///
+    /// `tmuxCommand` is the already-quoted invocation prefix — a local absolute
+    /// path, or a PATH-prefixed `exec tmux` for the far side. The `;` separating
+    /// the two tmux commands is passed as its own SINGLE-QUOTED argument: iTerm
+    /// tokenizes the command line itself with no shell in the loop, so a
+    /// shell-style `\;` would reach tmux as a literal backslash.
+    static func attachCommand(tmuxCommand: String, tmuxName: String) -> String {
+        let target = shq(tmuxName)
+        return "\(tmuxCommand) set-option -w -t \(target) window-size latest "
+            + "\(shq(";")) attach-session -t \(target)"
+    }
+
+    /// Attach to a tmux session on another host, over mosh when it's installed
+    /// locally and plain ssh otherwise.
+    ///
+    /// The two transports need the remote command shaped differently: ssh runs
+    /// it through the remote login shell, but mosh `exec`s its `--` argv
+    /// directly with NO shell in the loop — so `mosh host -- tmux attach`
+    /// (what the `airt`/`prot` aliases do) dies instantly with tmux unfound.
+    /// Hence the explicit `/bin/sh -c`.
+    static func remoteAttachCommand(sshTarget: String, tmuxName: String, moshPath: String?) -> String {
+        let attach = attachCommand(tmuxCommand: "PATH=\(remotePATH) exec tmux", tmuxName: tmuxName)
+        guard let moshPath else {
+            return "ssh -t -o ConnectTimeout=5 \(shq(sshTarget)) \(itermDoubleQuoted(attach))"
+        }
+        // ConnectTimeout rides along via --ssh so a dead host fails fast the
+        // same way the ssh path does.
+        return [
+            shq(moshPath),
+            shq("--server=\(remoteMoshServer)"),
+            shq("--ssh=ssh -o ConnectTimeout=5"),
+            shq(sshTarget),
+            "--",
+            "/bin/sh",
+            "-c",
+            itermDoubleQuoted(attach),
+        ].joined(separator: " ")
     }
 
     /// Single-quote a string for zsh.
@@ -1939,6 +2253,14 @@ enum GroupMode: String, CaseIterable, Identifiable {
         case .directory: return "Directory"
         }
     }
+    /// Stands in for the segmented control when the window is too narrow to
+    /// spell both modes out.
+    var symbol: String {
+        switch self {
+        case .status: return "circle.grid.2x2"
+        case .directory: return "folder"
+        }
+    }
 }
 
 struct SessionRow: View {
@@ -1982,7 +2304,7 @@ struct SessionRow: View {
             if item.hostIsLocal, session.tmuxName != nil {
                 badge("tmux", color: .blue)
             } else if !item.hostIsLocal, session.tmuxName != nil {
-                badge("ssh", color: .green)
+                badge(Opener.remoteTransportLabel, color: .green)
             } else if item.opensByResume {
                 badge("resume", color: .orange)
             }
@@ -2365,6 +2687,130 @@ struct MenuBarQuickAccessView: View {
     }
 }
 
+/// The directory filter panel: what is hidden, the directories available to
+/// hide, and a field for a path or pattern no session has surfaced yet.
+///
+/// Presented from the toolbar's filter button, NOT from Settings — which
+/// directories you want to look at is a display choice that changes with the
+/// task, like the grouping control beside it, not configuration you set once.
+struct HiddenDirectoriesSettingsView: View {
+    @EnvironmentObject private var store: SessionStore
+    @State private var draft = ""
+
+    private var addable: [String] {
+        store.knownDirectories.filter { !store.hiddenDirs.hides(cwd: $0) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Filter directories")
+                .font(.system(size: 13, weight: .semibold))
+            Text("Sessions in a hidden directory (and its subdirectories) are kept out of the list, the counts, the menu bar and search — on this Mac only. They keep running, and other clients still show them.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Hidden").font(.system(size: 12, weight: .semibold))
+            if store.hiddenDirs.isEmpty {
+                Text("Nothing hidden — every session shows.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            } else {
+                List {
+                    ForEach(store.hiddenDirs.paths, id: \.self) { dir in
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(HiddenDirs.displayName(for: dir))
+                                    .font(.system(size: 12, weight: .medium))
+                                Text(dir)
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1).truncationMode(.head)
+                            }
+                            Spacer()
+                            Button {
+                                store.unhideDirectory(dir)
+                            } label: { Image(systemName: "eye") }
+                                .buttonStyle(.borderless)
+                                .help("Show this directory again")
+                                .accessibilityIdentifier("unhide_dir_button_\(dir)")
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+                .listStyle(.inset)
+                .frame(minHeight: 90)
+            }
+
+            if !addable.isEmpty {
+                Text("Directories in use").font(.system(size: 12, weight: .semibold))
+                List {
+                    ForEach(addable, id: \.self) { dir in
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(HiddenDirs.displayName(for: dir))
+                                    .font(.system(size: 12, weight: .medium))
+                                Text(dir)
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1).truncationMode(.head)
+                            }
+                            Spacer()
+                            if let pattern = HiddenDirs.suggestedPattern(for: dir) {
+                                Button("Hide all like this") {
+                                    store.hideDirectory(pattern)
+                                }
+                                .buttonStyle(.borderless)
+                                .font(.system(size: 11))
+                                .help("Hides \(pattern) — every run of this scratch directory")
+                            }
+                            Button {
+                                store.hideDirectory(dir)
+                            } label: { Image(systemName: "eye.slash") }
+                                .buttonStyle(.borderless)
+                                .help("Hide this directory")
+                                .accessibilityIdentifier("hide_dir_button_\(dir)")
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+                .listStyle(.inset)
+                .frame(minHeight: 110)
+            }
+
+            HStack(spacing: 8) {
+                TextField("/Users/you/some/dir  or  */scratch-*", text: $draft)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 11, design: .monospaced))
+                    .accessibilityIdentifier("hidden_dir_field")
+                    .onSubmit(add)
+                Button("Hide") { add() }
+                    .disabled(HiddenDirs.normalize(draft) == nil)
+                    .accessibilityIdentifier("add_hidden_dir_button")
+            }
+            Text("An absolute path, or a pattern where * matches anything and ? one character. Use a pattern for directories that change every run, e.g. */gbrain-claude-cli-cwd-* for gbrain autopilot's temp folders.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Backed by \(Config.hiddenDirsFile.path)")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .lineLimit(1).truncationMode(.head)
+        }
+        // Popover-sized, not settings-window-sized: this is a panel hanging off a
+        // toolbar button, so it has no title bar of its own — hence the heading
+        // row at the top of `body`.
+        .padding(16)
+        .frame(width: 420)
+    }
+
+    private func add() {
+        store.hideDirectory(draft)
+        draft = ""
+    }
+}
+
 struct HostsSettingsView: View {
     @EnvironmentObject private var store: SessionStore
     @State private var configuredHosts: [Config.HostEntry] = Config.loadHosts()
@@ -2611,58 +3057,115 @@ struct HostsSettingsView: View {
 /// gets one compact named chip per configured host.
 struct DesktopConnectionStatusBar: View {
     @EnvironmentObject private var store: SessionStore
+    /// Narrow windows keep the dots and drop the labels — the status colour
+    /// is the part that must survive, the host name is recoverable on hover.
+    var compact: Bool = false
+
+    /// One rendered dot-and-label unit. Modelled separately from the store so
+    /// the same view can be measured off-screen to decide whether the labels
+    /// fit — see `labelledWidth(of:)`.
+    struct Chip: Identifiable {
+        let id: Int
+        let label: String
+        let trailing: String?
+        let compactTrailing: String?
+        let status: HostConnectionStatus
+        let help: String
+    }
+
+    var chips: [Chip] { Self.chips(store: store) }
+
+    static func chips(store: SessionStore) -> [Chip] {
+        if store.configuredHosts.count > 1 {
+            return store.configuredHosts.enumerated().map { index, host in
+                let status = store.connectionStatus(for: host)
+                let name = store.displayLabel(for: host)
+                return Chip(
+                    id: index,
+                    label: name,
+                    trailing: nil,
+                    compactTrailing: nil,
+                    status: status,
+                    help: "\(name) \(status.label.lowercased())"
+                )
+            }
+        }
+        let status = store.connectionStatus
+        let running = store.runningCount
+        return [Chip(
+            id: 0,
+            label: status.label,
+            trailing: running > 0 ? "· \(running) running" : nil,
+            compactTrailing: running > 0 ? "\(running)" : nil,
+            status: status,
+            help: running > 0 ? "\(status.label), \(running) running" : status.label
+        )]
+    }
 
     var body: some View {
-        Group {
-            if store.configuredHosts.count > 1 {
-                HStack(spacing: 12) {
-                    ForEach(Array(store.configuredHosts.enumerated()), id: \.offset) { _, host in
-                        hostChip(host)
-                    }
-                }
-            } else {
-                let status = store.connectionStatus
-                HStack(spacing: 6) {
-                    statusDot(status)
-                    Text(status.label)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(statusTextColor(status))
-                    if store.runningCount > 0 {
-                        Text("· \(store.runningCount) running")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(singleHostAccessibilityLabel(status))
+        Self.cluster(chips: chips, compact: compact)
+            .accessibilityIdentifier("host_connection_status")
+    }
+
+    @ViewBuilder
+    static func cluster(chips: [Chip], compact: Bool) -> some View {
+        HStack(spacing: compact ? 6 : 12) {
+            ForEach(chips) { chip in
+                chipView(chip, compact: compact, tight: chips.count > 1)
             }
         }
         .lineLimit(1)
-        .accessibilityIdentifier("host_connection_status")
     }
 
-    private func hostChip(_ host: Config.HostEntry) -> some View {
-        let status = store.connectionStatus(for: host)
-        return HStack(spacing: 5) {
-            statusDot(status)
-            Text(store.displayLabel(for: host))
-                .font(.caption.weight(.medium))
-                .foregroundStyle(statusTextColor(status))
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
+    @ViewBuilder
+    private static func chipView(_ chip: Chip, compact: Bool, tight: Bool) -> some View {
+        HStack(spacing: tight ? 5 : 6) {
+            statusDot(chip.status)
+            if !compact {
+                Text(chip.label)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(statusTextColor(chip.status))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            if let trailing = compact ? chip.compactTrailing : chip.trailing {
+                Text(trailing)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
         }
+        // Dots alone can't say which host is which; hover restores the name.
+        .help(compact ? chip.help : "")
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(store.displayLabel(for: host)) \(status.label.lowercased())")
+        .accessibilityLabel(chip.help)
     }
 
-    private func statusDot(_ status: HostConnectionStatus) -> some View {
+    /// Intrinsic width of the labelled cluster, measured off-screen from the
+    /// very view that will be drawn (so it can't drift from the real layout).
+    /// Cached: the toolbar asks on every layout pass, host names change rarely.
+    @MainActor
+    static func labelledWidth(of chips: [Chip]) -> CGFloat {
+        let key = chips.map { "\($0.label)\u{1}\($0.trailing ?? "")" }.joined(separator: "\u{2}")
+        if let cached = widthCache[key] { return cached }
+        let measured = ImageRenderer(
+            content: cluster(chips: chips, compact: false)
+                .fixedSize(horizontal: true, vertical: false)
+        ).nsImage?.size.width ?? .greatestFiniteMagnitude
+        widthCache[key] = measured
+        return measured
+    }
+
+    @MainActor private static var widthCache: [String: CGFloat] = [:]
+
+    private static func statusDot(_ status: HostConnectionStatus) -> some View {
         Circle()
             .fill(statusColor(status))
             .frame(width: 7, height: 7)
             .accessibilityHidden(true)
     }
 
-    private func statusColor(_ status: HostConnectionStatus) -> Color {
+    private static func statusColor(_ status: HostConnectionStatus) -> Color {
         switch status {
         case .connected: return .green
         case .connecting: return .secondary
@@ -2670,17 +3173,12 @@ struct DesktopConnectionStatusBar: View {
         }
     }
 
-    private func statusTextColor(_ status: HostConnectionStatus) -> Color {
+    private static func statusTextColor(_ status: HostConnectionStatus) -> Color {
         switch status {
         case .connected: return .primary
         case .connecting: return .secondary
         case .offline: return .orange
         }
-    }
-
-    private func singleHostAccessibilityLabel(_ status: HostConnectionStatus) -> String {
-        guard store.runningCount > 0 else { return status.label }
-        return "\(status.label), \(store.runningCount) running"
     }
 }
 
@@ -2697,6 +3195,18 @@ struct ContentView: View {
     @State private var pendingClose: SessionItem?
     @State private var pendingRename: SessionItem?
     @State private var renameText = ""
+    /// Tracks the window width so the toolbar can shed labels when the window
+    /// is narrow (e.g. parked in a third of a 13" Air's screen).
+    @State private var windowWidth: CGFloat = 0
+    @State private var compactSearchShown: Bool
+    @State private var showDirectoryFilter = false
+    @FocusState private var searchFieldFocused: Bool
+
+    /// `compactSearchShown` is seedable only so the off-screen `--window-shot`
+    /// harness can photograph the revealed search row.
+    init(compactSearchShown: Bool = false) {
+        _compactSearchShown = State(initialValue: compactSearchShown)
+    }
     private let timer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
 
     private struct ListSection: Identifiable {
@@ -2957,6 +3467,22 @@ struct ContentView: View {
                         requestMove(item, to: target)
                     }
                 }
+                // Build the mute list from the row that's bothering you. A
+                // per-run scratch directory ($TMPDIR/gbrain-claude-cli-cwd-<pid>
+                // and friends) gets a second, explicit option that mutes the
+                // whole family — hiding one literal temp path would go stale on
+                // the next run.
+                if let dir = item.session.cwd.flatMap(HiddenDirs.normalize) {
+                    Divider()
+                    Button("Hide \(HiddenDirs.displayName(for: dir))") {
+                        store.hideDirectory(dir)
+                    }
+                    if let pattern = HiddenDirs.suggestedPattern(for: dir) {
+                        Button("Hide all like this (\(pattern))") {
+                            store.hideDirectory(pattern)
+                        }
+                    }
+                }
                 if item.session.sessionId != nil {
                     Divider()
                     Button("Close session", role: .destructive) {
@@ -3069,6 +3595,119 @@ struct ContentView: View {
         "\(count) \(count == 1 ? "agent" : "agents")"
     }
 
+    /// Below this the toolbar can't hold the segmented picker plus labelled
+    /// host chips and search field without collapsing into the » overflow.
+    /// (AppKit charges ~300pt of chrome before any item gets a point, so the
+    /// budget is far tighter than the item widths suggest — see `--window-fit`.)
+    ///
+    /// Raised 760 → 820 when the directory-filter button joined the full-size
+    /// trailing cluster: `--window-fit 760` showed the 150pt search field
+    /// dropping into the » overflow, and losing search is a far worse trade than
+    /// spending another 60pt in the compact layout — which is a complete layout,
+    /// not a degraded one (it reaches the same filter panel through the grouping
+    /// menu). Re-measure with `--window-fit` after touching any toolbar item.
+    static let compactToolbarWidth: CGFloat = 820
+
+    /// Chrome plus the three compact icon items. Whatever a compact window has
+    /// left over this is what the host-status cluster may spend on labels.
+    /// Calibrated with `--window-fit`: a 67pt labelled cluster still fits at
+    /// 470 but not 460, so the true reserve is ~403 — 410 keeps a small margin.
+    static let compactStatusReserve: CGFloat = 410
+
+    private var isCompactToolbar: Bool { windowWidth < Self.compactToolbarWidth }
+
+    /// Short host names ("Pro", "Air") still fit in a third-of-the-screen
+    /// window, so only drop to bare dots when they genuinely don't.
+    static func hostLabelsFit(clusterWidth: CGFloat, windowWidth: CGFloat) -> Bool {
+        guard windowWidth < compactToolbarWidth else { return true }
+        return clusterWidth <= windowWidth - compactStatusReserve
+    }
+
+    private var showsHostLabels: Bool {
+        guard isCompactToolbar else { return true }
+        return Self.hostLabelsFit(
+            clusterWidth: DesktopConnectionStatusBar.labelledWidth(
+                of: DesktopConnectionStatusBar.chips(store: store)
+            ),
+            windowWidth: windowWidth
+        )
+    }
+
+    /// Names the filter control, and says what it's currently doing — the count
+    /// is the disclosure when the compact toolbar has no room for a badge.
+    private var directoryFilterLabel: String {
+        let dirs = store.hiddenDirs.paths.count
+        guard dirs > 0 else { return "Filter directories…" }
+        let live = store.hiddenLiveCount
+        return live > 0
+            ? "Filter directories… (\(live) hidden)"
+            : "Filter directories… (\(dirs) filtered)"
+    }
+
+    @ViewBuilder
+    private var groupPicker: some View {
+        let picker = Picker("Group by", selection: $groupMode) {
+            ForEach(GroupMode.allCases) { mode in
+                Text(mode.title).tag(mode)
+            }
+        }
+        if isCompactToolbar {
+            // Segmented needs room to spell out every mode; a narrow window
+            // gets the same choice for the width of one icon.
+            //
+            // Directory filtering rides along in this menu when compact. At the
+            // 440pt minimum the toolbar has roughly 140pt for ALL items and
+            // already spends 125 — measured with `--window-fit`, adding a fifth
+            // item there drops refresh AND search into the » overflow. So the
+            // narrow window collapses both display controls into one menu rather
+            // than losing unrelated chrome.
+            Menu {
+                picker.pickerStyle(.inline).labelsHidden()
+                Divider()
+                Button(directoryFilterLabel) { showDirectoryFilter = true }
+            } label: {
+                Image(systemName: groupMode.symbol)
+            }
+            .menuIndicator(.hidden)
+            .menuStyle(.button)
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .fixedSize()
+            .help("Grouped by \(groupMode.title)")
+            .accessibilityIdentifier("group_mode_menu")
+        } else {
+            picker.pickerStyle(.segmented)
+        }
+    }
+
+    /// Compact windows can't afford a permanent search field in the toolbar,
+    /// so search becomes a toggle that reveals a row under it.
+    private var compactSearchRow: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Search sessions", text: $searchText)
+                .textFieldStyle(.plain)
+                .focused($searchFieldFocused)
+                .onSubmit { searchFieldFocused = false }
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                    searchFieldFocused = true
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Clear search")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(.bar)
+        .accessibilityIdentifier("compact_search_row")
+    }
+
     var body: some View {
         List {
             ForEach(sections) { section in
@@ -3127,10 +3766,15 @@ struct ContentView: View {
             }
         }
         .listStyle(.inset)
-        // The leading host-status cluster is wider than the old static title.
-        // 760 keeps common two-host names alongside the centered picker and
-        // fixed trailing refresh/search cluster.
-        .frame(minWidth: 760, minHeight: 420)
+        // 440 is the narrowest width whose toolbar still shows every compact
+        // item (measured with `--window-fit`), and comfortably under a third
+        // of a 13" Air's 1470pt-wide desktop.
+        .frame(minWidth: 440, minHeight: 420)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            if width != windowWidth { windowWidth = width }
+        }
         // Hand every keystroke to the store, which debounces and asks the hosts.
         // Filtering `store.items` alone can't answer "search all my sessions" —
         // it only ever sees each host's newest 100 closed rows.
@@ -3140,16 +3784,41 @@ struct ContentView: View {
         // area, search + actions on the trailing edge.
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                DesktopConnectionStatusBar()
+                DesktopConnectionStatusBar(compact: !showsHostLabels)
             }
             .sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: .principal) {
-                Picker("Group by", selection: $groupMode) {
-                    ForEach(GroupMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
+            // A centered item costs twice the wider side's width in reserved
+            // space, which a narrow window can't spare — so in compact the
+            // grouping control joins the trailing cluster instead.
+            if !isCompactToolbar {
+                ToolbarItem(placement: .principal) {
+                    groupPicker
                 }
-                .pickerStyle(.segmented)
+            }
+            if isCompactToolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    groupPicker
+                }
+                .sharedBackgroundVisibility(.hidden)
+            }
+            // A display control, so it sits beside the grouping control rather
+            // than in Settings, and it is also the feature's disclosure — a
+            // filter you can't see is one you forget you set. Only in the
+            // full-size toolbar: compact has no room for a fifth item, so it
+            // reaches the same panel through the grouping menu.
+            if !isCompactToolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showDirectoryFilter.toggle()
+                    } label: {
+                        Image(systemName: store.hiddenLiveCount > 0 ? "eye.slash.fill" : "eye.slash")
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .help(directoryFilterLabel)
+                    .accessibilityIdentifier("directory_filter_button")
+                }
+                .sharedBackgroundVisibility(.hidden)
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -3169,19 +3838,53 @@ struct ContentView: View {
             // Adjacent items in one placement share a glass capsule by
             // default; hide it so refresh is its own circle beside search.
             .sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: .primaryAction) {
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Search sessions", text: $searchText)
-                        .textFieldStyle(.plain)
+            if isCompactToolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        compactSearchShown.toggle()
+                        searchFieldFocused = compactSearchShown
+                        if !compactSearchShown { searchText = "" }
+                    } label: {
+                        Image(systemName: searchText.isEmpty
+                              ? "magnifyingglass"
+                              : "line.3.horizontal.decrease.circle.fill")
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .help(compactSearchShown ? "Hide search" : "Search sessions")
+                    .accessibilityIdentifier("compact_search_toggle")
                 }
-                .padding(.horizontal, 10)
-                // 150pt (not wider): at the 640pt minWidth the centered
-                // pill + this cluster must fit without collapsing into ».
-                // No custom glass here — the system toolbar item background
-                // is the only container around the field.
-                .frame(width: 150, height: 30)
+                .sharedBackgroundVisibility(.hidden)
+            } else {
+                ToolbarItem(placement: .primaryAction) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+                        TextField("Search sessions", text: $searchText)
+                            .textFieldStyle(.plain)
+                    }
+                    .padding(.horizontal, 10)
+                    // 150pt (not wider): at the 640pt minWidth the centered
+                    // pill + this cluster must fit without collapsing into ».
+                    // No custom glass here — the system toolbar item background
+                    // is the only container around the field.
+                    .frame(width: 150, height: 30)
+                }
+            }
+        }
+        // One presentation site for both routes into the panel — the toolbar
+        // button when there's room, the grouping menu when there isn't. Anchored
+        // on the content rather than on either control, so the two paths can't
+        // fight over who owns the popover.
+        .popover(isPresented: $showDirectoryFilter, arrowEdge: .top) {
+            HiddenDirectoriesSettingsView()
+                .environmentObject(store)
+        }
+        // The compact search row lives under the toolbar because a permanent
+        // field there would push the other items into the » overflow.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if isCompactToolbar && compactSearchShown {
+                compactSearchRow
             }
         }
         .task { await store.refresh() }
@@ -3301,6 +4004,202 @@ struct ContentView: View {
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+/// Prints the exact command a remote row would hand iTerm2, so the transport
+/// can be exercised for real without driving the GUI. iTerm tokenizes this
+/// string itself with no shell in the loop, so verify it the same way
+/// (`shlex.split` + `execvp`) — running it through zsh would expand the `$PATH`
+/// that is meant to survive to the far side.
+enum AttachCommandCLI {
+    static func runIfRequested() {
+        let args = CommandLine.arguments
+        guard args.dropFirst().first == "--attach-command" else { return }
+        let rest = Array(args.dropFirst(2))
+        guard rest.count == 2 else {
+            print("usage: lfg --attach-command <ssh-target> <tmux-session>")
+            Darwin.exit(1)
+        }
+        print(Opener.remoteAttachCommand(sshTarget: rest[0], tmuxName: rest[1], moshPath: Opener.mosh))
+        fflush(stdout)
+        Darwin.exit(0)
+    }
+}
+
+/// Off-screen window harness: proves the main window actually accepts a narrow
+/// size and that its toolbar still fits every item there (no » overflow).
+/// Runs without a visible screen, so it works over ssh / on a locked login.
+enum WindowFitCLI {
+    @MainActor
+    static func runIfRequested() {
+        let args = CommandLine.arguments
+        guard args.dropFirst().first == "--window-fit" else { return }
+        let widths = args.dropFirst(2).compactMap { Double($0) }.map { CGFloat($0) }
+        guard !widths.isEmpty else {
+            print("{\"ok\":false,\"error\":\"usage: lfg --window-fit <width> [width…]\"}")
+            Darwin.exit(1)
+        }
+        let window = makeWindow()
+        settle(0.6)
+
+        var rows: [String] = []
+        var ok = true
+        for width in widths {
+            window.setContentSize(NSSize(width: width, height: 700))
+            settle(0.5)
+            // The compact toolbar is driven by a SwiftUI state change one
+            // layout pass behind the resize; nudge and settle again so the
+            // measurement reads the toolbar the user ends up looking at.
+            window.setContentSize(NSSize(width: width + 1, height: 700))
+            settle(0.3)
+            window.setContentSize(NSSize(width: width, height: 700))
+            settle(0.5)
+            let actual = window.contentLayoutRect.width
+            let items = window.toolbar?.items.count ?? -1
+            let visible = window.toolbar?.visibleItems?.count ?? -1
+            // -1 means AppKit never surfaced the toolbar to us; treat that as a
+            // failed measurement rather than a silent pass.
+            let fits = items > 0 && visible == items
+            let honored = abs(actual - width) < 2
+            if !fits || !honored { ok = false }
+            let visibleIds = Set((window.toolbar?.visibleItems ?? []).map(\.itemIdentifier.rawValue))
+            let dropped = (window.toolbar?.items ?? []).enumerated()
+                .filter { !visibleIds.contains($0.element.itemIdentifier.rawValue) }
+                .map { "\"#\($0.offset) w=\(Int(($0.element.view?.frame.width ?? -1).rounded()))\"" }
+                .joined(separator: ",")
+            let shown = (window.toolbar?.visibleItems ?? []).enumerated()
+                .map { "\"#\($0.offset) w=\(Int(($0.element.view?.frame.width ?? -1).rounded()))\"" }
+                .joined(separator: ",")
+            rows.append("""
+            {"requested":\(Int(width)),"contentWidth":\(Int(actual.rounded())),\
+            "toolbarItems":\(items),"visibleToolbarItems":\(visible),\
+            "shown":[\(shown)],"dropped":[\(dropped)],"fits":\(fits),"widthHonored":\(honored)}
+            """)
+        }
+        window.orderOut(nil)
+        print("{\"ok\":\(ok),\"widths\":[\(rows.joined(separator: ","))]}")
+        fflush(stdout)
+        Darwin.exit(ok ? 0 : 1)
+    }
+
+    /// Renders the real window — toolbar chrome included — at a given width,
+    /// without Screen Recording permission or a woken display, by asking the
+    /// window's frame view to draw itself into a bitmap.
+    @MainActor
+    static func runShotIfRequested() {
+        let args = CommandLine.arguments
+        guard args.dropFirst().first == "--window-shot" else { return }
+        guard args.count >= 4, let width = Double(args[2]) else {
+            print("{\"ok\":false,\"error\":\"usage: lfg --window-shot <width> <output.png> [--search]\"}")
+            Darwin.exit(1)
+        }
+        let output = URL(fileURLWithPath: args[3])
+        let window = makeWindow(sessions: true, compactSearchShown: args.contains("--search"))
+        window.setContentSize(NSSize(width: CGFloat(width), height: 560))
+        settle(1.2)
+        guard let frameView = window.contentView?.superview,
+              let rep = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds) else {
+            print("{\"ok\":false,\"error\":\"no frame view to draw\"}")
+            Darwin.exit(1)
+        }
+        frameView.cacheDisplay(in: frameView.bounds, to: rep)
+        guard let png = rep.representation(using: .png, properties: [:]) else {
+            print("{\"ok\":false,\"error\":\"could not encode png\"}")
+            Darwin.exit(1)
+        }
+        do {
+            try png.write(to: output, options: .atomic)
+        } catch {
+            print("{\"ok\":false,\"error\":\"\(error.localizedDescription)\"}")
+            Darwin.exit(1)
+        }
+        window.orderOut(nil)
+        print("{\"ok\":true,\"width\":\(Int(width)),\"shot\":\"\(output.path)\"}")
+        fflush(stdout)
+        Darwin.exit(0)
+    }
+
+    @MainActor
+    private static func makeWindow(sessions: Bool = false, compactSearchShown: Bool = false) -> NSWindow {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)
+
+        let store = SessionStore()
+        store.configuredHosts = [
+            Config.HostEntry(url: "http://studio:8766", displayName: "Creative Studio"),
+            Config.HostEntry(url: "http://air:8766", displayName: "Travel Mac"),
+        ]
+        store.lastRefreshed = Date()
+        if sessions {
+            store.hosts = [
+                HostState(
+                    url: "http://studio:8766",
+                    sshTarget: nil,
+                    displayName: "Creative Studio",
+                    info: HostInfoResponse(hostId: "studio", hostName: "Studio.local"),
+                    sessions: [
+                        fixtureSession(id: "needs-input", title: "Choose the launch direction",
+                                       project: "lfg", busy: true, status: "blocked", activity: 100),
+                        fixtureSession(id: "working", title: "Make the desktop window narrower",
+                                       project: "lfg", busy: true, activity: 300),
+                        fixtureSession(id: "paused", title: "Restore remote authentication",
+                                       project: "inbox", status: "blocked", activity: 250),
+                        fixtureSession(id: "recent", title: "Polish onboarding copy",
+                                       project: "studio", activity: 200),
+                    ],
+                    needsInputSessionIds: ["needs-input"],
+                    isLocal: true
+                )
+            ]
+        }
+
+        let host = NSHostingController(
+            rootView: ContentView(compactSearchShown: compactSearchShown).environmentObject(store)
+        )
+        let window = NSWindow(contentViewController: host)
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.title = "lfg"
+        // Match the shipping Window scene: `.navigationTitle("")` hides the
+        // title, and the default scene toolbar style is unified.
+        window.titleVisibility = .hidden
+        window.toolbarStyle = .unified
+        // Off the visible desktop: this must not steal focus or flash a window
+        // in front of whoever is using the Mac.
+        window.setFrameOrigin(NSPoint(x: -8000, y: 200))
+        window.orderFrontRegardless()
+        return window
+    }
+
+    private static func fixtureSession(
+        id: String,
+        title: String,
+        project: String,
+        busy: Bool = false,
+        status: String? = nil,
+        activity: Double
+    ) -> APISession {
+        APISession(
+            agent: "claude",
+            pid: id.hashValue,
+            cwd: "/Users/eugene/dev/\(project)",
+            project: project,
+            title: title,
+            sessionId: id,
+            busy: busy,
+            lastActivityAt: activity,
+            tmuxName: "lfg-\(id)",
+            model: "opus",
+            status: status,
+            lastUserText: nil
+        )
+    }
+
+    /// SwiftUI installs toolbar items and re-lays-out on the main run loop, so
+    /// measuring straight after `setContentSize` reads the previous layout.
+    @MainActor
+    private static func settle(_ seconds: TimeInterval) {
+        RunLoop.current.run(until: Date().addingTimeInterval(seconds))
     }
 }
 
@@ -3492,15 +4391,70 @@ enum SearchProbeCLI {
     }
 }
 
+/// Reports what the directory mute list is actually doing against the REAL
+/// hosts: how many live sessions it hides, which directories did the hiding, and
+/// what survives.
+///
+/// This exists because `--window-shot` draws FIXTURE sessions — it proves layout,
+/// never filtering — and the whole feature is a claim about real session data. It
+/// is also headless, so it works with the login session locked, which is the
+/// normal state of this Mac.
+///
+///     lfg --hidden-dirs-probe
+enum HiddenDirsProbeCLI {
+    @MainActor
+    static func runIfRequested() {
+        let args = CommandLine.arguments
+        guard args.dropFirst().first == "--hidden-dirs-probe" else { return }
+        let store = SessionStore()
+        let done = DispatchSemaphore(value: 0)
+        var line = "{\"ok\":false}"
+        Task { @MainActor in
+            await store.refresh()
+            let hidden = store.hiddenDirs
+            let all = store.hosts.flatMap(\.sessions).filter { !$0.closed }
+            let muted = all.filter { hidden.hides(cwd: $0.cwd) }
+            // Group the hidden rows by the entry that caught them, so a pattern
+            // that silently matches nothing is visible as a zero rather than
+            // hiding inside a total.
+            let byEntry = hidden.paths.map { entry -> String in
+                let n = all.filter { HiddenDirs([entry]).hides(cwd: $0.cwd) }.count
+                return "{\"entry\":\"\(entry)\",\"hides\":\(n)}"
+            }
+            let survivingDirs = Set(store.items.compactMap { $0.session.cwd }).sorted()
+                .prefix(12)
+                .map { "\"\($0)\"" }
+            line = "{\"ok\":true,\"hostsReachable\":\(store.hosts.filter { $0.error == nil }.count)," +
+                   "\"liveTotal\":\(all.count),\"liveHidden\":\(muted.count)," +
+                   "\"liveVisible\":\(store.items.filter { !$0.session.closed }.count)," +
+                   "\"hiddenLiveCount\":\(store.hiddenLiveCount)," +
+                   "\"entries\":[\(byEntry.joined(separator: ","))]," +
+                   "\"visibleDirs\":[\(survivingDirs.joined(separator: ","))]}"
+            done.signal()
+        }
+        while done.wait(timeout: .now() + 0.05) == .timedOut {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+        }
+        print(line)
+        fflush(stdout)
+        Darwin.exit(0)
+    }
+}
+
 @main
 struct LFGSessionsApp: App {
     @StateObject private var store = SessionStore()
     init() {
         DesktopFeatureTestCLI.runIfRequested()
+        HiddenDirsProbeCLI.runIfRequested()
         SearchProbeCLI.runIfRequested()
         DesktopStatusSnapshotCLI.runIfRequested()
         DesktopMenuBarSnapshotCLI.runIfRequested()
+        WindowFitCLI.runIfRequested()
+        WindowFitCLI.runShotIfRequested()
         MoveTestCLI.runIfRequested()
+        AttachCommandCLI.runIfRequested()
+        Opener.warmTransportProbe()
     }
 
     var body: some Scene {

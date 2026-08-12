@@ -56,6 +56,17 @@ export function paneSizeArgs(): string[] {
  * Skips attached sessions on purpose — resizing a window a human is looking at
  * would yank their terminal. They get the size back when they detach.
  *
+ * STICKY SIDE EFFECT, reverted elsewhere: per tmux(1), `resize-window` "will
+ * automatically set window-size to manual in the window options", and manual
+ * means the window stops following attached clients FOREVER. So every session
+ * this touches would otherwise attach at a fixed 120 cols regardless of the
+ * terminal — long lines run off the right edge instead of wrapping. The owner of
+ * undoing that is the attach path: `Opener.attachCommand` in
+ * desktop/LFGSessions.swift flips `window-size` back to `latest` ahead of every
+ * `attach-session`. The two halves are self-healing — on detach the window keeps
+ * the client's short size, so the next tick lands back here. See
+ * .claude/diagnosis-mosh-attach-window-width-20260811.md.
+ *
  * Returns true when a resize was issued.
  */
 export function ensurePaneRows(target: string, minRows = PANE_ROWS): boolean {

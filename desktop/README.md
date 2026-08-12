@@ -31,12 +31,27 @@ windows are stretched to the full visible height of the display they open on.
   segmented control sits in the center area, and refresh + search sit on the
   trailing edge. A single host shows Connected/Connecting/Offline; multiple
   hosts get one named green/gray/orange status chip each.
+- **Narrow windows** — the window resizes down to 440pt wide, so it can sit in
+  a third of a 13" Air's screen. Under 760pt the toolbar switches to a compact
+  form: the centered segmented control becomes an icon pull-down on the
+  trailing edge (a centered item reserves twice the wider side's width, which a
+  narrow window can't spare), and the search field becomes a toggle that
+  reveals a search row under the toolbar. AppKit charges roughly 300pt of
+  toolbar chrome before any item gets a point, so those swaps are what make 440
+  reachable at all.
+- **Host labels are dropped by measurement, not by breakpoint.** The labelled
+  status cluster is measured off-screen (`DesktopConnectionStatusBar.labelledWidth`,
+  cached per name set) and keeps its labels while they fit the leftover budget
+  — short names like "Pro"/"Air" survive down to ~480pt, long ones give way to
+  bare dots (names on hover) sooner. `ContentView.hostLabelsFit` is the pure
+  decision and is covered by `--desktop-feature-test`.
 - **Search** — filters on title, project, last user message, model, agent, host.
 - **Status / Directory segments** — group like the iOS client: by status
   (Working / Paused / Idle) or by directory (collapsible sections, most
   recently active first, running/idle tallies; ambiguous leaf names get their
   parent directory prefixed).
-- Auto-refreshes every 10 s; badge shows `tmux` (attach) or `resume` per row.
+- Auto-refreshes every 10 s; badge shows `tmux` (local attach), `mosh`/`ssh`
+  (remote attach, whichever transport that row will use), or `resume`.
 
 ## Hosts
 
@@ -64,6 +79,33 @@ machine hostname everywhere the host is labeled. Leaving it blank restores the
 hostname/URL fallback. Legacy string entries and objects containing only `url`
 and `ssh` remain supported.
 
+### Remote attach transport
+
+Opening a session on another host uses **mosh** when `mosh` is on this
+machine's PATH, falling back to plain `ssh -t` when it isn't. mosh survives IP
+changes, sleep, and packet loss, so an attached window keeps working across
+network roams instead of dying with its TCP stream — the same reason the
+`air`/`pro` aliases in `~/.zshrc` use it. The `ssh` config field is still the
+target either way; mosh uses ssh for the initial handshake, then UDP
+60000–61000 (open over Tailscale).
+
+Two things the shell aliases get wrong that this does not:
+
+- `mosh host -- tmux attach` **fails** — mosh `exec`s its `--` argv with no
+  shell in the loop, and sshd's non-interactive PATH is
+  `/usr/bin:/bin:/usr/sbin:/sbin` with no Homebrew, so `tmux` is not found and
+  the window dies instantly. The remote command is wrapped in an explicit
+  `/bin/sh -c` with a PATH prefix.
+- `--server` is passed as `PATH=… exec mosh-server` rather than a hardcoded
+  `/opt/homebrew/bin/mosh-server`, so it also resolves on Intel Homebrew hosts
+  (`/usr/local/bin`).
+
+To see the exact command a row would run, without opening a window:
+
+```
+./build/lfg.app/Contents/MacOS/lfg --attach-command <ssh-target> <tmux-session>
+```
+
 ## Build
 
 ```
@@ -90,6 +132,8 @@ build/lfg.app/Contents/MacOS/lfg --desktop-feature-test
 build/lfg.app/Contents/MacOS/lfg --status-snapshots /tmp/lfg-status-snapshots
 build/lfg.app/Contents/MacOS/lfg --menu-bar-snapshot /tmp/lfg-menu-bar.png
 build/lfg.app/Contents/MacOS/lfg --rename-test <sessionId> <hostURL> "<title>"
+build/lfg.app/Contents/MacOS/lfg --window-fit 440 490 760 1000
+build/lfg.app/Contents/MacOS/lfg --window-shot 440 /tmp/lfg-narrow.png [--search]
 ```
 
 The second and third commands render inspectable status-bar and menu-bar-window
@@ -97,3 +141,13 @@ fixtures off-screen, so visual verification still works while the login session
 is locked. The fourth drives the same `MoveCoordinator.rename` the row's
 "Rename…" context menu calls, against a live host — an empty title clears the
 override — because a locked login session can't be driven through the menu.
+
+The last two cover window sizing. `--window-fit` builds the real window
+off-screen at each width and reports whether every toolbar item is still
+visible (exit 1 if any collapsed into the » overflow, or if the window refused
+the requested width) — this is how the 440pt minimum and the 760pt compact
+breakpoint were chosen. `--window-shot` draws that same window, chrome
+included, into a PNG via `cacheDisplay`, so it needs neither Screen Recording
+permission nor an awake display; AppKit-backed controls (the segmented picker,
+the wide search field) come out as blank rounded rects in those shots, which is
+a limitation of `cacheDisplay`, not a layout bug.
