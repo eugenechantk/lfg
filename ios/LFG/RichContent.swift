@@ -237,7 +237,7 @@ struct MediaAttachmentsView: View {
 
     @ViewBuilder private func videoView(_ ref: MediaRef) -> some View {
         if let url = hostFiles?.resolve(rawPath: ref.raw) {
-            VideoPlayer(player: AVPlayer(url: url))
+            HostVideoPlayer(url: url)
                 .frame(height: 200)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         }
@@ -269,6 +269,55 @@ struct MediaAttachmentsView: View {
     }
 }
 
+// MARK: - Video
+
+/// Video surface for host files.
+///
+/// Two reasons this exists instead of SwiftUI's `VideoPlayer`:
+/// 1. `VideoPlayer` suppresses `AVPlayerViewController`'s full-screen expand
+///    button, so an inline video could only ever be watched in its 200pt strip.
+///    Hosting the controller directly puts the expand control back.
+/// 2. The player is owned by the coordinator, so a body re-evaluation (the
+///    transcript re-renders on every SSE delta) no longer builds a fresh
+///    `AVPlayer` and restart playback from zero.
+struct HostVideoPlayer: UIViewControllerRepresentable {
+    let url: URL
+
+    @MainActor final class Coordinator {
+        let controller = AVPlayerViewController()
+        var url: URL?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIViewController(context: Context) -> AVPlayerViewController {
+        let vc = context.coordinator.controller
+        vc.showsPlaybackControls = true
+        vc.videoGravity = .resizeAspect
+        vc.view.backgroundColor = .clear
+        // PiP would need the `audio` background mode, which this app doesn't
+        // declare — the button would appear and then stall on backgrounding.
+        vc.allowsPictureInPicturePlayback = false
+        vc.updatesNowPlayingInfoCenter = false
+        load(into: context.coordinator)
+        return vc
+    }
+
+    func updateUIViewController(_ vc: AVPlayerViewController, context: Context) {
+        load(into: context.coordinator)
+    }
+
+    static func dismantleUIViewController(_ vc: AVPlayerViewController, coordinator: Coordinator) {
+        vc.player?.pause()
+    }
+
+    private func load(into coordinator: Coordinator) {
+        guard coordinator.url != url else { return }
+        coordinator.url = url
+        coordinator.controller.player = AVPlayer(url: url)
+    }
+}
+
 // MARK: - Full-screen viewer
 
 /// Downloads the file from the host (it lives on the computer, not the phone)
@@ -285,7 +334,8 @@ struct FileViewerSheet: View {
         NavigationStack {
             Group {
                 if ref.kind == .video, let url {
-                    VideoPlayer(player: AVPlayer(url: url))      // stream remote video
+                    HostVideoPlayer(url: url)                    // stream remote video
+                        .ignoresSafeArea(edges: .bottom)
                 } else {
                     switch phase {
                     case .loading:
