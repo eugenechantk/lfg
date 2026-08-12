@@ -451,21 +451,39 @@ import LFGCore
         }
     }
 
+    /// Resolve a deep-linked session well enough for its detail view to bind.
+    ///
+    /// The lookup is an exact query, not a scan. It used to page the default
+    /// host's newest 80 resumable rows and search them for `sid` — which silently
+    /// fails for any conversation older than that window, and this host's newest
+    /// 100 closed rows are ALL gbrain-autopilot temp cwds, so in practice every
+    /// real project's sessions were out of reach. `sessionId` is part of the
+    /// server's search haystack (`entryHaystack`), so `?q=<sid>` is a one-request
+    /// exact hit at any age.
+    ///
+    /// Asked of every reachable host, not just the default one: `~/.claude/projects`
+    /// is synced but a transcript's newest copy can be on a peer, and the old
+    /// default-host-only lookup missed those outright. First host to answer with a
+    /// matching row wins — the copies describe the same conversation.
     private func resolveDeepLink(_ sid: String) async {
         await refresh()                       // reconnect + load the live list
         if session(sid) != nil { return }     // live — detail can bind immediately
-        guard let client else { return }
-        // Closed session: synthesize a display copy from the resumable list so the
-        // detail view + transcript open; `session(_:)` returns it as a fallback.
-        if let page = try? await client.resumable(limit: 80),
-           let r = page.sessions.first(where: { $0.sessionId == sid }) {
+        let hosts = settings.hosts.filter { isReachable($0) }
+        for host in hosts {
+            guard let c = settings.client(for: host) else { continue }
+            guard let page = try? await c.resumable(limit: 5, q: sid),
+                  let r = page.sessions.first(where: { $0.sessionId == sid }) else { continue }
+            // Synthesize a display copy so the detail view + transcript open;
+            // `session(_:)` returns it as a fallback.
             deepLinkSession = Session(
                 sessionId: r.sessionId,
                 title: r.title ?? "Session",
                 agent: r.agent ?? "claude",
                 project: r.project,
                 cwd: r.cwd,
-                lastActivityAt: r.mtime)
+                lastActivityAt: r.mtime,
+                closed: true)
+            return
         }
     }
 
@@ -2124,6 +2142,16 @@ import LFGCore
                 persistManualUnread()
             }
             markOpened(id)
+            // A session opened from a search result lives only in `searchResults`,
+            // which is rebuilt on every keystroke and emptied the moment the query
+            // is cleared. Latch a display copy now, or editing the search field
+            // while its detail view is on screen collapses that view back to
+            // "Opening session…". Only when nothing more authoritative holds it.
+            if !sessions.contains(where: { $0.sessionId == id }),
+               deepLinkSession?.sessionId != id,
+               let hit = searchResults.first(where: { $0.sessionId == id }) {
+                deepLinkSession = hit
+            }
         }
         guard focusedID != id else { return }
         focusedID = id
@@ -2395,8 +2423,11 @@ import LFGCore
     /// copy. Not added to `sessions`, so it never shows as a stale list card.
     private var focusedSnapshot: Session?
 
-    /// See `openFromNotification`: a closed session a notification deep-linked to,
-    /// resolved from the resumable list so its detail view can still open.
+    /// A closed session being held open because it exists nowhere else the detail
+    /// view can find it — `sessions` only holds the closed pages actually paged
+    /// in. Two things fill it: a notification deep-link (`openFromNotification`)
+    /// and focusing a session that was reached through search (`focus`). Both are
+    /// the same need — keep a display copy alive so `session(_:)` can answer.
     private var deepLinkSession: Session?
 
     func session(_ id: String) -> Session? {
@@ -2407,6 +2438,15 @@ import LFGCore
         if let real = remappedIds[id], let s = sessions.first(where: { $0.sessionId == real }) { return s }
         if id == focusedID, let snap = focusedSnapshot, snap.sessionId == id { return snap }
         if let dl = deepLinkSession, dl.sessionId == id { return dl }
+        // Reached through search. `SessionListView` renders a UNION of
+        // `filteredSessions` and `searchResults` — the host matches over every
+        // transcript it has, not over the pages in memory — so a row can be
+        // tappable while existing in NEITHER `sessions` nor any slot above.
+        // Without this the tap set a selection that resolved to nil and the
+        // detail column sat on `DetailLoading` ("Opening session…") forever, with
+        // nothing to retry it. Deliberately LAST: a session that is also live
+        // must resolve to its live copy, never to a closed stand-in.
+        if let hit = searchResults.first(where: { $0.sessionId == id }) { return hit }
         return nil
     }
 
