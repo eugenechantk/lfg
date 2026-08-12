@@ -476,8 +476,9 @@ struct SessionListView: View {
         }
     }
 
-    /// Header button for directory filtering — always present, badged with the
-    /// number of live sessions currently hidden.
+    /// Header button for directory filtering — always present, **active whenever
+    /// a filter is configured**, and badged with the number of live sessions that
+    /// filter is hiding right now.
     ///
     /// This is a **display** control, not configuration: which directories you
     /// want to look at right now changes with what you're doing, in the same
@@ -486,34 +487,48 @@ struct SessionListView: View {
     ///
     /// Being permanent also makes it the feature's disclosure. A filter with no
     /// visible trace is a bug report waiting to happen — months after muting
-    /// `~/.gbrain` the sessions are simply *absent* and nothing says why. The
-    /// badge answers that at a glance, and an always-present button means the
-    /// control never has to be discovered twice.
+    /// `~/.gbrain` the sessions are simply *absent* and nothing says why.
+    ///
+    /// Which is why active-ness keys off the **mute list**, not the badge count.
+    /// Keying both off the count meant a configured filter went completely dark
+    /// the moment none of its directories had a running session — the common
+    /// case, and precisely when the reminder is most needed, because by then
+    /// you've forgotten you set it. A muted directory with nothing running still
+    /// hides its closed sessions from the list.
     private var hiddenDirectoriesButton: some View {
-        let count = store.hiddenLiveSessionCount
+        let indicator = DirectoryFilterIndicator.resolve(
+            hasHiddenDirectories: !settings.hiddenDirs.isEmpty,
+            hiddenLiveSessionCount: store.hiddenLiveSessionCount)
+        let badge = indicator.badge
         return Button {
             showDirectoryFilter = true
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: count > 0 ? "eye.slash.fill" : "eye.slash")
+                Image(systemName: indicator.isActive ? "eye.slash.fill" : "eye.slash")
                     .font(.system(size: 13, weight: .medium))
-                if count > 0 {
-                    Text("\(count)").font(.system(size: 13, weight: .semibold))
+                if let badge {
+                    Text("\(badge)").font(.system(size: 13, weight: .semibold))
                 }
             }
-            .foregroundStyle(count > 0 ? Tokens.accent : Tokens.label)
+            .foregroundStyle(indicator.isActive ? Tokens.accent : Tokens.label)
             // The header squeezes its chrome to fit the status line; without
             // `fixedSize` the badge is the first thing compressed away, leaving a
             // bare icon that hides the one number worth showing.
             .fixedSize()
-            .padding(.horizontal, count > 0 ? 11 : 0)
+            // Padding follows the BADGE, not active-ness: an active-but-unbadged
+            // filter is still a lone glyph and keeps the round 38pt button.
+            .padding(.horizontal, badge != nil ? 11 : 0)
             .frame(minWidth: 38, minHeight: 38)
+            // Deliberately NOT tinted: the accent lives on the glyph, and tinting
+            // the capsule accent too would put accent on accent. The active
+            // treatment is unchanged from before — only what triggers it moved.
             .glassOrRaised(in: Capsule(), fallback: Tokens.raised, interactive: true)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(count > 0
-            ? "Filter directories, \(count) running sessions hidden"
-            : "Filter directories")
+        .accessibilityLabel({
+            if let badge { return "Filter directories, \(badge) running sessions hidden" }
+            return indicator.isActive ? "Filter directories, filter on" : "Filter directories"
+        }())
         .accessibilityIdentifier("directoryFilterButton")
     }
 
