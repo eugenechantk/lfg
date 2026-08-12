@@ -971,6 +971,27 @@ export async function cmdServe() {
       const url = new URL(req.url);
       const path = url.pathname;
 
+      // TEMPORARY (2026-08-07): memory-leak instrumentation. Splits the growth
+      // between the JS heap, external/ArrayBuffer bytes, and everything else, so
+      // a retention leak can be told apart from native/fragmentation growth.
+      // Remove once the leak in the 2026-08-07 freeze investigation is closed.
+      if (path === "/api/debug/mem" && req.method === "GET") {
+        const mu = process.memoryUsage();
+        return json({
+          at: Date.now(),
+          uptimeSec: Math.round(process.uptime()),
+          rssMB: +(mu.rss / 1048576).toFixed(1),
+          heapTotalMB: +(mu.heapTotal / 1048576).toFixed(1),
+          heapUsedMB: +(mu.heapUsed / 1048576).toFixed(1),
+          externalMB: +(mu.external / 1048576).toFixed(1),
+          arrayBuffersMB: +((mu as { arrayBuffers?: number }).arrayBuffers ?? 0) / 1048576,
+          journalListeners: journal.listenerCount(),
+          journalHead: journal.head(),
+          browserFrames: browserFrames.debugStats(),
+          runs: RUNS.size,
+        });
+      }
+
       // Latest browser screenshot for a session. Metadata rides the durable SSE
       // journal; the potentially-large bytes stay process-local and are fetched
       // only by a detail screen that is actually showing the preview.

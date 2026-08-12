@@ -148,6 +148,12 @@ export class Journal {
     return () => this.listeners.delete(fn);
   }
 
+  /** TEMPORARY (2026-08-07): leak instrumentation — a count that only ever
+   * rises means SSE streams are not unsubscribing on disconnect. */
+  listenerCount(): number {
+    return this.listeners.size;
+  }
+
   /** Current actionable-prompt state as last stated by the global pump. */
   promptPresent(sessionId: string): boolean {
     return this.latestPrompt(sessionId) != null;

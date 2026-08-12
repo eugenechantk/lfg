@@ -175,6 +175,14 @@ export class BrowserFrameStore {
     return meta;
   }
 
+  /** TEMPORARY (2026-08-07): leak instrumentation — entries are per-session and
+   * latest-only, so a rising count means sessions are never being forgotten. */
+  debugStats(): { sessions: number; bytes: number } {
+    let bytes = 0;
+    for (const f of this.latest.values()) bytes += f.data.length;
+    return { sessions: this.latest.size, bytes };
+  }
+
   metadataResponse(sessionId: string): Response {
     const meta = this.metadata(sessionId);
     return meta
