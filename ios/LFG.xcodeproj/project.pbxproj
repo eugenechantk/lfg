@@ -258,8 +258,6 @@
 			dependencies = (
 			);
 			name = LFGWidgets;
-			packageProductDependencies = (
-			);
 			productName = LFGWidgets;
 			productReference = D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -475,7 +473,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFGWidgets/Info.plist;
@@ -487,6 +486,7 @@
 				);
 				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
+				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -499,8 +499,8 @@
 				APS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
@@ -511,6 +511,7 @@
 				);
 				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
+				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -523,8 +524,8 @@
 				APS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
@@ -535,6 +536,7 @@
 				);
 				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
+				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -545,7 +547,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFGWidgets/Info.plist;
@@ -557,6 +560,7 @@
 				);
 				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
+				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
