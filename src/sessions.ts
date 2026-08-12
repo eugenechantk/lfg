@@ -250,7 +250,7 @@ function listCodexProcs(): { pid: number; cmd: string }[] {
 // stale file. `procStart` lets us reject a recycled pid's leftover json.
 function readPidSession(
   pid: number,
-): { sessionId: string; cwd: string | null } | null {
+): { sessionId: string; cwd: string | null; boundAt: number | null } | null {
   try {
     const raw = readFileSync(
       join(HOME, ".claude", "sessions", `${pid}.json`),
@@ -260,13 +260,23 @@ function readPidSession(
       sessionId?: string;
       cwd?: string;
       procStart?: string;
+      startedAt?: number;
     };
     if (!j.sessionId) return null;
     // Reject a recycled pid's leftover json: the live process's start time must
     // match the one claude stamped. Platform/encoding differences (Linux clock
     // ticks vs macOS UTC-vs-local lstart) are handled inside procStartMatches.
     if (j.procStart && !procStartMatches(pid, j.procStart)) return null;
-    return { sessionId: j.sessionId, cwd: j.cwd ?? null };
+    // `startedAt` is when this process BOUND this sessionId, which is not the
+    // process start time when a running claude switches session (in-TUI
+    // /resume). It is the tiebreak `resolveSessionOwners` needs, and unlike the
+    // pidfile's mutable `updatedAt` it never changes for a given process — so a
+    // winner picked from it cannot flap between ticks.
+    return {
+      sessionId: j.sessionId,
+      cwd: j.cwd ?? null,
+      boundAt: typeof j.startedAt === "number" ? j.startedAt : null,
+    };
   } catch {
     return null;
   }
@@ -1407,7 +1417,7 @@ async function listSessionsUncached(): Promise<Session[]> {
         sessionId = sm ? sm[1] : null;
       }
       if (ps?.cwd) cwd = ps.cwd;
-      return { ...p, cwd, startedAt, sessionId, authoritative };
+      return { ...p, cwd, startedAt, sessionId, authoritative, boundAt: ps?.boundAt ?? null };
     }),
   );
 
@@ -1419,6 +1429,14 @@ async function listSessionsUncached(): Promise<Session[]> {
   // (freshly written) transcript — which would surface it as a phantom claude
   // duplicate of the aisdk session.
   for (const id of aisdkSessionIds) claimed.add(id);
+
+  // pid → how that process came by its sessionId, for the collision tiebreak in
+  // resolveSessionOwners. Kept as a side map rather than a Session field so the
+  // REST payload stays byte-identical for clients.
+  const claimByPid = new Map<number, SessionClaim>();
+  for (const e of enriched) {
+    claimByPid.set(e.pid, { authoritative: e.authoritative, boundAt: e.boundAt });
+  }
 
   const overrides = await readTitleOverrides();
   const assigns = userAssignments();
@@ -1742,8 +1760,83 @@ async function listSessionsUncached(): Promise<Session[]> {
       (a.startedAt ?? 0) - (b.startedAt ?? 0) ||
       (a.sessionId ?? "").localeCompare(b.sessionId ?? ""),
   );
-  resolvePaneOwners(out);
-  return out;
+  const deduped = resolveSessionOwners(out, (pid) => claimByPid.get(pid) ?? null);
+  resolvePaneOwners(deduped);
+  return deduped;
+}
+
+/**
+ * One sessionId, one row. Drops every row but the rightful owner when two live
+ * processes claim the same session.
+ *
+ * THIS IS NOT HYPOTHETICAL, and it is not the pane collision `resolvePaneOwners`
+ * handles — these are different pids in different panes, each with its own
+ * authoritative `~/.claude/sessions/<pid>.json` naming the same sessionId (an
+ * in-TUI `/resume` of a session another live process is already on will do it).
+ *
+ * A duplicate id is corrupting rather than merely untidy, because sessionId is
+ * the key for essentially everything downstream: the push watcher's per-session
+ * `prior` map, journal delta baselines, unread state, leases, sendq. In the push
+ * watcher the two rows overwrite each other's memory every tick, so their
+ * differing observations read as a state change — one pane idle at the composer
+ * and one pane sitting on an AskUserQuestion produced a "needs input" push every
+ * ~12s, forever, for a session nobody had asked anything of.
+ *
+ * There are two collision shapes and they want OPPOSITE tiebreaks, which is why
+ * this takes the claim and not just a timestamp:
+ *
+ *  - Both claims AUTHORITATIVE (each pid's own pidfile names the id). The later
+ *    binding is the live one — a `/resume` takes the session over — so newest
+ *    `boundAt` wins. This is the reelly case.
+ *  - Claims GUESSED (no readable pidfile yet, so the id came from the `--resume`
+ *    arg or newest-unclaimed-in-cwd). `claude --resume X --fork-session` forks
+ *    carry X on the command line while genuinely owning a *different* id, so for
+ *    the first moments of a fork's life every fork looks like the parent. Here
+ *    the OLDEST process is the real owner and the newcomers are the forks, so
+ *    oldest `startedAt` wins — and a guess never beats an authoritative claim.
+ *
+ * Every term is immutable for a given process, so the winner cannot flap between
+ * ticks — which matters, since a flapping winner would recreate the exact
+ * phantom-transition storm this exists to remove. Exported for tests.
+ */
+export type SessionClaim = { authoritative: boolean; boundAt: number | null };
+
+export function resolveSessionOwners(
+  sessions: Session[],
+  claimOf: (pid: number) => SessionClaim | null = () => null,
+): Session[] {
+  const byId = new Map<string, Session[]>();
+  for (const s of sessions) {
+    if (!s.sessionId) continue;
+    const g = byId.get(s.sessionId);
+    if (g) g.push(s);
+    else byId.set(s.sessionId, [s]);
+  }
+  const losers = new Set<Session>();
+  for (const [sessionId, group] of byId) {
+    if (group.length <= 1) continue;
+    // Ranked descending: bigger tuple wins. `startedAt` is NEGATED for guesses so
+    // the same "bigger wins" comparison expresses oldest-first for them.
+    const rank = (s: Session): [number, number, number] => {
+      const claim = claimOf(s.pid);
+      return claim?.authoritative
+        ? [1, claim.boundAt ?? s.startedAt ?? 0, -s.pid]
+        : [0, -(s.startedAt ?? 0), -s.pid];
+    };
+    const winner = group.reduce((a, b) => {
+      const ra = rank(a);
+      const rb = rank(b);
+      for (let i = 0; i < ra.length; i++) if (rb[i]! !== ra[i]!) return rb[i]! > ra[i]! ? b : a;
+      return a;
+    });
+    console.warn(
+      `[sessions] ${group.length} live processes claim session ${sessionId} (pids ${group
+        .map((g) => g.pid)
+        .join(", ")}) — keeping pid ${winner.pid}`,
+    );
+    for (const s of group) if (s !== winner) losers.add(s);
+  }
+  return losers.size ? sessions.filter((s) => !losers.has(s)) : sessions;
 }
 
 // One pane, one sendable session. Several pids routinely resolve to the same
