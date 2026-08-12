@@ -6,6 +6,7 @@
 - [ ] 2026-08-07 — Launched the macOS app for Tier 2 automation before checking whether the login session was locked
 - [ ] 2026-08-07 — Read `/api/sessions` 1s after a write and nearly called the rename broken (LIST_TTL_MS is 1.5s)
 - [ ] 2026-08-07 — `pkill`'d any running desktop app instance without checking whether Eugene had one open
+- [x] 2026-08-07 — Syncthing made the Air's `git pull` abort on a file whose content already matched the commit (saved to memory: Air signs desktop builds ad-hoc)
 
 ## Log
 
@@ -32,3 +33,9 @@
 **What happened:** Ran `pkill -f "lfg.app/Contents/MacOS/lfg"` to get a clean launch of the new build, without first checking whether Eugene had the app open.
 **Why this was wrong:** The desktop app is a real tool he uses; killing it mid-use is a visible side effect of my verification, not of his work. Project CLAUDE.md already warns about concurrent agents sharing test rigs — the same courtesy applies to the human.
 **What better looks like:** `pgrep -f` first; if an instance exists, say so and ask (or reuse it) rather than killing it silently.
+
+### 2026-08-07 — Syncthing made the Air's git pull abort on an already-identical file
+
+**What happened:** `git pull` on the Air aborted with "Please commit your changes or stash them" on `desktop/LFGSessions.swift` — Syncthing had already delivered my edit to the Air's working tree, so git saw a local modification against a commit the Air didn't have yet.
+**Why it matters:** The instinct on a dirty-tree pull failure is to stash or hard-reset, both of which risk another agent's in-flight work on a shared repo. Here the file was byte-identical to what I'd just committed, so discarding it was provably lossless — but only because I checked.
+**What better looks like:** On a Syncthing-synced peer, `shasum <file>` on both hosts before touching the dirty file. Identical hash → `git checkout -- <file>` then pull is a content no-op. Different hash → stop, it's someone else's work. Never blanket-stash to unblock a pull on this repo.
