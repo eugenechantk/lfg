@@ -1,0 +1,49 @@
+{
+  "note": "FlowDeck accessibility tree extract captured ~2s after sending \"What is 20+20? Answer with just the number.\" to a CLOSED session (CHARLIE / 20fd1857). The row carries the resume-specific identifier pendingStripRowResuming and the label \"Queued\", sitting at y~719 in the pending strip above the composer \u2014 not in the transcript.",
+  "nodes": [
+    {
+      "role": "GenericElement",
+      "id": "pendingStripRowResuming",
+      "label": "",
+      "frame": {
+        "x": 26,
+        "y": 719,
+        "width": 14,
+        "height": 14
+      }
+    },
+    {
+      "role": "StaticText",
+      "id": "pendingStripRowResuming",
+      "label": "What is 20+20? Answer with just the number.",
+      "frame": {
+        "x": 48,
+        "y": 718.6666666666667,
+        "width": 244.33333333333331,
+        "height": 14.333333333333371
+      }
+    },
+    {
+      "role": "StaticText",
+      "id": "pendingStripRowResuming",
+      "label": "Queued",
+      "frame": {
+        "x": 312.6666666666667,
+        "y": 719.1666666666667,
+        "width": 41.333333333333314,
+        "height": 13.333333333333371
+      }
+    },
+    {
+      "role": "Image",
+      "id": "pendingStripRowResuming",
+      "label": "More",
+      "frame": {
+        "x": 363,
+        "y": 719.9999999999999,
+        "width": 12,
+        "height": 12
+      }
+    }
+  ]
+}

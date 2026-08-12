@@ -35,6 +35,10 @@ ios/fastlane/*.bak
 
 # Transient verification evidence + tool state
 .codex/evidence/
+# Screen recordings are evidence too, but they are 3-8MB each and the repo keeps
+# every one forever. Commit the extracted stills (the house pattern) and leave the
+# source recordings on the machine that captured them.
+.claude/evidence/**/*.mov
 .playwright-mcp/
 
 # Desktop app build output

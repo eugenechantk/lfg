@@ -362,6 +362,17 @@ struct PendingStripView: View {
                         } else if item.failed {
                             Button("Retry") { Task { await store.retryPending(sessionID, item) } }
                                 .font(.caption2).buttonStyle(.bordered).controlSize(.mini)
+                        } else if item.queuedForResume {
+                            // Waking a closed session. Labelled the same as any
+                            // other queued message on purpose — from here it is
+                            // one: the host has it, nothing has run it yet. It
+                            // stays this way until the reopened session's
+                            // transcript carries the turn, at which point it
+                            // becomes a real accent bubble.
+                            Text("Queued")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "ellipsis.circle").font(.caption).foregroundStyle(.tertiary)
                         } else {
                             // Affordance hint that the queued message is tappable.
                             Image(systemName: "ellipsis.circle").font(.caption).foregroundStyle(.tertiary)
@@ -370,7 +381,8 @@ struct PendingStripView: View {
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(.quaternary.opacity(0.4), in: Capsule())
                     .contentShape(Capsule())
-                    .accessibilityIdentifier("pendingStripRow")
+                    .accessibilityIdentifier(
+                        item.queuedForResume ? "pendingStripRowResuming" : "pendingStripRow")
                     // Failed rows carry their own inline Retry button, so a tap
                     // there would compete with it; everything else opens the menu.
                     .onTapGesture { if !item.failed { onTap(item) } }
@@ -391,10 +403,13 @@ struct OptimisticUserBubble: View {
     let pending: SessionStore.PendingSend
     @Environment(SessionStore.self) private var store
 
-    // Awaiting the backend: a wake-up send to a reaped session that's still
-    // resuming server-side. Render muted/gray until it's confirmed (then blue).
-    private var awaitingResume: Bool { !pending.confirmed && !pending.failed && !pending.queuedOffline }
-    private var mutedBubble: Bool { awaitingResume || pending.queuedOffline }
+    // Defensive: a bubble the backend hasn't confirmed renders muted rather than
+    // accent, so the invariant ("accent means the conversation has it") holds
+    // even if a future path routes an unconfirmed send here. The states that
+    // actually wait — behind a running turn, waking a closed session, offline —
+    // are all `showSent == false` and live in `PendingStripView` instead.
+    private var awaitingBackend: Bool { !pending.confirmed && !pending.failed && !pending.queuedOffline }
+    private var mutedBubble: Bool { awaitingBackend || pending.queuedOffline }
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
@@ -410,18 +425,17 @@ struct OptimisticUserBubble: View {
             }
             .animation(.easeInOut(duration: 0.25), value: pending.confirmed)
             // The happy path shows no spinner — the bubble reads as sent the
-            // instant the user hits send. A wake-up send shows a quiet "Waking…"
-            // note while the session resumes; a genuine failure surfaces Retry
+            // instant the user hits send. A genuine failure surfaces Retry
             // (this bubble bypasses the pending bar's own Retry).
             if pending.queuedOffline {
                 HStack(spacing: 6) {
                     Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
                     Text("Will send when reachable").font(.caption2).foregroundStyle(.secondary)
                 }
-            } else if awaitingResume {
+            } else if awaitingBackend {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.mini)
-                    Text("Waking session…").font(.caption2).foregroundStyle(.secondary)
+                    Text("Sending…").font(.caption2).foregroundStyle(.secondary)
                 }
             } else if pending.failed {
                 VStack(alignment: .trailing, spacing: 2) {

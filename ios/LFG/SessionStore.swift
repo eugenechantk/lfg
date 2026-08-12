@@ -137,12 +137,17 @@ import LFGCore
         /// time, so the agent runs it after the current turn. Waits in the
         /// pending bar, tappable for remove / edit / send-now.
         var queuedBehindTurn: Bool = false
+        /// Sent to a CLOSED session: this message is the kickoff prompt of a
+        /// server-side resume (`claude --resume <id> "<text>"`, which continues
+        /// into a new sessionId). It waits in the pending bar as a queued
+        /// message for the whole resume — including after the send returns —
+        /// and becomes a real accent bubble only once the reopened session's
+        /// transcript carries the turn. The host agreeing to wake a pane is not
+        /// the conversation having the message.
+        var queuedForResume: Bool = false
         /// Whether the backend has accepted this send yet. `true` for the normal
         /// path (the agent picks an idle/live session up instantly, so the bubble
-        /// reads as sent immediately). `false` for a wake-up send to a session
-        /// whose pane was reaped: the server has to resume the conversation first
-        /// (a real 1–6s round-trip), so the bubble renders muted/gray until the
-        /// send returns, then animates to the confirmed accent color.
+        /// reads as sent immediately); `false` for anything still waiting.
         var confirmed: Bool = true
         /// Why this send failed, shown under "Not sent". `lastError` is set on
         /// every failure path but rendered nowhere, so a rejected create (a
@@ -2573,27 +2578,49 @@ import LFGCore
         if needsHistory { loadHistory(sid) }
     }
 
+    /// Apply a journal `queue` ack to the matching optimistic row.
+    ///
+    /// `delivered` does NOT unconditionally drop the row — it defers to
+    /// `QueueAckResolution`, the same "only once the turn is in THIS client's
+    /// transcript" rule `correlatePending` follows. The resume path is why:
+    /// the server records a woken session's kickoff message as `delivered` and
+    /// acks it the moment it accepts the resume (`recordImmediateMessage`),
+    /// which is seconds before the revived agent writes the turn — and, for
+    /// Claude, into a different sessionId. Removing on the ack alone left the
+    /// message showing nowhere at all until history caught up.
     private func applyQueueAck(sid: String?, ack: QueueAck) {
         let preferredSid = sid ?? ack.sid
-        switch ack.kind {
-        case "delivered":
-            if let location = pendingLocation(clientId: ack.clientId, preferredSid: preferredSid) {
+        let location = pendingLocation(clientId: ack.clientId, preferredSid: preferredSid)
+        let landed = location.map { loc in
+            OptimisticSendReconciliation.containsMatchingUserTurn(
+                matchText: pendingSends[loc.sid]?.first { $0.id == loc.pid }?.matchText ?? "",
+                in: transcripts[loc.sid] ?? [])
+        } ?? false
+
+        switch QueueAckResolution.resolve(ackKind: ack.kind, transcriptHasMatchingUserTurn: landed) {
+        case .remove:
+            if let location {
                 removePending(location.sid, location.pid)
                 loadHistory(location.sid)
-            } else if let preferredSid {
-                loadHistory(preferredSid)
             }
             markOutboxStateEventually(ack.clientId, state: "delivered")
-        case "failed":
-            if let location = pendingLocation(clientId: ack.clientId, preferredSid: preferredSid) {
+        case .awaitTranscript:
+            // Keep the row exactly as it is (queued, in the strip) and pull the
+            // transcript; the stream or this fetch brings the turn, and
+            // reconcile retires the row in the same pass the real bubble appears.
+            if let target = location?.sid ?? preferredSid, !target.isEmpty { loadHistory(target) }
+            markOutboxStateEventually(ack.clientId, state: "delivered")
+        case .markFailed:
+            if let location {
                 mutatePending(location.sid, location.pid) {
                     $0.failed = true
                     $0.confirmed = true
+                    $0.queuedForResume = false
                     if let msgId = ack.msgId { $0.serverQueueID = msgId }
                 }
             }
             markOutboxStateEventually(ack.clientId, state: "failed")
-        default:
+        case .ignore:
             break
         }
     }
@@ -2616,6 +2643,73 @@ import LFGCore
             queues[sid] = q
             correlatePending(sid, q)
         }
+    }
+
+    /// Per-resume history pollers, keyed by the send's clientId. See
+    /// `watchForResumeLanding`.
+    private var resumeLandingWatchers: [String: Task<Void, Never>] = [:]
+    private static let resumeLandingInterval: Duration = .seconds(2)
+    private static let resumeLandingTicks = 30   // → give up after ~60s
+
+    /// Poll the reopened session's history until this resume send's user turn
+    /// shows up — nothing else will do it.
+    ///
+    /// Two gaps meet here. The journal doesn't reliably announce the revived
+    /// agent's first turns: the pane the pump was watching was reaped, and after
+    /// an **id-stable** resume the session keeps its id, so the pump's message
+    /// baseline for it can already sit past the bytes the new pane writes — no
+    /// `message` event is emitted at all. And the client's own safety net,
+    /// `reconcilePendingViaQueue`, only fetches history for a row that carries a
+    /// server queue id; a resume send has none (its text was the process's
+    /// kickoff argument, never a queue entry). Verified live: the turn and the
+    /// agent's reply were on disk within seconds while the client sat on a stale
+    /// two-message transcript until something forced a re-read.
+    ///
+    /// Bounded and self-cancelling: it stops the moment the row is gone (the
+    /// transcript landed and `reconcilePending` retired it), and gives up after
+    /// ~60s, leaving the row visibly queued and tappable rather than pretending
+    /// the message was received.
+    private func watchForResumeLanding(clientId: String) {
+        resumeLandingWatchers[clientId]?.cancel()
+        resumeLandingWatchers[clientId] = Task { [weak self] in
+            for _ in 0 ..< Self.resumeLandingTicks {
+                try? await Task.sleep(for: Self.resumeLandingInterval)
+                if Task.isCancelled { break }
+                guard let self else { return }
+                // The row moves id when Claude resumes into a new sessionId, so
+                // re-resolve it every tick rather than capturing the send-time id.
+                guard let loc = self.pendingLocation(clientId: clientId) else { break }
+                self.loadHistory(loc.sid)
+            }
+            self?.resumeLandingWatchers[clientId] = nil
+        }
+    }
+
+    /// Fold a successful send response into the optimistic row.
+    ///
+    /// A `resumed` response is deliberately NOT a promotion. All the host has
+    /// said is "I have started waking that pane" — the revived agent hasn't
+    /// written anything yet, and for Claude the turn will land in a different
+    /// sessionId's transcript entirely. Flipping to the accent colour here is
+    /// what used to make a woken session's message read as received seconds
+    /// before it was; the row stays queued and `reconcilePending` retires it
+    /// when the reopened transcript actually carries the turn.
+    ///
+    /// The converse matters too: a send classified as a resume that comes back
+    /// as an ordinary send (the pane turned out to be live) drops the resume
+    /// framing and takes the normal rules.
+    static func applyAcceptance(_ pending: inout PendingSend, _ resp: SendResponse) {
+        guard resp.resumed != true else { return }
+        pending.queuedForResume = false
+        pending.confirmed = true
+        // Link to the server queue id right away so the message can be
+        // removed / edited / sent-now while it's still pending.
+        if let qid = resp.msg?.id { pending.serverQueueID = qid }
+        // The response is the authority on whether this actually queued: a queue
+        // id means it waits for the current turn, no queue id means the agent
+        // took it directly. Corrects the optimistic guess made from local `busy`
+        // at send time.
+        pending.queuedBehindTurn = resp.msg?.id != nil
     }
 
     private func mutatePending(_ sid: String, _ pid: String, _ body: (inout PendingSend) -> Void) {
@@ -2687,9 +2781,9 @@ import LFGCore
                 let eff = (resp.resumed == true ? resp.sessionId : nil) ?? sid
                 mutatePending(eff, pending.id) {
                     $0.clientId = clientId
-                    $0.confirmed = true
-                    if let qid = resp.msg?.id { $0.serverQueueID = qid }
+                    Self.applyAcceptance(&$0, resp)
                 }
+                if resp.resumed == true { watchForResumeLanding(clientId: clientId) }
                 await refresh(); reconcilePending(eff)
             } catch {
                 await settleSendFailure(clientId: clientId, hostId: routeHostId(forSession: sid))
@@ -2807,27 +2901,30 @@ import LFGCore
         let typed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !typed.isEmpty || !attachments.isEmpty else { return }
 
-        // 1) Show something right now, before any await. `idle` decides WHICH
-        //    surface: a send the agent will take immediately becomes a finished
-        //    user bubble in the transcript, while a send that has to wait (the
-        //    session is mid-turn or sitting on a prompt) waits in the one-line
-        //    pending bar above the composer and only becomes a blue bubble once
-        //    the real user turn comes back from the host. Keeping the two
-        //    distinct is the point: an accent-coloured bubble means received.
-        let idle = prompts[id] == nil && busy[id] != true
-        // A wake-up send: the target isn't in the live list — it's a closed
-        // session whose detail we're carrying forward, either because its pane
-        // was reaped while focused (`focusedSnapshot`) or it was opened straight
-        // from a tapped push notification (`deepLinkSession`). Either way this
-        // message has to resume the conversation server-side first (a real
-        // round-trip), so show it as a bubble (showSent) but unconfirmed/muted
-        // until the send returns, rather than instantly-blue as if received.
-        // A closed session shown in the list is also a wake-up: the send resumes
-        // it server-side (a real round-trip) before it's live.
+        // 1) Show something right now, before any await. `OutgoingSendPresentation`
+        //    decides WHICH surface: a send the agent will take immediately becomes
+        //    a finished user bubble in the transcript, while a send that has to
+        //    wait — mid-turn, sitting on a prompt, waking a closed session, or
+        //    held for an unreachable host — waits in the one-line pending bar
+        //    above the composer and only becomes a blue bubble once the real user
+        //    turn comes back from the host. Keeping the two distinct is the point:
+        //    an accent-coloured bubble means received.
+        //
+        //    A resume send is a closed session whose detail we're showing, either
+        //    from the list, from search, or carried forward because its pane was
+        //    reaped while focused (`focusedSnapshot`) / it was opened straight from
+        //    a tapped push notification (`deepLinkSession`). Either way the message
+        //    has to revive the conversation server-side before anything runs it.
         let isClosed = session(id)?.closed == true
-        let isWakeUp = isClosed
+        let needsResume = isClosed
             || (!sessions.contains { $0.sessionId == id }
                 && (focusedSnapshot?.sessionId == id || deepLinkSession?.sessionId == id))
+        let offlineAtSend = isOffline(id)
+        let presentation = OutgoingSendPresentation.classify(
+            hostUnreachable: offlineAtSend,
+            sessionNeedsResume: needsResume,
+            agentBusy: busy[id] == true,
+            awaitingPrompt: prompts[id] != nil)
         let clientId = UUID().uuidString
         let pid = clientId
         let nowMs = Date().timeIntervalSince1970 * 1000
@@ -2837,13 +2934,14 @@ import LFGCore
                         displayText: typed.isEmpty ? "📎 Attachment" : typed,
                         matchText: typed,
                         ts: nowMs,
-                        showSent: idle || isWakeUp,
-                        queuedBehindTurn: !idle && !isWakeUp,
-                        confirmed: !isWakeUp))
+                        queuedOffline: presentation == .offlineQueued,
+                        showSent: presentation.showsAsBubble,
+                        queuedBehindTurn: presentation == .queuedBehindTurn,
+                        queuedForResume: presentation == .queuedForResume,
+                        confirmed: presentation.isConfirmed))
 
         // 2) Offline sends persist attachment bytes as sidecars and leave the outbox
         //    text as typed text only; replay uploads the bytes and bakes paths in.
-        let offlineAtSend = isOffline(id)
         if offlineAtSend {
             do {
                 try persistOutboxAttachments(attachments, clientId: clientId)
@@ -2859,16 +2957,12 @@ import LFGCore
                 mutatePending(id, pid) { $0.failed = true }
                 return
             }
-            mutatePending(id, pid) {
-                $0.matchText = typed
-                $0.queuedOffline = true
-                $0.confirmed = false
-                // Nothing has reached a host, so this cannot read as received:
-                // it waits in the pending bar ("Queued") until the reconnect
-                // replay sends it, whatever the session looked like at send time.
-                $0.showSent = false
-                $0.queuedBehindTurn = false
-            }
+            // Nothing has reached a host, so this cannot read as received: it
+            // waits in the pending bar ("Queued") until the reconnect replay
+            // sends it, whatever the session looked like at send time. The
+            // classification above already put it there; only `matchText` still
+            // needs settling (attachment paths are baked in at replay).
+            mutatePending(id, pid) { $0.matchText = typed }
             return
         }
 
@@ -2903,20 +2997,8 @@ import LFGCore
             await markOutboxState(clientId, state: "sent")
             applyResume(from: id, resp)
             let eff = (resp.resumed == true ? resp.sessionId : nil) ?? id
-            // The backend accepted it (and, for a wake-up, finished resuming) —
-            // flip the muted bubble to its confirmed accent color before the
-            // refresh, then let reconcile hand it off to the real user turn.
-            mutatePending(eff, pid) {
-                $0.confirmed = true
-                // Link to the server queue id right away so the message can be
-                // removed / edited / sent-now while it's still pending.
-                if let qid = resp.msg?.id { $0.serverQueueID = qid }
-                // The response is the authority on whether this actually queued:
-                // a queue id means it waits for the current turn, no queue id
-                // means the agent took it directly. Corrects the optimistic
-                // guess made from local `busy` at send time.
-                $0.queuedBehindTurn = resp.msg?.id != nil
-            }
+            mutatePending(eff, pid) { Self.applyAcceptance(&$0, resp) }
+            if resp.resumed == true { watchForResumeLanding(clientId: pid) }
             await refresh()
             reconcilePending(eff)
         } catch {

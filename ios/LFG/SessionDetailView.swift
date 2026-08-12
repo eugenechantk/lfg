@@ -160,15 +160,26 @@ struct SessionDetailView: View {
             titleVisibility: .visible,
             presenting: queueAction
         ) { item in
-            // An offline-queued message never reached the host, so there is no
-            // running turn to interrupt — "send now" just means try the host
-            // again instead of waiting for the reconnect drain.
-            Button(item.queuedOffline ? "Try sending now" : "Send now (interrupt)") {
-                Task { await store.sendQueuedNow(sid, item) }
+            // A message waking a closed session is the resumed process's kickoff
+            // argument, not a queue entry — there is nothing to interrupt and
+            // nothing to pull back and edit. Offering either would be a no-op
+            // dressed as an action. Remove is still honest: it stops showing the
+            // row here (the reopened session will surface the real turn anyway),
+            // which is the escape hatch if a resume never lands.
+            if item.queuedForResume && !item.queuedOffline {
+                Button("Remove", role: .destructive) { Task { await store.removeQueued(sid, item) } }
+                Button("Cancel", role: .cancel) {}
+            } else {
+                // An offline-queued message never reached the host, so there is no
+                // running turn to interrupt — "send now" just means try the host
+                // again instead of waiting for the reconnect drain.
+                Button(item.queuedOffline ? "Try sending now" : "Send now (interrupt)") {
+                    Task { await store.sendQueuedNow(sid, item) }
+                }
+                Button("Edit") { Task { draft = await store.editQueued(sid, item) } }
+                Button("Remove", role: .destructive) { Task { await store.removeQueued(sid, item) } }
+                Button("Cancel", role: .cancel) {}
             }
-            Button("Edit") { Task { draft = await store.editQueued(sid, item) } }
-            Button("Remove", role: .destructive) { Task { await store.removeQueued(sid, item) } }
-            Button("Cancel", role: .cancel) {}
         } message: { item in
             Text(item.displayText)
         }
