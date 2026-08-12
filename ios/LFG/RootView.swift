@@ -31,9 +31,10 @@ struct RootView: View {
                                     showNewSession: $showNewSession,
                                     focusNewSessionComposer: $focusNewSessionComposer)
                         .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 460)
-                        // Attached INSIDE the sidebar column so the compact-width
-                        // `.navigationDestination` resolves against that column's
-                        // navigation stack — on the Group it would have none.
+                        // Attached INSIDE the sidebar column: the create surface is
+                        // a full-screen cover, and presenting it from the column
+                        // the user is actually looking at keeps it off the
+                        // navigation stack the session detail is pushed onto.
                         .newSessionPresentation(selection: $selection,
                                                 isPresented: $showNewSession,
                                                 autofocusComposer: $focusNewSessionComposer)

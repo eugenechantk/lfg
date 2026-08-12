@@ -1,10 +1,22 @@
 import SwiftUI
 
-/// Presents the same new-session surface with the idiom-specific navigation
-/// required by the split-view shell.
+/// Presents the new-session surface as a full-screen cover, in BOTH size classes.
+///
+/// It used to be a `navigationDestination` push in compact width, which put the
+/// create screen on the very same navigation stack the session detail is pushed
+/// onto (`List(selection:)` inside the split view's sidebar drives that push).
+/// Dismissing it therefore raced the push of the session you just created, and
+/// SwiftUI resolved that race differently run to run:
+///
+///   * the pop read as "the stack returned to its root", so the split view wrote
+///     `selection = nil` ~175ms after the create set it — leaving an orphaned
+///     "No session selected" screen pushed on top of the real one, or
+///   * both writes landed as pushes, and one send produced two stacked detail
+///     screens.
+///
+/// A cover is not on the stack, and `onDismiss` fires once it is fully gone — so
+/// the selection lands on an idle stack and pushes exactly one detail.
 private struct NewSessionPresentationModifier: ViewModifier {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
     @Binding var selection: String?
     @Binding var isPresented: Bool
     @Binding var autofocusComposer: Bool
@@ -15,61 +27,28 @@ private struct NewSessionPresentationModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .navigationDestination(isPresented: compactPresentation) {
-                destination
+            .fullScreenCover(isPresented: $isPresented, onDismiss: resetPresentation) {
+                NewSessionView(autofocusComposer: autofocusComposer) { newID in
+                    // Deliberately NOT `selection = newID`. The create screen is
+                    // dismissing in this same runloop turn; a selection change made
+                    // during that in-flight transition is swallowed. The optimistic
+                    // session was in the store immediately, but the detail only
+                    // opened seconds later, when the server's create response
+                    // re-requested it, which read as "send does nothing, then it
+                    // jumps".
+                    pendingSelection = newID
+                }
             }
-            .fullScreenCover(
-                isPresented: regularPresentation,
-                onDismiss: resetPresentation
-            ) {
-                destination
-            }
-    }
-
-    private var compactPresentation: Binding<Bool> {
-        Binding(
-            get: { isPresented && horizontalSizeClass != .regular },
-            set: { updatePresentation($0) }
-        )
-    }
-
-    private var regularPresentation: Binding<Bool> {
-        Binding(
-            get: { isPresented && horizontalSizeClass == .regular },
-            set: { updatePresentation($0) }
-        )
-    }
-
-    private var destination: some View {
-        NewSessionView(autofocusComposer: autofocusComposer) { newID in
-            // Deliberately NOT `selection = newID`. The create screen dismisses
-            // itself in this same runloop turn, and in compact width it is a push
-            // on the very stack that `selection` drives — a selection change made
-            // during that in-flight transition is swallowed. The optimistic
-            // session was in the store immediately, but the detail only opened
-            // seconds later, when the server's create response re-requested it,
-            // which read as "send does nothing, then it jumps".
-            pendingSelection = newID
-        }
-    }
-
-    private func updatePresentation(_ newValue: Bool) {
-        isPresented = newValue
-        if !newValue {
-            autofocusComposer = false
-            applyPendingSelection()
-        }
     }
 
     private func resetPresentation() {
-        isPresented = false
         autofocusComposer = false
         applyPendingSelection()
     }
 
     /// Open the just-created session once the create screen's dismissal has been
-    /// committed. One main-actor hop is the whole difference between a selection
-    /// the navigation stack drops and a normal push.
+    /// committed. One main-actor hop keeps the assignment out of UIKit's dismissal
+    /// transaction — mutating navigation state inside one is undefined behavior.
     private func applyPendingSelection() {
         guard let id = pendingSelection else { return }
         pendingSelection = nil
