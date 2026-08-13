@@ -853,6 +853,49 @@ function describeInput(input: unknown): string {
   }
 }
 
+// `SendUserFile` is the harness tool an agent calls when a file it produced IS
+// the deliverable (a chart, a screenshot, a report). Rendered as a plain tool
+// line it would be a blob of JSON with the paths buried inside — the one place
+// the file must be tappable is the one place it wasn't. Turn the call into an
+// assistant text block whose caption is prose and whose files are markdown
+// references, so every client's existing media scanner surfaces them as
+// attachments (image/PDF cards, inline video) with no client change.
+//
+// Images use image syntax on purpose: clients strip `![…](…)` from prose once
+// it has become an attachment, so an image contributes no leftover text. Other
+// types stay links, which read as a filename the user can also tap inline.
+export function sendUserFileText(input: unknown): string | null {
+  if (!input || typeof input !== "object") return null;
+  const inp = input as { files?: unknown; caption?: unknown };
+  if (!Array.isArray(inp.files)) return null;
+  const files = inp.files.filter((f): f is string => typeof f === "string" && f.trim() !== "");
+  if (files.length === 0) return null;
+  const parts: string[] = [];
+  const caption = typeof inp.caption === "string" ? inp.caption.trim() : "";
+  if (caption) parts.push(caption);
+  for (const file of files) {
+    const path = file.trim();
+    const name = basename(path) || path;
+    const isImage = /\.(png|jpe?g|gif|webp|heic|bmp|tiff)$/i.test(path);
+    parts.push(`${isImage ? "!" : ""}[${name}](${path})`);
+  }
+  return parts.join("\n\n");
+}
+
+// True for the `tool_result` turn that answers a `SendUserFile` call. Claude
+// Code stamps the structured delivery record on the line, so this keys off that
+// shape rather than the result prose. The result only restates the paths and
+// their upload uuids directly beneath the attachments we just rendered, so it
+// is dropped as duplicate noise.
+function isSendUserFileResult(toolUseResult: unknown): boolean {
+  if (!toolUseResult || typeof toolUseResult !== "object") return false;
+  const r = toolUseResult as { attachments?: unknown };
+  if (!Array.isArray(r.attachments) || r.attachments.length === 0) return false;
+  return r.attachments.every(
+    (a) => !!a && typeof a === "object" && typeof (a as { path?: unknown }).path === "string",
+  );
+}
+
 function codexLineId(
   x: { timestamp?: string; type?: string; payload?: { type?: string; call_id?: string } },
   text: string,
@@ -950,6 +993,7 @@ function normalizeLineUnsafe(line: string): SessionMsg[] {
     error?: string;
     apiErrorStatus?: number;
     isMeta?: boolean;
+    toolUseResult?: unknown;
     message?: { role?: string; content?: unknown };
   };
   try {
@@ -1017,6 +1061,12 @@ function normalizeLineUnsafe(line: string): SessionMsg[] {
         return;
       }
       if (c.type === "tool_use") {
+        // A file the agent handed over renders as content, not as a tool call.
+        const handoff = c.name === "SendUserFile" ? sendUserFileText(c.input) : null;
+        if (handoff) {
+          msgs.push({ id: blockId(id, idx), role, kind: "text", text: handoff, ts });
+          return;
+        }
         const input = describeInput(c.input);
         msgs.push({
           id: blockId(id, idx),
@@ -1028,6 +1078,9 @@ function normalizeLineUnsafe(line: string): SessionMsg[] {
         return;
       }
       if (c.type === "tool_result") {
+        // The delivery receipt for a SendUserFile call restates paths already
+        // shown as attachments — drop it rather than echo them as raw text.
+        if (isSendUserFileResult(x.toolUseResult)) return;
         msgs.push({
           id: blockId(id, idx),
           role,
