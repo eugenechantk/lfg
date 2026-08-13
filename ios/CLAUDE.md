@@ -38,10 +38,12 @@ live, the conventions to keep, and the traps that have burned past sessions.
 | `LFG/NewSessionView.swift` | Agent/model/dir selectors + kickoff composer |
 | `LFG/MessageComposer.swift` | Reusable input bar (multiline grow, attach, send); `GlassPanel` |
 | `LFG/Components.swift` | Transcript bubbles, thinking block, tool lines, prompt panel, pending/queue strips, usage |
-| `LFG/RichContent.swift` | Host-file URL resolution, media scanning, markdown (MarkdownUI), full-screen viewer (image zoom / PDF) |
+| `LFG/RichContent.swift` | Host-file URL resolution, attachment cards, markdown (MarkdownUI), full-screen viewer (image zoom / PDF / video) |
+| `LFG/AttachmentsSheet.swift` | "Files & Links" — every attachment and link in a transcript, from the ••• menu |
 | `LFG/PushManager.swift` | APNs lifecycle + `AppDelegate`; side-effecting shell around `LFGCore/Push` |
 | `LFG/{Theme,SettingsView}.swift` | Visual helpers; host config / notifications / directories UI |
 | `LFGCore/Sources/LFGCore/Models.swift` | All Codable API types (lenient decoding) |
+| `LFGCore/Sources/LFGCore/MediaRefs.swift` | Parses files + web links out of turn text; whole-transcript index behind the attachments sheet |
 | `LFGCore/Sources/LFGCore/LFGClient.swift` | Stateless async HTTP/SSE client (Sendable) |
 | `LFGCore/Sources/LFGCore/SSEParser.swift` | Incremental SSE parser + frame→`LiveEvent` decoder |
 | `LFGCore/Sources/LFGCore/Push.swift` | Pure push-payload parsing + registration state machine |

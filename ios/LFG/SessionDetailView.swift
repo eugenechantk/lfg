@@ -31,6 +31,7 @@ struct SessionDetailView: View {
     // deliberate scroll-up and freezing auto-follow before the view settles.
     @State private var pinningToBottom = false
     @State private var dismissedBrowserFrameID: String?
+    @State private var showingAttachments = false
 
     private var sid: String { session.sessionId ?? "" }
     private var messages: [SessionMessage] { store.transcripts[sid] ?? [] }
@@ -148,6 +149,9 @@ struct SessionDetailView: View {
         }
         .onDisappear {
             store.blur(sid)
+        }
+        .sheet(isPresented: $showingAttachments) {
+            AttachmentsSheet(messages: messages)
         }
         .alert("Rename session", isPresented: $renaming) {
             TextField("Title", text: $newTitle)
@@ -374,6 +378,13 @@ struct SessionDetailView: View {
                         Label("Stop", systemImage: "stop.circle")
                     }
                 }
+                // Every file and link this session produced, without scrolling
+                // back through the transcript to find them.
+                Button { showingAttachments = true } label: {
+                    Label("Files & Links", systemImage: "paperclip")
+                }
+                .accessibilityIdentifier("filesAndLinksButton")
+
                 Menu {
                     ForEach(modelOptions, id: \.self) { m in
                         Button(m) { Task { await store.setModel(sid, m) } }
