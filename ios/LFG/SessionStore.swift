@@ -2645,39 +2645,63 @@ import LFGCore
         }
     }
 
-    /// Per-resume history pollers, keyed by the send's clientId. See
-    /// `watchForResumeLanding`.
+    /// Per-send history pollers, keyed by the send's clientId. See
+    /// `watchForTurnLanding`.
     private var resumeLandingWatchers: [String: Task<Void, Never>] = [:]
     private static let resumeLandingInterval: Duration = .seconds(2)
     private static let resumeLandingTicks = 30   // → give up after ~60s
+    /// The first few ticks run fast, because the window this closes for a kickoff
+    /// is only about a second wide (the transcript 404s for ~1s after create) and
+    /// the agent's first output can land inside it — a 2s first look is long enough
+    /// for the user to watch their own message sit under the reply.
+    private static let landingWarmupInterval: Duration = .milliseconds(500)
+    private static let landingWarmupTicks = 4
 
-    /// Poll the reopened session's history until this resume send's user turn
-    /// shows up — nothing else will do it.
+    /// Poll a session's history until this send's user turn shows up — nothing
+    /// else will do it. Used for the two sends whose turn the journal structurally
+    /// cannot announce: a resume, and a brand-new session's kickoff.
     ///
-    /// Two gaps meet here. The journal doesn't reliably announce the revived
-    /// agent's first turns: the pane the pump was watching was reaped, and after
-    /// an **id-stable** resume the session keeps its id, so the pump's message
-    /// baseline for it can already sit past the bytes the new pane writes — no
-    /// `message` event is emitted at all. And the client's own safety net,
-    /// `reconcilePendingViaQueue`, only fetches history for a row that carries a
-    /// server queue id; a resume send has none (its text was the process's
-    /// kickoff argument, never a queue entry). Verified live: the turn and the
-    /// agent's reply were on disk within seconds while the client sat on a stale
-    /// two-message transcript until something forced a re-read.
+    /// **Resume.** The journal doesn't reliably announce the revived agent's first
+    /// turns: the pane the pump was watching was reaped, and after an **id-stable**
+    /// resume the session keeps its id, so the pump's message baseline for it can
+    /// already sit past the bytes the new pane writes — no `message` event is
+    /// emitted at all. Verified live: the turn and the agent's reply were on disk
+    /// within seconds while the client sat on a stale two-message transcript until
+    /// something forced a re-read.
+    ///
+    /// **Kickoff.** `journal-pump.ts` starts a session it has just discovered at
+    /// the file's CURRENT size ("journal only what's next"), and the harness has
+    /// already written the kickoff user turn by then — so that turn is *never*
+    /// journaled. The one history fetch the detail view makes can't cover it
+    /// either: measured live, `POST /api/sessions/new` returns in ~300ms and the
+    /// messages endpoint 404s ("session transcript not found") for ~1s after that,
+    /// so the fetch lands in the gap and `ensureHistory` gives up silently. The
+    /// kickoff bubble then hung below the assistant output streaming in above it —
+    /// the user's own message rendered at the *bottom* of the conversation — until
+    /// leaving and re-entering the session re-ran the fetch.
+    ///
+    /// In both cases the client's other safety net, `reconcilePendingViaQueue`,
+    /// structurally skips the row: it only fetches history for a row that carries a
+    /// server queue id, and neither of these has one (their text was the process's
+    /// kickoff argument, never a queue entry).
     ///
     /// Bounded and self-cancelling: it stops the moment the row is gone (the
     /// transcript landed and `reconcilePending` retired it), and gives up after
     /// ~60s, leaving the row visibly queued and tappable rather than pretending
     /// the message was received.
-    private func watchForResumeLanding(clientId: String) {
+    private func watchForTurnLanding(clientId: String) {
         resumeLandingWatchers[clientId]?.cancel()
         resumeLandingWatchers[clientId] = Task { [weak self] in
-            for _ in 0 ..< Self.resumeLandingTicks {
-                try? await Task.sleep(for: Self.resumeLandingInterval)
+            for tick in 0 ..< (Self.landingWarmupTicks + Self.resumeLandingTicks) {
+                try? await Task.sleep(
+                    for: tick < Self.landingWarmupTicks
+                        ? Self.landingWarmupInterval
+                        : Self.resumeLandingInterval)
                 if Task.isCancelled { break }
                 guard let self else { return }
-                // The row moves id when Claude resumes into a new sessionId, so
-                // re-resolve it every tick rather than capturing the send-time id.
+                // The row moves id when Claude resumes into a new sessionId, and
+                // again when an optimistic create remaps its `local-…` placeholder,
+                // so re-resolve it every tick rather than capturing the send-time id.
                 guard let loc = self.pendingLocation(clientId: clientId) else { break }
                 self.loadHistory(loc.sid)
             }
@@ -2726,13 +2750,19 @@ import LFGCore
     /// message appears as the user's message right away instead of only once the
     /// agent records it. The session is created with this text as its prompt, so
     /// the real user turn lands shortly and reconciles the placeholder away.
-    func addPending(_ sid: String, text: String) {
+    ///
+    /// Returns the row's id so the caller can watch it land
+    /// (`watchForTurnLanding`); nil when there was nothing to add.
+    @discardableResult
+    func addPending(_ sid: String, text: String) -> String? {
         let typed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !typed.isEmpty else { return }
+        guard !typed.isEmpty else { return nil }
         let nowMs = Date().timeIntervalSince1970 * 1000
+        let pid = UUID().uuidString
         pendingSends[sid, default: []].append(
-            PendingSend(id: UUID().uuidString, displayText: typed, matchText: typed, ts: nowMs, showSent: true))
+            PendingSend(id: pid, displayText: typed, matchText: typed, ts: nowMs, showSent: true))
         reconcilePending(sid)
+        return pendingSends[sid]?.contains { $0.id == pid } == true ? pid : nil
     }
 
     /// Resend a failed optimistic message. If we know its server queue id, retry
@@ -2783,7 +2813,7 @@ import LFGCore
                     $0.clientId = clientId
                     Self.applyAcceptance(&$0, resp)
                 }
-                if resp.resumed == true { watchForResumeLanding(clientId: clientId) }
+                if resp.resumed == true { watchForTurnLanding(clientId: clientId) }
                 await refresh(); reconcilePending(eff)
             } catch {
                 await settleSendFailure(clientId: clientId, hostId: routeHostId(forSession: sid))
@@ -2998,7 +3028,7 @@ import LFGCore
             applyResume(from: id, resp)
             let eff = (resp.resumed == true ? resp.sessionId : nil) ?? id
             mutatePending(eff, pid) { Self.applyAcceptance(&$0, resp) }
-            if resp.resumed == true { watchForResumeLanding(clientId: pid) }
+            if resp.resumed == true { watchForTurnLanding(clientId: pid) }
             await refresh()
             reconcilePending(eff)
         } catch {
@@ -3130,7 +3160,15 @@ import LFGCore
         // maps the real id).
         if let host { hostBySession[placeholder] = host.id }
         busy[placeholder] = true            // the agent is spinning up on this prompt
-        addPending(placeholder, text: typed)   // finished (showSent) kickoff bubble
+        // Finished (showSent) kickoff bubble, plus a watcher that re-reads the
+        // transcript until the real user turn is in it. Without the watcher this
+        // bubble can outlive the whole first turn: the pump never journals a
+        // kickoff (it starts a new session's tail at EOF) and the detail view's one
+        // history fetch races the transcript into existence — see
+        // `watchForTurnLanding`.
+        if let pid = addPending(placeholder, text: typed) {
+            watchForTurnLanding(clientId: pid)
+        }
         Task { await attemptCreate(placeholder, req, on: host, attachments: attachments) }
         return placeholder
     }
