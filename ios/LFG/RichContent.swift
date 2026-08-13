@@ -55,94 +55,9 @@ extension EnvironmentValues {
     }
 }
 
-// MARK: - Media references in text
-
-enum MediaKind: Equatable {
-    case image, video, pdf, markdown, other
-
-    static func from(ext: String) -> MediaKind? {
-        switch ext.lowercased() {
-        case "png", "jpg", "jpeg", "gif", "webp", "heic", "bmp", "tiff": return .image
-        case "mp4", "mov", "m4v", "webm": return .video
-        case "pdf": return .pdf
-        case "md", "markdown", "txt": return .markdown
-        default: return nil
-        }
-    }
-}
-
-struct MediaRef: Identifiable, Equatable {
-    let raw: String          // original path or URL string
-    let kind: MediaKind
-    var label: String?       // friendly name from a markdown link, if any
-    var id: String { raw }
-    var filename: String { label ?? (raw as NSString).lastPathComponent }
-
-    init(raw: String, kind: MediaKind, label: String? = nil) {
-        self.raw = raw; self.kind = kind
-        self.label = (label?.isEmpty == false) ? label : nil
-    }
-}
-
-enum MediaScanner {
-    // Markdown image: ![label](url)
-    private static let imageMarkdown = try! NSRegularExpression(pattern: #"!\[([^\]]*)\]\(([^)\s]+)\)"#)
-    // Markdown link: [label](url)
-    private static let linkMarkdown = try! NSRegularExpression(pattern: #"(?<!\!)\[([^\]]*)\]\(([^)\s]+)\)"#)
-    // Bare file references ending in an extension: http(s) URL, absolute host
-    // path, or a multi-segment relative path (resolved against the session cwd).
-    // A boundary lookbehind keeps a relative path like `improvement-log/foo.md`
-    // from being grabbed mid-token as the bogus absolute `/foo.md` (which 404s) —
-    // it's matched whole instead so it can resolve to the real file.
-    private static let bareRef = try! NSRegularExpression(
-        pattern: #"(?:https?://[^\s)]+|(?<![\w.~/-])(?:/[^\s)]+|[\w.~-]+(?:/[\w.~-]+)+))\.([A-Za-z0-9]{1,5})"#)
-
-    /// Find renderable file references in a message.
-    /// - Markdown links → cards for ANY file type (explicit, so low false-positive).
-    /// - Markdown images → inline by default (MarkdownUI), or cards when
-    ///   `includeInlineImages` is set (user bubbles, which don't render markdown).
-    /// - Bare paths/URLs → only known media types, to avoid turning every file
-    ///   path mentioned in prose into a card.
-    static func scan(_ text: String, includeInlineImages: Bool = false) -> [MediaRef] {
-        let ns = text as NSString
-        let full = NSRange(location: 0, length: ns.length)
-
-        var seen = Set<String>()
-        var refs: [MediaRef] = []
-        var inlineImageURLs = Set<String>()
-
-        func add(_ raw: String, label: String?, allowAny: Bool) {
-            // Trim trailing sentence punctuation only — a leading dot is significant
-            // (e.g. `.claude/notes.md` is a dot-directory, not a stray period).
-            var trimmed = raw
-            while let last = trimmed.last, ".,);'\"".contains(last) { trimmed.removeLast() }
-            guard !trimmed.isEmpty, !seen.contains(trimmed) else { return }
-            let ext = (trimmed as NSString).pathExtension
-            let kind: MediaKind
-            if let known = MediaKind.from(ext: ext) { kind = known }
-            else if allowAny, !ext.isEmpty { kind = .other }
-            else { return }
-            seen.insert(trimmed)
-            refs.append(MediaRef(raw: trimmed, kind: kind, label: label))
-        }
-
-        for m in imageMarkdown.matches(in: text, range: full) where m.numberOfRanges > 2 {
-            let label = ns.substring(with: m.range(at: 1))
-            let url = ns.substring(with: m.range(at: 2))
-            if includeInlineImages { add(url, label: label, allowAny: true) }
-            else { inlineImageURLs.insert(url) }
-        }
-        for m in linkMarkdown.matches(in: text, range: full) where m.numberOfRanges > 2 {
-            add(ns.substring(with: m.range(at: 2)), label: ns.substring(with: m.range(at: 1)), allowAny: true)
-        }
-        for m in bareRef.matches(in: text, range: full) {
-            let raw = ns.substring(with: m.range(at: 0))
-            guard !inlineImageURLs.contains(raw) else { continue }
-            add(raw, label: nil, allowAny: false)
-        }
-        return refs
-    }
-}
+// `MediaKind`, `MediaRef`, `MediaScanner` and the whole-transcript index now
+// live in LFGCore (`MediaRefs.swift`) — pure string parsing, covered by tests
+// that run without a simulator. This file keeps only the SwiftUI surfaces.
 
 // MARK: - Markdown prose
 
@@ -205,41 +120,24 @@ private struct HostImageProvider: ImageProvider {
 
 // MARK: - Inline media attachments (video / pdf / file cards / bare images)
 
+/// Every attachment — image, video, PDF, anything — is a compact tappable card
+/// that opens full-screen in `FileViewerSheet`. One rule, no per-type layout:
+/// a transcript is a conversation to scan, and inline previews turned an
+/// image- or video-heavy session into a wall of media you had to scroll past.
+/// The card says what the file is; the tap is how you look at it.
 struct MediaAttachmentsView: View {
     let refs: [MediaRef]
-    /// When true, every attachment renders as a tappable file card (button) —
-    /// no inline image/video preview. Used for user-sent messages.
-    var cardsOnly: Bool = false
     @Environment(\.hostFiles) private var hostFiles
     @State private var viewing: MediaRef?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(refs) { ref in
-                if cardsOnly {
-                    fileCard(ref)
-                } else {
-                    switch ref.kind {
-                    // Images render as compact tappable cards (open full-size in
-                    // the viewer sheet) rather than full-width inline previews,
-                    // to keep image-heavy transcripts scannable.
-                    case .image: fileCard(ref)
-                    case .video: videoView(ref)
-                    case .pdf, .markdown, .other: fileCard(ref)
-                    }
-                }
+                fileCard(ref)
             }
         }
         .sheet(item: $viewing) { ref in
             FileViewerSheet(ref: ref, url: hostFiles?.resolve(rawPath: ref.raw))
-        }
-    }
-
-    @ViewBuilder private func videoView(_ ref: MediaRef) -> some View {
-        if let url = hostFiles?.resolve(rawPath: ref.raw) {
-            HostVideoPlayer(url: url)
-                .frame(height: 200)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
 
@@ -271,15 +169,19 @@ struct MediaAttachmentsView: View {
 
 // MARK: - Video
 
-/// Video surface for host files.
+/// Video surface for host files, shown inside `FileViewerSheet`.
 ///
 /// Two reasons this exists instead of SwiftUI's `VideoPlayer`:
 /// 1. `VideoPlayer` suppresses `AVPlayerViewController`'s full-screen expand
-///    button, so an inline video could only ever be watched in its 200pt strip.
+///    button, so a video could only ever be watched at the size it was given.
 ///    Hosting the controller directly puts the expand control back.
 /// 2. The player is owned by the coordinator, so a body re-evaluation (the
 ///    transcript re-renders on every SSE delta) no longer builds a fresh
 ///    `AVPlayer` and restart playback from zero.
+///
+/// It streams from the host rather than downloading first — a two-minute clip
+/// is tens of megabytes, and `FileViewerSheet`'s download path would hold all
+/// of it in memory before the first frame.
 struct HostVideoPlayer: UIViewControllerRepresentable {
     let url: URL
 

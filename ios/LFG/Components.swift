@@ -61,8 +61,9 @@ private struct TextBubble: View {
                                 withAnimation(.easeInOut(duration: 0.15)) { showTimestamp.toggle() }
                             }
                     }
-                    // User attachments show as tappable file cards, not inline previews.
-                    if !media.isEmpty { MediaAttachmentsView(refs: media, cardsOnly: true).frame(maxWidth: 280) }
+                    // Narrower than assistant attachments so the cards read as
+                    // part of the trailing bubble run.
+                    if !media.isEmpty { MediaAttachmentsView(refs: media).frame(maxWidth: 280) }
                     // Sent-time caption — only while toggled on.
                     if showTimestamp, let sentAt = timestampText {
                         Text(sentAt)
