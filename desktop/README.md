@@ -8,11 +8,14 @@ configured `lfg serve` hosts and reopens any of them in iTerm2 with one click.
 | Session | Action |
 | --- | --- |
 | On this Mac, has a tmux pane | New iTerm2 window attached to that tmux session (`tmux attach -t <name>`) |
-| On another host (or local without tmux) | New iTerm2 window with a fresh local tmux session running `claude --resume <sessionId>` in the session's cwd |
+| On another host with a tmux pane | New iTerm2 window attached over mosh/ssh |
+| Closed Claude or Codex session | New iTerm2 window with a fresh local tmux session running the agent's native resume command in the session's cwd |
+| Running without a tmux pane | Not openable; resuming would duplicate an already-running session |
 
-Cross-host resume works because `~/.claude/projects` syncs between machines,
-so the remote session's transcript is already on disk locally. Opened iTerm2
-windows are stretched to the full visible height of the display they open on.
+Cross-host resume works when the agent's transcript directory
+(`~/.claude/projects` or `~/.codex/sessions`) is synced between machines, so
+the remote session's history is already on disk locally. Opened iTerm2 windows
+are stretched to the full visible height of the display they open on.
 
 ## UI
 
@@ -51,7 +54,8 @@ windows are stretched to the full visible height of the display they open on.
   recently active first, running/idle tallies; ambiguous leaf names get their
   parent directory prefixed).
 - Auto-refreshes every 10 s; badge shows `tmux` (local attach), `mosh`/`ssh`
-  (remote attach, whichever transport that row will use), or `resume`.
+  (remote attach, whichever transport that row will use), or `resume` for a
+  closed Claude/Codex session. A running process never receives a Resume badge.
 
 ## Hosts
 

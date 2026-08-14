@@ -1,0 +1,15 @@
+   224
+   225	    var id: String { "\(hostId)-\(session.id)" }
+   226
+   227	    var canOpen: Bool {
+   228	        session.tmuxName != nil || opensByResume
+   229	    }
+   230
+   231	    var opensByResume: Bool {
+   232	        session.closed
+   233	            && session.tmuxName == nil
+   234	            && session.sessionId != nil
+   235	            && Opener.canResume(agent: session.agent)
+   236	    }
+   237
+   238	    enum Status: Int, CaseIterable {

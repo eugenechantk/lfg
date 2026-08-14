@@ -1,0 +1,47 @@
+  1499
+  1500	        // Resume is a lifecycle state, not a fallback for a missing tmux name.
+  1501	        // A live non-tmux Codex process cannot be attached, but starting a
+  1502	        // second `codex resume` would duplicate a session the server says is
+  1503	        // already running.
+  1504	        let liveCodexWithoutTmux = SessionItem(
+  1505	            session: APISession(
+  1506	                agent: "codex", pid: 73, cwd: "/tmp/project", project: "project",
+  1507	                title: "Live Codex", sessionId: "codex-live", busy: true,
+  1508	                lastActivityAt: 1, tmuxName: nil, model: "gpt-5.6",
+  1509	                status: nil, lastUserText: nil),
+  1510	            hostURL: "http://localhost:8766", hostId: "host", hostLabel: "This Mac",
+  1511	            hostIsLocal: true, hostSSHTarget: nil)
+  1512	        try expect(!liveCodexWithoutTmux.opensByResume,
+  1513	                   "a live session without tmux is not mislabeled resume")
+  1514	        try expect(!liveCodexWithoutTmux.canOpen,
+  1515	                   "a live session without an attach target cannot double-spawn via open")
+  1516	        try expect(Opener.open(liveCodexWithoutTmux)?.contains("already running outside tmux") == true,
+  1517	                   "open routing rejects a live non-tmux session before any resume command")
+  1518
+  1519	        let codexRowData = Data(#"{"sessionId":"codex-closed","cwd":"/tmp/project","project":"project","title":"Closed Codex","lastActivityAt":1,"lastUserText":null,"agent":"codex"}"#.utf8)
+  1520	        let codexResumable = try JSONDecoder().decode(ResumableAPISession.self, from: codexRowData)
+  1521	        let closedCodexSession = SessionStore.closedSession(from: codexResumable)
+  1522	        let closedCodex = SessionItem(
+  1523	            session: closedCodexSession,
+  1524	            hostURL: "http://localhost:8766", hostId: "host", hostLabel: "This Mac",
+  1525	            hostIsLocal: true, hostSSHTarget: nil)
+  1526	        try expect(closedCodexSession.agent == "codex",
+  1527	                   "a resumable Codex row keeps its agent identity")
+  1528	        try expect(closedCodex.opensByResume && closedCodex.canOpen,
+  1529	                   "a closed Codex session is openable by resume")
+  1530
+  1531	        let legacyRowData = Data(#"{"sessionId":"legacy-claude","cwd":"/tmp/project","project":"project","title":"Legacy Claude","lastActivityAt":1,"lastUserText":null}"#.utf8)
+  1532	        let legacyResumable = try JSONDecoder().decode(ResumableAPISession.self, from: legacyRowData)
+  1533	        try expect(legacyResumable.agent == "claude",
+  1534	                   "an older resumable response without agent remains Claude-compatible")
+  1535
+  1536	        let codexResume = Opener.resumeAgentCommand(agent: "codex", sessionId: "codex-closed")
+  1537	        try expect(codexResume?.contains("codex") == true &&
+  1538	                   codexResume?.hasSuffix(" resume 'codex-closed'") == true,
+  1539	                   "Codex resume uses the native codex resume subcommand")
+  1540	        let claudeResume = Opener.resumeAgentCommand(agent: "claude", sessionId: "claude-closed")
+  1541	        try expect(claudeResume?.contains("claude") == true &&
+  1542	                   claudeResume?.hasSuffix(" --resume 'claude-closed'") == true,
+  1543	                   "Claude resume keeps the native claude resume flag")
+  1544
+  1545	        // MARK: Hidden directories

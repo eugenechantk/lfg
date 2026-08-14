@@ -1,0 +1,9 @@
+   999	    /// A resumable row as a displayable closed session. Shared by the normal
+  1000	    /// list fetch and by search so the two can't drift into different rows.
+  1001	    static func closedSession(from r: ResumableAPISession) -> APISession {
+  1002	        APISession(
+  1003	            agent: r.agent,
+  1004	            pid: -1,
+  1005	            cwd: r.cwd,
+  1006	            project: r.project ?? projectName(for: r.cwd),
+  1007	            title: r.title,

@@ -1,0 +1,40 @@
+  2153	        guard item.opensByResume else {
+  2154	            return "This session is already running outside tmux, so lfg cannot attach to it."
+  2155	        }
+  2156	        return resumeLocally(item)
+  2157	    }
+  2158
+  2159	    static func canResume(agent: String) -> Bool {
+  2160	        agent == "claude" || agent == "aisdk" || agent == "codex"
+  2161	    }
+  2162
+  2163	    /// Pure command selection shared by the opener and headless regression
+  2164	    /// tests. Claude-family transcripts use Claude Code's flag; Codex rollouts
+  2165	    /// use Codex's native id-stable resume subcommand.
+  2166	    static func resumeAgentCommand(agent: String, sessionId: String) -> String? {
+  2167	        switch agent {
+  2168	        case "claude", "aisdk":
+  2169	            return "\(shq(claude)) --resume \(shq(sessionId))"
+  2170	        case "codex":
+  2171	            return "\(shq(codex)) resume \(shq(sessionId))"
+  2172	        default:
+  2173	            return nil
+  2174	        }
+  2175	    }
+  2176
+  2177	    static func resumeLocally(_ item: SessionItem) -> String? {
+  2178	        let s = item.session
+  2179	        guard let id = s.sessionId else {
+  2180	            return "This session has no session id yet — nothing to resume."
+  2181	        }
+  2182	        guard let inner = resumeAgentCommand(agent: s.agent, sessionId: id) else {
+  2183	            return "Only Claude and Codex sessions can be resumed across machines (this is \(s.agent))."
+  2184	        }
+  2185	        var cwd = s.cwd ?? NSHomeDirectory()
+  2186	        if !FileManager.default.fileExists(atPath: cwd) {
+  2187	            return "The session's directory doesn't exist on this machine:\n\(cwd)"
+  2188	        }
+  2189	        cwd = (cwd as NSString).standardizingPath
+  2190	        let tmuxName = "lfgd-\(id.prefix(8))"
+  2191	        // -A: if we already opened this one, attach instead of erroring.
+  2192	        let cmd = "\(shq(tmux)) new-session -A -s \(shq(tmuxName)) -c \(shq(cwd)) \(shq(inner))"

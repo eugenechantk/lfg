@@ -8,10 +8,10 @@
 //     that same remote tmux session over mosh (falling back to ssh when mosh
 //     isn't installed). mosh survives IP changes, sleep, and packet loss, so
 //     the window outlives roaming between networks.
-//   - Session with no tmux pane -> iTerm2 window with a fresh local tmux
-//     session running `claude --resume <id>` in the session's cwd. Works
-//     because ~/.claude/projects syncs between hosts, so the transcript is
-//     present locally.
+//   - Closed session with no tmux pane -> iTerm2 window with a fresh local tmux
+//     session running the matching agent's native resume command in the
+//     session's cwd. A live non-tmux process is deliberately not openable:
+//     resuming it would create a second process for an already-running session.
 //
 // Opened iTerm2 windows are resized to span the full height of the desktop
 // (screen) they appear on.
@@ -101,6 +101,42 @@ struct ResumableAPISession: Decodable {
     let title: String
     let lastActivityAt: Double?
     let lastUserText: String?
+    let agent: String
+
+    init(
+        sessionId: String,
+        cwd: String?,
+        project: String?,
+        title: String,
+        lastActivityAt: Double?,
+        lastUserText: String?,
+        agent: String = "claude"
+    ) {
+        self.sessionId = sessionId
+        self.cwd = cwd
+        self.project = project
+        self.title = title
+        self.lastActivityAt = lastActivityAt
+        self.lastUserText = lastUserText
+        self.agent = agent
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sessionId, cwd, project, title, lastActivityAt, lastUserText, agent
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sessionId = try c.decode(String.self, forKey: .sessionId)
+        cwd = try c.decodeIfPresent(String.self, forKey: .cwd)
+        project = try c.decodeIfPresent(String.self, forKey: .project)
+        title = try c.decode(String.self, forKey: .title)
+        lastActivityAt = try c.decodeIfPresent(Double.self, forKey: .lastActivityAt)
+        lastUserText = try c.decodeIfPresent(String.self, forKey: .lastUserText)
+        // Hosts predating Codex resume omitted `agent`; every row they emitted
+        // was Claude, so that is the only backward-compatible default.
+        agent = try c.decodeIfPresent(String.self, forKey: .agent) ?? "claude"
+    }
 }
 struct ResumableResponse: Decodable {
     let sessions: [ResumableAPISession]
@@ -189,11 +225,14 @@ struct SessionItem: Identifiable {
     var id: String { "\(hostId)-\(session.id)" }
 
     var canOpen: Bool {
-        session.tmuxName != nil || session.sessionId != nil
+        session.tmuxName != nil || opensByResume
     }
 
     var opensByResume: Bool {
-        session.tmuxName == nil && session.sessionId != nil
+        session.closed
+            && session.tmuxName == nil
+            && session.sessionId != nil
+            && Opener.canResume(agent: session.agent)
     }
 
     enum Status: Int, CaseIterable {
@@ -961,7 +1000,7 @@ final class SessionStore: ObservableObject {
     /// list fetch and by search so the two can't drift into different rows.
     static func closedSession(from r: ResumableAPISession) -> APISession {
         APISession(
-            agent: "claude",
+            agent: r.agent,
             pid: -1,
             cwd: r.cwd,
             project: r.project ?? projectName(for: r.cwd),
@@ -1457,6 +1496,51 @@ enum DesktopFeatureTestCLI {
             try expect(remote.contains("set-option -w -t 'lfg-abc123' window-size latest"),
                        "remote attach releases the window too — this is where the bug shows up")
         }
+
+        // Resume is a lifecycle state, not a fallback for a missing tmux name.
+        // A live non-tmux Codex process cannot be attached, but starting a
+        // second `codex resume` would duplicate a session the server says is
+        // already running.
+        let liveCodexWithoutTmux = SessionItem(
+            session: APISession(
+                agent: "codex", pid: 73, cwd: "/tmp/project", project: "project",
+                title: "Live Codex", sessionId: "codex-live", busy: true,
+                lastActivityAt: 1, tmuxName: nil, model: "gpt-5.6",
+                status: nil, lastUserText: nil),
+            hostURL: "http://localhost:8766", hostId: "host", hostLabel: "This Mac",
+            hostIsLocal: true, hostSSHTarget: nil)
+        try expect(!liveCodexWithoutTmux.opensByResume,
+                   "a live session without tmux is not mislabeled resume")
+        try expect(!liveCodexWithoutTmux.canOpen,
+                   "a live session without an attach target cannot double-spawn via open")
+        try expect(Opener.open(liveCodexWithoutTmux)?.contains("already running outside tmux") == true,
+                   "open routing rejects a live non-tmux session before any resume command")
+
+        let codexRowData = Data(#"{"sessionId":"codex-closed","cwd":"/tmp/project","project":"project","title":"Closed Codex","lastActivityAt":1,"lastUserText":null,"agent":"codex"}"#.utf8)
+        let codexResumable = try JSONDecoder().decode(ResumableAPISession.self, from: codexRowData)
+        let closedCodexSession = SessionStore.closedSession(from: codexResumable)
+        let closedCodex = SessionItem(
+            session: closedCodexSession,
+            hostURL: "http://localhost:8766", hostId: "host", hostLabel: "This Mac",
+            hostIsLocal: true, hostSSHTarget: nil)
+        try expect(closedCodexSession.agent == "codex",
+                   "a resumable Codex row keeps its agent identity")
+        try expect(closedCodex.opensByResume && closedCodex.canOpen,
+                   "a closed Codex session is openable by resume")
+
+        let legacyRowData = Data(#"{"sessionId":"legacy-claude","cwd":"/tmp/project","project":"project","title":"Legacy Claude","lastActivityAt":1,"lastUserText":null}"#.utf8)
+        let legacyResumable = try JSONDecoder().decode(ResumableAPISession.self, from: legacyRowData)
+        try expect(legacyResumable.agent == "claude",
+                   "an older resumable response without agent remains Claude-compatible")
+
+        let codexResume = Opener.resumeAgentCommand(agent: "codex", sessionId: "codex-closed")
+        try expect(codexResume?.contains("codex") == true &&
+                   codexResume?.hasSuffix(" resume 'codex-closed'") == true,
+                   "Codex resume uses the native codex resume subcommand")
+        let claudeResume = Opener.resumeAgentCommand(agent: "claude", sessionId: "claude-closed")
+        try expect(claudeResume?.contains("claude") == true &&
+                   claudeResume?.hasSuffix(" --resume 'claude-closed'") == true,
+                   "Claude resume keeps the native claude resume flag")
 
         // MARK: Hidden directories
         //
@@ -2001,6 +2085,7 @@ enum Opener {
     // Absolute paths so the command survives tmux's non-login `sh -c` env.
     static let tmux = resolve("tmux", fallback: "/opt/homebrew/bin/tmux")
     static let claude = resolve("claude", fallback: "/opt/homebrew/bin/claude")
+    static let codex = resolve("codex", fallback: "/opt/homebrew/bin/codex")
 
     /// Local mosh, when installed — nil means remote attach falls back to ssh.
     /// mosh is preferred because it survives IP changes, sleep, and packet
@@ -2065,16 +2150,37 @@ enum Opener {
                 remoteAttachCommand(sshTarget: target, tmuxName: name, moshPath: mosh)
             )
         }
+        guard item.opensByResume else {
+            return "This session is already running outside tmux, so lfg cannot attach to it."
+        }
         return resumeLocally(item)
+    }
+
+    static func canResume(agent: String) -> Bool {
+        agent == "claude" || agent == "aisdk" || agent == "codex"
+    }
+
+    /// Pure command selection shared by the opener and headless regression
+    /// tests. Claude-family transcripts use Claude Code's flag; Codex rollouts
+    /// use Codex's native id-stable resume subcommand.
+    static func resumeAgentCommand(agent: String, sessionId: String) -> String? {
+        switch agent {
+        case "claude", "aisdk":
+            return "\(shq(claude)) --resume \(shq(sessionId))"
+        case "codex":
+            return "\(shq(codex)) resume \(shq(sessionId))"
+        default:
+            return nil
+        }
     }
 
     static func resumeLocally(_ item: SessionItem) -> String? {
         let s = item.session
-        guard s.agent == "claude" || s.agent == "aisdk" else {
-            return "Only Claude sessions can be resumed across machines (this is \(s.agent))."
-        }
         guard let id = s.sessionId else {
             return "This session has no session id yet — nothing to resume."
+        }
+        guard let inner = resumeAgentCommand(agent: s.agent, sessionId: id) else {
+            return "Only Claude and Codex sessions can be resumed across machines (this is \(s.agent))."
         }
         var cwd = s.cwd ?? NSHomeDirectory()
         if !FileManager.default.fileExists(atPath: cwd) {
@@ -2083,7 +2189,6 @@ enum Opener {
         cwd = (cwd as NSString).standardizingPath
         let tmuxName = "lfgd-\(id.prefix(8))"
         // -A: if we already opened this one, attach instead of erroring.
-        let inner = "\(shq(claude)) --resume \(shq(id))"
         let cmd = "\(shq(tmux)) new-session -A -s \(shq(tmuxName)) -c \(shq(cwd)) \(shq(inner))"
         return runInNewITermWindow(cmd)
     }
@@ -3434,7 +3539,7 @@ struct ContentView: View {
             store.movingIds.contains($0) || store.closingIds.contains($0)
         } ?? false
         return Button {
-            guard !isMoving else { return }
+            guard !isMoving, item.canOpen else { return }
             // Off the main thread: the AppleScript round-trip can
             // block for a minute on the first-run automation
             // consent prompt, and must not freeze the UI.
@@ -3448,7 +3553,7 @@ struct ContentView: View {
             SessionRow(item: item, showHost: store.multipleHosts, isMoving: isMoving)
         }
         .buttonStyle(.plain)
-        .disabled(isMoving)
+        .disabled(isMoving || !item.canOpen)
         .contextMenu {
             if !isMoving {
                 if item.session.sessionId != nil {

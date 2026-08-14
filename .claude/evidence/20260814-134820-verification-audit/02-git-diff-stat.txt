@@ -1,0 +1,13 @@
+ desktop/LFGSessions.swift                          | 131 ++++++-
+ desktop/README.md                                  |  14 +-
+ improvement-log/improvement-log-c6102554.md        |   9 +
+ ios/LFG/LFGApp.swift                               |  25 ++
+ ios/LFG/NewSessionView.swift                       |  13 +-
+ ios/LFG/RootView.swift                             | 181 +++++++++-
+ ios/LFG/SessionDetailView.swift                    | 400 +++++++++++++--------
+ ios/LFG/SessionListView.swift                      |  51 ++-
+ ios/LFGCore/Sources/LFGCore/MediaRefs.swift        | 107 ++++--
+ ios/LFGCore/Sources/LFGCore/Models.swift           |  31 ++
+ .../Tests/LFGCoreTests/MediaRefsTests.swift        |  43 +++
+ ios/LFGCore/Tests/LFGCoreTests/ModelsTests.swift   |  36 ++
+ 12 files changed, 828 insertions(+), 213 deletions(-)
