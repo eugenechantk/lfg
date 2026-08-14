@@ -2,9 +2,9 @@
 // their on-disk transcripts (~/.claude/projects/<proj>/<sessionId>.jsonl).
 import { readdir, rename } from "node:fs/promises";
 import { scanBack, tail } from "./transcript.ts";
-import { sessionTurnState } from "./session-state.ts";
+import { resolveBusy, sessionTurnState } from "./session-state.ts";
 import { statSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join, basename } from "node:path";
+import { join, basename, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { tmuxTargetForPid, paneTtyForTarget } from "./tmux";
 import { listManaged, patchManaged, type ManagedSession } from "./managed";
@@ -405,7 +405,7 @@ async function firstPromptTitle(path: string): Promise<string | null> {
       } catch {
         continue;
       }
-      const cm = normalizeCodexLine(line);
+      const cm = normalizeCodexLine(line, createCodexNormalizationState())?.[0];
       if (cm?.role === "user" && cm.kind === "text") {
         const t = stripConversationPrefix(cm.text).trim().replace(/\s+/g, " ");
         if (t && !t.startsWith("<"))
@@ -822,6 +822,336 @@ function codexOutputText(output: unknown): string {
   }
 }
 
+type CodexCallDisposition = "show-output" | "hide-output";
+type CodexCallInfo = {
+  disposition: CodexCallDisposition;
+  tool?: string;
+  startedAt?: number | null;
+};
+
+export type CodexNormalizationState = {
+  cwd: string | null;
+  calls: Map<string, CodexCallInfo>;
+};
+
+export function createCodexNormalizationState(): CodexNormalizationState {
+  return { cwd: null, calls: new Map() };
+}
+
+function stripCodeModeEnvelope(text: string): string {
+  const trimmed = text.trim();
+  const match = trimmed.match(
+    /^Script (?:completed|failed|running with cell ID [^\n]+)\r?\nWall time [^\n]*\r?\nOutput:\s*\r?\n?([\s\S]*)$/,
+  );
+  return (match?.[1] ?? trimmed).trim();
+}
+
+function parseJsonObject(source: string): Record<string, unknown> | null {
+  try {
+    const value = JSON.parse(source);
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function readJsString(source: string, start: number): { value: string; end: number } | null {
+  const quote = source[start];
+  if (quote !== '"' && quote !== "'" && quote !== "`") return null;
+  let value = "";
+  for (let i = start + 1; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === quote) return { value, end: i + 1 };
+    if (ch !== "\\") {
+      value += ch;
+      continue;
+    }
+    const next = source[++i];
+    if (next == null) return null;
+    const escapes: Record<string, string> = {
+      n: "\n",
+      r: "\r",
+      t: "\t",
+      b: "\b",
+      f: "\f",
+      v: "\v",
+      "0": "\0",
+      "\\": "\\",
+      '"': '"',
+      "'": "'",
+      "`": "`",
+    };
+    if (next === "u" && /^[0-9a-fA-F]{4}$/.test(source.slice(i + 1, i + 5))) {
+      value += String.fromCharCode(Number.parseInt(source.slice(i + 1, i + 5), 16));
+      i += 4;
+    } else if (next === "x" && /^[0-9a-fA-F]{2}$/.test(source.slice(i + 1, i + 3))) {
+      value += String.fromCharCode(Number.parseInt(source.slice(i + 1, i + 3), 16));
+      i += 2;
+    } else {
+      value += escapes[next] ?? next;
+    }
+  }
+  return null;
+}
+
+function jsStringProperty(source: string, key: string, from = 0): string | null {
+  const re = new RegExp(`(?:^|[,\\s{])(?:["']?${key}["']?)\\s*:\\s*`, "g");
+  re.lastIndex = from;
+  const match = re.exec(source);
+  if (!match) return null;
+  let start = re.lastIndex;
+  while (/\s/.test(source[start] ?? "")) start++;
+  return readJsString(source, start)?.value ?? null;
+}
+
+function jsStringArrayVariable(source: string, name: string): string[] {
+  const match = new RegExp(`(?:const|let|var)\\s+${name}\\s*=\\s*\\[`).exec(source);
+  if (!match) return [];
+  const values: string[] = [];
+  let cursor = (match.index ?? 0) + match[0].length;
+  while (cursor < source.length) {
+    while (/[,\s]/.test(source[cursor] ?? "")) cursor++;
+    if (source[cursor] === "]") break;
+    const value = readJsString(source, cursor);
+    if (!value) break;
+    values.push(value.value);
+    cursor = value.end;
+  }
+  return values;
+}
+
+type InnerCodexToolCall = { name: string; argumentSource: string; args: Record<string, unknown> | null };
+
+function innerCodexToolCalls(source: string): InnerCodexToolCall[] {
+  const calls: InnerCodexToolCall[] = [];
+  const marker = "tools.";
+  let cursor = 0;
+  const nextMarker = (from: number): number => {
+    let quote: string | null = null;
+    let escaped = false;
+    for (let i = from; i < source.length; i++) {
+      const ch = source[i];
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (ch === "\\") escaped = true;
+        else if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === "`") {
+        quote = ch;
+        continue;
+      }
+      if (source.startsWith(marker, i)) return i;
+    }
+    return -1;
+  };
+  while ((cursor = nextMarker(cursor)) >= 0) {
+    const nameStart = cursor + marker.length;
+    const nameMatch = source.slice(nameStart).match(/^[A-Za-z0-9_]+/);
+    if (!nameMatch) {
+      cursor = nameStart;
+      continue;
+    }
+    const name = nameMatch[0];
+    let open = nameStart + name.length;
+    while (/\s/.test(source[open] ?? "")) open++;
+    if (source[open] !== "(") {
+      cursor = open;
+      continue;
+    }
+    let quote: string | null = null;
+    let escaped = false;
+    let depth = 1;
+    let end = open + 1;
+    for (; end < source.length; end++) {
+      const ch = source[end];
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (ch === "\\") escaped = true;
+        else if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+      else if (ch === "(") depth++;
+      else if (ch === ")" && --depth === 0) break;
+    }
+    const argumentSource = source.slice(open + 1, end).trim();
+    calls.push({ name, argumentSource, args: parseJsonObject(argumentSource) });
+    cursor = Math.max(end + 1, open + 1);
+  }
+  return calls;
+}
+
+function shellSegments(command: string): string[] {
+  const out: string[] = [];
+  let start = 0;
+  let quote: string | null = null;
+  let escaped = false;
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+    else if (ch === ";" || (ch === "&" && command[i + 1] === "&")) {
+      const part = command.slice(start, i).trim();
+      if (part) out.push(part);
+      if (ch === "&") i++;
+      start = i + 1;
+    }
+  }
+  const tail = command.slice(start).trim();
+  if (tail) out.push(tail);
+  return out;
+}
+
+function unquoteShell(value: string): string {
+  return value.trim().replace(/^(['"])([\s\S]*)\1$/, "$2");
+}
+
+function exploreSummary(command: string): string | null {
+  const cmd = command.trim();
+  let match = cmd.match(/^(?:cat|head|tail)\b[\s\S]*?\s([^\s]+)\s*$/);
+  if (match) return `Read ${unquoteShell(match[1])}`;
+  match = cmd.match(/^sed\b[\s\S]*?\s([^\s]+)\s*$/);
+  if (match) return `Read ${unquoteShell(match[1])}`;
+  if (/^rg\s+--files\b/.test(cmd)) {
+    const rest = cmd.replace(/^rg\s+--files\b/, "").trim();
+    return `List${rest ? ` ${rest}` : " files"}`;
+  }
+  if (/^ls\b/.test(cmd)) {
+    const rest = cmd.replace(/^ls\b/, "").replace(/(?:^|\s)-\S+/g, "").trim();
+    return `List${rest ? ` ${rest}` : " files"}`;
+  }
+  if (/^find\b/.test(cmd)) {
+    const root = unquoteShell(cmd.match(/^find\s+([^\s]+)/)?.[1] ?? ".");
+    const pattern = cmd.match(/(?:^|\s)-name\s+(['"]?)([^\s'"]+)\1/)?.[2];
+    return pattern ? `Search ${pattern} in ${root}` : `Search files in ${root}`;
+  }
+  if (/^rg\b/.test(cmd)) {
+    const withoutFlags = cmd.replace(/^rg\b/, "").replace(/^\s+(?:--?\S+\s+)*/, "").trim();
+    const quoted = withoutFlags.match(/^(['"])([\s\S]*?)\1(?:\s+([\s\S]+))?$/);
+    const parts = quoted
+      ? { query: quoted[2], path: quoted[3] }
+      : { query: withoutFlags.split(/\s+/)[0], path: withoutFlags.split(/\s+/).slice(1).join(" ") };
+    return `Search ${parts.query || "text"}${parts.path ? ` in ${parts.path}` : ""}`;
+  }
+  return null;
+}
+
+function commandCellText(command: string): string {
+  const parts = shellSegments(command);
+  const explored = parts.map(exploreSummary);
+  if (parts.length > 0 && explored.every((part): part is string => part != null)) {
+    return `Explored\n${explored.join("\n")}`;
+  }
+  return `Ran\n${command.trim()}`;
+}
+
+function planCellText(source: string, args: Record<string, unknown> | null): string {
+  const explanation =
+    (typeof args?.explanation === "string" ? args.explanation : null) ??
+    jsStringProperty(source, "explanation");
+  const rows: string[] = ["Updated Plan"];
+  if (explanation?.trim()) rows.push(explanation.trim());
+  const structured = Array.isArray(args?.plan) ? args.plan : null;
+  const plan = structured
+    ? structured
+        .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+        .map((item) => ({ step: item.step, status: item.status }))
+    : Array.from(source.matchAll(/(?:^|[,\s{])step\s*:\s*/g)).map((match) => {
+        const stepStart = (match.index ?? 0) + match[0].length;
+        const step = readJsString(source, stepStart)?.value;
+        const status = jsStringProperty(source, "status", stepStart);
+        return { step, status };
+      });
+  if (plan.length === 0) rows.push("(no steps provided)");
+  for (const item of plan) {
+    if (typeof item.step !== "string" || !item.step.trim()) continue;
+    rows.push(`${item.status === "completed" ? "✔" : "□"} ${item.step.trim()}`);
+  }
+  return rows.join("\n");
+}
+
+function displayCodexPath(path: string, cwd: string | null): string {
+  if (!cwd || !path.startsWith("/")) return path;
+  const rel = relative(cwd, path);
+  return rel && !rel.startsWith("..") ? rel : path;
+}
+
+type CodexPatchChange = {
+  type?: unknown;
+  unified_diff?: unknown;
+  content?: unknown;
+  move_path?: unknown;
+};
+
+function lineCount(text: string): number {
+  return text === "" ? 0 : text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
+}
+
+function patchLineCounts(change: CodexPatchChange): { added: number; removed: number } {
+  const type = typeof change.type === "string" ? change.type : "update";
+  if (type === "add") return { added: lineCount(String(change.content ?? "")), removed: 0 };
+  if (type === "delete") return { added: 0, removed: lineCount(String(change.content ?? "")) };
+  const diff = typeof change.unified_diff === "string" ? change.unified_diff : "";
+  let added = 0;
+  let removed = 0;
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("+") && !line.startsWith("+++")) added++;
+    else if (line.startsWith("-") && !line.startsWith("---")) removed++;
+  }
+  return { added, removed };
+}
+
+function codexPatchChangesText(changes: unknown, cwd: string | null): string {
+  if (!changes || typeof changes !== "object" || Array.isArray(changes)) return "";
+  const rows: Array<{
+    path: string;
+    type: string;
+    added: number;
+    removed: number;
+    detail: string;
+  }> = [];
+  for (const [rawPath, raw] of Object.entries(changes).sort(([a], [b]) => a.localeCompare(b))) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const change = raw as CodexPatchChange;
+    const type = typeof change.type === "string" ? change.type : "update";
+    const path = displayCodexPath(rawPath, cwd);
+    const moved =
+      typeof change.move_path === "string"
+        ? ` → ${displayCodexPath(change.move_path, cwd)}`
+        : "";
+    const detail =
+      typeof change.unified_diff === "string"
+        ? change.unified_diff.trim()
+        : typeof change.content === "string"
+          ? change.content.trim()
+          : "";
+    const counts = patchLineCounts(change);
+    rows.push({ path: `${path}${moved}`, type, ...counts, detail });
+  }
+  if (rows.length === 0) return "";
+  const totalAdded = rows.reduce((sum, row) => sum + row.added, 0);
+  const totalRemoved = rows.reduce((sum, row) => sum + row.removed, 0);
+  const counts = (added: number, removed: number) => `(+${added} -${removed})`;
+  const header =
+    rows.length === 1
+      ? `${rows[0].type === "add" ? "Added" : rows[0].type === "delete" ? "Deleted" : "Edited"} ${rows[0].path} ${counts(rows[0].added, rows[0].removed)}`
+      : `Edited ${rows.length} files ${counts(totalAdded, totalRemoved)}`;
+  const details = rows.map((row) => {
+    const rowHeader = rows.length === 1 ? "" : `${row.path} ${counts(row.added, row.removed)}`;
+    return [rowHeader, row.detail].filter(Boolean).join("\n");
+  });
+  const body = details.filter(Boolean).join("\n\n");
+  return body ? `${header}\n${body}` : header;
+}
+
 function blockId(id: string | null, idx: number): string | null {
   if (!id) return null;
   return idx === 0 ? id : `${id}#${idx}`;
@@ -907,21 +1237,212 @@ function codexLineId(
   return ts || kind || call || body ? `${ts}:${kind}:${call}:${body}` : null;
 }
 
-function normalizeCodexLine(line: string): SessionMsg | null {
+function codexMessage(
+  x: { timestamp?: string; type?: string; payload?: { type?: string; call_id?: string } },
+  role: string,
+  kind: SessionMsg["kind"],
+  text: string,
+  ts: number | null,
+  suffix?: number,
+): SessionMsg {
+  const id = codexLineId(x, text);
+  return { id: suffix && id ? `${id}#${suffix}` : id, role, kind, text, ts };
+}
+
+function mcpResultText(result: unknown): string {
+  if (!result || typeof result !== "object" || Array.isArray(result)) return "";
+  const tagged = result as { Ok?: unknown; Err?: unknown };
+  if (tagged.Err != null) return String(tagged.Err).trim();
+  if (!tagged.Ok || typeof tagged.Ok !== "object" || Array.isArray(tagged.Ok)) return "";
+  const ok = tagged.Ok as { content?: unknown; isError?: unknown };
+  if (!Array.isArray(ok.content)) return "";
+  return ok.content
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return "";
+      const block = item as { type?: unknown; text?: unknown; uri?: unknown };
+      if (block.type === "text" && typeof block.text === "string") return block.text.trim();
+      if (block.type === "image") return "<image content>";
+      if (block.type === "audio") return "<audio content>";
+      if (typeof block.uri === "string") return `link: ${block.uri}`;
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+function webSearchCellText(payload: Record<string, unknown>): string {
+  const query = typeof payload.query === "string" ? payload.query : "";
+  const action =
+    payload.action && typeof payload.action === "object" && !Array.isArray(payload.action)
+      ? (payload.action as Record<string, unknown>)
+      : null;
+  let detail = query;
+  if (action) {
+    const type = action.type;
+    if (type === "search") {
+      if (typeof action.query === "string" && action.query) detail = action.query;
+      else if (Array.isArray(action.queries) && typeof action.queries[0] === "string") {
+        detail = `${action.queries[0]}${action.queries.length > 1 ? " ..." : ""}`;
+      }
+    } else if (type === "open_page" && typeof action.url === "string") detail = action.url;
+    else if (type === "find_in_page") {
+      const pattern = typeof action.pattern === "string" ? `'${action.pattern}'` : "";
+      const url = typeof action.url === "string" ? action.url : "";
+      detail = [pattern, url].filter(Boolean).join(" in ");
+    }
+  }
+  return `Searched the web${detail ? ` for ${detail}` : ""}`;
+}
+
+const CODEX_COLLABORATION_TOOLS = new Set([
+  "spawn_agent",
+  "send_message",
+  "followup_task",
+  "wait_agent",
+  "list_agents",
+  "interrupt_agent",
+]);
+
+const CODEX_MCP_BUILTINS = new Set([
+  "list_mcp_resources",
+  "list_mcp_resource_templates",
+  "read_mcp_resource",
+]);
+
+function codexActivityMessage(
+  x: { timestamp?: string; type?: string; payload?: { type?: string; call_id?: string } },
+  text: string,
+  ts: number | null,
+  suffix = 0,
+): SessionMsg {
+  const message = codexMessage(x, "assistant", "tool_use", text, ts);
+  return x.payload?.call_id
+    ? { ...message, id: `codex-activity:${x.payload.call_id}${suffix ? `#${suffix}` : ""}` }
+    : message;
+}
+
+function normalizeToolCall(
+  x: { timestamp?: string; type?: string; payload?: { type?: string; call_id?: string } },
+  name: string,
+  namespace: string | undefined,
+  source: string,
+  args: Record<string, unknown> | null,
+  ts: number | null,
+  state: CodexNormalizationState,
+  suffix = 0,
+): SessionMsg | null {
+  const callID = x.payload?.call_id;
+  const remember = (disposition: CodexCallDisposition) => {
+    if (callID) state.calls.set(callID, { disposition, tool: name, startedAt: ts });
+  };
+  if (namespace?.startsWith("mcp__") || CODEX_MCP_BUILTINS.has(name)) {
+    remember("hide-output");
+    const server = namespace?.replace(/^mcp__/, "") ?? "codex";
+    const argumentText = source.trim();
+    return codexActivityMessage(
+      x,
+      `Called ${server}.${name}${argumentText ? `(${argumentText})` : ""}`,
+      ts,
+    );
+  }
+  if (name === "apply_patch") {
+    remember("hide-output");
+    return null;
+  }
+  if (name === "web__run") {
+    remember("hide-output");
+    return codexMessage(x, "assistant", "tool_use", "Searching the web", ts, suffix);
+  }
+  if (name === "wait_agent") {
+    remember("show-output");
+    return codexMessage(x, "assistant", "tool_use", "Waiting for agents", ts, suffix);
+  }
+  if (CODEX_COLLABORATION_TOOLS.has(name)) {
+    remember("hide-output");
+    return null;
+  }
+  if (name === "update_plan") {
+    remember("hide-output");
+    return codexMessage(x, "assistant", "tool_use", planCellText(source, args), ts, suffix);
+  }
+  if (name === "view_image") {
+    remember("hide-output");
+    const path =
+      (typeof args?.path === "string" ? args.path : null) ?? jsStringProperty(source, "path") ?? "";
+    return codexActivityMessage(
+      x,
+      `Viewed Image${path ? `\n${displayCodexPath(path, state.cwd)}` : ""}`,
+      ts,
+      suffix,
+    );
+  }
+  if (name === "exec_command") {
+    remember("show-output");
+    const command =
+      (typeof args?.cmd === "string" ? args.cmd : null) ?? jsStringProperty(source, "cmd") ?? "";
+    return codexActivityMessage(x, commandCellText(command), ts, suffix);
+  }
+  if (name === "wait") {
+    remember("show-output");
+    return null;
+  }
+  if (name === "write_stdin") {
+    remember("show-output");
+    const chars =
+      (typeof args?.chars === "string" ? args.chars : null) ?? jsStringProperty(source, "chars");
+    const text = `Interacted with background terminal${chars ? `\n${chars}` : ""}`;
+    return codexMessage(x, "assistant", "tool_use", text, ts, suffix);
+  }
+  remember("show-output");
+  const server = namespace?.replace(/^mcp__/, "");
+  const qualified = server ? `${server}.${name}` : name;
+  const argumentText = source.trim();
+  return codexMessage(
+    x,
+    "assistant",
+    "tool_use",
+    `Called ${qualified}${argumentText ? `(${argumentText})` : ""}`,
+    ts,
+    suffix,
+  );
+}
+
+function normalizeCodexLine(
+  line: string,
+  state: CodexNormalizationState,
+): SessionMsg[] | null {
   let x: {
     timestamp?: string;
     type?: string;
     payload?: {
+      [key: string]: unknown;
       type?: string;
       role?: string;
       content?: unknown;
       message?: string;
       name?: string;
       arguments?: string;
-      output?: string;
+      input?: unknown;
+      output?: unknown;
       summary?: Array<{ text?: string }>;
       call_id?: string;
       phase?: string;
+      success?: boolean;
+      stdout?: string;
+      stderr?: string;
+      changes?: unknown;
+      namespace?: string;
+      cwd?: string;
+      invocation?: unknown;
+      result?: unknown;
+      action?: unknown;
+      query?: string;
+      kind?: string;
+      agent_path?: string;
+      event_id?: string;
+      status?: string;
+      revised_prompt?: string;
+      saved_path?: string;
     };
   };
   try {
@@ -931,21 +1452,162 @@ function normalizeCodexLine(line: string): SessionMsg | null {
   }
   const ts = x.timestamp ? Date.parse(x.timestamp) : null;
   const p = x.payload;
+  const codexTopLevel = new Set([
+    "session_meta",
+    "turn_context",
+    "world_state",
+    "inter_agent_communication_metadata",
+    "compacted",
+  ]);
+  if (x.type === "session_meta") {
+    if (typeof p?.cwd === "string") state.cwd = p.cwd;
+    return [];
+  }
+  if (codexTopLevel.has(x.type ?? "")) return [];
   if (!p) return null;
 
-  if (x.type === "event_msg" && p.type === "user_message" && p.message?.trim()) {
-    const text = stripConversationPrefix(p.message.trim());
-    return { id: codexLineId(x, text), role: "user", kind: "text", text, ts };
+  if (x.type === "event_msg") {
+    if (p.type === "user_message" && p.message?.trim()) {
+      const text = stripConversationPrefix(p.message.trim());
+      return [codexMessage(x, "user", "text", text, ts)];
+    }
+    if (p.type === "patch_apply_end") {
+      if (p.success === false) {
+        const detail = p.stderr?.trim() || p.stdout?.trim() || "Patch failed";
+        const text = `Failed to apply patch\n${detail}`;
+        return [codexMessage(x, "tool", "tool_result", text, ts)];
+      }
+      const text = codexPatchChangesText(p.changes, state.cwd);
+      return text ? [codexMessage(x, "assistant", "tool_use", text, ts)] : [];
+    }
+    if (p.type === "exec_command_end") {
+      const parts = Array.isArray(p.command)
+        ? p.command.filter((part): part is string => typeof part === "string")
+        : [];
+      const command =
+        parts.length >= 3 && /(?:^|\/)\w*(?:ba|z|fi)?sh$/.test(parts[0]) && parts[1] === "-lc"
+          ? parts.slice(2).join(" ")
+          : parts.join(" ");
+      if (!command) return [];
+      const startedAt = p.call_id ? state.calls.get(p.call_id)?.startedAt : null;
+      if (p.call_id) {
+        state.calls.set(p.call_id, {
+          disposition: "show-output",
+          tool: "exec_command",
+          startedAt: startedAt ?? ts,
+        });
+      }
+      return [codexActivityMessage(x, commandCellText(command), startedAt ?? ts)];
+    }
+    if (p.type === "view_image_tool_call") {
+      const path = typeof p.path === "string" ? p.path : "";
+      const startedAt = p.call_id ? state.calls.get(p.call_id)?.startedAt : null;
+      if (p.call_id) {
+        state.calls.set(p.call_id, {
+          disposition: "hide-output",
+          tool: "view_image",
+          startedAt: startedAt ?? ts,
+        });
+      }
+      return [
+        codexActivityMessage(
+          x,
+          `Viewed Image${path ? `\n${displayCodexPath(path, state.cwd)}` : ""}`,
+          startedAt ?? ts,
+        ),
+      ];
+    }
+    if (p.type === "web_search_end") {
+      const text = webSearchCellText(p);
+      return [codexMessage(x, "assistant", "tool_use", text, ts)];
+    }
+    if (p.type === "mcp_tool_call_end") {
+      const invocation =
+        p.invocation && typeof p.invocation === "object" && !Array.isArray(p.invocation)
+          ? (p.invocation as Record<string, unknown>)
+          : {};
+      const server = typeof invocation.server === "string" ? invocation.server : "mcp";
+      const tool = typeof invocation.tool === "string" ? invocation.tool : "tool";
+      const args = invocation.arguments == null ? "" : JSON.stringify(invocation.arguments);
+      const title = `Called ${server}.${tool}${args ? `(${args})` : ""}`;
+      const result = mcpResultText(p.result);
+      const startedAt = p.call_id ? state.calls.get(p.call_id)?.startedAt : null;
+      if (p.call_id) {
+        state.calls.set(p.call_id, {
+          disposition: "hide-output",
+          tool,
+          startedAt: startedAt ?? ts,
+        });
+      }
+      return [codexActivityMessage(x, `${title}${result ? `\n${result}` : ""}`, startedAt ?? ts)];
+    }
+    if (p.type === "context_compacted") {
+      return [codexMessage(x, "assistant", "tool_use", "Context compacted", ts)];
+    }
+    if (p.type === "plan_update") {
+      return [codexMessage(x, "assistant", "tool_use", planCellText(JSON.stringify(p), p), ts)];
+    }
+    if (p.type === "error" && p.message?.trim()) {
+      return [codexMessage(x, "system", "tool_result", p.message.trim(), ts)];
+    }
+    if ((p.type === "warning" || p.type === "guardian_warning") && p.message?.trim()) {
+      return [codexMessage(x, "system", "tool_result", `Warning\n${p.message.trim()}`, ts)];
+    }
+    if (p.type === "deprecation_notice") {
+      const notice = p as Record<string, unknown>;
+      const summary = typeof notice.summary === "string" ? notice.summary.trim() : "";
+      const details = typeof p.details === "string" ? p.details.trim() : "";
+      const text = [summary, details].filter(Boolean).join("\n");
+      return text ? [codexMessage(x, "system", "tool_result", text, ts)] : [];
+    }
+    if (p.type === "entered_review_mode") {
+      const hint = typeof p.user_facing_hint === "string" ? p.user_facing_hint.trim() : "";
+      return [
+        codexMessage(
+          x,
+          "system",
+          "tool_result",
+          `Code review started${hint ? `: ${hint}` : ""}`,
+          ts,
+        ),
+      ];
+    }
+    if (p.type === "exited_review_mode") {
+      return [codexMessage(x, "system", "tool_result", "Code review finished", ts)];
+    }
+    if (p.type === "turn_aborted") {
+      const text =
+        "Conversation interrupted - tell the model what to do differently. " +
+        "Something went wrong? Hit `/feedback` to report the issue.";
+      return [codexMessage(x, "system", "tool_result", text, ts)];
+    }
+    if (p.type === "sub_agent_activity") {
+      const verbs: Record<string, string> = {
+        started: "Started",
+        interacted: "Interacted with",
+        interrupted: "Interrupted",
+      };
+      const verb = verbs[p.kind ?? ""];
+      if (!verb || !p.agent_path) return [];
+      const text = `${verb} \`${p.agent_path}\``;
+      return [codexMessage(x, "assistant", "tool_use", text, ts)];
+    }
+    if (p.type === "image_generation_end") {
+      const failed = p.status === "failed";
+      const detail = p.revised_prompt?.trim() || p.call_id || "";
+      const saved = typeof p.saved_path === "string" ? `\nSaved to: ${p.saved_path}` : "";
+      const text = `${failed ? "Image generation failed" : "Generated Image:"}${detail ? `\n${detail}` : ""}${saved}`;
+      return [codexMessage(x, "assistant", "tool_use", text, ts)];
+    }
+    return [];
   }
-  if (x.type === "event_msg" && p.type === "agent_message") return null;
   if (x.type !== "response_item") return null;
 
   if (p.type === "message") {
     const role = p.role || "assistant";
-    if (role === "system" || role === "developer" || role === "user") return null;
+    if (role === "system" || role === "developer" || role === "user") return [];
     const text = codexContentText(p.content).trim();
-    if (!text) return null;
-    return { id: codexLineId(x, text), role, kind: "text", text, ts };
+    return text ? [codexMessage(x, role, "text", text, ts)] : [];
   }
   if (p.type === "reasoning") {
     const text = (p.summary ?? [])
@@ -953,36 +1615,136 @@ function normalizeCodexLine(line: string): SessionMsg | null {
       .filter((s): s is string => !!s?.trim())
       .join("\n")
       .trim();
-    if (!text) return null;
-    return { id: codexLineId(x, text), role: "assistant", kind: "thinking", text, ts };
+    return text ? [codexMessage(x, "assistant", "thinking", text, ts)] : [];
   }
-  if (p.type === "function_call") {
-    const args = p.arguments ? `: ${p.arguments}` : "";
-    const text = `${p.name ?? "tool"}${args}`;
-    return { id: codexLineId(x, text), role: "assistant", kind: "tool_use", text, ts };
+  if (p.type === "local_shell_call") {
+    const action =
+      p.action && typeof p.action === "object" && !Array.isArray(p.action)
+        ? (p.action as Record<string, unknown>)
+        : null;
+    const command = Array.isArray(action?.command)
+      ? action.command.filter((part): part is string => typeof part === "string").join(" ")
+      : "";
+    return command ? [codexMessage(x, "assistant", "tool_use", commandCellText(command), ts)] : [];
   }
-  if (p.type === "function_call_output") {
-    const text = codexOutputText(p.output) || "(result)";
-    return { id: codexLineId(x, text), role: "tool", kind: "tool_result", text, ts };
+  if (p.type === "function_call" || p.type === "custom_tool_call") {
+    const source = p.type === "custom_tool_call" ? describeInput(p.input) : (p.arguments ?? "");
+    if (p.type === "custom_tool_call" && p.name === "exec") {
+      const calls = innerCodexToolCalls(source);
+      const messages: SessionMsg[] = [];
+      let showOutput = false;
+      for (const [index, call] of calls.entries()) {
+        // Code Mode's MCP wrapper has a different outer call id from the
+        // durable mcp_tool_call_end event. Rendering both creates two cells for
+        // the one CLI activity, so let the durable event own this block.
+        if (call.name.startsWith("mcp__")) continue;
+        const nestedX = { ...x, payload: { ...p, call_id: p.call_id } };
+        const inferredArgs =
+          call.name === "exec_command" && !call.args
+            ? (() => {
+                const commands = jsStringArrayVariable(source, "cmds");
+                return commands.length ? { cmd: commands.join(" && ") } : null;
+              })()
+            : call.args;
+        const message = normalizeToolCall(
+          nestedX,
+          call.name,
+          undefined,
+          call.argumentSource,
+          inferredArgs,
+          ts,
+          state,
+          index,
+        );
+        if (message) messages.push(message);
+        if (call.name === "exec_command" || call.name === "wait" || call.name === "write_stdin") {
+          showOutput = true;
+        }
+      }
+      if (p.call_id) {
+        state.calls.set(p.call_id, {
+          disposition: showOutput ? "show-output" : "hide-output",
+          tool: calls.length === 1 ? calls[0].name : undefined,
+          startedAt: ts,
+        });
+      }
+      return messages;
+    }
+    const args = parseJsonObject(source);
+    const message = normalizeToolCall(
+      x,
+      p.name ?? "tool",
+      p.namespace,
+      source,
+      args,
+      ts,
+      state,
+    );
+    return message ? [message] : [];
   }
-  return null;
+  if (p.type === "function_call_output" || p.type === "custom_tool_call_output") {
+    const info = p.call_id ? state.calls.get(p.call_id) : undefined;
+    if (p.call_id) state.calls.delete(p.call_id);
+    if (info?.disposition === "hide-output") return [];
+    const text = stripCodeModeEnvelope(codexOutputText(p.output));
+    if (info?.tool === "wait_agent") {
+      let detail = text;
+      try {
+        const parsed = JSON.parse(text) as { timed_out?: unknown; message?: unknown };
+        if (parsed.timed_out === true) detail = "No agents completed yet";
+        else if (parsed.timed_out === false) detail = "";
+        else if (typeof parsed.message === "string") detail = parsed.message;
+      } catch {}
+      const result = `Finished waiting${detail ? `\n${detail}` : ""}`;
+      return [codexMessage(x, "tool", "tool_result", result, ts)];
+    }
+    if (!text) return [];
+    return [codexMessage(x, "tool", "tool_result", text, ts)];
+  }
+  // tool_search_* is provider plumbing; web_search_call, image_generation_call,
+  // and context_compaction have a corresponding durable event_msg cell.
+  return [];
 }
 
 export function normalizeLine(line: string): SessionMsg | null {
   return normalizeLineMessages(line)[0] ?? null;
 }
 
-export function normalizeLineMessages(line: string): SessionMsg[] {
+export function normalizeLineMessages(
+  line: string,
+  codexState: CodexNormalizationState = createCodexNormalizationState(),
+): SessionMsg[] {
   try {
-    return normalizeLineUnsafe(line);
+    return normalizeLineUnsafe(line, codexState);
   } catch {
     return [];
   }
 }
 
-function normalizeLineUnsafe(line: string): SessionMsg[] {
-  const codex = normalizeCodexLine(line);
-  if (codex) return [codex];
+function collapseCodexLifecycleMessages(messages: SessionMsg[]): SessionMsg[] {
+  const collapsed: SessionMsg[] = [];
+  const indexById = new Map<string, number>();
+  for (const message of messages) {
+    if (!message.id?.startsWith("codex-activity:")) {
+      collapsed.push(message);
+      continue;
+    }
+    const existing = indexById.get(message.id);
+    if (existing == null) {
+      indexById.set(message.id, collapsed.length);
+      collapsed.push(message);
+    } else {
+      // Keep the activity at its original transcript position while replacing
+      // the in-progress form with the latest completed/failed form.
+      collapsed[existing] = message;
+    }
+  }
+  return collapsed;
+}
+
+function normalizeLineUnsafe(line: string, codexState: CodexNormalizationState): SessionMsg[] {
+  const codex = normalizeCodexLine(line, codexState);
+  if (codex) return codex;
 
   let x: {
     type?: string;
@@ -1141,7 +1903,7 @@ async function lastUserText(path: string): Promise<string | null> {
     } catch {
       return null;
     }
-    const cm = normalizeCodexLine(line);
+    const cm = normalizeCodexLine(line, createCodexNormalizationState())?.[0];
     if (cm?.role === "user" && cm.kind === "text") {
       const t = stripConversationPrefix(cm.text).trim().replace(/\s+/g, " ");
       if (t && !t.startsWith("<")) return t.length > 140 ? t.slice(0, 139) + "…" : t;
@@ -1212,7 +1974,7 @@ function collectUserTurns(lines: string[], n: number, maxChars: number): string[
       continue;
     }
     let t: string | null = null;
-    const cm = normalizeCodexLine(line);
+    const cm = normalizeCodexLine(line, createCodexNormalizationState())?.[0];
     if (cm?.role === "user" && cm.kind === "text") {
       t = stripConversationPrefix(cm.text).trim().replace(/\s+/g, " ");
     } else if (x.type === "user" && !x.isMeta) {
@@ -1246,7 +2008,7 @@ export async function lastUserPromptText(path: string): Promise<string | null> {
     } catch {
       return null;
     }
-    const cm = normalizeCodexLine(line);
+    const cm = normalizeCodexLine(line, createCodexNormalizationState())?.[0];
     if (cm?.role === "user" && cm.kind === "text") {
       const t = stripConversationPrefix(cm.text).trim().replace(/\s+/g, " ");
       if (t && !t.startsWith("<")) return t;
@@ -1579,7 +2341,7 @@ async function listSessionsUncached(): Promise<Session[]> {
       startedAt: e.startedAt,
       transcriptPath,
       lastActivityAt,
-      busy: delegated || (turn != null ? turn.state === "running" : (paneBusy ?? transcriptRecent)),
+      busy: resolveBusy({ verdict: turn, paneBusy: paneBusy ?? transcriptRecent, delegated }),
       last,
       // A headless `claude -p` (the report runner, or a dispatched agent
       // before it moved to its own tmux session) is a *descendant* of
@@ -1691,6 +2453,14 @@ async function listSessionsUncached(): Promise<Session[]> {
       lastActivityAt != null && Date.now() - lastActivityAt < REST_BUSY_WINDOW_MS;
     const delegated = sessionId ? delegatedSessionIds.has(sessionId) : false;
     const paneBusy = sessionId ? lastPaneBusy(sessionId) : null;
+    // Match the journal pump's turn-state stack. In particular, Codex's pane can
+    // briefly scrape as idle while its rollout still has an open `task_started`.
+    // Letting that raw false become the REST baseline made the iOS client's next
+    // poll fight the live journal and flip a genuinely running turn to Idle.
+    const turn =
+      tmuxTarget && transcriptPath
+        ? await sessionTurnState({ sessionId, transcriptPath })
+        : null;
     out.push({
       agent: "codex",
       pid: p.pid,
@@ -1703,7 +2473,7 @@ async function listSessionsUncached(): Promise<Session[]> {
       startedAt,
       transcriptPath,
       lastActivityAt,
-      busy: delegated || (paneBusy ?? transcriptRecent),
+      busy: resolveBusy({ verdict: turn, paneBusy: paneBusy ?? transcriptRecent, delegated }),
       last,
       tmuxTarget,
       tmuxName,
@@ -2375,10 +3145,20 @@ export async function recentMessages(
   const text = await file.slice(start).text();
   const lines = text.split("\n").filter(Boolean);
   const msgs: SessionMsg[] = [];
-  for (const l of lines) {
-    msgs.push(...normalizeLineMessages(l));
+  const codexState = createCodexNormalizationState();
+  // A tail window normally excludes the rollout's opening session_meta row.
+  // Seed it from the header so CLI-relative paths stay relative even when the
+  // patch itself is served from deep in a long transcript.
+  if (start > 0) {
+    const header = await file.slice(0, Math.min(size, 64 * 1024)).text();
+    const firstLine = header.split("\n", 1)[0];
+    if (firstLine) normalizeLineMessages(firstLine, codexState);
   }
-  return limit > 0 ? msgs.slice(-limit) : msgs;
+  for (const l of lines) {
+    msgs.push(...normalizeLineMessages(l, codexState));
+  }
+  const collapsed = collapseCodexLifecycleMessages(msgs);
+  return limit > 0 ? collapsed.slice(-limit) : collapsed;
 }
 
 // Messages from the first `maxBytes` bytes of a transcript. Used for forked
@@ -2399,10 +3179,12 @@ export async function snapshotMessages(
     text = lastNewline >= 0 ? text.slice(0, lastNewline + 1) : "";
   }
   const msgs: SessionMsg[] = [];
+  const codexState = createCodexNormalizationState();
   for (const l of text.split("\n").filter(Boolean)) {
-    msgs.push(...normalizeLineMessages(l));
+    msgs.push(...normalizeLineMessages(l, codexState));
   }
-  return limit > 0 ? msgs.slice(-limit) : msgs;
+  const collapsed = collapseCodexLifecycleMessages(msgs);
+  return limit > 0 ? collapsed.slice(-limit) : collapsed;
 }
 
 // A prompt read straight from the transcript's structured AskUserQuestion

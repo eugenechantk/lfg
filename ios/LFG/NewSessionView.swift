@@ -98,11 +98,17 @@ struct NewSessionView: View {
             sheet(for: kind)
                 .presentationDetents(kind.detents)
         }
-        .onChange(of: activeSheet) { _, new in
+        .onChange(of: activeSheet) { old, new in
             // Snapshot on open so ✕ can revert; clear on close.
             if new != nil, revertState == nil {
                 revertState = (cwd, cwdLabel, selectedHost, agent, model)
             } else if new == nil {
+                // A swipe-to-dismiss is also a keep/confirm path. Cancel first
+                // restores the snapshot, so persisting here covers every sheet
+                // dismissal without letting a cancelled row replace the preference.
+                if old == .model {
+                    settings.noteNewSessionModelSelection(agent: agent, model: model)
+                }
                 revertState = nil
             }
         }
@@ -136,6 +142,11 @@ struct NewSessionView: View {
         // made all ten child ids report "newSession.root" and left the whole
         // automation contract unqueryable.
         .task {
+            // Restore before the first suspension so asynchronous directory
+            // metadata loading cannot leave the picker on its hard-coded default.
+            let rememberedSelection = settings.lastNewSessionModelSelection
+            agent = rememberedSelection.agent
+            model = rememberedSelection.model
             if store.repos.isEmpty || store.root.isEmpty {
                 await store.loadCreateMetadata()
             }

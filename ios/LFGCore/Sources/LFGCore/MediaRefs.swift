@@ -53,42 +53,63 @@ public enum MediaScanner {
     ///   `includeInlineImages` is set (user bubbles, which don't render markdown).
     /// - Bare paths/URLs → only known media types, to avoid turning every file
     ///   path mentioned in prose into a card.
+    ///
+    /// Returned in **document order** — the order the agent wrote them. The three
+    /// passes below are by syntax, not position, so collecting them pass-by-pass
+    /// put every image ahead of every link regardless of what the turn actually
+    /// said: a handoff reading "the clip, then the frame" listed the frame first.
     public static func scan(_ text: String, includeInlineImages: Bool = false) -> [MediaRef] {
         let ns = text as NSString
         let full = NSRange(location: 0, length: ns.length)
 
-        var seen = Set<String>()
-        var refs: [MediaRef] = []
-        var inlineImageURLs = Set<String>()
-
-        func add(_ raw: String, label: String?, allowAny: Bool) {
-            // Trim trailing sentence punctuation only — a leading dot is significant
-            // (e.g. `.claude/notes.md` is a dot-directory, not a stray period).
-            var trimmed = raw
-            while let last = trimmed.last, ".,);'\"".contains(last) { trimmed.removeLast() }
-            guard !trimmed.isEmpty, !seen.contains(trimmed) else { return }
-            let ext = (trimmed as NSString).pathExtension
-            let kind: MediaKind
-            if let known = MediaKind.from(ext: ext) { kind = known }
-            else if allowAny, !ext.isEmpty { kind = .other }
-            else { return }
-            seen.insert(trimmed)
-            refs.append(MediaRef(raw: trimmed, kind: kind, label: label))
+        struct Candidate {
+            let location: Int
+            let raw: String
+            let label: String?
+            let allowAny: Bool
         }
+        var candidates: [Candidate] = []
+        var inlineImageURLs = Set<String>()
 
         for m in imageMarkdown.matches(in: text, range: full) where m.numberOfRanges > 2 {
             let label = ns.substring(with: m.range(at: 1))
             let url = ns.substring(with: m.range(at: 2))
-            if includeInlineImages { add(url, label: label, allowAny: true) }
-            else { inlineImageURLs.insert(url) }
+            if includeInlineImages {
+                candidates.append(Candidate(location: m.range.location, raw: url, label: label, allowAny: true))
+            } else {
+                inlineImageURLs.insert(url)
+            }
         }
         for m in linkMarkdown.matches(in: text, range: full) where m.numberOfRanges > 2 {
-            add(ns.substring(with: m.range(at: 2)), label: ns.substring(with: m.range(at: 1)), allowAny: true)
+            candidates.append(Candidate(location: m.range.location,
+                                        raw: ns.substring(with: m.range(at: 2)),
+                                        label: ns.substring(with: m.range(at: 1)),
+                                        allowAny: true))
         }
         for m in bareRef.matches(in: text, range: full) {
             let raw = ns.substring(with: m.range(at: 0))
             guard !inlineImageURLs.contains(raw) else { continue }
-            add(raw, label: nil, allowAny: false)
+            candidates.append(Candidate(location: m.range.location, raw: raw, label: nil, allowAny: false))
+        }
+
+        var seen = Set<String>()
+        var refs: [MediaRef] = []
+        // A markdown link and the bare path inside it start at different offsets,
+        // so ties are broken by which pass found it — markdown first, since it
+        // carries the label.
+        for candidate in candidates.sorted(by: { $0.location < $1.location }) {
+            // Trim trailing sentence punctuation only — a leading dot is significant
+            // (e.g. `.claude/notes.md` is a dot-directory, not a stray period).
+            var trimmed = candidate.raw
+            while let last = trimmed.last, ".,);'\"".contains(last) { trimmed.removeLast() }
+            guard !trimmed.isEmpty, !seen.contains(trimmed) else { continue }
+            let ext = (trimmed as NSString).pathExtension
+            let kind: MediaKind
+            if let known = MediaKind.from(ext: ext) { kind = known }
+            else if candidate.allowAny, !ext.isEmpty { kind = .other }
+            else { continue }
+            seen.insert(trimmed)
+            refs.append(MediaRef(raw: trimmed, kind: kind, label: candidate.label))
         }
         return refs
     }
@@ -211,26 +232,60 @@ public enum TranscriptResourceIndex {
     ///    mentions a file — and folding those in would bury the handful of files
     ///    actually handed to the user under hundreds of incidental ones. The
     ///    rule matches what the transcript itself renders as an attachment.
-    /// 2. **Newest first, first mention wins.** A file re-referenced in a later
-    ///    turn keeps its original label rather than accumulating duplicates.
+    /// 2. **Newest first, newest mention wins.** A file re-referenced in a later
+    ///    turn appears once, dated by that latest mention.
+    ///
+    /// Ordering is an explicit sort on the message timestamp, not the order the
+    /// transcript array happens to be in. `TranscriptMerge` does sort by `ts`
+    /// today, but "the list is newest-first" is the promise this screen makes,
+    /// and it should not quietly depend on an invariant owned elsewhere. Within
+    /// one turn, items keep the order the agent wrote them.
     public static func collect(from messages: [SessionMessage]) -> TranscriptResources {
         var files: [TranscriptAttachment] = []
         var links: [TranscriptLink] = []
         var seenFiles = Set<String>()
         var seenLinks = Set<String>()
+        // A message with no timestamp (a locally-appended turn that hasn't been
+        // echoed back yet) inherits the last one seen — walking newest→oldest,
+        // that is the nearest NEWER turn, which is where it belongs.
+        var carried: Double?
 
         for message in messages.reversed() where message.kind == "text" {
+            let ts = message.ts ?? carried
+            carried = ts
             let refs = MediaScanner.scan(message.text, includeInlineImages: true)
             let claimed = Set(refs.map(\.raw))
             for ref in refs where !seenFiles.contains(ref.raw) {
                 seenFiles.insert(ref.raw)
-                files.append(TranscriptAttachment(ref: ref, ts: message.ts))
+                files.append(TranscriptAttachment(ref: ref, ts: ts))
             }
             for link in LinkScanner.scan(message.text, excluding: claimed) where !seenLinks.contains(link.url) {
                 seenLinks.insert(link.url)
-                links.append(TranscriptLink(link: link, ts: message.ts))
+                links.append(TranscriptLink(link: link, ts: ts))
             }
         }
-        return TranscriptResources(files: files, links: links)
+        return TranscriptResources(
+            files: sortedNewestFirst(files, by: \.ts),
+            links: sortedNewestFirst(links, by: \.ts)
+        )
+    }
+
+    /// Newest first, stable: equal timestamps keep the order they were collected
+    /// in, which is newest-turn-first and then document order. Swift's `sort` is
+    /// not stable, so the collection index is the tiebreak.
+    ///
+    /// A still-undated item sorts as newest. Carry-forward above has already
+    /// dated any gap that had a newer neighbour, so what's left is the leading
+    /// run — a turn appended locally and not yet echoed back, which is by
+    /// construction the newest thing in the transcript.
+    private static func sortedNewestFirst<T>(_ items: [T], by ts: KeyPath<T, Double?>) -> [T] {
+        items.enumerated()
+            .sorted { lhs, rhs in
+                let l = lhs.element[keyPath: ts] ?? .greatestFiniteMagnitude
+                let r = rhs.element[keyPath: ts] ?? .greatestFiniteMagnitude
+                if l != r { return l > r }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
     }
 }

@@ -67,6 +67,8 @@ struct LFGApp: App {
     private static let sortModeKey = "lfg.sortMode"
     private static let recentDirsKey = "lfg.recentDirs"
     private static let hiddenDirsKey = "lfg.hiddenDirs"
+    private static let newSessionAgentKey = "lfg.newSessionAgent"
+    private static let newSessionModelKey = "lfg.newSessionModel"
 
     /// Configured backend hosts. Persisted as JSON; exactly one is `isDefault`.
     var hosts: [Host] {
@@ -91,6 +93,23 @@ struct LFGApp: App {
     /// Promote a directory to the front of the MRU list after a session starts there.
     func noteRecentDir(_ path: String) {
         recentDirs = RecentDirs.pushing(path, onto: recentDirs)
+    }
+
+    /// Last agent/model kept in the new-session picker. The pair is
+    /// validated during initialization so removed catalog entries never leak
+    /// into a create request after an app update.
+    var lastNewSessionModelSelection: AgentModelSelection {
+        didSet {
+            defaults.set(lastNewSessionModelSelection.agent.rawValue, forKey: Self.newSessionAgentKey)
+            defaults.set(lastNewSessionModelSelection.model, forKey: Self.newSessionModelKey)
+        }
+    }
+
+    func noteNewSessionModelSelection(agent: AgentKind, model: String) {
+        lastNewSessionModelSelection = AgentModelSelection.restoring(
+            agentRawValue: agent.rawValue,
+            model: model
+        )
     }
 
     /// Directories muted on THIS device: a session whose `cwd` is at or under one
@@ -152,9 +171,15 @@ struct LFGApp: App {
         sortMode = SortMode(rawValue: defaults.string(forKey: Self.sortModeKey) ?? "") ?? .recentActivity
         recentDirs = defaults.stringArray(forKey: Self.recentDirsKey) ?? []
         hiddenDirs = HiddenDirs(defaults.stringArray(forKey: Self.hiddenDirsKey) ?? [])
+        lastNewSessionModelSelection = AgentModelSelection.restoring(
+            agentRawValue: defaults.string(forKey: Self.newSessionAgentKey),
+            model: defaults.string(forKey: Self.newSessionModelKey)
+        )
         // Persist the migrated list so later launches read the new key directly
         // (didSet doesn't fire during init; all stored props must be set first).
         defaults.set(HostStore.encode(hosts), forKey: Self.hostsKey)
+        defaults.set(lastNewSessionModelSelection.agent.rawValue, forKey: Self.newSessionAgentKey)
+        defaults.set(lastNewSessionModelSelection.model, forKey: Self.newSessionModelKey)
     }
 
     // MARK: Host list mutation (Settings editor)

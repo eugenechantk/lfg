@@ -16,8 +16,13 @@
 // would double-deliver).
 
 import { Journal, PumpDeltas } from "./journal.ts";
-import { listSessions, resolveTranscript, normalizeLineMessages } from "./sessions.ts";
-import type { SessionMsg } from "./sessions.ts";
+import {
+  listSessions,
+  resolveTranscript,
+  normalizeLineMessages,
+  createCodexNormalizationState,
+} from "./sessions.ts";
+import type { SessionMsg, CodexNormalizationState } from "./sessions.ts";
 import { capturePaneAsyncStyled, ensurePaneRows, isBusy, PANE_ROWS, stripAnsi } from "./tmux.ts";
 import { PaneStitcher } from "./pane-history.ts";
 import { listQueue, reconcileQueued } from "./sendq.ts";
@@ -255,6 +260,8 @@ type Watched = {
   target: string | null;
   buf: string; // partial trailing line between ticks
   frameExtractor: BrowserFrameExtractor;
+  /** Per-rollout pairing for Codex call/output/end records. */
+  codexNormalization: CodexNormalizationState;
   /** Rebuilt scrollback for this pane — the only way to recover a question's
    *  preamble once it has scrolled off. See `pane-history.ts`. */
   stitcher: PaneStitcher;
@@ -365,12 +372,15 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       const tp = await resolveTranscript(sid).catch(() => null);
       if (!tp) continue;
       j.setOffset(sid, initialOffset(sid, tp));
+      const codexNormalization = createCodexNormalizationState();
+      codexNormalization.cwd = s.cwd ?? null;
       watched.set(sid, {
         sid,
         tp,
         target: s.tmuxTarget ?? null,
         buf: "",
         frameExtractor: new BrowserFrameExtractor(),
+        codexNormalization,
         stitcher: new PaneStitcher(),
         wasBusy: false,
       });
@@ -401,6 +411,9 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
         // the new end; the client's REST history fetch covers the gap.
         j.setOffset(w.sid, size);
         w.buf = "";
+        const cwd = w.codexNormalization.cwd;
+        w.codexNormalization = createCodexNormalizationState();
+        w.codexNormalization.cwd = cwd;
         return;
       }
       if (size === offset) return;
@@ -412,7 +425,7 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
         if (!l) continue;
         const frame = w.frameExtractor.consume(l);
         if (frame && deps.browserFrames) publishBrowserFrame(j, deps.browserFrames, w.sid, frame);
-        for (const m of normalizeLineMessages(l)) {
+        for (const m of normalizeLineMessages(l, w.codexNormalization)) {
           j.append(w.sid, "msg", { sid: w.sid, m });
         }
       }

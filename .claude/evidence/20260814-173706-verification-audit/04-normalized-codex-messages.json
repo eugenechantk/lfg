@@ -1,0 +1,29 @@
+{
+  "patch": [
+    {
+      "id": "2026-08-14T09:14:48.632Z:patch_apply_end:exec-patch-1:Code changes\nM /repo/src/app.ts\n@@ -1 +1 @@\n-old",
+      "role": "assistant",
+      "kind": "tool_use",
+      "text": "Code changes\nM /repo/src/app.ts\n@@ -1 +1 @@\n-old\n+new\n\nA /repo/src/new.ts\nexport const value = 1;",
+      "ts": 1786698888632
+    }
+  ],
+  "custom_tool_call": [
+    {
+      "id": "2026-08-14T09:11:29.541Z:custom_tool_call:call_patch_1:exec: const patch = `*** Begin Patch`\nawait tool",
+      "role": "assistant",
+      "kind": "tool_use",
+      "text": "exec: const patch = `*** Begin Patch`\nawait tools.apply_patch(patch);",
+      "ts": 1786698689541
+    }
+  ],
+  "custom_tool_call_output": [
+    {
+      "id": "2026-08-14T09:11:29.802Z:custom_tool_call_output:call_patch_1:Script completed\n\nApplied patch successfully",
+      "role": "tool",
+      "kind": "tool_result",
+      "text": "Script completed\n\nApplied patch successfully",
+      "ts": 1786698689802
+    }
+  ]
+}

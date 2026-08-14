@@ -109,4 +109,19 @@ describe("busy derivation has one implementation", () => {
       );
     });
   }
+
+  test("REST session baselines use the same structured resolver for Claude and Codex", async () => {
+    const src = code(await Bun.file(import.meta.dir + "/sessions.ts").text());
+    const turnCalls = src.match(/await sessionTurnState\(\{ sessionId, transcriptPath \}\)/g) ?? [];
+    const busyCalls = src.match(/resolveBusy\(\{/g) ?? [];
+
+    // listSessions has two pane-backed CLI branches: Claude and Codex. Both must
+    // honor the transcript's explicit open/complete turn markers before the raw
+    // pane scrape; otherwise the REST poll can fight the live journal and make
+    // the iOS status alternate between Working and Idle.
+    expect(turnCalls).toHaveLength(2);
+    expect(busyCalls.length).toBeGreaterThanOrEqual(2);
+    expect(src.includes("busy: delegated || (paneBusy ?? transcriptRecent)"),
+      "Codex must not bypass structured turn state").toBe(false);
+  });
 });

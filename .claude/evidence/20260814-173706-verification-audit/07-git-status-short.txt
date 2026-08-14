@@ -1,0 +1,29 @@
+ M improvement-log/improvement-log-c6102554.md
+ M ios/LFG/LFGApp.swift
+ M ios/LFG/NewSessionView.swift
+ M ios/LFG/RootView.swift
+ M ios/LFG/SessionDetailView.swift
+ M ios/LFG/SessionListView.swift
+ M ios/LFGCore/Sources/LFGCore/MediaRefs.swift
+ M ios/LFGCore/Sources/LFGCore/Models.swift
+ M ios/LFGCore/Tests/LFGCoreTests/MediaRefsTests.swift
+ M ios/LFGCore/Tests/LFGCoreTests/ModelsTests.swift
+ M src/session-state-parity.test.ts
+ M src/sessions.ts
+?? .claude/evidence/20260814-173706-verification-audit/
+?? .codex/feature/codex-transcript-tools-and-status.md
+?? .codex/feature/remember-new-session-model.md
+?? bug-reports/
+?? improvement-log/improvement-log-0c5762d2.md
+?? improvement-log/improvement-log-20260812-102110.md
+?? improvement-log/improvement-log-20260813-044840.md
+?? improvement-log/improvement-log-20260813-102112.md
+?? improvement-log/improvement-log-20260813-114002.md
+?? improvement-log/ipad-fullscreen-session.png
+?? improvement-log/ipad-restored.png
+?? improvement-log/ipad-selected-dark.png
+?? improvement-log/ipad-selected.png
+?? improvement-log/ipad-swipe-dismissed.png
+?? improvement-log/ipad-swipe-restored.png
+?? improvement-log/iphone-final.png
+?? src/sessions-codex-transcript.test.ts

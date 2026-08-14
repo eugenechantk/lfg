@@ -19,8 +19,6 @@ struct SessionDetailView: View {
     @State private var showFullTitle = false
     @State private var newTitle = ""
     @State private var confirmEnd = false
-    @State private var forking = false
-    @State private var transferring = false
     /// The queued message the user tapped (drives the remove / edit / send-now sheet).
     @State private var queueAction: SessionStore.PendingSend?
     @State private var isAtBottom = true
@@ -372,109 +370,23 @@ struct SessionDetailView: View {
         }
 
         ToolbarItem(placement: .topBarTrailing) {
-            Menu {
-                if isBusy {
-                    Button(role: .destructive) { Task { await store.interrupt(sid) } } label: {
-                        Label("Stop", systemImage: "stop.circle")
-                    }
-                }
-                // Every file and link this session produced, without scrolling
-                // back through the transcript to find them.
-                Button { showingAttachments = true } label: {
-                    Label("Files & Links", systemImage: "paperclip")
-                }
-                .accessibilityIdentifier("filesAndLinksButton")
-
-                Menu {
-                    ForEach(modelOptions, id: \.self) { m in
-                        Button(m) { Task { await store.setModel(sid, m) } }
-                    }
-                } label: { Label("Switch model", systemImage: "cpu") }
-
-                Menu {
-                    Button("Unassigned") { Task { await store.assign(sid, nil) } }
-                    ForEach(store.users, id: \.self) { u in
-                        Button(u) { Task { await store.assign(sid, u) } }
-                    }
-                } label: { Label("Assign to", systemImage: "person") }
-
-                Button { newTitle = session.title; renaming = true } label: {
-                    Label("Rename", systemImage: "pencil")
-                }
-
-                if let frame = store.browserFrames[sid],
-                   frame.frameId == dismissedBrowserFrameID {
-                    Button {
-                        dismissedBrowserFrameID = nil
-                    } label: {
-                        Label("Show Browser Preview", systemImage: "safari")
-                    }
-                    .accessibilityIdentifier("showBrowserPreviewButton")
-                }
-
-                // Fork branches this conversation into a new session: the source
-                // is untouched, the fork carries the full history and lands at an
-                // empty composer. Claude-family sessions use claude resume/fork;
-                // codex CLI sessions use codex's native fork lane.
-                if canFork {
-                    Button { Task { await forkSession() } } label: {
-                        Label(forking ? "Forking…" : "Fork session",
-                              systemImage: "arrow.triangle.branch")
-                    }
-                    .disabled(forking)
-                }
-
-                // Transfer: move a LIVE session to another host. Closes the pane
-                // on the current machine and resumes the (synced) transcript on the
-                // target — see `store.transfer`. Only for live sessions, and only
-                // when there's another host to move to.
-                if canTransfer {
-                    Menu {
-                        ForEach(transferTargets) { target in
-                            Button { Task { await transfer(to: target) } } label: {
-                                Label(target.label, systemImage: "desktopcomputer")
-                            }
-                        }
-                    } label: {
-                        Label(transferring ? "Moving…" : "Move to host",
-                              systemImage: "arrow.left.arrow.right")
-                    }
-                    .disabled(transferring)
-                }
-
-                if ManualUnread.canMarkUnread(sid) {
-                    if store.isManuallyUnread(sid) {
-                        Button { store.markRead(sid) } label: {
-                            Label("Mark as read", systemImage: "envelope.open")
-                        }
-                        .accessibilityIdentifier("markReadButton")
-                    } else {
-                        Button { markUnreadAndExit() } label: {
-                            Label("Mark as unread", systemImage: "envelope.badge")
-                        }
-                        .accessibilityIdentifier("markUnreadButton")
-                    }
-                }
-
-                // Debug: surface the underlying ids; tapping copies to clipboard.
-                Section("Debug — tap to copy") {
-                    if let tmux = session.tmuxName ?? session.tmuxTarget, !tmux.isEmpty {
-                        Button { copyToClipboard(tmux) } label: {
-                            Label("tmux · \(tmux)", systemImage: "terminal")
-                        }
-                    }
-                    if !sid.isEmpty {
-                        Button { copyToClipboard(sid) } label: {
-                            Label("\(agentIdLabel) · \(sid)", systemImage: "number")
-                        }
-                    }
-                }
-
-                Divider()
-                Button(role: .destructive) { confirmEnd = true } label: {
-                    Label("End session", systemImage: "xmark.circle")
-                }
-            } label: { Image(systemName: "ellipsis.circle") }
+            // Transcript deltas can arrive several times per second. A native
+            // Menu rebuilds its presented UIMenu for those updates and loses its
+            // scroll offset, so the root options surface is a scroll-owning
+            // popover instead. Short model/owner/host choices remain submenus.
+            SessionOptionsMenu(
+                sid: sid,
+                agent: session.agent,
+                closed: session.closed,
+                tmuxIdentifier: session.tmuxName ?? session.tmuxTarget,
+                isBusy: isBusy,
+                dismissedBrowserFrameID: dismissedBrowserFrameID,
+                onShowAttachments: { showingAttachments = true },
+                onRename: { newTitle = session.title; renaming = true },
+                onRestoreBrowserPreview: { dismissedBrowserFrameID = nil },
+                onConfirmEnd: { confirmEnd = true },
+                onMarkedUnread: onMarkedUnread
+            )
         }
     }
 
@@ -534,50 +446,286 @@ struct SessionDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// The working path shown under the title when the session is idle (no
+    /// "Running" status text). Prefers the real working dir, falling back to the
+    /// friendly project name; nil when neither is known.
+    private var headerPath: String? {
+        if let cwd = session.cwd, !cwd.isEmpty { return cwd }
+        if let project = session.project, !project.isEmpty { return project }
+        return nil
+    }
+
+}
+
+/// A transient, toolbar-anchored options surface with its own scroll state.
+/// SwiftUI can update the rows in place without recreating the presentation, so
+/// live transcript rendering cannot send the user back to the first option.
+private struct SessionOptionsMenu: View {
+    let sid: String
+    let agent: String
+    let closed: Bool
+    let tmuxIdentifier: String?
+    let isBusy: Bool
+    let dismissedBrowserFrameID: String?
+    let onShowAttachments: () -> Void
+    let onRename: () -> Void
+    let onRestoreBrowserPreview: () -> Void
+    let onConfirmEnd: () -> Void
+    let onMarkedUnread: () -> Void
+
+    @Environment(SessionStore.self) private var store
+    @Environment(AppSettings.self) private var settings
+    @State private var forking = false
+    @State private var transferring = false
+    @State private var showingOptions = false
+
+    var body: some View {
+        Button {
+            showingOptions = true
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .accessibilityIdentifier("sessionOptionsMenu")
+        .popover(isPresented: $showingOptions, arrowEdge: .top) {
+            optionsList
+                .frame(width: 320, height: 520)
+                // Keep the transient, toolbar-anchored idiom on iPhone too. The
+                // custom scroll view owns its offset while live data changes.
+                .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    private var optionsList: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                if isBusy {
+                    Button(role: .destructive) {
+                        showingOptions = false
+                        Task { await store.interrupt(sid) }
+                    } label: {
+                        optionLabel("Stop", systemImage: "stop.circle", tint: .red)
+                    }
+                    rowDivider
+                }
+
+                // Every file and link this session produced, without scrolling
+                // back through the transcript to find them.
+                Button { dismissThen(onShowAttachments) } label: {
+                    optionLabel("Files & Links", systemImage: "paperclip")
+                }
+                .accessibilityIdentifier("filesAndLinksButton")
+                rowDivider
+
+                Menu {
+                    ForEach(modelOptions, id: \.self) { model in
+                        Button(model) {
+                            showingOptions = false
+                            Task { await store.setModel(sid, model) }
+                        }
+                    }
+                } label: {
+                    optionLabel("Switch model", systemImage: "cpu", showsSubmenu: true)
+                }
+                rowDivider
+
+                Menu {
+                    Button("Unassigned") {
+                        showingOptions = false
+                        Task { await store.assign(sid, nil) }
+                    }
+                    ForEach(store.users, id: \.self) { user in
+                        Button(user) {
+                            showingOptions = false
+                            Task { await store.assign(sid, user) }
+                        }
+                    }
+                } label: {
+                    optionLabel("Assign to", systemImage: "person", showsSubmenu: true)
+                }
+                rowDivider
+
+                Button { dismissThen(onRename) } label: {
+                    optionLabel("Rename", systemImage: "pencil")
+                }
+                rowDivider
+
+                if let frame = store.browserFrames[sid],
+                   frame.frameId == dismissedBrowserFrameID {
+                    Button {
+                        showingOptions = false
+                        onRestoreBrowserPreview()
+                    } label: {
+                        optionLabel("Show Browser Preview", systemImage: "safari")
+                    }
+                    .accessibilityIdentifier("showBrowserPreviewButton")
+                    rowDivider
+                }
+
+                // Fork branches this conversation into a new session: the source
+                // is untouched and the fork carries the full history.
+                if canFork {
+                    Button {
+                        showingOptions = false
+                        Task { await forkSession() }
+                    } label: {
+                        optionLabel(forking ? "Forking…" : "Fork session",
+                                    systemImage: "arrow.triangle.branch")
+                    }
+                    .disabled(forking)
+                    rowDivider
+                }
+
+                // Transfer is offered only for a live session with another host.
+                if canTransfer {
+                    Menu {
+                        ForEach(transferTargets) { target in
+                            Button {
+                                showingOptions = false
+                                Task { await transfer(to: target) }
+                            } label: {
+                                Label(target.label, systemImage: "desktopcomputer")
+                            }
+                        }
+                    } label: {
+                        optionLabel(transferring ? "Moving…" : "Move to host",
+                                    systemImage: "arrow.left.arrow.right",
+                                    showsSubmenu: true)
+                    }
+                    .disabled(transferring)
+                    rowDivider
+                }
+
+                if ManualUnread.canMarkUnread(sid) {
+                    if store.isManuallyUnread(sid) {
+                        Button {
+                            showingOptions = false
+                            store.markRead(sid)
+                        } label: {
+                            optionLabel("Mark as read", systemImage: "envelope.open")
+                        }
+                        .accessibilityIdentifier("markReadButton")
+                    } else {
+                        Button {
+                            showingOptions = false
+                            markUnreadAndExit()
+                        } label: {
+                            optionLabel("Mark as unread", systemImage: "envelope.badge")
+                        }
+                        .accessibilityIdentifier("markUnreadButton")
+                    }
+                    rowDivider
+                }
+
+                // Debug: surface the underlying ids; tapping copies to clipboard.
+                Text("Debug — tap to copy")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    .padding(.bottom, 5)
+
+                if let tmuxIdentifier, !tmuxIdentifier.isEmpty {
+                    Button {
+                        showingOptions = false
+                        copyToClipboard(tmuxIdentifier)
+                    } label: {
+                        optionLabel("tmux · \(tmuxIdentifier)", systemImage: "terminal")
+                    }
+                    rowDivider
+                }
+
+                if !sid.isEmpty {
+                    Button {
+                        showingOptions = false
+                        copyToClipboard(sid)
+                    } label: {
+                        optionLabel("\(agentIdLabel) · \(sid)", systemImage: "number")
+                    }
+                }
+
+                Divider().padding(.vertical, 7)
+                Button(role: .destructive) {
+                    dismissThen(onConfirmEnd)
+                } label: {
+                    optionLabel("End session", systemImage: "xmark.circle", tint: .red)
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, 6)
+        }
+        .scrollIndicators(.visible)
+    }
+
+    private func optionLabel(
+        _ title: String,
+        systemImage: String,
+        tint: Color = .primary,
+        showsSubmenu: Bool = false
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .frame(width: 20)
+            Text(title)
+                .multilineTextAlignment(.leading)
+            Spacer()
+            if showsSubmenu {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private var rowDivider: some View {
+        Divider().padding(.leading, 48)
+    }
+
     private var modelOptions: [String] {
-        AgentKind(rawValue: session.agent)?.models ?? AgentKind.aisdk.models
+        AgentKind(rawValue: agent)?.models ?? AgentKind.aisdk.models
     }
 
     /// Fork is available for transcript families whose server lane can branch
-    /// natively: Claude-family sessions use `claude --resume --fork-session`,
-    /// while codex CLI sessions use `codex fork`. `codex-aisdk` and opencode stay
-    /// hidden until the server grows explicit fork support for those agents.
+    /// natively. codex-aisdk and opencode remain hidden until supported.
     private var canFork: Bool {
         !sid.isEmpty
-            && (session.agent == "claude"
-                || session.agent == "aisdk"
-                || session.agent == "codex"
-                || session.agent == nil)
+            && (agent == "claude"
+                || agent == "aisdk"
+                || agent == "codex")
     }
 
-    /// Branch this session and navigate into the fork. The store returns the new
-    /// session's id, which we hand to `requestSelection` so the split view opens
-    /// the fork directly; history loads from a fork-point snapshot until the
-    /// fork's own transcript file appears after its first turn.
-    private func forkSession() async {
-        guard !forking else { return }
-        forking = true
-        defer { forking = false }
-        let newId = await store.fork(ForkRequest(sessionId: sid))
-        if let newId { store.requestSelection(newId) }
-    }
-
-    /// Other configured hosts this live session can be moved to.
     private var transferTargets: [Host] {
         let current = store.host(forSession: sid)?.id
         return settings.hosts.filter { $0.id != current }
     }
 
-    /// Transfer is offered for a live (non-closed) session when its owning host is
-    /// known and at least one other host exists.
     private var canTransfer: Bool {
-        !sid.isEmpty && !session.closed
+        !sid.isEmpty && !closed
             && store.host(forSession: sid) != nil
             && !transferTargets.isEmpty
     }
 
-    /// Move this session to another host (close on source → resume on target).
-    /// `store.transfer` re-points navigation at the new live id itself.
+    private var agentIdLabel: String {
+        switch agent {
+        case "claude", "aisdk": return "Claude id"
+        case "codex", "codex-aisdk": return "Codex id"
+        default: return "Session id"
+        }
+    }
+
+    private func forkSession() async {
+        guard !forking else { return }
+        forking = true
+        defer { forking = false }
+        let newID = await store.fork(ForkRequest(sessionId: sid))
+        if let newID { store.requestSelection(newID) }
+    }
+
     private func transfer(to target: Host) async {
         guard !transferring else { return }
         transferring = true
@@ -591,27 +739,21 @@ struct SessionDetailView: View {
         onMarkedUnread()
     }
 
-    /// The working path shown under the title when the session is idle (no
-    /// "Running" status text). Prefers the real working dir, falling back to the
-    /// friendly project name; nil when neither is known.
-    private var headerPath: String? {
-        if let cwd = session.cwd, !cwd.isEmpty { return cwd }
-        if let project = session.project, !project.isEmpty { return project }
-        return nil
-    }
-
-    /// Human label for the agent's own session id (used in the Debug menu).
-    private var agentIdLabel: String {
-        switch session.agent {
-        case "claude", "aisdk": return "Claude id"
-        case "codex", "codex-aisdk": return "Codex id"
-        default: return "Session id"
-        }
-    }
-
     private func copyToClipboard(_ value: String) {
         UIPasteboard.general.string = value
         UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    /// Secondary sheets and dialogs need the popover to finish dismissing before
+    /// they present from SessionDetailView. Deferring by one short animation
+    /// interval avoids overlapping presentation-controller transitions.
+    private func dismissThen(_ action: @escaping @MainActor () -> Void) {
+        showingOptions = false
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !showingOptions else { return }
+            action()
+        }
     }
 }
 

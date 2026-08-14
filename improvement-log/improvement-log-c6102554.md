@@ -5,6 +5,7 @@
 - [x] 2026-08-13 — Burned ~25 min on FlowDeck's "Simulator appears locked" false positive; `FLOWDECK_UI_SKIP_LOCK_CHECK=1` is the escape hatch
 - [ ] 2026-08-13 — `flowdeck build` failed on a file another session added (`AttachmentsSheet`) because `LFG.xcodeproj` was stale; `xcodegen generate` is not in any build-failure playbook
 - [ ] 2026-08-13 — Journal-pump's "new session starts at EOF" rule means a kickoff user turn is NEVER delivered live; only the REST fetch has it, and nothing retried that fetch
+- [ ] 2026-08-13 — Misread fastlane's trailing changelog banner as "the lane never ran" and re-ran the deploy, uploading a duplicate build
 
 ## Log
 
@@ -31,3 +32,11 @@
 **Why this matters:** This is the third instance of the same family already documented in memory ([[journal-delta-needs-rest-baseline]], `watchForResumeLanding`'s resume gap): pump-owned state a client renders needs both a delta AND a snapshot, and a snapshot fetch that can 404 needs a retry, not a `try?`.
 
 **What better looks like:** Any new one-shot REST fetch in `SessionStore` that backs client-rendered state should be treated as retryable by default. A `try? await` that silently yields "no data" is a latch waiting to happen.
+
+### 2026-08-13 — Re-ran a TestFlight deploy because I misread fastlane's output
+
+**What happened:** I ran `deploy_testflight` and piped it through `tail -45`. Fastlane prints its "a new version is available" changelog — dozens of lines — at the END of a run, so the tail showed only the banner and a Ruby-version warning, with no lane summary. I concluded the lane hadn't run and re-ran it. It had run: two archives exist (22:11 and 22:13) and two builds were almost certainly uploaded.
+
+**Why this was wrong:** An upload is an outward-facing, non-undoable action; "I couldn't see the result" is not evidence that it didn't happen. The cost here was small (same commit, same 1.2.0 train, the higher build number wins) but the reflex — re-run when output is unclear — is exactly wrong for deploys, uploads, and sends.
+
+**What better looks like:** Always run a deploy with `> deploy.log 2>&1` and then GREP the log (`Driving the lane`, `fastlane summary`, `Successfully uploaded`) rather than tailing it — fastlane's trailing banner makes `tail` structurally useless. Before re-running any outward-facing command, check for its side effects first (here: `ls ~/Library/Developer/Xcode/Archives/<today>/` would have shown the archive in one call).

@@ -538,3 +538,34 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable {
 
     public var defaultModel: String { models.first ?? "sonnet" }
 }
+
+/// A validated agent/model pair for starting a new session.
+///
+/// Model catalogs evolve, so persisted values must be resolved through the
+/// current catalog before a create request uses them. A still-valid agent keeps
+/// its identity when its old model disappears and falls back to that agent's
+/// current default; an unknown agent falls back to the global default pair.
+public struct AgentModelSelection: Equatable, Sendable {
+    public var agent: AgentKind
+    public var model: String
+
+    public init(agent: AgentKind, model: String) {
+        self.agent = agent
+        self.model = model
+    }
+
+    public static let `default` = AgentModelSelection(
+        agent: .claude,
+        model: AgentKind.claude.defaultModel
+    )
+
+    public static func restoring(agentRawValue: String?, model: String?) -> AgentModelSelection {
+        guard let agentRawValue, let agent = AgentKind(rawValue: agentRawValue) else {
+            return .default
+        }
+        guard let model, agent.models.contains(model) else {
+            return AgentModelSelection(agent: agent, model: agent.defaultModel)
+        }
+        return AgentModelSelection(agent: agent, model: model)
+    }
+}

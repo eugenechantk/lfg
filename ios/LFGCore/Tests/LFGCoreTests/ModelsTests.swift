@@ -125,4 +125,40 @@ final class ModelsTests: XCTestCase {
         XCTAssertFalse(AgentKind.opencode.models.contains("anthropic/claude-sonnet-4-6"))
         XCTAssertEqual(AgentKind.allCases.count, 5)
     }
+
+    func testAgentModelSelectionRestoresValidPersistedPair() {
+        let selection = AgentModelSelection.restoring(
+            agentRawValue: "codex",
+            model: "gpt-5.6-terra"
+        )
+
+        XCTAssertEqual(selection, AgentModelSelection(agent: .codex, model: "gpt-5.6-terra"))
+    }
+
+    func testAgentModelSelectionDefaultsFirstUseToClaudeOpus() {
+        let selection = AgentModelSelection.restoring(agentRawValue: nil, model: nil)
+
+        XCTAssertEqual(selection, .default)
+        XCTAssertEqual(selection.agent, .claude)
+        XCTAssertEqual(selection.model, "claude-opus-5")
+    }
+
+    func testAgentModelSelectionReplacesStaleModelWithAgentsCurrentDefault() {
+        let selection = AgentModelSelection.restoring(
+            agentRawValue: "codex-aisdk",
+            model: "gpt-retired"
+        )
+
+        XCTAssertEqual(selection.agent, .codexAisdk)
+        XCTAssertEqual(selection.model, AgentKind.codexAisdk.defaultModel)
+    }
+
+    func testAgentModelSelectionReplacesUnknownAgentWithGlobalDefault() {
+        let selection = AgentModelSelection.restoring(
+            agentRawValue: "retired-runtime",
+            model: "claude-opus-5"
+        )
+
+        XCTAssertEqual(selection, .default)
+    }
 }

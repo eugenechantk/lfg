@@ -38,6 +38,11 @@ private enum Tokens {
     // No semantic equivalent — built to the design's exact alpha.
     static let meta = labelInk(0.50)
     static let host = labelInk(0.40)
+    /// The selected row's wash. The row's own `listRowBackground` replaces the
+    /// system's selection highlight, so this is what "selected" looks like —
+    /// accent at a low alpha, which reads as a state behind the row rather than
+    /// as a filled control competing with the row's own text.
+    static let selection = Color.accentColor.opacity(0.14)
     /// A plain white/black wash, NOT `Color(.separator)` — the system separator
     /// is blue-tinted `(84,84,88,0.65)` and read back `(42,42,44)` against the
     /// design's `(18,18,18)`.
@@ -422,17 +427,53 @@ struct SessionListView: View {
         path.remove(parentId)
     }
 
+    /// The row currently open in the detail column. Compared against the same
+    /// nav id the row is `.tag`ged with, so a session created in this run stays
+    /// selected across the create remap.
+    private func isSelected(_ row: RenderedSessionRow) -> Bool {
+        guard let selection else { return false }
+        return selection == store.navID(row.session.sessionId ?? "")
+    }
+
+    /// The selected row's tinted pill, inset from the column edges (and past the
+    /// agent indent) so it reads as a rounded chip around the row rather than a
+    /// full-bleed band.
+    ///
+    /// Drawn as a `background` on the row's CONTENT, deliberately not as
+    /// `listRowBackground`. A `listRowBackground` that varies with the selection
+    /// rebuilds the cell's background configuration on every selection change,
+    /// and a row that re-sections in the same update (an unread row becomes read
+    /// the moment you open it, so it moves out of Unread) then loses its tag —
+    /// the List clears `selection` and the detail empties. Measured: with the
+    /// dynamic `listRowBackground`, tapping an unread row opened it and then
+    /// immediately deselected it; the same tap on the unmodified build stayed put.
+    @ViewBuilder
+    private func selectionPill(selected: Bool, indent: CGFloat) -> some View {
+        if selected {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Tokens.selection)
+                .padding(.leading, indent + 8)
+                .padding(.trailing, 8)
+                .padding(.vertical, 2)
+        }
+    }
+
     @ViewBuilder
     private func sessionRow(_ row: RenderedSessionRow) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            SessionRow(session: row.session, group: store.group(for: row.session))
-                .padding(.leading, row.indent)
-            if !row.children.isEmpty, let parentId = normalizedId(row.session.sessionId) {
-                agentDisclosure(parentId: parentId, children: row.children)
+            VStack(alignment: .leading, spacing: 0) {
+                SessionRow(session: row.session, group: store.group(for: row.session))
                     .padding(.leading, row.indent)
+                if !row.children.isEmpty, let parentId = normalizedId(row.session.sessionId) {
+                    agentDisclosure(parentId: parentId, children: row.children)
+                        .padding(.leading, row.indent)
+                }
             }
+            .background { selectionPill(selected: isSelected(row), indent: row.indent) }
+            // The hairline would cut across the bottom of the selection pill and
+            // undo its rounded corners, so the selected row drops it.
             Rectangle()
-                .fill(Tokens.separator)
+                .fill(isSelected(row) ? Color.clear : Tokens.separator)
                 .frame(height: 1)
                 .padding(.leading, row.indent + 39)
         }

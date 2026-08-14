@@ -42,6 +42,49 @@ struct TranscriptResourceIndexTests {
         #expect(r.files[1].ts == 200)
     }
 
+    @Test("files within one turn keep the order the agent wrote them")
+    func documentOrderWithinATurn() {
+        // The scanner runs one pass per syntax, so collecting pass-by-pass put
+        // every image ahead of every link — a handoff reading "the clip, then
+        // the frame" listed the frame first, with identical timestamps, which
+        // reads as an unsorted list.
+        let r = TranscriptResourceIndex.collect(from: [
+            msg("First [clip.mp4](/out/clip.mp4), then ![frame](/out/frame.png), then /out/notes.md", ts: 500)
+        ])
+        #expect(r.files.map(\.ref.raw) == ["/out/clip.mp4", "/out/frame.png", "/out/notes.md"])
+    }
+
+    @Test("ordering is by timestamp, not the array's order")
+    func sortsByTimestampNotPosition() {
+        // The promise this screen makes is "newest first". It must not depend on
+        // the transcript array arriving pre-sorted by someone else.
+        let r = TranscriptResourceIndex.collect(from: [
+            msg("/out/middle.png", ts: 200),
+            msg("/out/oldest.png", ts: 100),
+            msg("/out/newest.png", ts: 300),
+        ])
+        #expect(r.files.map(\.ref.raw) == ["/out/newest.png", "/out/middle.png", "/out/oldest.png"])
+    }
+
+    @Test("an undated turn sorts with the nearest newer turn")
+    func undatedTurnsInheritPosition() {
+        // A locally-appended turn has no ts yet; it must not sink to the bottom.
+        let r = TranscriptResourceIndex.collect(from: [
+            msg("/out/old.png", ts: 100),
+            msg("/out/pending.png", ts: nil),
+        ])
+        #expect(r.files.map(\.ref.raw) == ["/out/pending.png", "/out/old.png"])
+    }
+
+    @Test("links sort newest first too")
+    func linksSortNewestFirst() {
+        let r = TranscriptResourceIndex.collect(from: [
+            msg("https://example.com/old", ts: 100),
+            msg("https://example.com/new", ts: 900),
+        ])
+        #expect(r.links.map(\.link.url) == ["https://example.com/new", "https://example.com/old"])
+    }
+
     @Test("tool calls and results are ignored")
     func ignoresToolNoise() {
         // A single Bash turn can name dozens of paths. None were handed over.
