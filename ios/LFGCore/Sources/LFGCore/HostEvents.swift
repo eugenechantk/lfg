@@ -113,6 +113,27 @@ public enum HostLinkPolicy {
         staleTimeout * quality.scale(max: 2)
     }
 
+    /// How long to wait for the stream's RESPONSE HEADERS before giving up.
+    ///
+    /// Scoped to the connect phase on purpose. A black-holed host accepts the TCP
+    /// connection and then never sends headers, which the byte-stall watchdog
+    /// cannot catch because it only starts once headers arrive — so this phase
+    /// needs its own bound. It used to be expressed as `URLRequest.timeoutInterval
+    /// = 18`, which looked like a connect bound but is actually an IDLE timeout
+    /// spanning the WHOLE request. That silently overrode `staleTimeout`: on a
+    /// relayed path the client logged `stale=40s`, believed it, and URLSession
+    /// still killed the stream at ~18s of quiet. The proof is negative — across
+    /// every connection log captured on 2026-08-16 the string "STALL — no bytes"
+    /// appears zero times, while `-1001 timedOut` at 18–21s of idle appears
+    /// constantly. The custom watchdog had never once fired.
+    public static let headersTimeout: TimeInterval = 18
+
+    /// The idle timeout to hand URLSession for a stream. Never below the stale
+    /// watchdog, or URLSession pre-empts the policy this client actually intends.
+    public static func streamRequestTimeout(for quality: PathQuality) -> TimeInterval {
+        max(headersTimeout, staleTimeout(for: quality))
+    }
+
     /// Keepalive request timeout, widened for a slow path.
     ///
     /// The ping is the **only** source of RTT samples, so a fixed 5s timeout is a
@@ -129,6 +150,79 @@ public enum HostLinkPolicy {
     /// their expiry is what triggers Tailscale re-punch flaps); also yields an
     /// RTT sample and bidirectional fast death detection.
     public static let keepaliveInterval: TimeInterval = 10
+
+    /// When the next keepalive tick is due, given the tick that just ran.
+    ///
+    /// Deadline-based, NOT sleep-after-work. Sleeping `keepaliveInterval` *after*
+    /// the ping returns makes the real cadence `interval + ping duration`, and the
+    /// ping's own timeout widens with a bad path — so on the exact path where the
+    /// NAT binding needs warming, 10s quietly became ~19s against a binding that
+    /// expires at ~30s. Measured in the 2026-08-16 cellular log: pings at
+    /// 13:48:13.7 and 13:48:33.2, a 19.5s gap, with nothing in between.
+    ///
+    /// If a tick overran its own deadline the schedule is rebased on now rather
+    /// than firing a burst of catch-up pings, which would be worse than late.
+    public static func keepaliveNextDeadline(after due: Date, now: Date) -> Date {
+        let next = due.addingTimeInterval(keepaliveInterval)
+        return next > now ? next : now.addingTimeInterval(keepaliveInterval)
+    }
+
+    /// How long with NO successful contact of any kind — a stream byte or a
+    /// keepalive pong — before a host is treated as **cold**.
+    ///
+    /// A cold host is not merely unhealthy; it is one nothing has reached for
+    /// minutes, and the overwhelmingly likely reason is that it is switched off.
+    /// The Air spent the whole of the 2026-08-16 outdoor log that way — six hours,
+    /// `dial since=26089` never advancing, not one set of response headers — while
+    /// costing a full 18 s stream timeout per attempt plus a keepalive every 10 s,
+    /// on the same marginal cellular link the *reachable* host was struggling over.
+    ///
+    /// Two minutes is deliberately far longer than any blip this client is
+    /// designed to ride out (the stale watchdog tops out at 40 s, the reconnect
+    /// ladder at 30 s), so a host that is merely having a bad time never trips it.
+    public static let coldAfter: TimeInterval = 120
+
+    /// Whether a host should be treated as cold. `nil` means nothing has been
+    /// recorded yet — a freshly started link is never cold.
+    public static func isCold(lastContactAt: Date?, now: Date = Date()) -> Bool {
+        guard let last = lastContactAt else { return false }
+        return now.timeIntervalSince(last) >= coldAfter
+    }
+
+    /// A cold host is pinged one tick in this many — 10 s becomes 60 s.
+    public static let coldKeepaliveEvery = 6
+
+    /// Whether the NAT-warming keepalive should fire on this tick.
+    ///
+    /// It fires whenever the link is started — **including while connecting or in
+    /// backoff**. Gating it on an already-healthy stream was a self-sustaining
+    /// failure loop on cellular: the stream drops, the link leaves `.live`, the
+    /// keepalive goes silent, the carrier NAT binding idles out at ~30s, Tailscale
+    /// has to re-punch, traffic black-holes, so the stream cannot reconnect and
+    /// the link never returns to `.live` to re-enable the keepalive. The one
+    /// moment the binding most needs a packet is the moment this used to stop
+    /// sending them.
+    ///
+    /// A **cold** host is the exception, and it is the correction to that fix
+    /// rather than a retreat from it: there is no NAT binding worth warming
+    /// toward a machine that is off, so it drops to one ping a minute. It never
+    /// stops entirely — that is what lets the host be noticed when it returns.
+    public static func keepaliveShouldPing(linkStarted: Bool, isCold: Bool, tick: Int) -> Bool {
+        guard linkStarted else { return false }
+        guard isCold else { return true }
+        return tick % coldKeepaliveEvery == 0
+    }
+
+    /// Whether a foreground kick may skip the rest of a link's backoff wait.
+    ///
+    /// For a reachable host, yes — that is the whole point of the kick, and it is
+    /// what turns a 30 s stale badge into an instant reconnect. For a cold one,
+    /// no: the app coming forward is not new information about a machine that has
+    /// been unreachable for minutes, and honouring it there is what kept the dead
+    /// Air pinned at attempt 1. Every `APP foreground` in the 2026-08-16 log —
+    /// dozens of them — reset its ladder and bought another immediate 18 s dial.
+    /// Cold hosts keep climbing their own backoff to the 30 s cap instead.
+    public static func foregroundMaySkipBackoff(isCold: Bool) -> Bool { !isCold }
 
     /// How quiet an apparently-healthy stream may be before a foreground kick
     /// force-redials it. The server heartbeats every 10s, so anything past this

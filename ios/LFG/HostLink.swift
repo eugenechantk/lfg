@@ -43,6 +43,12 @@ final class HostLink {
     /// signal `resumeNow` uses — `state` alone can't tell a live stream from one
     /// frozen by a process suspension.
     private(set) var lastElementAt: Date?
+    /// When this host was last reached by ANYTHING — a stream byte or a keepalive
+    /// pong. Distinct from `lastElementAt`, which only tracks the stream: a host
+    /// whose stream is down but whose pings answer is struggling, not cold, and
+    /// must not be backed off as if it were switched off. Seeded at start so a
+    /// fresh link is never born cold. See `HostLinkPolicy.isCold`.
+    private(set) var lastContactAt: Date?
     private(set) var lastRTT: TimeInterval?
     /// Rolling RTT estimate for this host, and the timeout scaling derived from
     /// it. Owned here because the keepalive that samples it is owned here; read
@@ -140,6 +146,13 @@ final class HostLink {
             log("resumeNow(\(cause)): starting from idle")
             start()
         case .backoff(let attempt):
+            // A cold host keeps its wait. The app coming forward says nothing new
+            // about a machine unreachable for minutes, and honouring it there is
+            // what pinned the dead Air at attempt 1 through dozens of foregrounds.
+            guard HostLinkPolicy.foregroundMaySkipBackoff(isCold: isCold(now: now)) else {
+                log("resumeNow(\(cause)): host is cold — keeping backoff (attempt \(attempt))")
+                return
+            }
             log("resumeNow(\(cause)): skipping backoff (attempt \(attempt))")
             redial()
         case .connecting:
@@ -176,10 +189,17 @@ final class HostLink {
 
     private func startRunTask() {
         reloadCursor()
+        if lastContactAt == nil { lastContactAt = Date() }
         runTask = Task { [weak self] in await self?.run() }
         if pingTask == nil {
             pingTask = Task { [weak self] in await self?.keepalive() }
         }
+    }
+
+    /// True when nothing has reached this host for `coldAfter`. Drives both the
+    /// keepalive cadence and whether a foreground kick may skip backoff.
+    private func isCold(now: Date = Date()) -> Bool {
+        HostLinkPolicy.isCold(lastContactAt: lastContactAt, now: now)
     }
 
     func stop() {
@@ -205,6 +225,7 @@ final class HostLink {
     private func markReceiving() {
         let was = attemptFailed
         attemptFailed = false
+        lastContactAt = Date()
         onSignal?(.receiving)
         if was { onStateChange?() }
     }
@@ -290,19 +311,28 @@ final class HostLink {
     /// stays pinned at the LAN default precisely where it is most wrong. The
     /// floor at 1.0× means the loop can only widen from there, never tighten.
     private func keepalive() async {
+        var due = Date()
+        var tick = 0
         while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(HostLinkPolicy.keepaliveInterval))
+            due = HostLinkPolicy.keepaliveNextDeadline(after: due, now: Date())
+            let wait = due.timeIntervalSinceNow
+            if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
             if Task.isCancelled { return }
-            switch state {
-            case .catchingUp, .live:
-                let timeout = HostLinkPolicy.keepaliveTimeout(for: pathQuality)
-                if let r = try? await client.keepalivePing(timeout: timeout) {
-                    lastRTT = r.rtt
-                    pathQuality.record(rtt: r.rtt)
-                    noteGradeChange()
-                }
-            default:
-                break
+            tick += 1
+            // Fires in EVERY started state, not just `.catchingUp`/`.live`. See
+            // `HostLinkPolicy.keepaliveShouldPing` — gating on a healthy stream
+            // meant the NAT binding went unwarmed exactly while the link was
+            // struggling to reconnect, which is what kept it struggling. A cold
+            // host (nothing reached for `coldAfter`) drops to one ping a minute:
+            // there is no binding to warm toward a machine that is off.
+            guard HostLinkPolicy.keepaliveShouldPing(
+                linkStarted: state != .idle, isCold: isCold(), tick: tick) else { continue }
+            let timeout = HostLinkPolicy.keepaliveTimeout(for: pathQuality)
+            if let r = try? await client.keepalivePing(timeout: timeout) {
+                lastContactAt = Date()
+                lastRTT = r.rtt
+                pathQuality.record(rtt: r.rtt)
+                noteGradeChange()
             }
         }
     }

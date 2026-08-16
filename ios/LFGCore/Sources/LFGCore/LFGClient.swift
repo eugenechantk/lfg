@@ -535,17 +535,44 @@ public struct LFGClient: Sendable {
                 var req = URLRequest(url: target)
                 req.httpMethod = "GET"
                 // NOT .infinity: URLSession's timeoutInterval is an IDLE timeout
-                // (resets on every received byte), so with 10s server heartbeats
-                // a healthy stream never trips it — while a black-holed connect
-                // (TCP accepted by the kernel, headers never arriving — SIGSTOPed
-                // or vanished server) fails within 18s instead of hanging
-                // forever. The custom watchdog below can only start AFTER headers
-                // arrive; this covers the phase it can't. Caught live in the
-                // Phase-1 gate test.
-                req.timeoutInterval = 18
+                // (resets on every received byte), so a black-holed connect (TCP
+                // accepted by the kernel, headers never arriving — SIGSTOPed or
+                // vanished server) has to be bounded or it hangs forever.
+                //
+                // But it spans the WHOLE request, not just the connect. Hardcoding
+                // it to 18 therefore capped the byte-stall watchdog below at 18s no
+                // matter what `staleTimeout` said: on a relayed path this dial logs
+                // `stale=40s` and URLSession still killed the stream at ~18s of
+                // quiet. Across every 2026-08-16 connection log the watchdog's
+                // "STALL — no bytes" line appears ZERO times and `-1001 timedOut`
+                // at 18–21s idle appears constantly — it had never once fired.
+                // Heartbeats are 10s apart and this path routinely jitters them to
+                // 10–11s, so two delayed in a row killed a stream the policy was
+                // willing to keep.
+                req.timeoutInterval = HostLinkPolicy.streamRequestTimeout(for: quality)
                 req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                // The connect phase keeps its own bound, since the byte watchdog
+                // below can only start once headers are in hand. Same mechanism as
+                // that watchdog: finishing the continuation runs `onTermination`,
+                // which cancels this task and with it the URLSession request.
+                // `AsyncBytes` is not Sendable, so it cannot be raced across a task
+                // group — the flag is what crosses, not the stream.
+                let gotHeaders = OSAllocatedUnfairLock(initialState: false)
+                let headerWatchdog = Task {
+                    try? await Task.sleep(for: .seconds(HostLinkPolicy.headersTimeout))
+                    if Task.isCancelled { return }
+                    guard !gotHeaders.withLock({ $0 }) else { return }
+                    log.log(.stream,
+                            String(format: "no response headers in %.0fs, giving up",
+                                   HostLinkPolicy.headersTimeout),
+                            host: label)
+                    continuation.finish(throwing: LFGError.streamStalled)
+                }
+                defer { headerWatchdog.cancel() }
                 do {
                     let (bytes, resp) = try await session.bytes(for: req)
+                    gotHeaders.withLock { $0 = true }
+                    headerWatchdog.cancel()
                     let status = (resp as? HTTPURLResponse)?.statusCode ?? -1
                     // Time-to-headers is the number that separates "the host is
                     // gone" from "the Tailscale path is cold": a re-punch or DERP

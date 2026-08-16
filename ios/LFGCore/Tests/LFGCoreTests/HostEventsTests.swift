@@ -28,6 +28,181 @@ final class HostEventsTests: XCTestCase {
         XCTAssertEqual(frames[0].id, "9")
     }
 
+    // MARK: Keepalive cadence + gating
+    //
+    // The 2026-08-16 cellular log showed the phone dropping every ~20s. Root
+    // cause was the NAT-warming keepalive: it only fired while the stream was
+    // already healthy, so a drop silenced it, the carrier binding idled out at
+    // ~30s, Tailscale re-punched, traffic black-holed, and the stream could not
+    // get back to healthy to re-enable it.
+
+    func testKeepaliveFiresInEveryStartedStateNotJustHealthyOnes() {
+        // The whole point: connecting and backing-off links still warm the NAT
+        // binding. Only a stopped link goes quiet.
+        for tick in 1...12 {
+            XCTAssertTrue(HostLinkPolicy.keepaliveShouldPing(
+                linkStarted: true, isCold: false, tick: tick))
+            XCTAssertFalse(HostLinkPolicy.keepaliveShouldPing(
+                linkStarted: false, isCold: false, tick: tick))
+        }
+    }
+
+    // MARK: Stream idle timeout vs the stale watchdog
+    //
+    // `URLRequest.timeoutInterval` was hardcoded to 18 to bound the connect phase,
+    // but it is an idle timeout over the WHOLE request — so it silently capped the
+    // byte-stall watchdog. Dials logged `stale=40s` and URLSession killed them at
+    // ~18s of quiet. Zero "STALL — no bytes" lines exist in any captured log.
+
+    func testStreamTimeoutIsNeverTighterThanTheStaleWatchdog() {
+        // The regression in one assertion: whatever the path grade, the timeout
+        // handed to URLSession must not pre-empt the watchdog.
+        for rtt in [0.005, 0.1, 0.3, 1.0, 2.0, 5.0] {
+            var q = PathQuality()
+            q.record(rtt: rtt)
+            XCTAssertGreaterThanOrEqual(
+                HostLinkPolicy.streamRequestTimeout(for: q),
+                HostLinkPolicy.staleTimeout(for: q),
+                "URLSession would kill the stream before the watchdog at rtt=\(rtt)")
+        }
+    }
+
+    func testARelayedPathActuallyGetsItsWidenedBudget() {
+        var relayed = PathQuality()
+        relayed.record(rtt: 2.0)
+        let stale = HostLinkPolicy.staleTimeout(for: relayed)
+        XCTAssertGreaterThan(stale, HostLinkPolicy.headersTimeout,
+                             "a slow path must widen past the connect bound")
+        XCTAssertEqual(HostLinkPolicy.streamRequestTimeout(for: relayed), stale, accuracy: 0.001)
+    }
+
+    func testTheConnectPhaseKeepsItsOwnBound() {
+        // A fresh link has no samples, so its watchdog is the 20s floor; the
+        // connect bound must stay below that or a black-holed dial hangs longer
+        // than it used to.
+        XCTAssertEqual(HostLinkPolicy.headersTimeout, 18, accuracy: 0.001)
+        XCTAssertLessThan(HostLinkPolicy.headersTimeout,
+                          HostLinkPolicy.staleTimeout(for: PathQuality()))
+    }
+
+    func testAFastPathIsUnchangedByTheFix() {
+        // LAN-grade paths already had staleTimeout == 20 > 18, so the effective
+        // budget moves 18 → 20 and nothing else about them changes.
+        var lan = PathQuality()
+        lan.record(rtt: 0.005)
+        XCTAssertEqual(HostLinkPolicy.streamRequestTimeout(for: lan),
+                       HostLinkPolicy.staleTimeout(for: lan), accuracy: 0.001)
+    }
+
+    // MARK: Cold hosts
+    //
+    // The Air was unreachable for the whole 2026-08-16 log — six hours, never one
+    // set of response headers — while burning an 18s stream timeout per attempt
+    // and a keepalive every 10s on the same cellular link the reachable host was
+    // struggling over. Every `APP foreground` reset its backoff ladder to 1s.
+
+    func testAFreshLinkIsNeverCold() {
+        XCTAssertFalse(HostLinkPolicy.isCold(lastContactAt: nil))
+        let now = Date(timeIntervalSince1970: 10_000)
+        XCTAssertFalse(HostLinkPolicy.isCold(lastContactAt: now, now: now))
+    }
+
+    func testAHostStrugglingButStillAnsweringIsNotCold() {
+        // The threshold must sit clear of every transient this client rides out:
+        // the widest stale watchdog (40s) and the top of the reconnect ladder (30s).
+        let widestWatchdog = HostLinkPolicy.staleTimeout(for: {
+            var q = PathQuality(); q.record(rtt: 2.0); return q
+        }())
+        XCTAssertGreaterThan(HostLinkPolicy.coldAfter, widestWatchdog)
+        XCTAssertGreaterThan(HostLinkPolicy.coldAfter, HostLinkPolicy.reconnectDelay(attempt: 99))
+
+        let start = Date(timeIntervalSince1970: 10_000)
+        let justUnder = start.addingTimeInterval(HostLinkPolicy.coldAfter - 1)
+        XCTAssertFalse(HostLinkPolicy.isCold(lastContactAt: start, now: justUnder))
+    }
+
+    func testAHostUnreachedPastTheThresholdIsCold() {
+        let start = Date(timeIntervalSince1970: 10_000)
+        let past = start.addingTimeInterval(HostLinkPolicy.coldAfter)
+        XCTAssertTrue(HostLinkPolicy.isCold(lastContactAt: start, now: past))
+        XCTAssertTrue(HostLinkPolicy.isCold(
+            lastContactAt: start, now: start.addingTimeInterval(6 * 3600)))
+    }
+
+    func testColdHostKeepsPingingButOnceAMinute() {
+        var fired = 0
+        for tick in 1...60 {
+            if HostLinkPolicy.keepaliveShouldPing(linkStarted: true, isCold: true, tick: tick) {
+                fired += 1
+            }
+        }
+        // 60 ticks × 10s = 10 minutes. One per minute, and never zero — going
+        // silent would mean never noticing the host come back.
+        XCTAssertEqual(fired, 10)
+        XCTAssertGreaterThan(fired, 0)
+    }
+
+    func testForegroundSkipsBackoffForAReachableHostOnly() {
+        XCTAssertTrue(HostLinkPolicy.foregroundMaySkipBackoff(isCold: false))
+        XCTAssertFalse(HostLinkPolicy.foregroundMaySkipBackoff(isCold: true))
+    }
+
+    func testAColdHostStillClimbsToTheBackoffCapRatherThanStalling() {
+        // Denying the foreground skip must not strand the host: its own ladder
+        // still runs, and still tops out at a bounded retry interval.
+        let cap = HostLinkPolicy.reconnectDelay(attempt: 99)
+        XCTAssertEqual(cap, 30, accuracy: 0.001)
+        XCTAssertGreaterThan(cap, 0, "a cold host must keep retrying, just slower")
+    }
+
+    func testKeepaliveCadenceIsFixedAndDoesNotStretchWithPingDuration() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        // A ping that took 9s (a slow path widening its own timeout) must not
+        // push the next tick to 19s — that was the measured regression.
+        let next = HostLinkPolicy.keepaliveNextDeadline(
+            after: start, now: start.addingTimeInterval(9))
+        XCTAssertEqual(next.timeIntervalSince(start),
+                       HostLinkPolicy.keepaliveInterval, accuracy: 0.001)
+    }
+
+    func testKeepaliveRebasesRatherThanBurstingAfterAnOverrun() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        // Tick overran its own deadline by 5s (ping took 15s > 10s interval).
+        // Next tick is one full interval from NOW, not a backlog of catch-ups.
+        let now = start.addingTimeInterval(15)
+        let next = HostLinkPolicy.keepaliveNextDeadline(after: start, now: now)
+        XCTAssertEqual(next.timeIntervalSince(now),
+                       HostLinkPolicy.keepaliveInterval, accuracy: 0.001)
+    }
+
+    func testKeepaliveStaysWellInsideTheCarrierNatBindingExpiry() {
+        // What protects the NAT binding is the QUIET GAP — the time from one
+        // ping finishing to the next starting. A slow ping is itself traffic on
+        // the binding (it is retrying the whole time), so its duration is not
+        // part of the gap. The invariant is therefore: gap <= keepaliveInterval,
+        // always, however long the pings run.
+        let worstPing = HostLinkPolicy.keepaliveTimeout(for: {
+            var q = PathQuality(); q.record(rtt: 2.0); return q
+        }())
+        XCTAssertLessThanOrEqual(worstPing, HostLinkPolicy.keepaliveInterval,
+                                 "a ping may never overlap the next tick")
+
+        let bindingExpiry: TimeInterval = 30
+        var due = Date(timeIntervalSince1970: 1_000)
+        for _ in 0..<5 {
+            let finished = due.addingTimeInterval(worstPing)
+            let next = HostLinkPolicy.keepaliveNextDeadline(after: due, now: finished)
+            let quietGap = next.timeIntervalSince(finished)
+            XCTAssertLessThanOrEqual(quietGap, HostLinkPolicy.keepaliveInterval + 0.001,
+                                     "binding left unwarmed for \(quietGap)s")
+            // And even measured pessimistically start-to-start, a tick can never
+            // drift out to the ~30s expiry.
+            XCTAssertLessThan(next.timeIntervalSince(due), bindingExpiry,
+                              "tick-to-tick reached the binding expiry")
+            due = next
+        }
+    }
+
     // MARK: HostStreamDecoder
 
     func testDecodesJournaledEventWithSeq() {
