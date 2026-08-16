@@ -1,0 +1,37 @@
+{
+  "id": "019ffff2-e185-7ae1-af67-c7b58d891c3e",
+  "queue": [
+    {
+      "id": "d8400bd9cbbbffff",
+      "text": "Run the shell command ‘sleep 90’ and after it finishes reply exactly LONG_DONE. Start immediately.",
+      "status": "delivered",
+      "attempts": 1,
+      "createdAt": 1786705605776,
+      "updatedAt": 1786705606310
+    },
+    {
+      "id": "1bc4a4c9693cceb9",
+      "text": "QUEUE_AUDIT_NOTE keep pending and do not populate draft",
+      "status": "delivered",
+      "attempts": 1,
+      "createdAt": 1786705641777,
+      "updatedAt": 1786705652409
+    },
+    {
+      "id": "0796f0b7d1359084",
+      "text": "Run exec_command with cmd ‘sleep 180’, yield_time_ms 120000, and after it finishes reply exactly EDIT_DONE. Do not use any other tool before that.",
+      "status": "delivered",
+      "attempts": 1,
+      "createdAt": 1786705743989,
+      "updatedAt": 1786705744473
+    },
+    {
+      "id": "3dd62073c853141c",
+      "text": "EDIT_AUDIT_NOTE should stay queued and not enter draft",
+      "status": "delivered",
+      "attempts": 1,
+      "createdAt": 1786705771169,
+      "updatedAt": 1786705778442
+    }
+  ]
+}

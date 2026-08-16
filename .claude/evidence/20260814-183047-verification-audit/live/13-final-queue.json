@@ -1,0 +1,13 @@
+{
+  "id": "019fffd3-bb27-7f21-8008-451d9ebd4462",
+  "queue": [
+    {
+      "id": "60c1e1f3fb43cdd1",
+      "text": "Multiline delivery probe\n\nReply with exactly MULTILINE_ACK and nothing else.",
+      "status": "delivered",
+      "attempts": 1,
+      "createdAt": 1786703521478,
+      "updatedAt": 1786703521954
+    }
+  ]
+}

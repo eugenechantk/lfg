@@ -1,0 +1,6 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Fri, 14 Aug 2026 10:31:16 GMT
+Content-Length: 43
+
+{"ok":true,"seq":222476,"ts":1786703476915}

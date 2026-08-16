@@ -1,0 +1,18 @@
+ M .claude/feature/codex-multiline-followup.md
+ M bug-reports/002-phone-disconnects-from-host.md
+ M ios/LFG/Components.swift
+ M ios/LFG/SessionDetailView.swift
+ M ios/LFG/SessionStore.swift
+ M ios/LFGCore/Sources/LFGCore/LFGClient.swift
+ M ios/LFGCore/Sources/LFGCore/Models.swift
+ M ios/LFGCore/Sources/LFGCore/QueueAckResolution.swift
+ M ios/LFGCore/Tests/LFGCoreTests/QueueAckResolutionTests.swift
+ M src/commands/serve.ts
+ M src/sendq.ts
+ M src/tmux-codex-pane.test.ts
+ M src/tmux.ts
+?? .claude/evidence/20260814-183047-verification-audit/
+?? .claude/evidence/20260814-reliable-followup-audit/
+?? .claude/evidence/20260814-reliable-followup/
+?? .claude/feature/reliable-followup-delivery.md
+?? src/sendq-delivery-policy.test.ts

@@ -1,0 +1,6 @@
+{
+  "cwd": "/Users/eugenechan/dev/personal/lfg",
+  "prompt": "AUDIT-RF-20260814-190534. Use the shell tool to run 'sleep 25' and after it finishes reply exactly AUDIT_DONE. Do not ask questions before starting.",
+  "agent": "codex",
+  "model": "gpt-5.6-sol"
+}

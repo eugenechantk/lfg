@@ -1,0 +1,4 @@
+ .claude/feature/codex-multiline-followup.md | 15 ++++++++++----
+ src/tmux-codex-pane.test.ts                 | 31 +++++++++++++++++++++++++++++
+ src/tmux.ts                                 | 23 ++++++++++++++++++++-
+ 3 files changed, 64 insertions(+), 5 deletions(-)

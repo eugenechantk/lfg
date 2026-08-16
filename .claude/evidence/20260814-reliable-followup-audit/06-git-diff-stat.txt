@@ -1,0 +1,14 @@
+ .claude/feature/codex-multiline-followup.md        | 24 ++++--
+ bug-reports/002-phone-disconnects-from-host.md     | 29 ++++++-
+ ios/LFG/Components.swift                           |  2 +-
+ ios/LFG/SessionDetailView.swift                    |  9 ++-
+ ios/LFG/SessionStore.swift                         | 30 +++++--
+ ios/LFGCore/Sources/LFGCore/LFGClient.swift        |  2 +-
+ ios/LFGCore/Sources/LFGCore/Models.swift           |  2 +-
+ .../Sources/LFGCore/QueueAckResolution.swift       | 20 +++++
+ .../LFGCoreTests/QueueAckResolutionTests.swift     | 24 ++++++
+ src/commands/serve.ts                              |  9 ++-
+ src/sendq.ts                                       | 93 +++++++++++-----------
+ src/tmux-codex-pane.test.ts                        | 31 ++++++++
+ src/tmux.ts                                        | 23 +++++-
+ 13 files changed, 227 insertions(+), 71 deletions(-)
