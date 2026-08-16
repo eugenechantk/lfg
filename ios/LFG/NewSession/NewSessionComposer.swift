@@ -78,8 +78,7 @@ struct NewSessionComposer: View {
     var autofocus = false
     let onSend: (String, [ComposerAttachment]) -> Void
 
-    @State private var attachments: [ComposerAttachment] = []
-    @State private var pickerItems: [PhotosPickerItem] = []
+    @State private var tray = AttachmentTray()
     @FocusState private var focused: Bool
 
     private var canSend: Bool {
@@ -112,8 +111,8 @@ struct NewSessionComposer: View {
                 }
             }
 
-            if !attachments.isEmpty {
-                thumbnails
+            if !tray.isEmpty {
+                AttachmentChips(tray: tray)
                     .padding(.top, 12)
             }
 
@@ -137,11 +136,15 @@ struct NewSessionComposer: View {
             // 44pt HIG minimum target. contentShape makes the whole block hittable.
             .contentShape(Rectangle())
             .onTapGesture { focused = true }
-            .padding(.top, attachments.isEmpty ? 12 : 8)
+            .padding(.top, tray.isEmpty ? 12 : 8)
             .accessibilityIdentifier("newSession.input")
 
             HStack(spacing: 14) {
-                PhotosPicker(selection: $pickerItems, maxSelectionCount: 6, matching: .images) {
+                // A menu rather than a direct PhotosPicker: "attach" now means two
+                // different system pickers and the choice has to be the user's.
+                Menu {
+                    AttachmentMenuItems(tray: tray)
+                } label: {
                     // Design drawn ink is 17.06pt; at this weight SF renders ~0.78pt
                     // of ink per pt of size, so 22 lands it. The 26pt slot is the
                     // design's touch area and stays as-is.
@@ -149,10 +152,12 @@ struct NewSessionComposer: View {
                         .font(.system(size: 22, weight: .regular))
                         .foregroundStyle(NewSessionPalette.attachIcon)
                         .frame(width: 26, height: 26)
+                        .opacity(tray.isLoading ? 0.4 : 1)
                 }
                 .glassButtonStyleOrPlain()
-                .accessibilityLabel("Attach image")
+                .accessibilityLabel("Attach")
                 .accessibilityIdentifier("newSession.attach")
+                .disabled(tray.isLoading)
 
                 ConfigChip(
                     label: modelLabel,
@@ -211,38 +216,11 @@ struct NewSessionComposer: View {
         )
         // No identifier on the card container — same propagation trap as the screen
         // root: it overwrote the chip/input/attach/send ids with "newSession.composer".
-        .onChange(of: pickerItems) { _, items in
-            Task { await load(items) }
-        }
+        .attachmentPickers(tray)
         .task(id: autofocus) {
             guard autofocus else { return }
             await Task.yield()
             focused = true
-        }
-    }
-
-    private var thumbnails: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(attachments) { attachment in
-                    ZStack(alignment: .topTrailing) {
-                        Image(uiImage: attachment.image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 56, height: 56)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                        Button {
-                            attachments.removeAll { $0.id == attachment.id }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.white, .black.opacity(0.6))
-                        }
-                        .offset(x: 5, y: -5)
-                    }
-                }
-            }
-            .padding(.vertical, 2)
         }
     }
 
@@ -254,25 +232,8 @@ struct NewSessionComposer: View {
     private func submit() {
         guard canSend, !sending else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        onSend(trimmed, attachments)
+        onSend(trimmed, tray.items)
         text = ""
-        attachments = []
-        pickerItems = []
-    }
-
-    private func load(_ items: [PhotosPickerItem]) async {
-        var loaded: [ComposerAttachment] = []
-        for item in items {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let image = UIImage(data: data)
-            {
-                loaded.append(ComposerAttachment(image: image, data: image.pngData() ?? data))
-            }
-        }
-        let result = loaded
-        await MainActor.run {
-            attachments.append(contentsOf: result)
-            pickerItems = []
-        }
+        tray.clear()
     }
 }

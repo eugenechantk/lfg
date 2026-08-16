@@ -58,6 +58,16 @@ public enum MediaScanner {
     /// passes below are by syntax, not position, so collecting them pass-by-pass
     /// put every image ahead of every link regardless of what the turn actually
     /// said: a handoff reading "the clip, then the frame" listed the frame first.
+    /// The host's attachment store. A bare path inside it is, by construction,
+    /// something a user actually attached, so it renders as a card whatever its
+    /// extension is — a `.csv` you just sent must not come back as a wall of raw
+    /// path text. Prose that merely *mentions* a `.csv` still doesn't become a
+    /// card, which is the reason bare references are otherwise restricted to
+    /// known media types.
+    static func isUploadedAttachment(_ path: String) -> Bool {
+        path.contains("/lfg-uploads/")
+    }
+
     public static func scan(_ text: String, includeInlineImages: Bool = false) -> [MediaRef] {
         let ns = text as NSString
         let full = NSRange(location: 0, length: ns.length)
@@ -89,7 +99,10 @@ public enum MediaScanner {
         for m in bareRef.matches(in: text, range: full) {
             let raw = ns.substring(with: m.range(at: 0))
             guard !inlineImageURLs.contains(raw) else { continue }
-            candidates.append(Candidate(location: m.range.location, raw: raw, label: nil, allowAny: false))
+            candidates.append(Candidate(location: m.range.location,
+                                        raw: raw,
+                                        label: nil,
+                                        allowAny: isUploadedAttachment(raw)))
         }
 
         var seen = Set<String>()

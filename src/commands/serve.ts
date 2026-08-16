@@ -76,7 +76,14 @@ import { PtyBridge, termSessionName } from "../pty.ts";
 import { capturePaneScroll, capturePaneEscaped, paneWidth, ensureFolderTrusted } from "../tmux.ts";
 import { rootDir, inboxDir, setInbox, createDir, expandUserPath } from "../dirs.ts";
 import { detectUrls } from "../links.ts";
+import { decodeFilenameHeader, storedUploadName } from "../upload-names.ts";
 import type { ServerWebSocket } from "bun";
+
+/// Ceiling on a single client attachment. The server is one Bun event loop
+/// serving every session (see .claude/CLAUDE.md) and the whole body is buffered
+/// into memory here, so an unbounded upload is a host-wide stall, not just a
+/// slow request. 64 MB comfortably covers a phone screen recording.
+const MAX_UPLOAD_BYTES = 64 * 1024 * 1024;
 import { appendCmd as appendAisdkCmd, removeEntry as removeAisdkEntry, readEntry as readAisdkEntry, findEntryByAnyId as findAisdkEntryByAnyId } from "../aisdk-registry.ts";
 import { closeAll, defaultCloseDeps, interruptAndConfirm, markClosed } from "../closing.ts";
 import { logOp } from "../ops-log.ts";
@@ -2129,27 +2136,36 @@ export async function cmdServe() {
       }
 
       {
-        // Image attach: the browser POSTs raw image bytes; we persist them and
-        // hand back an absolute path. The client then includes that path in the
-        // message text — Claude Code reads local image paths as image input.
+        // File attach: the client POSTs raw bytes; we persist them and hand back
+        // an absolute path. The client then includes that path in the message
+        // text — Claude Code reads local file paths (images, PDFs, text, …) as
+        // input.
+        //
+        // Each upload gets its own directory so the file can keep its ORIGINAL
+        // name: `MediaRef.filename` on the client is the last path component, so
+        // the directory carries the uniqueness and the card reads
+        // "Quarterly_Report.pdf" instead of "a1b2c3-…-report.pdf". Both the
+        // filename and the content type are client-supplied and re-sanitized
+        // here — this is the side that opens the file descriptor.
         const m = path.match(/^\/api\/sessions\/([0-9a-fA-F-]{36})\/upload$/);
         if (m && req.method === "POST") {
-          const ct = (req.headers.get("content-type") || "").toLowerCase();
-          const ext = ct.includes("png")
-            ? "png"
-            : ct.includes("webp")
-              ? "webp"
-              : ct.includes("gif")
-                ? "gif"
-                : "jpg";
+          const ct = req.headers.get("content-type") || "";
+          const rawName = decodeFilenameHeader(req.headers.get("x-lfg-filename"));
           const buf = new Uint8Array(await req.arrayBuffer());
           if (!buf.length) return err(400, "empty upload");
-          const dir = join(tmpdir(), "lfg-uploads");
+          if (buf.length > MAX_UPLOAD_BYTES) {
+            return err(413, `upload too large (max ${MAX_UPLOAD_BYTES} bytes)`);
+          }
+          const name = storedUploadName(rawName, ct);
+          const dir = join(
+            tmpdir(),
+            "lfg-uploads",
+            `${m[1]}-${Date.now()}-${randomBytes(3).toString("hex")}`,
+          );
           mkdirSync(dir, { recursive: true });
-          const name = `${m[1]}-${Date.now()}-${randomBytes(3).toString("hex")}.${ext}`;
           const fp = join(dir, name);
           await Bun.write(fp, buf);
-          return json({ ok: true, path: fp });
+          return json({ ok: true, path: fp, filename: name });
         }
       }
 

@@ -419,14 +419,32 @@ public struct LFGClient: Sendable {
         _ = try await send("POST", "api/sessions/\(id)/queue/\(messageID)/retry")
     }
 
-    /// Upload image bytes for a session; the server persists them and returns an
-    /// absolute path to include in a message (Claude Code reads local image paths
-    /// as image input). `contentType` should be image/png|jpeg|gif|webp.
-    public func upload(_ sessionID: String, data: Data, contentType: String) async throws -> String {
+    /// Upload attachment bytes for a session; the server persists them and returns
+    /// an absolute path to include in a message (the agent reads local file paths
+    /// — images, PDFs, text — as input).
+    ///
+    /// `filename` is what the file is called on the host, and therefore what the
+    /// transcript card is labelled: pass the real name whenever one exists. It
+    /// travels percent-encoded because HTTP headers are latin-1 and real
+    /// filenames are not; the server re-sanitizes it regardless.
+    public func upload(
+        _ sessionID: String,
+        data: Data,
+        contentType: String,
+        filename: String? = nil
+    ) async throws -> String {
         var req = URLRequest(url: url("api/sessions/\(sessionID)/upload"))
         req.httpMethod = "POST"
-        req.timeoutInterval = 30
+        // Videos and large documents are far heavier than the photos this
+        // endpoint used to carry; 30s was a timeout on a slow relayed path.
+        req.timeoutInterval = 120
         req.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        if let filename, !filename.isEmpty {
+            let encoded = filename.addingPercentEncoding(
+                withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "._-"))
+            ) ?? filename
+            req.setValue(encoded, forHTTPHeaderField: "X-LFG-Filename")
+        }
         req.httpBody = data
         let respData = try await performRaw(req)
         struct UploadResponse: Decodable { let path: String }

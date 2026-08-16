@@ -811,18 +811,30 @@ import LFGCore
 
         let fm = FileManager.default
         if fm.fileExists(atPath: dir.path) {
+    /// Label for a send that carried attachments but no typed text.
+    private static func attachmentSummary(_ attachments: [ComposerAttachment]) -> String {
+        guard let first = attachments.first else { return "📎 Attachment" }
+        if attachments.count == 1 { return "📎 \(first.meta.filename)" }
+        return "📎 \(first.meta.filename) +\(attachments.count - 1)"
+    }
+
             try fm.removeItem(at: dir)
         }
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
         for (index, attachment) in attachments.enumerated() {
-            try attachment.data.write(
-                to: dir.appendingPathComponent("\(index).png"),
-                options: [.atomic]
-            )
+            // The sidecar's NAME carries its ordering and its original filename,
+            // so there is no manifest to fall out of sync with the bytes it
+            // describes. See `OutboxAttachmentNaming`.
+            let name = OutboxAttachmentNaming.sidecarName(
+                index: index, filename: attachment.meta.filename)
+            try attachment.data.write(to: dir.appendingPathComponent(name), options: [.atomic])
         }
     }
 
-    private func outboxAttachmentFiles(clientId: String) -> [URL] {
+    /// Queued sidecars in send order, each with the metadata recovered from its
+    /// filename. Sidecars written by the previous build (`0.png`) still parse —
+    /// messages queued offline before this upgrade must not be dropped.
+    private func outboxAttachmentFiles(clientId: String) -> [(url: URL, meta: AttachmentMeta)] {
         guard let dir = outboxAttachmentDirectory(clientId: clientId),
               let files = try? FileManager.default.contentsOfDirectory(
                 at: dir,
@@ -831,13 +843,10 @@ import LFGCore
               ) else {
             return []
         }
-        return files
-            .filter { $0.pathExtension.lowercased() == "png" }
-            .sorted { lhs, rhs in
-                let lhsIndex = Int(lhs.deletingPathExtension().lastPathComponent) ?? .max
-                let rhsIndex = Int(rhs.deletingPathExtension().lastPathComponent) ?? .max
-                if lhsIndex != rhsIndex { return lhsIndex < rhsIndex }
-                return lhs.lastPathComponent < rhs.lastPathComponent
+        let byName = Dictionary(files.map { ($0.lastPathComponent, $0) }, uniquingKeysWith: { a, _ in a })
+        return OutboxAttachmentNaming.ordered(sidecarNames: Array(byName.keys))
+            .compactMap { entry in
+                byName[entry.name].map { (url: $0, meta: entry.meta) }
             }
     }
 
@@ -861,8 +870,13 @@ import LFGCore
 
         var paths: [String] = []
         for file in files {
-            let data = try Data(contentsOf: file)
-            let path = try await client.upload(row.sessionId, data: data, contentType: "image/png")
+            let data = try Data(contentsOf: file.url)
+            let path = try await client.upload(
+                row.sessionId,
+                data: data,
+                contentType: file.meta.contentType,
+                filename: file.meta.filename
+            )
             paths.append(path)
         }
 
@@ -2961,7 +2975,10 @@ import LFGCore
         pendingSends[id, default: []].append(
             PendingSend(id: pid,
                         clientId: clientId,
-                        displayText: typed.isEmpty ? "📎 Attachment" : typed,
+                        // An attachment-only send should say WHAT was sent. A bare
+                        // "📎 Attachment" is fine for a photo you just picked, but
+                        // useless once you can send three PDFs in a row.
+                        displayText: typed.isEmpty ? Self.attachmentSummary(attachments) : typed,
                         matchText: typed,
                         ts: nowMs,
                         queuedOffline: presentation == .offlineQueued,
@@ -3000,7 +3017,12 @@ import LFGCore
         //    the agent will record.
         var paths: [String] = []
         for att in attachments {
-            if let p = try? await client.upload(id, data: att.data, contentType: "image/png") { paths.append(p) }
+            if let p = try? await client.upload(
+                id,
+                data: att.data,
+                contentType: att.meta.contentType,
+                filename: att.meta.filename
+            ) { paths.append(p) }
         }
         let full = ([typed] + paths).filter { !$0.isEmpty }.joined(separator: "\n")
         guard !full.isEmpty else { removePending(id, pid); return }

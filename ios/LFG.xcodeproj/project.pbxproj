@@ -21,6 +21,7 @@
 		5E6C84F3CB9E6AA06447AFBC /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E73816164B94C119D0706DA8 /* WidgetKit.framework */; };
 		62E8EB3B75DC4806D6857766 /* NewSessionComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB0F37496A85B98C8E3D9867 /* NewSessionComposer.swift */; };
 		63E697B25FFD5633F32DF474 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 0F494F67402A869EB8A3476E /* MarkdownUI */; };
+		677E66E5606A3B3D911193D0 /* AttachmentTray.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCD4448C18939CAC5940F467 /* AttachmentTray.swift */; };
 		680725D02451A3EEFF5A9F28 /* NewSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27C81E2B22DECF886C37B1A7 /* NewSessionView.swift */; };
 		6D57951618DB68F747829455 /* LFGFleetAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */; };
 		7254BB93C3886BB66A1304A2 /* LFGCore in Frameworks */ = {isa = PBXBuildFile; productRef = 672BDBCB9E1F5950E1DB7012 /* LFGCore */; };
@@ -103,6 +104,7 @@
 		9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostLink.swift; sourceTree = "<group>"; };
 		B256A006CA36864233180E24 /* UnreadBadges.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnreadBadges.swift; sourceTree = "<group>"; };
 		B465BA01F1A3FC7DAF7ADF56 /* BrowserPreviewCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserPreviewCard.swift; sourceTree = "<group>"; };
+		BCD4448C18939CAC5940F467 /* AttachmentTray.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentTray.swift; sourceTree = "<group>"; };
 		C22EA76E51E2B0A745EE8847 /* RichContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichContent.swift; sourceTree = "<group>"; };
 		CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
 		CDCC421082566E268167E6E7 /* RetiredSessionActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetiredSessionActivity.swift; sourceTree = "<group>"; };
@@ -169,6 +171,7 @@
 			children = (
 				36D7D08CD0B7C101A085BC11 /* Assets.xcassets */,
 				0E9D14391A3FEF1D22D41A2B /* AttachmentsSheet.swift */,
+				BCD4448C18939CAC5940F467 /* AttachmentTray.swift */,
 				9D1BD4A3061EFB2858AB2A4B /* BackgroundSender.swift */,
 				B465BA01F1A3FC7DAF7ADF56 /* BrowserPreviewCard.swift */,
 				F4C23B1D7493D21B0344531F /* Components.swift */,
@@ -359,6 +362,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				677E66E5606A3B3D911193D0 /* AttachmentTray.swift in Sources */,
 				FD027D56F957D150BB87EBA7 /* AttachmentsSheet.swift in Sources */,
 				5942295A0F639DE68C4FF451 /* BackgroundSender.swift in Sources */,
 				037A25ADA39F6E527D36B73D /* BrowserPreviewCard.swift in Sources */,

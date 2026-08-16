@@ -1,11 +1,21 @@
 import SwiftUI
-import PhotosUI
 import LFGCore
 
+/// One picked item waiting to be sent — a photo, a video, or any file at all.
+///
+/// `preview` is only populated for things that *look* like something. Everything
+/// else renders as a named chip, which is the honest presentation: a blank grey
+/// square labelled nothing is worse than an icon and a filename.
 struct ComposerAttachment: Identifiable, Equatable {
     let id = UUID()
-    let image: UIImage
-    let data: Data            // PNG bytes for upload
+    let data: Data
+    let meta: AttachmentMeta
+    let preview: UIImage?
+
+    var filename: String { meta.filename }
+    var kind: AttachmentKind { meta.kind }
+
+    static func == (lhs: ComposerAttachment, rhs: ComposerAttachment) -> Bool { lhs.id == rhs.id }
 }
 
 /// Floating message bar: a growing multiline input with the attach + send
@@ -16,20 +26,19 @@ struct MessageComposer: View {
     var placeholder: String = "Message"
     var sending: Bool = false
     var autofocus = false
-    /// Receives the trimmed text and any picked image attachments.
+    /// Receives the trimmed text and any picked attachments.
     let onSend: (String, [ComposerAttachment]) -> Void
 
-    @State private var attachments: [ComposerAttachment] = []
-    @State private var pickerItems: [PhotosPickerItem] = []
+    @State private var tray = AttachmentTray()
     @FocusState private var focused: Bool
 
     private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !tray.isEmpty
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if !attachments.isEmpty { thumbnails }
+            if !tray.isEmpty { AttachmentChips(tray: tray) }
 
             // Growing input area.
             TextField(placeholder, text: $text, axis: .vertical)
@@ -39,10 +48,21 @@ struct MessageComposer: View {
 
             // Controls row, below the input.
             HStack(spacing: 14) {
-                PhotosPicker(selection: $pickerItems, maxSelectionCount: 6, matching: .images) {
-                    Image(systemName: "paperclip").font(.title3)
+                // A menu rather than a direct PhotosPicker: "attach" now means two
+                // different system pickers and the choice has to be the user's.
+                Menu {
+                    AttachmentMenuItems(tray: tray)
+                } label: {
+                    if tray.isLoading {
+                        ProgressView().controlSize(.small).frame(width: 22, height: 22)
+                    } else {
+                        Image(systemName: "paperclip").font(.title3)
+                    }
                 }
                 .tint(.secondary)
+                .accessibilityLabel("Attach")
+                .accessibilityIdentifier("composer.attach")
+                .disabled(tray.isLoading)
 
                 Spacer()
 
@@ -58,13 +78,14 @@ struct MessageComposer: View {
                     }
                 }
                 .disabled(!canSend || sending)
+                .accessibilityIdentifier("composer.send")
             }
         }
         .padding(12)
         .modifier(GlassPanel(cornerRadius: 24))
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
-        .onChange(of: pickerItems) { _, items in Task { await load(items) } }
+        .attachmentPickers(tray)
         .task(id: autofocus) {
             guard autofocus else { return }
             await Task.yield()
@@ -72,50 +93,26 @@ struct MessageComposer: View {
         }
     }
 
-    private var thumbnails: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(attachments) { att in
-                    ZStack(alignment: .topTrailing) {
-                        Image(uiImage: att.image)
-                            .resizable().scaledToFill()
-                            .frame(width: 56, height: 56)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                        Button {
-                            attachments.removeAll { $0.id == att.id }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.white, .black.opacity(0.6))
-                        }
-                        .offset(x: 5, y: -5)
-                    }
-                }
-            }
-            .padding(.vertical, 2)
-        }
-    }
-
     private func submit() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSend else { return }
-        onSend(trimmed, attachments)
+        onSend(trimmed, tray.items)
         text = ""
-        attachments = []
-        pickerItems = []
+        tray.clear()
     }
+}
 
-    private func load(_ items: [PhotosPickerItem]) async {
-        var loaded: [ComposerAttachment] = []
-        for item in items {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let img = UIImage(data: data) {
-                // Prefer PNG bytes; fall back to the original data if conversion fails.
-                loaded.append(ComposerAttachment(image: img, data: img.pngData() ?? data))
-            }
-        }
-        let result = loaded
-        await MainActor.run { attachments.append(contentsOf: result); pickerItems = [] }
-    }
+/// Resign whatever is currently first responder.
+///
+/// The composer's focus is a private `@FocusState` (it has to be — the composer
+/// is reused by the new-session screen, which drives its own autofocus), so a
+/// sibling view like the transcript can't flip it directly. Sending
+/// `resignFirstResponder` up the responder chain dismisses the keyboard and
+/// SwiftUI syncs the `@FocusState` back to `false` for us.
+@MainActor
+func dismissKeyboard() {
+    UIApplication.shared.sendAction(
+        #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
 }
 
 /// Liquid Glass panel on iOS 26+, with a material fallback for iOS 17–25.
