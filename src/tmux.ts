@@ -1035,6 +1035,13 @@ const METER_LOOKBACK_LINES = 6;
 // composer content sits *between* two rule lines, so only codex puts one there.
 const CODEX_PROMPT = /^\s*›\s*(.*?)\s*$/;
 
+// Codex terminates its unbordered composer with a model + cwd status line:
+//   gpt-5.6-sol high fast · ~/dev/personal/lfg · Main [default]
+// The cwd is the stable discriminator; model names and optional branch suffixes
+// vary. This boundary lets inputBoxFromPane include multiline continuation rows
+// without accidentally consuming transcript output above the composer.
+const CODEX_STATUS_FOOTER = /^\s{2,}.+\s·\s(?:~\/|\/).*/;
+
 // How far above the codex composer its chrome can reach (meter + queue notice +
 // blank lines). Bounded so an unbounded pane never lets transcript prose in.
 const CODEX_CHROME_LOOKBACK = 10;
@@ -1339,7 +1346,21 @@ export function inputBoxFromPane(pane: string): string | null {
   // read every draft as absent and failed with "message never left the input
   // box after retries". The `›` line below the last rule IS the composer.
   const codexIdx = codexComposerIndex(lines);
-  if (codexIdx != null) return lines[codexIdx].match(CODEX_PROMPT)?.[1] ?? "";
+  if (codexIdx != null) {
+    const first = lines[codexIdx].match(CODEX_PROMPT)?.[1] ?? "";
+    const footer = lines.findIndex((line, i) => i > codexIdx && CODEX_STATUS_FOOTER.test(line));
+    if (footer < 0) return first;
+
+    // Codex expands a bracketed multiline paste directly in its composer: the
+    // first line carries `›`, while every later paragraph/wrapped line is
+    // indented by two spaces until the model/cwd footer. Returning only the
+    // prompt line made the send queue miss any confirmation prefix that crossed
+    // the first newline, so it pasted the same message again on every retry.
+    const continuation = lines
+      .slice(codexIdx + 1, footer)
+      .map((line) => (line.startsWith("  ") ? line.slice(2) : line));
+    return [first, ...continuation].join("\n").trimEnd();
+  }
   // Scan bottom-up for the composer's two borders. Crucially, a border DRAWN
   // WIDER THAN THE PANE wraps into two consecutive rule lines — and pairing
   // each rule line with the next one up made the wrap pair with its own first

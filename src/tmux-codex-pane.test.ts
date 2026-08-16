@@ -93,6 +93,26 @@ const CODEX_TYPED_DRAFT = CODEX_IDLE_WORKED.replace(
   "› reply with just the word FOLLOWUP",
 );
 
+// The reported failed follow-up from codexy-153628-89613. Codex renders pasted
+// paragraphs as continuation lines, not a collapsed "[Pasted text]" chip. The
+// send queue's 48-character confirmation prefix crosses from the first line
+// into the second, so returning only the `›` line makes a successful paste look
+// absent and every retry appends another copy.
+const CODEX_MULTILINE_DRAFT = [
+  "─ Worked for 1m 17s " + "─".repeat(57),
+  "",
+  "",
+  "› I think the character emotions is too sad",
+  "",
+  "  Is it because my motion reference I have no emotions? Or is it my character",
+  "  reference has no emotions",
+  "",
+  "  I want the emotions to be energetic and lively",
+  "",
+  "  gpt-5.6-sol high fast · ~/dev/personal/fiftyworkout",
+  "",
+].join("\n");
+
 // A codex selector: numbered `›` rows are options, not somewhere to type.
 const CODEX_SELECTOR = [
   "  Choose an option",
@@ -156,6 +176,17 @@ describe("codex composer", () => {
 
   test("a typed draft is visible to the send queue", () => {
     expect(inputBoxFromPane(CODEX_TYPED_DRAFT)).toBe("reply with just the word FOLLOWUP");
+  });
+
+  test("a multiline draft includes Codex continuation lines", () => {
+    expect(inputBoxFromPane(CODEX_MULTILINE_DRAFT)).toBe([
+      "I think the character emotions is too sad",
+      "",
+      "Is it because my motion reference I have no emotions? Or is it my character",
+      "reference has no emotions",
+      "",
+      "I want the emotions to be energetic and lively",
+    ].join("\n"));
   });
 
   test("busy pane's composer is still readable", () => {
