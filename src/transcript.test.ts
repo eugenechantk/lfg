@@ -4,7 +4,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { head, scanBack, tail, windowFromSlice } from "./transcript.ts";
+import { head, scanBack, scanBackWithReader, tail, windowFromSlice } from "./transcript.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "lfg-transcript-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -83,6 +83,112 @@ describe("scanBack", () => {
       JSON.stringify({ type: "user", text: "second" }),
     ]);
     await expect(scanBack(p, pickUser)).resolves.toBe("second");
+  });
+
+  test("walks a large miss in disjoint bounded slices instead of rereading the growing tail", async () => {
+    const rows = [
+      JSON.stringify({ type: "user", text: "buried" }),
+      ...Array.from({ length: 80 }, (_, i) =>
+        JSON.stringify({ type: "assistant", text: `${i}:${"x".repeat(73)}` }),
+      ),
+    ];
+    const text = rows.join("\n") + "\n";
+    const bytes = Buffer.from(text);
+    const reads: Array<[number, number]> = [];
+
+    const found = await scanBackWithReader(
+      bytes.length,
+      pickUser,
+      async (start, end) => {
+        reads.push([start, end]);
+        return bytes.subarray(start, end);
+      },
+      { startBytes: 64, maxStepBytes: 256 },
+    );
+
+    expect(found).toBe("buried");
+    expect(reads.length).toBeGreaterThan(2);
+    expect(reads.every(([start, end]) => end - start <= 256)).toBe(true);
+    for (let i = 1; i < reads.length; i++) {
+      expect(reads[i][1]).toBe(reads[i - 1][0]);
+    }
+    expect(reads.reduce((sum, [start, end]) => sum + end - start, 0)).toBe(bytes.length);
+  });
+
+  test("reassembles a JSONL record split across backward slice boundaries", async () => {
+    const rows = [
+      JSON.stringify({ type: "user", text: "crosses-boundaries-" + "z".repeat(90) }),
+      JSON.stringify({ type: "assistant", text: "tail" }),
+    ];
+    const bytes = Buffer.from(rows.join("\n") + "\n");
+    const found = await scanBackWithReader(
+      bytes.length,
+      pickUser,
+      async (start, end) => bytes.subarray(start, end),
+      { startBytes: 17, maxStepBytes: 23 },
+    );
+    expect(found).toBe("crosses-boundaries-" + "z".repeat(90));
+  });
+
+  test("maxScanBytes stops the walk early and reads nothing past the budget", async () => {
+    const rows = [
+      JSON.stringify({ type: "user", text: "buried" }),
+      ...Array.from({ length: 80 }, (_, i) =>
+        JSON.stringify({ type: "assistant", text: `${i}:${"x".repeat(73)}` }),
+      ),
+    ];
+    const bytes = Buffer.from(rows.join("\n") + "\n");
+    const reads: Array<[number, number]> = [];
+
+    const found = await scanBackWithReader(
+      bytes.length,
+      pickUser,
+      async (start, end) => {
+        reads.push([start, end]);
+        return bytes.subarray(start, end);
+      },
+      { startBytes: 64, maxStepBytes: 256, maxScanBytes: 512 },
+    );
+
+    // The only user row is at the head, far outside the budget.
+    expect(found).toBe(null);
+    const scanned = reads.reduce((sum, [start, end]) => sum + end - start, 0);
+    expect(scanned).toBeLessThan(bytes.length);
+    // A budget may overshoot by at most the range that straddles it, never more.
+    expect(scanned).toBeLessThanOrEqual(512 + 256);
+  });
+
+  test("maxScanBytes still returns a hit that lies inside the budget", async () => {
+    const rows = [
+      JSON.stringify({ type: "assistant", text: "old" }),
+      JSON.stringify({ type: "user", text: "recent" }),
+      JSON.stringify({ type: "assistant", text: "newest" }),
+    ];
+    const bytes = Buffer.from(rows.join("\n") + "\n");
+    const found = await scanBackWithReader(
+      bytes.length,
+      pickUser,
+      async (start, end) => bytes.subarray(start, end),
+      { startBytes: 16, maxStepBytes: 32, maxScanBytes: bytes.length },
+    );
+    expect(found).toBe("recent");
+  });
+
+  test("omitting maxScanBytes keeps the walk-to-the-head guarantee", async () => {
+    const rows = [
+      JSON.stringify({ type: "user", text: "buried" }),
+      ...Array.from({ length: 80 }, (_, i) =>
+        JSON.stringify({ type: "assistant", text: `${i}:${"x".repeat(73)}` }),
+      ),
+    ];
+    const bytes = Buffer.from(rows.join("\n") + "\n");
+    const found = await scanBackWithReader(
+      bytes.length,
+      pickUser,
+      async (start, end) => bytes.subarray(start, end),
+      { startBytes: 64, maxStepBytes: 256 },
+    );
+    expect(found).toBe("buried");
   });
 });
 

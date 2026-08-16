@@ -23,7 +23,7 @@
 
 /** Default first window. Comfortably covers a few turns; grows on a miss. */
 export const DEFAULT_START_BYTES = 64 * 1024;
-/** Stop doubling past this in one step; still walks to the head of the file. */
+/** Stop growing past this in one step; still walks to the head of the file. */
 export const MAX_STEP_BYTES = 4 * 1024 * 1024;
 
 export type Window = {
@@ -74,34 +74,113 @@ export async function head(path: string, bytes: number): Promise<string[]> {
 }
 
 /**
- * Scan lines newest-first, growing the window until `pick` returns non-null or
- * the window reaches the head of the file.
+ * Scan lines newest-first until `pick` returns non-null or the reader reaches
+ * the head of the file.
  *
  * `pick` receives one raw line and returns the extracted value, or null to keep
  * looking. Returning null for every line in the whole transcript yields null —
  * which now genuinely means "not present", not "not in the window".
+ *
+ * `maxScanBytes` opts out of that guarantee on purpose, for callers whose answer
+ * is decorative rather than load-bearing. A `pick` that `JSON.parse`s every line
+ * costs the whole file when the answer isn't there — on a 511 MB Codex rollout
+ * that is half a gigabyte of JSON parsed to fill a 140-character card preview,
+ * and it was a large part of what put `lfg serve` over its RSS ceiling. Give it a
+ * budget and it stops early, reporting "not found" the same way. Never set it on
+ * a scan whose null answer changes session state.
  */
 export async function scanBack<T>(
   path: string,
   pick: (line: string) => T | null,
-  opts: { startBytes?: number } = {},
+  opts: { startBytes?: number; maxScanBytes?: number } = {},
 ): Promise<T | null> {
   const size = await sizeOf(path);
   if (size === 0) return null;
-  let bytes = Math.max(1, opts.startBytes ?? DEFAULT_START_BYTES);
+  const file = Bun.file(path);
+  return scanBackWithReader(
+    size,
+    pick,
+    async (start, end) => new Uint8Array(await file.slice(start, end).arrayBuffer()),
+    opts,
+  );
+}
 
-  // Each round rescans the whole (larger) window rather than only the newly
-  // exposed head of it. Tracking "already scanned" by line count is off by one
-  // whenever a round drops a different partial first line, and skipping a line
-  // is precisely the silent miss this function exists to remove. Growth only
-  // happens on a miss, which is rare, so the repeat scan is cheap insurance.
-  while (true) {
-    const w = await tail(path, bytes);
-    for (let i = w.lines.length - 1; i >= 0; i--) {
-      const got = pick(w.lines[i]);
-      if (got !== null && got !== undefined) return got;
+type ByteRangeReader = (start: number, end: number) => Promise<Uint8Array>;
+
+/**
+ * Backward JSONL scanner over an injected byte-range reader.
+ *
+ * Ranges are adjacent and never overlap. The old implementation widened the
+ * tail and rescanned all previously-seen bytes after every miss; a lookup near
+ * the head of a 535 MB rollout therefore read and allocated tens of gigabytes.
+ * This walks the same file once, in steps capped at `maxStepBytes`.
+ *
+ * The leading partial record from each range is retained as BYTES and joined to
+ * the next older range. Keeping it undecoded matters: a byte boundary may split
+ * a UTF-8 scalar, and decoding each half independently would corrupt the JSON.
+ */
+export async function scanBackWithReader<T>(
+  size: number,
+  pick: (line: string) => T | null,
+  read: ByteRangeReader,
+  opts: { startBytes?: number; maxStepBytes?: number; maxScanBytes?: number } = {},
+): Promise<T | null> {
+  if (size <= 0) return null;
+  const maxStep = Math.max(1, opts.maxStepBytes ?? MAX_STEP_BYTES);
+  // The budget is a floor on where the walk may stop, not a hard read cap: the
+  // range holding the budget boundary is read whole so no record is torn.
+  const floor =
+    opts.maxScanBytes === undefined ? 0 : Math.max(0, size - Math.max(1, opts.maxScanBytes));
+  let step = Math.min(maxStep, Math.max(1, opts.startBytes ?? DEFAULT_START_BYTES));
+  let end = size;
+  let newerFragment = new Uint8Array(0);
+  const decoder = new TextDecoder();
+
+  const inspect = (bytes: Uint8Array): T | null => {
+    if (bytes.length === 0) return null;
+    const got = pick(decoder.decode(bytes));
+    return got === undefined ? null : got;
+  };
+
+  while (end > 0) {
+    const start = Math.max(0, end - step);
+    const older = await read(start, end);
+    const combined = new Uint8Array(older.length + newerFragment.length);
+    combined.set(older);
+    combined.set(newerFragment, older.length);
+
+    // A mid-file range begins inside an arbitrary record. Save that fragment,
+    // including its newline, to complete with the next older range. Everything
+    // after it is a complete record and can be inspected newest-first now.
+    let completeStart = 0;
+    if (start > 0) {
+      const newline = combined.indexOf(0x0a);
+      if (newline < 0) {
+        newerFragment = combined;
+        end = start;
+        if (end <= floor) return null;
+        step = Math.min(maxStep, step * 4);
+        continue;
+      }
+      newerFragment = combined.slice(0, newline + 1);
+      completeStart = newline + 1;
+    } else {
+      newerFragment = new Uint8Array(0);
     }
-    if (w.atHead) return null;
-    bytes = Math.min(bytes * 4, bytes + MAX_STEP_BYTES);
+
+    let lineEnd = combined.length;
+    for (let i = combined.length - 1; i >= completeStart; i--) {
+      if (combined[i] !== 0x0a) continue;
+      const got = inspect(combined.subarray(i + 1, lineEnd));
+      if (got !== null && got !== undefined) return got;
+      lineEnd = i;
+    }
+    const got = inspect(combined.subarray(completeStart, lineEnd));
+    if (got !== null && got !== undefined) return got;
+
+    end = start;
+    if (end <= floor) return null;
+    step = Math.min(maxStep, step * 4);
   }
+  return null;
 }
