@@ -301,6 +301,14 @@ import LFGCore
     /// resumable) — suppress the stale closed card once we've revived it.
     private var resumedIds: Set<String> = []
 
+    /// Sessions this client has asked a host to revive, and hasn't seen come back
+    /// live yet — the "Restarting" group. Marked when we ask (before the POST, so
+    /// the card stops claiming "Closed" the instant you tap), cleared when a host
+    /// reports the id live. See `RestartTracking` for why this can't come from the
+    /// server: the window it would report during is inside its own blocking
+    /// resume request.
+    private var restarts = RestartTracking()
+
     /// Last successful live-session snapshot PER host (keyed by Host.id). A host
     /// that blips (transiently unreachable) keeps contributing its last-known
     /// sessions to the merged list rather than having them vanish for a poll —
@@ -1998,6 +2006,11 @@ import LFGCore
         // healthy link streams pane-scraped busy for EVERY session". That is not
         // what the pump does: it appends a `busy` event only when the value
         // CHANGES (src/journal-pump.ts). A session already running when this
+        // A host reporting the id live IS the end of a restart. Pruning here too
+        // means a revival that never lands falls back to "Closed" on the same
+        // poll that would have confirmed it.
+        restarts.confirmLive(reconciled.liveIds)
+        restarts.prune(now: Date())
         // client connected, and still running, emits nothing — so the link is
         // healthy, no delta ever arrives, and the old guard suppressed the only
         // other source. Result: a freshly-opened app showed every already-running
@@ -2333,7 +2346,10 @@ import LFGCore
     // MARK: Derived view state
 
     enum Group: Int, CaseIterable {
-        case needsInput, blocked, working, unread, idle, closed
+        // `restarting` sits next to `working` on purpose: that's the section the
+        // row lands in seconds later, so a revived session moves one hop rather
+        // than jumping the length of the list.
+        case needsInput, blocked, restarting, working, unread, idle, closed
         var title: String {
             switch self {
             case .needsInput: return "Needs you"
@@ -2359,6 +2375,7 @@ import LFGCore
             promptPresent: sid.map { prompts[$0] != nil } ?? false,
             blocked: s.isBlocked,
             busy: sid.map { busy[$0] == true } ?? false
+            case .restarting: return "Restarting"
         ) {
         case .needsInput: return .needsInput
         case .blocked: return .blocked
@@ -3030,6 +3047,10 @@ import LFGCore
 
         // 4) Save to the durable outbox first.
         guard let hostId = routeHostId(forSession: id),
+        // A send that has to wake the session is a restart request — the list
+        // should say so from the tap, not from the response. (`.queuedForResume`
+        // already excludes the offline case, where nothing leaves the phone.)
+        if presentation == .queuedForResume { restarts.mark(id, at: Date()) }
               await enqueueOutboxForTransport(clientId: clientId, sessionId: id, hostId: hostId, text: full) else {
             mutatePending(id, pid) { $0.failed = true }
             return
@@ -3116,6 +3137,9 @@ import LFGCore
             let stopped = try await client.interrupt(id)
             await refresh()
             if stopped == false {
+            // Nothing was revived — stop claiming a restart that isn't happening.
+            // (Harmless when this send wasn't a wake-up: the id isn't marked.)
+            restarts.clear(id)
                 lastError = "Stop didn't take — the agent isn't responding. Try ending the session."
             }
         } catch {
@@ -3366,6 +3390,9 @@ import LFGCore
                 return nil
             }
             let newId = resp.sessionId ?? id
+        // Claude resumes into a NEW sessionId, so an in-flight restart has to
+        // follow the row here or the card reverts mid-revival.
+        restarts.move(from: old, to: new)
             if newId != id { remap(from: id, to: newId) }
             hostBySession[newId] = target.id
             await refresh()
@@ -3377,3 +3404,9 @@ import LFGCore
         }
     }
 }
+        //    Marked as restarting only from here, not from the close above: during
+        //    1b the session is still live on the source, and saying "Restarting"
+        //    while a host still reports it live would fight `confirmLive`.
+        restarts.mark(id, at: Date())
+                restarts.clear(id)
+            restarts.clear(id)

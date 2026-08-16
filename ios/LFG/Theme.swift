@@ -44,6 +44,9 @@ enum Theme {
         // so the chosen colors are stated here, with the matching light variant.
         case .needsInput: return dot(dark: 0xFF9F0A, light: 0xFF9500)
         case .blocked:    return dot(dark: 0xFFD60A, light: 0xFFCC00)
+        // Teal: adjacent to Working green (where the row is headed) but clearly
+        // not it, and clearly not Idle blue either.
+        case .restarting: return dot(dark: 0x64D2FF, light: 0x5AC8FA)
         case .working:    return dot(dark: 0x30D158, light: 0x34C759)
         case .unread:     return dot(dark: 0xBF5AF0, light: 0xAF52DE)
         case .idle:       return dot(dark: 0x0A84FF, light: 0x007AFF)
