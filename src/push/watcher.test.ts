@@ -7,7 +7,6 @@ import {
   reduceFleetLiveActivity,
   orderFleetRows,
   MAX_FLEET_ROWS,
-  END_DEBOUNCE_S,
   liveActivitiesEnabled,
   pushWatcherEnabled,
   CANONICAL_SERVE_PORT,
@@ -237,13 +236,6 @@ describe("reduceFleetLiveActivity", () => {
     expect(r.nextActive).not.toBeNull();
   });
 
-  /**
-   * The end debounce. Ending on the FIRST empty tick churned a new activity — and
-   * a new, frequently unreachable, push token — on every gap between two turns.
-   * The real trace showed 19 starts against 90 end decisions, 76 of which had no
-   * token left to send to, which is how the card ended up stranded reading
-   * "1 running session". See `END_DEBOUNCE_S`.
-   */
   describe("ending the activity when the fleet empties", () => {
     const active = (): LiveActivityActive => ({
       startedAt: 1_700,
@@ -258,73 +250,14 @@ describe("reduceFleetLiveActivity", () => {
     });
     const idle = [{ session: { sessionId: "s1", title: "Job" }, observed: obs(false, false) }];
 
-    test("does NOT end on the first empty tick — it starts the clock", () => {
+    test("ends immediately on the first empty tick", () => {
       const r = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730 });
-      expect(r.action?.event).toBe("update"); // counter drops to 0 immediately…
-      expect(r.nextActive).not.toBeNull(); // …but the card (and its token) survive
-      expect(r.nextActive?.zeroSince).toBe(1_730);
-    });
-
-    test("the counter reads zero while we wait — the card must not keep claiming work", () => {
-      const r = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730 });
-      expect(r.action?.push.body.aps["content-state"]).toMatchObject({
-        working: 0, needsInput: 0, rows: [], more: 0,
-      });
-    });
-
-    test("ends once the fleet has been empty for the debounce", () => {
-      const waited: LiveActivityActive = { ...active(), zeroSince: 1_730 };
-      const r = reduceFleetLiveActivity({
-        observations: idle,
-        active: waited,
-        now: 1_730 + END_DEBOUNCE_S,
-      });
       expect(r.action?.event).toBe("end");
       expect(r.nextActive).toBeNull();
       expect(r.action?.push.body.aps["content-state"]).toMatchObject({
         working: 0, needsInput: 0, rows: [], more: 0,
       });
-    });
-
-    test("work resuming inside the window cancels the end and clears the clock", () => {
-      // The exact case the debounce exists for: the gap between two turns. State
-      // is modelled as it really is at that moment — the card is already showing
-      // the zeroed content pushed on the first empty tick.
-      const zeroed: LiveActivityContentState = {
-        working: 0, needsInput: 0, rows: [], more: 0, updatedAt: 1_730,
-      };
-      const waited: LiveActivityActive = {
-        startedAt: 1_700, contentState: zeroed, since: {}, zeroSince: 1_730,
-      };
-      const r = reduceFleetLiveActivity({
-        observations: [{ session: { sessionId: "s1", title: "Job" }, observed: obs(true, false) }],
-        active: waited,
-        now: 1_760,
-      });
-      expect(r.action?.event).toBe("update"); // counter goes back up
-      expect(r.nextActive?.zeroSince).toBeUndefined(); // clock cancelled
-      expect(r.nextActive).not.toBeNull(); // SAME activity, same token — the point
-    });
-
-    test("a no-op tick inside the window keeps the clock running, not restarts it", () => {
-      // Otherwise the card could never end: every quiet tick would reset it.
-      const zeroed: LiveActivityContentState = {
-        working: 0, needsInput: 0, rows: [], more: 0, updatedAt: 1_730,
-      };
-      const waited: LiveActivityActive = {
-        startedAt: 1_700, contentState: zeroed, since: {}, zeroSince: 1_730,
-      };
-      const r = reduceFleetLiveActivity({ observations: idle, active: waited, now: 1_800 });
-      expect(r.action).toBeNull(); // nothing renderable changed
-      expect(r.nextActive?.zeroSince).toBe(1_730); // clock preserved
-    });
-
-    test("the debounce is honoured exactly at the boundary", () => {
-      const waited: LiveActivityActive = { ...active(), zeroSince: 1_730 };
-      const at = (now: number) =>
-        reduceFleetLiveActivity({ observations: idle, active: waited, now }).action?.event;
-      expect(at(1_730 + END_DEBOUNCE_S - 1)).toBe("update"); // still waiting
-      expect(at(1_730 + END_DEBOUNCE_S)).toBe("end"); // elapsed
+      expect(r.action?.push.body.aps["dismissal-date"]).toBe(1_730);
     });
   });
 

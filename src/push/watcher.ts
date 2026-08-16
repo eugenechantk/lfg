@@ -140,11 +140,6 @@ export type LiveActivityActive = {
   startedAt: number;
   contentState?: LiveActivityContentState;
   since?: Record<string, { state: LiveActivityRow["state"]; at: number }>;
-  /**
-   * Epoch seconds when the fleet most recently became empty, or absent while
-   * anything is active. Drives `END_DEBOUNCE_S`.
-   */
-  zeroSince?: number;
 };
 
 export type LiveActivityAction = {
@@ -213,30 +208,6 @@ export function orderFleetRows(rows: LiveActivityRow[]): LiveActivityRow[] {
 export const MAX_FLEET_ROWS = 3;
 
 /**
- * How long the fleet must stay empty before the card is ended.
- *
- * WHY ENDING EAGERLY IS EXPENSIVE. Ending is not free and not symmetric: the next
- * card must be created by a **push-to-start**, and a push-to-started activity
- * gets a brand-new push token that only reaches us if the app happens to be awake
- * to observe `pushTokenUpdates`. Apple does not launch the app for this, and the
- * token never arrives at all when the app is force-quit. Every end/start cycle is
- * therefore a fresh chance to end up holding a token that no longer addresses the
- * card — and once the old one is pruned (`410 ExpiredToken`) there is no token at
- * all, so the *next* `end` cannot be delivered either and the card is stranded
- * reading "1 running session" forever.
- *
- * Measured on the real trace before this existed: 19 starts against 90 end
- * decisions, of which **76 had zero tokens to send to**. Almost every one of those
- * zero-crossings was the ordinary gap between two turns, not the user finishing.
- *
- * So: wait. A fleet that is empty for two minutes is genuinely idle; a fleet that
- * is empty for four seconds is mid-handoff. This keeps one activity — and one
- * working token — alive across the gaps, which is what makes the eventual `end`
- * deliverable.
- */
-export const END_DEBOUNCE_S = 120;
-
-/**
  * Reduce this tick's observations into at most one Live Activity action.
  *
  * Note there is no per-app ceiling to respect any more: the retired per-session
@@ -247,10 +218,7 @@ export function reduceFleetLiveActivity(args: {
   observations: Array<{ session: PayloadSessionInput; observed: SessionState }>;
   active: LiveActivityActive | null;
   now: number;
-  /** Test seam. Real callers take the constant. */
-  endDebounceS?: number;
 }): LiveActivityDecision {
-  const endDebounceS = args.endDebounceS ?? END_DEBOUNCE_S;
   const priorSince = args.active?.since ?? {};
   const since: Record<string, { state: LiveActivityRow["state"]; at: number }> = {};
 
@@ -309,22 +277,6 @@ export function reduceFleetLiveActivity(args: {
   }
 
   if (total === 0) {
-    // First tick of an empty fleet: start the clock, keep the card. Ending here
-    // is what churned a new activity (and a new, often unreachable, push token)
-    // on every gap between turns — see END_DEBOUNCE_S.
-    const zeroSince = args.active.zeroSince ?? args.now;
-    if (args.now - zeroSince < endDebounceS) {
-      // Push the emptiness through so the counter reads 0 while we wait. The
-      // card must not keep claiming work is running just because we are holding
-      // it open.
-      if (sameFleetContentState(args.active.contentState, contentState)) {
-        return { action: null, nextActive: { ...args.active, since, zeroSince } };
-      }
-      return {
-        action: { event: "update", push: buildUpdate(contentState) },
-        nextActive: { ...args.active, contentState, since, zeroSince },
-      };
-    }
     return {
       action: { event: "end", push: buildEnd(contentState, args.now) },
       nextActive: null,
@@ -332,14 +284,13 @@ export function reduceFleetLiveActivity(args: {
   }
 
   if (sameFleetContentState(args.active.contentState, contentState)) {
-    // Nothing renderable changed — keep the refreshed `since` map but send
-    // nothing. `zeroSince` is dropped: the fleet is not empty.
-    return { action: null, nextActive: { ...args.active, since, zeroSince: undefined } };
+    // Nothing renderable changed — keep the refreshed `since` map but send nothing.
+    return { action: null, nextActive: { ...args.active, since } };
   }
 
   return {
     action: { event: "update", push: buildUpdate(contentState) },
-    nextActive: { ...args.active, contentState, since, zeroSince: undefined },
+    nextActive: { ...args.active, contentState, since },
   };
 }
 
