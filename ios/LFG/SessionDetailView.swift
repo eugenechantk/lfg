@@ -62,7 +62,10 @@ struct SessionDetailView: View {
     }
 
     private func hasLanded(_ p: SessionStore.PendingSend) -> Bool {
-        OptimisticSendReconciliation.containsMatchingUserTurn(matchText: p.matchText, in: messages)
+        OptimisticSendReconciliation.containsMatchingUserTurn(
+            matchText: p.matchText,
+            sentAt: p.ts,
+            in: messages)
     }
 
     var body: some View {
@@ -178,8 +181,15 @@ struct SessionDetailView: View {
                 Button(item.queuedOffline ? "Try sending now" : "Send now (interrupt)") {
                     Task { await store.sendQueuedNow(sid, item) }
                 }
-                Button("Edit") { Task { draft = await store.editQueued(sid, item) } }
+                .accessibilityIdentifier("queuedMessageSendNowButton")
+                Button("Edit") {
+                    Task {
+                        if let editable = await store.editQueued(sid, item) { draft = editable }
+                    }
+                }
+                .accessibilityIdentifier("queuedMessageEditButton")
                 Button("Remove", role: .destructive) { Task { await store.removeQueued(sid, item) } }
+                    .accessibilityIdentifier("queuedMessageRemoveButton")
                 Button("Cancel", role: .cancel) {}
             }
         } message: { item in
@@ -294,6 +304,14 @@ struct SessionDetailView: View {
                 scrollProxy = proxy                      // shared with .task's open-at-bottom pin
                 proxy.scrollTo("BOTTOM", anchor: .bottom)
             }
+            // Tapping the transcript puts the keyboard away — the composer's
+            // focus is its own private @FocusState, so this goes through the
+            // responder chain (see `dismissKeyboard`). Simultaneous, so a tap
+            // that lands on a link, attachment card or button still activates
+            // it; the keyboard just goes down at the same time.
+            .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
+            // Dragging the transcript dismisses it too, tracking the finger.
+            .scrollDismissesKeyboard(.interactively)
             // Double-tap the top of the transcript to jump to the beginning, the
             // bottom to jump to the latest. Simultaneous so normal scrolling and
             // single-taps on content still work; the neutral middle band avoids

@@ -33,4 +33,39 @@ final class QueueAckResolutionTests: XCTestCase {
             QueueAckResolution.resolve(ackKind: "", transcriptHasMatchingUserTurn: true),
             .ignore)
     }
+
+    func testOfflineMessageWithoutServerQueueCanBeRemovedLocally() {
+        XCTAssertEqual(
+            QueuedMessageRemovalResolution.resolve(outcome: .noServerRow),
+            .removeLocally)
+    }
+
+    func testServerHeldMessageIsRemovedLocallyAfterServerAcceptsRemoval() {
+        XCTAssertEqual(
+            QueuedMessageRemovalResolution.resolve(outcome: .removed),
+            .removeLocally)
+    }
+
+    /// A queue row the host has pruned (or never had) cannot execute, so the
+    /// bubble must not be undeletable just because the id is stale. This is the
+    /// case that stranded rows on screen with no way to dismiss them.
+    func testMessageUnknownToTheServerIsRemovedLocally() {
+        XCTAssertEqual(
+            QueuedMessageRemovalResolution.resolve(outcome: .unknownToServer),
+            .removeLocally)
+    }
+
+    func testAgentCommittedMessageStaysVisibleWhenServerRejectsRemoval() {
+        XCTAssertEqual(
+            QueuedMessageRemovalResolution.resolve(outcome: .rejected),
+            .keepPending)
+    }
+
+    /// An offline/timed-out request says nothing about whether the message will
+    /// run, so the row stays until the host can answer.
+    func testFailedRequestKeepsTheRowVisible() {
+        XCTAssertEqual(
+            QueuedMessageRemovalResolution.resolve(outcome: .requestFailed),
+            .keepPending)
+    }
 }

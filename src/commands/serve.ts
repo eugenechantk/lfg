@@ -2359,15 +2359,20 @@ export async function cmdServe() {
         }
       }
 
-      // Remove a not-yet-delivered queued message. Clean because we hold it in
-      // lfg's own queue (not Claude's) until the agent is idle — see sendq.ts.
+      // Remove a message that has no future: pending, failed, or already
+      // delivered (a receipt the client needs to be able to dismiss). Only a
+      // send that is mid-keystroke or sitting in the agent's native next-turn
+      // queue is rejected, because it can no longer be retracted truthfully.
+      // A row the server has never heard of is 404 — also nothing that will
+      // run, and the client removes it locally on that status.
       {
         const m = path.match(
           /^\/api\/sessions\/([0-9a-fA-F-]{36})\/queue\/([0-9a-f]+)$/,
         );
         if (m && req.method === "DELETE") {
+          if (!getMessage(m[1], m[2])) return err(404, "queued message not found");
           if (!removeMessage(m[1], m[2]))
-            return err(409, "message already delivered or in-flight");
+            return err(409, "message is in-flight or already queued with the agent");
           return json({ ok: true });
         }
       }

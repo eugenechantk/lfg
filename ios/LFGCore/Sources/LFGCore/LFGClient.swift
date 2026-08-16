@@ -389,7 +389,7 @@ public struct LFGClient: Sendable {
         return (try? JSONDecoder().decode(InterruptResponse.self, from: data))?.stopped
     }
 
-    /// Remove a not-yet-delivered queued message (held in lfg's queue).
+    /// Remove a message only if LFG has not committed it to the agent yet.
     public func removeQueued(_ id: String, _ msgID: String) async throws {
         _ = try await send("DELETE", "api/sessions/\(id)/queue/\(msgID)")
     }

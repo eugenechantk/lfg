@@ -354,7 +354,7 @@ struct PendingStripView: View {
                             // An offline-queued message is waiting on the phone,
                             // not on the host — but the user still needs to be
                             // able to force it through or take it back, same as
-                            // one held behind a running turn. Carry the same
+                            // any server-tracked send. Carry the same
                             // ellipsis affordance so the row reads as tappable.
                             Text("Queued")
                                 .font(.caption2)

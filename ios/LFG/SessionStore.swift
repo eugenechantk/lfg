@@ -811,6 +811,13 @@ import LFGCore
         outboxAttachmentRoot?.appendingPathComponent(clientId, isDirectory: true)
     }
 
+    /// Label for a send that carried attachments but no typed text.
+    private static func attachmentSummary(_ attachments: [ComposerAttachment]) -> String {
+        guard let first = attachments.first else { return "📎 Attachment" }
+        if attachments.count == 1 { return "📎 \(first.meta.filename)" }
+        return "📎 \(first.meta.filename) +\(attachments.count - 1)"
+    }
+
     private func persistOutboxAttachments(_ attachments: [ComposerAttachment], clientId: String) throws {
         guard !attachments.isEmpty else { return }
         guard let dir = outboxAttachmentDirectory(clientId: clientId) else {
@@ -819,13 +826,6 @@ import LFGCore
 
         let fm = FileManager.default
         if fm.fileExists(atPath: dir.path) {
-    /// Label for a send that carried attachments but no typed text.
-    private static func attachmentSummary(_ attachments: [ComposerAttachment]) -> String {
-        guard let first = attachments.first else { return "📎 Attachment" }
-        if attachments.count == 1 { return "📎 \(first.meta.filename)" }
-        return "📎 \(first.meta.filename) +\(attachments.count - 1)"
-    }
-
             try fm.removeItem(at: dir)
         }
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -921,6 +921,27 @@ import LFGCore
     private func markOutboxStateEventually(_ clientId: String, state: String) {
         writeThrough { store in
             try await store.markOutbox(clientId: clientId, state: state)
+        }
+    }
+
+    /// Retire the durable outbox row behind an optimistic send whose turn is now
+    /// provably in the transcript.
+    ///
+    /// Reconciliation used to drop only the in-memory row. The outbox entry
+    /// stayed — `retryableOutbox()` returns everything not `delivered`, and the
+    /// happy path leaves a sent row at `sent` until a `delivered` queue ack
+    /// arrives — so a send whose ack was missed (the phone was asleep, the
+    /// journal cursor had moved on) came back on every cold launch as a restored
+    /// bubble AND was re-POSTed, with nothing but the text match keeping it off
+    /// screen. That match runs against a transcript that has to load first, and
+    /// against a window that can miss an old turn entirely, so the row read as
+    /// stuck at the bottom of the session for days. A row proven landed is
+    /// finished: delete it, or it resurrects forever.
+    private func retireOutbox(_ pending: PendingSend) {
+        guard let clientId = pending.clientId else { return }
+        deleteOutboxAttachments(clientId: clientId)
+        writeThrough { store in
+            try await store.deleteOutbox(clientId: clientId)
         }
     }
 
@@ -1064,7 +1085,7 @@ import LFGCore
             let respData = try await BackgroundSender.shared.post(req, label: row.clientId)
             let resp = LFGClient.decodeSendResponse(respData)
             await markOutboxState(row.clientId, state: "sent")
-            applyResume(from: row.sessionId, resp)
+            applyResume(from: row.sessionId, resp, on: row.hostId)
             let eff = (resp.resumed == true ? resp.sessionId : nil) ?? row.sessionId
             mutatePending(eff, row.clientId) {
                 $0.matchText = sendText
@@ -1985,6 +2006,11 @@ import LFGCore
         let fresh = reconciled.live.sessions
         hostBySession = reconciled.live.hostBySession
         liveIds = reconciled.liveIds
+        // A host reporting the id live IS the end of a restart. Pruning here too
+        // means a revival that never lands falls back to "Closed" on the same
+        // poll that would have confirmed it.
+        restarts.confirmLive(reconciled.liveIds)
+        restarts.prune(now: Date())
 
         // Keep any not-yet-reconciled optimistic (placeholder-id) sessions so
         // a poll landing mid-create can't make the open session vanish.
@@ -2006,11 +2032,6 @@ import LFGCore
         // healthy link streams pane-scraped busy for EVERY session". That is not
         // what the pump does: it appends a `busy` event only when the value
         // CHANGES (src/journal-pump.ts). A session already running when this
-        // A host reporting the id live IS the end of a restart. Pruning here too
-        // means a revival that never lands falls back to "Closed" on the same
-        // poll that would have confirmed it.
-        restarts.confirmLive(reconciled.liveIds)
-        restarts.prune(now: Date())
         // client connected, and still running, emits nothing — so the link is
         // healthy, no delta ever arrives, and the old guard suppressed the only
         // other source. Result: a freshly-opened app showed every already-running
@@ -2354,6 +2375,7 @@ import LFGCore
             switch self {
             case .needsInput: return "Needs you"
             case .blocked: return "Paused"
+            case .restarting: return "Restarting"
             case .working: return "Working"
             case .unread: return "Unread"
             case .idle: return "Idle"
@@ -2369,13 +2391,17 @@ import LFGCore
         // Everything between them is the one ladder in `SessionDisplayState`,
         // shared with `FleetActivitySnapshot` and mirrored on the server — so the
         // list and the Live Activity can no longer disagree.
-        if s.closed { return .closed }
         let sid = s.sessionId
+        // Ahead of `closed` for the same reason `closed` sits outside the shared
+        // ladder — only this client knows a revival is in flight. Without it, a
+        // session you just woke reads "Closed" for the whole resume round-trip
+        // (up to ~6s of server-side pidfile polling) and the tap looks ignored.
+        if let sid, restarts.isRestarting(sid, now: Date()) { return .restarting }
+        if s.closed { return .closed }
         switch SessionDisplayState.resolve(
             promptPresent: sid.map { prompts[$0] != nil } ?? false,
             blocked: s.isBlocked,
             busy: sid.map { busy[$0] == true } ?? false
-            case .restarting: return "Restarting"
         ) {
         case .needsInput: return .needsInput
         case .blocked: return .blocked
@@ -2515,9 +2541,26 @@ import LFGCore
             await hydrateTranscriptFromStoreIfEmpty(id)
             return
         }
-        guard let msgs = try? await client.messages(id, limit: 5000, full: true) else {
-            await hydrateTranscriptFromStoreIfEmpty(id)
-            return
+        let msgs: [SessionMessage]
+        do {
+            msgs = try await client.messages(id, limit: 5000, full: true)
+        } catch {
+            // This used to be `try?`, which made the one failure that strands the
+            // UI completely invisible: a transcript that never arrives leaves
+            // optimistic sends unprovable, so they sit at the bottom of the
+            // session looking un-delivered. Transcripts of long sessions run to
+            // megabytes, so a slow link times this out for real. Log it, and try
+            // once more — nothing else retries until the user leaves the session
+            // and comes back.
+            ConnectionLog.shared.log(
+                .probe, "history fetch failed for \(id.prefix(8)) — \(LFGClient.describe(error))")
+            try? await Task.sleep(for: .seconds(2))
+            guard let retried = try? await client.messages(id, limit: 5000, full: true) else {
+                ConnectionLog.shared.log(.probe, "history retry failed for \(id.prefix(8))")
+                await hydrateTranscriptFromStoreIfEmpty(id)
+                return
+            }
+            msgs = retried
         }
         var byKey: [String: SessionMessage] = [:]
         for m in (transcripts[id] ?? []) { byKey[m.stableID] = m }
@@ -2561,9 +2604,14 @@ import LFGCore
         let remaining = pend.filter { p in
             !OptimisticSendReconciliation.containsMatchingUserTurn(
                 matchText: p.matchText,
+                sentAt: p.ts,
                 in: transcripts[sid] ?? [])
         }
-        if remaining.count != pend.count { pendingSends[sid] = remaining }
+        if remaining.count != pend.count {
+            let kept = Set(remaining.map(\.id))
+            for p in pend where !kept.contains(p.id) { retireOutbox(p) }
+            pendingSends[sid] = remaining
+        }
     }
 
     /// Drive optimistic bubbles from the server's outbound-queue status, but only
@@ -2575,6 +2623,7 @@ import LFGCore
     private func correlatePending(_ sid: String, _ q: [QueueItem]) {
         guard let pend = pendingSends[sid], !pend.isEmpty else { return }
         var needsHistory = false
+        var retired: [PendingSend] = []
         let remaining: [PendingSend] = pend.compactMap { p in
             guard let item = OptimisticSendReconciliation.matchingQueueItem(
                 matchText: p.matchText,
@@ -2583,7 +2632,9 @@ import LFGCore
                 guard p.serverQueueID != nil else { return p }
                 if OptimisticSendReconciliation.containsMatchingUserTurn(
                     matchText: p.matchText,
+                    sentAt: p.ts,
                     in: transcripts[sid] ?? []) {
+                    retired.append(p)
                     return nil
                 }
                 // A previously linked queue item vanished before the matching
@@ -2595,7 +2646,9 @@ import LFGCore
             if item.status == "delivered" {
                 if OptimisticSendReconciliation.containsMatchingUserTurn(
                     matchText: p.matchText,
+                    sentAt: p.ts,
                     in: transcripts[sid] ?? []) {
+                    retired.append(p)
                     return nil
                 }
                 needsHistory = true
@@ -2605,6 +2658,7 @@ import LFGCore
             p2.failed = item.isFailed
             return p2
         }
+        for p in retired { retireOutbox(p) }
         if remaining != pend { pendingSends[sid] = remaining }
         if needsHistory { loadHistory(sid) }
     }
@@ -2625,6 +2679,7 @@ import LFGCore
         let landed = location.map { loc in
             OptimisticSendReconciliation.containsMatchingUserTurn(
                 matchText: pendingSends[loc.sid]?.first { $0.id == loc.pid }?.matchText ?? "",
+                sentAt: pendingSends[loc.sid]?.first { $0.id == loc.pid }?.ts,
                 in: transcripts[loc.sid] ?? [])
         } ?? false
 
@@ -2838,7 +2893,7 @@ import LFGCore
                 let respData = try await BackgroundSender.shared.post(req, label: clientId)
                 let resp = LFGClient.decodeSendResponse(respData)
                 await markOutboxState(clientId, state: "sent")
-                applyResume(from: sid, resp)
+                applyResume(from: sid, resp, on: hostId)
                 let eff = (resp.resumed == true ? resp.sessionId : nil) ?? sid
                 mutatePending(eff, pending.id) {
                     $0.clientId = clientId
@@ -2867,17 +2922,23 @@ import LFGCore
     /// must be remapped; codex resumes in place, so the id-stable path still has
     /// to flip `closed` off and suppress the stale closed row until polling sees
     /// the live pane.
-    private func applyResume(from old: String, _ resp: SendResponse) {
+    private func applyResume(from old: String, _ resp: SendResponse, on hostId: String) {
         guard resp.resumed == true else { return }
-        carryForwardResume(from: old, to: resp.sessionId)
+        carryForwardResume(from: old, to: resp.sessionId, on: hostId)
     }
 
     /// Resume responses mean the session is no longer just a closed transcript,
     /// regardless of whether the agent minted a new id. Keep the detail/list from
     /// rendering "Closed" during the 1-6s gap before the revived pane appears in
     /// `/api/sessions`.
-    private func carryForwardResume(from old: String, to returnedId: String?) {
+    private func carryForwardResume(from old: String, to returnedId: String?, on hostId: String) {
         let new = (returnedId?.isEmpty == false ? returnedId : nil) ?? old
+        // A closed session is host-agnostic, but the resume response tells us
+        // exactly which host now owns the revived pane. Persist that ownership
+        // before any follow-up action can run. Codex resumes with the SAME id;
+        // without this assignment, End/Stop immediately after resume had no
+        // route, returned false locally, and never reached the server.
+        hostBySession[new] = hostId
         // Carry the just-resumed session forward under its new live id so the open
         // detail doesn't blank out during the 1–6s the revived pane takes to
         // appear in the live list. Cleared on the next refresh once it's live.
@@ -2907,7 +2968,7 @@ import LFGCore
         do {
             let resp = try await client.sendMessage(id, text: text, clientId: clientId)
             await markOutboxState(clientId, state: "sent")
-            applyResume(from: id, resp)
+            applyResume(from: id, resp, on: hostId)
             await refresh()
         } catch {
             lastError = "Send failed: \(error.localizedDescription)"
@@ -2986,6 +3047,10 @@ import LFGCore
             sessionNeedsResume: needsResume,
             agentBusy: busy[id] == true,
             awaitingPrompt: prompts[id] != nil)
+        // A send that has to wake the session is a restart request — the list
+        // should say so from the tap, not from the response. (`.queuedForResume`
+        // already excludes the offline case, where nothing leaves the phone.)
+        if presentation == .queuedForResume { restarts.mark(id, at: Date()) }
         let clientId = UUID().uuidString
         let pid = clientId
         let nowMs = Date().timeIntervalSince1970 * 1000
@@ -3047,10 +3112,6 @@ import LFGCore
 
         // 4) Save to the durable outbox first.
         guard let hostId = routeHostId(forSession: id),
-        // A send that has to wake the session is a restart request — the list
-        // should say so from the tap, not from the response. (`.queuedForResume`
-        // already excludes the offline case, where nothing leaves the phone.)
-        if presentation == .queuedForResume { restarts.mark(id, at: Date()) }
               await enqueueOutboxForTransport(clientId: clientId, sessionId: id, hostId: hostId, text: full) else {
             mutatePending(id, pid) { $0.failed = true }
             return
@@ -3068,7 +3129,7 @@ import LFGCore
             let respData = try await BackgroundSender.shared.post(req, label: pid)
             let resp = LFGClient.decodeSendResponse(respData)
             await markOutboxState(clientId, state: "sent")
-            applyResume(from: id, resp)
+            applyResume(from: id, resp, on: hostId)
             let eff = (resp.resumed == true ? resp.sessionId : nil) ?? id
             mutatePending(eff, pid) { Self.applyAcceptance(&$0, resp) }
             if resp.resumed == true { watchForTurnLanding(clientId: pid) }
@@ -3076,6 +3137,9 @@ import LFGCore
             reconcilePending(eff)
         } catch {
             lastError = "Send failed: \(error.localizedDescription)"
+            // Nothing was revived — stop claiming a restart that isn't happening.
+            // (Harmless when this send wasn't a wake-up: the id isn't marked.)
+            restarts.clear(id)
             let reason = Self.pendingFailureReason(error)
             mutatePending(id, pid) { $0.failureReason = reason }
             // The host may have gone down between `isOffline(id)` reading false
@@ -3085,25 +3149,56 @@ import LFGCore
         }
     }
 
-    // MARK: Queued-message actions (hold-in-lfg)
+    // MARK: Queued-message actions
 
-    /// Remove a still-pending queued message so it never runs. Drops the server
-    /// queue entry (held in lfg's queue, so this is clean) and the local bubble.
+    /// Remove a message only while LFG can still guarantee that it will not run.
+    /// A server rejection means it is already committed to the agent, so retain
+    /// the local bubble and surface the request error.
     func removeQueued(_ sid: String, _ pending: PendingSend) async {
-        if let qid = pending.serverQueueID {
-            await run("Remove", for: sid) { try await $0.removeQueued(sid, qid) }
-        }
+        let outcome = await askHostToRemoveQueued(sid, pending)
+        guard QueuedMessageRemovalResolution.resolve(outcome: outcome) == .removeLocally
+        else { return }
         if let clientId = pending.clientId { await deleteOutbox(clientId) }
         removePending(sid, pending.id)
     }
 
-    /// Pull a queued message back to edit: remove it server-side + locally and
-    /// return its text so the caller can repopulate the composer.
-    @discardableResult
-    func editQueued(_ sid: String, _ pending: PendingSend) async -> String {
-        if let qid = pending.serverQueueID {
-            await run("Edit", for: sid) { try await $0.removeQueued(sid, qid) }
+    /// Ask the owning host to drop a queue row, distinguishing the three answers
+    /// that mean different things for the bubble on screen: removed / never
+    /// heard of it (both final) versus still committed to the agent, or a
+    /// request that never got an answer (both must keep the row).
+    ///
+    /// A 404 used to be lumped in with "rejected", which made a bubble whose
+    /// queue row the host had already pruned permanently undeletable — the exact
+    /// dead end reported for `cy-011521-59885`.
+    private func askHostToRemoveQueued(
+        _ sid: String, _ pending: PendingSend
+    ) async -> QueuedMessageRemovalOutcome {
+        guard let qid = pending.serverQueueID else { return .noServerRow }
+        guard let client = client(forSession: sid) else { return .requestFailed }
+        do {
+            try await client.removeQueued(sid, qid)
+            await refresh()
+            return .removed
+        } catch LFGError.http(let status, _) where status == 404 {
+            await refresh()
+            return .unknownToServer
+        } catch LFGError.http(let status, let body) where status == 409 {
+            lastError = "Remove failed: \(body.isEmpty ? "the message is already running" : body)"
+            return .rejected
+        } catch {
+            lastError = "Remove failed: \(LFGClient.describe(error))"
+            return .requestFailed
         }
+    }
+
+    /// Pull a message back to edit only when server removal succeeds. A native-
+    /// queued message cannot be retracted, so a rejection keeps it visible and
+    /// returns nil instead of duplicating its text into the composer.
+    @discardableResult
+    func editQueued(_ sid: String, _ pending: PendingSend) async -> String? {
+        let outcome = await askHostToRemoveQueued(sid, pending)
+        guard QueuedMessageRemovalResolution.resolve(outcome: outcome) == .removeLocally
+        else { return nil }
         if let clientId = pending.clientId { await deleteOutbox(clientId) }
         removePending(sid, pending.id)
         return pending.displayText
@@ -3137,9 +3232,6 @@ import LFGCore
             let stopped = try await client.interrupt(id)
             await refresh()
             if stopped == false {
-            // Nothing was revived — stop claiming a restart that isn't happening.
-            // (Harmless when this send wasn't a wake-up: the id isn't marked.)
-            restarts.clear(id)
                 lastError = "Stop didn't take — the agent isn't responding. Try ending the session."
             }
         } catch {
@@ -3298,6 +3390,9 @@ import LFGCore
         if let v = hostBySession.removeValue(forKey: old), hostBySession[new] == nil {
             hostBySession[new] = v
         }
+        // Claude resumes into a NEW sessionId, so an in-flight restart has to
+        // follow the row here or the card reverts mid-revival.
+        restarts.move(from: old, to: new)
         reconcilePending(new)
         // Rename the optimistic copy rather than dropping it: the refresh that
         // follows a create routinely returns a server list that doesn't carry the
@@ -3321,13 +3416,22 @@ import LFGCore
     /// session still restarts while the marked default is down); pass `on:` to
     /// revive the (synced) transcript on a specific machine — the basis of transfer.
     func resume(_ req: ResumeRequest, on host: Host? = nil) async -> String? {
-        guard let client = (host ?? agnosticHost).flatMap({ settings.client(for: $0) }) else { return nil }
+        guard let target = host ?? agnosticHost,
+              let client = settings.client(for: target) else { return nil }
+        // Before the POST, not after it: the server spends up to ~6s polling for
+        // the revived pane's pidfile before it answers, and for all of that the
+        // card would otherwise still read "Closed".
+        restarts.mark(req.sessionId, at: Date())
         do {
             let resp = try await client.resume(req)
-            carryForwardResume(from: req.sessionId, to: resp.sessionId)
+            carryForwardResume(from: req.sessionId, to: resp.sessionId, on: target.id)
             await refresh()
             return resp.sessionId ?? req.sessionId
-        } catch { lastError = "Resume failed: \(error.localizedDescription)"; return nil }
+        } catch {
+            restarts.clear(req.sessionId)
+            lastError = "Resume failed: \(error.localizedDescription)"
+            return nil
+        }
     }
 
     /// Fork a session into a new branch and return the new session's id (nil on
@@ -3377,6 +3481,10 @@ import LFGCore
         //    and the session would end up dead, not transferred. Retry until the
         //    source is fully gone and resume actually revives a pane. Claude
         //    resumes off the copied history; re-point routing + selection at it.
+        //    Marked as restarting only from here, not from the close above: during
+        //    1b the session is still live on the source, and saying "Restarting"
+        //    while a host still reports it live would fight `confirmLive`.
+        restarts.mark(id, at: Date())
         do {
             var resp = try await targetClient.resume(ResumeRequest(sessionId: id))
             var attempts = 0
@@ -3386,27 +3494,20 @@ import LFGCore
                 attempts += 1
             }
             if resp.alreadyLive == true {
+                restarts.clear(id)
                 lastError = "Transfer: \(target.label) couldn't take over — source still busy. Try again."
                 return nil
             }
             let newId = resp.sessionId ?? id
-        // Claude resumes into a NEW sessionId, so an in-flight restart has to
-        // follow the row here or the card reverts mid-revival.
-        restarts.move(from: old, to: new)
             if newId != id { remap(from: id, to: newId) }
             hostBySession[newId] = target.id
             await refresh()
             requestSelection(newId)
             return newId
         } catch {
+            restarts.clear(id)
             lastError = "Transfer: resuming on \(target.label) failed: \(error.localizedDescription)"
             return nil
         }
     }
 }
-        //    Marked as restarting only from here, not from the close above: during
-        //    1b the session is still live on the source, and saying "Restarting"
-        //    while a host still reports it live would fight `confirmLive`.
-        restarts.mark(id, at: Date())
-                restarts.clear(id)
-            restarts.clear(id)

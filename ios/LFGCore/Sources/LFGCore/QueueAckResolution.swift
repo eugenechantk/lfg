@@ -41,3 +41,42 @@ public enum QueueAckResolution: Equatable, Sendable {
         }
     }
 }
+
+/// What the host said when asked to remove a queued message.
+public enum QueuedMessageRemovalOutcome: Equatable, Sendable {
+    /// The row never reached a host, so there is nothing to ask about.
+    case noServerRow
+    /// The host removed it.
+    case removed
+    /// 404 — the host has no message with that id (already pruned, or the
+    /// queue was cleared). Nothing under that id can run.
+    case unknownToServer
+    /// 409 — the message is mid-keystroke or already committed to the agent's
+    /// own next-turn queue, so it is still going to execute.
+    case rejected
+    /// The request itself failed (offline, timeout). Server state is unknown.
+    case requestFailed
+}
+
+/// Whether a queued-message action may remove its optimistic row locally.
+///
+/// A row with no server queue id is still local (for example, offline) and can
+/// be removed. Once the server has an id, local state may disappear only when
+/// the host confirms the message will not execute — either because it removed
+/// it, or because it has never heard of it. Native agent queues cannot retract
+/// a committed message, so a 409 must leave the row visible instead of
+/// pretending the message was cancelled; so must a failed request, which tells
+/// us nothing about what the host will do.
+public enum QueuedMessageRemovalResolution: Equatable, Sendable {
+    case removeLocally
+    case keepPending
+
+    public static func resolve(
+        outcome: QueuedMessageRemovalOutcome
+    ) -> QueuedMessageRemovalResolution {
+        switch outcome {
+        case .noServerRow, .removed, .unknownToServer: return .removeLocally
+        case .rejected, .requestFailed: return .keepPending
+        }
+    }
+}

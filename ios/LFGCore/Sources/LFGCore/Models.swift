@@ -465,7 +465,7 @@ public struct SendResponse: Codable, Sendable {
     public var duplicate: Bool?
     /// The server's queue entry for this send (id/text/status), so the client can
     /// correlate the optimistic bubble to a server queue id immediately — used to
-    /// drive remove / edit / send-now actions on the still-pending message.
+    /// drive queue actions while preserving the server as the source of truth.
     public var msg: QueueItem?
 }
 
