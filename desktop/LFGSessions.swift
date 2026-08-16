@@ -1535,12 +1535,16 @@ enum DesktopFeatureTestCLI {
 
         let codexResume = Opener.resumeAgentCommand(agent: "codex", sessionId: "codex-closed")
         try expect(codexResume?.contains("codex") == true &&
+                   codexResume?.contains("--sandbox danger-full-access") == true &&
+                   codexResume?.contains("--ask-for-approval never") == true &&
+                   codexResume?.contains("--dangerously-bypass-hook-trust") == true &&
                    codexResume?.hasSuffix(" resume 'codex-closed'") == true,
-                   "Codex resume uses the native codex resume subcommand")
+                   "Codex resume uses the native subcommand with bypass permissions")
         let claudeResume = Opener.resumeAgentCommand(agent: "claude", sessionId: "claude-closed")
         try expect(claudeResume?.contains("claude") == true &&
+                   claudeResume?.contains("--dangerously-skip-permissions") == true &&
                    claudeResume?.hasSuffix(" --resume 'claude-closed'") == true,
-                   "Claude resume keeps the native claude resume flag")
+                   "Claude resume keeps the native flag with bypass permissions")
 
         // MARK: Hidden directories
         //
@@ -2166,9 +2170,10 @@ enum Opener {
     static func resumeAgentCommand(agent: String, sessionId: String) -> String? {
         switch agent {
         case "claude", "aisdk":
-            return "\(shq(claude)) --resume \(shq(sessionId))"
+            return "\(shq(claude)) --dangerously-skip-permissions --resume \(shq(sessionId))"
         case "codex":
-            return "\(shq(codex)) resume \(shq(sessionId))"
+            return "\(shq(codex)) --sandbox danger-full-access --ask-for-approval never "
+                + "--dangerously-bypass-hook-trust resume \(shq(sessionId))"
         default:
             return nil
         }
