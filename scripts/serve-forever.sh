@@ -19,10 +19,12 @@
 # Usage:  bun run serve:forever   (or)   bash scripts/serve-forever.sh
 # Stop:   Ctrl-C  (forwards the signal and exits cleanly)
 #
+# The ceiling is measured as PHYS_FOOTPRINT, not `ps` RSS — see `mem_mb_of`.
+#
 # Tunables:
 #   LFG_MAX_RSS_MB     hard ceiling; child is restarted above it   (default 4096)
 #   LFG_RSS_WARN_PCT   log a warning at this % of the ceiling      (default 75)
-#   LFG_RSS_CHECK_SECS how often to sample the child's RSS         (default 30)
+#   LFG_RSS_CHECK_SECS how often to sample the child's memory      (default 30)
 #
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -73,10 +75,40 @@ child=""
 shutdown() { running=0; [ -n "$child" ] && kill "$child" 2>/dev/null; }
 trap shutdown INT TERM
 
-# Sample the child's RSS in MB. Empty output means it is gone.
-rss_mb_of() {
-  local kb
-  kb="$(ps -o rss= -p "$1" 2>/dev/null | tr -d ' ')"
+# Sample the child's real memory use in MB. Empty output means it is gone.
+#
+# NOT `ps -o rss`, which is what this used to do and what made the ceiling fire
+# constantly. On macOS, RSS counts pages the allocator has already freed and
+# marked reclaimable: the kernel can take them back at no cost and jetsam does
+# not charge you for them. Measured on this host 2026-08-16, same instant:
+#
+#   ps RSS            3326 MB
+#   phys_footprint     906 MB      (dirty 911 MB, clean 35 MB, RECLAIMABLE 2471 MB)
+#
+# Forcing a full GC first proves there is nothing to clean up — `Bun.gc(true)`
+# takes heapUsed from 695 MB to 4.7 MB and RSS does not move one megabyte. The
+# memory is already free inside the process; only the OS's bookkeeping still
+# shows it. So the ceiling was killing a healthy server every few minutes over
+# memory it was not using, and each kill drops every /api/events stream — which
+# is exactly what the phone reports as "host disconnected" on the go.
+#
+# phys_footprint is the number jetsam itself uses, so this still catches the real
+# 2026-08-07 runaway; it just stops firing on a lie. `footprint` costs ~43 ms.
+# Falls back to RSS if it is missing or refuses, so a live child is never
+# mistaken for a dead one.
+mem_mb_of() {
+  local pid="$1" mb kb
+  mb="$(/usr/bin/footprint -p "$pid" 2>/dev/null | awk '
+    /phys_footprint:/ {
+      v = $2; u = $3
+      if (u == "GB") printf "%d\n", v * 1024
+      else if (u == "MB") printf "%d\n", v
+      else if (u == "KB") printf "%d\n", v / 1024
+      else printf "%d\n", v / 1048576
+      exit
+    }')"
+  if [ -n "$mb" ]; then echo "$mb"; return; fi
+  kb="$(ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ')"
   [ -n "$kb" ] && echo $(( kb / 1024 ))
 }
 
@@ -104,11 +136,11 @@ supervise() {
     [ "$elapsed" -lt "$CHECK_SECS" ] && continue
     elapsed=0
 
-    mb="$(rss_mb_of "$pid")"
+    mb="$(mem_mb_of "$pid")"
     [ -z "$mb" ] && return 0
 
     if [ "$mb" -ge "$MAX_RSS_MB" ]; then
-      echo "[serve-forever] MEMORY CEILING: lfg serve at ${mb}MB >= ${MAX_RSS_MB}MB — restarting it." >&2
+      echo "[serve-forever] MEMORY CEILING: lfg serve at ${mb}MB footprint >= ${MAX_RSS_MB}MB — restarting it." >&2
       echo "[serve-forever]   This is a leak guard, not a healthy restart. See the 2026-08-07" >&2
       echo "[serve-forever]   freeze note above; raise with LFG_MAX_RSS_MB if the ceiling is wrong." >&2
       terminate "$pid"
@@ -117,7 +149,7 @@ supervise() {
 
     if [ "$warned" -eq 0 ] && [ "$mb" -ge "$WARN_RSS_MB" ]; then
       warned=1
-      echo "[serve-forever] lfg serve at ${mb}MB (${WARN_PCT}% of the ${MAX_RSS_MB}MB ceiling)." >&2
+      echo "[serve-forever] lfg serve at ${mb}MB footprint (${WARN_PCT}% of the ${MAX_RSS_MB}MB ceiling)." >&2
     fi
   done
   return 0
