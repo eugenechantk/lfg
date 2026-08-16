@@ -2586,8 +2586,8 @@ export async function cmdServe() {
   startAutopilot((l) => console.log(l));
   // Background push watcher — no-op unless APNs is configured (LFG_APNS_*).
   ensurePushWatcher();
-  // Client-independent queue pump: drains the hold-in-lfg outbound queue when
-  // each agent goes idle (held messages must deliver even with the app closed).
+  // Client-independent queue pump: starts recovered/pending deliveries and
+  // reconciles native agent queues even when the app is closed.
   startQueuePump();
 
   console.log(`lfg web → http://${server.hostname}:${server.port}`);
