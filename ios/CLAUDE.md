@@ -79,9 +79,17 @@ live, the conventions to keep, and the traps that have burned past sessions.
   subscriptions or tear a link down for session lifecycle/focus changes (that
   was the old design's biggest self-inflicted-disconnect source). A clean close
   AND a thrown error both land in `HostLink.run`'s retry loop; the cursor makes
-  every reconnect lossless. Watchdog subtlety: URLSession's `timeoutInterval`
-  (18s, idle-based) covers the response-header phase that the byte watchdog
-  can't — a black-holed host accepts TCP and never sends headers.
+  every reconnect lossless. **Watchdog subtlety, and the bug it caused:** the
+  connect phase needs its own bound, because the byte-stall watchdog only starts
+  once headers arrive and a black-holed host accepts TCP then sends nothing. That
+  used to be `req.timeoutInterval = 18` — but `timeoutInterval` is idle-based over
+  the WHOLE request, so it silently capped `staleTimeout` (up to 40s on a relayed
+  path) at 18s. Dials logged `stale=40s` and URLSession killed them at ~18s of
+  quiet; across every 2026-08-16 connection log the watchdog's "STALL — no bytes"
+  line appears ZERO times. Heartbeats are 10s apart and a bad path jitters them to
+  10–11s, so two late in a row killed a stream the policy would have kept. Now:
+  `timeoutInterval = HostLinkPolicy.streamRequestTimeout(for:)` (never below the
+  watchdog) plus an explicit `headersTimeout` watchdog for the connect phase.
 - **Notification taps must defer the selection onto the next runloop turn.**
   Setting `requestedSelection` synchronously inside UIKit's launch/CATransaction
   snapshot drives a `NavigationSplitView` selection mid-transaction → UIKit throws
