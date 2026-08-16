@@ -294,10 +294,20 @@ async function forkSession(opts: {
       newId = liveFork?.sessionId ?? null;
       if (newId) newPid = panePidForSession(tmuxName);
     }
-    if (newId) {
-      patchManaged(tmuxName, { sessionId: newId });
-      if (newPid) await acquireLease(newId, newPid);
+    if (!newId) {
+      // A branch the client cannot address is not a successful fork. Tear down
+      // only the tmux session this request created and remove its managed row so
+      // it cannot linger as a blank/null-id card.
+      tmuxKillSession(tmuxName);
+      removeManaged(tmuxName);
+      return {
+        ok: false,
+        status: 504,
+        error: "Codex fork started but did not produce a session ID",
+      };
     }
+    patchManaged(tmuxName, { sessionId: newId });
+    if (newPid) await acquireLease(newId, newPid);
     return { ok: true, tmuxName, cwd, newId, agent: "codex" };
   }
   // Branch on the model the conversation was last using, unless overridden.
@@ -2088,6 +2098,15 @@ export async function cmdServe() {
                 claimedIds,
               })?.id ?? null;
           }
+        }
+        if (agent === "codex" && !sessionId) {
+          // HTTP 200 + sessionId:null leaves iOS with nothing it can open while
+          // the blank pane remains managed forever. Creation is atomic from the
+          // client's perspective: either bind a real Codex rollout id, or clean
+          // up the exact tmux session this request just spawned and fail.
+          tmuxKillSession(tmuxName);
+          removeManaged(tmuxName);
+          return err(504, "Codex started but did not produce a session ID");
         }
         if (agent === "aisdk") {
           for (let i = 0; i < 20 && !readAisdkEntry(aisdkSessionId!); i++)

@@ -20,6 +20,7 @@ const {
   resetSearchIndexCacheForTests,
   setSearchIndexTtlForTests,
   setSessionTitle,
+  mayRefreshLiveLease,
   SEARCH_INDEX_PATH: indexPath,
 } = await import("./sessions.ts");
 // Both paths come from the modules under test, not recomputed from `data`:
@@ -28,6 +29,14 @@ const {
 // value keeps this file correct regardless of load order.
 const { PATHS } = await import("./config.ts");
 const sessionTitlesPath = PATHS.sessionTitles;
+
+describe("closed-session lease refresh guard", () => {
+  test("a cached live row cannot recreate a lease after its pid is tombstoned", () => {
+    expect(mayRefreshLiveLease("session-id", 42, (pid) => pid === 42)).toBe(false);
+    expect(mayRefreshLiveLease("session-id", 42, () => false)).toBe(true);
+    expect(mayRefreshLiveLease(null, 42, () => false)).toBe(false);
+  });
+});
 
 beforeEach(() => {
   rmSync(projects, { recursive: true, force: true });

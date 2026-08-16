@@ -15,6 +15,7 @@ type Thread = {
   path: string;
   cwd: string | null;
   createdAt: number | null;
+  fileCreatedAt?: number | null;
   updatedAt: number | null;
   firstUserText: string | null;
   forkedFromId: string | null;
@@ -81,6 +82,20 @@ describe("pickCodexThread — promptless (interactive codex)", () => {
     expect(got).toBeNull();
   });
 
+  it("binds a valid rollout whose file appears 170 seconds after launch", () => {
+    const delayed = thread({
+      id: "delayed",
+      createdAt: T0,
+      fileCreatedAt: T0 + 170_000,
+    });
+    const got = pickCodexThread(
+      { cwd: "/Users/eugenechan/dev/inbox", startedAt: T0, prompt: null },
+      [delayed],
+      new Set(),
+    );
+    expect(got?.id).toBe("delayed");
+  });
+
   it("skips already-claimed rollouts", () => {
     const t = thread({ id: "a" });
     const got = pickCodexThread(
@@ -113,6 +128,29 @@ describe("pickCodexThread — promptless (interactive codex)", () => {
       claimed,
     );
     expect(gotB?.id).toBe("b");
+  });
+
+  it("rejects a later metadata-only rollout that preserves the process launch timestamp", () => {
+    const live = thread({
+      id: "live",
+      createdAt: T0 + 13_000,
+      fileCreatedAt: T0 + 13_000,
+      updatedAt: T0 + 90 * 60_000,
+    });
+    const abandoned = thread({
+      id: "abandoned",
+      createdAt: T0 + 600,
+      fileCreatedAt: T0 + 30 * 60_000,
+      updatedAt: T0 + 30 * 60_000,
+    });
+
+    const got = pickCodexThread(
+      { cwd: "/Users/eugenechan/dev/inbox", startedAt: T0, prompt: null },
+      [abandoned, live],
+      new Set(),
+    );
+
+    expect(got?.id).toBe("live");
   });
 
   it("returns null when startedAt is unknown (can't disambiguate promptless)", () => {

@@ -505,6 +505,7 @@ export type CodexThread = {
   path: string;
   cwd: string | null;
   createdAt: number | null;
+  fileCreatedAt?: number | null;
   updatedAt: number | null;
   firstUserText: string | null;
   forkedFromId: string | null;
@@ -523,15 +524,24 @@ async function codexThreads(): Promise<CodexThread[]> {
       };
       const id = row.payload?.id ?? path.match(UUID)?.[0] ?? null;
       if (row.type !== "session_meta" || !id) continue;
+      let fileCreatedAt: number | null = null;
       let updatedAt: number | null = null;
       try {
-        updatedAt = statSync(path).mtimeMs;
+        const stat = statSync(path);
+        // `session_meta.payload.timestamp` is normally the rollout creation
+        // time, but Codex can create an abandoned metadata-only rollout later
+        // while preserving the parent TUI's original launch timestamp. Keep the
+        // filesystem birth time as a second signal so that late file cannot
+        // impersonate the rollout that actually appeared at process launch.
+        fileCreatedAt = stat.birthtimeMs > 0 ? stat.birthtimeMs : null;
+        updatedAt = stat.mtimeMs;
       } catch {}
       out.push({
         id,
         path,
         cwd: row.payload?.cwd ?? null,
         createdAt: row.payload?.timestamp ? Date.parse(row.payload.timestamp) : null,
+        fileCreatedAt,
         updatedAt,
         firstUserText: await firstUserTextFromTop(path),
         forkedFromId: row.payload?.forked_from_id ?? row.forked_from_id ?? null,
@@ -605,10 +615,24 @@ function samePrompt(a: string | null, b: string | null): boolean {
 // How far a rollout's createdAt may precede the process startedAt and still be
 // trusted as that process's session (clock skew / rollout-before-first-poll).
 const CODEX_BIND_SKEW_MS = 30_000;
-// For a promptless (interactive) codex, the launch rollout is written within
-// seconds of the process; anything created much later in the same cwd belongs to
-// a different, later session and must NOT be guess-bound.
-const CODEX_BIND_WINDOW_MS = 120_000;
+// For a promptless (interactive) codex, the launch rollout normally appears
+// within seconds, but large restored sessions can delay the file by nearly three
+// minutes. Anything created much later in the same cwd belongs to a different,
+// later session and must NOT be guess-bound. Five minutes covers the observed
+// 170-second restore while the filesystem-birth signal still rejects the
+// metadata-only phantom created 30 minutes after launch.
+const CODEX_BIND_WINDOW_MS = 5 * 60_000;
+
+// A rollout cannot belong to a process before the file itself existed. Codex's
+// embedded timestamp can retain the original TUI launch time when it emits an
+// abandoned metadata-only rollout much later, so use the later of the semantic
+// timestamp and the filesystem birth time for live launch binding.
+function codexBindingCreatedAt(thread: CodexThread): number | null {
+  const times = [thread.createdAt, thread.fileCreatedAt].filter(
+    (time): time is number => time != null && Number.isFinite(time) && time > 0,
+  );
+  return times.length > 0 ? Math.max(...times) : null;
+}
 
 // Bind a running tmux `codex` process to its rollout transcript. Two modes:
 //   1. prompt — the process was launched with an inline `-- <prompt>`; match the
@@ -633,15 +657,17 @@ export function pickCodexThread(
   if (!cwd) return null;
   const minTime = (startedAt ?? 0) - CODEX_BIND_SKEW_MS;
   const inCwd = threads.filter(
-    (t) => t.cwd === cwd && !claimed.has(t.id) && (t.createdAt ?? 0) >= minTime,
+    (t) => t.cwd === cwd && !claimed.has(t.id) && (codexBindingCreatedAt(t) ?? 0) >= minTime,
   );
   if (inCwd.length === 0) return null;
   if (prompt) {
     const matches = inCwd.filter((t) => samePrompt(t.firstUserText, prompt));
     if (matches.length <= 1) return matches[0] ?? null;
     return matches.sort((a, b) => {
-      if (startedAt != null && a.createdAt != null && b.createdAt != null) {
-        const byCreatedProximity = Math.abs(a.createdAt - startedAt) - Math.abs(b.createdAt - startedAt);
+      const aCreatedAt = codexBindingCreatedAt(a);
+      const bCreatedAt = codexBindingCreatedAt(b);
+      if (startedAt != null && aCreatedAt != null && bCreatedAt != null) {
+        const byCreatedProximity = Math.abs(aCreatedAt - startedAt) - Math.abs(bCreatedAt - startedAt);
         if (byCreatedProximity !== 0) return byCreatedProximity;
       }
       return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
@@ -652,11 +678,11 @@ export function pickCodexThread(
   if (startedAt == null) return null;
   return (
     inCwd
-      .filter((t) => (t.createdAt ?? 0) <= startedAt + CODEX_BIND_WINDOW_MS)
+      .filter((t) => (codexBindingCreatedAt(t) ?? 0) <= startedAt + CODEX_BIND_WINDOW_MS)
       .sort(
         (a, b) =>
-          Math.abs((a.createdAt ?? 0) - startedAt) -
-          Math.abs((b.createdAt ?? 0) - startedAt),
+          Math.abs((codexBindingCreatedAt(a) ?? 0) - startedAt) -
+          Math.abs((codexBindingCreatedAt(b) ?? 0) - startedAt),
       )[0] ?? null
   );
 }
@@ -1893,6 +1919,22 @@ function normalizeLineUnsafe(line: string, codexState: CodexNormalizationState):
   return [];
 }
 
+/**
+ * How far back a card preview is worth hunting for a human turn.
+ *
+ * This `pick` `JSON.parse`s and codex-normalizes every line it sees, so an
+ * unbounded walk costs the whole file when there is no human turn to find —
+ * exactly the shape of a long autonomous Codex run, whose rollouts here reach
+ * 511 MB. One `listResumable` poll over that corpus peaked at 1.2 GB, and the
+ * supervisor kills `lfg serve` at 4 GB, taking every /api/events stream with it.
+ *
+ * 32 MB clears every Claude transcript in the corpus outright and covers the
+ * recent tail of the huge Codex ones. Past it the row shows no preview line,
+ * which is a cosmetic loss on a handful of sessions; the alternative was a host
+ * that reads as "disconnected" on the phone every few minutes.
+ */
+const LAST_USER_TEXT_SCAN_BYTES = 32 * 1024 * 1024;
+
 // Last genuine user prompt — scan the tail backwards, skipping meta rows and
 // command/caveat wrappers (lines starting with "<"). Truncated for the card.
 async function lastUserText(path: string): Promise<string | null> {
@@ -1914,7 +1956,7 @@ async function lastUserText(path: string): Promise<string | null> {
     t = stripHumanPrefix(t.trim().replace(/\s+/g, " "));
     if (!t || t.startsWith("<")) return null;
     return t.length > 140 ? t.slice(0, 139) + "…" : t;
-  });
+  }, { maxScanBytes: LAST_USER_TEXT_SCAN_BYTES });
 }
 
 /**
@@ -2816,10 +2858,23 @@ export type ResumableCandidate = {
  * session list), so an enumeration plus N stat-sized lease ops is the right
  * price for removing a whole class of disagreement.
  */
+export function mayRefreshLiveLease(
+  sessionId: string | null,
+  pid: number,
+  closing: (pid: number) => boolean = isClosing,
+): boolean {
+  return !!sessionId && !closing(pid);
+}
+
 async function refreshLeasesForLiveSessions(): Promise<void> {
   try {
     for (const s of await listSessions()) {
-      if (s.sessionId) await ensureLease(s.sessionId, s.pid);
+      // listSessions is briefly cached. A close can tombstone the pid after the
+      // cached row was produced but before resumable search refreshes leases.
+      // Re-check at the side effect boundary or that stale row recreates the
+      // lease releaseLease just removed, hiding the newly closed session for the
+      // full 90-second freshness window.
+      if (mayRefreshLiveLease(s.sessionId, s.pid)) await ensureLease(s.sessionId!, s.pid);
     }
   } catch {
     // Enumeration failed: fall through and read whatever leases exist. A stale
@@ -3132,6 +3187,72 @@ export function setSearchIndexTtlForTests(ms: number): void {
   searchIndexFreshUntil = 0;
 }
 
+/**
+ * Normalize a whole JSONL transcript without ever holding it in memory at once.
+ *
+ * The bounded tail path can afford `slice().text()`; an unbounded read cannot.
+ * One string of a 511 MB Codex rollout, plus the line array `split` makes from
+ * it, peaked at ~2 GB of RSS for a page of 220 messages — two concurrent calls
+ * put the host over its 4 GB ceiling, and every ceiling kill drops all
+ * `/api/events` streams. Streaming keeps peak at O(chunk + kept messages);
+ * the messages themselves are what the caller asked for.
+ */
+async function streamNormalizedMessages(
+  file: ReturnType<typeof Bun.file>,
+  codexState: CodexNormalizationState,
+): Promise<SessionMsg[]> {
+  const msgs: SessionMsg[] = [];
+  const decoder = new TextDecoder();
+  // Carry BYTES, not a string. Appending each chunk to a `carry` string and
+  // scanning it re-flattens a growing rope on every chunk: measured on the
+  // 511 MB rollout that was slower AND hungrier than reading the whole file.
+  // Rows here average ~137 KB, so a line routinely spans several chunks.
+  let pending: Uint8Array[] = [];
+  let pendingLen = 0;
+
+  const take = (line: string) => {
+    if (line) msgs.push(...normalizeLineMessages(line, codexState));
+  };
+
+  // Join the carried head of a record to its tail and decode the whole row at
+  // once. A UTF-8 scalar can never straddle the `\n` these are split on, so
+  // every other subarray is safe to decode on its own, uncopied.
+  const joinPending = (tail: Uint8Array): string => {
+    const buf = new Uint8Array(pendingLen + tail.length);
+    let at = 0;
+    for (const part of pending) {
+      buf.set(part, at);
+      at += part.length;
+    }
+    buf.set(tail, at);
+    pending = [];
+    pendingLen = 0;
+    return decoder.decode(buf);
+  };
+
+  for await (const chunk of file.stream()) {
+    let from = 0;
+    let nl = chunk.indexOf(0x0a, from);
+    while (nl >= 0) {
+      const body = chunk.subarray(from, nl);
+      take(pendingLen > 0 ? joinPending(body) : decoder.decode(body));
+      from = nl + 1;
+      nl = chunk.indexOf(0x0a, from);
+    }
+    if (from < chunk.length) {
+      // Copy before retaining: a stream may hand back a reused buffer.
+      const rest = chunk.subarray(from);
+      const kept = new Uint8Array(rest.length);
+      kept.set(rest);
+      pending.push(kept);
+      pendingLen += kept.length;
+    }
+  }
+  // A transcript whose final row has no trailing newline still has that row.
+  if (pendingLen > 0) take(joinPending(new Uint8Array(0)));
+  return msgs;
+}
+
 // Recent normalized messages for an initial render (tail of the file).
 export async function recentMessages(
   path: string,
@@ -3141,7 +3262,12 @@ export async function recentMessages(
   const file = Bun.file(path);
   const size = file.size;
   const maxBytes = opts.maxBytes === undefined ? 256 * 1024 : opts.maxBytes;
-  const start = maxBytes == null ? 0 : Math.max(0, size - maxBytes);
+  if (maxBytes == null) {
+    const msgs = await streamNormalizedMessages(file, createCodexNormalizationState());
+    const collapsed = collapseCodexLifecycleMessages(msgs);
+    return limit > 0 ? collapsed.slice(-limit) : collapsed;
+  }
+  const start = Math.max(0, size - maxBytes);
   const text = await file.slice(start).text();
   const lines = text.split("\n").filter(Boolean);
   const msgs: SessionMsg[] = [];
