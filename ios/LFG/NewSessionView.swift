@@ -42,7 +42,12 @@ struct NewSessionView: View {
     @State private var edgeSwipeDismissed = false
     /// Snapshot taken when a sheet opens so ✕ can revert. Selection is applied
     /// live as rows are tapped, so "confirm" is really dismiss-and-keep.
-    @State private var revertState: (cwd: String, label: String, host: Host?, agent: AgentKind, model: String)?
+    @State private var revertState: (cwd: String, label: String, host: Host?, agent: AgentKind,
+                                     model: String, modelWasExplicit: Bool)?
+    /// Whether the user has picked a model by hand in THIS draft. Once they have,
+    /// changing the directory must not overwrite it — a deliberate choice outranks
+    /// an inferred one, and silently undoing it is the worse failure.
+    @State private var modelPickedExplicitly = false
     @State private var showAddDirectory = false
     @State private var addDirectoryPath = ""
 
@@ -101,12 +106,16 @@ struct NewSessionView: View {
         .onChange(of: activeSheet) { old, new in
             // Snapshot on open so ✕ can revert; clear on close.
             if new != nil, revertState == nil {
-                revertState = (cwd, cwdLabel, selectedHost, agent, model)
+                revertState = (cwd, cwdLabel, selectedHost, agent, model, modelPickedExplicitly)
             } else if new == nil {
                 // A swipe-to-dismiss is also a keep/confirm path. Cancel first
                 // restores the snapshot, so persisting here covers every sheet
                 // dismissal without letting a cancelled row replace the preference.
-                if old == .model {
+                // Only a hand-picked model updates the global memory. Without the
+                // flag, merely opening and dismissing the sheet would write back
+                // whatever the *directory* inferred, and "what the user last chose"
+                // would decay into "what the last directory happened to run".
+                if old == .model, modelPickedExplicitly {
                     settings.noteNewSessionModelSelection(agent: agent, model: model)
                 }
                 revertState = nil
@@ -128,8 +137,7 @@ struct NewSessionView: View {
                 let p = addDirectoryPath.trimmingCharacters(in: .whitespaces)
                 addDirectoryPath = ""
                 guard !p.isEmpty else { return }
-                cwd = p
-                cwdLabel = (p as NSString).lastPathComponent
+                selectDirectory(path: p, label: (p as NSString).lastPathComponent)
                 closeSheet()
             }
         } message: {
@@ -154,6 +162,11 @@ struct NewSessionView: View {
                 cwd = store.inbox
                 cwdLabel = store.inbox.isEmpty ? "Directory" : "Inbox"
             }
+            // Now that a directory is on screen, let it speak for the model. Runs
+            // once, after the directory resolves — deliberately not bound to
+            // `store.sessions`, so a background refresh can never flip the chip
+            // while the user is composing.
+            applyInferredModel(for: cwd)
             if selectedHost == nil {
                 selectedHost = HostStore.defaultHost(settings.hosts) {
                     store.hostStateByHost[$0.id]?.isLive == true
@@ -228,7 +241,7 @@ struct NewSessionView: View {
                 recents: recentDirectories,
                 all: allDirectories,
                 selectedPath: cwd,
-                onSelect: { entry in cwd = entry.path; cwdLabel = entry.name },
+                onSelect: { entry in selectDirectory(path: entry.path, label: entry.name) },
                 onAddByPath: { showAddDirectory = true },
                 onConfirm: closeSheet,
                 onCancel: revertSheet
@@ -246,7 +259,11 @@ struct NewSessionView: View {
             ModelSheet(
                 selectedAgent: agent,
                 selectedModel: model,
-                onSelect: { kind, name in agent = kind; model = name },
+                onSelect: { kind, name in
+                    agent = kind
+                    model = name
+                    modelPickedExplicitly = true
+                },
                 onConfirm: closeSheet,
                 onCancel: revertSheet
             )
@@ -265,8 +282,32 @@ struct NewSessionView: View {
             selectedHost = r.host
             agent = r.agent
             model = r.model
+            modelPickedExplicitly = r.modelWasExplicit
         }
         closeSheet()
+    }
+
+    /// Pick a directory and, unless the user has already chosen a model by hand,
+    /// re-default the agent/model to whatever the newest session in that directory
+    /// ran on. The single entry point for every way a directory gets chosen — the
+    /// picker and the add-by-path alert — so the two can't drift.
+    private func selectDirectory(path: String, label: String) {
+        cwd = path
+        cwdLabel = label
+        applyInferredModel(for: path)
+    }
+
+    /// Directory-derived default. A no-op once the model has been picked by hand,
+    /// and a no-op in effect when the directory has no usable history (the
+    /// inference returns the remembered pair it was handed as the fallback).
+    private func applyInferredModel(for path: String) {
+        guard !modelPickedExplicitly else { return }
+        let inferred = AgentModelSelection.inferred(
+            forCwd: path,
+            in: store.sessions,
+            fallback: settings.lastNewSessionModelSelection)
+        agent = inferred.agent
+        model = inferred.model
     }
 
     private func start(text: String, attachments: [ComposerAttachment]) async {

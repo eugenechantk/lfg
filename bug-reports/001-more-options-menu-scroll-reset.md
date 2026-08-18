@@ -1,6 +1,6 @@
 # Bug 001: More options menu resets while scrolling
 
-## Status: FIXED — verified 2026-08-14
+## Status: FIXED WITH NATIVE MENU — verified 2026-08-19
 
 ## Description
 
@@ -17,7 +17,9 @@ The session detail screen's More Options menu flashes and jumps back to its firs
 
 `SessionDetailView` observes the live transcript. While a session is running, transcript deltas invalidate the view several times per turn. The ellipsis actions were implemented as a native SwiftUI `Menu` inside that same toolbar, and each invalidation rebuilt the presented `UIMenu`. UIKit recreated the menu at offset zero, producing the flash and jump to the first row.
 
-Extracting an equatable child was insufficient because SwiftUI reconstructs toolbar menu presentations above the child view boundary. The fix replaces only the root `Menu` with a toolbar-anchored popover containing a plain `ScrollView`. The scroll view owns persistent scroll state and updates its rows in place; the short model, owner, and host choices remain native submenus.
+Extracting an equatable child was insufficient because SwiftUI reconstructs toolbar menu presentations above the child view boundary. The first fix replaced the root `Menu` with a custom toolbar-anchored popover containing a plain `ScrollView`.
+
+The revised fix restores a fully native Apple menu using a stable UIKit `UIButton` + `UIMenu`. The button receives its root menu only once. A `UIDeferredMenuElement` generates the latest actions when a presentation begins, so transcript-driven SwiftUI updates only replace the coordinator's builder and cannot recreate the menu the user is currently scrolling. UIKit owns overflow scrolling and preserves its position for the presentation lifetime.
 
 ## Success Criteria
 
@@ -41,7 +43,7 @@ Extracting an equatable child was insufficient because SwiftUI reconstructs tool
 1. Open More Options.
 2. Tap "Switch model" and confirm its model submenu appears.
 3. Reopen More Options and tap "Files & Links".
-4. **Expected:** the native model submenu appears, and Files & Links dismisses the popover before presenting its sheet.
+4. **Expected:** the native model submenu appears, and Files & Links dismisses the menu before presenting its sheet.
 
 ## Investigation Log
 
@@ -69,6 +71,10 @@ Removed the navigation title and "Done" button after review. More Options now re
 
 Replaced the grouped `List` presentation with a plain `ScrollView` and flat button rows separated by hairlines. This restores the previous menu-style visual language without giving up stable scrolling. Simulator verification confirmed that the flat surface remained scrolled to "End session" after a live transcript update.
 
+### Follow-up: restore the native Apple menu
+
+The custom popover still looked and behaved like an imitation of a menu. Replaced it with a UIKit pull-down button whose stable root `UIMenu` contains a deferred action tree. In Simulator, the native menu overflowed after adding a second host, scrolled from "Stop" to "End session," retained that lower position while the open session streamed new tool-result messages, and continued into the native model submenu.
+
 ## Final Summary
 
-The native root `Menu` was recreated on every transcript-driven toolbar invalidation, discarding its scroll offset. More Options now uses a plain toolbar-anchored popover backed by a flat `ScrollView` of buttons and separators, while bounded choices remain submenus. The scroll view stayed at the bottom across a live transcript update, the nested model menu and Files & Links handoff passed, the app built successfully, and all 360 LFGCore tests passed.
+The SwiftUI root `Menu` was recreated on every transcript-driven toolbar invalidation, discarding its scroll offset. More Options is now a fully native, stable UIKit `UIMenu` whose deferred children refresh on each opening without replacing the active presentation. UIKit's native overflow list stayed at the bottom across streaming transcript updates, the native model submenu opened correctly, and the app built successfully.

@@ -2590,6 +2590,10 @@ import LFGCore
             sessionId: r.sessionId,
             title: (r.title?.isEmpty == false ? r.title! : "Session"),
             agent: r.agent ?? "claude",
+            // Carried through so the new-session screen can default its model
+            // from a directory whose sessions have all ended — the common case
+            // when you are starting a new one. See `AgentModelSelection.inferred`.
+            model: r.model,
             project: r.project,
             cwd: r.cwd,
             lastUserText: r.lastUserText,

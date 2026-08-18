@@ -30,9 +30,27 @@ struct SessionDetailView: View {
     @State private var pinningToBottom = false
     @State private var dismissedBrowserFrameID: String?
     @State private var showingAttachments = false
+    /// How many of the newest messages the transcript actually renders. The store
+    /// still holds the whole conversation — this bounds only what SwiftUI has to
+    /// place. See `TranscriptWindow` for the profile that motivates it.
+    @State private var window = TranscriptWindow.pageSize
+    /// True from the moment a page is added until the reader's position has been
+    /// restored — see `extendWindow` for why this gate is load-bearing.
+    @State private var extending = false
 
     private var sid: String { session.sessionId ?? "" }
     private var messages: [SessionMessage] { store.transcripts[sid] ?? [] }
+
+    /// Index of the oldest rendered message, and the slice from it. `indices` on
+    /// the slice are indices into `messages`, so `followsUserBubble` can still
+    /// look at the message *above* the window.
+    private var windowStart: Int {
+        TranscriptWindow.startIndex(total: messages.count, window: window)
+    }
+    private var windowedMessages: ArraySlice<SessionMessage> { messages[windowStart...] }
+    private var hasOlderHistory: Bool {
+        TranscriptWindow.hasOlder(total: messages.count, window: window)
+    }
     private var prompt: AgentPrompt? { store.prompts[sid] }
     private var pending: [SessionStore.PendingSend] { store.pendingSends[sid] ?? [] }
     private var isBusy: Bool { store.busy[sid] == true }
@@ -131,6 +149,9 @@ struct SessionDetailView: View {
         .toolbar { toolbarMenu }
         .task(id: sid) {
             isAtBottom = true
+            // A session opens on its newest page; whatever history the previous
+            // session had paged in must not carry over.
+            window = TranscriptWindow.pageSize
             store.focus(sid)
             await store.loadBrowserFrame(sid)
             store.loadHistory(sid)   // store-owned: not cancelled by view churn
@@ -224,7 +245,10 @@ struct SessionDetailView: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity).padding(.top, 40)
                     } else {
-                        ForEach(Array(messages.enumerated()), id: \.element.stableID) { idx, msg in
+                        // Everything older than the window sits behind this row;
+                        // scrolling it into view walks one page further back.
+                        if hasOlderHistory { olderHistoryLoader }
+                        ForEach(Array(zip(windowedMessages.indices, windowedMessages)), id: \.1.stableID) { idx, msg in
                             TranscriptMessageView(
                                 message: msg,
                                 // Back-to-back user turns collapse their leading gap.
@@ -294,7 +318,17 @@ struct SessionDetailView: View {
                 }
                 .padding()
             }
-            .onChange(of: messages.count) { _, _ in if isAtBottom { withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) } } }
+            .onChange(of: messages.count) { old, new in
+                // Reading history while the agent streams: the window is a count
+                // taken from the newest end, so an arriving turn would silently
+                // push a row off the TOP and shift the text under the user's
+                // eyes. Grow by what arrived instead, and let it slide again
+                // once they're back at the bottom.
+                if !isAtBottom, new > old {
+                    window = TranscriptWindow.grown(window: window, byAppended: new - old)
+                }
+                if isAtBottom { withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) } }
+            }
             .onChange(of: prompt) { _, _ in if isAtBottom { withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) } } }
             // Optimistic sent bubbles and the pending strip live outside `messages`,
             // so a fresh send changes neither `messages.count` nor `prompt`. Track
@@ -327,9 +361,66 @@ struct SessionDetailView: View {
       }
     }
 
+    /// The row above the oldest rendered message. Coming into view IS the
+    /// request for more history — it only reaches the viewport if the user
+    /// scrolled to the top of the window.
+    private var olderHistoryLoader: some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.mini)
+            Text("Loading earlier messages…")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .accessibilityIdentifier("transcriptOlderLoader")
+        .onAppear { extendWindow() }
+    }
+
+    /// Walk the window one page further back, keeping the reader in place.
+    private func extendWindow() {
+        // Two guards, both learned the hard way:
+        //
+        // `pinningToBottom` — the open-at-bottom pin is still force-scrolling,
+        // and the loader flashes through the viewport on the way down. Reading
+        // that as intent would page in the whole history on every open.
+        //
+        // `extending` — this one is load-bearing, not belt-and-braces. Restoring
+        // the reader's position is asynchronous, and until it lands the loader is
+        // still on screen, where its `onAppear` fires again. Measured without it:
+        // a SINGLE swipe walked the window 1000 → 1400, paging in a thousand
+        // messages nobody scrolled past and rebuilding the exact list this whole
+        // change exists to avoid.
+        guard !pinningToBottom, hasOlderHistory, !extending else { return }
+        extending = true
+        let anchorID = messages[windowStart].stableID
+        window = TranscriptWindow.extended(window: window, total: messages.count)
+        // Prepended rows push the content down. Put the message the user was
+        // reading back where it was, unanimated, so this reads as history
+        // appearing above rather than as a jump.
+        Task { @MainActor in
+            // `scrollTo` cannot resolve a row that has no frame yet, so the
+            // restore has to wait for the prepended page to lay out — an
+            // immediate call is the no-op that let the runaway above happen.
+            try? await Task.sleep(for: .milliseconds(50))
+            var tx = Transaction()
+            tx.disablesAnimations = true
+            withTransaction(tx) { scrollProxy?.scrollTo(anchorID, anchor: .top) }
+            // Hold the gate briefly past the restore: the loader needs a beat to
+            // leave the viewport before it is allowed to ask for another page.
+            try? await Task.sleep(for: .milliseconds(250))
+            extending = false
+        }
+    }
+
     private func jumpToTop() {
         guard let scrollProxy else { return }
         isAtBottom = false
+        // "Jump to the beginning" has to mean the beginning, so this is the one
+        // place that renders the whole transcript. The cost is now something the
+        // user asks for explicitly instead of what every session open pays; the
+        // window is restored the next time the session is opened.
+        window = max(window, messages.count)
         withAnimation { scrollProxy.scrollTo("TOP", anchor: .top) }
     }
 
@@ -388,10 +479,10 @@ struct SessionDetailView: View {
         }
 
         ToolbarItem(placement: .topBarTrailing) {
-            // Transcript deltas can arrive several times per second. A native
-            // Menu rebuilds its presented UIMenu for those updates and loses its
-            // scroll offset, so the root options surface is a scroll-owning
-            // popover instead. Short model/owner/host choices remain submenus.
+            // Keep the native UIKit menu object stable for the lifetime of this
+            // toolbar button. Its deferred contents refresh each time it opens,
+            // while transcript deltas cannot rebuild an already-presented menu
+            // and reset UIKit's native scroll position.
             SessionOptionsMenu(
                 sid: sid,
                 agent: session.agent,
@@ -475,9 +566,12 @@ struct SessionDetailView: View {
 
 }
 
-/// A transient, toolbar-anchored options surface with its own scroll state.
-/// SwiftUI can update the rows in place without recreating the presentation, so
-/// live transcript rendering cannot send the user back to the first option.
+/// Apple's native pull-down menu, backed by a stable UIKit menu object.
+///
+/// A SwiftUI `Menu` directly inside this transcript-observing toolbar is rebuilt
+/// for every streaming delta, which makes UIKit recreate the presented menu at
+/// offset zero. `NativeSessionOptionsButton` assigns its root `UIMenu` only once;
+/// the deferred child reads the latest actions when a presentation begins.
 private struct SessionOptionsMenu: View {
     let sid: String
     let agent: String
@@ -495,213 +589,128 @@ private struct SessionOptionsMenu: View {
     @Environment(AppSettings.self) private var settings
     @State private var forking = false
     @State private var transferring = false
-    @State private var showingOptions = false
 
     var body: some View {
-        Button {
-            showingOptions = true
-        } label: {
-            Image(systemName: "ellipsis.circle")
-        }
-        .accessibilityIdentifier("sessionOptionsMenu")
-        .popover(isPresented: $showingOptions, arrowEdge: .top) {
-            optionsList
-                .frame(width: 320, height: 520)
-                // Keep the transient, toolbar-anchored idiom on iPhone too. The
-                // custom scroll view owns its offset while live data changes.
-                .presentationCompactAdaptation(.popover)
-        }
+        NativeSessionOptionsButton { menuElements }
     }
 
-    private var optionsList: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                if isBusy {
-                    Button(role: .destructive) {
-                        showingOptions = false
-                        Task { await store.interrupt(sid) }
-                    } label: {
-                        optionLabel("Stop", systemImage: "stop.circle", tint: .red)
-                    }
-                    rowDivider
-                }
+    private var menuElements: [UIMenuElement] {
+        var primary: [UIMenuElement] = []
 
-                // Every file and link this session produced, without scrolling
-                // back through the transcript to find them.
-                Button { dismissThen(onShowAttachments) } label: {
-                    optionLabel("Files & Links", systemImage: "paperclip")
-                }
-                .accessibilityIdentifier("filesAndLinksButton")
-                rowDivider
+        if isBusy {
+            primary.append(action("Stop", systemImage: "stop.circle", attributes: .destructive) {
+                Task { await store.interrupt(sid) }
+            })
+        }
 
-                Menu {
-                    ForEach(modelOptions, id: \.self) { model in
-                        Button(model) {
-                            showingOptions = false
-                            Task { await store.setModel(sid, model) }
-                        }
-                    }
-                } label: {
-                    optionLabel("Switch model", systemImage: "cpu", showsSubmenu: true)
-                }
-                rowDivider
+        primary.append(action("Files & Links", systemImage: "paperclip", handler: onShowAttachments))
 
-                Menu {
-                    Button("Unassigned") {
-                        showingOptions = false
-                        Task { await store.assign(sid, nil) }
-                    }
-                    ForEach(store.users, id: \.self) { user in
-                        Button(user) {
-                            showingOptions = false
-                            Task { await store.assign(sid, user) }
-                        }
-                    }
-                } label: {
-                    optionLabel("Assign to", systemImage: "person", showsSubmenu: true)
-                }
-                rowDivider
+        let models = modelOptions.map { model in
+            action(model) { Task { await store.setModel(sid, model) } }
+        }
+        primary.append(UIMenu(
+            title: "Switch model",
+            image: UIImage(systemName: "cpu"),
+            children: models
+        ))
 
-                Button { dismissThen(onRename) } label: {
-                    optionLabel("Rename", systemImage: "pencil")
-                }
-                rowDivider
+        var assignees: [UIMenuElement] = [
+            action("Unassigned") { Task { await store.assign(sid, nil) } }
+        ]
+        assignees.append(contentsOf: store.users.map { user in
+            action(user) { Task { await store.assign(sid, user) } }
+        })
+        primary.append(UIMenu(
+            title: "Assign to",
+            image: UIImage(systemName: "person"),
+            children: assignees
+        ))
 
-                if let frame = store.browserFrames[sid],
-                   frame.frameId == dismissedBrowserFrameID {
-                    Button {
-                        showingOptions = false
-                        onRestoreBrowserPreview()
-                    } label: {
-                        optionLabel("Show Browser Preview", systemImage: "safari")
-                    }
-                    .accessibilityIdentifier("showBrowserPreviewButton")
-                    rowDivider
-                }
+        primary.append(action("Rename", systemImage: "pencil", handler: onRename))
 
-                // Fork branches this conversation into a new session: the source
-                // is untouched and the fork carries the full history.
-                if canFork {
-                    Button {
-                        showingOptions = false
-                        Task { await forkSession() }
-                    } label: {
-                        optionLabel(forking ? "Forking…" : "Fork session",
-                                    systemImage: "arrow.triangle.branch")
-                    }
-                    .disabled(forking)
-                    rowDivider
-                }
+        if let frame = store.browserFrames[sid],
+           frame.frameId == dismissedBrowserFrameID {
+            primary.append(action(
+                "Show Browser Preview",
+                systemImage: "safari",
+                handler: onRestoreBrowserPreview
+            ))
+        }
 
-                // Transfer is offered only for a live session with another host.
-                if canTransfer {
-                    Menu {
-                        ForEach(transferTargets) { target in
-                            Button {
-                                showingOptions = false
-                                Task { await transfer(to: target) }
-                            } label: {
-                                Label(target.label, systemImage: "desktopcomputer")
-                            }
-                        }
-                    } label: {
-                        optionLabel(transferring ? "Moving…" : "Move to host",
-                                    systemImage: "arrow.left.arrow.right",
-                                    showsSubmenu: true)
-                    }
-                    .disabled(transferring)
-                    rowDivider
-                }
+        if canFork {
+            primary.append(action(
+                forking ? "Forking…" : "Fork session",
+                systemImage: "arrow.triangle.branch",
+                attributes: forking ? .disabled : []
+            ) {
+                Task { await forkSession() }
+            })
+        }
 
-                if ManualUnread.canMarkUnread(sid) {
-                    if store.isManuallyUnread(sid) {
-                        Button {
-                            showingOptions = false
-                            store.markRead(sid)
-                        } label: {
-                            optionLabel("Mark as read", systemImage: "envelope.open")
-                        }
-                        .accessibilityIdentifier("markReadButton")
-                    } else {
-                        Button {
-                            showingOptions = false
-                            markUnreadAndExit()
-                        } label: {
-                            optionLabel("Mark as unread", systemImage: "envelope.badge")
-                        }
-                        .accessibilityIdentifier("markUnreadButton")
-                    }
-                    rowDivider
-                }
-
-                // Debug: surface the underlying ids; tapping copies to clipboard.
-                Text("Debug — tap to copy")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
-                    .padding(.bottom, 5)
-
-                if let tmuxIdentifier, !tmuxIdentifier.isEmpty {
-                    Button {
-                        showingOptions = false
-                        copyToClipboard(tmuxIdentifier)
-                    } label: {
-                        optionLabel("tmux · \(tmuxIdentifier)", systemImage: "terminal")
-                    }
-                    rowDivider
-                }
-
-                if !sid.isEmpty {
-                    Button {
-                        showingOptions = false
-                        copyToClipboard(sid)
-                    } label: {
-                        optionLabel("\(agentIdLabel) · \(sid)", systemImage: "number")
-                    }
-                }
-
-                Divider().padding(.vertical, 7)
-                Button(role: .destructive) {
-                    dismissThen(onConfirmEnd)
-                } label: {
-                    optionLabel("End session", systemImage: "xmark.circle", tint: .red)
+        if canTransfer {
+            let targets = transferTargets.map { target in
+                action(
+                    target.label,
+                    systemImage: "desktopcomputer",
+                    attributes: transferring ? .disabled : []
+                ) {
+                    Task { await transfer(to: target) }
                 }
             }
-            .buttonStyle(.plain)
-            .padding(.vertical, 6)
+            primary.append(UIMenu(
+                title: transferring ? "Moving…" : "Move to host",
+                image: UIImage(systemName: "arrow.left.arrow.right"),
+                children: targets
+            ))
         }
-        .scrollIndicators(.visible)
+
+        if ManualUnread.canMarkUnread(sid) {
+            if store.isManuallyUnread(sid) {
+                primary.append(action("Mark as read", systemImage: "envelope.open") {
+                    store.markRead(sid)
+                })
+            } else {
+                primary.append(action("Mark as unread", systemImage: "envelope.badge") {
+                    markUnreadAndExit()
+                })
+            }
+        }
+
+        var debug: [UIMenuElement] = []
+        if let tmuxIdentifier, !tmuxIdentifier.isEmpty {
+            debug.append(action("tmux · \(tmuxIdentifier)", systemImage: "terminal") {
+                copyToClipboard(tmuxIdentifier)
+            })
+        }
+        if !sid.isEmpty {
+            debug.append(action("\(agentIdLabel) · \(sid)", systemImage: "number") {
+                copyToClipboard(sid)
+            })
+        }
+
+        return [
+            UIMenu(options: .displayInline, children: primary),
+            UIMenu(title: "Debug — tap to copy", options: .displayInline, children: debug),
+            UIMenu(options: .displayInline, children: [
+                action("End session", systemImage: "xmark.circle", attributes: .destructive,
+                       handler: onConfirmEnd)
+            ])
+        ]
     }
 
-    private func optionLabel(
+    private func action(
         _ title: String,
-        systemImage: String,
-        tint: Color = .primary,
-        showsSubmenu: Bool = false
-    ) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .frame(width: 20)
-            Text(title)
-                .multilineTextAlignment(.leading)
-            Spacer()
-            if showsSubmenu {
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
+        systemImage: String? = nil,
+        attributes: UIMenuElement.Attributes = [],
+        handler: @escaping @MainActor () -> Void
+    ) -> UIAction {
+        UIAction(
+            title: title,
+            image: systemImage.flatMap(UIImage.init(systemName:)),
+            attributes: attributes
+        ) { _ in
+            MainActor.assumeIsolated { handler() }
         }
-        .foregroundStyle(tint)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
-        .contentShape(Rectangle())
-    }
-
-    private var rowDivider: some View {
-        Divider().padding(.leading, 48)
     }
 
     private var modelOptions: [String] {
@@ -762,15 +771,46 @@ private struct SessionOptionsMenu: View {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
-    /// Secondary sheets and dialogs need the popover to finish dismissing before
-    /// they present from SessionDetailView. Deferring by one short animation
-    /// interval avoids overlapping presentation-controller transitions.
-    private func dismissThen(_ action: @escaping @MainActor () -> Void) {
-        showingOptions = false
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(250))
-            guard !showingOptions else { return }
-            action()
+}
+
+/// A UIKit pull-down button whose root menu identity never changes after mount.
+/// `updateUIView` only replaces the deferred builder, so a live SwiftUI update can
+/// affect the next presentation without disturbing the one the user is scrolling.
+private struct NativeSessionOptionsButton: UIViewRepresentable {
+    let makeElements: @MainActor () -> [UIMenuElement]
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(makeElements: makeElements)
+    }
+
+    func makeUIView(context: Context) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: "ellipsis.circle"), for: .normal)
+        button.accessibilityLabel = "More"
+        button.accessibilityIdentifier = "sessionOptionsMenu"
+        button.showsMenuAsPrimaryAction = true
+        button.menu = UIMenu(children: [
+            UIDeferredMenuElement.uncached { [weak coordinator = context.coordinator] completion in
+                guard let coordinator else {
+                    completion([])
+                    return
+                }
+                completion(MainActor.assumeIsolated { coordinator.makeElements() })
+            }
+        ])
+        return button
+    }
+
+    func updateUIView(_ button: UIButton, context: Context) {
+        context.coordinator.makeElements = makeElements
+    }
+
+    @MainActor
+    final class Coordinator {
+        var makeElements: @MainActor () -> [UIMenuElement]
+
+        init(makeElements: @escaping @MainActor () -> [UIMenuElement]) {
+            self.makeElements = makeElements
         }
     }
 }

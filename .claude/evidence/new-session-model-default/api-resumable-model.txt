@@ -1,0 +1,13 @@
+[sessions] no confident session for cwd /Users/eugenechan/dev/inbox: newest unclaimed transcript 81f746f5-6ec1-46a5-8fbf-974efcef5a88 is 21m staler than the freshest in this cwd — leaving unidentified
+claude	sonnet	/private/var/folders/cd/_rd32xx17dv8ltmf4ctm5wn40000gn/T/gbrain-claude-cli-cwd-24267
+claude	sonnet	/private/var/folders/cd/_rd32xx17dv8ltmf4ctm5wn40000gn/T/gbrain-claude-cli-cwd-24267
+claude	sonnet	/private/var/folders/cd/_rd32xx17dv8ltmf4ctm5wn40000gn/T/gbrain-claude-cli-cwd-24267
+claude	sonnet	/private/var/folders/cd/_rd32xx17dv8ltmf4ctm5wn40000gn/T/gbrain-claude-cli-cwd-24267
+claude	sonnet	/private/var/folders/cd/_rd32xx17dv8ltmf4ctm5wn40000gn/T/gbrain-claude-cli-cwd-24267
+claude	sonnet	/private/var/folders/cd/_rd32xx17dv8ltmf4ctm5wn40000gn/T/gbrain-claude-cli-cwd-24267
+claude	sonnet	/private/var/folders/cd/_rd32xx17dv8ltmf4ctm5wn40000gn/T/gbrain-claude-cli-cwd-24267
+claude	sonnet	/private/var/folders/cd/_rd32xx17dv8ltmf4ctm5wn40000gn/T/gbrain-claude-cli-cwd-24267
+claude	sonnet	/private/var/folders/cd/_rd32xx17dv8ltmf4ctm5wn40000gn/T/gbrain-claude-cli-cwd-24267
+claude	sonnet	/private/var/folders/cd/_rd32xx17dv8ltmf4ctm5wn40000gn/T/gbrain-claude-cli-cwd-24267
+claude	sonnet	/private/var/folders/cd/_rd32xx17dv8ltmf4ctm5wn40000gn/T/gbrain-claude-cli-cwd-24267
+claude	sonnet	/private/var/folders/cd/_rd32xx17dv8ltmf4ctm5wn40000gn/T/gbrain-claude-cli-cwd-24267

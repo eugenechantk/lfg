@@ -329,6 +329,12 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
     public var mtime: Double?
     public var agent: String?
     public var lastUserText: String?
+    /// The model this closed conversation last ran on, in the same shape a live
+    /// row reports it (claude → short alias, codex → raw id). nil when the server
+    /// couldn't read one, when the row came from search (which is built from the
+    /// un-modelled search index), or from a server too old to send the field —
+    /// every consumer must treat it as best-effort.
+    public var model: String?
     /// Server-computed: this transcript has no live process **on the host that
     /// served it**. Defaults to `true` because that is what appearing in
     /// `/api/sessions/resumable` has always meant — an older server that omits
@@ -343,14 +349,15 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
 
     public init(sessionId: String, title: String? = nil, project: String? = nil,
                 cwd: String? = nil, mtime: Double? = nil, agent: String? = nil,
-                lastUserText: String? = nil, closed: Bool = true) {
+                lastUserText: String? = nil, model: String? = nil, closed: Bool = true) {
         self.sessionId = sessionId; self.title = title; self.project = project
         self.cwd = cwd; self.mtime = mtime; self.agent = agent
-        self.lastUserText = lastUserText; self.closed = closed
+        self.lastUserText = lastUserText; self.model = model; self.closed = closed
     }
 
     enum CodingKeys: String, CodingKey {
-        case sessionId, title, project, cwd, mtime, agent, lastActivityAt, lastUserText, closed
+        case sessionId, title, project, cwd, mtime, agent, lastActivityAt, lastUserText
+        case model, closed
     }
 
     public init(from decoder: Decoder) throws {
@@ -367,6 +374,7 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
         }
         agent = try c.decodeIfPresent(String.self, forKey: .agent)
         lastUserText = try c.decodeIfPresent(String.self, forKey: .lastUserText)
+        model = try c.decodeIfPresent(String.self, forKey: .model)
     }
 
     // Manual encode: an explicit CodingKeys enum with an extra `lastActivityAt`
@@ -380,6 +388,7 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
         try c.encodeIfPresent(mtime, forKey: .lastActivityAt)
         try c.encodeIfPresent(agent, forKey: .agent)
         try c.encodeIfPresent(lastUserText, forKey: .lastUserText)
+        try c.encodeIfPresent(model, forKey: .model)
     }
 }
 
