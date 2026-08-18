@@ -271,6 +271,78 @@ describe("Codex CLI transcript parity", () => {
     ).toBe("Started `/root/audit`");
   });
 
+  test("surfaces hidden Codex image output as a served markdown attachment", async () => {
+    const state = createCodexNormalizationState();
+    const bytes = Buffer.from("codex-image-one");
+    normalizeLineMessages(
+      functionCall("view_image", { path: "/repo/screenshot.png" }, "call_image_output"),
+      state,
+    );
+
+    const messages = normalizeLineMessages(
+      functionOutput(
+        [
+          { type: "input_text", text: "internal tool envelope" },
+          {
+            type: "input_image",
+            image_url: `data:image/png;base64,${bytes.toString("base64")}`,
+            detail: "high",
+          },
+        ],
+        "call_image_output",
+      ),
+      state,
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({ role: "assistant", kind: "text" });
+    expect(messages[0]?.text).toMatch(/^!\[image\.png\]\(\/.*\/image\.png\)$/);
+    expect(messages[0]?.text).not.toContain("base64");
+    expect(messages[0]?.text).not.toContain("internal tool envelope");
+    const path = messages[0]!.text.match(/\((.*)\)$/)?.[1];
+    expect(path).toBeTruthy();
+    expect(Buffer.from(await Bun.file(path!).arrayBuffer())).toEqual(bytes);
+    rmSync(path!.replace(/\/image\.png$/, ""), { recursive: true, force: true });
+  });
+
+  test("preserves multiple Codex image blocks without leaking their base64 payloads", async () => {
+    const state = createCodexNormalizationState();
+    const first = Buffer.from("first-image");
+    const second = Buffer.from("second-image");
+    normalizeLineMessages(
+      functionCall("exec_command", { cmd: "render screenshots" }, "call_multi_image"),
+      state,
+    );
+
+    const messages = normalizeLineMessages(
+      functionOutput(
+        [
+          { type: "input_text", text: "Script completed\nWall time 0.1 seconds\nOutput:\nrendered" },
+          { type: "input_image", image_url: `data:image/png;base64,${first.toString("base64")}` },
+          { type: "input_image", image_url: `data:image/jpeg;base64,${second.toString("base64")}` },
+        ],
+        "call_multi_image",
+      ),
+      state,
+    );
+
+    expect(messages.map((message) => message.kind)).toEqual(["tool_result", "text", "text"]);
+    expect(messages[0]?.text).toBe("rendered");
+    expect(messages.slice(1).map((message) => message.text)).toEqual([
+      expect.stringMatching(/^!\[image\.png\]\(\/.*\/image\.png\)$/),
+      expect.stringMatching(/^!\[image\.jpg\]\(\/.*\/image\.jpg\)$/),
+    ]);
+    expect(new Set(messages.slice(1).map((message) => message.id)).size).toBe(2);
+    expect(JSON.stringify(messages)).not.toContain("base64");
+
+    const paths = messages.slice(1).map((message) => message.text.match(/\((.*)\)$/)![1]);
+    expect(Buffer.from(await Bun.file(paths[0]).arrayBuffer())).toEqual(first);
+    expect(Buffer.from(await Bun.file(paths[1]).arrayBuffer())).toEqual(second);
+    for (const path of paths) {
+      rmSync(path.replace(/\/image\.(?:png|jpg)$/, ""), { recursive: true, force: true });
+    }
+  });
+
   test("collapses direct MCP call lifecycles into one stable CLI activity", () => {
     const state = createCodexNormalizationState();
     const started = normalizeLineMessages(

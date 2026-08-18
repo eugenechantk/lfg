@@ -35,6 +35,7 @@ import {
   type TitleSource,
 } from "./autopilot/titles.ts";
 import { homedir } from "node:os";
+import { createHash } from "node:crypto";
 import { codexDelegationSessionIds, lastPaneBusy } from "./activity.ts";
 import {
   listProcs,
@@ -846,6 +847,71 @@ function codexOutputText(output: unknown): string {
   } catch {
     return String(output);
   }
+}
+
+type CodexOutputImage = { data: string; mediaType: string };
+
+/**
+ * Image blocks returned by Codex tools are durable transcript content, not just
+ * model input. Decode them to the same served temp-file store used for Claude
+ * attachments so clients receive small markdown refs instead of multi-megabyte
+ * data URLs on every REST/SSE refresh.
+ */
+function codexOutputImages(output: unknown): string[] {
+  const images: CodexOutputImage[] = [];
+
+  const dataURLImage = (raw: string): CodexOutputImage | null => {
+    const match = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)$/i.exec(raw);
+    return match ? { mediaType: match[1].toLowerCase(), data: match[2] } : null;
+  };
+
+  const visit = (value: unknown) => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    const block = value as Record<string, unknown>;
+    if (block.type === "input_image" && typeof block.image_url === "string") {
+      const image = dataURLImage(block.image_url);
+      if (image) images.push(image);
+      return;
+    }
+    if (block.type === "image" && typeof block.data === "string") {
+      const mediaType =
+        typeof block.mimeType === "string"
+          ? block.mimeType
+          : typeof block.media_type === "string"
+            ? block.media_type
+            : "image/png";
+      if (mediaType.toLowerCase().startsWith("image/")) {
+        images.push({ data: block.data, mediaType: mediaType.toLowerCase() });
+      }
+      return;
+    }
+    for (const child of Object.values(block)) visit(child);
+  };
+  visit(output);
+
+  const paths: string[] = [];
+  for (const image of images) {
+    try {
+      const bytes = Buffer.from(image.data, "base64");
+      if (bytes.length === 0) continue;
+      const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 24);
+      const ext = extForMediaType(image.mediaType, "image");
+      const dir = join(tmpdir(), "lfg-uploads", `codex-image-${hash}`);
+      const path = join(dir, `image.${ext}`);
+      if (!existsSync(path)) {
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(path, bytes);
+      }
+      paths.push(path);
+    } catch {
+      // A malformed attachment must not make the rest of the transcript vanish.
+    }
+  }
+  return paths;
 }
 
 type CodexCallDisposition = "show-output" | "hide-output";
@@ -1711,7 +1777,17 @@ function normalizeCodexLine(
   if (p.type === "function_call_output" || p.type === "custom_tool_call_output") {
     const info = p.call_id ? state.calls.get(p.call_id) : undefined;
     if (p.call_id) state.calls.delete(p.call_id);
-    if (info?.disposition === "hide-output") return [];
+    const imageMessages = codexOutputImages(p.output).map((path, index) =>
+      codexMessage(
+        x,
+        "assistant",
+        "text",
+        `![${basename(path)}](${path})`,
+        ts,
+        index + 1,
+      ),
+    );
+    if (info?.disposition === "hide-output") return imageMessages;
     const text = stripCodeModeEnvelope(codexOutputText(p.output));
     if (info?.tool === "wait_agent") {
       let detail = text;
@@ -1722,10 +1798,10 @@ function normalizeCodexLine(
         else if (typeof parsed.message === "string") detail = parsed.message;
       } catch {}
       const result = `Finished waiting${detail ? `\n${detail}` : ""}`;
-      return [codexMessage(x, "tool", "tool_result", result, ts)];
+      return [codexMessage(x, "tool", "tool_result", result, ts), ...imageMessages];
     }
-    if (!text) return [];
-    return [codexMessage(x, "tool", "tool_result", text, ts)];
+    if (!text) return imageMessages;
+    return [codexMessage(x, "tool", "tool_result", text, ts), ...imageMessages];
   }
   // tool_search_* is provider plumbing; web_search_call, image_generation_call,
   // and context_compaction have a corresponding durable event_msg cell.
@@ -2809,6 +2885,17 @@ export type ResumableSession = {
   lastActivityAt: number | null;
   lastUserText: string | null;
   /**
+   * The model this conversation last ran on, read off its transcript in the same
+   * shape a LIVE row reports (claude → short alias, codex → the raw id). null
+   * when the transcript has no assistant turn to read it from.
+   *
+   * Optional because `searchResumable` builds its rows from the search index,
+   * which does not carry a model: indexing one would mean a backward scan of
+   * every transcript in the corpus (5,318 files) on the single Bun event loop,
+   * where `listResumable` pays it only for the page it enriches.
+   */
+  model?: string | null;
+  /**
    * Server-computed session state, alongside `busy` and `status`: this transcript
    * has no live process **on this host**. `listResumable` establishes it by
    * excluding the live-session ids, so it is a derivation, not a constant.
@@ -2944,6 +3031,17 @@ export async function collectResumableCandidates(): Promise<ResumableCandidate[]
   return candidates;
 }
 
+/**
+ * The model a closed session last ran on, in the same shape `listSessions`
+ * reports for a live row: claude collapses to a short alias (`opus`), codex
+ * keeps its raw id (`gpt-5.6-sol`) because there is no alias family for it.
+ * Mirrors the live derivation at the `model:` field of `listSessions`.
+ */
+async function modelForCandidate(c: ResumableCandidate): Promise<string | null> {
+  if (c.agent === "codex") return lastCodexModel(c.path).catch(() => null);
+  return modelAliasForTranscript(c.path).catch(() => null);
+}
+
 /** Read a candidate's searchable/displayable metadata off its transcript. */
 async function enrichCandidate(
   c: ResumableCandidate,
@@ -2962,6 +3060,7 @@ async function enrichCandidate(
     title,
     lastActivityAt: c.mtime,
     lastUserText: await lastUserText(c.path).catch(() => null),
+    model: await modelForCandidate(c),
     // Earned, not assumed: nothing holds a fresh lease on this session.
     closed: true,
   };
