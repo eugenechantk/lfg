@@ -29,6 +29,29 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+# Guarantee the PATH the server needs instead of trusting whoever launched it.
+#
+# The server shells out to `tmux` BY BARE NAME for everything that makes a
+# session steerable — pane discovery (`tmuxTargetForPid`), `send-keys`, spawning
+# and resuming sessions — and every one of those calls is inside a try/catch
+# that turns "binary not found" into a silent null. On 2026-08-17 the Air's
+# server had been (re)started over ssh and inherited sshd's
+# PATH=/usr/bin:/bin:/usr/sbin:/sbin. Homebrew's tmux was unreachable, so all 18
+# of that host's sessions reported `tmuxTarget: null` and the desktop client
+# greyed out every Air row as unopenable (`canOpen == tmuxName != nil`), sends
+# 409'd, and resume failed — with the host showing perfectly healthy and green.
+# A missing directory on PATH is invisible in every symptom it causes, so fix it
+# here rather than depending on the launcher's environment.
+for dir in /opt/homebrew/bin /usr/local/bin; do
+  case ":$PATH:" in *":$dir:"*) ;; *) [ -d "$dir" ] && PATH="$dir:$PATH" ;; esac
+done
+export PATH
+
+if ! command -v tmux >/dev/null 2>&1; then
+  echo "[serve-forever] WARNING: no tmux on PATH — sessions will report no pane," >&2
+  echo "[serve-forever]          and send/resume/spawn will fail on this host." >&2
+fi
+
 # lfg listens on loopback (LFG_HOST default 127.0.0.1) — expose it on the tailnet
 # with `tailscale serve --bg 127.0.0.1:8766` (tailnet-only HTTPS at the machine's
 # MagicDNS URL), NOT funnel (which is public). Point the iOS client at that URL.
