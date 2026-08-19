@@ -23,6 +23,9 @@ ios/**/*.ipa
 ios/**/*.dSYM.zip
 ios/vendor/bundle/
 ios/.bundle/
+# Private-build Cloudflare Access payload generated from macOS Keychain.
+# It is intentionally bundled into local signed apps but never source-controlled.
+ios/PrivateResources/BundledCloudflareAccess.private.json
 
 # Debug screenshot dumps (large, throwaway)
 .claude/shots/

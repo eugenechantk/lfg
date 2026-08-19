@@ -75,6 +75,10 @@ public struct Host: Codable, Sendable, Hashable, Identifiable {
 /// UserDefaults / UIKit so `swift test` can verify migration and default-host
 /// selection deterministically; `AppSettings` is the thin persistence shell.
 public enum HostStore {
+    /// The private production endpoint offered in first-run setup. Persisted
+    /// hosts still win; this is only initial text for an otherwise empty form.
+    public static let preferredHostURL = "https://lfg-pro.eugenechantk.me"
+
     public static func decode(_ data: Data?) -> [Host] {
         guard let data, !data.isEmpty else { return [] }
         return (try? JSONDecoder().decode([Host].self, from: data)) ?? []

@@ -3,6 +3,10 @@ import XCTest
 
 final class MultiHostTests: XCTestCase {
 
+    func testPreferredHostURLUsesPrivateCloudflareTunnel() {
+        XCTAssertEqual(HostStore.preferredHostURL, "https://lfg-pro.eugenechantk.me")
+    }
+
     // MARK: HostStore — migration (SC2)
 
     func testMigrateLegacyBaseURLBecomesOneDefaultHost() {

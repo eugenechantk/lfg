@@ -2,10 +2,11 @@ import Foundation
 
 // MARK: - Transcript render window
 //
-// A session's transcript is fetched whole (`limit: 5000, full: true`) and every
-// consumer that reasons about the conversation — the Files & Links index, the
-// full-title card, optimistic-send reconciliation — depends on having all of it.
-// What must NOT be whole is the part handed to SwiftUI.
+// A session's transcript is fetched newest-first in bounded pages and merged
+// whole (up to 5,000 messages) in SessionStore. Every consumer that reasons
+// about the conversation — the Files & Links index, the full-title card,
+// optimistic-send reconciliation — depends on having all of it. What must NOT
+// be whole is the part handed to SwiftUI.
 //
 // `LazyVStack` is lazy about *rendering* rows, not about *placing* them: every
 // scroll update walks the entire `ForEach` list. Profiled on 2026-08-18 with

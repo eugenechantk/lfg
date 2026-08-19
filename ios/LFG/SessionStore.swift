@@ -2541,35 +2541,48 @@ import LFGCore
             await hydrateTranscriptFromStoreIfEmpty(id)
             return
         }
-        let msgs: [SessionMessage]
         do {
-            msgs = try await client.messages(id, limit: 5000, full: true)
+            try await consumeHistoryPages(from: client, sessionID: id)
         } catch {
             // This used to be `try?`, which made the one failure that strands the
             // UI completely invisible: a transcript that never arrives leaves
             // optimistic sends unprovable, so they sit at the bottom of the
-            // session looking un-delivered. Transcripts of long sessions run to
-            // megabytes, so a slow link times this out for real. Log it, and try
-            // once more — nothing else retries until the user leaves the session
-            // and comes back.
+            // session looking un-delivered. Pages already merged remain visible;
+            // log the failed attempt and walk the cursors once more. Stable-id
+            // union makes overlap with the first attempt harmless.
             ConnectionLog.shared.log(
                 .probe, "history fetch failed for \(id.prefix(8)) — \(LFGClient.describe(error))")
             try? await Task.sleep(for: .seconds(2))
-            guard let retried = try? await client.messages(id, limit: 5000, full: true) else {
-                ConnectionLog.shared.log(.probe, "history retry failed for \(id.prefix(8))")
+            do {
+                try await consumeHistoryPages(from: client, sessionID: id)
+            } catch {
+                ConnectionLog.shared.log(
+                    .probe, "history retry failed for \(id.prefix(8)) — \(LFGClient.describe(error))")
                 await hydrateTranscriptFromStoreIfEmpty(id)
                 return
             }
-            msgs = retried
         }
+    }
+
+    /// Consume one bounded network response at a time. `MessageHistoryPages` is
+    /// pull-based, so this merge completes before the older-page request starts:
+    /// a long Cloudflare transcript becomes visible after its newest page rather
+    /// than after the entire multi-megabyte history has crossed the tunnel.
+    private func consumeHistoryPages(from client: LFGClient, sessionID id: String) async throws {
+        for try await page in client.messageHistoryPages(id, limit: 5_000, pageSize: 500) {
+            mergeHistoryPage(page, sessionID: id)
+        }
+    }
+
+    private func mergeHistoryPage(_ messages: [SessionMessage], sessionID id: String) {
         var byKey: [String: SessionMessage] = [:]
         for m in (transcripts[id] ?? []) { byKey[m.stableID] = m }
-        for m in msgs { byKey[m.stableID] = m }
+        for m in messages { byKey[m.stableID] = m }
         let merged = byKey.values.sorted { ($0.ts ?? 0) < ($1.ts ?? 0) }
         transcripts[id] = merged
         seen[id] = Set(byKey.keys)
         writeThrough { store in
-            try await store.appendMessages(sessionId: id, merged)
+            try await store.appendMessages(sessionId: id, messages)
         }
         reconcilePending(id)
     }

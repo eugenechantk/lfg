@@ -60,6 +60,7 @@ struct LFGApp: App {
 /// migrates from the legacy single `lfg.baseURL` on first launch.
 @MainActor @Observable final class AppSettings {
     private let defaults = UserDefaults.standard
+    private let credentialStore = HostCredentialStore.shared
     private static let baseURLKey = "lfg.baseURL"   // legacy — migration source only
     private static let hostsKey = "lfg.hosts"
     private static let ownerKey = "lfg.defaultOwner"
@@ -145,14 +146,27 @@ struct LFGApp: App {
     }
 
     /// A stateless client for one host.
-    func client(for host: Host) -> LFGClient? { LFGClient(string: host.url) }
+    func client(for host: Host) -> LFGClient? { credentialStore.client(forHostURL: host.url) }
 
     /// The default host's client — used for host-agnostic create-flow metadata
     /// (dirs/users/usage) and inline host-file rendering. Falls back to the first
     /// host. Reachability-aware placement is the store's job (`HostStore.defaultHost`).
     var defaultClient: LFGClient? {
         guard let h = hosts.first(where: { $0.isDefault }) ?? hosts.first else { return nil }
-        return LFGClient(string: h.url)
+        return credentialStore.client(forHostURL: h.url)
+    }
+
+    func accessCredential(forHostURL url: String) -> CloudflareAccessCredential? {
+        credentialStore.credential(forHostURL: url)
+    }
+
+    func saveAccessCredential(_ credential: CloudflareAccessCredential,
+                              forHostURL url: String) throws {
+        try credentialStore.save(credential, forHostURL: url)
+    }
+
+    func removeAccessCredential(forHostURL url: String) throws {
+        try credentialStore.remove(forHostURL: url)
     }
 
     var hasConfiguredHost: Bool { !hosts.isEmpty }
@@ -175,11 +189,36 @@ struct LFGApp: App {
             agentRawValue: defaults.string(forKey: Self.newSessionAgentKey),
             model: defaults.string(forKey: Self.newSessionModelKey)
         )
+        // Private builds may contain a generated, gitignored Service Auth
+        // payload. Copy it into this device's Keychain before the first client
+        // is created, and make a clean install usable without a setup form.
+        if let bundled = Self.bundledCloudflareAccessConfiguration() {
+            do {
+                try credentialStore.save(bundled.credential, forHostURL: bundled.hostURL)
+                hosts = bundled.addingHostIfNeeded(to: hosts)
+            } catch {
+                // A Keychain failure must not prevent launch; the existing
+                // manual host/credential flow remains available as fallback.
+            }
+        }
         // Persist the migrated list so later launches read the new key directly
         // (didSet doesn't fire during init; all stored props must be set first).
         defaults.set(HostStore.encode(hosts), forKey: Self.hostsKey)
         defaults.set(lastNewSessionModelSelection.agent.rawValue, forKey: Self.newSessionAgentKey)
         defaults.set(lastNewSessionModelSelection.model, forKey: Self.newSessionModelKey)
+    }
+
+    private static func bundledCloudflareAccessConfiguration(
+        bundle: Bundle = .main
+    ) -> BundledCloudflareAccessConfiguration? {
+        // Folder references preserve their directory in the finished bundle.
+        // Resolve that concrete path instead of relying on Bundle's indexed
+        // resource lookup, which can omit dynamically-added ignored files.
+        let url = bundle.bundleURL
+            .appendingPathComponent("PrivateResources", isDirectory: true)
+            .appendingPathComponent("BundledCloudflareAccess.private.json")
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return BundledCloudflareAccessConfiguration(data: data)
     }
 
     // MARK: Host list mutation (Settings editor)
@@ -216,7 +255,12 @@ struct LFGApp: App {
         if hosts.contains(where: { $0.id == u && $0.id != id }) { return false }
         let n = (displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         var h = hosts[idx]
-        if h.url != u { h.hostId = nil; h.name = nil }
+        if h.url != u {
+            do { try credentialStore.move(from: h.url, to: u) }
+            catch { return false }
+            h.hostId = nil
+            h.name = nil
+        }
         h.url = u
         h.displayName = n.isEmpty ? nil : n
         var next = hosts
@@ -226,6 +270,7 @@ struct LFGApp: App {
     }
 
     func removeHost(_ id: String) {
+        try? credentialStore.remove(forHostURL: id)
         hosts = HostStore.normalized(hosts.filter { $0.id != id })
     }
 

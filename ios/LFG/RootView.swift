@@ -32,9 +32,9 @@ struct RootView: View {
     /// non-default machine still resolve.
     private var hostFilesForSelection: HostFiles? {
         if let selection, let h = store.host(forSession: selection), let c = settings.client(for: h) {
-            return HostFiles(baseURL: c.baseURL)
+            return HostFiles(client: c)
         }
-        return settings.defaultClient.map { HostFiles(baseURL: $0.baseURL) }
+        return settings.defaultClient.map { HostFiles(client: $0) }
     }
 
     var body: some View {

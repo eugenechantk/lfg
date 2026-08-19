@@ -10,8 +10,9 @@ import LFGCore
 /// Builds URLs against the connected host. Local absolute paths the agent emits
 /// (e.g. /Users/…/out.png) are served through `GET /api/file?path=…`; http(s)
 /// URLs pass through untouched.
-struct HostFiles: Sendable, Equatable {
-    let baseURL: URL
+struct HostFiles: Sendable {
+    let client: LFGClient
+    var baseURL: URL { client.baseURL }
     /// The session's working directory, used to resolve relative paths the agent
     /// emits in prose (e.g. `improvement-log/foo.md`) to a real host file. Nil
     /// outside a session, where only absolute paths can be served.
@@ -102,17 +103,49 @@ private struct HostImageProvider: ImageProvider {
     func makeImage(url: URL?) -> some View {
         Group {
             if let url, let resolved = hostFiles?.resolve(url) ?? (url.scheme != nil ? url : nil) {
-                AsyncImage(url: resolved) { phase in
-                    switch phase {
-                    case .success(let img): img.resizable().scaledToFit()
-                    case .failure: Label("image unavailable", systemImage: "photo").font(.caption).foregroundStyle(.secondary)
-                    default: ProgressView()
-                    }
-                }
+                AuthenticatedImage(url: resolved, client: hostFiles?.client)
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             } else {
                 EmptyView()
+            }
+        }
+    }
+}
+
+private struct AuthenticatedImage: View {
+    let url: URL
+    let client: LFGClient?
+
+    @State private var image: UIImage?
+    @State private var failed = false
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image).resizable().scaledToFit()
+            } else if failed {
+                Label("image unavailable", systemImage: "photo")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                ProgressView()
+            }
+        }
+        .task(id: url) {
+            failed = false
+            do {
+                let data: Data
+                if let client { data = try await client.resourceData(from: url) }
+                else { data = try await URLSession.shared.data(from: url).0 }
+                guard !Task.isCancelled, let decoded = UIImage(data: data) else {
+                    if !Task.isCancelled { failed = true }
+                    return
+                }
+                image = decoded
+            } catch is CancellationError {
+                return
+            } catch {
+                failed = true
             }
         }
     }
@@ -137,7 +170,11 @@ struct MediaAttachmentsView: View {
             }
         }
         .sheet(item: $viewing) { ref in
-            FileViewerSheet(ref: ref, url: hostFiles?.resolve(rawPath: ref.raw))
+            FileViewerSheet(
+                ref: ref,
+                url: hostFiles?.resolve(rawPath: ref.raw),
+                client: hostFiles?.client
+            )
         }
     }
 
@@ -179,9 +216,9 @@ struct MediaAttachmentsView: View {
 ///    transcript re-renders on every SSE delta) no longer builds a fresh
 ///    `AVPlayer` and restart playback from zero.
 ///
-/// It streams from the host rather than downloading first — a two-minute clip
-/// is tens of megabytes, and `FileViewerSheet`'s download path would hold all
-/// of it in memory before the first frame.
+/// Protected videos are downloaded to a temporary file before this view is
+/// created. AVPlayer has no supported arbitrary-header API, so pointing it at a
+/// Cloudflare Access URL would silently omit the service credential.
 struct HostVideoPlayer: UIViewControllerRepresentable {
     let url: URL
 
@@ -227,27 +264,26 @@ struct HostVideoPlayer: UIViewControllerRepresentable {
 struct FileViewerSheet: View {
     let ref: MediaRef
     let url: URL?
+    let client: LFGClient?
     @Environment(\.dismiss) private var dismiss
 
-    enum Phase: Equatable { case loading, failed(String), data(Data) }
+    enum Phase: Equatable { case loading, failed(String), data(Data), localVideo(URL) }
     @State private var phase: Phase = .loading
 
     var body: some View {
         NavigationStack {
             Group {
-                if ref.kind == .video, let url {
-                    HostVideoPlayer(url: url)                    // stream remote video
-                        .ignoresSafeArea(edges: .bottom)
-                } else {
-                    switch phase {
-                    case .loading:
-                        ProgressView("Loading…").frame(maxWidth: .infinity, maxHeight: .infinity)
-                    case .failed(let message):
-                        ContentUnavailableView("Can't load file", systemImage: "exclamationmark.triangle",
-                                               description: Text(message))
-                    case .data(let data):
-                        rendered(data)
-                    }
+                switch phase {
+                case .loading:
+                    ProgressView(ref.kind == .video ? "Preparing video…" : "Loading…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .failed(let message):
+                    ContentUnavailableView("Can't load file", systemImage: "exclamationmark.triangle",
+                                           description: Text(message))
+                case .data(let data):
+                    rendered(data)
+                case .localVideo(let url):
+                    HostVideoPlayer(url: url).ignoresSafeArea(edges: .bottom)
                 }
             }
             .navigationTitle(ref.filename)
@@ -255,8 +291,10 @@ struct FileViewerSheet: View {
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
         .task {
-            guard ref.kind != .video else { return }
             await load()
+        }
+        .onDisappear {
+            if case .localVideo(let url) = phase { try? FileManager.default.removeItem(at: url) }
         }
     }
 
@@ -280,12 +318,24 @@ struct FileViewerSheet: View {
     private func load() async {
         guard let url else { phase = .failed("This file isn't available on the host."); return }
         do {
-            let (data, resp) = try await URLSession.shared.data(from: url)
-            if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                phase = .failed("Host returned \(http.statusCode). The file may have moved or sit outside the served folders.")
-                return
+            if ref.kind == .video {
+                let downloaded: URL
+                if let client { downloaded = try await client.downloadResource(from: url) }
+                else { downloaded = try await URLSession.shared.download(from: url).0 }
+                let directory = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("lfg-viewer", isDirectory: true)
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                let ext = url.pathExtension.isEmpty ? ref.filename.split(separator: ".").last.map(String.init) ?? "mp4"
+                                                    : url.pathExtension
+                let local = directory.appendingPathComponent(UUID().uuidString).appendingPathExtension(ext)
+                try FileManager.default.moveItem(at: downloaded, to: local)
+                phase = .localVideo(local)
+            } else {
+                let data: Data
+                if let client { data = try await client.resourceData(from: url) }
+                else { data = try await URLSession.shared.data(from: url).0 }
+                phase = .data(data)
             }
-            phase = .data(data)
         } catch {
             phase = .failed(error.localizedDescription)
         }

@@ -242,7 +242,12 @@ struct BrowserPreviewOverlay: View {
     private func loadPreviewImage() async {
         imageLoadFailed = false
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let data: Data
+            if let client = HostCredentialStore.shared.client(forResourceURL: url) {
+                data = try await client.resourceData(from: url)
+            } else {
+                data = try await URLSession.shared.data(from: url).0
+            }
             guard !Task.isCancelled, let image = UIImage(data: data) else {
                 if !Task.isCancelled { imageLoadFailed = true }
                 return

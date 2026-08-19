@@ -38,7 +38,11 @@ struct AttachmentsSheet: View {
             resources = await Task.detached { TranscriptResourceIndex.collect(from: snapshot) }.value
         }
         .sheet(item: $viewing) { ref in
-            FileViewerSheet(ref: ref, url: hostFiles?.resolve(rawPath: ref.raw))
+            FileViewerSheet(
+                ref: ref,
+                url: hostFiles?.resolve(rawPath: ref.raw),
+                client: hostFiles?.client
+            )
         }
     }
 

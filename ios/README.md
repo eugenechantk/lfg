@@ -159,7 +159,24 @@ flowdeck build
 flowdeck run
 ```
 
-Then set the server URL in-app (see **Backend connection** above).
+Private Eugene-only builds can bundle the Cloudflare Access bootstrap already
+stored in macOS Keychain:
+
+```bash
+cd ios
+scripts/generate-bundled-cloudflare-access
+xcodegen generate
+```
+
+This creates the gitignored, mode-`0600`
+`PrivateResources/BundledCloudflareAccess.private.json`. A clean install copies
+the token into the device Keychain and adds the protected host automatically.
+The resource is extractable from the app binary, so never use it in a publicly
+distributed build. Delete the generated resource and regenerate the project to
+produce a credential-free build with the normal manual setup flow.
+
+Without that private resource, set the server URL and credentials in-app (see
+**Backend connection** above).
 
 ### Tests
 

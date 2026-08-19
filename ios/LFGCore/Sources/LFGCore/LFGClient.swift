@@ -48,25 +48,50 @@ public enum Reachability: Sendable, Equatable {
     case badResponse(String)       // reached something, but not a healthy lfg
 }
 
+/// Cloudflare Access machine credential for one configured host.
+///
+/// Deliberately not `Codable`: the app stores this value in Keychain and passes
+/// it into `LFGClient`; it must never hitch a ride in the persisted Host JSON.
+public struct CloudflareAccessCredential: Sendable, Equatable {
+    public let clientID: String
+    public let clientSecret: String
+
+    public init(clientID: String, clientSecret: String) {
+        self.clientID = clientID
+        self.clientSecret = clientSecret
+    }
+
+    fileprivate func apply(to request: inout URLRequest) {
+        request.setValue(clientID, forHTTPHeaderField: "CF-Access-Client-Id")
+        request.setValue(clientSecret, forHTTPHeaderField: "CF-Access-Client-Secret")
+    }
+}
+
 /// Stateless async client for the lfg HTTP/SSE API. `Sendable` so it can be
 /// shared across the actor boundary. Construct with the base URL the user sets
 /// (loopback, LAN, or a Tailscale MagicDNS https URL).
 public struct LFGClient: Sendable {
     public let baseURL: URL
     private let session: URLSession
+    private let accessCredential: CloudflareAccessCredential?
 
-    public init(baseURL: URL, session: URLSession = .shared) {
+    public init(baseURL: URL,
+                session: URLSession = .shared,
+                accessCredential: CloudflareAccessCredential? = nil) {
         self.baseURL = baseURL
         self.session = session
+        self.accessCredential = accessCredential
     }
 
-    public init?(string: String, session: URLSession = .shared) {
+    public init?(string: String,
+                 session: URLSession = .shared,
+                 accessCredential: CloudflareAccessCredential? = nil) {
         var s = string.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.isEmpty { return nil }
         if !s.contains("://") { s = "http://" + s }
         if s.hasSuffix("/") { s.removeLast() }
         guard let url = URL(string: s) else { return nil }
-        self.init(baseURL: url, session: session)
+        self.init(baseURL: url, session: session, accessCredential: accessCredential)
     }
 
     /// Short name for this host in the connection log — the timeline is read on
@@ -120,6 +145,68 @@ public struct LFGClient: Sendable {
         return comps?.url ?? baseURL.appendingPathComponent(path)
     }
 
+    /// A request for an API or host-owned resource. Access credentials are
+    /// scoped to the exact origin (scheme + host + effective port), so a
+    /// transcript's arbitrary external image URL can never receive them.
+    public func resourceRequest(for resourceURL: URL) -> URLRequest {
+        authenticated(URLRequest(url: resourceURL))
+    }
+
+    /// Load a host-owned image, document, or browser frame through the same
+    /// authenticated transport as the API. External URLs remain credential-free.
+    public func resourceData(from resourceURL: URL) async throws -> Data {
+        try await performRaw(resourceRequest(for: resourceURL))
+    }
+
+    /// Download a potentially large protected resource to URLSession's
+    /// temporary file rather than materializing it in memory. The caller must
+    /// move/copy the returned file before the temporary location is reclaimed.
+    public func downloadResource(from resourceURL: URL) async throws -> URL {
+        let request = resourceRequest(for: resourceURL)
+        do {
+            let (file, response) = try await session.download(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw LFGError.decoding("non-HTTP response")
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                throw LFGError.http(status: http.statusCode, body: "")
+            }
+            return file
+        } catch let error as LFGError {
+            throw error
+        } catch {
+            throw LFGError.notReachable(underlying: error.localizedDescription)
+        }
+    }
+
+    private func authenticated(_ request: URLRequest) -> URLRequest {
+        guard let accessCredential,
+              Self.sameOrigin(request.url, baseURL) else { return request }
+        var request = request
+        accessCredential.apply(to: &request)
+        return request
+    }
+
+    private static func sameOrigin(_ lhs: URL?, _ rhs: URL) -> Bool {
+        guard let lhs,
+              let lhsScheme = lhs.scheme?.lowercased(),
+              let rhsScheme = rhs.scheme?.lowercased(),
+              let lhsHost = lhs.host?.lowercased(),
+              let rhsHost = rhs.host?.lowercased(),
+              lhsScheme == rhsScheme,
+              lhsHost == rhsHost else { return false }
+
+        func effectivePort(_ url: URL, scheme: String) -> Int? {
+            if let port = url.port { return port }
+            switch scheme {
+            case "https": return 443
+            case "http": return 80
+            default: return nil
+            }
+        }
+        return effectivePort(lhs, scheme: lhsScheme) == effectivePort(rhs, scheme: rhsScheme)
+    }
+
     // MARK: Core request helpers
 
     /// Default timeout for a user-initiated read. The poll loop overrides this with a
@@ -159,7 +246,7 @@ public struct LFGClient: Sendable {
 
     private func performRaw(_ req: URLRequest) async throws -> Data {
         do {
-            let (data, resp) = try await session.data(for: req)
+            let (data, resp) = try await session.data(for: authenticated(req))
             guard let http = resp as? HTTPURLResponse else {
                 throw LFGError.decoding("non-HTTP response")
             }
@@ -307,6 +394,27 @@ public struct LFGClient: Sendable {
         return try await get("api/sessions/\(id)/messages", query: q, as: MessagesResponse.self)
     }
 
+    /// Lazily walk a transcript from newest to oldest in bounded responses.
+    ///
+    /// The old history path requested as many as 5,000 messages as one JSON
+    /// response. That is effectively free over loopback but can be ~10 MB and
+    /// take minutes to finish beside a long-lived event stream through a
+    /// Cloudflare Tunnel. Pull-based iteration is deliberate: the caller gets
+    /// the newest page before the next network request starts, so it can render
+    /// useful content immediately while older history continues loading.
+    public func messageHistoryPages(
+        _ id: String,
+        limit: Int = 5_000,
+        pageSize: Int = 500
+    ) -> MessageHistoryPages {
+        MessageHistoryPages(
+            client: self,
+            sessionID: id,
+            maxMessages: min(5_000, max(0, limit)),
+            pageSize: min(500, max(1, pageSize))
+        )
+    }
+
     // MARK: Create / resume
 
     public func newSession(_ r: NewSessionRequest) async throws -> NewSessionResponse {
@@ -352,7 +460,7 @@ public struct LFGClient: Sendable {
         req.timeoutInterval = 60
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: sendMessageBody(text: text, clientId: clientId).compactMapValues { $0 })
-        return req
+        return authenticated(req)
     }
 
     private func sendMessageBody(text: String, clientId: String?) -> [String: Any?] {
@@ -518,6 +626,7 @@ public struct LFGClient: Sendable {
     public func events(since: Int64,
                        quality: PathQuality = PathQuality()) -> AsyncThrowingStream<HostStreamElement, Error> {
         let target = url("api/events", query: [URLQueryItem(name: "since", value: String(since))])
+        let baseRequest = resourceRequest(for: target)
         let session = self.session
         let staleTimeout = HostLinkPolicy.staleTimeout(for: quality)
         let label = logLabel
@@ -532,7 +641,7 @@ public struct LFGClient: Sendable {
                         String(format: "dial since=%lld %@ stale=%.0fs",
                                since, quality.summary, staleTimeout),
                         host: label)
-                var req = URLRequest(url: target)
+                var req = baseRequest
                 req.httpMethod = "GET"
                 // NOT .infinity: URLSession's timeoutInterval is an IDLE timeout
                 // (resets on every received byte), so a black-holed connect (TCP
@@ -698,5 +807,88 @@ public struct LFGClient: Sendable {
         req.timeoutInterval = timeout
         let data = try await performRaw(req)
         return try EventsPage.decode(data)
+    }
+}
+
+/// Pull-based transcript history sequence returned by
+/// `LFGClient.messageHistoryPages`. Each `next()` performs at most one request,
+/// which makes page delivery—not merely request size—progressive.
+public struct MessageHistoryPages: AsyncSequence, Sendable {
+    public typealias Element = [SessionMessage]
+
+    private let client: LFGClient
+    private let sessionID: String
+    private let maxMessages: Int
+    private let pageSize: Int
+
+    fileprivate init(client: LFGClient, sessionID: String,
+                     maxMessages: Int, pageSize: Int) {
+        self.client = client
+        self.sessionID = sessionID
+        self.maxMessages = maxMessages
+        self.pageSize = pageSize
+    }
+
+    public func makeAsyncIterator() -> AsyncIterator {
+        AsyncIterator(
+            client: client,
+            sessionID: sessionID,
+            maxMessages: maxMessages,
+            pageSize: pageSize
+        )
+    }
+
+    public struct AsyncIterator: AsyncIteratorProtocol {
+        private let client: LFGClient
+        private let sessionID: String
+        private let maxMessages: Int
+        private let pageSize: Int
+        private var before: Int?
+        private var delivered = 0
+        private var seenCursors: Set<Int> = []
+        private var finished = false
+
+        fileprivate init(client: LFGClient, sessionID: String,
+                         maxMessages: Int, pageSize: Int) {
+            self.client = client
+            self.sessionID = sessionID
+            self.maxMessages = maxMessages
+            self.pageSize = pageSize
+        }
+
+        public mutating func next() async throws -> [SessionMessage]? {
+            try Task.checkCancellation()
+            guard !finished, delivered < maxMessages else { return nil }
+
+            let requestLimit = Swift.min(pageSize, maxMessages - delivered)
+            let page = try await client.messagesBackward(
+                sessionID,
+                before: before,
+                limit: requestLimit
+            )
+            guard !page.messages.isEmpty else {
+                finished = true
+                return nil
+            }
+
+            // A compatible server respects the requested limit. Keep the client
+            // cap authoritative even if an older or drifting host returns more.
+            let messages = page.messages.count <= requestLimit
+                ? page.messages
+                : Array(page.messages.suffix(requestLimit))
+            delivered += messages.count
+
+            if delivered >= maxMessages {
+                finished = true
+            } else if let next = page.nextBefore,
+                      seenCursors.insert(next).inserted {
+                before = next
+            } else {
+                // nil means the beginning; a repeat is malformed server state.
+                // Both terminate rather than spinning on the same page forever.
+                finished = true
+            }
+            return messages
+        }
     }
 }

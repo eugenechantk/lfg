@@ -11,6 +11,7 @@
 		037A25ADA39F6E527D36B73D /* BrowserPreviewCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B465BA01F1A3FC7DAF7ADF56 /* BrowserPreviewCard.swift */; };
 		042B67FEFC81B19353989F4A /* NewSessionAtoms.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4FDFAEC4C595AA92D818A8C /* NewSessionAtoms.swift */; };
 		0B5E6EC8D0198C245E872599 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 847BA9F87A178565C0EEC901 /* SettingsView.swift */; };
+		11D0A935DB980CB4EBEF35AC /* HostCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5AB3889AD4A389149350563 /* HostCredentialStore.swift */; };
 		16B0F6A79CE890FBF2B0E5E2 /* LFGFleetAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */; };
 		17E5CC9417E33D6CADF1F707 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25CBF3AE8C40F2EE10BB4BD0 /* Theme.swift */; };
 		50F6EF746AAEB80DB6229E05 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 073FCBCA797989A55F83BAE4 /* MessageComposer.swift */; };
@@ -39,10 +40,12 @@
 		BF6314DDC10C441712E87E2E /* FleetActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 565F8BC62A1D403CDD690340 /* FleetActivityController.swift */; };
 		C189723845E8FF48DC379B21 /* NewSessionPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 527BBB8AABCE2FF8891A9B59 /* NewSessionPresentation.swift */; };
 		C1B5BCFA6FA382188AFC753C /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */; };
+		C6D0589CE81A10D9963D3BCA /* PrivateResources in Resources */ = {isa = PBXBuildFile; fileRef = F13AC9330D0FCC5623AF2347 /* PrivateResources */; };
 		D2F9456B4314172C7546226F /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */; };
 		D34242B9518E03AED793C989 /* SessionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2641AAFED0A103CF2409D79C /* SessionListView.swift */; };
 		D8A5A082EB39555E1426606E /* FleetActivityViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80338C36975F1F607F2D9487 /* FleetActivityViews.swift */; };
 		D9DD48F43B87E8793C27102F /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 512247CB20DB703CAE731727 /* SessionDetailView.swift */; };
+		ED302728FF1B47A0084BE945 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 563E4E44E5A47EC365BFA33A /* Security.framework */; };
 		EF7A801ECD3C787CEC6ECA82 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 36D7D08CD0B7C101A085BC11 /* Assets.xcassets */; };
 		F2BF12A27D8AF0AA5A35222B /* RetiredSessionActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDCC421082566E268167E6E7 /* RetiredSessionActivity.swift */; };
 		F550F9A23975E3A96952B92F /* LFGWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -89,6 +92,7 @@
 		491B12C3F1E687BB82CC93AE /* LFGFleetActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGFleetActivityWidget.swift; sourceTree = "<group>"; };
 		512247CB20DB703CAE731727 /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
 		527BBB8AABCE2FF8891A9B59 /* NewSessionPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionPresentation.swift; sourceTree = "<group>"; };
+		563E4E44E5A47EC365BFA33A /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		565F8BC62A1D403CDD690340 /* FleetActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FleetActivityController.swift; sourceTree = "<group>"; };
 		5C0AF429850CD7F98D54334E /* LFG.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LFG.entitlements; sourceTree = "<group>"; };
 		6461434AE6C2B0858AC679ED /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -106,6 +110,7 @@
 		B465BA01F1A3FC7DAF7ADF56 /* BrowserPreviewCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserPreviewCard.swift; sourceTree = "<group>"; };
 		BCD4448C18939CAC5940F467 /* AttachmentTray.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentTray.swift; sourceTree = "<group>"; };
 		C22EA76E51E2B0A745EE8847 /* RichContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichContent.swift; sourceTree = "<group>"; };
+		C5AB3889AD4A389149350563 /* HostCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostCredentialStore.swift; sourceTree = "<group>"; };
 		CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
 		CDCC421082566E268167E6E7 /* RetiredSessionActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetiredSessionActivity.swift; sourceTree = "<group>"; };
 		D48FAC07EBFC6249487EAEB9 /* ConnectionLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionLogView.swift; sourceTree = "<group>"; };
@@ -116,6 +121,7 @@
 		EAECB64072CE4F5286C7591E /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
 		EB0F37496A85B98C8E3D9867 /* NewSessionComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionComposer.swift; sourceTree = "<group>"; };
 		EB9F7C4ADF1BED07B550BD99 /* NewSessionSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionSheets.swift; sourceTree = "<group>"; };
+		F13AC9330D0FCC5623AF2347 /* PrivateResources */ = {isa = PBXFileReference; lastKnownFileType = folder; path = PrivateResources; sourceTree = SOURCE_ROOT; };
 		F4C23B1D7493D21B0344531F /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		F63A269E91FBB297094BA544 /* LFGCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LFGCore; path = LFGCore; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -128,6 +134,7 @@
 				7254BB93C3886BB66A1304A2 /* LFGCore in Frameworks */,
 				63E697B25FFD5633F32DF474 /* MarkdownUI in Frameworks */,
 				A9CABFDC3E306F17D2F69E33 /* ActivityKit.framework in Frameworks */,
+				ED302728FF1B47A0084BE945 /* Security.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -148,6 +155,7 @@
 			isa = PBXGroup;
 			children = (
 				CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */,
+				563E4E44E5A47EC365BFA33A /* Security.framework */,
 				76672CAA13A7F7B59D2B0A72 /* SwiftUI.framework */,
 				E73816164B94C119D0706DA8 /* WidgetKit.framework */,
 			);
@@ -157,6 +165,7 @@
 		1634932B7ACF7433EA5E19E5 = {
 			isa = PBXGroup;
 			children = (
+				F13AC9330D0FCC5623AF2347 /* PrivateResources */,
 				1DEF3A76C8CE97E28B63A13C /* LFG */,
 				FA8FE8245D3AF81F2B302E13 /* LFGWidgets */,
 				33994F66596F8E85A2F92388 /* Packages */,
@@ -177,6 +186,7 @@
 				F4C23B1D7493D21B0344531F /* Components.swift */,
 				D48FAC07EBFC6249487EAEB9 /* ConnectionLogView.swift */,
 				565F8BC62A1D403CDD690340 /* FleetActivityController.swift */,
+				C5AB3889AD4A389149350563 /* HostCredentialStore.swift */,
 				9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */,
 				716A5CB7BF742B16562A7EF8 /* Info.plist */,
 				649DB6E8EC8E3C5852C813C8 /* LaunchScreen.storyboard */,
@@ -264,6 +274,8 @@
 			dependencies = (
 			);
 			name = LFGWidgets;
+			packageProductDependencies = (
+			);
 			productName = LFGWidgets;
 			productReference = D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -341,6 +353,7 @@
 			files = (
 				EF7A801ECD3C787CEC6ECA82 /* Assets.xcassets in Resources */,
 				8D3E23D31117026A9BF00460 /* LaunchScreen.storyboard in Resources */,
+				C6D0589CE81A10D9963D3BCA /* PrivateResources in Resources */,
 				5C80FE3B63D36885C3E3CA4F /* SharedAssets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -367,6 +380,7 @@
 				FDC78A1C6A82751D9F56E521 /* Components.swift in Sources */,
 				02F689F65D6FDF5099FADF31 /* ConnectionLogView.swift in Sources */,
 				BF6314DDC10C441712E87E2E /* FleetActivityController.swift in Sources */,
+				11D0A935DB980CB4EBEF35AC /* HostCredentialStore.swift in Sources */,
 				8A8BAA0AADCD3A860CCA5B39 /* HostLink.swift in Sources */,
 				8950528E1385EF07CB2814AD /* LFGApp.swift in Sources */,
 				16B0F6A79CE890FBF2B0E5E2 /* LFGFleetAttributes.swift in Sources */,
@@ -481,8 +495,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFGWidgets/Info.plist;
@@ -492,9 +505,8 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -507,8 +519,8 @@
 				APS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
@@ -517,9 +529,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -532,8 +543,8 @@
 				APS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
@@ -542,9 +553,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -555,8 +565,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFGWidgets/Info.plist;
@@ -566,9 +575,8 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";

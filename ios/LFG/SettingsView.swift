@@ -4,16 +4,20 @@ import LFGCore
 /// Full-screen first-run host setup, shown when no host is configured.
 struct ConnectView: View {
     @Environment(AppSettings.self) private var settings
-    @State private var draft = ""
+    @State private var draft = HostStore.preferredHostURL
     @State private var probe: Reachability?
     @State private var probing = false
+    @State private var usesCloudflareAccess = false
+    @State private var accessClientID = ""
+    @State private var accessClientSecret = ""
+    @State private var saveError: String?
 
     var body: some View {
         @Bindable var settings = settings
         VStack(spacing: 18) {
             Image(systemName: "sparkles").font(.system(size: 48)).foregroundStyle(.orange)
             Text("Connect to your lfg host").font(.title2.weight(.semibold))
-            Text("Enter the URL that serves the lfg API — a Tailscale MagicDNS https address, or a loopback/LAN URL on the same network.")
+            Text("Enter the URL that serves the lfg API — a Cloudflare HTTPS hostname, Tailscale MagicDNS address, or a loopback/LAN URL on the same network.")
                 .font(.subheadline).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
@@ -22,6 +26,28 @@ struct ConnectView: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .keyboardType(.URL)
+
+            Toggle("Use Cloudflare Access", isOn: $usesCloudflareAccess)
+                .accessibilityIdentifier("connect_access_toggle")
+
+            if usesCloudflareAccess {
+                TextField("Access Client ID", text: $accessClientID)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.caption.monospaced())
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("connect_access_client_id_field")
+                SecureField("Access Client Secret", text: $accessClientSecret)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.caption.monospaced())
+                    // This is an API credential, not a website password. Avoid
+                    // offering to copy it into the system Passwords store.
+                    .textContentType(.oneTimeCode)
+                    .accessibilityIdentifier("connect_access_client_secret_field")
+                Text("Use a per-device Service Auth token. Its secret is saved only in this device's Keychain.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
 
             HostProbeRow(probe: probe, probing: probing)
 
@@ -34,10 +60,15 @@ struct ConnectView: View {
             .disabled(draft.isEmpty || probing)
 
             Button("Save & continue") {
-                settings.addHost(draft.trimmingCharacters(in: .whitespaces))
+                save()
             }
             .buttonStyle(.borderedProminent)
             .disabled(draft.isEmpty)
+
+            if let saveError {
+                Label(saveError, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red).font(.caption)
+            }
 
             Text("You can add a second host later in Settings to run and transfer sessions across machines.")
                 .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -48,9 +79,41 @@ struct ConnectView: View {
     }
 
     private func test() async {
+        saveError = nil
+        guard let credential = draftAccessCredential() else { return }
         probing = true
-        probe = await LFGClient(string: draft)?.ping() ?? .badResponse("Invalid URL")
+        probe = await LFGClient(string: draft, accessCredential: credential)?.ping()
+            ?? .badResponse("Invalid URL")
         probing = false
+    }
+
+    private func save() {
+        saveError = nil
+        guard let credential = draftAccessCredential() else { return }
+        let url = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard settings.addHost(url, displayName: nil) else {
+            saveError = "That address is blank or already configured."
+            return
+        }
+        guard let credential else { return }
+        do {
+            try settings.saveAccessCredential(credential, forHostURL: url)
+        } catch {
+            settings.removeHost(url)
+            saveError = error.localizedDescription
+        }
+    }
+
+    /// Outer nil means validation failed; `.some(nil)` means Access is disabled.
+    private func draftAccessCredential() -> CloudflareAccessCredential?? {
+        guard usesCloudflareAccess else { return .some(nil) }
+        let clientID = accessClientID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secret = accessClientSecret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clientID.isEmpty, !secret.isEmpty else {
+            saveError = "Enter both the Cloudflare Access Client ID and Client Secret."
+            return nil
+        }
+        return .some(CloudflareAccessCredential(clientID: clientID, clientSecret: secret))
     }
 }
 
@@ -152,7 +215,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Text("The lfg API is unauthenticated by design — its security boundary is your Tailscale tailnet. Keep this device on the tailnet.")
+                    Text("Each host must stay behind a private network or an authenticated HTTPS gateway. Cloudflare Access credentials are kept in this device's Keychain and are never stored with the host list.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -285,16 +348,27 @@ struct HostEditView: View {
     @State private var probe: Reachability?
     @State private var probing = false
     @State private var saveError: String?
+    @State private var usesCloudflareAccess: Bool
+    @State private var accessClientID: String
+    @State private var accessClientSecret = ""
+    private let savedAccessCredential: CloudflareAccessCredential?
 
     init(mode: Mode) {
         self.mode = mode
         switch mode {
         case .add:
+            savedAccessCredential = nil
             _displayName = State(initialValue: "")
             _url = State(initialValue: "")
+            _usesCloudflareAccess = State(initialValue: false)
+            _accessClientID = State(initialValue: "")
         case .edit(let h):
+            let credential = HostCredentialStore.shared.credential(forHostURL: h.url)
+            savedAccessCredential = credential
             _displayName = State(initialValue: h.displayName ?? "")
             _url = State(initialValue: h.url)
+            _usesCloudflareAccess = State(initialValue: credential != nil)
+            _accessClientID = State(initialValue: credential?.clientID ?? "")
         }
     }
 
@@ -329,7 +403,30 @@ struct HostEditView: View {
                     .keyboardType(.URL)
                     .onChange(of: url) { probe = nil; saveError = nil }
             } header: { Text("Address") } footer: {
-                Text("A Tailscale MagicDNS https URL, or a loopback/LAN address on the same network.")
+                Text("A Cloudflare HTTPS hostname, Tailscale MagicDNS URL, or loopback/LAN address.")
+            }
+
+            Section {
+                Toggle("Use Cloudflare Access", isOn: $usesCloudflareAccess)
+                    .accessibilityIdentifier("host_access_toggle")
+                if usesCloudflareAccess {
+                    TextField("Client ID", text: $accessClientID)
+                        .font(.caption.monospaced())
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("host_access_client_id_field")
+                    SecureField(savedAccessCredential == nil ? "Client Secret" : "Saved — enter to replace",
+                                text: $accessClientSecret)
+                        .font(.caption.monospaced())
+                        .textContentType(.oneTimeCode)
+                        .accessibilityIdentifier("host_access_client_secret_field")
+                }
+            } header: { Text("Cloudflare Access") } footer: {
+                if usesCloudflareAccess {
+                    Text("Use a per-device Service Auth token. The secret is saved in Keychain and is never shown again; leave it blank to keep the saved secret.")
+                } else {
+                    Text("Leave off for hosts protected by Tailscale or a trusted local network.")
+                }
             }
 
             Section {
@@ -375,12 +472,17 @@ struct HostEditView: View {
     }
 
     private func test() async {
+        saveError = nil
+        guard let accessCredential = draftAccessCredential() else { return }
         probing = true
-        probe = await LFGClient(string: trimmedURL)?.ping() ?? .badResponse("Invalid URL")
+        probe = await LFGClient(string: trimmedURL, accessCredential: accessCredential)?.ping()
+            ?? .badResponse("Invalid URL")
         probing = false
     }
 
     private func save() {
+        saveError = nil
+        guard let accessCredential = draftAccessCredential() else { return }
         let ok: Bool
         switch mode {
         case .add:
@@ -389,12 +491,39 @@ struct HostEditView: View {
             ok = settings.updateHost(id: h.id, url: trimmedURL, displayName: displayName)
         }
         guard ok else {
-            saveError = "That address is blank or already configured on another host."
+            saveError = "That address is blank, already configured, or its saved credential could not be moved."
+            return
+        }
+        do {
+            if usesCloudflareAccess, let accessCredential {
+                try settings.saveAccessCredential(accessCredential, forHostURL: trimmedURL)
+            } else {
+                try settings.removeAccessCredential(forHostURL: trimmedURL)
+            }
+        } catch {
+            if isAdd { settings.removeHost(trimmedURL) }
+            saveError = error.localizedDescription
             return
         }
         store.reconnect()
         Task { await store.resolveHostIdentities() }
         dismiss()
+    }
+
+    /// Outer nil means validation failed; `.some(nil)` means Access is
+    /// intentionally disabled; `.some(credential)` is ready to use.
+    private func draftAccessCredential() -> CloudflareAccessCredential?? {
+        guard usesCloudflareAccess else { return .some(nil) }
+        let clientID = accessClientID.trimmingCharacters(in: .whitespacesAndNewlines)
+        var secret = accessClientSecret.trimmingCharacters(in: .whitespacesAndNewlines)
+        if secret.isEmpty, savedAccessCredential?.clientID == clientID {
+            secret = savedAccessCredential?.clientSecret ?? ""
+        }
+        guard !clientID.isEmpty, !secret.isEmpty else {
+            saveError = "Enter both the Cloudflare Access Client ID and Client Secret."
+            return nil
+        }
+        return .some(CloudflareAccessCredential(clientID: clientID, clientSecret: secret))
     }
 }
 

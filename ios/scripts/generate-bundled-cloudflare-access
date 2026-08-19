@@ -1,0 +1,40 @@
+#!/bin/zsh
+set -euo pipefail
+
+service="dev.omg.lfg.cloudflare-access.pilot"
+host_url="https://lfg-pro.eugenechantk.me"
+script_dir="${0:A:h}"
+output_path="$script_dir/../PrivateResources/BundledCloudflareAccess.private.json"
+
+credential_json=$(security find-generic-password \
+  -s "$service" \
+  -a "$host_url" \
+  -w 2>/dev/null) || {
+    print -u2 "No pilot credential found in macOS Keychain for $host_url."
+    exit 1
+  }
+
+mkdir -p "${output_path:h}"
+umask 077
+BUNDLED_HOST_URL="$host_url" \
+BUNDLED_CREDENTIAL_JSON="$credential_json" \
+BUNDLED_OUTPUT_PATH="$output_path" \
+/usr/bin/python3 <<'PY'
+import json
+import os
+from pathlib import Path
+
+credential = json.loads(os.environ["BUNDLED_CREDENTIAL_JSON"])
+payload = {
+    "hostURL": os.environ["BUNDLED_HOST_URL"],
+    "clientID": credential["clientID"],
+    "clientSecret": credential["clientSecret"],
+}
+output = Path(os.environ["BUNDLED_OUTPUT_PATH"])
+temporary = output.with_suffix(output.suffix + ".tmp")
+temporary.write_text(json.dumps(payload, separators=(",", ":")) + "\n")
+temporary.chmod(0o600)
+temporary.replace(output)
+PY
+
+print "Generated private Cloudflare Access resource at ${output_path#$script_dir/../}."
