@@ -160,6 +160,13 @@ struct DesktopCloudflareCredential: Codable, Equatable {
 
 enum DesktopCredentialStore {
     private static let service = "com.eugenechan.lfg-desktop.cloudflare-access"
+    private static let fallbackFileName = "lfg-access-service-token.private.json"
+
+    private struct PrivatePayload: Decodable {
+        let hostURL: String
+        let clientID: String
+        let clientSecret: String
+    }
 
     static func origin(for rawURL: String) -> String? {
         guard var components = URLComponents(string: rawURL),
@@ -185,9 +192,33 @@ enum DesktopCredentialStore {
             kSecMatchLimit: kSecMatchLimitOne,
         ]
         var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data else { return nil }
-        return try? JSONDecoder().decode(DesktopCloudflareCredential.self, from: data)
+        if SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+           let data = result as? Data,
+           let credential = try? JSONDecoder().decode(DesktopCloudflareCredential.self, from: data) {
+            return credential
+        }
+        return privateFallback(for: account)
+    }
+
+    static func privateFallback(
+        for rawURL: String,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> DesktopCloudflareCredential? {
+        guard let requestedOrigin = origin(for: rawURL) else { return nil }
+        let file = homeDirectory
+            .appendingPathComponent(".cloudflared", isDirectory: true)
+            .appendingPathComponent(fallbackFileName)
+        guard let data = try? Data(contentsOf: file),
+              let payload = try? JSONDecoder().decode(PrivatePayload.self, from: data),
+              origin(for: payload.hostURL) == requestedOrigin,
+              !payload.clientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !payload.clientSecret.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return DesktopCloudflareCredential(
+            clientID: payload.clientID,
+            clientSecret: payload.clientSecret
+        )
     }
 
     static func save(_ credential: DesktopCloudflareCredential, for rawURL: String) throws {
@@ -1596,6 +1627,27 @@ enum DesktopFeatureTestCLI {
                    "desktop credentials are keyed by canonical HTTPS origin")
         try expect(DesktopCredentialStore.origin(for: "http://lfg.example.com") == nil,
                    "desktop never associates an Access token with plain HTTP")
+        let fallbackHome = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lfg-desktop-fallback-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: fallbackHome) }
+        let fallbackDirectory = fallbackHome.appendingPathComponent(".cloudflared", isDirectory: true)
+        try FileManager.default.createDirectory(at: fallbackDirectory, withIntermediateDirectories: true)
+        try Data(#"{"hostURL":"https://lfg.example.com","clientID":"fallback-id","clientSecret":"fallback-secret"}"#.utf8)
+            .write(to: fallbackDirectory.appendingPathComponent("lfg-access-service-token.private.json"))
+        try expect(
+            DesktopCredentialStore.privateFallback(
+                for: "https://lfg.example.com/api/info",
+                homeDirectory: fallbackHome
+            ) == DesktopCloudflareCredential(clientID: "fallback-id", clientSecret: "fallback-secret"),
+            "headless Macs can read an exact-origin private credential fallback"
+        )
+        try expect(
+            DesktopCredentialStore.privateFallback(
+                for: "https://other.example.com/api/info",
+                homeDirectory: fallbackHome
+            ) == nil,
+            "private fallback credentials never cross origins"
+        )
 
         let legacyData = Data(#"{"hosts":["http://localhost:8766",{"url":"http://studio:8766","ssh":"me@studio"}]}"#.utf8)
         let legacy = try require(Config.decodeHosts(legacyData), "legacy config decodes")

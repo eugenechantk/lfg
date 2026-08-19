@@ -134,6 +134,12 @@ The import reads only `clientID` and `clientSecret`; the explicit URL selects
 the Keychain origin, allowing one account-level service token to authorize more
 than one protected LFG hostname when their Access policies allow it.
 
+For a remotely administered Mac whose login Keychain is unavailable over SSH,
+the app also checks `~/.cloudflared/lfg-access-service-token.private.json`.
+That file uses the bundled JSON shape and is accepted only when its `hostURL`
+matches the requested HTTPS origin exactly. Keep it mode `0400`; it is a
+machine-local provisioning fallback, not part of the repository.
+
 Two things the previous Mosh shell aliases got wrong that the automatic
 transport does not:
 

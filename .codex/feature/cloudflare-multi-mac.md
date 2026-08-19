@@ -47,6 +47,9 @@ Mac's Surfshark connection. Cloudflare Access protects every public hostname.
 - Do not publish TCP 22 or 8766 through the router.
 - Do not commit named-tunnel credentials, Access service tokens, or generated
   private resources.
+- Prefer Keychain for desktop tokens. A headlessly provisioned Mac may use the
+  mode-`0400` `~/.cloudflared/lfg-access-service-token.private.json` fallback,
+  which is accepted only for its declared HTTPS origin.
 - Create the Access application before publishing each hostname.
 - Keep Mosh available for private/LAN profiles, but force SSH for Cloudflare
   profiles because the published SSH route does not carry Mosh UDP traffic.
