@@ -75,6 +75,10 @@ Replaced the grouped `List` presentation with a plain `ScrollView` and flat butt
 
 The custom popover still looked and behaved like an imitation of a menu. Replaced it with a UIKit pull-down button whose stable root `UIMenu` contains a deferred action tree. In Simulator, the native menu overflowed after adding a second host, scrolled from "Stop" to "End session," retained that lower position while the open session streamed new tool-result messages, and continued into the native model submenu.
 
+### Follow-up: match the native navigation controls
+
+The UIKit representable accepted spare toolbar width when the centered title was short, stretching the More control into a capsule, and its `.system` button inherited the blue accent tint. Constrained it to the back control's 44×44pt footprint, added required content hugging, and changed the icon tint to dynamic label color. Simulator checks with long and short titles confirmed the control remains circular and its glyph matches the back chevron.
+
 ## Final Summary
 
 The SwiftUI root `Menu` was recreated on every transcript-driven toolbar invalidation, discarding its scroll offset. More Options is now a fully native, stable UIKit `UIMenu` whose deferred children refresh on each opening without replacing the active presentation. UIKit's native overflow list stayed at the bottom across streaming transcript updates, the native model submenu opened correctly, and the app built successfully.

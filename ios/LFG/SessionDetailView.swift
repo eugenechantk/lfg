@@ -592,6 +592,10 @@ private struct SessionOptionsMenu: View {
 
     var body: some View {
         NativeSessionOptionsButton { menuElements }
+            // A UIViewRepresentable otherwise accepts the toolbar's spare width,
+            // turning the system glass circle into a capsule for short titles.
+            // Match the fixed 44pt footprint of the native back control.
+            .frame(width: 44, height: 44)
     }
 
     private var menuElements: [UIMenuElement] {
@@ -786,6 +790,13 @@ private struct NativeSessionOptionsButton: UIViewRepresentable {
     func makeUIView(context: Context) -> UIButton {
         let button = UIButton(type: .system)
         button.setImage(UIImage(systemName: "ellipsis.circle"), for: .normal)
+        // This is a neutral toolbar action, not a primary action. Dynamic label
+        // color matches the system back chevron in both light and dark appearance.
+        button.tintColor = .label
+        button.contentHorizontalAlignment = .center
+        button.contentVerticalAlignment = .center
+        button.setContentHuggingPriority(.required, for: .horizontal)
+        button.setContentHuggingPriority(.required, for: .vertical)
         button.accessibilityLabel = "More"
         button.accessibilityIdentifier = "sessionOptionsMenu"
         button.showsMenuAsPrimaryAction = true
