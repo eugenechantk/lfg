@@ -1,0 +1,1 @@
+95875 ./desktop/build/lfg.app/Contents/MacOS/lfg

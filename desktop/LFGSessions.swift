@@ -29,6 +29,7 @@ import SwiftUI
 import AppKit
 import Darwin
 import Dispatch
+import Security
 
 // MARK: - API models (subset of lfg's Session type)
 
@@ -147,11 +148,108 @@ struct ResumableResponse: Decodable {
 struct HostInfoResponse: Decodable { let hostId: String; let hostName: String }
 struct SessionStatesResponse: Decodable { let needsInputSessionIds: [String] }
 
+enum RemoteTransport: String, Codable {
+    case automatic
+    case ssh
+}
+
+struct DesktopCloudflareCredential: Codable, Equatable {
+    let clientID: String
+    let clientSecret: String
+}
+
+enum DesktopCredentialStore {
+    private static let service = "com.eugenechan.lfg-desktop.cloudflare-access"
+
+    static func origin(for rawURL: String) -> String? {
+        guard var components = URLComponents(string: rawURL),
+              let scheme = components.scheme?.lowercased(),
+              let host = components.host?.lowercased(),
+              scheme == "https" else { return nil }
+        components.scheme = scheme
+        components.host = host
+        components.path = ""
+        components.query = nil
+        components.fragment = nil
+        guard let url = components.url else { return nil }
+        return url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    static func load(for rawURL: String) -> DesktopCloudflareCredential? {
+        guard let account = origin(for: rawURL) else { return nil }
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: account,
+            kSecReturnData: true,
+            kSecMatchLimit: kSecMatchLimitOne,
+        ]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data else { return nil }
+        return try? JSONDecoder().decode(DesktopCloudflareCredential.self, from: data)
+    }
+
+    static func save(_ credential: DesktopCloudflareCredential, for rawURL: String) throws {
+        guard let account = origin(for: rawURL),
+              !credential.clientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !credential.clientSecret.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw CredentialError.invalid
+        }
+        let data = try JSONEncoder().encode(credential)
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: account,
+        ]
+        let update: [CFString: Any] = [kSecValueData: data]
+        let status = SecItemUpdate(query as CFDictionary, update as CFDictionary)
+        if status == errSecItemNotFound {
+            var add = query
+            add[kSecValueData] = data
+            add[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlock
+            let addStatus = SecItemAdd(add as CFDictionary, nil)
+            guard addStatus == errSecSuccess else { throw CredentialError.keychain(addStatus) }
+        } else if status != errSecSuccess {
+            throw CredentialError.keychain(status)
+        }
+    }
+
+    enum CredentialError: LocalizedError {
+        case invalid
+        case keychain(OSStatus)
+
+        var errorDescription: String? {
+            switch self {
+            case .invalid: return "Credential requires an HTTPS host URL, client ID, and client secret."
+            case .keychain(let status): return "Keychain error \(status)."
+            }
+        }
+    }
+}
+
+enum DesktopAPI {
+    static func request(_ url: URL, method: String = "GET") -> URLRequest {
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        if let credential = DesktopCredentialStore.load(for: url.absoluteString) {
+            authorize(&request, credential: credential)
+        }
+        return request
+    }
+
+    static func authorize(_ request: inout URLRequest, credential: DesktopCloudflareCredential) {
+        request.setValue(credential.clientID, forHTTPHeaderField: "CF-Access-Client-Id")
+        request.setValue(credential.clientSecret, forHTTPHeaderField: "CF-Access-Client-Secret")
+    }
+}
+
 // MARK: - Host state
 
 struct HostState: Identifiable {
     let url: String
     let sshTarget: String?
+    var remoteTransport: RemoteTransport = .automatic
     var displayName: String?
     var info: HostInfoResponse?
     var sessions: [APISession] = []
@@ -202,6 +300,7 @@ struct SessionItem: Identifiable {
     let hostLabel: String
     let hostIsLocal: Bool
     let hostSSHTarget: String?
+    let hostRemoteTransport: RemoteTransport
     let needsInput: Bool
 
     init(
@@ -211,6 +310,7 @@ struct SessionItem: Identifiable {
         hostLabel: String,
         hostIsLocal: Bool,
         hostSSHTarget: String?,
+        hostRemoteTransport: RemoteTransport = .automatic,
         needsInput: Bool = false
     ) {
         self.session = session
@@ -219,6 +319,7 @@ struct SessionItem: Identifiable {
         self.hostLabel = hostLabel
         self.hostIsLocal = hostIsLocal
         self.hostSSHTarget = hostSSHTarget
+        self.hostRemoteTransport = hostRemoteTransport
         self.needsInput = needsInput
     }
 
@@ -359,15 +460,22 @@ enum Config {
         var url: String
         var ssh: String?
         var displayName: String?
+        var transport: RemoteTransport
 
         var id: String { url }
 
-        enum CodingKeys: String, CodingKey { case url, ssh, displayName }
+        enum CodingKeys: String, CodingKey { case url, ssh, displayName, transport }
 
-        init(url: String, ssh: String? = nil, displayName: String? = nil) {
+        init(
+            url: String,
+            ssh: String? = nil,
+            displayName: String? = nil,
+            transport: RemoteTransport = .automatic
+        ) {
             self.url = url
             self.ssh = ssh
             self.displayName = displayName
+            self.transport = transport
         }
 
         init(from decoder: Decoder) throws {
@@ -376,17 +484,19 @@ enum Config {
                 self.url = url
                 self.ssh = nil
                 self.displayName = nil
+                self.transport = .automatic
                 return
             }
             let c = try decoder.container(keyedBy: CodingKeys.self)
             url = try c.decode(String.self, forKey: .url)
             ssh = try c.decodeIfPresent(String.self, forKey: .ssh)
             displayName = try c.decodeIfPresent(String.self, forKey: .displayName)
+            transport = try c.decodeIfPresent(RemoteTransport.self, forKey: .transport) ?? .automatic
         }
 
         func encode(to encoder: Encoder) throws {
             let name = Config.normalizedDisplayName(displayName)
-            if ssh == nil && name == nil {
+            if ssh == nil && name == nil && transport == .automatic {
                 var single = encoder.singleValueContainer()
                 try single.encode(url)
                 return
@@ -395,6 +505,9 @@ enum Config {
             try c.encode(url, forKey: .url)
             try c.encodeIfPresent(ssh, forKey: .ssh)
             try c.encodeIfPresent(name, forKey: .displayName)
+            if transport != .automatic {
+                try c.encode(transport, forKey: .transport)
+            }
         }
 
         func displayLabel(reportedHostName: String?) -> String {
@@ -413,6 +526,26 @@ enum Config {
     }
 
     struct HostsFile: Codable { var hosts: [HostEntry] }
+
+    /// Canonical private remote offered by the Add Host form. It is not silently
+    /// inserted into existing host files: opening Settings makes the choice
+    /// explicit, while keeping the URL and friendly label consistent.
+    static let preferredHost = HostEntry(
+        url: "https://lfg-pro.eugenechantk.me",
+        ssh: "pro",
+        displayName: "Pro",
+        transport: .ssh
+    )
+
+    static func entryForNewHost(url: String, ssh: String?) -> HostEntry {
+        guard url == preferredHost.url else { return HostEntry(url: url, ssh: ssh) }
+        return HostEntry(
+            url: url,
+            ssh: ssh ?? preferredHost.ssh,
+            displayName: preferredHost.displayName,
+            transport: preferredHost.transport
+        )
+    }
 
     /// Production uses the standard home-directory location. The explicit
     /// override gives UI automation a disposable config root so it never has
@@ -470,7 +603,12 @@ enum Config {
 
     static func encodeHosts(_ hosts: [HostEntry]) throws -> Data {
         let normalized = hosts.map {
-            HostEntry(url: $0.url, ssh: $0.ssh, displayName: normalizedDisplayName($0.displayName))
+            HostEntry(
+                url: $0.url,
+                ssh: $0.ssh,
+                displayName: normalizedDisplayName($0.displayName),
+                transport: $0.transport
+            )
         }
         return try JSONEncoder().encode(HostsFile(hosts: normalized))
     }
@@ -670,6 +808,7 @@ final class SessionStore: ObservableObject {
                     hostLabel: host?.label ?? entry.url,
                     hostIsLocal: host?.isLocal ?? false,
                     hostSSHTarget: Config.sshTarget(for: entry),
+                    hostRemoteTransport: entry.transport,
                     needsInput: false))
             }
         }
@@ -691,6 +830,7 @@ final class SessionStore: ObservableObject {
                     hostLabel: host.label,
                     hostIsLocal: host.isLocal,
                     hostSSHTarget: host.sshTarget,
+                    hostRemoteTransport: host.remoteTransport,
                     needsInput: $0.sessionId.map(host.needsInputSessionIds.contains) ?? false
                 )
             }
@@ -952,6 +1092,7 @@ final class SessionStore: ObservableObject {
         var state = HostState(
             url: url,
             sshTarget: Config.sshTarget(for: entry),
+            remoteTransport: entry.transport,
             displayName: Config.normalizedDisplayName(entry.displayName)
         )
         let session = URLSession(configuration: {
@@ -967,21 +1108,21 @@ final class SessionStore: ObservableObject {
                 state.error = "bad URL"
                 return state
             }
-            let (infoData, _) = try await session.data(from: infoURL)
+            let (infoData, _) = try await session.data(for: DesktopAPI.request(infoURL))
             state.info = try JSONDecoder().decode(HostInfoResponse.self, from: infoData)
-            let (sessData, _) = try await session.data(from: sessURL)
+            let (sessData, _) = try await session.data(for: DesktopAPI.request(sessURL))
             let parsed = try JSONDecoder().decode(SessionsResponse.self, from: sessData)
             state.sessions = parsed.sessions.sorted {
                 ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0)
             }
             // Older lfg hosts do not expose this lightweight endpoint yet.
             // Keep the host usable; only its Needs Input section is absent.
-            if let (statesData, statesResponse) = try? await session.data(from: statesURL),
+            if let (statesData, statesResponse) = try? await session.data(for: DesktopAPI.request(statesURL)),
                (statesResponse as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) == true,
                let states = try? JSONDecoder().decode(SessionStatesResponse.self, from: statesData) {
                 state.needsInputSessionIds = Set(states.needsInputSessionIds)
             }
-            if let (resumableData, _) = try? await session.data(from: resumableURL),
+            if let (resumableData, _) = try? await session.data(for: DesktopAPI.request(resumableURL)),
                let resumable = try? JSONDecoder().decode(ResumableResponse.self, from: resumableData) {
                 state.closedSessions = resumable.sessions.map(Self.closedSession(from:))
             }
@@ -1039,7 +1180,7 @@ final class SessionStore: ObservableObject {
             c.timeoutIntervalForRequest = 20
             return c
         }())
-        guard let (data, response) = try? await session.data(from: url),
+        guard let (data, response) = try? await session.data(for: DesktopAPI.request(url)),
               (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) == true,
               let page = try? JSONDecoder().decode(ResumableResponse.self, from: data) else {
             return ([], nil)
@@ -1211,9 +1352,7 @@ enum MoveCoordinator {
         guard let url = URL(string: trimmed + path) else {
             throw MoveError.server("bad URL: \(baseURL)")
         }
-        var req = URLRequest(url: url)
-        req.httpMethod = method
-        return req
+        return DesktopAPI.request(url, method: method)
     }
 
     private static func validateHTTP(_ response: URLResponse, data: Data = Data()) throws {
@@ -1328,7 +1467,7 @@ enum MoveTestCLI {
             return nil
         }
         do {
-            let (data, response) = try await session.data(from: url)
+            let (data, response) = try await session.data(for: DesktopAPI.request(url))
             guard let http = response as? HTTPURLResponse,
                   (200..<300).contains(http.statusCode) else {
                 return nil
@@ -1342,7 +1481,7 @@ enum MoveTestCLI {
 
     private static func fetchHostId(_ baseURL: String) async -> String? {
         guard let url = URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/info"),
-              let (data, response) = try? await session.data(from: url),
+              let (data, response) = try? await session.data(for: DesktopAPI.request(url)),
               let http = response as? HTTPURLResponse,
               (200..<300).contains(http.statusCode),
               let info = try? JSONDecoder().decode(HostInfoResponse.self, from: data) else {
@@ -1431,11 +1570,40 @@ enum DesktopFeatureTestCLI {
 
     @MainActor
     private static func run() throws {
+        try expect(Config.preferredHost.url == "https://lfg-pro.eugenechantk.me",
+                   "preferred desktop host uses the Pro Cloudflare tunnel")
+        try expect(Config.preferredHost.displayName == "Pro",
+                   "preferred desktop host has the Pro display name")
+        try expect(Config.preferredHost.ssh == "pro" && Config.preferredHost.transport == .ssh,
+                   "preferred desktop host uses the Cloudflare SSH alias and forces SSH")
+        try expect(Config.entryForNewHost(url: Config.preferredHost.url, ssh: nil).displayName == "Pro",
+                   "adding the preferred URL persists its Pro name")
+        try expect(Config.entryForNewHost(url: Config.preferredHost.url, ssh: nil).ssh == "pro",
+                   "adding the preferred URL persists its Pro SSH alias")
+        try expect(Config.entryForNewHost(url: Config.preferredHost.url, ssh: nil).transport == .ssh,
+                   "adding the preferred URL cannot fall through to Mosh")
+        try expect(Config.entryForNewHost(url: "http://air:8766", ssh: nil).displayName == nil,
+                   "adding another URL preserves the existing unnamed behavior")
+
+        let credential = DesktopCloudflareCredential(clientID: "desktop-id", clientSecret: "desktop-secret")
+        var authorized = URLRequest(url: URL(string: "https://lfg.example.com/api/info")!)
+        DesktopAPI.authorize(&authorized, credential: credential)
+        try expect(authorized.value(forHTTPHeaderField: "CF-Access-Client-Id") == "desktop-id",
+                   "desktop Access request carries the client ID")
+        try expect(authorized.value(forHTTPHeaderField: "CF-Access-Client-Secret") == "desktop-secret",
+                   "desktop Access request carries the client secret")
+        try expect(DesktopCredentialStore.origin(for: "https://LFG.Example.com/api/info?x=1") == "https://lfg.example.com",
+                   "desktop credentials are keyed by canonical HTTPS origin")
+        try expect(DesktopCredentialStore.origin(for: "http://lfg.example.com") == nil,
+                   "desktop never associates an Access token with plain HTTP")
+
         let legacyData = Data(#"{"hosts":["http://localhost:8766",{"url":"http://studio:8766","ssh":"me@studio"}]}"#.utf8)
         let legacy = try require(Config.decodeHosts(legacyData), "legacy config decodes")
         try expect(legacy.count == 2, "legacy string and object entries load")
         try expect(legacy[0].displayName == nil, "legacy string has no display name")
         try expect(legacy[1].ssh == "me@studio", "legacy object keeps SSH target")
+        try expect(legacy.allSatisfy { $0.transport == .automatic },
+                   "legacy entries retain automatic Mosh-or-SSH transport")
         let isolatedDirectory = Config.directory(
             environment: ["LFG_DESKTOP_CONFIG_DIR": "/tmp/lfg-desktop-ui-audit"],
             homeDirectory: URL(fileURLWithPath: "/Users/example")
@@ -1479,6 +1647,23 @@ enum DesktopFeatureTestCLI {
                    "remote attach falls back to ssh when mosh is missing")
         try expect(sshAttach.contains("attach-session -t 'lfg-abc123'"), "ssh fallback attaches the same session")
         try expect(!sshAttach.contains("mosh"), "ssh fallback doesn't reference mosh")
+
+        let cloudflareItem = SessionItem(
+            session: APISession(
+                agent: "claude", pid: 99, cwd: "/tmp/project", project: "project",
+                title: "Cloudflare", sessionId: "cf-session", busy: true,
+                lastActivityAt: 1, tmuxName: "lfg-cloudflare", model: "opus",
+                status: nil, lastUserText: nil
+            ),
+            hostURL: Config.preferredHost.url,
+            hostId: "pro",
+            hostLabel: "Pro",
+            hostIsLocal: false,
+            hostSSHTarget: "pro",
+            hostRemoteTransport: .ssh
+        )
+        try expect(Opener.transportPath(for: cloudflareItem, availableMoshPath: "/opt/homebrew/bin/mosh") == nil,
+                   "Cloudflare-backed rows force SSH even when Mosh is installed")
 
         // Every attach hands the window size back to the client first. The pump's
         // `resize-window` latches `window-size manual` on the far side, and a
@@ -2099,7 +2284,13 @@ enum Opener {
     static let mosh: String? = resolveOptional("mosh")
 
     /// Badge text for a remote row: which transport its window will use.
-    static var remoteTransportLabel: String { mosh == nil ? "ssh" : "mosh" }
+    static func remoteTransportLabel(for item: SessionItem) -> String {
+        transportPath(for: item, availableMoshPath: mosh) == nil ? "ssh" : "mosh"
+    }
+
+    static func transportPath(for item: SessionItem, availableMoshPath: String?) -> String? {
+        item.hostRemoteTransport == .ssh ? nil : availableMoshPath
+    }
 
     /// Resolving `mosh` spawns a login zsh, so warm the lazy static off the
     /// main thread — otherwise the first list render blocks on it.
@@ -2151,7 +2342,11 @@ enum Opener {
                 return "This host has no SSH target configured and no URL host to derive one from."
             }
             return runInNewITermWindow(
-                remoteAttachCommand(sshTarget: target, tmuxName: name, moshPath: mosh)
+                remoteAttachCommand(
+                    sshTarget: target,
+                    tmuxName: name,
+                    moshPath: transportPath(for: item, availableMoshPath: mosh)
+                )
             )
         }
         guard item.opensByResume else {
@@ -2414,7 +2609,7 @@ struct SessionRow: View {
             if item.hostIsLocal, session.tmuxName != nil {
                 badge("tmux", color: .blue)
             } else if !item.hostIsLocal, session.tmuxName != nil {
-                badge(Opener.remoteTransportLabel, color: .green)
+                badge(Opener.remoteTransportLabel(for: item), color: .green)
             } else if item.opensByResume {
                 badge("resume", color: .orange)
             }
@@ -2924,8 +3119,8 @@ struct HiddenDirectoriesSettingsView: View {
 struct HostsSettingsView: View {
     @EnvironmentObject private var store: SessionStore
     @State private var configuredHosts: [Config.HostEntry] = Config.loadHosts()
-    @State private var newHost = ""
-    @State private var newSSH = ""
+    @State private var newHost = Config.preferredHost.url
+    @State private var newSSH = Config.preferredHost.ssh ?? ""
     @State private var validationMessage: String?
     @State private var saveError: String?
 
@@ -3098,7 +3293,8 @@ struct HostsSettingsView: View {
 
     private func sshDetailText(for entry: Config.HostEntry) -> String {
         if let target = Config.sshTarget(for: entry) {
-            return "SSH: \(target)"
+            let transport = entry.transport == .ssh ? "ssh only" : "mosh/ssh"
+            return "SSH: \(target) · \(transport)"
         }
         return "SSH: unavailable"
     }
@@ -3117,7 +3313,7 @@ struct HostsSettingsView: View {
         let url = trimmedNewHost
         guard validate(url) else { return }
         let ssh = trimmedNewSSH.isEmpty ? nil : trimmedNewSSH
-        persist(configuredHosts + [Config.HostEntry(url: url, ssh: ssh)])
+        persist(configuredHosts + [Config.entryForNewHost(url: url, ssh: ssh)])
         newHost = ""
         newSSH = ""
     }
@@ -4551,10 +4747,63 @@ enum HiddenDirsProbeCLI {
     }
 }
 
+enum CloudflareCredentialCLI {
+    private struct ImportPayload: Decodable {
+        let clientID: String
+        let clientSecret: String
+    }
+
+    static func runIfRequested() {
+        let args = CommandLine.arguments
+        guard let command = args.dropFirst().first,
+              command == "--import-cloudflare-credential" || command == "--cloudflare-credential-status" else {
+            return
+        }
+
+        do {
+            if command == "--cloudflare-credential-status" {
+                guard args.count == 3 else { throw CLIError.usage }
+                let origin = DesktopCredentialStore.origin(for: args[2]) ?? args[2]
+                let configured = DesktopCredentialStore.load(for: args[2]) != nil
+                print("{\"ok\":true,\"host\":\"\(json(origin))\",\"configured\":\(configured)}")
+                Darwin.exit(configured ? 0 : 1)
+            }
+
+            guard args.count == 4 else { throw CLIError.usage }
+            let data = try Data(contentsOf: URL(fileURLWithPath: args[3]))
+            let payload = try JSONDecoder().decode(ImportPayload.self, from: data)
+            try DesktopCredentialStore.save(
+                DesktopCloudflareCredential(clientID: payload.clientID, clientSecret: payload.clientSecret),
+                for: args[2]
+            )
+            let origin = DesktopCredentialStore.origin(for: args[2]) ?? args[2]
+            print("{\"ok\":true,\"host\":\"\(json(origin))\"}")
+            Darwin.exit(0)
+        } catch {
+            print("{\"ok\":false,\"error\":\"\(json(error.localizedDescription))\"}")
+            Darwin.exit(1)
+        }
+    }
+
+    private static func json(_ value: String) -> String {
+        value.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+    }
+
+    private enum CLIError: LocalizedError {
+        case usage
+        var errorDescription: String? {
+            "usage: lfg --import-cloudflare-credential <https-host-url> <credential-json>"
+        }
+    }
+}
+
 @main
 struct LFGSessionsApp: App {
     @StateObject private var store = SessionStore()
     init() {
+        CloudflareCredentialCLI.runIfRequested()
         DesktopFeatureTestCLI.runIfRequested()
         HiddenDirsProbeCLI.runIfRequested()
         SearchProbeCLI.runIfRequested()

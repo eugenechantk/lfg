@@ -8,7 +8,7 @@ configured `lfg serve` hosts and reopens any of them in iTerm2 with one click.
 | Session | Action |
 | --- | --- |
 | On this Mac, has a tmux pane | New iTerm2 window attached to that tmux session (`tmux attach -t <name>`) |
-| On another host with a tmux pane | New iTerm2 window attached over mosh/ssh |
+| On another host with a tmux pane | New iTerm2 window attached over the host profile's SSH or Mosh transport |
 | Closed Claude or Codex session | New iTerm2 window with a fresh local tmux session running the agent's native resume command in the session's cwd |
 | Running without a tmux pane | Not openable; resuming would duplicate an already-running session |
 
@@ -66,34 +66,76 @@ are stretched to the full visible height of the display they open on.
   "hosts": [
     "http://localhost:8766",
     {
-      "url": "http://100.75.162.40:8766",
-      "ssh": "eugene@100.75.162.40",
-      "displayName": "Mac Studio"
+      "url": "https://lfg-air.eugenechantk.me",
+      "ssh": "air",
+      "displayName": "Air",
+      "transport": "ssh"
     }
   ]
 }
 ```
 
-Each entry is one `lfg serve` machine (Tailscale IP or MagicDNS name). The
+The Add Host field is prefilled with
+`https://lfg-pro.eugenechantk.me`, and its SSH field with `pro`. Adding that
+canonical endpoint gives it the friendly name `Pro` and forces plain SSH for
+Cloudflare Access; existing host files are never rewritten automatically.
+
+Each entry is one `lfg serve` machine. The
 host whose URL is loopback — or whose reported hostname matches this machine —
-is treated as local. Hosts reached twice (localhost + Tailscale IP) are
+is treated as local. Hosts reached twice (localhost plus a remote endpoint) are
 deduped by `hostId`. Unreachable hosts are listed at the bottom of the window.
 The optional `displayName` can be edited in Settings and overrides the reported
 machine hostname everywhere the host is labeled. Leaving it blank restores the
 hostname/URL fallback. Legacy string entries and objects containing only `url`
-and `ssh` remain supported.
+and `ssh` remain supported; their omitted `transport` defaults to `automatic`.
 
 ### Remote attach transport
 
-Opening a session on another host uses **mosh** when `mosh` is on this
-machine's PATH, falling back to plain `ssh -t` when it isn't. mosh survives IP
+Opening a session on another host uses **mosh** when `transport` is `automatic`
+and `mosh` is on this machine's PATH, falling back to plain `ssh -t` when it
+isn't. mosh survives IP
 changes, sleep, and packet loss, so an attached window keeps working across
-network roams instead of dying with its TCP stream — the same reason the
-`air`/`pro` aliases in `~/.zshrc` use it. The `ssh` config field is still the
-target either way; mosh uses ssh for the initial handshake, then UDP
-60000–61000 (open over Tailscale).
+network roams instead of dying with its TCP stream. The `ssh` config field is
+still the target either way; mosh uses ssh for the initial handshake, then UDP
+60000–61000.
 
-Two things the shell aliases get wrong that this does not:
+Set `"transport": "ssh"` for a Cloudflare Access SSH alias. The tunnel carries
+the SSH stream, but not Mosh's post-bootstrap UDP connection, so these profiles
+must never automatically switch to Mosh.
+
+The corresponding aliases live in `~/.ssh/config`:
+
+```sshconfig
+Host pro
+    HostName ssh-pro.eugenechantk.me
+    User eugenechan
+    ProxyCommand /opt/homebrew/bin/cloudflared access ssh --hostname %h
+
+Host air
+    HostName ssh-air.eugenechantk.me
+    User eugenechan
+    ProxyCommand /opt/homebrew/bin/cloudflared access ssh --hostname %h
+```
+
+Cloudflare Access service tokens are stored per HTTPS origin in the macOS
+Keychain, never in `hosts.json`. Import the same private JSON shape used by the
+iOS build without printing the secret:
+
+```sh
+build/lfg.app/Contents/MacOS/lfg \
+  --import-cloudflare-credential https://lfg-pro.eugenechantk.me \
+  /path/to/BundledCloudflareAccess.private.json
+
+build/lfg.app/Contents/MacOS/lfg \
+  --cloudflare-credential-status https://lfg-pro.eugenechantk.me
+```
+
+The import reads only `clientID` and `clientSecret`; the explicit URL selects
+the Keychain origin, allowing one account-level service token to authorize more
+than one protected LFG hostname when their Access policies allow it.
+
+Two things the previous Mosh shell aliases got wrong that the automatic
+transport does not:
 
 - `mosh host -- tmux attach` **fails** — mosh `exec`s its `--` argv with no
   shell in the loop, and sshd's non-interactive PATH is
