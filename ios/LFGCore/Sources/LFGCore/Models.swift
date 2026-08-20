@@ -27,6 +27,11 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     /// stale "Working" badge for sessions the live SSE stream doesn't cover (or
     /// whose busy delta was missed across a reconnect). nil on older servers.
     public var busy: Bool?
+    /// Active Claude child agents. Older hosts omit it, which decodes as zero.
+    /// The server also folds this into `busy`, keeping every status surface in sync.
+    public var runningChildAgentCount: Int
+    /// Active background shell processes. Older hosts omit it, which decodes as zero.
+    public var runningBackgroundProcessCount: Int
     /// The session's newest transcript message, as the server's `previewLast` sees
     /// it — metadata lines (`mode`, `permission-mode`, `bridge-session`, `ai-title`)
     /// and `isMeta` turns are already filtered out. Its `id` (the transcript line's
@@ -73,7 +78,9 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         assignedUser: String? = nil, parentSessionId: String? = nil, lastUserText: String? = nil,
         startedAt: Double? = nil, lastActivityAt: Double? = nil,
         tmuxTarget: String? = nil, tmuxName: String? = nil, managed: Bool? = nil,
-        busy: Bool? = nil, last: SessionMessage? = nil, closed: Bool = false,
+        busy: Bool? = nil, runningChildAgentCount: Int = 0,
+        runningBackgroundProcessCount: Int = 0,
+        last: SessionMessage? = nil, closed: Bool = false,
         prompt: AgentPrompt? = nil
     ) {
         self.sessionId = sessionId; self.title = title; self.agent = agent
@@ -83,7 +90,9 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         self.lastUserText = lastUserText
         self.startedAt = startedAt; self.lastActivityAt = lastActivityAt
         self.tmuxTarget = tmuxTarget; self.tmuxName = tmuxName; self.managed = managed
-        self.busy = busy; self.last = last; self.closed = closed
+        self.busy = busy; self.runningChildAgentCount = max(0, runningChildAgentCount)
+        self.runningBackgroundProcessCount = max(0, runningBackgroundProcessCount)
+        self.last = last; self.closed = closed
         self.prompt = prompt
     }
 
@@ -107,6 +116,14 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         tmuxName = try c.decodeIfPresent(String.self, forKey: .tmuxName)
         managed = try c.decodeIfPresent(Bool.self, forKey: .managed)
         busy = try c.decodeIfPresent(Bool.self, forKey: .busy)
+        runningChildAgentCount = max(
+            0,
+            try c.decodeIfPresent(Int.self, forKey: .runningChildAgentCount) ?? 0
+        )
+        runningBackgroundProcessCount = max(
+            0,
+            try c.decodeIfPresent(Int.self, forKey: .runningBackgroundProcessCount) ?? 0
+        )
         // Never let a malformed preview line fail the whole session decode.
         last = (try? c.decodeIfPresent(SessionMessage.self, forKey: .last)) ?? nil
         closed = (try c.decodeIfPresent(Bool.self, forKey: .closed)) ?? false

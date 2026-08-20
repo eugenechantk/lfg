@@ -1,5 +1,24 @@
 import Foundation
 
+/// The honest state of the row above the oldest currently rendered transcript
+/// message. Network paging and revealing rows already buffered in memory are
+/// different operations: only the former should imply that the transcript is
+/// still incomplete.
+public enum TranscriptHistoryTopRow: Equatable, Sendable {
+    case hidden
+    case loadingNetwork
+    case revealingBuffered
+
+    public static func resolve(
+        isNetworkLoading: Bool,
+        hasBufferedEarlierMessages: Bool
+    ) -> Self {
+        if isNetworkLoading { return .loadingNetwork }
+        if hasBufferedEarlierMessages { return .revealingBuffered }
+        return .hidden
+    }
+}
+
 // MARK: - Transcript render window
 //
 // A session's transcript is fetched newest-first in bounded pages and merged

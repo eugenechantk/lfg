@@ -84,6 +84,29 @@ public enum HostState: Equatable, Sendable {
     }
 }
 
+/// The three user-facing states derived from host health.
+///
+/// A reconnect burst is presentation context rather than health evidence: a
+/// host that was previously offline should read as reconnecting while the app
+/// is actively trying it again, but it does not become connected until bytes or
+/// a successful probe arrive.
+public enum HostConnectionPresentation: Equatable, Sendable {
+    case connected
+    case reconnecting
+    case offline
+
+    public init(state: HostState?, isReconnecting: Bool) {
+        switch state {
+        case .live:
+            self = .connected
+        case .offline, .noNetworkSustained:
+            self = isReconnecting ? .reconnecting : .offline
+        case nil, .unknown, .connecting, .degraded, .noNetwork:
+            self = .reconnecting
+        }
+    }
+}
+
 /// Everything that can change a host's health. `HostLink` and the REST reconcile
 /// both emit these; neither interprets them.
 public enum HostSignal: Equatable, Sendable {

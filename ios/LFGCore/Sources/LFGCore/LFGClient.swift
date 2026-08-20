@@ -381,6 +381,28 @@ public struct LFGClient: Sendable {
         return try await get("api/sessions/\(id)/messages", query: q, as: MessagesResponse.self).messages
     }
 
+    public func childAgents(_ id: String) async throws -> [ChildAgentSession] {
+        try await get(
+            "api/sessions/\(id)/subagents",
+            as: ChildAgentSessionsResponse.self
+        ).agents
+    }
+
+    public func childAgentMessages(
+        parentID: String,
+        childID: String,
+        limit: Int = 0,
+        full: Bool = true
+    ) async throws -> [SessionMessage] {
+        var query = [URLQueryItem(name: "limit", value: String(limit))]
+        if full { query.append(URLQueryItem(name: "full", value: "1")) }
+        return try await get(
+            "api/sessions/\(parentID)/subagents/\(childID)/messages",
+            query: query,
+            as: MessagesResponse.self
+        ).messages
+    }
+
     /// Current outbound message queue for a session — used as a poll-based
     /// fallback to reconcile optimistic sends when a live `queue` event is missed.
     public func queue(_ id: String) async throws -> [QueueItem] {

@@ -12,7 +12,8 @@ final class ModelsTests: XCTestCase {
            "startedAt":1.0,"transcriptPath":"/t","lastActivityAt":2.0,"last":null,
            "tmuxTarget":"lfg-x:0.0","tmuxName":"lfg-x","managed":true,
            "assignedUser":"eugene","parentSessionId":"parent-123","model":"sonnet","status":"ok",
-           "statusReason":null,"statusDetail":null},
+           "statusReason":null,"statusDetail":null,"runningChildAgentCount":2,
+           "runningBackgroundProcessCount":1},
           {"agent":"claude","pid":2,"cmd":"y","cwd":null,"project":"p","title":"t2",
            "sessionId":null,"status":"blocked","statusReason":"model_unavailable",
            "statusDetail":"opus gone","tmuxName":"lfg-y","managed":true}
@@ -25,6 +26,8 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(s0.model, "sonnet")
         XCTAssertEqual(s0.assignedUser, "eugene")
         XCTAssertEqual(s0.parentSessionId, "parent-123")
+        XCTAssertEqual(s0.runningChildAgentCount, 2)
+        XCTAssertEqual(s0.runningBackgroundProcessCount, 1)
         XCTAssertTrue(s0.hasPane)
         XCTAssertFalse(s0.isBlocked)
         let s1 = resp.sessions[1]
@@ -32,6 +35,8 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(s1.statusReason, "model_unavailable")
         XCTAssertNil(s1.sessionId)
         XCTAssertNil(s1.parentSessionId)
+        XCTAssertEqual(s1.runningChildAgentCount, 0)
+        XCTAssertEqual(s1.runningBackgroundProcessCount, 0)
         XCTAssertFalse(s1.hasPane)
     }
 

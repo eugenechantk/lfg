@@ -927,7 +927,8 @@ private struct HeaderStatusLine: View {
                             .fixedSize()
                             .accessibilityHidden(true)
                     }
-                    HostHeaderToken(host: host, online: store.hostStateByHost[host.id]?.isLive == true)
+                    HostHeaderToken(host: host,
+                                    status: store.connectionStatus(forHost: host.id))
                 }
             } else {
                 let status = store.connectionStatus
@@ -938,7 +939,7 @@ private struct HeaderStatusLine: View {
                 Text(status.label)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(status.textColor(connected: Tokens.label,
-                                                      connecting: Tokens.labelSecondary))
+                                                      reconnecting: Tokens.labelSecondary))
                     .lineLimit(1)
                 if store.runningCount > 0 {
                     Text("·")
@@ -962,25 +963,26 @@ private struct HeaderStatusLine: View {
 
 private struct HostHeaderToken: View {
     let host: Host
-    let online: Bool
+    let status: HostConnectionPresentation
 
     var body: some View {
         HStack(spacing: 4) {
             Circle()
-                .fill(online ? Color(.systemGreen) : Color(.systemOrange))
+                .fill(status.dotColor)
                 .frame(width: 7, height: 7)
                 .fixedSize()
                 .accessibilityHidden(true)
             Text(host.label)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(online ? Tokens.label : Color(.systemOrange))
+                .foregroundStyle(status.textColor(connected: Tokens.label,
+                                                   reconnecting: Tokens.labelSecondary))
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .minimumScaleFactor(0.82)
         }
         .frame(minWidth: 0)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(host.label) \(online ? "online" : "offline")")
+        .accessibilityLabel("\(host.label) \(status.accessibilityLabel)")
     }
 }
 
@@ -1131,12 +1133,13 @@ struct SessionRow: View {
                     .truncationMode(.tail)
                     .frame(height: 22, alignment: .leading)
                 HStack(spacing: 7) {
-                    Text(metaText)
+                    metaText
                         .font(.system(size: 15))
                         .foregroundStyle(Tokens.meta)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .frame(height: 20, alignment: .leading)
+                        .accessibilityLabel(metaAccessibilityText)
                     if let hostLabel {
                         HStack(spacing: 4) {
                             Image(systemName: "desktopcomputer")
@@ -1165,15 +1168,48 @@ struct SessionRow: View {
         session.title.isEmpty ? "Untitled session" : session.title
     }
 
-    private var metaText: String {
-        var parts: [String] = [directoryText]
+    private var metaText: Text {
+        var text = Text(directoryText)
+        if !session.closed, let model = session.model, !model.isEmpty {
+            text = text + Text(" · \(model)")
+        }
+        if session.runningChildAgentCount > 0 {
+            text = text
+                + Text(" · ")
+                + Text(Image(systemName: "person.2.fill"))
+                + Text(" \(session.runningChildAgentCount)")
+        }
+        if session.runningBackgroundProcessCount > 0 {
+            text = text
+                + Text(" · ")
+                + Text(Image(systemName: "terminal"))
+                + Text(" \(session.runningBackgroundProcessCount)")
+        }
+        if let at = session.lastActivityAt {
+            text = text + Text(" · \(at.asCompactRelativeFromMillis)")
+        }
+        return text
+    }
+
+    private var metaAccessibilityText: String {
+        var parts = [directoryText]
         if !session.closed, let model = session.model, !model.isEmpty {
             parts.append(model)
+        }
+        if let childActivity = SessionWorkListPresentation.childAgentLabel(
+            count: session.runningChildAgentCount
+        ) {
+            parts.append(childActivity)
+        }
+        if let processActivity = SessionWorkListPresentation.backgroundProcessLabel(
+            count: session.runningBackgroundProcessCount
+        ) {
+            parts.append(processActivity)
         }
         if let at = session.lastActivityAt {
             parts.append(at.asCompactRelativeFromMillis)
         }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 
     private var directoryText: String {
@@ -1186,88 +1222,41 @@ struct SessionRow: View {
     }
 }
 
-/// Presentation for the tri-state connection status. "Connecting…" is its own
+/// Presentation for the tri-state connection status. "Reconnecting…" is its own
 /// state on purpose: an unknown or still-being-established connection is not an
 /// outage, and painting it orange made every cold launch look like one.
-extension SessionStore.ConnectionStatus {
+extension HostConnectionPresentation {
     var label: String {
         switch self {
         case .connected: return "Connected"
-        case .connecting: return "Connecting…"
+        case .reconnecting: return "Reconnecting…"
         case .offline: return "Offline"
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .connected: return "online"
+        case .reconnecting: return "reconnecting"
+        case .offline: return "offline"
         }
     }
 
     var dotColor: Color {
         switch self {
         case .connected: return Color(.systemGreen)
-        case .connecting: return Color(.systemGray)
+        case .reconnecting: return Color(.systemGray)
         case .offline: return Color(.systemOrange)
         }
     }
 
     /// Offline is always orange; the other two take the caller's palette (the
     /// list header and the toolbar badge use different label tokens).
-    func textColor(connected: Color, connecting: Color) -> Color {
+    func textColor(connected: Color, reconnecting: Color) -> Color {
         switch self {
         case .connected: return connected
-        case .connecting: return connecting
+        case .reconnecting: return reconnecting
         case .offline: return Color(.systemOrange)
-        }
-    }
-}
-
-/// Top-bar connection status. Single host → a "Connected/Connecting/Offline"
-/// badge plus the running count. Multiple hosts → one dot+label chip per host so
-/// you can see at a glance which host is online (green) and which is offline
-/// (orange).
-struct StatusBadge: View {
-    @Environment(SessionStore.self) private var store
-    @Environment(AppSettings.self) private var settings
-
-    var body: some View {
-        if settings.hosts.count > 1 {
-            HStack(spacing: 12) {
-                ForEach(settings.hosts) { host in
-                    HostStatusChip(host: host,
-                                   online: store.hostStateByHost[host.id]?.isLive == true)
-                }
-            }
-        } else {
-            let status = store.connectionStatus
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(status.dotColor)
-                    .frame(width: 7, height: 7)
-                Text(status.label)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(status.textColor(connected: .primary, connecting: .secondary))
-                if store.runningCount > 0 {
-                    Text("· \(store.runningCount) running")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-}
-
-/// A single host's online/offline status: a colored dot (green online, orange
-/// offline) + the host's short label. Offline labels go orange so the down host
-/// stands out in the top bar.
-private struct HostStatusChip: View {
-    let host: Host
-    let online: Bool
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(online ? Color(.systemGreen) : Color(.systemOrange))
-                .frame(width: 7, height: 7)
-            Text(host.label)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(online ? Color.primary : Color(.systemOrange))
-                .lineLimit(1)
         }
     }
 }

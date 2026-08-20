@@ -73,6 +73,14 @@ import LFGCore
 
     // Per-session live state, keyed by sessionId.
     private(set) var transcripts: [String: [SessionMessage]] = [:]
+    /// Sessions whose bounded backward-history walk is still in flight. The
+    /// newest page is intentionally rendered before this clears, so the detail
+    /// view needs this separate truth to explain that older turns are arriving.
+    private(set) var historyLoadingSessionIDs: Set<String> = []
+    /// `ensureHistory` also runs directly during failed-send reconciliation, so
+    /// count overlapping callers instead of letting the first completion hide a
+    /// still-active load.
+    private var historyLoadCounts: [String: Int] = [:]
     private(set) var prompts: [String: AgentPrompt] = [:]
     private(set) var busy: [String: Bool] = [:]
     /// When the journal last stated each session's `busy`, so a journal value can
@@ -106,6 +114,10 @@ import LFGCore
     /// Latest browser screenshot metadata per session. Bytes remain on the
     /// owning host and are fetched only while its detail view is visible.
     private(set) var browserFrames: [String: BrowserFrame] = [:]
+    /// Claude-internal child agents discovered from the parent transcript's
+    /// sidecar directory. They are read-only views inside the parent detail,
+    /// not independently steerable top-level LFG sessions.
+    private(set) var childAgentsBySession: [String: [ChildAgentSession]] = [:]
 
     /// Locally-originated sends shown optimistically as user bubbles the instant
     /// the user hits send — before any network round-trip. Each is removed once
@@ -270,7 +282,7 @@ import LFGCore
     /// Launch/foreground reconnect burst — see `startReconnectBurst`.
     private var reconnectBurstTask: Task<Void, Never>?
     /// True while that burst is in flight and some configured host still hasn't
-    /// answered. The UI reads this as "Connecting…": before the burst is done,
+    /// answered. The UI reads this as "Reconnecting…": before the burst is done,
     /// nothing has actually failed — showing "Offline" there is a lie that made
     /// every launch look like an outage.
     private(set) var isReconnecting = false
@@ -384,6 +396,28 @@ import LFGCore
         guard let client = client(forSession: sessionId),
               let frame = try? await client.browserFrameMetadata(sessionId: sessionId) else { return }
         browserFrames[sessionId] = frame
+    }
+
+    func refreshChildAgents(_ sessionId: String) async {
+        guard !sessionId.isEmpty, let client = readClient(forSession: sessionId) else { return }
+        do {
+            childAgentsBySession[sessionId] = try await client.childAgents(sessionId)
+        } catch let error as LFGError {
+            // Older hosts and sessions without a materialized transcript both
+            // answer 404. That is the feature's empty state, not a banner-worthy
+            // connection failure. Keep the existing snapshot on real transport
+            // errors so a momentary host blip does not make the strip disappear.
+            if case .http(let status, _) = error, status == 404 {
+                childAgentsBySession[sessionId] = []
+            }
+        } catch {}
+    }
+
+    func childAgentMessages(parentID: String, childID: String) async throws -> [SessionMessage] {
+        guard let client = readClient(forSession: parentID) else {
+            throw LFGError.notReachable(underlying: "No reachable transcript host")
+        }
+        return try await client.childAgentMessages(parentID: parentID, childID: childID)
     }
 
     /// The client for READING `id`'s transcript. Unlike `client(forSession:)`,
@@ -511,18 +545,15 @@ import LFGCore
     /// `degraded` — inside the grace window the old code had to "keep the
     /// previous displayed value", which a projection cannot express. It has an
     /// honest answer here: a host that is failing but still inside its grace
-    /// window is **connecting**, not connected and not offline. That is the
+    /// window is **reconnecting**, not connected and not offline. That is the
     /// true state, and the UI already had a word for it.
-    enum ConnectionStatus: Equatable { case connected, connecting, offline }
+    var connectionStatus: HostConnectionPresentation {
+        HostConnectionPresentation(state: fleetState, isReconnecting: isReconnecting)
+    }
 
-    var connectionStatus: ConnectionStatus {
-        switch fleetState {
-        case .live: return .connected
-        case .offline, .noNetworkSustained: return isReconnecting ? .connecting : .offline
-        // `noNetwork` sits with `degraded` on purpose: both are failures inside
-        // the grace window, and "connecting" is the honest word for both.
-        case nil, .unknown, .connecting, .degraded, .noNetwork: return .connecting
-        }
+    func connectionStatus(forHost hostId: String) -> HostConnectionPresentation {
+        HostConnectionPresentation(state: hostStateByHost[hostId],
+                                   isReconnecting: isReconnecting)
     }
 
     /// Every configured host answered — the burst's exit condition. Deliberately
@@ -1410,7 +1441,7 @@ import LFGCore
 
         if settled.isLive {
             // Whichever writer got here first (REST probe or link bytes), the
-            // fleet being healthy ends the "Connecting…" state immediately — the
+            // fleet being healthy ends the "Reconnecting…" state immediately — the
             // burst task itself may still be asleep between probes.
             if allHostsReachable { isReconnecting = false }
             if !wasLive { Task { await self.replayPendingOutbox(forHost: hostId) } }
@@ -2536,6 +2567,9 @@ import LFGCore
     /// prompts show even in long, tool-heavy sessions where they'd otherwise be
     /// older than the live-stream backfill window.
     func ensureHistory(_ id: String) async {
+        beginHistoryLoad(id)
+        defer { endHistoryLoad(id) }
+
         // A READ: route to any reachable host, not to the (possibly down) owner.
         guard let client = readClient(forSession: id) else {
             await hydrateTranscriptFromStoreIfEmpty(id)
@@ -2561,6 +2595,25 @@ import LFGCore
                 await hydrateTranscriptFromStoreIfEmpty(id)
                 return
             }
+        }
+    }
+
+    func isHistoryLoading(_ id: String) -> Bool {
+        historyLoadingSessionIDs.contains(id)
+    }
+
+    private func beginHistoryLoad(_ id: String) {
+        historyLoadCounts[id, default: 0] += 1
+        historyLoadingSessionIDs.insert(id)
+    }
+
+    private func endHistoryLoad(_ id: String) {
+        let remaining = max(0, (historyLoadCounts[id] ?? 1) - 1)
+        if remaining == 0 {
+            historyLoadCounts[id] = nil
+            historyLoadingSessionIDs.remove(id)
+        } else {
+            historyLoadCounts[id] = remaining
         }
     }
 

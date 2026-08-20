@@ -3,6 +3,18 @@ import LFGCore
 import UIKit
 
 struct SessionDetailView: View {
+    private enum PresentedSheet: Identifiable {
+        case attachments
+        case childSessions(selectedID: String?)
+
+        var id: String {
+            switch self {
+            case .attachments: "attachments"
+            case .childSessions(let selectedID): "child-sessions-\(selectedID ?? "all")"
+            }
+        }
+    }
+
     let session: Session
     /// Called after the session is closed, so the owner (RootView) can clear the
     /// navigation selection and pop back to the list. Without this the split view
@@ -29,7 +41,7 @@ struct SessionDetailView: View {
     // deliberate scroll-up and freezing auto-follow before the view settles.
     @State private var pinningToBottom = false
     @State private var dismissedBrowserFrameID: String?
-    @State private var showingAttachments = false
+    @State private var presentedSheet: PresentedSheet?
     /// How many of the newest messages the transcript actually renders. The store
     /// still holds the whole conversation — this bounds only what SwiftUI has to
     /// place. See `TranscriptWindow` for the profile that motivates it.
@@ -51,9 +63,16 @@ struct SessionDetailView: View {
     private var hasOlderHistory: Bool {
         TranscriptWindow.hasOlder(total: messages.count, window: window)
     }
+    private var historyTopRow: TranscriptHistoryTopRow {
+        TranscriptHistoryTopRow.resolve(
+            isNetworkLoading: store.isHistoryLoading(sid),
+            hasBufferedEarlierMessages: hasOlderHistory
+        )
+    }
     private var prompt: AgentPrompt? { store.prompts[sid] }
     private var pending: [SessionStore.PendingSend] { store.pendingSends[sid] ?? [] }
     private var isBusy: Bool { store.busy[sid] == true }
+    private var childAgents: [ChildAgentSession] { store.childAgentsBySession[sid] ?? [] }
 
     /// Owning host's short label, shown as a pill in the title area in multi-host
     /// setups (a single-host client has nothing to disambiguate).
@@ -123,6 +142,11 @@ struct SessionDetailView: View {
                     if store.isOffline(sid) {
                         OfflineComposerNotice(hostLabel: store.host(forSession: sid)?.label ?? "This host")
                     }
+                    if !childAgents.isEmpty {
+                        ChildSessionsComposerBar(agents: childAgents) {
+                            presentedSheet = .childSessions(selectedID: nil)
+                        }
+                    }
                     MessageComposer(text: $draft, sending: false) { text, atts in
                         // Hand the send to the store, which owns it for the app's
                         // lifetime (under a background-task assertion). Leaving
@@ -169,11 +193,26 @@ struct SessionDetailView: View {
             pinningToBottom = false
             isAtBottom = true
         }
+        .task(id: "child-agents-\(sid)") {
+            while !Task.isCancelled {
+                await store.refreshChildAgents(sid)
+                try? await Task.sleep(for: .seconds(
+                    childAgents.contains(where: { $0.status.isActive }) || isBusy ? 2 : 8
+                ))
+            }
+        }
         .onDisappear {
             store.blur(sid)
         }
-        .sheet(isPresented: $showingAttachments) {
-            AttachmentsSheet(messages: messages)
+        .sheet(item: $presentedSheet) { sheet in
+            switch sheet {
+            case .attachments:
+                AttachmentsSheet(messages: messages)
+            case .childSessions(let selectedID):
+                ChildAgentSessionsSheet(parentSessionID: sid, initialChildID: selectedID)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
         }
         .alert("Rename session", isPresented: $renaming) {
             TextField("Title", text: $newTitle)
@@ -247,7 +286,7 @@ struct SessionDetailView: View {
                     } else {
                         // Everything older than the window sits behind this row;
                         // scrolling it into view walks one page further back.
-                        if hasOlderHistory { olderHistoryLoader }
+                        if historyTopRow != .hidden { olderHistoryLoader }
                         ForEach(Array(zip(windowedMessages.indices, windowedMessages)), id: \.1.stableID) { idx, msg in
                             TranscriptMessageView(
                                 message: msg,
@@ -366,14 +405,26 @@ struct SessionDetailView: View {
     /// scrolled to the top of the window.
     private var olderHistoryLoader: some View {
         HStack(spacing: 8) {
-            ProgressView().controlSize(.mini)
-            Text("Loading earlier messages…")
+            if historyTopRow == .loadingNetwork || extending {
+                ProgressView().controlSize(.mini)
+            } else {
+                Image(systemName: "chevron.up")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            Text(historyTopRow == .loadingNetwork || extending
+                 ? "Loading earlier messages…"
+                 : "Earlier messages")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        .accessibilityIdentifier("transcriptOlderLoader")
+        .accessibilityIdentifier(
+            historyTopRow == .loadingNetwork
+                ? "transcriptHistoryLoadingIndicator"
+                : "transcriptOlderLoader"
+        )
         .onAppear { extendWindow() }
     }
 
@@ -489,8 +540,12 @@ struct SessionDetailView: View {
                 closed: session.closed,
                 tmuxIdentifier: session.tmuxName ?? session.tmuxTarget,
                 isBusy: isBusy,
+                childAgents: childAgents,
                 dismissedBrowserFrameID: dismissedBrowserFrameID,
-                onShowAttachments: { showingAttachments = true },
+                onShowAttachments: { presentedSheet = .attachments },
+                onShowChildSessions: { selectedID in
+                    presentedSheet = .childSessions(selectedID: selectedID)
+                },
                 onRename: { newTitle = session.title; renaming = true },
                 onRestoreBrowserPreview: { dismissedBrowserFrameID = nil },
                 onConfirmEnd: { confirmEnd = true },
@@ -578,8 +633,10 @@ private struct SessionOptionsMenu: View {
     let closed: Bool
     let tmuxIdentifier: String?
     let isBusy: Bool
+    let childAgents: [ChildAgentSession]
     let dismissedBrowserFrameID: String?
     let onShowAttachments: () -> Void
+    let onShowChildSessions: (String?) -> Void
     let onRename: () -> Void
     let onRestoreBrowserPreview: () -> Void
     let onConfirmEnd: () -> Void
@@ -605,6 +662,26 @@ private struct SessionOptionsMenu: View {
             primary.append(action("Stop", systemImage: "stop.circle", attributes: .destructive) {
                 Task { await store.interrupt(sid) }
             })
+        }
+
+        if !childAgents.isEmpty {
+            let childActions: [UIMenuElement] = [
+                action("View all", systemImage: "list.bullet") {
+                    onShowChildSessions(nil)
+                },
+            ] + childAgents.map { child in
+                action(
+                    child.description,
+                    systemImage: child.status.menuSystemImage
+                ) {
+                    onShowChildSessions(child.id)
+                }
+            }
+            primary.append(UIMenu(
+                title: "Child sessions (\(childAgents.count))",
+                image: UIImage(systemName: "person.2"),
+                children: childActions
+            ))
         }
 
         primary.append(action("Files & Links", systemImage: "paperclip", handler: onShowAttachments))
@@ -845,5 +922,245 @@ struct OfflineComposerNotice: View {
         .padding(.vertical, 7)
         .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
         .padding(.horizontal, 16)
+    }
+}
+
+private struct ChildSessionsComposerBar: View {
+    let agents: [ChildAgentSession]
+    let action: () -> Void
+
+    private var presentation: ChildAgentCollectionPresentation {
+        ChildAgentCollectionPresentation(agents: agents)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Image(systemName: "person.2.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.tint)
+                    if presentation.runningCount > 0 {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 7, height: 7)
+                            .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
+                            .offset(x: 11, y: -9)
+                    }
+                }
+                .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(presentation.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(presentation.compactStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                if presentation.runningCount > 0 {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .accessibilityHidden(true)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 11))
+            .overlay(
+                RoundedRectangle(cornerRadius: 11)
+                    .stroke(Color(.separator).opacity(0.55), lineWidth: 0.5)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 11))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .accessibilityIdentifier("childSessionsComposerBar")
+        .accessibilityLabel("\(presentation.title), \(presentation.compactStatus)")
+        .accessibilityHint("Shows child sessions")
+    }
+}
+
+private struct ChildAgentSessionsSheet: View {
+    let parentSessionID: String
+    @Environment(SessionStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var path: [String]
+
+    init(parentSessionID: String, initialChildID: String?) {
+        self.parentSessionID = parentSessionID
+        _path = State(initialValue: initialChildID.map { [$0] } ?? [])
+    }
+
+    private var agents: [ChildAgentSession] {
+        store.childAgentsBySession[parentSessionID] ?? []
+    }
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            Group {
+                if agents.isEmpty {
+                    ContentUnavailableView(
+                        "No child sessions",
+                        systemImage: "person.2",
+                        description: Text("This session has not spawned a child agent.")
+                    )
+                } else {
+                    List(agents) { child in
+                        NavigationLink(value: child.id) {
+                            ChildAgentSessionRow(child: child)
+                        }
+                        .accessibilityIdentifier("childSessionRow_\(child.id)")
+                    }
+                    .listStyle(.insetGrouped)
+                }
+            }
+            .navigationTitle("Child sessions")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: String.self) { childID in
+                if let child = agents.first(where: { $0.id == childID }) {
+                    ChildAgentTranscriptView(parentSessionID: parentSessionID, child: child)
+                } else {
+                    ContentUnavailableView("Child session unavailable", systemImage: "person.crop.circle.badge.xmark")
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .accessibilityIdentifier("childSessionsDoneButton")
+                }
+            }
+        }
+        .task { await store.refreshChildAgents(parentSessionID) }
+        .accessibilityIdentifier("childSessionsSheet")
+    }
+}
+
+private struct ChildAgentSessionRow: View {
+    let child: ChildAgentSession
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 11) {
+            child.status.statusView
+                .frame(width: 22, height: 22)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(child.description)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 5) {
+                    Text(child.agentType)
+                    Text("·")
+                    Text(child.status.label)
+                        .foregroundStyle(child.status.tint)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 3)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(child.description), \(child.agentType), \(child.status.label)")
+    }
+}
+
+private struct ChildAgentTranscriptView: View {
+    let parentSessionID: String
+    let child: ChildAgentSession
+    @Environment(SessionStore.self) private var store
+    @State private var messages: [SessionMessage] = []
+    @State private var loading = true
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Group {
+            if loading && messages.isEmpty {
+                ProgressView("Loading transcript…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let errorMessage, messages.isEmpty {
+                ContentUnavailableView(
+                    "Transcript unavailable",
+                    systemImage: "exclamationmark.bubble",
+                    description: Text(errorMessage)
+                )
+            } else if messages.isEmpty {
+                ContentUnavailableView(
+                    "No transcript yet",
+                    systemImage: "text.bubble",
+                    description: Text("This child session has not produced visible output.")
+                )
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        ForEach(messages, id: \.stableID) { message in
+                            TranscriptMessageView(message: message)
+                        }
+                    }
+                    .padding()
+                }
+            }
+        }
+        .navigationTitle(child.description)
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: child.id) { await loadTranscriptUntilTerminal() }
+        .accessibilityIdentifier("childSessionTranscript")
+    }
+
+    private func loadTranscriptUntilTerminal() async {
+        while !Task.isCancelled {
+            do {
+                messages = try await store.childAgentMessages(
+                    parentID: parentSessionID,
+                    childID: child.id
+                )
+                errorMessage = nil
+            } catch is CancellationError {
+                return
+            } catch {
+                errorMessage = (error as? LFGError)?.userMessage ?? error.localizedDescription
+            }
+            loading = false
+            await store.refreshChildAgents(parentSessionID)
+            let isActive = store.childAgentsBySession[parentSessionID]?
+                .first(where: { $0.id == child.id })?.status.isActive == true
+            guard isActive else { return }
+            try? await Task.sleep(for: .seconds(2))
+        }
+    }
+}
+
+private extension ChildAgentStatus {
+    var menuSystemImage: String {
+        switch self {
+        case .running: "clock.arrow.circlepath"
+        case .completed: "checkmark.circle"
+        case .failed: "exclamationmark.triangle"
+        case .stopped: "stop.circle"
+        case .unknown: "questionmark.circle"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .running: .blue
+        case .completed: .green
+        case .failed: .orange
+        case .stopped, .unknown: .secondary
+        }
+    }
+
+    @ViewBuilder var statusView: some View {
+        if self == .running {
+            ProgressView().controlSize(.small)
+        } else {
+            Image(systemName: menuSystemImage)
+                .foregroundStyle(tint)
+        }
     }
 }
