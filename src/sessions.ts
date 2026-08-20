@@ -2448,7 +2448,9 @@ export function listSessions(): Promise<Session[]> {
   return entry.promise;
 }
 
-async function listSessionsUncached(): Promise<Session[]> {
+async function listSessionsUncached(
+  { enrichRunningWork = true }: { enrichRunningWork?: boolean } = {},
+): Promise<Session[]> {
   // Drop just-closed sessions up front (see closing.ts): /close kills the
   // process but it lingers for a poll or two, so without this a stopped session
   // flickers back into the list until pgrep stops seeing it.
@@ -2850,6 +2852,13 @@ async function listSessionsUncached(): Promise<Session[]> {
       (a.sessionId ?? "").localeCompare(b.sessionId ?? ""),
   );
   const deduped = resolveSessionOwners(out, (pid) => claimByPid.get(pid) ?? null);
+  // Lease refresh needs only the authoritative live (sessionId, pid) claims.
+  // Child-agent/background-process enrichment can walk large live transcripts,
+  // so do not put that unrelated work on the resumable-list critical path.
+  if (!enrichRunningWork) {
+    resolvePaneOwners(deduped);
+    return deduped;
+  }
   const transcriptBackgroundCounts = await claudeBackgroundProcessCounts(
     deduped.flatMap((session) => session.transcriptPath ? [session.transcriptPath] : []),
   );
@@ -3122,7 +3131,10 @@ export function mayRefreshLiveLease(
 
 async function refreshLeasesForLiveSessions(): Promise<void> {
   try {
-    for (const s of await listSessions()) {
+    // Deliberately bypass the public session-list cache: resumable enumeration
+    // must see newly started local sessions before offering them as closed, but
+    // it does not need delegated-work counts or transcript-sidecar discovery.
+    for (const s of await listSessionsUncached({ enrichRunningWork: false })) {
       // listSessions is briefly cached. A close can tombstone the pid after the
       // cached row was produced but before resumable search refreshes leases.
       // Re-check at the side effect boundary or that stale row recreates the
