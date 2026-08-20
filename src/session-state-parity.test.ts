@@ -95,6 +95,10 @@ describe("busy derivation has one implementation", () => {
         true,
       );
       expect(src.includes("resolveBusy("), `${label} must use the shared last step`).toBe(true);
+      expect(
+        src.includes("busyWithRunningWork("),
+        `${label} must preserve active child-agent and background-process work`,
+      ).toBe(true);
     });
 
     test(`${label} does not reach past it to the transcript layer`, async () => {

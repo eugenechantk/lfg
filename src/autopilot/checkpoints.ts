@@ -16,6 +16,12 @@ export type Checkpoint = {
   bytes: number;
   /** ms epoch of that examination. */
   at: number;
+  /**
+   * Every genuine user message found through `bytes`, oldest-first and already
+   * truncated for the title prompt. Optional for compatibility with checkpoints
+   * written before conversation-aware titles shipped.
+   */
+  userMessages?: string[];
 };
 
 export type CheckpointFile = Record<string, Checkpoint>;
@@ -28,7 +34,14 @@ export function parseCheckpoints(raw: unknown): CheckpointFile {
     const v = value as Partial<Checkpoint>;
     if (typeof v.bytes !== "number" || !Number.isFinite(v.bytes)) continue;
     if (typeof v.at !== "number" || !Number.isFinite(v.at)) continue;
-    out[id] = { bytes: v.bytes, at: v.at };
+    const checkpoint: Checkpoint = { bytes: v.bytes, at: v.at };
+    if (
+      Array.isArray(v.userMessages) &&
+      v.userMessages.every((message) => typeof message === "string")
+    ) {
+      checkpoint.userMessages = v.userMessages;
+    }
+    out[id] = checkpoint;
   }
   return out;
 }

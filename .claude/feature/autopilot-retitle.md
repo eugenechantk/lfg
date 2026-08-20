@@ -28,8 +28,10 @@ into the same tick without new plumbing.
    b. Drops any session whose title Eugene set by hand, and any whose transcript
       has not grown since the last time autopilot looked at it.
    c. Takes the N least-recently-checked survivors (default 12), live first.
-   d. Builds one compact digest per session (current title, project, and the last
-      6 genuine human turns) and makes **one** batched LLM call.
+   d. Builds one compact digest per session (current title, project, and every
+      genuine human turn in chronological order) and makes **one** batched LLM
+      call. Already-scanned user history is cached in the retitle checkpoint so
+      later runs read only appended transcript bytes.
    e. For each session the model says has drifted, writes the new title via
       `setSessionTitle(..., { source: "auto" })`.
 4. Eugene opens the iOS client / desktop app and the session list shows titles
@@ -216,6 +218,14 @@ hallucinated key from reaching real state.
   contamination cost — a separate change.
 - **Cheap model for the batch.** The task is one-line summarisation over short
   digests; `LFG_AUTOPILOT_MODEL` defaults to `haiku`.
+- **Conversation-level drift, not latest-request drift.** The original task used
+  only the newest six user messages and explicitly asked what the session was
+  doing "NOW". That made the latest request disproportionately likely to become
+  the title. The retitler now supplies the full chronological user-message
+  sequence and requires a sustained semantic shift; related follow-ups, bugs,
+  implementation steps, and verification remain part of one workstream. A new
+  title summarizes that established workstream instead of restating the newest
+  request. See `autopilot-conversation-titles.md` for the change's verification.
 
 ## Verification Evidence
 

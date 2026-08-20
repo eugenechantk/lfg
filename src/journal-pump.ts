@@ -23,14 +23,26 @@ import {
   createCodexNormalizationState,
 } from "./sessions.ts";
 import type { SessionMsg, CodexNormalizationState } from "./sessions.ts";
-import { capturePaneAsyncStyled, ensurePaneRows, isBusy, PANE_ROWS, stripAnsi } from "./tmux.ts";
+import {
+  backgroundProcessCount,
+  capturePaneAsyncStyled,
+  ensurePaneRows,
+  isBusy,
+  PANE_ROWS,
+  stripAnsi,
+} from "./tmux.ts";
 import { PaneStitcher } from "./pane-history.ts";
 import { listQueue, reconcileQueued } from "./sendq.ts";
 import { findEntryByAnyId as findAisdkEntryByAnyId } from "./aisdk-registry.ts";
-import { codexDelegationSessionIds, notePaneBusy } from "./activity.ts";
+import {
+  codexDelegationSessionIds,
+  notePaneBackgroundProcessCount,
+  notePaneBusy,
+} from "./activity.ts";
 import { forgetTurnState } from "./turn-state.ts";
 import { forgetHookState } from "./hook-state.ts";
 import { resolveBusy, sessionTurnState } from "./session-state.ts";
+import { busyWithRunningWork } from "./subagents.ts";
 import { statSync } from "node:fs";
 import {
   BrowserFrameExtractor,
@@ -257,6 +269,7 @@ export function withStitchedPreamble<T>(prompt: T, w: { stitcher: PaneStitcher }
 type Watched = {
   sid: string;
   tp: string;
+  agent: string;
   target: string | null;
   buf: string; // partial trailing line between ticks
   frameExtractor: BrowserFrameExtractor;
@@ -268,6 +281,9 @@ type Watched = {
   /** Last busy value seen by the poll loop, to find the idle→busy edge that
    *  starts a new turn (and so resets the stitcher). */
   wasBusy: boolean;
+  /** Refreshed from the canonical session snapshot on every watch-set scan. */
+  runningChildAgentCount: number;
+  runningBackgroundProcessCount: number;
 };
 
 // Set while a pump is running: re-scrape ONE session right now instead of
@@ -367,6 +383,9 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       const existing = watched.get(sid);
       if (existing) {
         existing.target = s.tmuxTarget ?? null; // pane can (re)appear
+        existing.agent = s.agent;
+        existing.runningChildAgentCount = s.runningChildAgentCount ?? 0;
+        existing.runningBackgroundProcessCount = s.runningBackgroundProcessCount ?? 0;
         continue;
       }
       const tp = await resolveTranscript(sid).catch(() => null);
@@ -377,12 +396,15 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       watched.set(sid, {
         sid,
         tp,
+        agent: s.agent,
         target: s.tmuxTarget ?? null,
         buf: "",
         frameExtractor: new BrowserFrameExtractor(),
         codexNormalization,
         stitcher: new PaneStitcher(),
         wasBusy: false,
+        runningChildAgentCount: s.runningChildAgentCount ?? 0,
+        runningBackgroundProcessCount: s.runningBackgroundProcessCount ?? 0,
       });
     }
     if (bootSids) bootSids = null; // boot trust window is one enumeration only
@@ -448,7 +470,11 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
             baseBusy = false;
           }
         }
-        const busy = baseBusy || delegated;
+        const busy = busyWithRunningWork(
+          baseBusy || delegated,
+          w.runningChildAgentCount,
+          w.runningBackgroundProcessCount,
+        );
         noteTurnEdge(w, busy);
         if (deltas.busyChanged(w.sid, busy)) j.append(w.sid, "busy", { sid: w.sid, busy });
         return;
@@ -470,13 +496,21 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
         j.append(w.sid, "prompt", { sid: w.sid, prompt });
       const paneBusy = pane ? isBusy(pane) : false;
       notePaneBusy(w.sid, paneBusy); // still the REST fallback when both layers abstain
+      if (w.agent === "codex") {
+        w.runningBackgroundProcessCount = pane ? backgroundProcessCount(pane) : 0;
+        notePaneBackgroundProcessCount(w.sid, w.runningBackgroundProcessCount);
+      }
       // Ask the agent (hooks) and its transcript, in that order of certainty but
       // arbitrated by recency — see `session-state.ts` for why rank alone would
       // latch busy on every steering send. The pane only backstops both. We are
       // in the pane-backed branch, so the process is known to exist; these layers
       // answer "is a turn in flight", not "is this alive".
       const verdict = await sessionTurnState({ sessionId: w.sid, transcriptPath: w.tp });
-      const busy = resolveBusy({ verdict, paneBusy, delegated });
+      const busy = busyWithRunningWork(
+        resolveBusy({ verdict, paneBusy, delegated }),
+        w.runningChildAgentCount,
+        w.runningBackgroundProcessCount,
+      );
       noteTurnEdge(w, busy);
       if (deltas.busyChanged(w.sid, busy)) j.append(w.sid, "busy", { sid: w.sid, busy });
     } catch {}

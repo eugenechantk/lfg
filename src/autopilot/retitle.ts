@@ -29,7 +29,7 @@ import { ensureLease, leasePathForTranscript, parseLease } from "../leases.ts";
 import {
   collectResumableCandidates,
   listSessions,
-  recentUserTurns,
+  allUserTurns,
   readTitleRecords,
   setSessionTitle,
   type ResumableCandidate,
@@ -144,29 +144,36 @@ export function buildRetitlePrompt(digests: RetitleDigest[]): string {
       `id: ${d.sessionId}`,
       `current_title: ${d.title}`,
       `project: ${d.project}`,
-      `recent_user_messages (oldest → newest):`,
+      `all_user_messages (oldest → newest):`,
       turns || "  (none)",
     ].join("\n");
   });
 
   return `You are maintaining the session list of a coding-agent dashboard.
 
-Each session below shows its CURRENT title (usually taken from the very first
-thing the user typed) and the user's most recent messages. Long sessions drift:
-the user changes subject, so the first prompt stops describing the work.
+Each session below shows its CURRENT title (usually taken from the first thing
+the user typed) and ALL genuine user messages in chronological order. Judge the
+conversation as a whole. Do not infer the session topic from the newest message
+alone.
 
-For each session decide whether the current title still describes what the
-session is actually working on NOW, judged by the recent messages.
+For each session, first decide whether the messages show a sustained semantic
+shift to a different workstream. A follow-up, clarification, implementation
+step, bug found while doing the work, verification request, or change in tactics
+within the same goal is NOT topic drift.
 
-- If it still fits, return null for that session. Prefer null — a title that is
-  merely imperfect is not worth churning.
-- If it has drifted, return a better title: 2-6 words, specific, naming the real
-  subject. No trailing punctuation, no quotes, no "Session" prefix, no filler
-  like "working on" or "discussion about". Match the tone of a git branch name
-  written as prose, e.g. "Autopilot retitle task", "iOS push token expiry",
-  "Tailwind migration for settings".
-- Ignore tool noise and one-word replies ("yes", "go on") when judging subject.
-- If the recent messages are too thin to tell, return null.
+- If there is no sustained semantic shift and the current title still names the
+  established workstream, return null. Prefer null — a merely imperfect title is
+  not worth churning.
+- Rename only when the full message sequence makes the current title materially
+  misleading. The new title must summarize the established workstream across the
+  conversation; never restate just the latest request.
+- A new title is 2-6 words, specific, with no trailing punctuation, quotes,
+  "Session" prefix, or filler such as "working on" or "discussion about". Match
+  the tone of a git branch name written as prose, e.g. "Autopilot retitle task",
+  "iOS push token expiry", "Tailwind migration for settings".
+- Ignore one-word replies ("yes", "go on") when judging the subject.
+- If the messages are too thin or mixed to identify a stable workstream, return
+  null.
 
 Reply with ONLY a JSON array, one entry per session, no prose and no markdown
 fence:
@@ -346,11 +353,21 @@ export async function runRetitle(ctx: TaskContext): Promise<TaskResult> {
   log(`[retitle] ${all.length} in window → ${picked.length} to examine`);
   if (!picked.length) return { examined: 0, changed: 0, note: "no candidates" };
 
-  // Build digests; drop anything too thin to judge.
+  // Build complete conversation digests; drop anything too thin to judge.
   const digests: RetitleDigest[] = [];
   const byId = new Map<string, RetitleCandidate>();
+  const histories = new Map<string, { messages: string[]; nextByte: number }>();
   for (const c of picked) {
-    const turns = await recentUserTurns(c.path, 6).catch(() => []);
+    const checkpoint = checkpoints[c.sessionId];
+    const canContinue =
+      checkpoint?.userMessages !== undefined && checkpoint.bytes <= c.bytes;
+    const previous = canContinue ? checkpoint.userMessages! : [];
+    const scanned = await allUserTurns(c.path, {
+      startByte: canContinue ? checkpoint.bytes : 0,
+    }).catch(() => null);
+    if (!scanned) continue;
+    const turns = [...previous, ...scanned.turns];
+    histories.set(c.sessionId, { messages: turns, nextByte: scanned.nextByte });
     if (turns.length < MIN_USER_TURNS) continue;
     const title = c.title || titles[c.sessionId]?.title || "(untitled)";
     digests.push({
@@ -369,7 +386,19 @@ export async function runRetitle(ctx: TaskContext): Promise<TaskResult> {
   const stamp = async () => {
     if (dryRun) return;
     const next = { ...checkpoints };
-    for (const c of picked) next[c.sessionId] = { bytes: c.bytes, at: now };
+    for (const c of picked) {
+      const history = histories.get(c.sessionId);
+      // A failed read is left unstamped so it can retry. Successful reads cache
+      // the complete truncated message sequence and checkpoint only through the
+      // last complete JSON row.
+      if (history) {
+        next[c.sessionId] = {
+          bytes: history.nextByte,
+          at: now,
+          userMessages: history.messages,
+        };
+      }
+    }
     await writeCheckpoints(
       pruneCheckpoints(next, new Set(all.map((c) => c.sessionId))),
     ).catch(() => {});

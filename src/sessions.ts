@@ -36,7 +36,16 @@ import {
 } from "./autopilot/titles.ts";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
-import { codexDelegationSessionIds, lastPaneBusy } from "./activity.ts";
+import {
+  codexDelegationSessionIds,
+  lastPaneBackgroundProcessCount,
+  lastPaneBusy,
+} from "./activity.ts";
+import {
+  listSubagentSessions,
+  runningBackgroundProcessCounts as claudeBackgroundProcessCounts,
+  withSessionWorkActivity,
+} from "./subagents.ts";
 import {
   listProcs,
   cwdOf,
@@ -106,6 +115,13 @@ export type Session = {
   // freshness is only the fallback. Background Codex delegations are folded in
   // here too so every surface shares the same busy boolean.
   busy: boolean;
+  // Number of Claude child agents currently active. Added after the parent row
+  // is deduplicated; active children also promote `busy` so every consumer sees
+  // the parent as working even while its own pane is idle.
+  runningChildAgentCount?: number;
+  // Active background shell processes: Claude derives these from transcript
+  // task lifecycle; Codex derives them from its live pane status.
+  runningBackgroundProcessCount?: number;
   last: SessionMsg | null;
   tmuxTarget: string | null;
   // tmux session name (the `name` in `name:0.0`) when targetable, and whether
@@ -1931,6 +1947,26 @@ function normalizeLineUnsafe(line: string, codexState: CodexNormalizationState):
           msgs.push({ id: blockId(id, idx), role, kind: "text", text: handoff, ts });
           return;
         }
+        // Claude's Agent input contains the entire delegated prompt. That is
+        // implementation detail, not transcript content — the child-session UI
+        // owns the full lifecycle and transcript. Keep one readable launch beat
+        // in the parent without leaking the prompt or opaque child id.
+        if (c.name === "Agent") {
+          const agentInput = c.input && typeof c.input === "object" && !Array.isArray(c.input)
+            ? (c.input as Record<string, unknown>)
+            : null;
+          const description = typeof agentInput?.description === "string"
+            ? agentInput.description.trim()
+            : "";
+          msgs.push({
+            id: blockId(id, idx),
+            role,
+            kind: "tool_use",
+            text: description ? `Started agent · ${description}` : "Started child agent",
+            ts,
+          });
+          return;
+        }
         const input = describeInput(c.input);
         msgs.push({
           id: blockId(id, idx),
@@ -1945,11 +1981,18 @@ function normalizeLineUnsafe(line: string, codexState: CodexNormalizationState):
         // The delivery receipt for a SendUserFile call restates paths already
         // shown as attachments — drop it rather than echo them as raw text.
         if (isSendUserFileResult(x.toolUseResult)) return;
+        const resultText = extractText(c.content);
+        // Async Agent launch receipts explicitly mark themselves as internal
+        // metadata and contain agent ids + temp output paths. The child-session
+        // panel is the user-facing representation; exposing this block is both
+        // noisy and a violation of the producer's own visibility contract.
+        if (resultText.startsWith("Async agent launched successfully.")
+            && resultText.includes("internal metadata")) return;
         msgs.push({
           id: blockId(id, idx),
           role,
           kind: "tool_result",
-          text: extractText(c.content) || "(result)",
+          text: resultText || "(result)",
           ts,
         });
         return;
@@ -2079,38 +2122,143 @@ export async function recentUserTurns(
 function collectUserTurns(lines: string[], n: number, maxChars: number): string[] {
   const out: string[] = [];
   for (let i = lines.length - 1; i >= 0 && out.length < n; i--) {
-    const line = lines[i];
-    let x: {
-      type?: string;
-      isMeta?: boolean;
-      toolUseResult?: unknown;
-      message?: { content?: unknown };
-    };
-    try {
-      x = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    let t: string | null = null;
-    const cm = normalizeCodexLine(line, createCodexNormalizationState())?.[0];
-    if (cm?.role === "user" && cm.kind === "text") {
-      t = stripConversationPrefix(cm.text).trim().replace(/\s+/g, " ");
-    } else if (x.type === "user" && !x.isMeta) {
-      // A tool result is recorded as a `user` turn. `extractText` drops the
-      // `tool_result` blocks themselves, but a record can carry a stray text
-      // block alongside — so exclude the record outright rather than trusting
-      // the content shape. These outnumber real turns by an order of magnitude.
-      if (x.toolUseResult !== undefined) continue;
-      const raw = extractText(x.message?.content);
-      t = raw ? stripHumanPrefix(raw.trim().replace(/\s+/g, " ")) : null;
-    }
-    // "<" opens the command/caveat wrappers Claude Code injects as user turns
-    // (`<command-name>`, `<local-command-stdout>`); they are machinery, not the
-    // human, and they'd otherwise dominate the digest of an active session.
-    if (!t || t.startsWith("<")) continue;
-    out.push(t.length > maxChars ? t.slice(0, maxChars - 1) + "…" : t);
+    const turn = userTurnFromLine(lines[i], maxChars);
+    if (turn) out.push(turn);
   }
   return out.reverse();
+}
+
+/** Parse one JSONL row into the genuine user text shared by both title readers. */
+function userTurnFromLine(line: string, maxChars: number): string | null {
+  // Tool-heavy transcripts can contain multi-megabyte assistant/output rows.
+  // Avoid materialising those through JSON.parse when neither transcript format
+  // can possibly classify the row as a user message.
+  if (!/"type"\s*:\s*"(?:user|user_message)"/.test(line)) return null;
+  let x: {
+    type?: string;
+    isMeta?: boolean;
+    toolUseResult?: unknown;
+    message?: { content?: unknown };
+    payload?: { type?: string; message?: string };
+  };
+  try {
+    x = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  let text: string | null = null;
+  if (x.type === "event_msg" && x.payload?.type === "user_message") {
+    text = x.payload.message
+      ? stripConversationPrefix(x.payload.message).trim().replace(/\s+/g, " ")
+      : null;
+  } else if (x.type === "user" && !x.isMeta) {
+    // A tool result is recorded as a `user` turn. `extractText` drops the
+    // `tool_result` blocks themselves, but a record can carry a stray text
+    // block alongside — so exclude the record outright rather than trusting
+    // the content shape. These outnumber real turns by an order of magnitude.
+    if (x.toolUseResult !== undefined) return null;
+    const raw = extractText(x.message?.content);
+    text = raw ? stripHumanPrefix(raw.trim().replace(/\s+/g, " ")) : null;
+  }
+  // "<" opens the command/caveat wrappers Claude Code injects as user turns
+  // (`<command-name>`, `<local-command-stdout>`); they are machinery, not the
+  // human, and they'd otherwise dominate the digest of an active session.
+  if (!text || text.startsWith("<")) return null;
+  return text.length > maxChars ? text.slice(0, maxChars - 1) + "…" : text;
+}
+
+export type AllUserTurnsResult = {
+  /** Genuine user messages found at or after the requested byte offset. */
+  turns: string[];
+  /** Safe byte offset for the next incremental scan. */
+  nextByte: number;
+};
+
+/**
+ * Read every genuine user turn from a transcript without loading the whole file
+ * into memory.
+ *
+ * The retitler persists the returned `turns` and `nextByte`, then starts the next
+ * scan at that byte. This makes the title model conversation-aware while keeping
+ * 500 MB Codex transcripts an initial one-time scan rather than a recurring cost.
+ * `nextByte` never advances past an incomplete JSON row, so a message observed
+ * halfway through an active writer's append is picked up on the next scan.
+ */
+export async function allUserTurns(
+  path: string,
+  {
+    maxChars = 240,
+    startByte = 0,
+  }: { maxChars?: number; startByte?: number } = {},
+): Promise<AllUserTurnsResult> {
+  const file = Bun.file(path);
+  if (!(await file.exists())) return { turns: [], nextByte: 0 };
+
+  const size = file.size;
+  const from = Number.isFinite(startByte) && startByte >= 0 && startByte <= size
+    ? Math.floor(startByte)
+    : 0;
+  if (from === size) return { turns: [], nextByte: from };
+
+  const turns: string[] = [];
+  const decoder = new TextDecoder();
+  let lineParts: Uint8Array[] = [];
+  let lineBytes = 0;
+  let nextByte = from;
+
+  const lineText = (): string => {
+    if (lineParts.length === 0) return "";
+    if (lineParts.length === 1) return decoder.decode(lineParts[0]);
+    const joined = new Uint8Array(lineBytes);
+    let offset = 0;
+    for (const part of lineParts) {
+      joined.set(part, offset);
+      offset += part.byteLength;
+    }
+    return decoder.decode(joined);
+  };
+
+  const consumeCompleteLine = (newlineBytes: number): void => {
+    const turn = userTurnFromLine(lineText(), maxChars);
+    if (turn) turns.push(turn);
+    nextByte += lineBytes + newlineBytes;
+    lineParts = [];
+    lineBytes = 0;
+  };
+
+  for await (const chunk of file.slice(from, size).stream()) {
+    let segmentStart = 0;
+    for (let i = 0; i < chunk.byteLength; i++) {
+      if (chunk[i] !== 0x0a) continue;
+      if (i > segmentStart) {
+        const part = chunk.subarray(segmentStart, i);
+        lineParts.push(part);
+        lineBytes += part.byteLength;
+      }
+      consumeCompleteLine(1);
+      segmentStart = i + 1;
+    }
+    if (segmentStart < chunk.byteLength) {
+      const part = chunk.subarray(segmentStart);
+      lineParts.push(part);
+      lineBytes += part.byteLength;
+    }
+  }
+
+  // Closed transcripts are allowed to omit the final newline. Advance only if
+  // that final row is valid JSON; an active transcript caught mid-write remains
+  // uncheckpointed and will be retried from the start of the partial row.
+  if (lineBytes > 0) {
+    const finalLine = lineText();
+    try {
+      JSON.parse(finalLine);
+      const turn = userTurnFromLine(finalLine, maxChars);
+      if (turn) turns.push(turn);
+      nextByte += lineBytes;
+    } catch {}
+  }
+
+  return { turns, nextByte };
 }
 
 // The full (untruncated) text of the last genuine user turn, whitespace-collapsed.
@@ -2702,8 +2850,27 @@ async function listSessionsUncached(): Promise<Session[]> {
       (a.sessionId ?? "").localeCompare(b.sessionId ?? ""),
   );
   const deduped = resolveSessionOwners(out, (pid) => claimByPid.get(pid) ?? null);
-  resolvePaneOwners(deduped);
-  return deduped;
+  const transcriptBackgroundCounts = await claudeBackgroundProcessCounts(
+    deduped.flatMap((session) => session.transcriptPath ? [session.transcriptPath] : []),
+  );
+  const workEnriched = await Promise.all(deduped.map(async (session) => {
+    const agents = session.transcriptPath
+      ? await listSubagentSessions(session.transcriptPath)
+      : [];
+    const transcriptBackgroundCount = session.transcriptPath
+      ? transcriptBackgroundCounts.get(session.transcriptPath) ?? 0
+      : 0;
+    const paneBackgroundCount = session.sessionId
+      ? lastPaneBackgroundProcessCount(session.sessionId) ?? 0
+      : 0;
+    return withSessionWorkActivity(
+      session,
+      agents,
+      Math.max(transcriptBackgroundCount, paneBackgroundCount),
+    );
+  }));
+  resolvePaneOwners(workEnriched);
+  return workEnriched;
 }
 
 /**

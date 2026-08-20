@@ -347,6 +347,65 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
     expect(sent[0].p.kind).toBe("finished");
   });
 
+  test("an active child keeps an idle parent busy until the child finishes", async () => {
+    const sent: ApnsPayload[] = [];
+    const prior = new Map<string, PriorState>();
+    let runningChildAgentCount = 1;
+    const deps: TickDeps = {
+      sessions: async () => [{
+        sessionId: "s1",
+        title: "Parent",
+        tmuxTarget: "t",
+        runningChildAgentCount,
+      }],
+      observe: async () => obs(false, false),
+      devices: async () => [{ token: "a", env: "sandbox" }],
+      cfg,
+      send: async (_d, payload) => {
+        sent.push(payload);
+        return { ok: true, status: 200 };
+      },
+      now: () => 1000,
+    };
+
+    await runPushTick(prior, deps);
+    expect(prior.get("s1")?.busy).toBe(true);
+    await runPushTick(prior, deps);
+    expect(sent).toHaveLength(0);
+
+    runningChildAgentCount = 0;
+    await runPushTick(prior, deps);
+    expect(sent.map((payload) => payload.kind)).toEqual(["finished"]);
+  });
+
+  test("an active background process keeps an idle parent busy until it finishes", async () => {
+    const sent: ApnsPayload[] = [];
+    const prior = new Map<string, PriorState>();
+    let runningBackgroundProcessCount = 1;
+    const deps: TickDeps = {
+      sessions: async () => [{
+        sessionId: "s1",
+        title: "Parent",
+        tmuxTarget: "t",
+        runningBackgroundProcessCount,
+      }],
+      observe: async () => obs(false, false),
+      devices: async () => [{ token: "a", env: "sandbox" }],
+      cfg,
+      send: async (_d, payload) => {
+        sent.push(payload);
+        return { ok: true, status: 200 };
+      },
+      now: () => 1000,
+    };
+
+    await runPushTick(prior, deps);
+    expect(prior.get("s1")?.busy).toBe(true);
+    runningBackgroundProcessCount = 0;
+    await runPushTick(prior, deps);
+    expect(sent.map((payload) => payload.kind)).toEqual(["finished"]);
+  });
+
   test("busy → idle with a prompt pushes 'needs-input' carrying the question", async () => {
     const sent: ApnsPayload[] = [];
     const prior = new Map<string, PriorState>();

@@ -17,7 +17,12 @@
 // Claude ones from the shapes already covered in tmux-composer-border.test.ts.
 // See .claude/diagnosis-codex-send-not-sent-20260806.md.
 import { test, expect, describe } from "bun:test";
-import { inputBoxFromPane, isBusy, codexComposerIndex } from "./tmux";
+import {
+  backgroundProcessCount,
+  inputBoxFromPane,
+  isBusy,
+  codexComposerIndex,
+} from "./tmux";
 
 const RULE_77 = "─".repeat(77);
 
@@ -44,6 +49,21 @@ const CODEX_BUSY_PLAIN = [
   "• Running the requested command now.",
   "",
   "• Working (11s • esc to interrupt) · 1 background terminal running · /ps to vie…",
+  "",
+  "› Write tests for @filename",
+  "",
+  "  gpt-5.6-sol high fast · ~/dev/personal/lfg-sendq-repro",
+  "",
+].join("\n");
+
+// Codex can finish its own response while a spawned shell keeps running. The
+// background terminal is still session work even though the main meter is idle.
+const CODEX_IDLE_WITH_BACKGROUND = [
+  "• The server is ready; leaving it running for the preview.",
+  "",
+  "─ Worked for 8s " + "─".repeat(63),
+  "",
+  "  2 background terminals running · /ps to view · /stop to close",
   "",
   "› Write tests for @filename",
   "",
@@ -150,6 +170,18 @@ describe("codex busy detection", () => {
 
   test("plain busy codex still reads busy", () => {
     expect(isBusy(CODEX_BUSY_PLAIN)).toBe(true);
+  });
+
+  test("background terminals keep an otherwise idle codex session busy", () => {
+    expect(backgroundProcessCount(CODEX_IDLE_WITH_BACKGROUND)).toBe(2);
+    expect(isBusy(CODEX_IDLE_WITH_BACKGROUND)).toBe(true);
+  });
+
+  test("background terminal copy in agent prose is not counted", () => {
+    expect(backgroundProcessCount(CODEX_IDLE_WORKED.replace(
+      "• LONGACK",
+      "• The requested label is ‘2 background terminals running’.",
+    ))).toBe(0);
   });
 
   test("idle codex reads idle", () => {

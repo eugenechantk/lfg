@@ -2,7 +2,13 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { lastPaneBusy, notePaneBusy, scanStateRoots } from "./activity.ts";
+import {
+  lastPaneBackgroundProcessCount,
+  lastPaneBusy,
+  notePaneBackgroundProcessCount,
+  notePaneBusy,
+  scanStateRoots,
+} from "./activity.ts";
 
 const tempDirs: string[] = [];
 
@@ -104,5 +110,12 @@ describe("pane busy cache", () => {
 
     expect(lastPaneBusy("s-pane", 10_999)).toBe(true);
     expect(lastPaneBusy("s-pane", 11_001)).toBeNull();
+  });
+
+  test("background process counts are normalized and expire with pane state", () => {
+    notePaneBackgroundProcessCount("s-processes", 2.8, 1000);
+
+    expect(lastPaneBackgroundProcessCount("s-processes", 10_999)).toBe(2);
+    expect(lastPaneBackgroundProcessCount("s-processes", 11_001)).toBeNull();
   });
 });

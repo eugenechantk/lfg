@@ -1055,6 +1055,7 @@ const CODEX_BUSY_METER = /\((?:\d+h\s*)?(?:\d+m\s*)?\d+s\s*[•·]\s*esc to inte
 // Only rendered while a turn is in flight, so it is a positive busy signal in
 // its own right — and it is exactly the frame the old 6-line window missed.
 const CODEX_QUEUE_NOTICE = /messages? to be submitted after next tool call/i;
+const CODEX_BACKGROUND_PROCESSES = /\b(\d+)\s+background terminals?\s+running\b/i;
 
 /**
  * Index of the codex composer line, or null if this pane isn't a codex TUI.
@@ -1096,6 +1097,15 @@ function codexChrome(lines: string[]): string | null {
   }
   const start = Math.max(lastRule + 1, composer - CODEX_CHROME_LOOKBACK, 0);
   return lines.slice(start).join("\n");
+}
+
+/** Count live Codex background terminals from the bounded TUI chrome only. */
+export function backgroundProcessCount(pane: string): number {
+  const chrome = codexChrome(pane.split("\n"));
+  if (!chrome) return 0;
+  const raw = chrome.match(CODEX_BACKGROUND_PROCESSES)?.[1];
+  const count = raw == null ? 0 : Number(raw);
+  return Number.isSafeInteger(count) && count > 0 ? count : 0;
 }
 
 // Split a captured pane into the two chrome regions isBusy is allowed to read.
@@ -1146,7 +1156,10 @@ export function isBusy(pane: string): boolean {
   // only holds the send until the next poll.
   if (codex != null) {
     return (
-      CODEX_BUSY_METER.test(codex) || CODEX_QUEUE_NOTICE.test(codex) || BUSY_METER.test(codex)
+      CODEX_BUSY_METER.test(codex)
+      || CODEX_QUEUE_NOTICE.test(codex)
+      || BUSY_METER.test(codex)
+      || backgroundProcessCount(pane) > 0
     );
   }
   const { meter, footer } = busyChromeRegions(pane);

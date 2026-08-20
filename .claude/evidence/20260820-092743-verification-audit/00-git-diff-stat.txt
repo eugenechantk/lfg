@@ -1,0 +1,15 @@
+ .claude/feature/autopilot-retitle.md               |  14 +-
+ desktop/LFGSessions.swift                          | 108 ++++++++++----
+ desktop/README.md                                  |  42 ++++--
+ desktop/build.sh                                   |   4 +-
+ ios/LFG/LFGApp.swift                               |   6 +-
+ .../Sources/LFGCore/BundledCloudflareAccess.swift  |  50 +++++--
+ .../BundledCloudflareAccessTests.swift             |  48 +++++--
+ ios/README.md                                      |   4 +-
+ ios/scripts/generate-bundled-cloudflare-access     |   3 +
+ src/autopilot/checkpoints.ts                       |  15 +-
+ src/autopilot/retitle.test.ts                      |  23 ++-
+ src/autopilot/retitle.ts                           |  71 ++++++---
+ src/recent-user-turns.test.ts                      |  76 +++++++++-
+ src/sessions.ts                                    | 159 +++++++++++++++++----
+ 14 files changed, 500 insertions(+), 123 deletions(-)

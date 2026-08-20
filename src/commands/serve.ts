@@ -77,6 +77,7 @@ import { capturePaneScroll, capturePaneEscaped, paneWidth, ensureFolderTrusted }
 import { rootDir, inboxDir, setInbox, createDir, expandUserPath } from "../dirs.ts";
 import { detectUrls } from "../links.ts";
 import { decodeFilenameHeader, storedUploadName } from "../upload-names.ts";
+import { listSubagentSessions, resolveSubagentTranscript } from "../subagents.ts";
 import type { ServerWebSocket } from "bun";
 
 /// Ceiling on a single client attachment. The server is one Bun event loop
@@ -674,6 +675,54 @@ export async function messagesResponseForSession(sid: string, url: URL): Promise
     messages,
     ...(forkPending ? { forkPending: true } : {}),
   });
+}
+
+export async function subagentsResponseForSession(
+  sid: string,
+  resolve: (sid: string) => Promise<string | null> = resolveTranscript,
+): Promise<Response> {
+  const parentTranscript = await resolve(sid);
+  if (!parentTranscript) return err(404, "session transcript not found");
+  return json({ id: sid, agents: await listSubagentSessions(parentTranscript) });
+}
+
+export async function subagentMessagesResponseForSession(
+  sid: string,
+  agentId: string,
+  url: URL,
+  resolve: (sid: string) => Promise<string | null> = resolveTranscript,
+): Promise<Response> {
+  const parentTranscript = await resolve(sid);
+  if (!parentTranscript) return err(404, "session transcript not found");
+  const childTranscript = resolveSubagentTranscript(parentTranscript, agentId);
+  if (!childTranscript) return err(404, "child agent transcript not found");
+
+  if (url.searchParams.get("page") === "backward") {
+    const rawLimit = parseInt(url.searchParams.get("limit") ?? "220", 10);
+    const rawBefore = url.searchParams.get("before");
+    const before = rawBefore == null ? null : Math.max(0, parseInt(rawBefore, 10) || 0);
+    const page = await messagePage(childTranscript, {
+      before,
+      limit: Number.isFinite(rawLimit) ? rawLimit : 220,
+    });
+    return json({
+      id: agentId,
+      parentId: sid,
+      total: page.total,
+      nextBefore: page.nextBefore,
+      messages: page.messages,
+    });
+  }
+
+  const full = url.searchParams.get("full") === "1";
+  const rawLimit = parseInt(url.searchParams.get("limit") ?? (full ? "0" : "40"), 10);
+  const limit = full
+    ? Math.max(0, Math.min(20_000, Number.isFinite(rawLimit) ? rawLimit : 0))
+    : Math.min(500, Math.max(1, Number.isFinite(rawLimit) ? rawLimit : 40));
+  const messages = await recentMessages(childTranscript, limit, {
+    maxBytes: full ? null : undefined,
+  });
+  return json({ id: agentId, parentId: sid, messages });
 }
 
 export type LiveStreamPane = { sid: string; tp: string; target: string | null };
@@ -2341,6 +2390,22 @@ export async function cmdServe() {
       // Non-streaming transcript read — lets an orchestrator (e.g. the voice
       // agent via the lfg-sessions skill) inspect what another session is
       // doing without holding an SSE connection.
+      {
+        const m = path.match(
+          /^\/api\/sessions\/([0-9a-fA-F-]{36})\/subagents\/([A-Za-z0-9_-]{1,128})\/messages$/,
+        );
+        if (m && req.method === "GET") {
+          return subagentMessagesResponseForSession(m[1], m[2], url);
+        }
+      }
+
+      {
+        const m = path.match(/^\/api\/sessions\/([0-9a-fA-F-]{36})\/subagents$/);
+        if (m && req.method === "GET") {
+          return subagentsResponseForSession(m[1]);
+        }
+      }
+
       {
         const m = path.match(/^\/api\/sessions\/([0-9a-fA-F-]{36})\/messages$/);
         if (m && req.method === "GET") {

@@ -1,0 +1,18 @@
+ M .claude/feature/autopilot-retitle.md
+ M desktop/LFGSessions.swift
+ M desktop/README.md
+ M desktop/build.sh
+ M ios/LFG/LFGApp.swift
+ M ios/LFGCore/Sources/LFGCore/BundledCloudflareAccess.swift
+ M ios/LFGCore/Tests/LFGCoreTests/BundledCloudflareAccessTests.swift
+ M ios/README.md
+ M ios/scripts/generate-bundled-cloudflare-access
+ M src/autopilot/checkpoints.ts
+ M src/autopilot/retitle.test.ts
+ M src/autopilot/retitle.ts
+ M src/recent-user-turns.test.ts
+ M src/sessions.ts
+?? .claude/evidence/20260820-092743-verification-audit/
+?? .claude/feature/autopilot-conversation-titles.md
+?? .codex/feature/bundled-pro-air-hosts.md
+?? scripts/lfg-forward

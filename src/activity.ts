@@ -7,6 +7,7 @@ const PANE_BUSY_TTL_MS = 10_000;
 
 let delegationCache: { at: number; ids: Set<string> } | null = null;
 const paneBusyCache = new Map<string, { busy: boolean; at: number }>();
+const paneBackgroundProcessCache = new Map<string, { count: number; at: number }>();
 
 export function defaultCodexStateRoots(): string[] {
   return [
@@ -80,4 +81,25 @@ export function lastPaneBusy(sid: string, at: number = Date.now()): boolean | nu
     return null;
   }
   return hit.busy;
+}
+
+export function notePaneBackgroundProcessCount(
+  sid: string,
+  count: number,
+  at: number = Date.now(),
+): void {
+  paneBackgroundProcessCache.set(sid, { count: Math.max(0, Math.floor(count)), at });
+}
+
+export function lastPaneBackgroundProcessCount(
+  sid: string,
+  at: number = Date.now(),
+): number | null {
+  const hit = paneBackgroundProcessCache.get(sid);
+  if (!hit) return null;
+  if (at - hit.at > PANE_BUSY_TTL_MS) {
+    paneBackgroundProcessCache.delete(sid);
+    return null;
+  }
+  return hit.count;
 }

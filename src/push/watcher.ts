@@ -42,6 +42,7 @@ import {
 import { unregisterDevice } from "./store.ts";
 import { loadFleetActivityActive, saveFleetActivityActive } from "./fleet-active-store.ts";
 import { resolveBusy, sessionDisplayState, sessionTurnState } from "../session-state.ts";
+import { busyWithRunningWork } from "../subagents.ts";
 import { basename, join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { PATHS } from "../config.ts";
@@ -131,6 +132,8 @@ export type PayloadSessionInput = {
   model?: string | null;
   status?: string | null;
   lastActivityAt?: number | null;
+  runningChildAgentCount?: number;
+  runningBackgroundProcessCount?: number;
 };
 
 /// State of the one fleet Live Activity between ticks. `since` is tracked for
@@ -560,6 +563,14 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
     let state: SessionState;
     try {
       state = await deps.observe(s);
+      state = {
+        ...state,
+        busy: busyWithRunningWork(
+          state.busy,
+          s.runningChildAgentCount ?? 0,
+          s.runningBackgroundProcessCount ?? 0,
+        ),
+      };
     } catch {
       continue;
     }

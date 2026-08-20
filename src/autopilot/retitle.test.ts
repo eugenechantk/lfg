@@ -216,6 +216,15 @@ describe("buildRetitlePrompt", () => {
     expect(p).toContain("- two");
   });
 
+  test("judges the whole conversation instead of treating the newest request as the topic", () => {
+    const p = buildRetitlePrompt(digests);
+    const prose = p.replace(/\s+/g, " ");
+    expect(p).toContain("all_user_messages (oldest → newest)");
+    expect(prose).toContain("newest message alone");
+    expect(prose).toContain("sustained semantic shift");
+    expect(prose).toContain("summarize the established workstream");
+  });
+
   test("asks for a JSON array and biases toward null", () => {
     const p = buildRetitlePrompt(digests);
     expect(p).toContain('[{"id": "<session id>", "title": "<new title>" | null}]');
@@ -231,12 +240,22 @@ describe("buildRetitlePrompt", () => {
 describe("checkpoints", () => {
   test("round-trips and drops malformed rows", () => {
     const parsed = parseCheckpoints({
-      good: { bytes: 10, at: 20 },
+      good: { bytes: 10, at: 20, userMessages: ["first", "second"] },
+      legacy: { bytes: 30, at: 40 },
       noBytes: { at: 20 },
       nan: { bytes: NaN, at: 1 },
       notObj: 3,
     });
-    expect(parsed).toEqual({ good: { bytes: 10, at: 20 } });
+    expect(parsed).toEqual({
+      good: { bytes: 10, at: 20, userMessages: ["first", "second"] },
+      legacy: { bytes: 30, at: 40 },
+    });
+  });
+
+  test("drops an invalid cached message list so the transcript is fully rescanned", () => {
+    expect(parseCheckpoints({ bad: { bytes: 10, at: 20, userMessages: ["first", 42] } })).toEqual({
+      bad: { bytes: 10, at: 20 },
+    });
   });
 
   test("a non-object file yields empty checkpoints", () => {
