@@ -59,12 +59,18 @@ are stretched to the full visible height of the display they open on.
 
 ## Hosts
 
-`~/.config/lfg-desktop/hosts.json` (seeded with localhost on first run):
+`~/.config/lfg-desktop/hosts.json` (seeded with the Pro and Air Cloudflare
+hosts on first run; an existing non-empty file remains authoritative):
 
 ```json
 {
   "hosts": [
-    "http://localhost:8766",
+    {
+      "url": "https://lfg-pro.eugenechantk.me",
+      "ssh": "pro",
+      "displayName": "Pro",
+      "transport": "ssh"
+    },
     {
       "url": "https://lfg-air.eugenechantk.me",
       "ssh": "air",
@@ -76,9 +82,10 @@ are stretched to the full visible height of the display they open on.
 ```
 
 The Add Host field is prefilled with
-`https://lfg-pro.eugenechantk.me`, and its SSH field with `pro`. Adding that
-canonical endpoint gives it the friendly name `Pro` and forces plain SSH for
-Cloudflare Access; existing host files are never rewritten automatically.
+`https://lfg-pro.eugenechantk.me`, and its SSH field with `pro`. Adding either
+canonical endpoint gives it the matching friendly name and alias and forces
+plain SSH for Cloudflare Access; existing non-empty host files are never
+rewritten automatically.
 
 Each entry is one `lfg serve` machine. The
 host whose URL is loopback — or whose reported hostname matches this machine —
@@ -117,6 +124,24 @@ Host air
     ProxyCommand /opt/homebrew/bin/cloudflared access ssh --hostname %h
 ```
 
+### Forward another port
+
+The `air forward` and `pro forward` helpers expose one remote loopback port on
+the current Mac through the existing Cloudflare SSH alias. The local listener
+is bound to `127.0.0.1`, so it is not exposed to the LAN or Internet:
+
+```sh
+air forward 3000              # Air :3000 -> this Mac :3000
+pro forward 8080              # Pro :8080 -> this Mac :8080
+air forward 3000 13000        # Air :3000 -> this Mac :13000
+lfg-forward air 3000          # generic form
+air-forward 3000              # legacy dashed form, also supported
+```
+
+Keep the command's terminal open while using the forwarded port; press
+Control-C to stop it. The command fails instead of replacing an existing local
+listener.
+
 Cloudflare Access service tokens are stored per HTTPS origin in the macOS
 Keychain, never in `hosts.json`. Import the same private JSON shape used by the
 iOS build without printing the secret:
@@ -136,9 +161,10 @@ than one protected LFG hostname when their Access policies allow it.
 
 For a remotely administered Mac whose login Keychain is unavailable over SSH,
 the app also checks `~/.cloudflared/lfg-access-service-token.private.json`.
-That file uses the bundled JSON shape and is accepted only when its `hostURL`
-matches the requested HTTPS origin exactly. Keep it mode `0400`; it is a
-machine-local provisioning fallback, not part of the repository.
+That file uses the bundled JSON shape and is accepted only when the requested
+HTTPS origin appears in its `hostURLs` allowlist (or matches the legacy
+`hostURL` exactly). Keep it mode `0400`; it is a machine-local provisioning
+fallback, not part of the repository.
 
 Two things the previous Mosh shell aliases got wrong that the automatic
 transport does not:

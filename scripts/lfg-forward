@@ -1,0 +1,89 @@
+#!/bin/zsh
+set -eu
+
+program="${0:t}"
+
+usage() {
+  if [[ "$program" == "air" || "$program" == "pro" ]]; then
+    print -u2 "Usage: $program forward <remote-port> [local-port]"
+    print -u2 "Example: $program forward 3000"
+  elif [[ "$program" == "lfg-forward" ]]; then
+    print -u2 "Usage: lfg-forward <pro|air> <remote-port> [local-port]"
+    print -u2 "Example: lfg-forward air 3000"
+  else
+    print -u2 "Usage: $program <remote-port> [local-port]"
+    print -u2 "Example: $program 3000"
+  fi
+}
+
+case "$program" in
+  air|pro)
+    target="$program"
+    if (( $# < 1 )) || [[ "$1" != "forward" ]]; then
+      usage
+      exit 2
+    fi
+    shift
+    ;;
+  air-forward)
+    target="air"
+    ;;
+  pro-forward)
+    target="pro"
+    ;;
+  lfg-forward)
+    if (( $# < 1 )); then
+      usage
+      exit 2
+    fi
+    target="$1"
+    shift
+    if [[ "$target" != "pro" && "$target" != "air" ]]; then
+      print -u2 "Host must be 'pro' or 'air'."
+      usage
+      exit 2
+    fi
+    ;;
+  *)
+    print -u2 "Run this command as air, pro, lfg-forward, pro-forward, or air-forward."
+    exit 2
+    ;;
+esac
+
+if (( $# < 1 || $# > 2 )) || [[ "$1" == "--help" || "$1" == "-h" ]]; then
+  usage
+  if (( $# >= 1 )) && [[ "$1" == "--help" || "$1" == "-h" ]]; then
+    exit 0
+  fi
+  exit 2
+fi
+
+remote_port="$1"
+local_port="${2:-$remote_port}"
+
+for port in "$remote_port" "$local_port"; do
+  if [[ ! "$port" =~ '^[0-9]+$' ]] || (( port < 1 || port > 65535 )); then
+    print -u2 "Invalid port: $port (expected 1-65535)."
+    exit 2
+  fi
+done
+
+if /usr/sbin/lsof -nP -iTCP:"$local_port" -sTCP:LISTEN >/dev/null 2>&1; then
+  print -u2 "Local port $local_port is already in use:"
+  /usr/sbin/lsof -nP -iTCP:"$local_port" -sTCP:LISTEN >&2
+  exit 1
+fi
+
+print "Forwarding local 127.0.0.1:$local_port to $target 127.0.0.1:$remote_port"
+print "Keep this terminal open; press Ctrl-C to stop forwarding."
+
+exec /usr/bin/ssh \
+  -N \
+  -T \
+  -o ControlMaster=no \
+  -o ControlPath=none \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=15 \
+  -o ServerAliveCountMax=4 \
+  -L "127.0.0.1:${local_port}:127.0.0.1:${remote_port}" \
+  "$target"

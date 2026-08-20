@@ -4,11 +4,15 @@ import Foundation
 /// ignored resource, then immediately copy the credential into device-only
 /// Keychain storage on launch.
 public struct BundledCloudflareAccessConfiguration: Sendable, Equatable {
-    public let hostURL: String
+    public let hostURLs: [String]
     public let credential: CloudflareAccessCredential
 
+    /// The first bundled origin remains the compatibility/default origin.
+    public var hostURL: String { hostURLs[0] }
+
     private struct Payload: Decodable {
-        let hostURL: String
+        let hostURL: String?
+        let hostURLs: [String]?
         let clientID: String
         let clientSecret: String
     }
@@ -16,26 +20,44 @@ public struct BundledCloudflareAccessConfiguration: Sendable, Equatable {
     public init?(data: Data) {
         guard let payload = try? JSONDecoder().decode(Payload.self, from: data) else { return nil }
 
-        let hostURL = payload.hostURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let clientID = payload.clientID.trimmingCharacters(in: .whitespacesAndNewlines)
         let clientSecret = payload.clientSecret.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clientID.isEmpty,
-              !clientSecret.isEmpty,
-              let canonicalURL = Self.canonicalHTTPSOrigin(for: hostURL) else { return nil }
+              !clientSecret.isEmpty else { return nil }
 
-        self.hostURL = canonicalURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let rawHostURLs: [String]
+        if let hostURLs = payload.hostURLs {
+            rawHostURLs = hostURLs
+        } else if let hostURL = payload.hostURL {
+            rawHostURLs = [hostURL]
+        } else {
+            return nil
+        }
+
+        var seen = Set<String>()
+        var canonicalURLs: [String] = []
+        for rawURL in rawHostURLs {
+            guard let canonicalURL = Self.canonicalHTTPSOrigin(for: rawURL) else { return nil }
+            if seen.insert(canonicalURL).inserted {
+                canonicalURLs.append(canonicalURL)
+            }
+        }
+        guard !canonicalURLs.isEmpty else { return nil }
+
+        self.hostURLs = canonicalURLs
         self.credential = CloudflareAccessCredential(clientID: clientID, clientSecret: clientSecret)
     }
 
-    /// A bundled private host is additive: it makes a fresh install usable but
-    /// never replaces the user's existing default or duplicates the same URL.
-    public func addingHostIfNeeded(to hosts: [Host]) -> [Host] {
-        guard !hosts.contains(where: { Self.canonicalHTTPSOrigin(for: $0.url) == hostURL }) else {
-            return hosts
+    /// Bundled private hosts are additive: they make a fresh install usable but
+    /// never replace the user's existing default or duplicate the same origin.
+    public func addingHostsIfNeeded(to hosts: [Host]) -> [Host] {
+        var result = hosts
+        for hostURL in hostURLs where !result.contains(where: {
+            Self.canonicalHTTPSOrigin(for: $0.url) == hostURL
+        }) {
+            result.append(Host(url: hostURL, isDefault: result.isEmpty))
         }
-        return HostStore.normalized(
-            hosts + [Host(url: hostURL, isDefault: hosts.isEmpty)]
-        )
+        return result == hosts ? hosts : HostStore.normalized(result)
     }
 
     private static func canonicalHTTPSOrigin(for value: String) -> String? {

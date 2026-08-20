@@ -170,7 +170,9 @@ xcodegen generate
 
 This creates the gitignored, mode-`0600`
 `PrivateResources/BundledCloudflareAccess.private.json`. A clean install copies
-the token into the device Keychain and adds the protected host automatically.
+the token into the device Keychain for both the Pro and Air Cloudflare origins
+and adds both protected hosts automatically. The payload keeps the legacy
+single `hostURL` field and adds an ordered `hostURLs` allowlist.
 The resource is extractable from the app binary, so never use it in a publicly
 distributed build. Delete the generated resource and regenerate the project to
 produce a credential-free build with the normal manual setup flow.

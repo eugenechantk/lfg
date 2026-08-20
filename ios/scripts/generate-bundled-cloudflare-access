@@ -3,6 +3,7 @@ set -euo pipefail
 
 service="dev.omg.lfg.cloudflare-access.pilot"
 host_url="https://lfg-pro.eugenechantk.me"
+host_urls_json='["https://lfg-pro.eugenechantk.me","https://lfg-air.eugenechantk.me"]'
 script_dir="${0:A:h}"
 output_path="$script_dir/../PrivateResources/BundledCloudflareAccess.private.json"
 
@@ -17,6 +18,7 @@ credential_json=$(security find-generic-password \
 mkdir -p "${output_path:h}"
 umask 077
 BUNDLED_HOST_URL="$host_url" \
+BUNDLED_HOST_URLS_JSON="$host_urls_json" \
 BUNDLED_CREDENTIAL_JSON="$credential_json" \
 BUNDLED_OUTPUT_PATH="$output_path" \
 /usr/bin/python3 <<'PY'
@@ -27,6 +29,7 @@ from pathlib import Path
 credential = json.loads(os.environ["BUNDLED_CREDENTIAL_JSON"])
 payload = {
     "hostURL": os.environ["BUNDLED_HOST_URL"],
+    "hostURLs": json.loads(os.environ["BUNDLED_HOST_URLS_JSON"]),
     "clientID": credential["clientID"],
     "clientSecret": credential["clientSecret"],
 }

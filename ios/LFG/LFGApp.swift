@@ -194,8 +194,10 @@ struct LFGApp: App {
         // is created, and make a clean install usable without a setup form.
         if let bundled = Self.bundledCloudflareAccessConfiguration() {
             do {
-                try credentialStore.save(bundled.credential, forHostURL: bundled.hostURL)
-                hosts = bundled.addingHostIfNeeded(to: hosts)
+                for hostURL in bundled.hostURLs {
+                    try credentialStore.save(bundled.credential, forHostURL: hostURL)
+                }
+                hosts = bundled.addingHostsIfNeeded(to: hosts)
             } catch {
                 // A Keychain failure must not prevent launch; the existing
                 // manual host/credential flow remains available as fallback.

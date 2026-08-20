@@ -163,7 +163,8 @@ enum DesktopCredentialStore {
     private static let fallbackFileName = "lfg-access-service-token.private.json"
 
     private struct PrivatePayload: Decodable {
-        let hostURL: String
+        let hostURL: String?
+        let hostURLs: [String]?
         let clientID: String
         let clientSecret: String
     }
@@ -210,7 +211,8 @@ enum DesktopCredentialStore {
             .appendingPathComponent(fallbackFileName)
         guard let data = try? Data(contentsOf: file),
               let payload = try? JSONDecoder().decode(PrivatePayload.self, from: data),
-              origin(for: payload.hostURL) == requestedOrigin,
+              (payload.hostURLs ?? payload.hostURL.map { [$0] } ?? [])
+                .contains(where: { origin(for: $0) == requestedOrigin }),
               !payload.clientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !payload.clientSecret.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return nil
@@ -558,23 +560,34 @@ enum Config {
 
     struct HostsFile: Codable { var hosts: [HostEntry] }
 
-    /// Canonical private remote offered by the Add Host form. It is not silently
-    /// inserted into existing host files: opening Settings makes the choice
-    /// explicit, while keeping the URL and friendly label consistent.
-    static let preferredHost = HostEntry(
-        url: "https://lfg-pro.eugenechantk.me",
-        ssh: "pro",
-        displayName: "Pro",
-        transport: .ssh
-    )
+    /// Canonical private remotes included on a fresh install. Existing non-empty
+    /// host files remain authoritative and are never silently rewritten.
+    static let bundledHosts = [
+        HostEntry(
+            url: "https://lfg-pro.eugenechantk.me",
+            ssh: "pro",
+            displayName: "Pro",
+            transport: .ssh
+        ),
+        HostEntry(
+            url: "https://lfg-air.eugenechantk.me",
+            ssh: "air",
+            displayName: "Air",
+            transport: .ssh
+        ),
+    ]
+
+    static let preferredHost = bundledHosts[0]
 
     static func entryForNewHost(url: String, ssh: String?) -> HostEntry {
-        guard url == preferredHost.url else { return HostEntry(url: url, ssh: ssh) }
+        guard let bundled = bundledHosts.first(where: { $0.url == url }) else {
+            return HostEntry(url: url, ssh: ssh)
+        }
         return HostEntry(
             url: url,
-            ssh: ssh ?? preferredHost.ssh,
-            displayName: preferredHost.displayName,
-            transport: preferredHost.transport
+            ssh: ssh ?? bundled.ssh,
+            displayName: bundled.displayName,
+            transport: bundled.transport
         )
     }
 
@@ -591,17 +604,13 @@ enum Config {
     }
 
     static func loadHosts() -> [HostEntry] {
-        if let hosts = loadHosts(from: dir),
-           !hosts.isEmpty {
-            return hosts
-        }
-        // Seed a default config so the file is discoverable/editable.
-        let seed = HostsFile(hosts: [HostEntry(url: "http://localhost:8766")])
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        if let data = try? JSONEncoder().encode(seed) {
-            try? data.write(to: hostsFile)
-        }
-        return seed.hosts
+        loadOrSeedHosts(in: dir)
+    }
+
+    static func loadOrSeedHosts(in directory: URL) -> [HostEntry] {
+        if let hosts = loadHosts(from: directory), !hosts.isEmpty { return hosts }
+        try? saveHosts(bundledHosts, to: directory)
+        return bundledHosts
     }
 
     static func sshTarget(for entry: HostEntry) -> String? {
@@ -1613,6 +1622,19 @@ enum DesktopFeatureTestCLI {
                    "adding the preferred URL persists its Pro SSH alias")
         try expect(Config.entryForNewHost(url: Config.preferredHost.url, ssh: nil).transport == .ssh,
                    "adding the preferred URL cannot fall through to Mosh")
+        try expect(Config.bundledHosts == [
+            Config.HostEntry(
+                url: "https://lfg-pro.eugenechantk.me", ssh: "pro",
+                displayName: "Pro", transport: .ssh),
+            Config.HostEntry(
+                url: "https://lfg-air.eugenechantk.me", ssh: "air",
+                displayName: "Air", transport: .ssh),
+        ], "fresh desktop installs bundle the Pro and Air Cloudflare hosts")
+        try expect(
+            Config.entryForNewHost(url: "https://lfg-air.eugenechantk.me", ssh: nil)
+                == Config.bundledHosts[1],
+            "adding the Air URL persists its name, SSH alias, and forced SSH transport"
+        )
         try expect(Config.entryForNewHost(url: "http://air:8766", ssh: nil).displayName == nil,
                    "adding another URL preserves the existing unnamed behavior")
 
@@ -1648,6 +1670,40 @@ enum DesktopFeatureTestCLI {
             ) == nil,
             "private fallback credentials never cross origins"
         )
+        try Data(#"{"hostURL":"https://lfg-pro.example.com","hostURLs":["https://lfg-pro.example.com","https://lfg-air.example.com"],"clientID":"multi-id","clientSecret":"multi-secret"}"#.utf8)
+            .write(to: fallbackDirectory.appendingPathComponent("lfg-access-service-token.private.json"))
+        let multiCredential = DesktopCloudflareCredential(
+            clientID: "multi-id", clientSecret: "multi-secret")
+        try expect(
+            DesktopCredentialStore.privateFallback(
+                for: "https://lfg-pro.example.com/api/info", homeDirectory: fallbackHome
+            ) == multiCredential,
+            "multi-origin fallback authorizes the declared Pro origin"
+        )
+        try expect(
+            DesktopCredentialStore.privateFallback(
+                for: "https://lfg-air.example.com/api/info", homeDirectory: fallbackHome
+            ) == multiCredential,
+            "multi-origin fallback authorizes the declared Air origin"
+        )
+        try expect(
+            DesktopCredentialStore.privateFallback(
+                for: "https://undeclared.example.com/api/info", homeDirectory: fallbackHome
+            ) == nil,
+            "multi-origin fallback remains restricted to its declared origins"
+        )
+
+        let seedDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lfg-desktop-seed-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: seedDirectory) }
+        try expect(Config.loadOrSeedHosts(in: seedDirectory) == Config.bundledHosts,
+                   "a missing desktop host file is seeded with both bundled hosts")
+        try expect(Config.loadHosts(from: seedDirectory) == Config.bundledHosts,
+                   "the bundled desktop hosts are persisted for later launches")
+        let customHosts = [Config.HostEntry(url: "http://custom:8766", displayName: "Custom")]
+        try Config.saveHosts(customHosts, to: seedDirectory)
+        try expect(Config.loadOrSeedHosts(in: seedDirectory) == customHosts,
+                   "an existing non-empty desktop host file is preserved")
 
         let legacyData = Data(#"{"hosts":["http://localhost:8766",{"url":"http://studio:8766","ssh":"me@studio"}]}"#.utf8)
         let legacy = try require(Config.decodeHosts(legacyData), "legacy config decodes")
