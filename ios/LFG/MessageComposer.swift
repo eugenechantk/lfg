@@ -56,7 +56,15 @@ struct MessageComposer: View {
                     if tray.isLoading {
                         ProgressView().controlSize(.small).frame(width: 22, height: 22)
                     } else {
-                        Image(systemName: "paperclip").font(.title3)
+                        Image(systemName: "paperclip")
+                            .font(.title3)
+                            // The glyph itself is only about 23×25pt. Keeping that
+                            // as the Menu label made the real tap target just as
+                            // small, so ordinary finger taps around the paperclip
+                            // looked unresponsive. Preserve the icon's leading
+                            // position while giving the control a HIG-sized target.
+                            .frame(width: 44, height: 44, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
                 }
                 .tint(.secondary)
