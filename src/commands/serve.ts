@@ -40,6 +40,7 @@ import {
   recentMessages,
   snapshotMessages,
   messagePage,
+  byteBoundedPageStart,
   normalizeLineMessages,
   setSessionTitle,
   sessionIdForPid,
@@ -78,7 +79,7 @@ import { rootDir, inboxDir, setInbox, createDir, expandUserPath } from "../dirs.
 import { detectUrls } from "../links.ts";
 import { decodeFilenameHeader, storedUploadName } from "../upload-names.ts";
 import { listSubagentSessions, resolveSubagentTranscript } from "../subagents.ts";
-import type { ServerWebSocket } from "bun";
+import type { Server, ServerWebSocket } from "bun";
 
 /// Ceiling on a single client attachment. The server is one Bun event loop
 /// serving every session (see .claude/CLAUDE.md) and the whole body is buffered
@@ -518,6 +519,39 @@ function json(obj: unknown, init?: ResponseInit) {
   });
 }
 
+/**
+ * Gzip JSON responses when the client asks for it. Nothing on the phone's path
+ * compresses otherwise — Bun doesn't, and Tailscale Serve proxies bytes as-is —
+ * so a 256KiB history page crossed a relayed cellular link at full size. That
+ * transfer, not server work, was the dominant remaining cost of opening a
+ * transcript (bug 009 follow-up). URLSession/browsers decompress transparently;
+ * clients that don't send Accept-Encoding: gzip (plain curl, the CLI) keep
+ * getting identity bytes. Streaming responses (SSE, files, browser frames) pass
+ * through untouched via the content-type gate.
+ */
+const GZIP_MIN_BYTES = 1024;
+export async function compressJsonResponse(req: Request, res: Response): Promise<Response> {
+  try {
+    const type = res.headers.get("content-type") ?? "";
+    if (!type.toLowerCase().includes("application/json")) return res;
+    if (res.headers.has("content-encoding") || res.body == null) return res;
+    if (!/\bgzip\b/i.test(req.headers.get("accept-encoding") ?? "")) return res;
+    const raw = new Uint8Array(await res.arrayBuffer());
+    if (raw.byteLength < GZIP_MIN_BYTES) {
+      return new Response(raw, { status: res.status, headers: res.headers });
+    }
+    const headers = new Headers(res.headers);
+    headers.set("Content-Encoding", "gzip");
+    headers.delete("Content-Length");
+    headers.set("Vary", "Accept-Encoding");
+    return new Response(Bun.gzipSync(raw), { status: res.status, headers });
+  } catch {
+    // Body already consumed or any other surprise — the uncompressed answer is
+    // always a correct one.
+    return res;
+  }
+}
+
 function err(status: number, message: string, extra?: Record<string, unknown>) {
   return json({ error: message, ...(extra ?? {}) }, { status });
 }
@@ -607,22 +641,35 @@ async function codexCreateFallbackCandidates(): Promise<CodexCreateFallbackCandi
 
 async function messagePageFromSnapshot(
   path: string,
-  opts: { before?: number | null; limit?: number; maxBytes: number | null },
+  opts: {
+    before?: number | null;
+    limit?: number;
+    sourceMaxBytes: number | null;
+    pageMaxBytes?: number | null;
+  },
 ): Promise<{
   messages: Awaited<ReturnType<typeof snapshotMessages>>;
   nextBefore: number | null;
   total: number;
 }> {
-  const all = await snapshotMessages(path, 0, { maxBytes: opts.maxBytes });
+  const all = await snapshotMessages(path, 0, { maxBytes: opts.sourceMaxBytes });
   const limit = Math.max(1, Math.min(500, opts.limit ?? 220));
   const rawEnd = opts.before ?? all.length;
   const end = Math.max(0, Math.min(all.length, rawEnd));
-  const start = Math.max(0, end - limit);
+  const countBoundedStart = Math.max(0, end - limit);
+  const start = byteBoundedPageStart(all, countBoundedStart, end, opts.pageMaxBytes);
   return {
     messages: all.slice(start, end),
     nextBefore: start > 0 ? start : null,
     total: all.length,
   };
+}
+
+function backwardPageMaxBytes(url: URL): number | null {
+  const raw = parseInt(url.searchParams.get("maxBytes") ?? "", 10);
+  return Number.isFinite(raw)
+    ? Math.max(16 * 1024, Math.min(1024 * 1024, raw))
+    : null;
 }
 
 export async function messagesResponseForSession(sid: string, url: URL): Promise<Response> {
@@ -643,15 +690,18 @@ export async function messagesResponseForSession(sid: string, url: URL): Promise
     const rawBefore = url.searchParams.get("before");
     const before =
       rawBefore == null ? null : Math.max(0, parseInt(rawBefore, 10) || 0);
+    const pageMaxBytes = backwardPageMaxBytes(url);
     const page = forkPending
       ? await messagePageFromSnapshot(tp, {
           before,
           limit: Number.isFinite(rawLimit) ? rawLimit : 220,
-          maxBytes: forkSourceBytes,
+          sourceMaxBytes: forkSourceBytes,
+          pageMaxBytes,
         })
       : await messagePage(tp, {
           before,
           limit: Number.isFinite(rawLimit) ? rawLimit : 220,
+          maxBytes: pageMaxBytes,
         });
     return json({
       id: sid,
@@ -701,9 +751,11 @@ export async function subagentMessagesResponseForSession(
     const rawLimit = parseInt(url.searchParams.get("limit") ?? "220", 10);
     const rawBefore = url.searchParams.get("before");
     const before = rawBefore == null ? null : Math.max(0, parseInt(rawBefore, 10) || 0);
+    const pageMaxBytes = backwardPageMaxBytes(url);
     const page = await messagePage(childTranscript, {
       before,
       limit: Number.isFinite(rawLimit) ? rawLimit : 220,
+      maxBytes: pageMaxBytes,
     });
     return json({
       id: agentId,
@@ -1034,6 +1086,17 @@ export async function cmdServe() {
       });
     },
     async fetch(req, server) {
+      const res = await handleHttp(req, server);
+      return res instanceof Response ? compressJsonResponse(req, res) : res;
+    },
+  });
+
+  // The whole HTTP surface, unchanged — hoisted so the `fetch` above can gzip
+  // every JSON response at one boundary instead of at 100 call sites.
+  async function handleHttp(
+    req: Request,
+    server: Server<TermSocketData>,
+  ): Promise<Response | undefined> {
       const url = new URL(req.url);
       const path = url.pathname;
 
@@ -2680,8 +2743,7 @@ export async function cmdServe() {
 
 
       return err(404, "not found");
-    },
-  });
+  }
 
   startAutoScheduler((l) => console.log(l));
   // Periodic maintenance over lfg's own state (session retitling today). Runs

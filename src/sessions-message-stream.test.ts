@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { recentMessages } from "./sessions.ts";
+import { messagePage, recentMessages } from "./sessions.ts";
 
 // `recentMessages(path, n, { maxBytes: null })` streams the transcript instead
 // of materializing it as one string — a 511 MB Codex rollout otherwise peaked
@@ -99,6 +99,40 @@ describe("streamed whole-transcript reads", () => {
       const { streamed, wholeString } = await bothReaders(path);
       expect(streamed).toEqual([]);
       expect(streamed).toEqual(wholeString);
+    });
+  });
+});
+
+describe("byte-bounded backward transcript pages", () => {
+  test("walks the full transcript without duplicates while keeping each messages array bounded", async () => {
+    await withFixture(
+      Array.from({ length: 7 }, (_, index) => userMessage(`${index}:${"x".repeat(400)}`)),
+      async (path) => {
+        const maxBytes = 1_100;
+        const received: string[] = [];
+        let before: number | null = null;
+
+        do {
+          const page = await messagePage(path, { before, limit: 7, maxBytes });
+          expect(Buffer.byteLength(JSON.stringify(page.messages))).toBeLessThanOrEqual(maxBytes);
+          expect(page.messages.length).toBeGreaterThan(0);
+          received.unshift(...page.messages.map((message) => message.text));
+          before = page.nextBefore;
+        } while (before != null);
+
+        expect(received).toEqual(
+          Array.from({ length: 7 }, (_, index) => `${index}:${"x".repeat(400)}`),
+        );
+      },
+    );
+  });
+
+  test("returns one oversized message so the cursor always makes progress", async () => {
+    await withFixture([userMessage("first"), userMessage("x".repeat(4_000))], async (path) => {
+      const page = await messagePage(path, { limit: 2, maxBytes: 32 });
+
+      expect(page.messages.map((message) => message.text)).toEqual(["x".repeat(4_000)]);
+      expect(page.nextBefore).toBe(1);
     });
   });
 });
