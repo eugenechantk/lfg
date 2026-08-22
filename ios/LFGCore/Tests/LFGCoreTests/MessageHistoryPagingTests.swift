@@ -30,6 +30,10 @@ struct MessageHistoryPagingTests {
         #expect(requests.map { $0.queryValue("page") } == ["backward", "backward", "backward"])
         #expect(requests.map { $0.queryValue("limit") } == ["2", "2", "1"])
         #expect(requests.map { $0.queryValue("before") } == [nil, "3", "1"])
+        // The FIRST page is deliberately much smaller than the rest: it is the
+        // only page the user is waiting on, so it crosses a slow link sooner.
+        // Later pages land above content already on screen.
+        #expect(requests.map { $0.queryValue("maxBytes") } == ["49152", "262144", "262144"])
     }
 
     @Test("stops after a server repeats its backward cursor")
@@ -89,6 +93,68 @@ struct MessageHistoryPagingTests {
         }
     }
 
+    @Test("retries a transient older page at the same cursor instead of restarting at newest")
+    func retriesFailedCursorInPlace() async throws {
+        HistoryPagingURLProtocol.reset(
+            messages: Self.messages(count: 5),
+            failRequestNumberOnce: 2
+        )
+        var pages: [[SessionMessage]] = []
+
+        for try await page in makeClient().messageHistoryPages(
+            "session-1",
+            limit: 5,
+            pageSize: 2,
+            pageRetryDelay: .zero
+        ) {
+            pages.append(page)
+        }
+
+        #expect(pages.flatMap { $0 }.compactMap(\.id) == ["m3", "m4", "m1", "m2", "m0"])
+        let requests = HistoryPagingURLProtocol.requests()
+        #expect(requests.map { $0.queryValue("before") } == [nil, "3", "3", "1"])
+    }
+
+    @Test("requests a small first page, then full-size pages through the same cursor")
+    func firstPageUsesASmallerByteBudget() async throws {
+        HistoryPagingURLProtocol.reset(messages: Self.messages(count: 5))
+        for try await _ in makeClient().messageHistoryPages(
+            "session-1", limit: 5, pageSize: 2
+        ) {}
+
+        let requests = HistoryPagingURLProtocol.requests()
+        let budgets = requests.map { $0.queryValue("maxBytes") }
+        #expect(budgets.first == "49152")
+        #expect(budgets.dropFirst().allSatisfy { $0 == "262144" })
+        // The cursor walk itself must be untouched by the smaller first page.
+        #expect(requests.map { $0.queryValue("before") } == [nil, "3", "1"])
+    }
+
+    @Test("a retry of the first page keeps the small budget")
+    func firstPageRetryStaysSmall() async throws {
+        HistoryPagingURLProtocol.reset(
+            messages: Self.messages(count: 4),
+            failRequestNumberOnce: 1
+        )
+        for try await _ in makeClient().messageHistoryPages(
+            "session-1", limit: 4, pageSize: 2, pageRetryDelay: .zero
+        ) {}
+
+        let budgets = HistoryPagingURLProtocol.requests().map { $0.queryValue("maxBytes") }
+        // Both the failed attempt and its retry are still the first page.
+        #expect(budgets.prefix(2).allSatisfy { $0 == "49152" })
+    }
+
+    @Test("opting out of the small first page restores one uniform budget")
+    func firstPageBudgetIsOptional() async throws {
+        HistoryPagingURLProtocol.reset(messages: Self.messages(count: 5))
+        for try await _ in makeClient().messageHistoryPages(
+            "session-1", limit: 5, pageSize: 2, firstPageByteLimit: nil
+        ) {}
+        let budgets = HistoryPagingURLProtocol.requests().map { $0.queryValue("maxBytes") }
+        #expect(budgets.allSatisfy { $0 == "262144" })
+    }
+
     private func makeClient() -> LFGClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [HistoryPagingURLProtocol.self]
@@ -116,12 +182,18 @@ private final class HistoryPagingURLProtocol: URLProtocol {
     nonisolated(unsafe) private static var transcript: [SessionMessage] = []
     nonisolated(unsafe) private static var capturedRequests: [URLRequest] = []
     nonisolated(unsafe) private static var repeatsCursor = false
+    nonisolated(unsafe) private static var failRequestNumberOnce: Int?
 
-    static func reset(messages: [SessionMessage], repeatsCursor: Bool = false) {
+    static func reset(
+        messages: [SessionMessage],
+        repeatsCursor: Bool = false,
+        failRequestNumberOnce: Int? = nil
+    ) {
         lock.withLock {
             transcript = messages
             capturedRequests = []
             self.repeatsCursor = repeatsCursor
+            self.failRequestNumberOnce = failRequestNumberOnce
         }
     }
 
@@ -133,9 +205,24 @@ private final class HistoryPagingURLProtocol: URLProtocol {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
-        let (messages, shouldRepeat): ([SessionMessage], Bool) = Self.lock.withLock {
+        let (messages, shouldRepeat, shouldFail): ([SessionMessage], Bool, Bool) = Self.lock.withLock {
             Self.capturedRequests.append(request)
-            return (Self.transcript, Self.repeatsCursor)
+            let requestNumber = Self.capturedRequests.count
+            let shouldFail = requestNumber == Self.failRequestNumberOnce
+            if shouldFail { Self.failRequestNumberOnce = nil }
+            return (Self.transcript, Self.repeatsCursor, shouldFail)
+        }
+        if shouldFail {
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 504,
+                httpVersion: "HTTP/2",
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data(#"{"error":"gateway timeout"}"#.utf8))
+            client?.urlProtocolDidFinishLoading(self)
+            return
         }
         let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
         let limit = max(1, Int(components?.queryItems?.first { $0.name == "limit" }.flatMap(\.value) ?? "") ?? 220)

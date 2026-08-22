@@ -409,10 +409,16 @@ public struct LFGClient: Sendable {
         try await get("api/sessions/\(id)/queue", as: QueueResponse.self).queue
     }
 
-    public func messagesBackward(_ id: String, before: Int?, limit: Int = 220) async throws -> MessagesResponse {
+    public func messagesBackward(
+        _ id: String,
+        before: Int?,
+        limit: Int = 220,
+        maxBytes: Int? = nil
+    ) async throws -> MessagesResponse {
         var q = [URLQueryItem(name: "page", value: "backward"),
                  URLQueryItem(name: "limit", value: String(limit))]
         if let before { q.append(URLQueryItem(name: "before", value: String(before))) }
+        if let maxBytes { q.append(URLQueryItem(name: "maxBytes", value: String(maxBytes))) }
         return try await get("api/sessions/\(id)/messages", query: q, as: MessagesResponse.self)
     }
 
@@ -424,16 +430,30 @@ public struct LFGClient: Sendable {
     /// Cloudflare Tunnel. Pull-based iteration is deliberate: the caller gets
     /// the newest page before the next network request starts, so it can render
     /// useful content immediately while older history continues loading.
+    /// - Parameter firstPageByteLimit: byte budget for the FIRST (newest) page
+    ///   only. First paint is the only page the user is waiting on — every later
+    ///   one lands above content they are already reading — so it is requested
+    ///   much smaller and the walk then returns to `pageByteLimit` through the
+    ///   same cursor. At 48 KiB versus 256 KiB that is ~5x fewer bytes before
+    ///   anything is on screen, which is the whole delay on a relayed path.
+    ///   Pass `nil` to use `pageByteLimit` for every page.
     public func messageHistoryPages(
         _ id: String,
         limit: Int = 5_000,
-        pageSize: Int = 500
+        pageSize: Int = 500,
+        pageByteLimit: Int? = 256 * 1024,
+        firstPageByteLimit: Int? = 48 * 1024,
+        pageRetryDelay: Duration = .seconds(2)
     ) -> MessageHistoryPages {
-        MessageHistoryPages(
+        let clamp: (Int) -> Int = { min(1024 * 1024, max(16 * 1024, $0)) }
+        return MessageHistoryPages(
             client: self,
             sessionID: id,
             maxMessages: min(5_000, max(0, limit)),
-            pageSize: min(500, max(1, pageSize))
+            pageSize: min(500, max(1, pageSize)),
+            pageByteLimit: pageByteLimit.map(clamp),
+            firstPageByteLimit: firstPageByteLimit.map(clamp) ?? pageByteLimit.map(clamp),
+            pageRetryDelay: pageRetryDelay
         )
     }
 
@@ -833,8 +853,9 @@ public struct LFGClient: Sendable {
 }
 
 /// Pull-based transcript history sequence returned by
-/// `LFGClient.messageHistoryPages`. Each `next()` performs at most one request,
-/// which makes page delivery—not merely request size—progressive.
+/// `LFGClient.messageHistoryPages`. Each `next()` advances one cursor and may
+/// retry that same cursor once, which makes page delivery—not merely request
+/// size—progressive without restarting already-delivered history.
 public struct MessageHistoryPages: AsyncSequence, Sendable {
     public typealias Element = [SessionMessage]
 
@@ -842,13 +863,21 @@ public struct MessageHistoryPages: AsyncSequence, Sendable {
     private let sessionID: String
     private let maxMessages: Int
     private let pageSize: Int
+    private let pageByteLimit: Int?
+    private let firstPageByteLimit: Int?
+    private let pageRetryDelay: Duration
 
     fileprivate init(client: LFGClient, sessionID: String,
-                     maxMessages: Int, pageSize: Int) {
+                     maxMessages: Int, pageSize: Int,
+                     pageByteLimit: Int?, firstPageByteLimit: Int?,
+                     pageRetryDelay: Duration) {
         self.client = client
         self.sessionID = sessionID
         self.maxMessages = maxMessages
         self.pageSize = pageSize
+        self.pageByteLimit = pageByteLimit
+        self.firstPageByteLimit = firstPageByteLimit
+        self.pageRetryDelay = pageRetryDelay
     }
 
     public func makeAsyncIterator() -> AsyncIterator {
@@ -856,7 +885,10 @@ public struct MessageHistoryPages: AsyncSequence, Sendable {
             client: client,
             sessionID: sessionID,
             maxMessages: maxMessages,
-            pageSize: pageSize
+            pageSize: pageSize,
+            pageByteLimit: pageByteLimit,
+            firstPageByteLimit: firstPageByteLimit,
+            pageRetryDelay: pageRetryDelay
         )
     }
 
@@ -865,17 +897,25 @@ public struct MessageHistoryPages: AsyncSequence, Sendable {
         private let sessionID: String
         private let maxMessages: Int
         private let pageSize: Int
+        private let pageByteLimit: Int?
+        private let firstPageByteLimit: Int?
+        private let pageRetryDelay: Duration
         private var before: Int?
         private var delivered = 0
         private var seenCursors: Set<Int> = []
         private var finished = false
 
         fileprivate init(client: LFGClient, sessionID: String,
-                         maxMessages: Int, pageSize: Int) {
+                         maxMessages: Int, pageSize: Int,
+                         pageByteLimit: Int?, firstPageByteLimit: Int?,
+                         pageRetryDelay: Duration) {
             self.client = client
             self.sessionID = sessionID
             self.maxMessages = maxMessages
             self.pageSize = pageSize
+            self.pageByteLimit = pageByteLimit
+            self.firstPageByteLimit = firstPageByteLimit
+            self.pageRetryDelay = pageRetryDelay
         }
 
         public mutating func next() async throws -> [SessionMessage]? {
@@ -883,11 +923,14 @@ public struct MessageHistoryPages: AsyncSequence, Sendable {
             guard !finished, delivered < maxMessages else { return nil }
 
             let requestLimit = Swift.min(pageSize, maxMessages - delivered)
-            let page = try await client.messagesBackward(
-                sessionID,
-                before: before,
-                limit: requestLimit
-            )
+            let page: MessagesResponse
+            do {
+                page = try await requestPage(limit: requestLimit)
+            } catch {
+                try Task.checkCancellation()
+                try await Task.sleep(for: pageRetryDelay)
+                page = try await requestPage(limit: requestLimit)
+            }
             guard !page.messages.isEmpty else {
                 finished = true
                 return nil
@@ -911,6 +954,22 @@ public struct MessageHistoryPages: AsyncSequence, Sendable {
                 finished = true
             }
             return messages
+        }
+
+        /// Byte budget for the request about to go out. `delivered == 0` is the
+        /// first (newest) page — the only one the user is actually waiting on,
+        /// and the one a retry must also keep small.
+        private var currentByteLimit: Int? {
+            delivered == 0 ? firstPageByteLimit : pageByteLimit
+        }
+
+        private func requestPage(limit: Int) async throws -> MessagesResponse {
+            try await client.messagesBackward(
+                sessionID,
+                before: before,
+                limit: limit,
+                maxBytes: currentByteLimit
+            )
         }
     }
 }

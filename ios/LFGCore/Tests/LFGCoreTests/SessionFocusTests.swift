@@ -30,4 +30,26 @@ final class SessionFocusTests: XCTestCase {
         XCTAssertTrue(SessionFocus.isFocused("s1", focusedID: focused))
         XCTAssertFalse(SessionFocus.isFocused("s2", focusedID: focused))
     }
+
+    func testFocusSnapshotCapturesTheExactCurrentListRow() {
+        let rows = [(id: "s0", title: "Other"), (id: "s1", title: "Open")]
+
+        let snapshot = SessionFocus.snapshotCandidate(
+            "s1",
+            candidates: rows,
+            id: { $0.id }
+        )
+
+        XCTAssertEqual(snapshot?.title, "Open")
+    }
+
+    func testFocusSnapshotDoesNotGuessAnotherSession() {
+        let snapshot = SessionFocus.snapshotCandidate(
+            "missing",
+            candidates: [(id: "s0", title: "Other")],
+            id: { $0.id }
+        )
+
+        XCTAssertNil(snapshot)
+    }
 }

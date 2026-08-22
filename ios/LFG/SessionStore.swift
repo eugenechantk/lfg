@@ -30,7 +30,44 @@ import LFGCore
     /// Routing table: session `id` → owning `Host.id` (url). Every per-session op
     /// resolves the host's client through this. Rebuilt each refresh.
     private(set) var hostBySession: [String: String] = [:]
-    var lastError: String?
+
+    /// Why the last store operation failed. Assigned from ~20 call sites (send,
+    /// interrupt, close, fork, transfer, queue edits, outbox writes) and cleared
+    /// by every successful `refresh()`.
+    ///
+    /// Nothing rendered it, so every one of those failures was silent on the
+    /// phone — "Stop didn't take" and "Send failed" looked identical to success.
+    /// It is now a computed pass-through that also stamps `errorEvent`, so the
+    /// ~20 existing assignments surface without being touched (and so does any
+    /// new one).
+    var lastError: String? {
+        get { lastErrorStorage }
+        set {
+            lastErrorStorage = newValue
+            // Only real failures raise an event. `refresh()` sets this to nil on
+            // every successful poll — roughly once a second — so a banner reading
+            // `lastError` directly would blink out before it could be read. The
+            // event has its own lifetime, owned by whoever presents it.
+            if let newValue, !newValue.isEmpty {
+                errorEvent = StoreErrorEvent(message: newValue)
+            }
+        }
+    }
+    private var lastErrorStorage: String?
+
+    /// The most recent failure worth telling the user about, as a distinct event.
+    ///
+    /// Identity changes on every failure, so two identical messages in a row
+    /// still re-trigger the presentation instead of being swallowed as "no
+    /// change". Cleared by the presenter via `dismissErrorEvent()`.
+    private(set) var errorEvent: StoreErrorEvent?
+
+    struct StoreErrorEvent: Identifiable, Equatable {
+        let id = UUID()
+        let message: String
+    }
+
+    func dismissErrorEvent() { errorEvent = nil }
 
     /// Consecutive failed polls since the last success, PER host. Now used ONLY
     /// to drive `HostHealth.shouldProbe`'s cold back-off — it no longer debounces
@@ -118,6 +155,27 @@ import LFGCore
     /// sidecar directory. They are read-only views inside the parent detail,
     /// not independently steerable top-level LFG sessions.
     private(set) var childAgentsBySession: [String: [ChildAgentSession]] = [:]
+
+    /// When the user last sent a follow-up to each session, epoch ms.
+    ///
+    /// Owned here rather than by the detail view because the child-sessions bar
+    /// must stay dismissed when the user navigates away and back — view-local
+    /// state would resurrect the stale bar on every return. Compared against
+    /// child-agent activity by `ChildSessionsBarVisibility`; both are epoch ms.
+    private(set) var lastUserSendAt: [String: Double] = [:]
+
+    /// Whether the child-sessions bar belongs above the composer right now.
+    ///
+    /// Not simply `!childAgents.isEmpty`: that left the bar on screen forever
+    /// once a session had ever spawned an agent. See `ChildSessionsBarVisibility`
+    /// for the rule. The toolbar's "Child sessions (N)" entry is unaffected and
+    /// remains the always-available way in.
+    func showsChildSessionsBar(_ id: String) -> Bool {
+        ChildSessionsBarVisibility.shouldShow(
+            agents: childAgentsBySession[id] ?? [],
+            lastUserSendAt: lastUserSendAt[id]
+        )
+    }
 
     /// Locally-originated sends shown optimistically as user bubbles the instant
     /// the user hits send — before any network round-trip. Each is removed once
@@ -1027,9 +1085,23 @@ import LFGCore
         )
     }
 
+    /// Hand a message back to the user: red bubble, Retry button, and — because
+    /// this is the terminal outcome — one banner.
+    ///
+    /// Every path that gives up on a send funnels through here, which is what
+    /// makes "banners are for terminal outcomes only" true by construction
+    /// rather than by remembering. The re-queued path in `settleSendFailure`
+    /// deliberately does NOT call this: that message is still going, and the
+    /// queued bubble already says so. See `SendFailurePolicy`.
     private func markPendingFailed(clientId: String) {
         guard let location = pendingLocation(clientId: clientId) else { return }
         mutatePending(location.sid, location.pid) { $0.failed = true }
+        // Prefer the host's own sentence, which the send site already stored on
+        // the row, over a generic "not sent".
+        let reason = pendingSends[location.sid]?
+            .first { $0.id == location.pid }?
+            .failureReason
+        lastError = SendFailurePolicy.bannerMessage(reason: reason)
     }
 
     private func replayPendingOutboxOnStart() async {
@@ -1128,7 +1200,11 @@ import LFGCore
             await refresh()
             reconcilePending(eff)
         } catch {
-            lastError = "Outbox retry failed: \(error.localizedDescription)"
+            // No banner here. A drain attempt throwing is routine — the cold
+            // first packets of a foreground tailnet path do it constantly — and
+            // `settleSendFailure` usually re-queues the row, so announcing every
+            // attempt produced a banner for a message that sent fine on the next
+            // pass. It owns the messaging, and only for the terminal branch.
             await settleSendFailure(clientId: row.clientId, hostId: row.hostId)
         }
     }
@@ -1152,7 +1228,12 @@ import LFGCore
     private func settleSendFailure(clientId: String, hostId: String?) async {
         let hostStillDown = hostId.map { !(hostStateByHost[$0]?.isLive ?? false) } ?? false
         let hasAttachments = !outboxAttachmentFiles(clientId: clientId).isEmpty
-        guard hostStillDown || hasAttachments else {
+        let disposition = SendFailurePolicy.disposition(
+            hostStillDown: hostStillDown,
+            hasAttachments: hasAttachments
+        )
+        guard disposition == .requeued else {
+            // Terminal. `markPendingFailed` raises the one banner.
             markPendingFailed(clientId: clientId)
             await markOutboxState(clientId, state: "failed")
             return
@@ -2220,6 +2301,21 @@ import LFGCore
     /// on the host, so focusing is now pure bookkeeping (Phase 1 SC1).
     func focus(_ id: String?) {
         if let id {
+            // Latch the resolved detail immediately, before any refresh can
+            // transiently omit its list row. Previously the snapshot was only
+            // populated by a later successful refresh; a deep-link could open,
+            // then collapse to "Opening session…" if membership churn won that
+            // race. Prefer the authoritative live row, then any valid fallback
+            // (deep link/search/remap) that already resolved this detail.
+            if let live = SessionFocus.snapshotCandidate(
+                id,
+                candidates: sessions,
+                id: { $0.sessionId }
+            ) {
+                focusedSnapshot = live
+            } else if let resolved = session(id) {
+                focusedSnapshot = resolved
+            }
             let updated = ManualUnread.afterOpening(id, flags: manualUnread)
             if updated != manualUnread {
                 manualUnread = updated
@@ -2570,31 +2666,32 @@ import LFGCore
         beginHistoryLoad(id)
         defer { endHistoryLoad(id) }
 
+        // Paint from disk BEFORE touching the network.
+        //
+        // This used to run only when no host was reachable or after a page
+        // failed — i.e. the local copy was treated as a fallback for being
+        // offline. But the slowest open is not the offline one, it is the
+        // online-but-far-away one: a cold launch on a relayed path showed
+        // "Connecting to live transcript…" for as long as the first page took,
+        // while a complete copy of that transcript sat in GRDB. Reading it first
+        // costs one local query and makes a previously-opened session paint
+        // immediately whether or not the network is up; the network pages then
+        // merge on top, deduped by stable id (`TranscriptMerge`), so nothing is
+        // lost and nothing doubles.
+        await hydrateTranscriptFromStoreIfEmpty(id)
+
         // A READ: route to any reachable host, not to the (possibly down) owner.
-        guard let client = readClient(forSession: id) else {
-            await hydrateTranscriptFromStoreIfEmpty(id)
-            return
-        }
+        guard let client = readClient(forSession: id) else { return }
         do {
             try await consumeHistoryPages(from: client, sessionID: id)
         } catch {
-            // This used to be `try?`, which made the one failure that strands the
-            // UI completely invisible: a transcript that never arrives leaves
-            // optimistic sends unprovable, so they sit at the bottom of the
-            // session looking un-delivered. Pages already merged remain visible;
-            // log the failed attempt and walk the cursors once more. Stable-id
-            // union makes overlap with the first attempt harmless.
+            // The paging iterator already retried the failed cursor once. Do not
+            // create another iterator here: that would restart at the newest page
+            // and amplify a slow older-page timeout by redownloading everything.
             ConnectionLog.shared.log(
-                .probe, "history fetch failed for \(id.prefix(8)) — \(LFGClient.describe(error))")
-            try? await Task.sleep(for: .seconds(2))
-            do {
-                try await consumeHistoryPages(from: client, sessionID: id)
-            } catch {
-                ConnectionLog.shared.log(
-                    .probe, "history retry failed for \(id.prefix(8)) — \(LFGClient.describe(error))")
-                await hydrateTranscriptFromStoreIfEmpty(id)
-                return
-            }
+                .probe, "history page retry failed for \(id.prefix(8)) — \(LFGClient.describe(error))")
+            await hydrateTranscriptFromStoreIfEmpty(id)
+            return
         }
     }
 
@@ -2627,13 +2724,24 @@ import LFGCore
         }
     }
 
+    /// Merge one history page into the rendered transcript.
+    ///
+    /// This used to rebuild a `[String: SessionMessage]` of the WHOLE transcript
+    /// and re-sort all of it, for every page — O(n log n) plus two full
+    /// allocations per page, on the MainActor, while the user was scrolling, and
+    /// growing more expensive with each page. `TranscriptMerge` does it in O(m)
+    /// for the ordinary "older page prepends" case (and O(n + m) if timestamps
+    /// genuinely interleave) by using the fact that both sides are already
+    /// ordered. `seen` is carried through the same call instead of being rebuilt
+    /// from the merged keys, which was the other per-page O(n) pass.
     private func mergeHistoryPage(_ messages: [SessionMessage], sessionID id: String) {
-        var byKey: [String: SessionMessage] = [:]
-        for m in (transcripts[id] ?? []) { byKey[m.stableID] = m }
-        for m in messages { byKey[m.stableID] = m }
-        let merged = byKey.values.sorted { ($0.ts ?? 0) < ($1.ts ?? 0) }
-        transcripts[id] = merged
-        seen[id] = Set(byKey.keys)
+        let result = TranscriptMerge.merge(
+            existing: transcripts[id] ?? [],
+            existingIDs: seen[id] ?? [],
+            page: messages
+        )
+        transcripts[id] = result.messages
+        seen[id] = result.ids
         writeThrough { store in
             try await store.appendMessages(sessionId: id, messages)
         }
@@ -2882,6 +2990,18 @@ import LFGCore
         guard resp.resumed != true else { return }
         pending.queuedForResume = false
         pending.confirmed = true
+        // Acceptance retires every failure marker a previous attempt left behind.
+        //
+        // This is what produced "Not sent" warnings with no queued message: a
+        // first attempt fails transiently, `settleSendFailure` marks the row
+        // `failed`/`queuedOffline`, a later redelivery SUCCEEDS and lands here —
+        // and the row stayed flagged, because acceptance only ever set
+        // `confirmed`. `retryOutboxRow`'s own success path cleared them by hand;
+        // every other success path did not. The server taking the message is
+        // proof it is no longer un-sent, so clear it here, once, for all callers.
+        pending.failed = false
+        pending.queuedOffline = false
+        pending.failureReason = nil
         // Link to the server queue id right away so the message can be
         // removed / edited / sent-now while it's still pending.
         if let qid = resp.msg?.id { pending.serverQueueID = qid }
@@ -2982,7 +3102,13 @@ import LFGCore
     /// (send/close/interrupt/…) hit the right machine in a multi-host setup.
     @discardableResult
     func run(_ label: String, for id: String, _ op: @escaping (LFGClient) async throws -> Void) async -> Bool {
-        guard let client = client(forSession: id) else { return false }
+        // A routing miss used to return `false` in silence, which is the worst
+        // of the invisible-failure cases: the action never left the phone, so
+        // there is not even a server-side trace to find later.
+        guard let client = client(forSession: id) else {
+            lastError = "\(label) failed: no host is currently routed for this session."
+            return false
+        }
         do { try await op(client); await refresh(); return true }
         catch { lastError = "\(label) failed: \(error.localizedDescription)"; return false }
     }
@@ -3071,6 +3197,11 @@ import LFGCore
         // notice sitting directly above the composer.
         let ownerKnownDown = host(forSession: id).map { !isNotKnownDown($0) } ?? false
         if !ownerKnownDown { busy[id] = true }
+        // Sending is the user moving on from the previous turn, which is what
+        // makes that turn's finished child agents stale. Stamped even when the
+        // host is down: the send is queued and will run, and either way the
+        // user has stopped caring about the last turn's agents.
+        lastUserSendAt[id] = Date().timeIntervalSince1970 * 1000
         let app = UIApplication.shared
         var bg: UIBackgroundTaskIdentifier = .invalid
         bg = app.beginBackgroundTask(withName: "lfg.send") {
@@ -3152,8 +3283,11 @@ import LFGCore
 
             guard let hostId = routeHostId(forSession: id),
                   await enqueueOutboxForTransport(clientId: clientId, sessionId: id, hostId: hostId, text: typed) else {
+                // Terminal in the other direction: the sidecars are gone and no
+                // drain will ever pick this up, so it needs the same banner the
+                // other give-up paths get. It was silent before.
                 deleteOutboxAttachments(clientId: clientId)
-                mutatePending(id, pid) { $0.failed = true }
+                markPendingFailed(clientId: clientId)
                 return
             }
             // Nothing has reached a host, so this cannot read as received: it
@@ -3206,7 +3340,10 @@ import LFGCore
             await refresh()
             reconcilePending(eff)
         } catch {
-            lastError = "Send failed: \(error.localizedDescription)"
+            // No banner here either — this throw may well be a queued message.
+            // `settleSendFailure` below decides, and announces only if it is
+            // giving the message back to the user.
+            //
             // Nothing was revived — stop claiming a restart that isn't happening.
             // (Harmless when this send wasn't a wake-up: the id isn't marked.)
             restarts.clear(id)
@@ -3297,7 +3434,10 @@ import LFGCore
     /// finally distinguishable from one that acted on it. Reporting that is the
     /// whole point: silently "succeeding" is what made Stop feel broken.
     func interrupt(_ id: String) async {
-        guard let client = client(forSession: id) else { return }
+        guard let client = client(forSession: id) else {
+            lastError = "Stop failed: no host is currently routed for this session."
+            return
+        }
         do {
             let stopped = try await client.interrupt(id)
             await refresh()
@@ -3444,6 +3584,11 @@ import LFGCore
             let merged = TranscriptMerge.unionByStableID(moved, transcripts[new] ?? [])
             transcripts[new] = merged
             seen[new] = Set(merged.map(\.stableID))
+        }
+        // A kickoff send is stamped against the placeholder id; carry it so the
+        // reconciled session does not forget the user already sent something.
+        if let v = lastUserSendAt.removeValue(forKey: old) {
+            lastUserSendAt[new] = max(v, lastUserSendAt[new] ?? 0)
         }
         if let v = prompts.removeValue(forKey: old), prompts[new] == nil { prompts[new] = v }
         if let v = busy.removeValue(forKey: old), busy[new] == nil { busy[new] = v }

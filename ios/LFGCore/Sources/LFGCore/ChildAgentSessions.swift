@@ -117,6 +117,55 @@ public struct ChildAgentCollectionPresentation: Sendable, Equatable {
     }
 }
 
+/// Whether the child-sessions bar above the composer should be on screen.
+///
+/// The bar used to show whenever a session had *ever* spawned a child agent, so
+/// once an agent finished it sat above the composer forever — clutter from a
+/// turn that ended, in the one place the user is trying to type. But it cannot
+/// simply hide on completion either: a finished agent the user has not yet
+/// acknowledged is exactly what they may want to open.
+///
+/// The rule that resolves both: sending a follow-up is the acknowledgement.
+/// After a send, work belonging to the *previous* turn is stale and the bar goes
+/// away; anything that has been active since the send (including agents the new
+/// turn spawns) brings it back. The toolbar's "Child sessions (N)" entry remains
+/// the always-available way in, so hiding the bar never loses access.
+public enum ChildSessionsBarVisibility {
+
+    /// The most recent moment this agent did anything. Prefers the strongest
+    /// signal available; a row may carry any subset of these.
+    public static func latestActivity(of agent: ChildAgentSession) -> Double? {
+        [agent.finishedAt, agent.lastActivityAt, agent.startedAt]
+            .compactMap { $0 }
+            .max()
+    }
+
+    /// - Parameter lastUserSendAt: epoch **milliseconds** of the most recent
+    ///   follow-up the user sent to this session, or nil if they have not sent
+    ///   one. Same unit as `ChildAgentSession`'s timestamps and
+    ///   `SessionStore.PendingSend.ts` — mixing seconds in here would make every
+    ///   send look older than every agent and the bar would never hide.
+    public static func shouldShow(
+        agents: [ChildAgentSession],
+        lastUserSendAt: Double?
+    ) -> Bool {
+        guard !agents.isEmpty else { return false }
+        // Running work is always worth surfacing, no matter what was sent when.
+        if agents.contains(where: { $0.status.isActive }) { return true }
+        // Never sent anything: nothing has superseded this work yet.
+        guard let lastUserSendAt else { return true }
+        // Every agent is finished. Show it only if some of that work happened
+        // after the last thing the user said; otherwise it belongs to a turn
+        // they have already moved on from.
+        guard let newestActivity = agents.compactMap(latestActivity(of:)).max() else {
+            // No timestamps at all to reason with. A send is the more recent
+            // known event, so treat the agents as the older news.
+            return false
+        }
+        return lastUserSendAt < newestActivity
+    }
+}
+
 public enum SessionWorkListPresentation {
     public static func childAgentLabel(count: Int) -> String? {
         guard count > 0 else { return nil }

@@ -101,3 +101,90 @@ final class ChildAgentSessionTests: XCTestCase {
         )
     }
 }
+
+/// Cover for the child-sessions bar dismissing once its work is stale.
+///
+/// Timestamps are epoch **milliseconds** throughout, matching the server and
+/// `SessionStore.PendingSend.ts`.
+final class ChildSessionsBarVisibilityTests: XCTestCase {
+
+    private let t0 = 1_787_369_000_000.0
+
+    private func agent(
+        _ id: String,
+        _ status: ChildAgentStatus,
+        started: Double? = nil,
+        activity: Double? = nil,
+        finished: Double? = nil
+    ) -> ChildAgentSession {
+        ChildAgentSession(
+            id: id, status: status,
+            startedAt: started, lastActivityAt: activity, finishedAt: finished)
+    }
+
+    func testNoAgentsMeansNoBar() {
+        XCTAssertFalse(ChildSessionsBarVisibility.shouldShow(agents: [], lastUserSendAt: nil))
+        XCTAssertFalse(ChildSessionsBarVisibility.shouldShow(agents: [], lastUserSendAt: t0))
+    }
+
+    /// The old behaviour, still correct until the user moves on.
+    func testFinishedAgentsShowUntilTheUserSendsAgain() {
+        let agents = [agent("a", .completed, started: t0, finished: t0 + 1_000)]
+        XCTAssertTrue(ChildSessionsBarVisibility.shouldShow(agents: agents, lastUserSendAt: nil))
+    }
+
+    /// The bug: a follow-up makes the previous turn's finished work stale.
+    func testFinishedAgentsHideAfterAFollowUp() {
+        let agents = [
+            agent("a", .completed, started: t0, finished: t0 + 1_000),
+            agent("b", .failed, started: t0, finished: t0 + 2_000),
+        ]
+        XCTAssertFalse(
+            ChildSessionsBarVisibility.shouldShow(agents: agents, lastUserSendAt: t0 + 5_000))
+    }
+
+    /// Running work outranks everything — this is what re-shows the bar for
+    /// agents the new turn spawns.
+    func testRunningAgentKeepsTheBarEvenRightAfterASend() {
+        let agents = [
+            agent("a", .completed, finished: t0 + 1_000),
+            agent("b", .running, started: t0 + 6_000),
+        ]
+        XCTAssertTrue(
+            ChildSessionsBarVisibility.shouldShow(agents: agents, lastUserSendAt: t0 + 5_000))
+    }
+
+    /// Agents spawned by the new turn that have since finished are NOT stale.
+    func testAgentsThatFinishedAfterTheSendStillShow() {
+        let agents = [agent("a", .completed, started: t0 + 6_000, finished: t0 + 7_000)]
+        XCTAssertTrue(
+            ChildSessionsBarVisibility.shouldShow(agents: agents, lastUserSendAt: t0 + 5_000))
+    }
+
+    /// A send at exactly the newest activity counts as superseding it, so a
+    /// same-millisecond tie cannot leave the bar stuck on screen.
+    func testSendAtTheSameInstantSupersedes() {
+        let agents = [agent("a", .completed, finished: t0 + 5_000)]
+        XCTAssertFalse(
+            ChildSessionsBarVisibility.shouldShow(agents: agents, lastUserSendAt: t0 + 5_000))
+    }
+
+    /// Rows can arrive with no timestamps at all (lenient decoding).
+    func testUntimedAgentsHideOnceSomethingHasBeenSent() {
+        let agents = [agent("a", .completed)]
+        XCTAssertTrue(ChildSessionsBarVisibility.shouldShow(agents: agents, lastUserSendAt: nil))
+        XCTAssertFalse(ChildSessionsBarVisibility.shouldShow(agents: agents, lastUserSendAt: t0))
+    }
+
+    /// `lastActivityAt` and `startedAt` stand in when `finishedAt` is absent.
+    func testLatestActivityFallsBackThroughTheAvailableTimestamps() {
+        XCTAssertEqual(
+            ChildSessionsBarVisibility.latestActivity(
+                of: agent("a", .completed, started: t0, activity: t0 + 500)),
+            t0 + 500)
+        XCTAssertEqual(
+            ChildSessionsBarVisibility.latestActivity(of: agent("a", .completed, started: t0)),
+            t0)
+        XCTAssertNil(ChildSessionsBarVisibility.latestActivity(of: agent("a", .completed)))
+    }
+}

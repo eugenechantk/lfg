@@ -73,3 +73,50 @@ final class OutgoingSendPresentationTests: XCTestCase {
         }
     }
 }
+
+/// Cover for "banners are for terminal outcomes only".
+///
+/// The bug this pins: every failed outbox attempt raised a banner, but the
+/// common cold-tailnet first-drain failure re-queues the row and sends fine on
+/// the next pass — so the user got a banner for a message that was never in
+/// trouble.
+final class SendFailurePolicyTests: XCTestCase {
+
+    /// The exact shape of the spurious banner: host down, so the row is
+    /// re-queued and the queued bubble already says "will send when reachable".
+    func testUnreachableHostRequeuesSilently() {
+        let d = SendFailurePolicy.disposition(hostStillDown: true, hasAttachments: false)
+        XCTAssertEqual(d, .requeued)
+        XCTAssertFalse(d.announcesToUser)
+    }
+
+    /// Attachment sidecars are still on disk, so the send is replayable however
+    /// it threw — and burning the row would strand them.
+    func testAttachmentsAlwaysRequeueSilently() {
+        for hostDown in [true, false] {
+            let d = SendFailurePolicy.disposition(hostStillDown: hostDown, hasAttachments: true)
+            XCTAssertEqual(d, .requeued, "hostDown=\(hostDown)")
+            XCTAssertFalse(d.announcesToUser)
+        }
+    }
+
+    /// The host answered and the message is what went wrong: nothing else will
+    /// happen without the user, so say so.
+    func testHostAnsweredAndRejectedIsTerminalAndAnnounced() {
+        let d = SendFailurePolicy.disposition(hostStillDown: false, hasAttachments: false)
+        XCTAssertEqual(d, .failed)
+        XCTAssertTrue(d.announcesToUser)
+    }
+
+    func testBannerPrefersTheHostsOwnWords() {
+        XCTAssertEqual(
+            SendFailurePolicy.bannerMessage(reason: "directory not found: /Uzers/x"),
+            "Message not sent — directory not found: /Uzers/x")
+    }
+
+    func testBannerFallsBackWhenThereIsNoReason() {
+        let fallback = "Message not sent. Tap Retry on the message to try again."
+        XCTAssertEqual(SendFailurePolicy.bannerMessage(reason: nil), fallback)
+        XCTAssertEqual(SendFailurePolicy.bannerMessage(reason: "   "), fallback)
+    }
+}

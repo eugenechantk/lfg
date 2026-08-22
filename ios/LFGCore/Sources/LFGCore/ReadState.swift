@@ -54,4 +54,16 @@ public enum SessionFocus {
     public static func afterDisappearing(_ sessionID: String, focusedID: String?) -> String? {
         focusedID == sessionID ? nil : focusedID
     }
+
+    /// Resolve the exact display value to retain when a session receives focus.
+    /// Session-list membership can churn independently of the pushed detail; a
+    /// snapshot taken at focus keeps that detail resolvable through a transient
+    /// refresh that omits its row.
+    public static func snapshotCandidate<Value>(
+        _ sessionID: String,
+        candidates: [Value],
+        id: (Value) -> String?
+    ) -> Value? {
+        candidates.first { id($0) == sessionID }
+    }
 }

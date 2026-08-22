@@ -61,3 +61,55 @@ public enum OutgoingSendPresentation: Equatable, Sendable {
     /// for the transcript to say so.
     public var isConfirmed: Bool { self == .sentBubble }
 }
+
+/// What a send that threw actually means, and whether it is worth interrupting
+/// the user about.
+///
+/// A throw is not by itself bad news. The common one is a cold tailnet path
+/// dropping the first packets of a foreground drain: the message is still in
+/// the durable outbox, the next pass sends it, and the queued bubble already
+/// says so honestly. Announcing that is worse than saying nothing — it trains
+/// the user to ignore a banner that will also carry the failures that DO need
+/// them.
+///
+/// So the split is by outcome, not by "did something throw":
+///
+/// - **Re-queued** — auto-recovering. The UI already shows "will send when
+///   reachable". Silent.
+/// - **Failed** — terminal. The message is handed back to the human with a
+///   Retry button, and nothing further happens unless they tap it. Worth a
+///   banner, because otherwise a message the user believes they sent simply
+///   never goes.
+public enum SendFailureDisposition: Equatable, Sendable {
+    case requeued
+    case failed
+
+    /// Only terminal outcomes are announced. This is the whole rule.
+    public var announcesToUser: Bool { self == .failed }
+}
+
+public enum SendFailurePolicy {
+
+    /// - Parameters:
+    ///   - hostStillDown: the owning host is not currently live. A throw against
+    ///     a host that is itself unreachable says nothing about the message.
+    ///   - hasAttachments: the attachment bytes are still on disk as sidecars,
+    ///     so the send is replayable no matter why it threw — and burning the
+    ///     row would strand the sidecars.
+    public static func disposition(
+        hostStillDown: Bool,
+        hasAttachments: Bool
+    ) -> SendFailureDisposition {
+        (hostStillDown || hasAttachments) ? .requeued : .failed
+    }
+
+    /// One short sentence for the banner. The pending row carries the host's own
+    /// words when it has them; a bare "not sent" leaves the user guessing.
+    public static func bannerMessage(reason: String?) -> String {
+        let trimmed = reason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty else {
+            return "Message not sent. Tap Retry on the message to try again."
+        }
+        return "Message not sent — \(trimmed)"
+    }
+}
