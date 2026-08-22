@@ -1,0 +1,18 @@
+$ curl -s http://127.0.0.1:8766/api/sessions | jq ...codex summary
+false	codexy-153628-89613	019fff33-6f44-7e00-8b36-b57f762833ce	Test motion control on real workout videos
+true	codexy-235129-9487	01a01ab8-aaf3-7b80-afc6-7528bf357f0c	Clip move association and downloads
+false	codexy-165159-64263	01a02511-c274-7232-a012-16cb8d7a02e7	fiftyworkout
+false	codexy-225817-36257	01a02512-5d2a-77e2-9d2d-2b349a7f64d9	Okay, can you verify every page to see if we got rid of the frame? Also…
+false	codexy-234644-7203	01a01fda-748d-7d42-b62f-ae1a64ddc83d	i want to brainstorm more on the studio app, based on our latest brains…
+false	codexy-134503-87505		fiftyworkout
+false	codexy-134514-88562	01a01e5e-bbd6-7531-8c8d-27020a21efde	Week 1 workout assembly
+false	codexy-180544-24630	01a023c8-cc9c-7582-a224-36e9497e654a	Email auth and production launch
+true	codexy-181020-30855	01a023cc-fe0c-7ee1-a676-a1bb4f07b874	50queen app buildout
+false	codexy-181129-45046	01a023cd-e044-74f1-8b31-a9ccde70472f	we have a pipeline that generates the program for the person based on h…
+false	codexy-181942-73980	01a01fae-1685-7002-a632-90146c6f090d	50queen web redesign
+false	codexy-182018-81515	01a023d5-f1b4-7070-9ad2-cce97ea467e4	We now have a reference document on how to build a guided workout sessi…
+false	lfg-b50929	01a025c6-d5ff-7eb0-be5e-e57faf214663	lfg
+false	codexy-004502-97241	01a02536-32a8-7202-86e2-729b10fd37e8	Landing page responsive design
+false	codexy-005332-33809	01a0253d-f759-7890-9257-ba020600e3ed	Fiftyworkout production testing
+false	codexy-005403-36435	01a0253f-1597-7ec0-8cef-1296c19e22b5	fiftyworkout
+true	lfg-6947a8	01a025c2-c206-72e1-bd90-d440610ca708	For codex sessions, the status keeps swapping between idle and running

@@ -15,8 +15,10 @@ history continues loading in bounded pages.
    each page into the store without duplicating live-stream messages.
 5. Loading stops at the beginning of the transcript or the existing 5,000
    message retention cap.
-6. A failed page logs the failure, waits, and retries the history load once;
-   already-merged pages remain visible.
+6. Each response is bounded by encoded bytes as well as message count, because
+   tool results vary dramatically in size.
+7. A failed page waits and retries the same cursor once; already-merged pages
+   remain visible and the load never restarts from the newest page.
 
 ## Success Criteria
 
@@ -31,6 +33,12 @@ history continues loading in bounded pages.
 - [x] SC5: The complete 4,029-message reproduction session loads through the
   real Cloudflare hostname in Simulator, including history older than the first
   500-message page.
+- [x] SC6: Each history response targets at most 256 KiB of encoded message JSON,
+  while one individually oversized message is still returned to advance the cursor.
+- [x] SC7: A transient older-page failure retries the same `before` cursor and
+  does not redownload the newest pages.
+- [x] SC8: Session `codexy-165159-64263` renders recent messages promptly, reaches
+  its first prompt, and clears the top history-loading indicator.
 
 ## Test Strategy
 
@@ -50,6 +58,14 @@ transport against the known 9.97 MB transcript.
   - repeated cursors terminate instead of looping
   - final request shrinks to preserve the 5,000-message cap
   - each page carries Cloudflare Access credentials
+  - every request carries the 256 KiB response budget
+  - a transient failure repeats the same cursor rather than restarting
+
+### Server unit
+
+- `src/sessions-message-stream.test.ts`
+  - byte-bounded pages traverse every normalized message without duplicates
+  - one oversized message still advances the backward cursor
 
 ### Existing regression suite
 
@@ -71,15 +87,18 @@ transport against the known 9.97 MB transcript.
 - Change `SessionStore.ensureHistory` to merge and persist each yielded page as
   it arrives. Keep union-by-stable-ID semantics so SSE and retry overlap remain
   harmless.
-- Preserve the existing single retry and local-store fallback.
+- Bound pages by encoded JSON bytes rather than only message count.
+- Own the single retry inside the cursor-preserving async iterator; the store
+  preserves the existing local-store fallback for terminal failure.
 
 ## Residual Risks
 
-- The endpoint currently reparses the full transcript for each backward page;
-  this costs about 0.3 seconds per page on the 4,029-message reproduction file,
-  but network transfer dominates through Cloudflare.
-- The real-device cellular path may differ from Simulator bandwidth; bounded
-  pages prevent one oversized transfer from blocking all visible history.
+- One individually oversized message can exceed the page budget because paging
+  must always advance. Supporting strict bounds there would require chunking or
+  separately fetching expanded tool output.
+- Complete history still transfers every message and can take tens of seconds on
+  a slow tunnel. Recent content arrives first, the top row reports progress, and
+  cursor-preserving retries prevent that transfer from restarting.
 
 ## Bugs
 
@@ -105,3 +124,14 @@ transport against the known 9.97 MB transcript.
   history on the 4,029-message session, plus visible transcript content on the
   user's exact `codexy-221150-93411` session. Evidence:
   `.codex/evidence/20260819-124100-ios-visual-audit/evidence.md`.
+- 2026-08-21: Exact-session server verification reduced the newest response from
+  500 messages / 1,091,341 bytes to 140 messages / 249,242 bytes. Through the
+  active Cloudflare route it completed in 0.755 seconds with 63,118 wire bytes.
+- 2026-08-21: The exact 1,154-message history completed in 15 bounded responses
+  without cursor restart under variable tunnel bandwidth.
+- 2026-08-21: Focused paging tests passed 5/5; the full LFGCore suite passed
+  468/468; TypeScript type checking passed; server coverage passed.
+- 2026-08-21: Independent post-restart audit passed. The exact session detail
+  appeared at 1.79 seconds and recent transcript content at 2.767 seconds, then
+  reached the original first prompt with no loading indicator remaining.
+  Evidence: `.codex/evidence/20260821-013828-ios-visual-audit/evidence.md`.

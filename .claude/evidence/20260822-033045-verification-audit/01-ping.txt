@@ -1,0 +1,7 @@
+$ curl -si http://127.0.0.1:8766/api/ping
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Fri, 21 Aug 2026 19:30:45 GMT
+Content-Length: 43
+
+{"ok":true,"seq":456065,"ts":1787340645138}

@@ -1,0 +1,10 @@
+$ journal relevance summary
+head 456099
+event_count 10
+active_sid 01a01ab8-aaf3-7b80-afc6-7528bf357f0c events 0
+known_sid 01a023d5-f1b4-7070-9ad2-cce97ea467e4 events 0
+other_session_ids ['01a025c2-c206-72e1-bd90-d440610ca708', '9fec1e45-e700-436b-835d-7d7a73e0f730', 'ae9a8fc1-e453-4f88-9992-7d0e1ab5ba4c']
+
+$ current session ownership for event-only session ids
+sid=ae9a8fc1-e453-4f88-9992-7d0e1ab5ba4c
+sid=9fec1e45-e700-436b-835d-7d7a73e0f730

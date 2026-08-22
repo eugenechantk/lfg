@@ -1,0 +1,277 @@
+--- src/codex-bind.test.ts ---
+import { describe, expect, it } from "bun:test";
+import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  codexPromptFromCmd,
+  firstUserTextFromTop,
+  pickCodexForkThread,
+  pickOpenCodexThread,
+  pickCodexThread,
+  pickKnownCodexThread,
+} from "./sessions.ts";
+
+type Thread = {
+  id: string;
+  path: string;
+  cwd: string | null;
+  createdAt: number | null;
+  fileCreatedAt?: number | null;
+  updatedAt: number | null;
+  lastRecordAt?: number | null;
+  firstUserText: string | null;
+  forkedFromId: string | null;
+};
+
+const T0 = 1_782_885_876_000; // process startedAt used across cases
+
+function thread(over: Partial<Thread> & { id: string }): Thread {
+  return {
+    path: `/rollout-${over.id}.jsonl`,
+    cwd: "/Users/eugenechan/dev/inbox",
+    createdAt: T0 + 8_000,
+    updatedAt: T0 + 8_000,
+    firstUserText: null,
+    forkedFromId: null,
+    ...over,
+  };
+}
+
+async function writeRollout(lines: unknown[]): Promise<string> {
+  const path = join(tmpdir(), `lfg-codex-bind-${randomUUID()}.jsonl`);
+  await Bun.write(path, lines.map((line) => JSON.stringify(line)).join("\n"));
+  return path;
+}
+
+describe("pickCodexThread — promptless (interactive codex)", () => {
+  it("binds an interactive codex to its same-cwd rollout written just after launch", () => {
+    const t = thread({ id: "a" });
+    const got = pickCodexThread(
+      { cwd: "/Users/eugenechan/dev/inbox", startedAt: T0, prompt: null },
+      [t],
+      new Set(),
+    );
+    expect(got?.id).toBe("a");
+  });
+
+  it("does not bind a rollout from a different cwd", () => {
+    const t = thread({ id: "a", cwd: "/other/dir" });
+    const got = pickCodexThread(
+      { cwd: "/Users/eugenechan/dev/inbox", startedAt: T0, prompt: null },
+      [t],
+      new Set(),
+    );
+    expect(got).toBeNull();
+  });
+
+  it("does not bind a stale rollout created well before launch", () => {
+    const t = thread({ id: "a", createdAt: T0 - 5 * 60_000 });
+    const got = pickCodexThread(
+      { cwd: "/Users/eugenechan/dev/inbox", startedAt: T0, prompt: null },
+      [t],
+      new Set(),
+    );
+    expect(got).toBeNull();
+  });
+
+  it("does not bind a rollout created long after launch (a newer session)", () => {
+    const t = thread({ id: "a", createdAt: T0 + 10 * 60_000 });
+    const got = pickCodexThread(
+      { cwd: "/Users/eugenechan/dev/inbox", startedAt: T0, prompt: null },
+      [t],
+      new Set(),
+    );
+    expect(got).toBeNull();
+  });
+
+  it("binds a valid rollout whose file appears 170 seconds after launch", () => {
+    const delayed = thread({
+      id: "delayed",
+      createdAt: T0,
+      fileCreatedAt: T0 + 170_000,
+    });
+    const got = pickCodexThread(
+      { cwd: "/Users/eugenechan/dev/inbox", startedAt: T0, prompt: null },
+      [delayed],
+      new Set(),
+    );
+    expect(got?.id).toBe("delayed");
+  });
+
+  it("skips already-claimed rollouts", () => {
+    const t = thread({ id: "a" });
+    const got = pickCodexThread(
+      { cwd: "/Users/eugenechan/dev/inbox", startedAt: T0, prompt: null },
+      [t],
+      new Set(["a"]),
+    );
+    expect(got).toBeNull();
+  });
+
+  it("binds two interactive codex in the same cwd each to its nearest-launch rollout", () => {
+    const startA = T0;
+    const startB = T0 + 60_000;
+    const rollA = thread({ id: "a", createdAt: startA + 5_000 });
+    const rollB = thread({ id: "b", createdAt: startB + 5_000 });
+    const threads = [rollA, rollB];
+    const claimed = new Set<string>();
+
+    const gotA = pickCodexThread(
+      { cwd: "/Users/eugenechan/dev/inbox", startedAt: startA, prompt: null },
+      threads,
+      claimed,
+    );
+    expect(gotA?.id).toBe("a");
+    claimed.add(gotA!.id);
+
+    const gotB = pickCodexThread(
+      { cwd: "/Users/eugenechan/dev/inbox", startedAt: startB, prompt: null },
+      threads,
+      claimed,
+    );
+    expect(gotB?.id).toBe("b");
+  });
+
+  it("rejects a later metadata-only rollout that preserves the process launch timestamp", () => {
+    const live = thread({
+      id: "live",
+      createdAt: T0 + 13_000,
+      fileCreatedAt: T0 + 13_000,
+      updatedAt: T0 + 90 * 60_000,
+    });
+    const abandoned = thread({
+      id: "abandoned",
+      createdAt: T0 + 600,
+      fileCreatedAt: T0 + 30 * 60_000,
+      updatedAt: T0 + 30 * 60_000,
+    });
+
+    const got = pickCodexThread(
+      { cwd: "/Users/eugenechan/dev/inbox", startedAt: T0, prompt: null },
+      [abandoned, live],
+      new Set(),
+    );
+
+    expect(got?.id).toBe("live");
+  });
+
+  it("returns null when startedAt is unknown (can't disambiguate promptless)", () => {
+    const t = thread({ id: "a" });
+    const got = pickCodexThread(
+      { cwd: "/Users/eugenechan/dev/inbox", startedAt: null, prompt: null },
+      [t],
+      new Set(),
+    );
+    expect(got).toBeNull();
+  });
+});
+
+describe("pickOpenCodexThread — live process ownership", () => {
+  it("prefers the freshest rollout the process actually has open over launch proximity", () => {
+    const staleNearest = thread({
+      id: "stale-nearest",
+      path: "/rollout-stale-nearest.jsonl",
+      createdAt: T0 - 15_000,
+      fileCreatedAt: T0 - 15_000,
+      updatedAt: T0 + 5 * 60_000,
+    });
+    const delayedOwned = thread({
+      id: "delayed-owned",
+      path: "/rollout-delayed-owned.jsonl",
+      createdAt: T0 + 65_000,
+      fileCreatedAt: T0 + 65_000,
+      updatedAt: T0 + 4 * 60 * 60_000,
+    });
+
+    expect(
+      pickCodexThread(
+        { cwd: delayedOwned.cwd, startedAt: T0, prompt: null },
+        [staleNearest, delayedOwned],
+        new Set(),
+      )?.id,
+    ).toBe("stale-nearest");
+    expect(
+      pickOpenCodexThread(
+        new Set([delayedOwned.path]),
+        [staleNearest, delayedOwned],
+        new Set(),
+      )?.id,
+    ).toBe("delayed-owned");
+  });
+
+  it("selects the freshest unclaimed rollout when a long-lived TUI keeps old files open", () => {
+    const old = thread({
+      id: "old",
+      path: "/rollout-old.jsonl",
+      // Syncthing touched the old file later; semantic activity must still win.
+      updatedAt: T0 + 20_000,
+      lastRecordAt: T0 + 1_000,
+    });
+    const current = thread({
+      id: "current",
+      path: "/rollout-current.jsonl",
+      updatedAt: T0 + 9_000,
+      lastRecordAt: T0 + 9_000,
+    });
+    const claimed = thread({
+      id: "claimed",
+      path: "/rollout-claimed.jsonl",
+      updatedAt: T0 + 10_000,
+    });
+
+    expect(
+      pickOpenCodexThread(
+        new Set([old.path, current.path, claimed.path]),
+        [old, current, claimed],
+        new Set([claimed.id]),
+      )?.id,
+    ).toBe("current");
+  });
+});
+
+describe("codex managed binding intents", () => {
+  it("binds a resumed session by known id even when the rollout predates process start", () => {
+    const oldResume = thread({
+      id: "00000000-0000-4000-8000-0000000000aa",
+      createdAt: T0 - 6 * 60 * 60_000,
+      updatedAt: T0 + 1_000,
+    });
+
+    expect(
+
+--- src/procinfo-codex.test.ts ---
+import { describe, expect, test } from "bun:test";
+import { parseOpenCodexRollouts } from "./procinfo.ts";
+
+describe("parseOpenCodexRollouts", () => {
+  test("maps rollout paths to their owning process", () => {
+    const got = parseOpenCodexRollouts(`
+p101
+fcwd
+n/Users/eugenechan/dev/a
+f51
+n/Users/eugenechan/.codex/sessions/2026/08/21/rollout-a.jsonl
+p202
+f22
+n/Users/eugenechan/.codex/sessions/2026/08/22/rollout-b.jsonl
+f23
+n/Users/eugenechan/not-a-rollout.jsonl
+`);
+
+    expect(got.get(101)).toEqual([
+      "/Users/eugenechan/.codex/sessions/2026/08/21/rollout-a.jsonl",
+    ]);
+    expect(got.get(202)).toEqual([
+      "/Users/eugenechan/.codex/sessions/2026/08/22/rollout-b.jsonl",
+    ]);
+  });
+
+  test("deduplicates repeated descriptors and ignores malformed process blocks", () => {
+    const path = "/tmp/.codex/sessions/2026/08/22/rollout-current.jsonl";
+    const got = parseOpenCodexRollouts(`p7\nf4\nn${path}\nf5\nn${path}\npnope\nn${path}\n`);
+
+    expect(got.get(7)).toEqual([path]);
+    expect(got.size).toBe(1);
+  });
+});

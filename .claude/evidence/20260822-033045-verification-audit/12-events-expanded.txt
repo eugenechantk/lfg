@@ -1,0 +1,77 @@
+$ tail -n +2 12-events-since-baseline.json | jq .
+{
+  "events": [
+    {
+      "seq": 456090,
+      "ts": 1787340718563,
+      "sessionId": "01a025c2-c206-72e1-bd90-d440610ca708",
+      "type": "msg",
+      "payload": "{\"sid\":\"01a025c2-c206-72e1-bd90-d440610ca708\",\"m\":{\"id\":\"2026-08-21T19:31:58.386Z:function_call_output:call_WnEo3wWahfDPJ56sY1EB7cu2:Finished waiting\\nNo agents completed yet\",\"role\":\"tool\",\"kind\":\"tool_result\",\"text\":\"Finished waiting\\nNo agents completed yet\",\"ts\":1787340718386}}"
+    },
+    {
+      "seq": 456091,
+      "ts": 1787340723375,
+      "sessionId": "01a025c2-c206-72e1-bd90-d440610ca708",
+      "type": "msg",
+      "payload": "{\"sid\":\"01a025c2-c206-72e1-bd90-d440610ca708\",\"m\":{\"id\":\"2026-08-21T19:32:02.775Z:function_call:call_aoj1sjhps2KOTnnKGUre9iR3:Waiting for agents\",\"role\":\"assistant\",\"kind\":\"tool_use\",\"text\":\"Waiting for agents\",\"ts\":1787340722775}}"
+    },
+    {
+      "seq": 456092,
+      "ts": 1787340732533,
+      "sessionId": "ae9a8fc1-e453-4f88-9992-7d0e1ab5ba4c",
+      "type": "busy",
+      "payload": "{\"sid\":\"ae9a8fc1-e453-4f88-9992-7d0e1ab5ba4c\",\"busy\":true}"
+    },
+    {
+      "seq": 456093,
+      "ts": 1787340732534,
+      "sessionId": "ae9a8fc1-e453-4f88-9992-7d0e1ab5ba4c",
+      "type": "queue",
+      "payload": "{\"sid\":\"ae9a8fc1-e453-4f88-9992-7d0e1ab5ba4c\",\"queue\":[]}"
+    },
+    {
+      "seq": 456094,
+      "ts": 1787340735734,
+      "sessionId": "ae9a8fc1-e453-4f88-9992-7d0e1ab5ba4c",
+      "type": "busy",
+      "payload": "{\"sid\":\"ae9a8fc1-e453-4f88-9992-7d0e1ab5ba4c\",\"busy\":false}"
+    },
+    {
+      "seq": 456095,
+      "ts": 1787340737737,
+      "sessionId": "ae9a8fc1-e453-4f88-9992-7d0e1ab5ba4c",
+      "type": "msg",
+      "payload": "{\"sid\":\"ae9a8fc1-e453-4f88-9992-7d0e1ab5ba4c\",\"m\":{\"id\":\"a0d56621-c7e2-4cc9-846c-139166391e1f\",\"role\":\"assistant\",\"kind\":\"text\",\"text\":\"App Store and mobile growth today runs on bypassing the platform rather than optimizing within it: the most repeated pattern is routing paid traffic to a web funnel—onboarding and charging users on a website before ever prompting the app install—to dodge Apple's 30% cut and multi-week payout delays. Growth itself is treated as a disciplined, staged experiment rather than a hustle: waitlists before launch, silent warm-up before content, soft CTAs before scaling, with skipping phases named as the primary failure mode. Content and creator strategies (faceless branding, influencer hiring) are shown to be learnable systems, but only after paying real tuition in dollars or reworked funnels—$50K in hiring mistakes, 11 rejections before shipping, years of positioning wasted versus two months of waitlist-building. Underneath it all is a bias toward maximal ambition (aim for a billion to land at 500M) paired with hard-won tactical precision, suggesting the concept is less about a single growth hack and more about a full-stack discipline: big vision, ruthless experimentation, and structurally avoiding Apple's economics wherever possible.\",\"ts\":1787340737491}}"
+    },
+    {
+      "seq": 456096,
+      "ts": 1787340739001,
+      "sessionId": "ae9a8fc1-e453-4f88-9992-7d0e1ab5ba4c",
+      "type": "busy",
+      "payload": "{\"sid\":\"ae9a8fc1-e453-4f88-9992-7d0e1ab5ba4c\",\"busy\":true}"
+    },
+    {
+      "seq": 456097,
+      "ts": 1787340740848,
+      "sessionId": "ae9a8fc1-e453-4f88-9992-7d0e1ab5ba4c",
+      "type": "busy",
+      "payload": "{\"sid\":\"ae9a8fc1-e453-4f88-9992-7d0e1ab5ba4c\",\"busy\":false}"
+    },
+    {
+      "seq": 456098,
+      "ts": 1787340744472,
+      "sessionId": "9fec1e45-e700-436b-835d-7d7a73e0f730",
+      "type": "busy",
+      "payload": "{\"sid\":\"9fec1e45-e700-436b-835d-7d7a73e0f730\",\"busy\":true}"
+    },
+    {
+      "seq": 456099,
+      "ts": 1787340744473,
+      "sessionId": "9fec1e45-e700-436b-835d-7d7a73e0f730",
+      "type": "queue",
+      "payload": "{\"sid\":\"9fec1e45-e700-436b-835d-7d7a73e0f730\",\"queue\":[]}"
+    }
+  ],
+  "head": 456099,
+  "canServe": true
+}

@@ -1,0 +1,31 @@
+$ tail -n +2 sessions | jq keys
+[
+  "sessions"
+]
+
+$ tail -n +2 sessions | jq .sessions[0]
+{
+  "agent": "claude",
+  "pid": 88221,
+  "cmd": "claude bg-pty-host --bg-pty-host /tmp/cc-daemon-501/96f10b56/spare/25848890.pty.sock 200 50 -- /opt/homebrew/Caskroom/claude-code@latest/2.1.220/claude --bg-spare /tmp/cc-daemon-501/96f10b56/spare/25848890.claim.sock",
+  "cwd": "/private/tmp/cc-daemon-501/96f10b56/spare",
+  "project": "private-tmp-cc-daemon-501-96f10b56-spare",
+  "title": "spare",
+  "lastUserText": null,
+  "sessionId": null,
+  "startedAt": 1786203140000,
+  "transcriptPath": null,
+  "lastActivityAt": null,
+  "busy": false,
+  "last": null,
+  "tmuxTarget": null,
+  "tmuxName": null,
+  "managed": false,
+  "assignedUser": null,
+  "model": null,
+  "status": "ok",
+  "statusReason": null,
+  "statusDetail": null,
+  "runningChildAgentCount": 0,
+  "runningBackgroundProcessCount": 0
+}
