@@ -133,6 +133,7 @@ export type PayloadSessionInput = {
   status?: string | null;
   lastActivityAt?: number | null;
   runningChildAgentCount?: number;
+  runningChildSessionCount?: number;
   runningBackgroundProcessCount?: number;
 };
 
@@ -567,8 +568,7 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
         ...state,
         busy: busyWithRunningWork(
           state.busy,
-          s.runningChildAgentCount ?? 0,
-          s.runningBackgroundProcessCount ?? 0,
+          (s.runningChildAgentCount ?? 0) + (s.runningChildSessionCount ?? 0),
         ),
       };
     } catch {

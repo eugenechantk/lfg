@@ -44,12 +44,15 @@ import {
 import {
   listSubagentSessions,
   runningBackgroundProcessCounts as claudeBackgroundProcessCounts,
+  withChildSessionActivity,
   withSessionWorkActivity,
 } from "./subagents.ts";
 import {
   listProcs,
   cwdOf,
+  openCodexRolloutPaths,
   primeCwds,
+  primeOpenCodexRollouts,
   primeProcSnapshot,
   startTimeMsOf,
   procStartMatches,
@@ -119,6 +122,12 @@ export type Session = {
   // is deduplicated; active children also promote `busy` so every consumer sees
   // the parent as working even while its own pane is idle.
   runningChildAgentCount?: number;
+  // Number of SPAWNED child sessions (separate live sessions carrying this
+  // session's id as `parentSessionId`) currently busy. A delegated worker
+  // session is the parent's work in flight exactly like a subagent, so these
+  // promote the parent's `busy` too — without this the parent read Idle the
+  // whole time its delegate ran.
+  runningChildSessionCount?: number;
   // Active background shell processes: Claude derives these from transcript
   // task lifecycle; Codex derives them from its live pane status.
   runningBackgroundProcessCount?: number;
@@ -524,11 +533,28 @@ export type CodexThread = {
   createdAt: number | null;
   fileCreatedAt?: number | null;
   updatedAt: number | null;
+  /** Newest embedded record timestamp; populated only for live open rollouts. */
+  lastRecordAt?: number | null;
   firstUserText: string | null;
   forkedFromId: string | null;
 };
 
-async function codexThreads(): Promise<CodexThread[]> {
+async function lastCodexRecordAt(path: string): Promise<number | null> {
+  return scanBack(path, (line) => {
+    try {
+      const timestamp = (JSON.parse(line) as { timestamp?: unknown }).timestamp;
+      if (typeof timestamp !== "string") return null;
+      const parsed = Date.parse(timestamp);
+      return Number.isFinite(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }, { startBytes: 8 * 1024 });
+}
+
+async function codexThreads(
+  liveOpenPaths: ReadonlySet<string> = new Set(),
+): Promise<CodexThread[]> {
   const out: CodexThread[] = [];
   for (const path of await codexRolloutFiles()) {
     try {
@@ -560,6 +586,11 @@ async function codexThreads(): Promise<CodexThread[]> {
         createdAt: row.payload?.timestamp ? Date.parse(row.payload.timestamp) : null,
         fileCreatedAt,
         updatedAt,
+        // Files in the synced Codex tree can receive a fresh filesystem mtime
+        // without new conversation content. For live open rollouts, carry the
+        // newest embedded timestamp so binding cannot jump when sync touches an
+        // older descriptor the same long-lived TUI still owns.
+        lastRecordAt: liveOpenPaths.has(path) ? await lastCodexRecordAt(path) : null,
         firstUserText: await firstUserTextFromTop(path),
         forkedFromId: row.payload?.forked_from_id ?? row.forked_from_id ?? null,
       });
@@ -711,6 +742,33 @@ export function pickKnownCodexThread(
 ): CodexThread | null {
   if (!sessionId || claimed.has(sessionId)) return null;
   return threads.find((t) => t.id === sessionId) ?? null;
+}
+
+/**
+ * Bind a Codex process to a rollout it demonstrably has open.
+ *
+ * Process-launch proximity is only a bootstrap fallback. A promptless TUI may
+ * create its rollout more than a minute after launch, and the same long-lived
+ * process can switch conversations later. In both cases a nearby same-cwd file
+ * can belong to another process. Open descriptors narrow the candidates to
+ * files this process actually owns; activity chooses the current one when Codex
+ * retains descriptors for earlier conversations.
+ */
+export function pickOpenCodexThread(
+  openPaths: ReadonlySet<string>,
+  threads: CodexThread[],
+  claimed: Set<string>,
+): CodexThread | null {
+  return (
+    threads
+      .filter((thread) => openPaths.has(thread.path) && !claimed.has(thread.id))
+      .sort(
+        (a, b) =>
+          (b.lastRecordAt ?? b.updatedAt ?? 0) - (a.lastRecordAt ?? a.updatedAt ?? 0) ||
+          (codexBindingCreatedAt(b) ?? 0) - (codexBindingCreatedAt(a) ?? 0) ||
+          a.id.localeCompare(b.id),
+      )[0] ?? null
+  );
 }
 
 export function pickCodexForkThread(
@@ -2468,14 +2526,20 @@ async function listSessionsUncached(
   const claudeProcs = listClaudeProcs().filter(
     (p) => !isClosing(p.pid) && !harnessPids.has(ppidOf(p.pid) ?? -1),
   );
+  const codexProcs = listCodexProcs();
   // Batch-prime every candidate proc's cwd with a single `lsof` so the per-pid
   // cwdOf() calls in the claude + codex enrichment below hit the cache instead
   // of each spawning their own lsof — the largest single contributor to the
   // synchronous spawn storm. Codex pids are cheap to enumerate here (they read
   // the shared ps snapshot, no extra spawn).
-  await primeCwds([
-    ...claudeProcs.map((p) => p.pid),
-    ...listCodexProcs().map((p) => p.pid),
+  await Promise.all([
+    primeCwds([
+      ...claudeProcs.map((p) => p.pid),
+      ...codexProcs.map((p) => p.pid),
+    ]),
+    primeOpenCodexRollouts(
+      codexProcs.filter((p) => !/\bapp-server\b/.test(p.cmd)).map((p) => p.pid),
+    ),
   ]);
   const enriched = await Promise.all(
     claudeProcs.map(async (p) => {
@@ -2630,7 +2694,10 @@ async function listSessionsUncached(
     });
   }
 
-  const codex = await codexThreads();
+  const liveOpenCodexPaths = new Set(
+    codexProcs.flatMap((proc) => openCodexRolloutPaths(proc.pid)),
+  );
+  const codex = await codexThreads(liveOpenCodexPaths);
   const claimedCodex = new Set<string>();
   // codex-aisdk harnesses each spawn a `codex app-server --listen stdio://`
   // child that pgrep WILL surface (basename is `codex`). It's the AI-SDK
@@ -2642,7 +2709,7 @@ async function listSessionsUncached(
   for (const e of aisdkEntries) {
     if (e.agent === "codex" && e.threadId) claimedCodex.add(e.threadId);
   }
-  for (const p of listCodexProcs()) {
+  for (const p of codexProcs) {
     if (isClosing(p.pid)) continue; // just-closed — keep it out of the list
     // The app-server child of a codex-aisdk harness — not a user-facing codex
     // session. Its argv is `codex app-server --listen stdio://` (no resume id,
@@ -2676,6 +2743,23 @@ async function listSessionsUncached(
     if (!thread) {
       thread = pickCodexForkThread(
         { forkedFromId, spawnedAt: managedCodex?.createdAt ?? startedAt },
+        codex,
+        claimedCodex,
+      );
+      if (thread) {
+        sessionId = thread.id;
+        if (managedCodex && !managedCodex.sessionId) {
+          patchManaged(managedCodex.tmuxName, { sessionId: thread.id });
+        }
+      }
+    }
+    // The process's open rollout descriptors are a stronger ownership signal
+    // than cwd + launch-time proximity. In particular, a promptless TUI can
+    // delay creating its own rollout while an older nearby rollout already
+    // exists, and a long-lived TUI can switch sessions without restarting.
+    if (!thread) {
+      thread = pickOpenCodexThread(
+        new Set(openCodexRolloutPaths(p.pid)),
         codex,
         claimedCodex,
       );
@@ -2859,11 +2943,20 @@ async function listSessionsUncached(
     resolvePaneOwners(deduped);
     return deduped;
   }
+  // Claude-transcript work only: codex rollouts can never contain an Agent
+  // launch or a `backgroundTaskId`, and streaming one through the event filter
+  // is not free — a large live rollout measured 858ms per scan on this event
+  // loop, enough to starve the pump. Codex background terminals arrive via the
+  // pane scrape (`lastPaneBackgroundProcessCount`) below instead.
+  const scansClaudeTranscript = (session: { agent?: string | null }): boolean =>
+    !session.agent?.startsWith("codex");
   const transcriptBackgroundCounts = await claudeBackgroundProcessCounts(
-    deduped.flatMap((session) => session.transcriptPath ? [session.transcriptPath] : []),
+    deduped.flatMap((session) =>
+      session.transcriptPath && scansClaudeTranscript(session) ? [session.transcriptPath] : [],
+    ),
   );
   const workEnriched = await Promise.all(deduped.map(async (session) => {
-    const agents = session.transcriptPath
+    const agents = session.transcriptPath && scansClaudeTranscript(session)
       ? await listSubagentSessions(session.transcriptPath)
       : [];
     const transcriptBackgroundCount = session.transcriptPath
@@ -2879,7 +2972,9 @@ async function listSessionsUncached(
     );
   }));
   resolvePaneOwners(workEnriched);
-  return workEnriched;
+  // Spawned delegate sessions promote their parent's busy — same contract as
+  // running subagents, discovered from the list itself rather than transcripts.
+  return withChildSessionActivity(workEnriched);
 }
 
 /**
@@ -3677,9 +3772,35 @@ export async function pendingToolPrompt(
   };
 }
 
+export function byteBoundedPageStart<T>(
+  items: T[],
+  countBoundedStart: number,
+  end: number,
+  maxBytes: number | null | undefined,
+): number {
+  if (maxBytes == null || !Number.isFinite(maxBytes) || countBoundedStart >= end) {
+    return countBoundedStart;
+  }
+
+  const budget = Math.max(0, Math.floor(maxBytes));
+  let start = end;
+  let encodedBytes = 2; // JSON array brackets.
+  for (let index = end - 1; index >= countBoundedStart; index--) {
+    const itemBytes = Buffer.byteLength(JSON.stringify(items[index]) ?? "null");
+    const separatorBytes = start < end ? 1 : 0;
+    if (start < end && encodedBytes + separatorBytes + itemBytes > budget) break;
+    start = index;
+    encodedBytes += separatorBytes + itemBytes;
+    // Always return one item, even when it alone exceeds the budget. Otherwise
+    // an unusually large tool result would leave the cursor unable to advance.
+    if (encodedBytes > budget) break;
+  }
+  return start;
+}
+
 export async function messagePage(
   path: string,
-  opts: { before?: number | null; limit?: number } = {},
+  opts: { before?: number | null; limit?: number; maxBytes?: number | null } = {},
 ): Promise<{
   messages: SessionMsg[];
   nextBefore: number | null;
@@ -3689,7 +3810,8 @@ export async function messagePage(
   const limit = Math.max(1, Math.min(500, opts.limit ?? 220));
   const rawEnd = opts.before ?? all.length;
   const end = Math.max(0, Math.min(all.length, rawEnd));
-  const start = Math.max(0, end - limit);
+  const countBoundedStart = Math.max(0, end - limit);
+  const start = byteBoundedPageStart(all, countBoundedStart, end, opts.maxBytes);
   return {
     messages: all.slice(start, end),
     nextBefore: start > 0 ? start : null,

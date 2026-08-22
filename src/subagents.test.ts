@@ -8,6 +8,7 @@ import {
   resolveSubagentTranscript,
   runningBackgroundProcessCount,
   runningBackgroundProcessCounts,
+  withChildSessionActivity,
   withSessionWorkActivity,
 } from "./subagents.ts";
 import {
@@ -110,10 +111,9 @@ afterEach(() => {
 
 describe("Claude subagent discovery", () => {
   test("child activity can only promote parent busy, never clear it", () => {
-    expect(busyWithRunningWork(false, 0, 0)).toBe(false);
-    expect(busyWithRunningWork(false, 1, 0)).toBe(true);
-    expect(busyWithRunningWork(false, 0, 1)).toBe(true);
-    expect(busyWithRunningWork(true, 0, 0)).toBe(true);
+    expect(busyWithRunningWork(false, 0)).toBe(false);
+    expect(busyWithRunningWork(false, 1)).toBe(true);
+    expect(busyWithRunningWork(true, 0)).toBe(true);
   });
   test("running children promote the parent busy state and expose their count", () => {
     const parent = { id: "parent", busy: false };
@@ -250,13 +250,58 @@ describe("Claude subagent discovery", () => {
     expect(counts.get(second.parent)).toBe(1);
   });
 
-  test("background processes promote parent busy independently of children", () => {
+  test("background processes surface as a badge and never promote parent busy", () => {
+    // A dev server started with run_in_background stays alive for hours;
+    // folding it into busy pinned idle sessions "Working" forever and
+    // suppressed their finished/needs-input pushes (bug 010).
     expect(withSessionWorkActivity({ id: "parent", busy: false }, [], 2)).toEqual({
       id: "parent",
-      busy: true,
+      busy: false,
       runningChildAgentCount: 0,
       runningBackgroundProcessCount: 2,
     });
+  });
+
+  test("a busy spawned child session promotes its parent (Eugene: parent read Idle while its delegate ran)", () => {
+    const rows = withChildSessionActivity([
+      { sessionId: "parent", parentSessionId: null, busy: false },
+      { sessionId: "delegate", parentSessionId: "parent", busy: true },
+      { sessionId: "bystander", parentSessionId: null, busy: false },
+    ]);
+
+    expect(rows.find((r) => r.sessionId === "parent")).toMatchObject({
+      busy: true,
+      runningChildSessionCount: 1,
+    });
+    expect(rows.find((r) => r.sessionId === "bystander")?.busy).toBe(false);
+  });
+
+  test("an idle child session does not promote, and completion releases the parent", () => {
+    const rows: Array<{
+      sessionId: string;
+      parentSessionId: string | null;
+      busy: boolean;
+      runningChildSessionCount?: number;
+    }> = withChildSessionActivity([
+      { sessionId: "parent", parentSessionId: null, busy: false },
+      { sessionId: "delegate", parentSessionId: "parent", busy: false },
+    ]);
+
+    expect(rows.find((r) => r.sessionId === "parent")).toMatchObject({ busy: false });
+    expect(rows.find((r) => r.sessionId === "parent")?.runningChildSessionCount).toBeUndefined();
+  });
+
+  test("a row claiming itself as parent cannot count itself as its own child", () => {
+    const input: Array<{
+      sessionId: string;
+      parentSessionId: string | null;
+      busy: boolean;
+      runningChildSessionCount?: number;
+    }> = [{ sessionId: "loop", parentSessionId: "loop", busy: true }];
+
+    const rows = withChildSessionActivity(input);
+
+    expect(rows[0].runningChildSessionCount).toBeUndefined();
   });
 
   test("discovers sidecars, lifecycle state, timestamps, and newest-first ordering", async () => {
@@ -310,11 +355,74 @@ describe("Claude subagent discovery", () => {
       notification("resumed", "tool-resumed", "running", "2026-08-20T04:04:00.000Z"),
     ].join(""));
 
-    const [session] = await listSubagentSessions(f.parent);
+    const [session] = await listSubagentSessions(
+      f.parent,
+      Date.parse("2026-08-20T04:05:00.000Z"),
+    );
 
     expect(session.status).toBe("running");
     expect(session.finishedAt).toBeNull();
     expect(session.lastActivityAt).toBe(Date.parse("2026-08-20T04:04:00.000Z"));
+  });
+
+  test("a synchronous subagent's tool_result completion terminates its status", async () => {
+    // Claude Code writes <task-notification> rows only for ASYNC agent
+    // launches. A foreground Agent call records its completion solely as the
+    // tool_result's toolUseResult — before bug 010 that row was filtered out
+    // and the child read "running" forever, latching the parent busy.
+    const f = fixture();
+    child(f.sidecars, {
+      id: "sync-child",
+      toolUseId: "tool-sync",
+      description: "Sync explore",
+      lastTimestamp: "2026-08-20T04:02:00.000Z",
+    });
+    writeFileSync(f.parent, [
+      launch("tool-sync", "Sync explore", "2026-08-20T04:01:00.000Z"),
+      line({
+        type: "user",
+        timestamp: "2026-08-20T04:03:00.000Z",
+        toolUseResult: {
+          status: "completed",
+          agentId: "sync-child",
+          agentType: "Explore",
+          totalDurationMs: 120_000,
+        },
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "tool-sync", content: "done" }],
+        },
+      }),
+    ].join(""));
+
+    const [session] = await listSubagentSessions(
+      f.parent,
+      Date.parse("2026-08-20T04:04:00.000Z"),
+    );
+
+    expect(session.status).toBe("completed");
+    expect(session.finishedAt).toBe(Date.parse("2026-08-20T04:03:00.000Z"));
+  });
+
+  test("a running child with no completion record and no recent activity degrades to unknown", async () => {
+    // Parent killed mid-agent: no notification and no tool_result will ever
+    // arrive, so without a clock backstop the child latches "running" across
+    // every /resume. The stale read must also flip WITHOUT a file change —
+    // i.e. through the sidecar cache — so read once fresh, then again stale.
+    const f = fixture();
+    child(f.sidecars, {
+      id: "orphan",
+      toolUseId: "tool-orphan",
+      description: "Orphaned agent",
+      lastTimestamp: "2026-08-20T04:02:00.000Z",
+    });
+    writeFileSync(f.parent, launch("tool-orphan", "Orphaned agent", "2026-08-20T04:01:00.000Z"));
+
+    const fresh = await listSubagentSessions(f.parent, Date.parse("2026-08-20T04:10:00.000Z"));
+    expect(fresh[0].status).toBe("running");
+
+    const stale = await listSubagentSessions(f.parent, Date.parse("2026-08-20T05:00:00.000Z"));
+    expect(stale[0].status).toBe("unknown");
+    expect(stale[0].finishedAt).toBeNull();
   });
 
   test("maps killed and stopped to stopped and keeps unknown statuses neutral", async () => {

@@ -378,7 +378,11 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
     expect(sent.map((payload) => payload.kind)).toEqual(["finished"]);
   });
 
-  test("an active background process keeps an idle parent busy until it finishes", async () => {
+  test("a background process never makes an idle parent busy (bug 010)", async () => {
+    // A dev server started with run_in_background lives for hours. Folding it
+    // into busy pinned idle sessions "Working" and — because reduceTransition
+    // returns early while busy — suppressed every later finished/needs-input
+    // push. Background work is a badge, not a turn.
     const sent: ApnsPayload[] = [];
     const prior = new Map<string, PriorState>();
     let runningBackgroundProcessCount = 1;
@@ -400,10 +404,10 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
     };
 
     await runPushTick(prior, deps);
-    expect(prior.get("s1")?.busy).toBe(true);
+    expect(prior.get("s1")?.busy).toBe(false);
     runningBackgroundProcessCount = 0;
     await runPushTick(prior, deps);
-    expect(sent.map((payload) => payload.kind)).toEqual(["finished"]);
+    expect(sent).toHaveLength(0);
   });
 
   test("busy → idle with a prompt pushes 'needs-input' carrying the question", async () => {

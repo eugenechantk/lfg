@@ -172,9 +172,13 @@ describe("codex busy detection", () => {
     expect(isBusy(CODEX_BUSY_PLAIN)).toBe(true);
   });
 
-  test("background terminals keep an otherwise idle codex session busy", () => {
+  test("background terminals are a badge, not busy (bug 010)", () => {
+    // "N background terminals running" stays on screen for a dev server's
+    // whole lifetime. Counting it as busy pinned idle codex sessions
+    // "Working" for hours, held sendq deliveries, and made the interrupt
+    // confirmation unfalsifiable. The count still flows to clients.
     expect(backgroundProcessCount(CODEX_IDLE_WITH_BACKGROUND)).toBe(2);
-    expect(isBusy(CODEX_IDLE_WITH_BACKGROUND)).toBe(true);
+    expect(isBusy(CODEX_IDLE_WITH_BACKGROUND)).toBe(false);
   });
 
   test("background terminal copy in agent prose is not counted", () => {

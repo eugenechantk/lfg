@@ -185,9 +185,18 @@ export type InterruptDeps = {
   wait: (ms: number) => Promise<void>;
 };
 
-/** Total time the pane gets to drop its busy meter before we report failure. */
-const CONFIRM_WINDOW_MS = 1_500;
+/** Total time the pane gets to drop its busy meter before we report failure.
+ * 5s, not 1.5s: codex has to unwind an in-flight exec/tool before it repaints
+ * idle, and the old window reported `stopped: false` for interrupts that were
+ * in fact landing. */
+const CONFIRM_WINDOW_MS = 5_000;
 const CONFIRM_POLL_MS = 250;
+/** Re-send Escape while the pane still reads busy. A lone ESC can sit buffered
+ * in the TUI's input parser (it can't tell it from the start of an escape
+ * sequence — same failure dismissPrompt works around), so one send-keys can
+ * silently do nothing. Re-sending only while busy means an idle composer never
+ * sees a second Escape (which would open rewind/backtrack). */
+const RESEND_EVERY_MS = 1_500;
 
 export type InterruptOutcome = {
   /** The Escape was transmitted (pane existed). */
@@ -207,11 +216,20 @@ export async function interruptAndConfirm(
   if (!deps.escape(target)) return { sent: false, stopped: false };
   // Poll rather than wait-then-check: a responsive agent clears in well under the
   // window, and Stop should feel immediate.
+  let sinceLastSend = 0;
   for (let waited = 0; waited < CONFIRM_WINDOW_MS; waited += CONFIRM_POLL_MS) {
     await deps.wait(CONFIRM_POLL_MS);
+    sinceLastSend += CONFIRM_POLL_MS;
     const pane = await deps.capture(target);
     if (pane == null) return { sent: true, stopped: null };
     if (!deps.busy(pane)) return { sent: true, stopped: true };
+    // Still busy: the first Escape may be sitting buffered in the TUI's input
+    // parser. Re-send on a slow cadence — the busy check above guarantees we
+    // never drop an extra Escape on an idle composer.
+    if (sinceLastSend >= RESEND_EVERY_MS) {
+      if (!deps.escape(target)) return { sent: true, stopped: null };
+      sinceLastSend = 0;
+    }
   }
   return { sent: true, stopped: false };
 }

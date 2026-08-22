@@ -1155,11 +1155,15 @@ export function isBusy(pane: string): boolean {
   // what re-drove messages and failed them, while reading an idle agent as busy
   // only holds the send until the next poll.
   if (codex != null) {
+    // Background terminals are deliberately NOT busy: "1 background terminal
+    // running" stays on screen for a dev server's whole lifetime, so counting
+    // it pinned idle sessions Working, held sendq deliveries, and made the
+    // interrupt confirmation unfalsifiable. It remains visible to clients as
+    // `runningBackgroundProcessCount` via backgroundProcessCount().
     return (
       CODEX_BUSY_METER.test(codex)
       || CODEX_QUEUE_NOTICE.test(codex)
       || BUSY_METER.test(codex)
-      || backgroundProcessCount(pane) > 0
     );
   }
   const { meter, footer } = busyChromeRegions(pane);

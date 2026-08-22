@@ -9,7 +9,7 @@
 // heuristics in sessions.ts/tmux.ts are untouched.
 //
 // All functions are best-effort: a dead/missing pid yields null, never a throw.
-import { readlink } from "node:fs/promises";
+import { readdir, readlink } from "node:fs/promises";
 import { statSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 
@@ -194,6 +194,129 @@ export async function primeCwds(pids: number[]): Promise<void> {
       cwdCache.set(cur, { at: now, val: line.slice(1).trim() || null });
     }
   }
+}
+
+const CODEX_ROLLOUT_PATH_RE = /\/\.codex\/sessions\/.+\/rollout-[^/]+\.jsonl$/;
+const CODEX_ROLLOUT_SNAPSHOT_TTL_MS = 1_500;
+let codexRolloutSnapshot: {
+  at: number;
+  pathsByPid: Map<number, string[]>;
+} | null = null;
+
+/**
+ * Parse `lsof -Fan` process/file blocks into the Codex rollouts each pid owns.
+ *
+ * A long-lived Codex TUI keeps older rollout descriptors open after an in-TUI
+ * session switch. Keeping every path here is intentional: the caller has the
+ * transcript activity metadata needed to decide which owned rollout is current.
+ *
+ * OWNERSHIP REQUIRES WRITE ACCESS. Codex only ever appends to its OWN rollout
+ * (`u`/`w`); at startup it transiently opens OTHER rollouts read-only (`r`) to
+ * build its history/picker. A spawn-time scan that caught such a descriptor
+ * bound a brand-new session to a days-old rollout — and `patchManaged` then
+ * made the wrong id permanent, since the managed registry outranks every later
+ * binding signal (bug 010, live repro: lfg-f88d49 → rollout from two days
+ * prior). A descriptor with UNKNOWN mode stays owned: the Linux `/proc` path
+ * reports no mode, and losing ownership evidence must not un-bind a session.
+ */
+export function parseOpenCodexRollouts(out: string | null): Map<number, string[]> {
+  const pathsByPid = new Map<number, string[]>();
+  const seenByPid = new Map<number, Set<string>>();
+  let pid: number | null = null;
+  let mode: string | null = null;
+  for (const line of out?.split("\n") ?? []) {
+    if (line.startsWith("p")) {
+      const parsed = Number(line.slice(1));
+      pid = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+      mode = null;
+      continue;
+    }
+    if (line.startsWith("f")) {
+      mode = null; // new descriptor block; its `a` field (if any) follows
+      continue;
+    }
+    if (line.startsWith("a")) {
+      mode = line.slice(1);
+      continue;
+    }
+    if (pid == null || !line.startsWith("n")) continue;
+    const path = line.slice(1);
+    if (!CODEX_ROLLOUT_PATH_RE.test(path)) continue;
+    if (mode === "r") continue; // read-only: someone else's rollout
+    let seen = seenByPid.get(pid);
+    if (!seen) {
+      seen = new Set();
+      seenByPid.set(pid, seen);
+    }
+    if (seen.has(path)) continue;
+    seen.add(path);
+    const paths = pathsByPid.get(pid);
+    if (paths) paths.push(path);
+    else pathsByPid.set(pid, [path]);
+  }
+  return pathsByPid;
+}
+
+async function linuxOpenCodexRollouts(pid: number): Promise<string[]> {
+  const out: string[] = [];
+  let descriptors: string[];
+  try {
+    descriptors = await readdir(`/proc/${pid}/fd`);
+  } catch {
+    return out;
+  }
+  const seen = new Set<string>();
+  await Promise.all(descriptors.map(async (descriptor) => {
+    try {
+      const path = await readlink(`/proc/${pid}/fd/${descriptor}`);
+      if (CODEX_ROLLOUT_PATH_RE.test(path) && !seen.has(path)) {
+        seen.add(path);
+        out.push(path);
+      }
+    } catch {}
+  }));
+  return out;
+}
+
+/**
+ * Prime one host-level snapshot of open Codex rollout descriptors.
+ *
+ * Darwin needs `lsof`, but one batched invocation for every Codex pid costs far
+ * less than one process per session. Linux reads `/proc` directly. A failed
+ * Darwin probe deliberately preserves the last good snapshot: losing an
+ * auxiliary observation for one scan must not make a session jump identities.
+ */
+export async function primeOpenCodexRollouts(pids: number[]): Promise<void> {
+  const unique = Array.from(new Set(pids.filter((pid) => Number.isInteger(pid) && pid > 0)));
+  const now = Date.now();
+  if (
+    codexRolloutSnapshot &&
+    now - codexRolloutSnapshot.at < CODEX_ROLLOUT_SNAPSHOT_TTL_MS &&
+    unique.every((pid) => codexRolloutSnapshot!.pathsByPid.has(pid))
+  ) return;
+
+  if (unique.length === 0) {
+    codexRolloutSnapshot = { at: now, pathsByPid: new Map() };
+    return;
+  }
+
+  if (IS_DARWIN) {
+    const raw = await spawnTextAsync(["lsof", "-a", "-p", unique.join(","), "-Fan"]);
+    if (raw == null) return;
+    const parsed = parseOpenCodexRollouts(raw);
+    for (const pid of unique) if (!parsed.has(pid)) parsed.set(pid, []);
+    codexRolloutSnapshot = { at: Date.now(), pathsByPid: parsed };
+    return;
+  }
+
+  const entries = await Promise.all(
+    unique.map(async (pid) => [pid, await linuxOpenCodexRollouts(pid)] as const),
+  );
+  codexRolloutSnapshot = { at: Date.now(), pathsByPid: new Map(entries) };
+}
+
+export function openCodexRolloutPaths(pid: number): string[] {
+  return [...(codexRolloutSnapshot?.pathsByPid.get(pid) ?? [])];
 }
 
 const PID_VALUE_TTL_MS = 30_000;

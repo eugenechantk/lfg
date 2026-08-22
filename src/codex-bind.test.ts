@@ -6,6 +6,7 @@ import {
   codexPromptFromCmd,
   firstUserTextFromTop,
   pickCodexForkThread,
+  pickOpenCodexThread,
   pickCodexThread,
   pickKnownCodexThread,
 } from "./sessions.ts";
@@ -17,6 +18,7 @@ type Thread = {
   createdAt: number | null;
   fileCreatedAt?: number | null;
   updatedAt: number | null;
+  lastRecordAt?: number | null;
   firstUserText: string | null;
   forkedFromId: string | null;
 };
@@ -161,6 +163,69 @@ describe("pickCodexThread — promptless (interactive codex)", () => {
       new Set(),
     );
     expect(got).toBeNull();
+  });
+});
+
+describe("pickOpenCodexThread — live process ownership", () => {
+  it("prefers the freshest rollout the process actually has open over launch proximity", () => {
+    const staleNearest = thread({
+      id: "stale-nearest",
+      path: "/rollout-stale-nearest.jsonl",
+      createdAt: T0 - 15_000,
+      fileCreatedAt: T0 - 15_000,
+      updatedAt: T0 + 5 * 60_000,
+    });
+    const delayedOwned = thread({
+      id: "delayed-owned",
+      path: "/rollout-delayed-owned.jsonl",
+      createdAt: T0 + 65_000,
+      fileCreatedAt: T0 + 65_000,
+      updatedAt: T0 + 4 * 60 * 60_000,
+    });
+
+    expect(
+      pickCodexThread(
+        { cwd: delayedOwned.cwd, startedAt: T0, prompt: null },
+        [staleNearest, delayedOwned],
+        new Set(),
+      )?.id,
+    ).toBe("stale-nearest");
+    expect(
+      pickOpenCodexThread(
+        new Set([delayedOwned.path]),
+        [staleNearest, delayedOwned],
+        new Set(),
+      )?.id,
+    ).toBe("delayed-owned");
+  });
+
+  it("selects the freshest unclaimed rollout when a long-lived TUI keeps old files open", () => {
+    const old = thread({
+      id: "old",
+      path: "/rollout-old.jsonl",
+      // Syncthing touched the old file later; semantic activity must still win.
+      updatedAt: T0 + 20_000,
+      lastRecordAt: T0 + 1_000,
+    });
+    const current = thread({
+      id: "current",
+      path: "/rollout-current.jsonl",
+      updatedAt: T0 + 9_000,
+      lastRecordAt: T0 + 9_000,
+    });
+    const claimed = thread({
+      id: "claimed",
+      path: "/rollout-claimed.jsonl",
+      updatedAt: T0 + 10_000,
+    });
+
+    expect(
+      pickOpenCodexThread(
+        new Set([old.path, current.path, claimed.path]),
+        [old, current, claimed],
+        new Set([claimed.id]),
+      )?.id,
+    ).toBe("current");
   });
 });
 

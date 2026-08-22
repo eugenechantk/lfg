@@ -384,7 +384,10 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       if (existing) {
         existing.target = s.tmuxTarget ?? null; // pane can (re)appear
         existing.agent = s.agent;
-        existing.runningChildAgentCount = s.runningChildAgentCount ?? 0;
+        // Spawned delegate sessions count as running child work here too, so
+        // the journal's busy matches the REST snapshot's fold.
+        existing.runningChildAgentCount =
+          (s.runningChildAgentCount ?? 0) + (s.runningChildSessionCount ?? 0);
         existing.runningBackgroundProcessCount = s.runningBackgroundProcessCount ?? 0;
         continue;
       }
@@ -403,7 +406,8 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
         codexNormalization,
         stitcher: new PaneStitcher(),
         wasBusy: false,
-        runningChildAgentCount: s.runningChildAgentCount ?? 0,
+        runningChildAgentCount:
+          (s.runningChildAgentCount ?? 0) + (s.runningChildSessionCount ?? 0),
         runningBackgroundProcessCount: s.runningBackgroundProcessCount ?? 0,
       });
     }
@@ -473,7 +477,6 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
         const busy = busyWithRunningWork(
           baseBusy || delegated,
           w.runningChildAgentCount,
-          w.runningBackgroundProcessCount,
         );
         noteTurnEdge(w, busy);
         if (deltas.busyChanged(w.sid, busy)) j.append(w.sid, "busy", { sid: w.sid, busy });
@@ -509,7 +512,6 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       const busy = busyWithRunningWork(
         resolveBusy({ verdict, paneBusy, delegated }),
         w.runningChildAgentCount,
-        w.runningBackgroundProcessCount,
       );
       noteTurnEdge(w, busy);
       if (deltas.busyChanged(w.sid, busy)) j.append(w.sid, "busy", { sid: w.sid, busy });

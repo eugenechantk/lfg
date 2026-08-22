@@ -2528,7 +2528,13 @@ export async function cmdServe() {
         const m = path.match(/^\/api\/sessions\/([0-9a-fA-F-]{36})\/interrupt$/);
         if (m && req.method === "POST") {
           const sess = (await listSessions()).find((s) => s.sessionId === m[1]);
-          if (!sess) return err(404, "session not found");
+          // Log the early exits too: interrupts that die on these guards were
+          // invisible (the client renders no errors), which made "interrupt
+          // does nothing" undiagnosable from the phone.
+          if (!sess) {
+            void logOp({ op: "interrupt", sessionId: m[1], ok: false, ms: 0, error: "not-found" });
+            return err(404, "session not found");
+          }
           if (
             sess.agent === "aisdk" ||
             sess.agent === "codex-aisdk" ||
@@ -2540,8 +2546,17 @@ export async function cmdServe() {
             appendAisdkCmd(key, { type: "interrupt" });
             return json({ ok: true });
           }
-          if (!sess.tmuxTarget)
+          if (!sess.tmuxTarget) {
+            void logOp({
+              op: "interrupt",
+              sessionId: m[1],
+              ok: false,
+              ms: 0,
+              error: "no-tmux-target",
+              pid: sess.pid,
+            });
             return err(409, "session is not in a tmux pane — cannot interrupt");
+          }
           // A single Escape stops the current turn. This doubles as "steer":
           // any message already sitting in Claude's own queue gets processed as
           // the next turn once the running one is interrupted. We deliberately

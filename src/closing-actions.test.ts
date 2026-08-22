@@ -163,4 +163,36 @@ describe("interruptAndConfirm — the Escape landing is not the same as it worki
     const r = await interruptAndConfirm("w:0.0", d);
     expect(r).toEqual({ sent: false, stopped: false });
   });
+
+  // Bug 010: a lone ESC can sit buffered in the TUI's input parser (it can't
+  // tell it from the start of an escape sequence), so one send-keys can
+  // silently do nothing — the same failure dismissPrompt retries around.
+  test("a pane that stays busy gets Escape re-sent on a slow cadence", async () => {
+    const d = deps(["✻ Crunched for 2m 4s"], () => true);
+    let escapes = 0;
+    d.escape = () => { escapes++; return true; };
+    const r = await interruptAndConfirm("w:0.0", d);
+    expect(r).toEqual({ sent: true, stopped: false });
+    // 5s window, re-send each 1.5s of continued busy: initial + 3 retries.
+    expect(escapes).toBe(4);
+  });
+
+  test("an idle composer never receives a second Escape", async () => {
+    // A second Esc on an idle composer opens rewind/backtrack — the retry is
+    // gated on the pane still reading busy.
+    const d = deps(["busy", "done"], (p) => p === "busy");
+    let escapes = 0;
+    d.escape = () => { escapes++; return true; };
+    const r = await interruptAndConfirm("w:0.0", d);
+    expect(r.stopped).toBe(true);
+    expect(escapes).toBe(1);
+  });
+
+  test("a re-send that fails mid-window reports unknown, not success", async () => {
+    const d = deps(["busy"], () => true);
+    let escapes = 0;
+    d.escape = () => { escapes++; return escapes === 1; };
+    const r = await interruptAndConfirm("w:0.0", d);
+    expect(r).toEqual({ sent: true, stopped: null });
+  });
 });
