@@ -5,8 +5,10 @@ import {
   apnsJwt,
   apnsBody,
   sendApns,
+  sendWithTransientRetry,
   _resetApnsJwtCache,
   type ApnsConfig,
+  type ApnsResult,
   type ApnsTransport,
 } from "./apns.ts";
 
@@ -97,6 +99,51 @@ describe("sendApns", () => {
     expect(body.aps["content-available"]).toBe(1);
     expect(body.sid).toBe("s9");
     expect(body.kind).toBe("needs-input");
+  });
+
+  /**
+   * The old transport opened a fresh HTTP/2 connection per push and never
+   * retried — 609 of 809 logged failures were `status 0` TLS disconnects (Apple
+   * throttles connection churn), and a dropped `end` left a zombie card. Only a
+   * transport-level failure (status 0) is retried: a real HTTP status — 410,
+   * 400, even 500 — is APNs speaking and is authoritative.
+   */
+  describe("sendWithTransientRetry", () => {
+    const runner = (results: ApnsResult[]) => {
+      let calls = 0;
+      return {
+        calls: () => calls,
+        fn: async () => results[Math.min(calls++, results.length - 1)]!,
+      };
+    };
+    const sleepNoop = async () => {};
+
+    test("a status-0 failure is retried and the retry's success wins", async () => {
+      const r = runner([{ ok: false, status: 0, reason: "socket disconnected" }, { ok: true, status: 200 }]);
+      const out = await sendWithTransientRetry(r.fn, 2, 0, sleepNoop);
+      expect(out).toEqual({ ok: true, status: 200 });
+      expect(r.calls()).toBe(2);
+    });
+
+    test("a real HTTP status is authoritative — no retry on 410", async () => {
+      const r = runner([{ ok: false, status: 410, reason: "Unregistered" }, { ok: true, status: 200 }]);
+      const out = await sendWithTransientRetry(r.fn, 2, 0, sleepNoop);
+      expect(out.status).toBe(410);
+      expect(r.calls()).toBe(1);
+    });
+
+    test("success on the first attempt makes exactly one call", async () => {
+      const r = runner([{ ok: true, status: 200 }]);
+      await sendWithTransientRetry(r.fn, 2, 0, sleepNoop);
+      expect(r.calls()).toBe(1);
+    });
+
+    test("exhausting attempts returns the last transient failure", async () => {
+      const r = runner([{ ok: false, status: 0, reason: "a" }, { ok: false, status: 0, reason: "b" }]);
+      const out = await sendWithTransientRetry(r.fn, 2, 0, sleepNoop);
+      expect(out).toEqual({ ok: false, status: 0, reason: "b" });
+      expect(r.calls()).toBe(2);
+    });
   });
 
   test("apnsBody carries optional journal wake keys", () => {

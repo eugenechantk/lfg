@@ -139,6 +139,81 @@ describe("Live Activity token store", () => {
     });
   });
 
+  /**
+   * Push-to-start tokens rot: dev/simulator builds each mint one, none ever
+   * 410s promptly, and the live store reached 19 — every `start` blasted all of
+   * them. Newest-3 per env keeps the real install's token by construction (it
+   * re-registers on every app launch) without the stranding risk of age-based
+   * pruning. Capped per env so a churn of sandbox dev builds can never evict a
+   * production token.
+   */
+  describe("pushToStart tokens are capped to the newest 3 per env", () => {
+    test("registering a 4th sandbox token evicts the oldest sandbox token only", async () => {
+      const s = await store();
+      for (const tok of ["p1", "p2", "p3", "p4"]) {
+        await s.upsertLiveActivityToken({ token: tok, kind: "pushToStart", env: "sandbox" });
+        await new Promise((resolve) => setTimeout(resolve, 2));
+      }
+      expect((await s.listPushToStartTokens()).map((t) => t.token).sort()).toEqual([
+        "p2",
+        "p3",
+        "p4",
+      ]);
+    });
+
+    test("the two envs have independent caps", async () => {
+      const s = await store();
+      for (const tok of ["s1", "s2", "s3", "s4"]) {
+        await s.upsertLiveActivityToken({ token: tok, kind: "pushToStart", env: "sandbox" });
+        await new Promise((resolve) => setTimeout(resolve, 2));
+      }
+      await s.upsertLiveActivityToken({ token: "prod1", kind: "pushToStart", env: "production" });
+      const tokens = await s.listPushToStartTokens();
+      expect(tokens.filter((t) => t.env === "production").map((t) => t.token)).toEqual(["prod1"]);
+      expect(tokens.filter((t) => t.env === "sandbox").length).toBe(3);
+    });
+
+    test("re-registering an existing token refreshes it instead of burning a slot", async () => {
+      const s = await store();
+      for (const tok of ["p1", "p2", "p3"]) {
+        await s.upsertLiveActivityToken({ token: tok, kind: "pushToStart", env: "sandbox" });
+        await new Promise((resolve) => setTimeout(resolve, 2));
+      }
+      await s.upsertLiveActivityToken({ token: "p1", kind: "pushToStart", env: "sandbox" });
+      expect((await s.listPushToStartTokens()).map((t) => t.token).sort()).toEqual([
+        "p1",
+        "p2",
+        "p3",
+      ]);
+    });
+
+    test("activityUpdate tokens are untouched by the cap", async () => {
+      const s = await store();
+      for (const tok of ["p1", "p2", "p3", "p4"]) {
+        await s.upsertLiveActivityToken({ token: tok, kind: "pushToStart", env: "sandbox" });
+        await new Promise((resolve) => setTimeout(resolve, 2));
+      }
+      await s.upsertLiveActivityToken({ token: "u1", kind: "activityUpdate", env: "sandbox" });
+      expect((await s.listActivityUpdateTokens()).map((t) => t.token)).toEqual(["u1"]);
+    });
+
+    test("an oversized store on disk is capped at read time, before any new registration", async () => {
+      // The live store already holds 11+ sandbox corpses; the cap must apply on
+      // the next server start, not only after the next app launch re-registers.
+      const s = await store();
+      const list = [];
+      for (let i = 0; i < 6; i++) {
+        list.push({ token: `old${i}`, kind: "pushToStart", env: "sandbox", updatedAt: 1000 + i });
+      }
+      await Bun.write(process.env.LFG_LIVE_ACTIVITY_STORE!, JSON.stringify(list));
+      expect((await s.listPushToStartTokens()).map((t) => t.token).sort()).toEqual([
+        "old3",
+        "old4",
+        "old5",
+      ]);
+    });
+  });
+
   test("lookup and remove operate by token", async () => {
     const s = await store();
     await s.upsertLiveActivityToken({ token: "start", kind: "pushToStart", env: "sandbox" });

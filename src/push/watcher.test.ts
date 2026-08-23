@@ -7,6 +7,7 @@ import {
   reduceFleetLiveActivity,
   orderFleetRows,
   MAX_FLEET_ROWS,
+  FLEET_END_DEBOUNCE_S,
   liveActivitiesEnabled,
   pushWatcherEnabled,
   CANONICAL_SERVE_PORT,
@@ -236,7 +237,15 @@ describe("reduceFleetLiveActivity", () => {
     expect(r.nextActive).not.toBeNull();
   });
 
-  describe("ending the activity when the fleet empties", () => {
+  /**
+   * The end is DEBOUNCED, not immediate. The delivery log (08-08 → 08-23)
+   * recorded 202 end→start transitions, 82 of them under 30s: every idle blip
+   * dismissed the card and bet its resurrection on push-to-start → background
+   * app relaunch → update-token re-upload, which is the path that fails. During
+   * the hold the card gets one truthful zeroed update instead.
+   * See `.claude/feature/live-activity-delivery-reliability.md`.
+   */
+  describe("ending the activity when the fleet empties (debounced)", () => {
     const active = (): LiveActivityActive => ({
       startedAt: 1_700,
       contentState: {
@@ -249,15 +258,65 @@ describe("reduceFleetLiveActivity", () => {
       since: { s1: { state: "working", at: 1_700 } },
     });
     const idle = [{ session: { sessionId: "s1", title: "Job" }, observed: obs(false, false) }];
+    const busy = [{ session: { sessionId: "s1", title: "Job" }, observed: obs(true, false) }];
 
-    test("ends immediately on the first empty tick", () => {
+    test("first empty tick sends a zeroed update and starts the hold, not an end", () => {
       const r = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730 });
-      expect(r.action?.event).toBe("end");
-      expect(r.nextActive).toBeNull();
+      expect(r.action?.event).toBe("update");
       expect(r.action?.push.body.aps["content-state"]).toMatchObject({
         working: 0, needsInput: 0, rows: [], more: 0,
       });
-      expect(r.action?.push.body.aps["dismissal-date"]).toBe(1_730);
+      expect(r.nextActive?.zeroSince).toBe(1_730);
+    });
+
+    test("staying empty within the hold sends nothing and keeps the hold's start", () => {
+      const first = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730 });
+      const again = reduceFleetLiveActivity({
+        observations: idle,
+        active: first.nextActive,
+        now: 1_730 + 30,
+      });
+      expect(again.action).toBeNull();
+      expect(again.nextActive?.zeroSince).toBe(1_730);
+    });
+
+    test("ends once the fleet has been empty for the full debounce window", () => {
+      const first = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730 });
+      const later = 1_730 + FLEET_END_DEBOUNCE_S;
+      const r = reduceFleetLiveActivity({ observations: idle, active: first.nextActive, now: later });
+      expect(r.action?.event).toBe("end");
+      expect(r.nextActive).toBeNull();
+      expect(r.action?.push.body.aps["dismissal-date"]).toBe(later);
+    });
+
+    test("activity reappearing within the hold cancels the end with no start churn", () => {
+      const first = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730 });
+      const back = reduceFleetLiveActivity({
+        observations: busy,
+        active: first.nextActive,
+        now: 1_730 + 20,
+      });
+      expect(back.action?.event).toBe("update"); // NOT end, NOT start
+      expect(back.nextActive?.zeroSince).toBeUndefined();
+      // A later genuine empty stretch starts a FRESH hold from its own first tick.
+      const emptyAgain = reduceFleetLiveActivity({
+        observations: idle,
+        active: back.nextActive,
+        now: 1_730 + 40,
+      });
+      expect(emptyAgain.action?.event).toBe("update");
+      expect(emptyAgain.nextActive?.zeroSince).toBe(1_730 + 40);
+    });
+
+    test("an adopted card (no contentState) with an empty fleet is zero-updated then held", () => {
+      // `noteFleetActivityStarted` adopts with no contentState. Before the
+      // debounce this was the app-vs-server tug of war: the app creates a card,
+      // registers a token, and the server ended it within a tick — captured
+      // live at 2026-08-23T02:00Z as an end every ~30s, forever.
+      const adopted: LiveActivityActive = { startedAt: 1_700 };
+      const r = reduceFleetLiveActivity({ observations: idle, active: adopted, now: 1_730 });
+      expect(r.action?.event).toBe("update");
+      expect(r.nextActive?.zeroSince).toBe(1_730);
     });
   });
 
@@ -630,6 +689,145 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
     expect(content.more).toBe(3);
   });
 
+});
+
+/**
+ * Partial delivery must not advance state. Update/end fan out to one token per
+ * APNs env, and one of the two is routinely a corpse that answers 200 — so
+ * "at least one accepted" was routinely "only the corpse accepted", which
+ * stranded the real device's card as a zombie (captured live: 2026-08-23
+ * 06:06:48Z, end → production status 0, sandbox corpse 200, state advanced).
+ * Update and end now require EVERY targeted token to accept; start keeps
+ * "any accepted" because re-blasting starts risks duplicate cards.
+ */
+describe("partial Live Activity delivery does not advance state", () => {
+  const liveCard = (): LiveActivityActive => ({
+    startedAt: 1_700,
+    contentState: {
+      working: 1,
+      needsInput: 0,
+      rows: [{ sid: "s1", title: "Old", state: "working", since: 1_700 }],
+      more: 0,
+      updatedAt: 1_700,
+    },
+    since: { s1: { state: "working", at: 1_700 } },
+  });
+
+  type SendResult = { ok: boolean; status: number; reason?: string };
+  const harness = (args: {
+    active: { current: LiveActivityActive | null };
+    sessionsBusy: boolean;
+    results: Record<string, SendResult[]>; // per-token queue of results
+    now: number;
+  }) => {
+    const sent: { token: string; event: string }[] = [];
+    const deps: TickDeps = {
+      sessions: async () => [{ sessionId: "s1", title: "Job", tmuxTarget: "t" }],
+      observe: async () => obs(args.sessionsBusy, false),
+      devices: async () => [],
+      cfg,
+      send: async () => ({ ok: true, status: 200 }),
+      liveActivities: {
+        active: args.active,
+        pushToStartTokens: async () => [{ token: "start", env: "sandbox" as const }],
+        activityUpdateTokens: async () => [
+          { token: "u-prod", env: "production" as const },
+          { token: "u-sand", env: "sandbox" as const },
+        ],
+        send: async (d, push) => {
+          sent.push({ token: d.token, event: push.body.aps.event });
+          const queue = args.results[d.token];
+          return queue?.length ? queue.shift()! : { ok: true, status: 200 };
+        },
+      },
+      now: () => args.now,
+    };
+    return { sent, deps };
+  };
+  const fail0: SendResult = {
+    ok: false,
+    status: 0,
+    reason: "Client network socket disconnected before secure TLS connection was established",
+  };
+
+  test("an update with one transport failure keeps the old baseline and re-sends next tick", async () => {
+    const active = { current: liveCard() };
+    const h = harness({ active, sessionsBusy: true, results: { "u-prod": [fail0] }, now: 1_710_000 });
+    await runPushTick(new Map(), h.deps);
+    expect(h.sent.map((s) => s.event)).toEqual(["update", "update"]);
+    // Baseline NOT advanced: the stored contentState still has the old title…
+    expect(active.current?.contentState?.rows[0]?.title).toBe("Old");
+    // …so the next tick re-sends the same update to both tokens.
+    const h2 = harness({ active, sessionsBusy: true, results: {}, now: 1_710_002 });
+    await runPushTick(new Map(), h2.deps);
+    expect(h2.sent.map((s) => s.event)).toEqual(["update", "update"]);
+    expect(active.current?.contentState?.rows[0]?.title).toBe("Job");
+  });
+
+  test("an end with one transport failure keeps the card live and retries until all accept", async () => {
+    // zeroSince already older than the debounce window → the reducer decides end.
+    const expired: LiveActivityActive = { ...liveCard(), zeroSince: 1_000 };
+    const active: { current: LiveActivityActive | null } = { current: expired };
+    const now = (1_000 + FLEET_END_DEBOUNCE_S + 5) * 1000;
+    const h = harness({ active, sessionsBusy: false, results: { "u-prod": [fail0] }, now });
+    await runPushTick(new Map(), h.deps);
+    expect(h.sent.map((s) => s.event)).toEqual(["end", "end"]);
+    expect(active.current).not.toBeNull(); // NOT advanced — the real card would be a zombie
+
+    const h2 = harness({ active, sessionsBusy: false, results: {}, now: now + 2000 });
+    await runPushTick(new Map(), h2.deps);
+    expect(h2.sent.map((s) => s.event)).toEqual(["end", "end"]);
+    expect(active.current).toBeNull(); // all accepted → done
+  });
+
+  test("a permanent DeviceTokenNotForTopic rejection prunes the token instead of livelocking", async () => {
+    // All-accepted advancement re-sends until every token accepts. A 400
+    // DeviceTokenNotForTopic can NEVER succeed, so without pruning the watcher
+    // would re-send the same update every 2s tick forever.
+    const active = { current: liveCard() };
+    const dead: string[] = [];
+    const h = harness({
+      active,
+      sessionsBusy: true,
+      results: { "u-prod": [{ ok: false, status: 400, reason: "DeviceTokenNotForTopic" }] },
+      now: 1_710_000,
+    });
+    h.deps.liveActivities!.onDeadToken = (t) => {
+      dead.push(t);
+    };
+    await runPushTick(new Map(), h.deps);
+    expect(dead).toEqual(["u-prod"]);
+    // Not advanced this tick; the next tick's (now pruned) token list can go green.
+    expect(active.current?.contentState?.rows[0]?.title).toBe("Old");
+  });
+
+  test("a start still advances on any acceptance (re-blasting risks duplicate cards)", async () => {
+    const active: { current: LiveActivityActive | null } = { current: null };
+    const sent: { token: string; event: string }[] = [];
+    const deps: TickDeps = {
+      sessions: async () => [{ sessionId: "s1", title: "Job", tmuxTarget: "t" }],
+      observe: async () => obs(true, false),
+      devices: async () => [],
+      cfg,
+      send: async () => ({ ok: true, status: 200 }),
+      liveActivities: {
+        active,
+        pushToStartTokens: async () => [
+          { token: "p1", env: "production" as const },
+          { token: "p2", env: "sandbox" as const },
+        ],
+        activityUpdateTokens: async () => [],
+        send: async (d, push) => {
+          sent.push({ token: d.token, event: push.body.aps.event });
+          return d.token === "p1" ? fail0 : { ok: true, status: 200 };
+        },
+      },
+      now: () => 1_700_000,
+    };
+    await runPushTick(new Map(), deps);
+    expect(sent.map((s) => s.event)).toEqual(["start", "start"]);
+    expect(active.current).not.toBeNull();
+  });
 });
 
 /**

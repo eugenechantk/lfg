@@ -119,34 +119,91 @@ function host(env: "sandbox" | "production"): string {
   return env === "production" ? "api.push.apple.com" : "api.development.push.apple.com";
 }
 
-// Default transport: real HTTP/2 POST to APNs. APNs is HTTP/2-only and `fetch`
-// (Bun's, as of 1.3.x) chokes on its responses — "Malformed_HTTP_Response" — so
-// we use node:http2 directly, which speaks the protocol cleanly.
-const realTransport: ApnsTransport = ({ host, token, topic, pushType, priority, jwt, body }) =>
-  new Promise<ApnsResult>((resolve) => {
+/**
+ * One long-lived HTTP/2 session per APNs host, reused across sends.
+ *
+ * The transport used to `http2.connect` + `close` PER PUSH. Apple explicitly
+ * asks clients to hold connections open and treats rapid connection churn as
+ * abuse — and the delivery trace shows the price: 609 of 809 logged failures
+ * were `status 0` "socket disconnected before secure TLS connection was
+ * established". Those weren't network weather; they were the churn itself.
+ * A session that errors, closes, or receives GOAWAY is dropped from the pool
+ * and the next send dials fresh.
+ */
+const apnsSessions = new Map<string, http2.ClientHttp2Session>();
+
+function apnsSession(host: string): http2.ClientHttp2Session {
+  const existing = apnsSessions.get(host);
+  if (existing && !existing.closed && !existing.destroyed) return existing;
+  const session = http2.connect(`https://${host}`);
+  const drop = () => {
+    if (apnsSessions.get(host) === session) apnsSessions.delete(host);
+  };
+  // 'error' needs a listener even when idle or Node crashes the process; the
+  // in-flight request observes the same failure through its own 'error' event.
+  session.on("error", drop);
+  session.on("close", drop);
+  session.on("goaway", () => session.close());
+  apnsSessions.set(host, session);
+  return session;
+}
+
+// A hung request must not wedge the push watcher: its tick loop skips while a
+// previous tick is still running, so one stalled stream would silently stop
+// ALL pushes. Generous bound — APNs answers in well under a second.
+const APNS_REQUEST_TIMEOUT_MS = 10_000;
+
+function apnsAttempt({
+  host,
+  token,
+  topic,
+  pushType,
+  priority,
+  jwt,
+  body,
+}: Parameters<ApnsTransport>[0]): Promise<ApnsResult> {
+  return new Promise<ApnsResult>((resolve) => {
     let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const done = (r: ApnsResult) => {
       if (settled) return;
       settled = true;
+      clearTimeout(timer);
       resolve(r);
     };
-    let client: http2.ClientHttp2Session;
+    let session: http2.ClientHttp2Session | undefined;
+    let req: http2.ClientHttp2Stream;
+    const evict = () => {
+      if (session && apnsSessions.get(host) === session) apnsSessions.delete(host);
+      try {
+        session?.destroy();
+      } catch {}
+    };
     try {
-      client = http2.connect(`https://${host}`);
+      session = apnsSession(host);
+      const headers: http2.OutgoingHttpHeaders = {
+        ":method": "POST",
+        ":path": `/3/device/${token}`,
+        authorization: `bearer ${jwt}`,
+        "apns-topic": topic,
+        "apns-push-type": pushType,
+        "content-type": "application/json",
+      };
+      if (typeof priority === "number") headers["apns-priority"] = priority;
+      req = session.request(headers);
     } catch (e) {
+      // The session refused to even open a stream — it is not coming back.
+      evict();
       return done({ ok: false, status: 0, reason: (e as Error).message });
     }
-    client.on("error", (e) => done({ ok: false, status: 0, reason: (e as Error).message }));
-    const headers: http2.OutgoingHttpHeaders = {
-      ":method": "POST",
-      ":path": `/3/device/${token}`,
-      authorization: `bearer ${jwt}`,
-      "apns-topic": topic,
-      "apns-push-type": pushType,
-      "content-type": "application/json",
-    };
-    if (typeof priority === "number") headers["apns-priority"] = priority;
-    const req = client.request(headers);
+    timer = setTimeout(() => {
+      // A timed-out stream means the SESSION is suspect (half-dead TCP path);
+      // evict it so the retry and later sends dial fresh instead of queueing
+      // 10s stalls behind the same wedged connection.
+      req.close(http2.constants.NGHTTP2_CANCEL);
+      evict();
+      done({ ok: false, status: 0, reason: "request timeout" });
+    }, APNS_REQUEST_TIMEOUT_MS);
     let status = 0;
     let data = "";
     req.on("response", (headers) => {
@@ -157,7 +214,6 @@ const realTransport: ApnsTransport = ({ host, token, topic, pushType, priority, 
       data += chunk;
     });
     req.on("end", () => {
-      client.close();
       if (status === 200) return done({ ok: true, status });
       let reason: string | undefined;
       try {
@@ -168,6 +224,34 @@ const realTransport: ApnsTransport = ({ host, token, topic, pushType, priority, 
     req.on("error", (e) => done({ ok: false, status: 0, reason: (e as Error).message }));
     req.end(body);
   });
+}
+
+/**
+ * Retry ONLY transport-level failures (`status 0` — TLS/socket/timeout, i.e.
+ * APNs never spoke). Any real HTTP status, including 410/400/500, is APNs'
+ * answer and is authoritative — retrying those would double-send alerts on
+ * flaky 5xxs and mask dead tokens. Exported for tests; the delay parameter
+ * exists so tests don't sleep.
+ */
+export async function sendWithTransientRetry(
+  fn: () => Promise<ApnsResult>,
+  attempts = 2,
+  delayMs = 250,
+  sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+): Promise<ApnsResult> {
+  let last: ApnsResult = { ok: false, status: 0 };
+  for (let i = 0; i < attempts; i++) {
+    last = await fn();
+    if (last.ok || last.status !== 0) return last;
+    if (i < attempts - 1) await sleep(delayMs);
+  }
+  return last;
+}
+
+// Default transport: real HTTP/2 POST to APNs over the pooled session, with one
+// transient retry. APNs is HTTP/2-only and `fetch` (Bun's, as of 1.3.x) chokes
+// on its responses — "Malformed_HTTP_Response" — so we use node:http2 directly.
+const realTransport: ApnsTransport = (args) => sendWithTransientRetry(() => apnsAttempt(args));
 
 /** Serialize an APNs payload into the on-the-wire JSON body. */
 export function apnsBody(payload: ApnsPayload): string {

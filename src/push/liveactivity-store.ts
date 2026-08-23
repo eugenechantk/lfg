@@ -54,8 +54,34 @@ export async function upsertLiveActivityToken(input: {
   const replaced = existing
     ? list.map((t) => (t.token === input.token ? record : t))
     : [...list, record];
-  await writeTokens(supersede(replaced, record));
+  await writeTokens(capPushToStart(supersede(replaced, record)));
   return record;
+}
+
+/**
+ * At most this many `pushToStart` tokens per APNs environment, newest first.
+ *
+ * These tokens rot rather than die: dev/simulator builds each mint one, a stale
+ * one rarely answers 410 promptly, and the live store reached NINETEEN — every
+ * `start` decision blasted all of them (slow, and stale-but-live tokens risk
+ * duplicate cards). Newest-N keeps the real install's token by construction —
+ * push-to-start re-registers on every app launch, so the device that matters is
+ * always among the newest — where age-based pruning could strand a device that
+ * simply hasn't opened the app lately. Per-env so churning sandbox dev builds
+ * can never evict a production (TestFlight) token.
+ */
+export const MAX_PUSH_TO_START_PER_ENV = 3;
+
+function capPushToStart(list: LiveActivityToken[]): LiveActivityToken[] {
+  const keep = new Set<string>();
+  for (const env of ["sandbox", "production"] as const) {
+    [...list]
+      .filter((t) => t.kind === "pushToStart" && t.env === env)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, MAX_PUSH_TO_START_PER_ENV)
+      .forEach((t) => keep.add(t.token));
+  }
+  return list.filter((t) => t.kind !== "pushToStart" || keep.has(t.token));
 }
 
 /**
@@ -94,7 +120,10 @@ export async function lookupLiveActivityToken(token: string): Promise<LiveActivi
 }
 
 export async function listPushToStartTokens(): Promise<LiveActivityToken[]> {
-  return (await listLiveActivityTokens()).filter((t) => t.kind === "pushToStart");
+  // Capped at read too, so a store that grew oversized before this cap existed
+  // (or was edited on disk) is bounded on the next server start — not only
+  // after the next registration happens to rewrite it.
+  return capPushToStart(await listLiveActivityTokens()).filter((t) => t.kind === "pushToStart");
 }
 
 export async function listActivityUpdateTokens(): Promise<LiveActivityToken[]> {

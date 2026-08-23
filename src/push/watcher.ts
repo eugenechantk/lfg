@@ -139,12 +139,28 @@ export type PayloadSessionInput = {
 
 /// State of the one fleet Live Activity between ticks. `since` is tracked for
 /// every active session, not just the rendered rows, so a session that scrolls
-/// out of the visible rows and back keeps its elapsed time.
+/// out of the visible rows and back keeps its elapsed time. `zeroSince` (unix
+/// seconds) marks when the fleet was first observed empty — the end-debounce
+/// clock; absent while anything is active.
 export type LiveActivityActive = {
   startedAt: number;
   contentState?: LiveActivityContentState;
   since?: Record<string, { state: LiveActivityRow["state"]; at: number }>;
+  zeroSince?: number;
 };
+
+/**
+ * How long (seconds) the fleet must stay empty before the card is ended.
+ *
+ * Ending is the one event that cannot be cheaply undone: the activity's update
+ * token dies with it, and resurrection needs push-to-start → a background app
+ * relaunch → an update-token re-upload through the tunnel — the chain that
+ * fails. The delivery log recorded 202 end→start transitions (82 under 30s,
+ * median 56s): idle blips at turn boundaries were dismissing the card many
+ * times a day. During the hold the card shows a truthful zeroed update; a
+ * session reappearing cancels the end on the plain update path, no churn.
+ */
+export const FLEET_END_DEBOUNCE_S = 60;
 
 export type LiveActivityAction = {
   event: "start" | "update" | "end";
@@ -281,6 +297,19 @@ export function reduceFleetLiveActivity(args: {
   }
 
   if (total === 0) {
+    const zeroSince = args.active.zeroSince ?? args.now;
+    if (args.now - zeroSince < FLEET_END_DEBOUNCE_S) {
+      // Inside the hold: keep the card but tell it the truth (zeroed counters)
+      // once, then stay quiet until the window expires or work reappears.
+      const held: LiveActivityActive = { ...args.active, since, zeroSince };
+      if (sameFleetContentState(args.active.contentState, contentState)) {
+        return { action: null, nextActive: held };
+      }
+      return {
+        action: { event: "update", push: buildUpdate(contentState) },
+        nextActive: { ...held, contentState },
+      };
+    }
     return {
       action: { event: "end", push: buildEnd(contentState, args.now) },
       nextActive: null,
@@ -288,13 +317,14 @@ export function reduceFleetLiveActivity(args: {
   }
 
   if (sameFleetContentState(args.active.contentState, contentState)) {
-    // Nothing renderable changed — keep the refreshed `since` map but send nothing.
-    return { action: null, nextActive: { ...args.active, since } };
+    // Nothing renderable changed — keep the refreshed `since` map but send
+    // nothing. `zeroSince` still resets: activity is activity.
+    return { action: null, nextActive: { ...args.active, since, zeroSince: undefined } };
   }
 
   return {
     action: { event: "update", push: buildUpdate(contentState) },
-    nextActive: { ...args.active, contentState, since },
+    nextActive: { ...args.active, contentState, since, zeroSince: undefined },
   };
 }
 
@@ -419,7 +449,18 @@ function withWakeMetadata(payload: ApnsPayload, deps: Pick<TickDeps, "head" | "h
 }
 
 function isDeadApnsToken(r: { ok: boolean; status: number; reason?: string }): boolean {
-  return !r.ok && (r.status === 410 || r.reason === "BadDeviceToken" || r.reason === "Unregistered");
+  // `DeviceTokenNotForTopic` is a 400 but is a property of the TOKEN, not the
+  // request — it can never succeed, and since update/end delivery now requires
+  // every token to accept, an unprunable permanent rejection would re-send on
+  // every 2s tick forever. Sender-side failures (403 ExpiredProviderToken etc.)
+  // must NOT land here: they say nothing about the token.
+  return (
+    !r.ok &&
+    (r.status === 410 ||
+      r.reason === "BadDeviceToken" ||
+      r.reason === "Unregistered" ||
+      r.reason === "DeviceTokenNotForTopic")
+  );
 }
 
 /**
@@ -455,8 +496,8 @@ async function sendLiveActivityToTokens(
   deps: NonNullable<TickDeps["liveActivities"]>,
   cfg: ApnsConfig,
   log?: (line: string) => void,
-): Promise<number> {
-  let sent = 0;
+): Promise<{ accepted: number; attempted: number }> {
+  let accepted = 0;
   for (const token of tokens) {
     const r = await deps.send(token, push, cfg);
     // Logged on SUCCESS too: a 200 here does not mean the card updated (a dead
@@ -470,14 +511,14 @@ async function sendLiveActivityToTokens(
       ...(r.reason ? { reason: r.reason } : {}),
     });
     if (r.ok) {
-      sent++;
+      accepted++;
     } else if (isDeadApnsToken(r)) {
       await deps.onDeadToken?.(token.token);
     } else {
       log?.(`[liveactivity] ${token.token.slice(0, 8)}… ${r.status} ${r.reason ?? ""}`.trim());
     }
   }
-  return sent;
+  return { accepted, attempted: tokens.length };
 }
 
 async function applyLiveActivityDecision(
@@ -516,9 +557,33 @@ async function applyLiveActivityDecision(
     return;
   }
 
-  const sent = await sendLiveActivityToTokens(tokens, decision.action.push, deps, cfg, log);
-  if (sent <= 0) {
-    traceLiveActivity("none-accepted", { apnsEvent: decision.action.event, tokens: tokens.length });
+  const { accepted, attempted } = await sendLiveActivityToTokens(
+    tokens,
+    decision.action.push,
+    deps,
+    cfg,
+    log,
+  );
+
+  // How much delivery counts as delivered differs by event, and the difference
+  // is the 2026-08-23 zombie-card bug. Update/end target one token per APNs
+  // env, and one env is routinely a corpse that 200s — so "any accepted" was
+  // routinely "only the corpse accepted": the real device's send failed
+  // (status 0), state advanced anyway, and the card froze/never dismissed.
+  // Those two events now require EVERY targeted token to accept; a shortfall
+  // leaves `active.current` alone so the next tick re-sends (re-updating or
+  // re-ending an already-correct card is harmless, and 410s prune tokens so
+  // the requirement converges). `start` keeps "any accepted": re-blasting
+  // starts until every stale push-to-start token accepts could stack duplicate
+  // cards on the real device, and an under-delivered start self-heals through
+  // token registration (`noteFleetActivityStarted`).
+  const required = decision.action.event === "start" ? 1 : attempted;
+  if (accepted < required) {
+    traceLiveActivity(accepted === 0 ? "none-accepted" : "partial", {
+      apnsEvent: decision.action.event,
+      tokens: attempted,
+      accepted,
+    });
     return;
   }
 
@@ -652,6 +717,9 @@ let fleetEndedReported = false;
  * See `.claude/diagnosis-live-activity-background-updates.md`.
  */
 export async function noteFleetActivityEnded(): Promise<void> {
+  // Traced because this is the ONE path that nulls the card with no `decide`
+  // line — without it, a start following a quiet stretch reads as inexplicable.
+  traceLiveActivity("client-ended", { hadActive: fleetActive.current !== null });
   fleetActive.current = null;
   fleetEndedReported = true;
   await saveFleetActivityActive(null);
@@ -671,6 +739,7 @@ export async function noteFleetActivityEnded(): Promise<void> {
  */
 export function noteFleetActivityStarted(now: () => number = Date.now): void {
   if (fleetActive.current) return; // already tracking a card; keep its baselines
+  traceLiveActivity("adopted");
   fleetActive.current = { startedAt: Math.floor(now() / 1000) };
   fleetEndedReported = false;
 }
