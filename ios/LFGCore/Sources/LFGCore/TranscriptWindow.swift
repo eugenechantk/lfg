@@ -213,6 +213,21 @@ public enum TranscriptWindow {
         return max(1, Int((seconds / max(0.001, frameInterval)).rounded()))
     }
 
+    /// Whether an INVERTED transcript is at its newest end.
+    ///
+    /// The inverted list makes this trivial and, crucially, *stable*: newest is
+    /// the structural start, so "at newest" is `contentOffset.y <= epsilon`. It
+    /// does not consult content height at all — which matters, because Phase-1
+    /// finding 2 measured content height swinging 15,600 → 8,100 → 14,700 pt
+    /// between adjacent samples as `LazyVStack` re-estimated unmeasured rows.
+    /// Any predicate reading contentHeight inherits that noise; this one cannot.
+    ///
+    /// `epsilon` absorbs rubber-banding, including the negative offsets of an
+    /// overscroll bounce.
+    public static func isAtNewestEnd(offsetY: Double, epsilon: Double = 24) -> Bool {
+        offsetY <= epsilon
+    }
+
     /// Whether the transcript is scrolled to (or within a hair of) its newest
     /// end, from real scroll geometry.
     ///

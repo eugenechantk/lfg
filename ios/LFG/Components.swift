@@ -30,6 +30,30 @@ extension SessionMessage {
     }
 }
 
+/// Memoises `TranscriptRowText.derive` by stable id.
+///
+/// The derivation is pure but not cheap (a media scan plus an `NSRegularExpression`
+/// compiled per ref), and it used to run inside `TextBubble.body` — i.e. for
+/// every visible row on every SwiftUI update, which Phase-1 finding 1 showed is
+/// once per scroll frame. Rows are immutable once delivered (the client never
+/// rewrites a message's text), so a plain id-keyed memo is safe.
+@MainActor
+private enum TranscriptRowTextCache {
+    private static var entries: [String: TranscriptRowText] = [:]
+    /// Bounded so a 5,000-message transcript cannot pin unbounded strings; the
+    /// working set is the render window, far below this.
+    private static let capacity = 1_200
+
+    static func text(for message: SessionMessage) -> TranscriptRowText {
+        let key = message.stableID
+        if let hit = entries[key] { return hit }
+        let derived = TranscriptRowText.derive(from: message.text)
+        if entries.count >= capacity { entries.removeAll(keepingCapacity: true) }
+        entries[key] = derived
+        return derived
+    }
+}
+
 private struct TextBubble: View {
     let message: SessionMessage
     var followsUserBubble: Bool = false
@@ -40,7 +64,8 @@ private struct TextBubble: View {
     // file cards (below) rather than full-width inline previews — for both user
     // bubbles and assistant prose. Keeps long, screenshot-heavy transcripts
     // scannable instead of a wall of images.
-    private var media: [MediaRef] { MediaScanner.scan(message.text, includeInlineImages: true) }
+    private var rowText: TranscriptRowText { TranscriptRowTextCache.text(for: message) }
+    private var media: [MediaRef] { rowText.media }
 
     var body: some View {
         if isUser {
@@ -104,30 +129,11 @@ private struct TextBubble: View {
     /// as a compact file card below, so leaving `![alt](path)` in the markdown
     /// would double-render it full-width. Links and all other text are untouched
     /// (links stay tappable inline AND get a card, as before).
-    private var prose: String {
-        var t = message.text
-        for ref in media where ref.kind == .image {
-            let escaped = NSRegularExpression.escapedPattern(for: ref.raw)
-            if let re = try? NSRegularExpression(pattern: "!\\[[^\\]]*\\]\\(\\s*" + escaped + "\\s*\\)") {
-                t = re.stringByReplacingMatches(in: t, range: NSRange(t.startIndex..., in: t), withTemplate: "")
-            }
-        }
-        return t.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+    private var prose: String { rowText.prose }
 
     /// For user bubbles, hide attachment references (shown as cards below):
     /// strips the surrounding markdown link/image, then any bare leftover path.
-    private var displayText: String {
-        var t = message.text
-        for ref in media {
-            let escaped = NSRegularExpression.escapedPattern(for: ref.raw)
-            if let re = try? NSRegularExpression(pattern: "!?\\[[^\\]]*\\]\\(\\s*" + escaped + "\\s*\\)") {
-                t = re.stringByReplacingMatches(in: t, range: NSRange(t.startIndex..., in: t), withTemplate: "")
-            }
-            t = t.replacingOccurrences(of: ref.raw, with: "")
-        }
-        return t.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+    private var displayText: String { rowText.displayText }
 }
 
 /// Collapsible reasoning block, collapsed by default.
@@ -163,6 +169,8 @@ struct ThinkingView: View {
 private struct ToolLineView: View {
     let message: SessionMessage
     @State private var expanded = false
+    /// Roughly three lines of caption-monospaced text plus slack.
+    private static let collapsedMaxHeight: CGFloat = 64
 
     private var content: String { message.text.isEmpty ? message.kind : message.text }
     private var isUse: Bool { message.kind == "tool_use" }
@@ -179,6 +187,13 @@ private struct ToolLineView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(expanded ? nil : 3)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // A collapsed tool row must not be able to grow unbounded.
+                    // `lineLimit` alone does not cap it: one measured row was
+                    // 2,858pt tall, which `LazyVStack` must place on every
+                    // scroll update. Expanding is still one tap away.
+                    .frame(maxHeight: expanded ? nil : Self.collapsedMaxHeight,
+                           alignment: .top)
+                    .clipped()
                 Image(systemName: expanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 9)).foregroundStyle(.tertiary)
                     .padding(.top, 2)

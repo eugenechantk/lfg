@@ -407,3 +407,38 @@ final class AnchorAfterMutationTests: XCTestCase {
             previousWindow: 200, currentWindow: 200))
     }
 }
+
+/// Cover for the inverted list's at-newest predicate.
+///
+/// The point of the flip is that this reads ONLY the offset — content height
+/// breathing (measured 15,600 → 8,100 → 14,700 pt between samples) cannot
+/// perturb it, which is what made the old `atEnd` flap and fire follow bursts.
+final class InvertedNewestEndTests: XCTestCase {
+
+    func testOffsetZeroIsNewest() {
+        XCTAssertTrue(TranscriptWindow.isAtNewestEnd(offsetY: 0))
+    }
+
+    /// Overscroll bounce goes negative; that is still the newest end.
+    func testOverscrollBounceIsStillNewest() {
+        XCTAssertTrue(TranscriptWindow.isAtNewestEnd(offsetY: -80))
+    }
+
+    func testWithinEpsilonIsNewest() {
+        XCTAssertTrue(TranscriptWindow.isAtNewestEnd(offsetY: 24))
+    }
+
+    func testScrolledIntoHistoryIsNotNewest() {
+        XCTAssertFalse(TranscriptWindow.isAtNewestEnd(offsetY: 25))
+        XCTAssertFalse(TranscriptWindow.isAtNewestEnd(offsetY: 4000))
+    }
+
+    /// The discriminating property: content height is not an input, so it cannot
+    /// make the answer flap.
+    func testAnswerIsIndependentOfContentHeight() {
+        for _ in 0..<3 {
+            XCTAssertTrue(TranscriptWindow.isAtNewestEnd(offsetY: 5))
+            XCTAssertFalse(TranscriptWindow.isAtNewestEnd(offsetY: 900))
+        }
+    }
+}

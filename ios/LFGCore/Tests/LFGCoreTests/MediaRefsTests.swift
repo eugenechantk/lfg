@@ -165,3 +165,51 @@ struct LinkScannerTests {
         #expect(r.links.count == 1)
     }
 }
+
+/// Cover for hoisting the per-row text derivations out of `TextBubble.body`.
+/// The contract is that results are byte-identical to the inline versions —
+/// this is a performance change, not a behaviour change.
+@Suite("Transcript row text")
+struct TranscriptRowTextTests {
+
+    @Test("inline image leaves prose but is still collected as media")
+    func inlineImageStripped() {
+        let r = TranscriptRowText.derive(from: "before ![alt](/tmp/a.png) after")
+        #expect(!r.prose.contains("!["))
+        #expect(r.prose.contains("before"))
+        #expect(r.prose.contains("after"))
+        #expect(r.media.count == 1)
+    }
+
+    /// `prose` strips ONLY image markdown — a plain link stays tappable inline.
+    @Test("a plain markdown link survives in prose")
+    func plainLinkSurvives() {
+        let r = TranscriptRowText.derive(from: "see [docs](https://example.com/x) here")
+        #expect(r.prose.contains("[docs](https://example.com/x)"))
+    }
+
+    /// `displayText` strips any ref's markdown AND a bare leftover path.
+    @Test("display text strips refs and bare paths")
+    func displayStripsRefs() {
+        let r = TranscriptRowText.derive(from: "look /tmp/a.png please")
+        #expect(!r.displayText.contains("/tmp/a.png"))
+        #expect(r.displayText.contains("look"))
+        #expect(r.displayText.contains("please"))
+    }
+
+    @Test("plain text passes through untouched")
+    func plainTextUnchanged() {
+        let r = TranscriptRowText.derive(from: "just words")
+        #expect(r.prose == "just words")
+        #expect(r.displayText == "just words")
+        #expect(r.media.isEmpty)
+    }
+
+    @Test("empty text is safe")
+    func emptyIsSafe() {
+        let r = TranscriptRowText.derive(from: "")
+        #expect(r.prose.isEmpty)
+        #expect(r.displayText.isEmpty)
+        #expect(r.media.isEmpty)
+    }
+}

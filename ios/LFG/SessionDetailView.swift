@@ -6,11 +6,13 @@ struct SessionDetailView: View {
     private enum PresentedSheet: Identifiable {
         case attachments
         case childSessions(selectedID: String?)
+        case inversionSpike
 
         var id: String {
             switch self {
             case .attachments: "attachments"
             case .childSessions(let selectedID): "child-sessions-\(selectedID ?? "all")"
+            case .inversionSpike: "inversion-spike"
             }
         }
     }
@@ -34,30 +36,10 @@ struct SessionDetailView: View {
     /// The queued message the user tapped (drives the remove / edit / send-now sheet).
     @State private var queueAction: SessionStore.PendingSend?
     @State private var isAtBottom = true
-    @State private var bottomDebounce: Task<Void, Never>?
-    /// Holds the transcript against the composer while the keyboard animates.
-    @State private var keyboardRepin: Task<Void, Never>?
-    /// Holds the transcript at the newest row across an append until arrival.
-    @State private var followRepin: Task<Void, Never>?
-    /// Releases the identity anchor after an arrival-driven window change.
-    @State private var viewportHold: Task<Void, Never>?
-    /// Raw "is the scroll view at its end" from geometry, recorded even while
-    /// opening — this is what lets the opening pin confirm it actually arrived.
-    @State private var scrolledToEnd = false
-    /// Stricter twin of `scrolledToEnd`, false while the transcript is still too
-    /// short to be meaningfully "at the end".
-    @State private var openArrivalConfirmed = false
     @State private var scrollProxy: ScrollViewProxy?
-    /// SwiftUI's identity-backed scroll position follows the top-most message
-    /// under the user's eyes as rows are inserted above it. Unlike a delayed
-    /// `scrollTo`, it keeps updating during drag/deceleration instead of snapping
-    /// back to a stale anchor after the user has continued scrolling.
-    @State private var scrollPositionID: String?
     // True while the open-at-bottom lifecycle follows history loading. Guards the
     // BOTTOM-anchor debounce from mistaking a still-loading transcript for a
     // deliberate scroll-up and freezing auto-follow before the view settles.
-    @State private var pinningToBottom = false
-    @State private var settlingInitialBottomPin = false
     @State private var dismissedBrowserFrameID: String?
     @State private var presentedSheet: PresentedSheet?
     /// How many of the newest messages the transcript actually renders. The store
@@ -68,9 +50,26 @@ struct SessionDetailView: View {
     /// restored — see `extendWindow` for why this gate is load-bearing.
     @State private var extending = false
 
+    /// PHASE-1 INSTRUMENTATION — remove before shipping. Every code path that
+    /// can move the viewport logs through here, tagged LFGVP for `log stream`.
+    private func vp(_ trigger: String, _ detail: String = "") {
+        #if DEBUG
+        NSLog("LFGVP \(trigger) atNewest=\(isAtBottom) ext=\(extending) win=\(window) start=\(windowStart) total=\(messages.count) \(detail)")
+        #endif
+    }
+
     private var sid: String { session.sessionId ?? "" }
     private var messages: [SessionMessage] { store.transcripts[sid] ?? [] }
-    private var messageStableIDs: [String] { messages.map(\.stableID) }
+    /// Identity snapshot of the transcript as of the last observed mutation.
+    ///
+    /// Deliberately NOT a computed property any more. It used to be
+    /// `messages.map(\.stableID)` feeding `.onChange`, which rebuilt a
+    /// ~1,150-element array on every body evaluation — and with
+    /// `.scrollPosition(id:)` writing `@State` once per scroll tick, that meant
+    /// once per frame, making scrolling O(transcript) (Phase-1 finding 1). The
+    /// store's `transcriptVersion` is the trigger now; this array is rebuilt
+    /// only when it actually changed.
+    @State private var lastMessageIDs: [String] = []
 
     /// Index of the oldest rendered message, and the slice from it. `indices` on
     /// the slice are indices into `messages`, so `followsUserBubble` can still
@@ -217,46 +216,20 @@ struct SessionDetailView: View {
         }
         .toolbar { toolbarMenu }
         .task(id: sid) {
-            bottomDebounce?.cancel()
-            keyboardRepin?.cancel()
-            followRepin?.cancel()
-            viewportHold?.cancel()
+            // Opening is now just state: the inverted list rests at the newest
+            // message because that is `contentOffset == 0`. There is nothing to
+            // pin, settle or confirm.
             isAtBottom = true
-            pinningToBottom = true
-            settlingInitialBottomPin = false
-            scrollPositionID = nil
             // A session opens on its newest page; whatever history the previous
             // session had paged in must not carry over.
             window = TranscriptWindow.pageSize
+            lastMessageIDs = messages.map(\.stableID)
+            vp("open")
             store.focus(sid)
             store.loadHistory(sid)   // store-owned: not cancelled by view churn
-
-            // Cached/live messages can already provide the newest tail before
-            // the network history walk begins. Settle immediately in that case;
-            // otherwise the messages onChange below does this when the first
-            // renderable batch lands. Do not wait for every older page: those
-            // pages load above the bounded tail and must not lock user scrolling.
-            if TranscriptWindow.shouldSettleInitialPin(
-                isOpening: pinningToBottom,
-                hasRenderedTail: !messages.isEmpty
-            ) {
-                await settleInitialBottomPin(for: sid)
-            }
             await store.loadBrowserFrame(sid)
-            if TranscriptWindow.shouldSettleInitialPin(
-                isOpening: pinningToBottom,
-                hasRenderedTail: !messages.isEmpty
-            ) {
-                await settleInitialBottomPin(for: sid)
-            }
         }
         .onDisappear {
-            bottomDebounce?.cancel()
-            keyboardRepin?.cancel()
-            followRepin?.cancel()
-            viewportHold?.cancel()
-            pinningToBottom = false
-            settlingInitialBottomPin = false
             store.blur(sid)
         }
         .task(id: "child-agents-\(sid)") {
@@ -271,6 +244,8 @@ struct SessionDetailView: View {
             switch sheet {
             case .attachments:
                 AttachmentsSheet(messages: messages)
+            case .inversionSpike:
+                InvertedTranscriptSpike(sessionID: sid)
             case .childSessions(let selectedID):
                 ChildAgentSessionsSheet(parentSessionID: sid, initialChildID: selectedID)
                     .presentationDetents([.medium, .large])
@@ -337,299 +312,146 @@ struct SessionDetailView: View {
     private var transcript: some View {
       GeometryReader { geo in
         ScrollViewReader { proxy in
+            // INVERTED LIST. The stack and every row are flipped 180°, so the
+            // array's FIRST element renders at the visual BOTTOM.
+            //
+            // Both product constraints become structural instead of maintained:
+            //   * "open shows the latest" is `contentOffset == 0`, the scroll
+            //     view's resting state — no pin, no settle, no arrival check;
+            //   * "older pages attach at the top" is an append to the array END,
+            //     which grows content at offsets the reader is not looking at,
+            //     so it cannot displace them.
+            //
+            // That is why there is no `.scrollPosition(id:)` binding, no follow
+            // loop and no keyboard re-pin below: the machinery existed only to
+            // re-assert a position the layout now holds by itself.
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
-                    Color.clear.frame(height: 1).id("TOP")   // jump-to-top anchor
-                    if session.isBlocked { PausedBannerView(session: session) }
+                    // ---- visual BOTTOM (newest) ----
+                    Color.clear.frame(height: 1).id(Self.newestAnchor).flippedRow()
+
+                    if let prompt {
+                        PromptPanelView(sessionID: sid, prompt: prompt).flippedRow()
+                    }
+                    // What the model said just before asking. Held out of the
+                    // transcript by Claude Code until answered, so it arrives
+                    // scraped from the pane and renders as an ordinary assistant
+                    // bubble immediately above the panel.
+                    if let preamble = PromptPreamble.message(
+                        for: prompt, sessionID: sid, transcriptTail: messages
+                    ) {
+                        TranscriptMessageView(message: preamble)
+                            .id(preamble.stableID)
+                            .flippedRow()
+                    }
+                    // Reversed so that, once the stack is flipped back, they read
+                    // in send order.
+                    ForEach(unmatchedSentBubbles.reversed()) {
+                        OptimisticUserBubble(sessionID: sid, pending: $0).flippedRow()
+                    }
 
                     if messages.isEmpty && !isBusy {
                         Text("Connecting to live transcript…")
                             .font(.subheadline).foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity).padding(.top, 40)
+                            .flippedRow()
                     } else {
-                        // Everything older than the window sits behind this row;
-                        // scrolling it into view walks one page further back.
-                        if historyTopRow != .hidden { olderHistoryLoader }
-                        ForEach(Array(zip(windowedMessages.indices, windowedMessages)), id: \.1.stableID) { idx, msg in
+                        // Newest first. `idx` still indexes `messages`, so the
+                        // back-to-back user-turn rule reads the message ABOVE
+                        // this one exactly as before.
+                        ForEach(Array(windowedMessages.indices.reversed()), id: \.self) { idx in
                             TranscriptMessageView(
-                                message: msg,
-                                // Back-to-back user turns collapse their leading gap.
+                                message: messages[idx],
                                 followsUserBubble: idx > 0 && messages[idx - 1].rendersAsUserBubble
                             )
-                            .id(msg.stableID)
+                            .id(messages[idx].stableID)
+                            .flippedRow()
+                        }
+                        // Visually the TOP of the transcript; structurally the
+                        // END of the array. Appending here is what makes a
+                        // history reveal free.
+                        if historyTopRow != .hidden {
+                            olderHistoryLoader.flippedRow()
                         }
                     }
 
-                    // Sends the agent takes immediately (kickoff, or a follow-up
-                    // to an idle session) show as a finished user bubble right
-                    // away — everything still waiting sits in the pending bar
-                    // above the composer instead. Filtered against the live
-                    // transcript so the placeholder disappears in the SAME render
-                    // pass that the real user turn appears — otherwise the two
-                    // overlap for a beat (the "momentary duplicate") until the
-                    // store's reconcile mutates pendingSends a tick later.
-                    ForEach(unmatchedSentBubbles) { OptimisticUserBubble(sessionID: sid, pending: $0) }
-
-                    // What the model said just before asking. While the question
-                    // is live this is NOT in the transcript — Claude Code holds
-                    // that turn back until it's answered — so it arrives scraped
-                    // from the pane on `prompt.context`. It is still the model
-                    // answering, so it renders as an ordinary assistant bubble
-                    // here rather than as a caption inside the panel below: same
-                    // markdown and typography as every other turn, and the thread
-                    // reads continuously into the question. Drops out of the same
-                    // render pass in which the real turn lands (see
-                    // `PromptPreamble.shouldSynthesize`), so there is no doubled
-                    // beat when the question is answered.
-                    if let preamble = PromptPreamble.message(
-                        for: prompt, sessionID: sid, transcriptTail: messages
-                    ) {
-                        TranscriptMessageView(message: preamble).id(preamble.stableID)
+                    if session.isBlocked {
+                        PausedBannerView(session: session).flippedRow()
                     }
-
-                    // "Running" now lives in the nav-bar header (below the title),
-                    // not inline in the transcript.
-                    if let prompt { PromptPanelView(sessionID: sid, prompt: prompt) }
-                    // Bottom anchor: track its visibility so we only auto-scroll
-                    // when the user is already at the bottom — otherwise a running
-                    // session would yank them back down whenever a new turn streams
-                    // in, making it impossible to scroll up through history.
-                    Color.clear.frame(height: 1).id("BOTTOM")
-                        .onAppear {
-                            bottomDebounce?.cancel()
-                            isAtBottom = true
-                        }
-                        .onDisappear {
-                            // The anchor leaves the viewport for two very different
-                            // reasons: the user scrolled up, OR new content was just
-                            // appended (a transient — the onChange handler below is
-                            // about to scroll us back to the bottom). Debounce so an
-                            // append transient isn't mistaken for a deliberate
-                            // scroll-up: that mistake freezes auto-follow, so live
-                            // messages (especially a bulk reconnect backfill) appear
-                            // to "stop coming in" until the user leaves and reopens
-                            // the session. A real scroll-up has no follow-up scroll,
-                            // so the anchor stays gone and isAtBottom flips after the
-                            // delay; a transient is cancelled by the anchor returning.
-                            bottomDebounce?.cancel()
-                            bottomDebounce = Task {
-                                try? await Task.sleep(for: .milliseconds(350))
-                                if !Task.isCancelled && !pinningToBottom { isAtBottom = false }
-                            }
-                        }
+                    // ---- visual TOP (oldest) ----
                 }
                 .padding()
-                .scrollTargetLayout()
             }
-            .scrollPosition(id: historyRevealAnchor)
-            // Authoritative "is the reader at the newest end", from geometry.
-            // The 1pt BOTTOM anchor below still drives this on iOS 17, but its
-            // `onAppear` reports row *creation*, not visibility — see
-            // `TranscriptWindow.isScrolledToEnd`.
-            .modifier(BottomProximityTracker { atEnd, confirmsOpen in
-                // Recorded unconditionally, including while opening: the opening
-                // pin needs these to know whether its scroll actually ARRIVED.
-                scrolledToEnd = atEnd
-                openArrivalConfirmed = confirmsOpen
-                guard !pinningToBottom else { return }
-                bottomDebounce?.cancel()
-                isAtBottom = atEnd
+            .flippedRow()
+            // The flip would draw the indicator down the wrong edge and run it
+            // backwards; there is no correct-looking version of it here.
+            .scrollIndicators(.hidden)
+            // Offset-only "am I at the newest end". Deliberately does not read
+            // content height — see `TranscriptWindow.isAtNewestEnd`.
+            .modifier(NewestEndTracker { atNewest in
+                if isAtBottom != atNewest { vp("tracker.atNewest", "-> \(atNewest)") }
+                isAtBottom = atNewest
             })
-            // The keyboard resizes the transcript out from under the reader.
-            // See `repinForKeyboardChange` for what that costs if nobody reacts.
-            .onReceive(NotificationCenter.default.publisher(
-                for: UIResponder.keyboardWillChangeFrameNotification
-            )) { note in
-                repinForKeyboardChange(note, using: proxy)
+            .onChange(of: store.transcriptVersion[sid] ?? 0) { _, _ in
+                let old = lastMessageIDs
+                let new = messages.map(\.stableID)
+                guard old != new else { return }
+                lastMessageIDs = new
+                // The ONLY thing a transcript mutation still does. Nothing
+                // scrolls: a reader at the newest end is already at offset 0 and
+                // stays there, and a reader in history is untouched because the
+                // new rows land at the far end of the array.
+                //
+                // The window is still a count of the newest N, so an arriving
+                // turn would push the oldest rendered row out of the prefix.
+                // Grow by exactly the appended rows to keep it rendered.
+                guard !TranscriptWindow.shouldFollowLatest(
+                    isAtBottom: isAtBottom, isOpening: false
+                ) else { return }
+                let grown = TranscriptWindow.reconciled(
+                    window: window, previousIDs: old, currentIDs: new)
+                if grown != window { vp("idsChanged.grow", "win \(window)->\(grown)") }
+                window = grown
             }
-            .onChange(of: messageStableIDs) { old, new in
-                let shouldFollowLatest = TranscriptWindow.shouldFollowLatest(
-                    isAtBottom: isAtBottom,
-                    isOpening: pinningToBottom
-                )
-                // Reading history while the agent streams: the window is a count
-                // taken from the newest end, so an arriving turn would silently
-                // push a row off the TOP and shift the text under the user's
-                // eyes. Grow only for rows that actually arrived AFTER the old
-                // tail. Older network pages are prepended; expanding for their
-                // raw count is the jump that used to lay hundreds of rows above
-                // the viewport.
-                if !shouldFollowLatest {
-                    let previousWindow = window
-                    let grown = TranscriptWindow.reconciled(
-                        window: window,
-                        previousIDs: old,
-                        currentIDs: new
-                    )
-                    // `reconciled` keeps the row COUNT honest, but the window is
-                    // measured from the newest end, so `startIndex` still moves
-                    // whenever the total changes — and that lays older rows above
-                    // whatever the reader is looking at. Measured on a real
-                    // session: startIndex walked 0 → 282 → 640 → 1035 → 1221 as
-                    // pages landed, shoving the visible text each time. Re-anchor
-                    // to the row that was on top, in the SAME transaction that
-                    // changes the window — exactly what `extendWindow` does for a
-                    // user-driven reveal, applied to an arrival-driven one.
-                    let anchor = TranscriptWindow.anchorAfterMutation(
-                        previousIDs: old,
-                        currentIDs: new,
-                        previousWindow: previousWindow,
-                        currentWindow: grown
-                    )
-                    if let anchor {
-                        holdViewportAcrossMutation(anchoredTo: anchor) { window = grown }
-                    } else {
-                        window = grown
-                    }
-                }
-                if shouldFollowLatest {
-                    if pinningToBottom {
-                        scrollToLatest(using: proxy, animated: false)
-                    } else {
-                        followLatestUntilArrived(using: proxy)
-                    }
-                }
-                if TranscriptWindow.shouldSettleInitialPin(
-                    isOpening: pinningToBottom,
-                    hasRenderedTail: !new.isEmpty
-                ), !settlingInitialBottomPin {
-                    Task { @MainActor in
-                        await settleInitialBottomPin(for: sid)
-                    }
-                }
-            }
-            .onChange(of: prompt) { _, _ in
-                if TranscriptWindow.shouldFollowLatest(
-                    isAtBottom: isAtBottom,
-                    isOpening: pinningToBottom
-                ) {
-                    if pinningToBottom {
-                        scrollToLatest(using: proxy, animated: false)
-                    } else {
-                        followLatestUntilArrived(using: proxy)
-                    }
-                }
-            }
-            // Optimistic sent bubbles and the pending strip live outside `messages`,
-            // so a fresh send changes neither `messages.count` nor `prompt`. Track
-            // the pending count too, or submitting a message wouldn't scroll down.
-            //
-            // Routed through the same verified pin as the transcript path. When a
-            // send resolves, `pending.count` and `messages` change in quick
-            // succession; two independently ANIMATED `scrollTo`s over an
-            // insert-plus-remove is what made a follow-up visibly scroll up and
-            // then settle back. One non-animated pin per change, and they
-            // coalesce instead of competing.
-            .onChange(of: pending.count) { _, _ in
-                if TranscriptWindow.shouldFollowLatest(
-                    isAtBottom: isAtBottom,
-                    isOpening: pinningToBottom
-                ) {
-                    if pinningToBottom {
-                        scrollToLatest(using: proxy, animated: false)
-                    } else {
-                        followLatestUntilArrived(using: proxy)
-                    }
-                }
-            }
-            .onAppear {
-                scrollProxy = proxy                      // shared with .task's open-at-bottom pin
-                proxy.scrollTo("BOTTOM", anchor: .bottom)
-            }
+            .onAppear { scrollProxy = proxy }
             // Tapping the transcript puts the keyboard away — the composer's
             // focus is its own private @FocusState, so this goes through the
-            // responder chain (see `dismissKeyboard`). Simultaneous, so a tap
-            // that lands on a link, attachment card or button still activates
-            // it; the keyboard just goes down at the same time.
+            // responder chain. Simultaneous, so a tap that lands on a link,
+            // attachment card or button still activates it.
             .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
-            // Dragging the transcript dismisses it too, tracking the finger.
             .scrollDismissesKeyboard(.interactively)
-            // Double-tap the top of the transcript to jump to the beginning, the
-            // bottom to jump to the latest. Simultaneous so normal scrolling and
-            // single-taps on content still work; the neutral middle band avoids
-            // hijacking double-taps while reading.
+            // Double-tap the LOWER band to jump to the latest message.
+            //
+            // The old top band ran `jumpToTop`, which set `window =
+            // messages.count` — rendering the entire transcript — and animated to
+            // the oldest row. That is the only code path that ever went to the
+            // first few responses, and it is the prime suspect for the reported
+            // teleport (Phase-1 finding 5). It is gone: there is no
+            // jump-to-oldest, and nothing silently expands the window.
             .simultaneousGesture(
                 SpatialTapGesture(count: 2).onEnded { event in
-                    let h = geo.size.height
-                    if event.location.y < h * 0.30 { jumpToTop() }
-                    else if event.location.y > h * 0.70 { jumpToBottom() }
+                    guard event.location.y > geo.size.height * 0.70 else { return }
+                    jumpToNewest()
                 }
             )
         }
       }
     }
 
-    /// The anchor `.scrollPosition(id:)` is allowed to enforce, which is ONLY
-    /// while `extendWindow` is revealing a page.
-    ///
-    /// `.scrollPosition(id:)` is a *continuous* contract, not a one-shot scroll:
-    /// SwiftUI keeps re-deriving the content offset to hold the bound row at the
-    /// anchor for as long as the modifier is bound to a non-nil id — including
-    /// across layout changes that have nothing to do with history. Raising the
-    /// keyboard is exactly such a change, and re-anchoring against it threw the
-    /// reader's rows 407pt off the top of the screen (measured on the shipped
-    /// 1.3.0 build; `.claude/evidence/20260822-keyboard-scroll`). The same fires
-    /// for any `safeAreaInset` height change — the pending strip, the child
-    /// sessions bar, the offline notice.
-    ///
-    /// The history reveal only ever needed the anchor for the one transaction
-    /// that inserts the page, so report it for exactly that long and report nil
-    /// the rest of the time, leaving the scroll view's own offset management
-    /// alone. The setter still writes through, so `scrollPositionID` keeps
-    /// tracking the top-most row for whenever the next reveal needs it.
-    private var historyRevealAnchor: Binding<String?> {
-        Binding(
-            get: {
-                KeyboardViewportPolicy.enforcesHistoryAnchor(isRevealingPage: extending)
-                    ? scrollPositionID
-                    : nil
-            },
-            set: { scrollPositionID = $0 }
-        )
+    /// Sentinel at the array start, i.e. the visual bottom.
+    private static let newestAnchor = "NEWEST"
+
+    /// The one remaining programmatic scroll, and only on an explicit user
+    /// action (double-tap the lower band, or sending a message).
+    private func jumpToNewest() {
+        guard let scrollProxy else { return }
+        vp("jumpToNewest")
+        withAnimation { scrollProxy.scrollTo(Self.newestAnchor, anchor: .top) }
     }
 
-    /// Keep a bottom-pinned reader pinned across a keyboard transition.
-    ///
-    /// The composer hangs off `safeAreaInset(edge: .bottom)`, so the keyboard
-    /// shrinks the transcript's viewport by ~300pt. Nothing moved the content to
-    /// match: measured on 1.3.0, the newest message sat at y=428…655 while the
-    /// keyboard claimed everything below y=373 — i.e. tapping the composer hid
-    /// the very message you were replying to, and left older content on screen.
-    ///
-    /// Re-pinning once on `willChangeFrame` is not enough: the notification
-    /// arrives *before* the safe-area inset lands, so a single scroll targets the
-    /// pre-keyboard layout. Re-pin across the animation instead, then once more
-    /// at the end. Fires for hide as well as show, which is what keeps the
-    /// viewport stable on the way back down.
-    private func repinForKeyboardChange(_ note: Notification, using proxy: ScrollViewProxy) {
-        guard KeyboardViewportPolicy.shouldRepinToLatest(
-            isAtBottom: isAtBottom,
-            isOpening: pinningToBottom
-        ) else { return }
-        // The BOTTOM anchor leaves the viewport while the inset animates. Left
-        // alone, that trips the `onDisappear` debounce into reading a keyboard
-        // transition as a deliberate scroll-up and freezing auto-follow.
-        bottomDebounce?.cancel()
-        let frames = KeyboardViewportPolicy.repinFrameCount(
-            animationDuration: note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey]
-                as? Double
-        )
-        keyboardRepin?.cancel()
-        keyboardRepin = Task { @MainActor in
-            for _ in 0..<frames {
-                if Task.isCancelled { return }
-                scrollToLatest(using: proxy, animated: false)
-                try? await Task.sleep(for: .milliseconds(16))
-            }
-            guard !Task.isCancelled else { return }
-            scrollToLatest(using: proxy, animated: false)
-            isAtBottom = true
-        }
-    }
-
-    /// The row above the oldest rendered message. Coming into view IS the
-    /// request for more history — it only reaches the viewport if the user
-    /// scrolled to the top of the window.
+    /// The row above the oldest rendered message — visually the top of the
+    /// transcript, structurally the END of the array. Coming into view IS the
+    /// request for more history.
     private var olderHistoryLoader: some View {
         HStack(spacing: 8) {
             if historyTopRow == .loadingNetwork || extending {
@@ -655,193 +477,29 @@ struct SessionDetailView: View {
         .onAppear { extendWindow() }
     }
 
-    /// Apply a render-window change while holding the given row where it is.
+    /// Reveal one more page of older messages.
     ///
-    /// Same shape as `extendWindow`'s transaction — the identity anchor is set
-    /// and the window changed together, so SwiftUI resolves the new layout
-    /// against a row the reader can see rather than re-deriving an offset from
-    /// a slice whose top just moved. `extending` is what exposes the anchor to
-    /// `.scrollPosition(id:)` (see `historyRevealAnchor`), and it is released on
-    /// the same 300 ms settle the reveal path uses.
-    private func holdViewportAcrossMutation(
-        anchoredTo anchorID: String,
-        _ apply: () -> Void
-    ) {
-        extending = true
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        transaction.scrollTargetAnchor = .top
-        if #available(iOS 18.0, *) {
-            transaction.scrollPositionUpdatePreservesVelocity = true
-            transaction.scrollContentOffsetAdjustmentBehavior = .automatic
-        }
-        withTransaction(transaction) {
-            scrollPositionID = anchorID
-            apply()
-        }
-        viewportHold?.cancel()
-        viewportHold = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(300))
-            extending = false
-        }
-    }
-
-    /// Walk the window one page further back, keeping the reader in place.
+    /// Under inversion this is the whole operation: the page appends to the END
+    /// of the array, which is the visual TOP, at offsets the reader is not
+    /// looking at. There is no anchor to capture, no transaction to coordinate
+    /// and no position to restore — Phase-1 finding 4 showed the old anchored
+    /// reveal was already compensating correctly, and this removes the need for
+    /// it entirely.
+    ///
+    /// `extending` remains as a one-shot re-entrancy guard: restoring layout is
+    /// asynchronous and the loader stays on screen meanwhile, where its
+    /// `onAppear` would otherwise fire again and walk the window several pages
+    /// in a single flick.
     private func extendWindow() {
-        // Two guards, both learned the hard way:
-        //
-        // `pinningToBottom` — the open-at-bottom pin is still force-scrolling,
-        // and the loader flashes through the viewport on the way down. Reading
-        // that as intent would page in the whole history on every open.
-        //
-        // `extending` — this one is load-bearing, not belt-and-braces. Restoring
-        // the reader's position is asynchronous, and until it lands the loader is
-        // still on screen, where its `onAppear` fires again. Measured without it:
-        // a SINGLE swipe walked the window 1000 → 1400, paging in a thousand
-        // messages nobody scrolled past and rebuilding the exact list this whole
-        // change exists to avoid.
-        guard !pinningToBottom, hasOlderHistory, !extending else { return }
+        guard hasOlderHistory, !extending else { return }
         extending = true
-        let anchorID = messages[windowStart].stableID
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        transaction.scrollTargetAnchor = .top
-        if #available(iOS 18.0, *) {
-            // A page can land while a flick is still decelerating. Preserve that
-            // velocity so revealing history never feels like the app grabbed the
-            // scroll view away from the user's gesture.
-            transaction.scrollPositionUpdatePreservesVelocity = true
-            transaction.scrollContentOffsetAdjustmentBehavior = .automatic
-        }
-        // Target the first retained message in the SAME transaction that inserts
-        // the page. This excludes the fixed TOP/loader targets from SwiftUI's
-        // choice of semantic anchor without scheduling a stale future scroll.
-        withTransaction(transaction) {
-            scrollPositionID = anchorID
-            window = TranscriptWindow.extended(window: window, total: messages.count)
-        }
+        let grown = TranscriptWindow.extended(window: window, total: messages.count)
+        vp("extendWindow", "win \(window)->\(grown)")
+        window = grown
         Task { @MainActor in
-            // Hold the gate while SwiftUI places the new targets and moves the
-            // loader out of the viewport. A continued drag remains entirely
-            // user-driven because this task never writes a scroll destination.
             try? await Task.sleep(for: .milliseconds(300))
             extending = false
         }
-    }
-
-    private func jumpToTop() {
-        guard let scrollProxy else { return }
-        isAtBottom = false
-        // "Jump to the beginning" has to mean the beginning, so this is the one
-        // place that renders the whole transcript. The cost is now something the
-        // user asks for explicitly instead of what every session open pays; the
-        // window is restored the next time the session is opened.
-        window = max(window, messages.count)
-        withAnimation { scrollProxy.scrollTo("TOP", anchor: .top) }
-    }
-
-    private func jumpToBottom() {
-        guard let scrollProxy else { return }
-        isAtBottom = true
-        withAnimation { scrollProxy.scrollTo("BOTTOM", anchor: .bottom) }
-    }
-
-    private func scrollToLatest(animated: Bool) {
-        guard let scrollProxy else { return }
-        scrollToLatest(using: scrollProxy, animated: animated)
-    }
-
-    /// Scroll to the newest row and keep asserting it until geometry confirms we
-    /// arrived.
-    ///
-    /// A single `scrollTo("BOTTOM")` undershoots in this `LazyVStack` — the rows
-    /// are tall and variable and many are not measured yet — so the view can end
-    /// up a few hundred points short of the end. That used to be invisible
-    /// because `isAtBottom` was latched true by the BOTTOM anchor's `onAppear`,
-    /// which re-followed on the next message. Now that follow is honest geometry,
-    /// an undershoot turns auto-follow OFF and every later message drifts the
-    /// reader further from the newest content — measured at ~640 pt over 28 s on
-    /// a streaming session. Verify, don't assume.
-    private func followLatestUntilArrived(using proxy: ScrollViewProxy) {
-        followRepin?.cancel()
-        followRepin = Task { @MainActor in
-            for _ in 0..<Self.followRepinFrames {
-                if Task.isCancelled { return }
-                scrollToLatest(using: proxy, animated: false)
-                await Task.yield()
-                try? await Task.sleep(for: .milliseconds(16))
-                if Self.canVerifyScrollGeometry, scrolledToEnd { break }
-            }
-            guard !Task.isCancelled else { return }
-            if Self.canVerifyScrollGeometry, scrolledToEnd { isAtBottom = true }
-        }
-    }
-
-    /// Short — this rides an append, not an open. Long enough to absorb a couple
-    /// of layout passes, short enough that it cannot feel like the view is
-    /// fighting a deliberate scroll.
-    private static let followRepinFrames = 12
-
-    private func scrollToLatest(using proxy: ScrollViewProxy, animated: Bool) {
-        if animated {
-            withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) }
-        } else {
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                proxy.scrollTo("BOTTOM", anchor: .bottom)
-            }
-        }
-    }
-
-    private func settleInitialBottomPin(for openingSessionID: String) async {
-        guard sid == openingSessionID,
-              pinningToBottom,
-              !settlingInitialBottomPin else { return }
-        settlingInitialBottomPin = true
-
-        // Pin until the scroll view CONFIRMS it reached the end.
-        //
-        // This used to pin twice — once after a yield, once 120 ms later — and
-        // then release regardless. It never checked that the scroll arrived. A
-        // `LazyVStack` that is still measuring rows lands `scrollTo`
-        // approximately, so on a cold open of a long transcript the pin could be
-        // released part-way up; and because `isAtBottom` is now honest geometry
-        // rather than a latched anchor callback, auto-follow correctly stayed
-        // off and the reader was simply parked mid-transcript. Measured before
-        // this: newest rows ~800 pt below the fold, and they stayed there.
-        //
-        // Re-asserting costs nothing once we have arrived — the loop exits on
-        // the first confirmation — and the budget is bounded so a transcript
-        // that can never satisfy the check still hands control back.
-        let budget = TranscriptWindow.openPinFrameBudget(
-            canVerifyGeometry: Self.canVerifyScrollGeometry
-        )
-        for _ in 0..<budget {
-            guard sid == openingSessionID, pinningToBottom else {
-                settlingInitialBottomPin = false
-                return
-            }
-            scrollToLatest(animated: false)
-            await Task.yield()
-            try? await Task.sleep(for: .milliseconds(16))
-            if Self.canVerifyScrollGeometry, openArrivalConfirmed { break }
-        }
-        guard sid == openingSessionID, pinningToBottom else {
-            settlingInitialBottomPin = false
-            return
-        }
-        scrollToLatest(animated: false)
-        pinningToBottom = false
-        settlingInitialBottomPin = false
-        isAtBottom = true
-    }
-
-    /// Whether `BottomProximityTracker` can actually report arrival on this OS.
-    /// On iOS 17 `scrolledToEnd` never updates, so the opening pin must not wait
-    /// on it.
-    private static var canVerifyScrollGeometry: Bool {
-        if #available(iOS 18.0, *) { true } else { false }
     }
 
     // MARK: Toolbar
@@ -906,6 +564,7 @@ struct SessionDetailView: View {
                 childAgents: childAgents,
                 dismissedBrowserFrameID: dismissedBrowserFrameID,
                 onShowAttachments: { presentedSheet = .attachments },
+                onShowInversionSpike: { presentedSheet = .inversionSpike },
                 onShowChildSessions: { selectedID in
                     presentedSheet = .childSessions(selectedID: selectedID)
                 },
@@ -999,6 +658,7 @@ private struct SessionOptionsMenu: View {
     let childAgents: [ChildAgentSession]
     let dismissedBrowserFrameID: String?
     let onShowAttachments: () -> Void
+    let onShowInversionSpike: () -> Void
     let onShowChildSessions: (String?) -> Void
     let onRename: () -> Void
     let onRestoreBrowserPreview: () -> Void
@@ -1048,6 +708,9 @@ private struct SessionOptionsMenu: View {
         }
 
         primary.append(action("Files & Links", systemImage: "paperclip", handler: onShowAttachments))
+        // PHASE-2 SPIKE entry — remove with the spike.
+        primary.append(action("Spike: inverted transcript", systemImage: "arrow.up.arrow.down",
+                              handler: onShowInversionSpike))
 
         let models = modelOptions.map { model in
             action(model) { Task { await store.setModel(sid, model) } }
@@ -1266,49 +929,52 @@ private struct NativeSessionOptionsButton: UIViewRepresentable {
     }
 }
 
-/// Reports whether the transcript is scrolled to its newest end, from the scroll
-/// view's real geometry.
+/// The 180° flip that makes the transcript an inverted list.
 ///
-/// This exists because the 1 pt `BOTTOM` anchor cannot answer the question
-/// honestly. In a `LazyVStack`, `onAppear` fires when SwiftUI *creates* a row,
-/// not when it becomes visible, so a large transcript mutation re-creates the
-/// anchor while the reader is hundreds of points up and latches `isAtBottom`
-/// true. From then on every arriving message scrolls toward the newest end and
-/// the transcript walks out from under the reader — measured at −146 pt per
-/// arrival on a live session, which is what "the transcript disappears while I'm
-/// typing" actually is.
-///
-/// iOS 18+ only; on iOS 17 the anchor keeps its previous behavior, unchanged.
-private struct BottomProximityTracker: ViewModifier {
-    /// `(atEnd, confirmsOpenArrival)`. They differ for a transcript shorter than
-    /// the viewport: that is "at the end" for auto-follow, but must NOT confirm
-    /// an open — see `TranscriptWindow.confirmsOpenArrival`.
-    let onChange: (Bool, Bool) -> Void
+/// Applied to the `ScrollView` AND to every row, so rows read the right way up
+/// inside an upside-down stack. `scaleEffect` rather than `rotationEffect`
+/// because it is a pure mirror — no rounding drift on repeated application.
+private extension View {
+    func flippedRow() -> some View {
+        rotationEffect(.degrees(180))
+    }
+}
 
-    private struct Proximity: Equatable {
-        var atEnd: Bool
-        var confirmsOpen: Bool
+/// Reports whether an inverted transcript is at its newest end.
+///
+/// Reads the offset ONLY. The predecessor read content height too, and Phase-1
+/// finding 2 measured that height swinging 15,600 → 8,100 → 14,700 pt between
+/// adjacent samples while `LazyVStack` re-estimated unmeasured rows — which made
+/// `atEnd` flap and fire 12-frame follow bursts against the user's finger. An
+/// offset cannot do that.
+///
+/// iOS 18+. On iOS 17 the value stays at its initial `true`, which under
+/// inversion is the safe default: the only thing it gates is whether an arriving
+/// message grows the render window.
+private struct NewestEndTracker: ViewModifier {
+    let onChange: (Bool) -> Void
+
+    private struct AtNewest: Equatable {
+        var value: Bool
+        /// PHASE-1 INSTRUMENTATION — coarse buckets so the geometry trace fires
+        /// on real movement without per-frame spam.
+        var yBucket: Int
+        var contentBucket: Int
     }
 
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
-            content.onScrollGeometryChange(for: Proximity.self) { geo in
-                Proximity(
-                    atEnd: TranscriptWindow.isScrolledToEnd(
-                        contentHeight: geo.contentSize.height,
-                        containerHeight: geo.containerSize.height,
-                        offsetY: geo.contentOffset.y,
-                        bottomInset: geo.contentInsets.bottom
-                    ),
-                    confirmsOpen: TranscriptWindow.confirmsOpenArrival(
-                        contentHeight: geo.contentSize.height,
-                        containerHeight: geo.containerSize.height,
-                        offsetY: geo.contentOffset.y,
-                        bottomInset: geo.contentInsets.bottom
-                    )
+            content.onScrollGeometryChange(for: AtNewest.self) { geo in
+                AtNewest(
+                    value: TranscriptWindow.isAtNewestEnd(offsetY: geo.contentOffset.y),
+                    yBucket: Int(geo.contentOffset.y / 40),
+                    contentBucket: Int(geo.contentSize.height / 100)
                 )
             } action: { _, p in
-                onChange(p.atEnd, p.confirmsOpen)
+                #if DEBUG
+                NSLog("LFGVP geo y=\(p.yBucket * 40) contentH=\(p.contentBucket * 100) atNewest=\(p.value)")
+                #endif
+                onChange(p.value)
             }
         } else {
             content

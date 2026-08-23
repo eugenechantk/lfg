@@ -162,6 +162,22 @@ import LFGCore
     /// must stay dismissed when the user navigates away and back — view-local
     /// state would resurrect the stale bar on every return. Compared against
     /// child-agent activity by `ChildSessionsBarVisibility`; both are epoch ms.
+    /// Bumped on every mutation of `transcripts[sid]`.
+    ///
+    /// Exists so views can observe "the transcript changed" without building an
+    /// O(n) identity array to compare. `SessionDetailView` used to drive its
+    /// reconciliation from `.onChange(of: messages.map(\.stableID))`, which
+    /// rebuilt a ~1,150-element array on EVERY body evaluation — and the
+    /// `.scrollPosition(id:)` setter makes that happen once per scroll frame, so
+    /// scrolling was O(transcript) per frame (Phase-1 finding 1). An Int compares
+    /// in constant time and the array is now built only when something actually
+    /// changed.
+    private(set) var transcriptVersion: [String: Int] = [:]
+
+    private func bumpTranscript(_ id: String) {
+        transcriptVersion[id, default: 0] &+= 1
+    }
+
     private(set) var lastUserSendAt: [String: Double] = [:]
 
     /// Whether the child-sessions bar belongs above the composer right now.
@@ -806,6 +822,7 @@ import LFGCore
             guard !stored.isEmpty, transcripts[id]?.isEmpty ?? true else { return }
             let messages = stored.map(Self.message(from:))
             transcripts[id] = messages
+            bumpTranscript(id)
             seen[id] = Set(messages.map(\.stableID))
             reconcilePending(id)
             if id == focusedID { markOpened(id) }
@@ -2686,6 +2703,7 @@ import LFGCore
             if set.contains(key) { return }
             set.insert(key); seen[sid] = set
             transcripts[sid, default: []].append(m)
+            bumpTranscript(sid)
             writeThrough { store in
                 try await store.appendMessages(sessionId: sid, [m])
             }
@@ -2980,6 +2998,7 @@ import LFGCore
             page: messages
         )
         transcripts[id] = result.messages
+        bumpTranscript(id)
         seen[id] = result.ids
         writeThrough { store in
             try await store.appendMessages(sessionId: id, messages)
@@ -3841,6 +3860,7 @@ import LFGCore
         if let moved = transcripts.removeValue(forKey: old) {
             let merged = TranscriptMerge.unionByStableID(moved, transcripts[new] ?? [])
             transcripts[new] = merged
+            bumpTranscript(new); bumpTranscript(old)
             seen[new] = Set(merged.map(\.stableID))
         }
         // A kickoff send is stamped against the placeholder id; carry it so the
