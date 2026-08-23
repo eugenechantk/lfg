@@ -351,7 +351,10 @@ import LFGCore
     private var focusedID: String?
     private var storeHydrationTask: Task<Void, Never>?
     private var storeHydrationCompleted = false
-    private static let outboxRetryCapMs: Double = 24 * 60 * 60 * 1000
+    /// Retained for reference only — the live value now lives in
+    /// `OutboxResurrectionPolicy.retryWindowMs`, so both replay paths and the
+    /// tests share one number.
+    private static let outboxRetryCapMs: Double = OutboxResurrectionPolicy.retryWindowMs
 
     /// Closed (resumable) sessions synthesized from `/api/sessions/resumable`,
     /// merged into `sessions` each poll so ended sessions stay visible. Refreshed
@@ -1122,16 +1125,109 @@ import LFGCore
         for row in rows {
             if hasPendingSend(clientId: row.clientId) { continue }
             if replayingOutbox.contains(row.clientId) { continue }
-            if now - row.updatedAt > Self.outboxRetryCapMs {
+
+            switch await outboxDecision(for: row, store: store) {
+            case .retire, .prune:
+                // Either proven landed, or too old for anyone to act on. Both
+                // end the same way — the row and its sidecars go, and NOTHING
+                // is shown. No bubble, no banner. This is the exit the old code
+                // never had: a past-cap row was resurrected as a red "Not sent"
+                // every single launch, for messages a later retry had already
+                // delivered.
+                await deleteOutbox(row.clientId)
+            case .surface:
+                // Terminal but recent: the user should see it and be able to
+                // retry. Sidecars go because the row will not be replayed
+                // automatically again.
+                //
+                // Deliberately NOT writing the row's state: `markOutbox` sets
+                // `updatedAt = now`, which reset the age that every cap check
+                // reads and re-armed the reachable-host drain. The row is
+                // already `failed` on disk; saying so again costs its age.
                 appendPendingFromOutbox(row, failed: true)
-                await markOutboxState(row.clientId, state: "failed")
                 deleteOutboxAttachments(clientId: row.clientId)
-                continue
+            case .retry:
+                replayingOutbox.insert(row.clientId)
+                await retryOutboxRow(row)
+                replayingOutbox.remove(row.clientId)
             }
-            replayingOutbox.insert(row.clientId)
-            await retryOutboxRow(row)
-            replayingOutbox.remove(row.clientId)
         }
+    }
+
+    /// The one decision point for every consumer of `retryableOutbox()`.
+    ///
+    /// There are two of them — the launch replay and the host-became-reachable
+    /// drain — and they MUST agree. They did not: the launch path applied the
+    /// policy while the drain kept its own ad-hoc cap check, so a stale row
+    /// surfaced at launch and was then auto-re-POSTed the moment its host
+    /// answered. Anything reading `retryableOutbox()` goes through here.
+    ///
+    /// Age is measured from `createdAt`, never `updatedAt` — see
+    /// `OutboxResurrectionPolicy.decide`.
+    private func outboxDecision(for row: LFGOutboxRow, store: LFGStore) async -> OutboxResurrection {
+        OutboxResurrectionPolicy.decide(
+            ageMs: Date().timeIntervalSince1970 * 1000 - row.createdAt,
+            deliveredInTranscript: await outboxRowAlreadyDelivered(row, store: store)
+        )
+    }
+
+    /// **The invariant.** Every POST that could resend a durable outbox row asks
+    /// this first, and a `false` means the send does not happen — whoever the
+    /// caller is.
+    ///
+    /// Call-site gating failed twice in the field. Both times the policy was
+    /// right and applied everywhere we had enumerated; both times a path outside
+    /// that enumeration posted the row anyway. The last one was
+    /// `resendFailedSends`, the recovered-host sweep, which resends through
+    /// `retryPending` — the manual Retry button's function — and therefore never
+    /// touched `retryOutboxRow` or any outbox gate. On a cold launch with a live
+    /// host it fires against exactly the bubbles that `.surface` had just
+    /// created, so the surfacing branch was feeding its own bypass.
+    ///
+    /// Enforcing here instead makes a *new* caller safe by default. Anything
+    /// that isn't an outbox-backed send (a fresh compose, a placeholder create)
+    /// has no row and passes straight through.
+    private func outboxSendPermitted(
+        clientId: String?,
+        trigger: OutboxSendTrigger
+    ) async -> Bool {
+        guard let clientId, let store = localStore else { return true }
+        // `try?` flattens the accessor's own `LFGOutboxRow?`, so this one bind
+        // covers both "read failed" and "no such row" — and both mean the same
+        // thing here: not an outbox-backed send, let it through.
+        guard let row = try? await store.outbox(clientId: clientId) else { return true }
+
+        let decision = await outboxDecision(for: row, store: store)
+        if OutboxSendGate.permits(decision, trigger: trigger) { return true }
+
+        Logger(subsystem: "dev.omg.lfg", category: "outbox").notice(
+            "refused \(trigger == .automatic ? "automatic" : "manual", privacy: .public) send of \(clientId, privacy: .public): decision=\(String(describing: decision), privacy: .public)")
+
+        // A refusal for `.retire` means the turn is already in the transcript.
+        // Drop the row so the refusal isn't silent — otherwise a manual Retry
+        // would look like it did nothing at all.
+        if decision == .retire { await deleteOutbox(clientId) }
+        return false
+    }
+
+    /// Whether an outbox row's text is already in the session's transcript.
+    ///
+    /// Reads the PERSISTED transcript rather than `transcripts[...]`: this runs
+    /// at launch, before any session has been opened, so the in-memory copy is
+    /// empty and every row would look undelivered — which is exactly how these
+    /// rows survived. Matching is by text, so a send that landed under a
+    /// different `clientId` (the retry minted its own) still resolves.
+    private func outboxRowAlreadyDelivered(_ row: LFGOutboxRow, store: LFGStore) async -> Bool {
+        let stored: [LFGStoredMessage]
+        do { stored = try await store.messages(sessionId: row.sessionId) }
+        catch { return false }   // cannot prove delivery; fall through to age rules
+        guard !stored.isEmpty else { return false }
+        return OptimisticSendReconciliation.containsMatchingUserTurn(
+            matchText: row.text,
+            sentAt: row.updatedAt,
+            in: stored.map(Self.message(from:)),
+            searchLimit: OutboxResurrectionPolicy.resurrectionSearchLimit
+        )
     }
 
     /// Replay this host's still-unsent outbox rows now that it is reachable again.
@@ -1146,24 +1242,38 @@ import LFGCore
     private func replayPendingOutbox(forHost hostId: String) async {
         guard let store = localStore else { return }
         let rows = ((try? await store.retryableOutbox()) ?? []).filter { $0.hostId == hostId }
-        let now = Date().timeIntervalSince1970 * 1000
         for row in rows where !replayingOutbox.contains(row.clientId) {
-            // The cap belongs on every replay path, not just the launch one: a
-            // host that stays down for days would otherwise have this path
-            // re-posting week-old messages the moment it answers.
-            guard now - row.updatedAt <= Self.outboxRetryCapMs else { continue }
-            replayingOutbox.insert(row.clientId)
-            // Clear the "queued offline" / failed chrome on the existing bubble;
-            // retryOutboxRow reconciles it to sent/confirmed from here.
-            if let loc = pendingLocation(clientId: row.clientId) {
-                mutatePending(loc.sid, loc.pid) { $0.queuedOffline = false; $0.failed = false }
+            // Same decision as the launch path, from the same helper. This used
+            // to be its own cap check against `updatedAt`, which a failure
+            // state-write resets to now — so a 3-day-old row read as fresh and
+            // was re-POSTed as soon as the host answered, delivering a stale
+            // instruction days late. That is the hazard the cap exists for.
+            switch await outboxDecision(for: row, store: store) {
+            case .retire, .prune:
+                await deleteOutbox(row.clientId)
+            case .surface:
+                // Past the cap: it keeps its bubble and its Retry button, and
+                // the user decides. Nothing is sent, and nothing is written to
+                // the row — a state write here would reset its age and re-arm
+                // this very path on the next reconnect.
+                continue
+            case .retry:
+                replayingOutbox.insert(row.clientId)
+                // Clear the "queued offline" / failed chrome on the existing bubble;
+                // retryOutboxRow reconciles it to sent/confirmed from here.
+                if let loc = pendingLocation(clientId: row.clientId) {
+                    mutatePending(loc.sid, loc.pid) { $0.queuedOffline = false; $0.failed = false }
+                }
+                await retryOutboxRow(row)
+                replayingOutbox.remove(row.clientId)
             }
-            await retryOutboxRow(row)
-            replayingOutbox.remove(row.clientId)
         }
     }
 
     private func retryOutboxRow(_ row: LFGOutboxRow) async {
+        // Boundary check. The callers already decided, but this is the POST and
+        // the POST owns the invariant — see `outboxSendPermitted`.
+        guard await outboxSendPermitted(clientId: row.clientId, trigger: .automatic) else { return }
         appendPendingFromOutbox(row)
         guard let host = settings.hosts.first(where: { $0.id == row.hostId }),
               let client = settings.client(for: host) else {
@@ -1205,7 +1315,8 @@ import LFGCore
             // `settleSendFailure` usually re-queues the row, so announcing every
             // attempt produced a banner for a message that sent fine on the next
             // pass. It owns the messaging, and only for the terminal branch.
-            await settleSendFailure(clientId: row.clientId, hostId: row.hostId)
+            await settleSendFailure(clientId: row.clientId, hostId: row.hostId,
+                                    evidence: .from(error))
         }
     }
 
@@ -1225,18 +1336,32 @@ import LFGCore
     /// Attachments take the same branch regardless: their bytes are still on
     /// disk as sidecars, so the send is genuinely replayable no matter why it
     /// threw, and burning the row would strand the sidecars too.
-    private func settleSendFailure(clientId: String, hostId: String?) async {
+    private func settleSendFailure(
+        clientId: String,
+        hostId: String?,
+        evidence: SendFailureEvidence
+    ) async {
         let hostStillDown = hostId.map { !(hostStateByHost[$0]?.isLive ?? false) } ?? false
         let hasAttachments = !outboxAttachmentFiles(clientId: clientId).isEmpty
-        let disposition = SendFailurePolicy.disposition(
+        let outcome = SendTerminalityPolicy.classify(
+            evidence: evidence,
             hostStillDown: hostStillDown,
             hasAttachments: hasAttachments
         )
-        guard disposition == .requeued else {
-            // Terminal. `markPendingFailed` raises the one banner.
+        switch outcome {
+        case .terminal:
+            // The host answered, or the request could never have gone out.
+            // `markPendingFailed` raises the one banner.
             markPendingFailed(clientId: clientId)
             await markOutboxState(clientId, state: "failed")
             return
+        case .confirming:
+            // The bytes went out and we stopped listening. Say nothing yet —
+            // go find out whether it landed.
+            confirmAmbiguousSend(clientId: clientId)
+            return
+        case .requeue:
+            break
         }
         if let loc = pendingLocation(clientId: clientId) {
             mutatePending(loc.sid, loc.pid) {
@@ -1249,6 +1374,115 @@ import LFGCore
         // Re-arm the row so the next drain picks it up as pending rather than
         // leaving whatever state the attempt wrote.
         await markOutboxState(clientId, state: "pending")
+    }
+
+    /// Confirming probes in flight, keyed by clientId.
+    private var deliveryConfirmations: [String: Task<Void, Never>] = [:]
+
+    /// The message may already be delivered. Show nothing alarming, and go ask
+    /// the host before saying otherwise.
+    ///
+    /// This closes the last mechanism behind "Not sent" on a send that visibly
+    /// worked. On a cold tunnel the POST times out **after** the request bytes
+    /// went out; the server processes it normally; the old code saw a reachable
+    /// host, called it terminal, and fired the banner — and seconds later the
+    /// turn arrived over SSE and `reconcilePending` quietly cleared the bubble.
+    /// The bubble self-healed; the banner the user had already read did not.
+    ///
+    /// So terminality now waits for evidence. The bubble holds its in-flight
+    /// presentation (no red, no Retry, no banner) for a bounded window while we
+    /// look for the turn.
+    private func confirmAmbiguousSend(clientId: String) {
+        guard deliveryConfirmations[clientId] == nil else { return }
+        if let loc = pendingLocation(clientId: clientId) {
+            mutatePending(loc.sid, loc.pid) {
+                $0.failed = false
+                $0.queuedOffline = false
+                $0.confirmed = false
+                $0.showSent = false
+                $0.failureReason = nil
+            }
+        }
+        // Hold the reconnect drain off this row for the window. It is `pending`
+        // on disk and a host link coming up mid-confirm would re-POST it — and
+        // the whole premise here is that the first attempt may have LANDED, so
+        // that re-POST duplicates the message in the conversation.
+        replayingOutbox.insert(clientId)
+
+        deliveryConfirmations[clientId] = Task { [weak self] in
+            defer {
+                self?.replayingOutbox.remove(clientId)
+                self?.deliveryConfirmations[clientId] = nil
+            }
+            var probesCompleted = 0
+            var landed = false
+            while true {
+                guard let self else { return }
+                switch DeliveryConfirmationPolicy.next(
+                    probesCompleted: probesCompleted,
+                    foundDelivered: landed
+                ) {
+                case .resolveDelivered:
+                    await self.resolveConfirmedDelivery(clientId: clientId)
+                    return
+                case .declareTerminal:
+                    // The window closed with no sign of it. NOW the banner is
+                    // honest — and it is still exactly one.
+                    self.markPendingFailed(clientId: clientId)
+                    await self.markOutboxState(clientId, state: "failed")
+                    return
+                case .probeAgain(let afterMs):
+                    try? await Task.sleep(for: .milliseconds(Int(afterMs)))
+                    if Task.isCancelled { return }
+                    // The ordinary happy path lands here: SSE delivered the turn
+                    // and `reconcilePending` already retired the row. Nothing to
+                    // resolve, nothing to announce.
+                    guard self.pendingLocation(clientId: clientId) != nil else { return }
+                    landed = await self.ambiguousSendLanded(clientId: clientId)
+                    if !landed { probesCompleted += 1 }
+                }
+            }
+        }
+    }
+
+    /// Did the host take this message after all?
+    ///
+    /// Two independent proofs, either sufficient. The **queue** is the stronger
+    /// and earlier one: an entry means the host has custody even though the
+    /// agent hasn't run the turn yet, which is the common shape when the send
+    /// raced a busy session. The **transcript** covers the case where it ran
+    /// immediately and the queue entry is already gone.
+    private func ambiguousSendLanded(clientId: String) async -> Bool {
+        guard let loc = pendingLocation(clientId: clientId),
+              let pending = pendingSends[loc.sid]?.first(where: { $0.id == loc.pid })
+        else { return true }
+        guard let client = client(forSession: loc.sid) else { return false }
+
+        if let q = try? await client.queue(loc.sid) {
+            queues[loc.sid] = q
+            if OptimisticSendReconciliation.matchingQueueItem(
+                matchText: pending.matchText, in: q) != nil { return true }
+        }
+        guard let msgs = try? await client.messages(loc.sid, limit: 60) else { return false }
+        return OptimisticSendReconciliation.containsMatchingUserTurn(
+            matchText: pending.matchText,
+            sentAt: pending.ts,
+            in: msgs)
+    }
+
+    /// It landed. Retire the failure that never was.
+    private func resolveConfirmedDelivery(clientId: String) async {
+        await markOutboxState(clientId, state: "sent")
+        guard let loc = pendingLocation(clientId: clientId) else { return }
+        mutatePending(loc.sid, loc.pid) {
+            $0.failed = false
+            $0.queuedOffline = false
+            $0.failureReason = nil
+            $0.confirmed = true
+        }
+        // Pull the turn in so the optimistic row is replaced by the real one
+        // rather than sitting confirmed-but-unmatched.
+        loadHistory(loc.sid)
     }
 
     private func persistCursor(_ cursor: Int64, for host: Host) {
@@ -2059,7 +2293,12 @@ import LFGCore
             for p in (pendingSends[sid] ?? []).filter(\.failed) {
                 // The previous retry's refresh may have reconciled this one away.
                 guard pendingSends[sid]?.contains(where: { $0.id == p.id }) == true else { continue }
-                await retryPending(sid, p)
+                // `.automatic`: nobody asked for this. THIS is the path that
+                // re-POSTed a 3-day-old row on cold launch — `recoveredHosts`
+                // treats the first refresh's unknown→live transition as a
+                // recovery, and the rows it sweeps are precisely the failed
+                // bubbles `replayPendingOutboxOnStart` had just surfaced.
+                await retryPending(sid, p, trigger: .automatic)
             }
         }
     }
@@ -3043,7 +3282,17 @@ import LFGCore
 
     /// Resend a failed optimistic message. If we know its server queue id, retry
     /// that queued entry; otherwise (the original HTTP send never landed) resend.
-    func retryPending(_ sid: String, _ pending: PendingSend) async {
+    /// - Parameter trigger: defaults to `.userInitiated` because the Retry and
+    ///   "Send now" buttons are the callers a reader expects. The one automatic
+    ///   caller — `resendFailedSends` — must say so, and that is the whole point:
+    ///   this function is the second POST boundary for outbox rows, and it was
+    ///   the unguarded one that delivered a three-day-old message into a live
+    ///   session on cold launch.
+    func retryPending(
+        _ sid: String,
+        _ pending: PendingSend,
+        trigger: OutboxSendTrigger = .userInitiated
+    ) async {
         // A placeholder whose session never got created: re-attempt the create,
         // not a send (there's no session on the server to send to yet).
         if let req = pendingCreates[sid] {
@@ -3053,6 +3302,9 @@ import LFGCore
             return
         }
         let clientId = pending.clientId ?? pending.id
+        // Boundary check — before any state is mutated, so a refused row keeps
+        // its failed/Retry chrome exactly as the user left it.
+        guard await outboxSendPermitted(clientId: clientId, trigger: trigger) else { return }
         mutatePending(sid, pending.id) {
             $0.clientId = clientId
             $0.failed = false
@@ -3069,7 +3321,12 @@ import LFGCore
             }
             let ok = await run("Retry", for: sid) { try await $0.retryQueued(sid, messageID: qid) }
             if ok { await markOutboxState(clientId, state: "sent") }
-            else { await settleSendFailure(clientId: clientId, hostId: hostId) }
+            else {
+                // `run` swallowed the error, but a queue retry that threw is the
+                // same ambiguous shape as any other: the host may well have
+                // taken it. The probe finds the queue entry and resolves.
+                await settleSendFailure(clientId: clientId, hostId: hostId, evidence: .from(nil))
+            }
         } else if let client = client(forSession: sid) {
             do {
                 // Same background transport as the composer send — a retry must
@@ -3092,7 +3349,8 @@ import LFGCore
                 if resp.resumed == true { watchForTurnLanding(clientId: clientId) }
                 await refresh(); reconcilePending(eff)
             } catch {
-                await settleSendFailure(clientId: clientId, hostId: routeHostId(forSession: sid))
+                await settleSendFailure(clientId: clientId, hostId: routeHostId(forSession: sid),
+                                        evidence: .from(error))
             }
         }
     }
@@ -3352,7 +3610,7 @@ import LFGCore
             // The host may have gone down between `isOffline(id)` reading false
             // at the top of this function and the POST landing — in which case
             // this is a queued message, not a failed one.
-            await settleSendFailure(clientId: clientId, hostId: hostId)
+            await settleSendFailure(clientId: clientId, hostId: hostId, evidence: .from(error))
         }
     }
 

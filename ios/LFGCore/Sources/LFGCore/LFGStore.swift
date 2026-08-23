@@ -410,7 +410,7 @@ public final class LFGStore: @unchecked Sendable {
         }
     }
 
-    func outbox(clientId: String) async throws -> LFGOutboxRow? {
+    public func outbox(clientId: String) async throws -> LFGOutboxRow? {
         try await dbQueue.read { db in
             try OutboxRecord
                 .fetchOne(

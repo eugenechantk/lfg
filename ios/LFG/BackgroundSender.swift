@@ -101,7 +101,15 @@ final class BackgroundSender: NSObject {
         }
         if let f = state.bodyFile { try? FileManager.default.removeItem(at: f) }
         if let error {
-            state.continuation?.resume(throwing: LFGError.notReachable(underlying: error.localizedDescription))
+            // Keep the URLError code. Flattening it to a string is what made
+            // every transport failure look alike at the catch site, so a
+            // `timedOut` (request bytes went out — the host may have processed
+            // it in full) was indistinguishable from a `cannotFindHost` (nothing
+            // was transmitted). `SendTerminalityPolicy` needs exactly that
+            // difference to decide whether a banner is honest.
+            state.continuation?.resume(throwing: LFGError.transport(
+                code: (error as? URLError)?.code.rawValue,
+                underlying: error.localizedDescription))
             return
         }
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {

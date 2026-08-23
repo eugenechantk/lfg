@@ -4,6 +4,13 @@ import os
 public enum LFGError: Error, LocalizedError, Sendable {
     case badURL
     case notReachable(underlying: String)
+    /// A URLSession-level failure that kept its `URLError` code.
+    ///
+    /// Distinct from `notReachable` only because the **code** is load-bearing:
+    /// `SendTerminalityPolicy` needs to tell "the request never went out" from
+    /// "the request went out and we stopped listening", and the two are the
+    /// same string. Reads identically to the user.
+    case transport(code: Int?, underlying: String)
     case http(status: Int, body: String)
     case decoding(String)
     /// The live stream went silent — no bytes (not even heartbeats) for longer
@@ -15,6 +22,7 @@ public enum LFGError: Error, LocalizedError, Sendable {
         switch self {
         case .badURL: return "Invalid server URL."
         case .notReachable(let u): return "Can't reach the host: \(u)"
+        case .transport(_, let u): return "Can't reach the host: \(u)"
         case .http(let s, let b): return "Server error \(s): \(b)"
         case .decoding(let m): return "Unexpected response: \(m)"
         case .streamStalled: return "Live stream stalled — reconnecting."
