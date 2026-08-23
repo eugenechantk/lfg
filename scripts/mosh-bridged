@@ -69,13 +69,28 @@ key=${${(s: :)line}[4]}
 # 2. Carrier: 127.0.0.1:$lport UDP <-> ssh stdio <-> 127.0.0.1:$rport on the host.
 bridge_local="$here/mosh-bridge"
 [[ -x "$bridge_local" ]] || bridge_local="$HOME/.local/bin/mosh-bridge"
-/usr/bin/python3 "$bridge_local" client "$lport" -- \
+readyfile="${TMPDIR:-/tmp}/mosh-bridged-ready.$$"
+rm -f "$readyfile"
+log="$HOME/Library/Logs/mosh-bridge.log"
+LFG_BRIDGE_READY="$readyfile" /usr/bin/python3 "$bridge_local" client "$lport" -- \
   "${ssh_run[@]}" "$target" \
   'exec /usr/bin/python3 "$HOME/.local/bin/mosh-bridge" server '"$rport" &
 bridge_pid=$!
-trap 'kill $bridge_pid 2>/dev/null' EXIT INT TERM
+trap 'kill $bridge_pid 2>/dev/null; rm -f "$readyfile"' EXIT INT TERM
+
+# Hold mosh-client until the carrier proves the far side is reachable (the bridge
+# touches $readyfile on the server's hello). Without this wait mosh-client starts
+# talking to a not-yet-connected carrier and flashes "Nothing received from
+# server on UDP port …" for ~2s. Cap the wait so a broken carrier still hands
+# control to mosh-client (which then shows its own diagnostics) instead of hanging.
+for _ in {1..150}; do [[ -f "$readyfile" ]] && break; sleep 0.1; done
+if [[ ! -f "$readyfile" ]]; then
+  print -r -- "$(date '+%F %T') $target: carrier not ready after 15s, starting mosh-client anyway" >>| "$log"
+fi
 
 # 3. mosh-client, with the usual title/prediction behaviour. -# is the window title.
+print -r -- "$(date '+%F %T') $target: mosh-client start (lport=$lport rport=$rport)" >>| "$log"
 rc=0
 MOSH_KEY="$key" "$mosh_client" -# "$target" 127.0.0.1 "$lport" || rc=$?
+print -r -- "$(date '+%F %T') $target: mosh-client EXIT rc=$rc (rc=0 → remote session ended cleanly; non-zero → mosh-client error)" >>| "$log"
 exit $rc
