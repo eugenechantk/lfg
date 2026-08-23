@@ -47,3 +47,63 @@
 ## Logs deleted after processing
 
 All five 2026-08-22 logs (three empty; two fully captured above and in the memories/CLAUDE.md edits listed).
+
+## Post-digest addendum (same session, Phase-1 scroll debugging)
+
+- Coordination gap: my "stand by, don't edit" message caused the worker to
+  silently REVERT its in-flight instrumentation between my file-read and my
+  build — I then drove a full simulator debug cycle against an app with no
+  writer logs and burned ~20 min on a phantom "logs don't emit" mystery.
+  Lesson: a stand-down instruction to a concurrent session must say what to do
+  with in-flight edits (keep/commit/hand over), and after ANY "file changed on
+  disk" note during shared-tree work, re-grep the assumptions before building.
+
+- Outbox drain: per-call-site policy gating missed a replay path TWICE in
+  independent re-verification (stub down->up shape passed while the field shape
+  — cold launch, host live from t0 — kept re-sending stale rows). Lesson
+  pattern: an invariant ("never auto-send past the retry cap") belongs at the
+  single choke point that performs the action, not sprinkled on callers; and a
+  verifier's rig must replicate the FIELD shape, not the convenient shape —
+  re-confirms [[verify-against-real-session-population]] for a non-pane domain.
+
+## Second addendum — logs processed at 2026-08-23 cleanup (5 files, sessions 20260822-184635/-184653, 20260823-074941, ff4c4e3c, 21123b4f)
+
+**Patterns → actions taken:**
+
+1. **Call-site gating failed a THIRD round** (ff4c4e3c: `resendFailedSends` →
+   `retryPending` bypassed every outbox gate; Eugene had to name the boundary).
+   → new memory `enforce-at-the-boundary` (HIGH; graduated from the addendum
+   above after the third recurrence).
+2. **All-negative verification passed under a rig that could not fail, twice in
+   one session** (rows seeded under the wrong key — `Host.id` is the URL, not
+   the JSON `hostId`; a refuse-everything boundary check would also have gone
+   green). The hand-tapped Retry control exposed both. → extended
+   [[verify-the-discriminating-case]]: every "X must not happen" needs a paired
+   "Y must happen" through the same path, control checked FIRST.
+3. **A behavioral fix was deleted by a refactor that also rewrote its test to
+   pin the regression** (21123b4f: end-debounce added in `17afb13`, deleted by
+   `5d93e63` Aug 17; green tests + a "fixed" memory hid it for 6 days; found
+   via `git log -S`). → [[live-activity-end-is-not-free]] updated with history
+   warning; reinstated tests carry the WHY in comments. Rule worth keeping in
+   mind: on a "previously-fixed" bug that's back, `git log -S <fix-constant>`
+   before re-diagnosing — the deploy-gap hazard has a regression-by-refactor
+   sibling.
+4. **Known-good escape hatch recalled only after the failure it prevents**
+   (184653: two 45s stalls before `FLOWDECK_UI_SKIP_LOCK_CHECK=1`). → memory
+   updated to say export it pre-emptively in the first UI-automation command.
+
+**One-offs captured, no new mechanism:** proxy rigs must handle connection
+reuse (URLSession pools TCP; inspecting only the first request per connection
+verifies nothing); `flowdeck run` relocates the sim data container so plist
+seeding is structurally impossible (drive the real UI or seed sqlite);
+`settleSendFailure` had flattened `URLError` to a string one layer down —
+preserve typed errors across layers that later need to discriminate them;
+editing a host's Address creates a NEW host (`Host.id` IS the URL) — verify
+restores against full prior state (count + contents), not the edited field;
+TDD red step skipped and a TDZ bug in a first edit pass (21123b4f, minor).
+
+**Already addressed in-session:** iPad verification carve-out written into
+`ios/CLAUDE.md` (184653); Live Activity server fixes + audit (21123b4f).
+
+**Logs deleted after processing:** all five (two were empty templates); content
+captured here and in the memory edits above.
