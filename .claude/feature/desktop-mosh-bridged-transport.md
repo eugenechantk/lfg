@@ -82,7 +82,7 @@ the Air doesn't feel 120–180 ms laggy — and so the window stops closing itse
 | SC3 | `--desktop-feature-test` migration cases | PASS | bundled URL `"ssh"`→`.moshBridged`; other URL `"ssh"` stays `.ssh`; bundled default `.moshBridged` |
 | SC4 | `--desktop-feature-test` on `remoteTransportLabel` + `transportDetail` | PASS | badge `mosh`/`ssh`-fallback; detail "mosh (bridged over ssh)" |
 | SC5 | `transportPath(... availableMoshBridgedPath: nil)` | PASS | falls back to ssh, never raw mosh UDP |
-| SC6 | headless repro of old vs new command | PARTIAL — see below | `.claude/et-over-cloudflare/{close-repro,blip-*,soak30-*}.log` |
+| SC6 | headless repro of old vs new command + 30-min soaks + live use | PARTIAL (mechanism identified; mosh-bridged immune + in live use; spontaneous close not force-reproduced) | `.claude/et-over-cloudflare/{close-repro,blip-*,soak30-*}.log` |
 | SC7 | `build.sh` + `--desktop-feature-test` + relaunch | PASS | clean build, Developer-ID signed (same identity → iTerm TCC grant preserved), installed to /Applications, running pid confirmed |
 
 ### SC6 — the self-closing window
@@ -97,8 +97,15 @@ old desktop emitted (`ssh -t … tmux attach`) under four conditions:
 - 30-min idle soak, attempt 1 — the ssh window exited at 117 s, but with **exit
   status 0** (`rtype exit-status reply 0`): a *self-inflicted* clean close — a
   cleanup step killed the tmux session server-side while the soak was attached,
-  which makes the tmux client exit normally. NOT a network close. A second soak
-  against an untouched session is running.
+  which makes the tmux client exit normally. NOT a network close.
+- 30-min idle soak, attempt 2 (untouched session `soakbox`) — **still attached at
+  1800 s**, no close. So a spontaneous close does not occur on an idle home
+  network in a 30-min window; it needs the longer-stall / hard-reset conditions
+  above (real roaming, sleep, edge reconnect) which did not arise here.
+
+**Real-world use:** during verification, two of Eugene's own sessions
+(`cy-112025-52233`, `lfg-b5eb89`) were attached over `mosh-bridged` on the Pro —
+the shipped transport is in live use, not just tested.
 
 **Mechanism (high confidence) even without a forced repro:** the old attach is a single
 long-lived TCP stream over the Cloudflare tunnel. When that stream is stalled longer than
