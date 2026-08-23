@@ -22,7 +22,15 @@ live, the conventions to keep, and the traps that have burned past sessions.
   This holds *regardless of what device or dimensions a design file specifies*; an
   artboard size (e.g. "iPhone 16e 390×844") is a canvas convention, not a
   deployment target. One consistent device keeps screenshots comparable across
-  sessions. Many agents run here at once, so check for another session already
+  sessions. **Exception — adaptive chrome (toolbars, `.searchable`,
+  `NavigationSplitView`) must ALSO be seen on an iPad.** The app ships
+  `TARGETED_DEVICE_FAMILY = "1,2"`, and iPad-only placement bugs survive
+  indefinitely otherwise (see the `.searchable` trap below). The session guard
+  only provisions an iPhone; create your own in the session namespace —
+  `flowdeck simulator create -n "cc-<sid8>-ipad" --device-type
+  com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB --runtime
+  com.apple.CoreSimulator.SimRuntime.iOS-26-3` — anything prefixed `cc-<sid8>`
+  is allowed through. Many agents run here at once, so check for another session already
   driving it before LIVE verification — contention is a coordination problem, not
   a reason to boot a different device.
 
@@ -110,6 +118,18 @@ live, the conventions to keep, and the traps that have burned past sessions.
 - **macOS host has no `/proc`.** CLI/tmux enumeration + the prompt panel depend on
   the server's `src/procinfo.ts` shim. Missing CLI sessions on a macOS host is
   expected, not an app bug.
+- **`.searchable` lands in a DIFFERENT bar on iPadOS, and a hidden nav bar eats
+  it.** `.searchable(placement: .toolbar)` + `DefaultToolbarItem(kind: .search,
+  placement: .bottomBar)` is Apple's iOS 26 bottom-search recipe — on iPhone.
+  On iPadOS the field resolves into the sidebar column's **navigation** bar and
+  the `DefaultToolbarItem` is a no-op, so `SessionListView`'s
+  `.toolbar(.hidden, for: .navigationBar)` left iPad with **no search field at
+  all** while the plus (an ordinary `.bottomBar` item) kept rendering and made
+  the bar look intact. `bottomSearchChrome` therefore hands iPad the hand-built
+  `BottomSearchBar`, keyed on `userInterfaceIdiom`, not size class — an iPad in
+  Slide Over is compact-width and would otherwise lose search again.
+  Generalise: **any adaptive chrome must be looked at on an iPad**, because
+  placement APIs silently re-target by idiom.
 
 ## Verifying changes
 

@@ -986,63 +986,85 @@ private struct HostHeaderToken: View {
     }
 }
 
-/// Pre-iOS-26 stand-in for the system bottom search toolbar: the same two
-/// controls (search field + plus), hand-built, because `DefaultToolbarItem(kind:
-/// .search)` and the automatic bottom placement of `.searchable` are 26-only.
-/// Deliberately plain — it is a floor, not a design; on 26 nobody sees it.
-private struct LegacyBottomSearchBar: View {
+/// Hand-built stand-in for the system bottom search toolbar: the same two
+/// controls (search field + plus), in the same place.
+///
+/// Two audiences, for different reasons:
+/// * **Pre-iOS-26**, because `DefaultToolbarItem(kind: .search)` and the
+///   automatic bottom placement of `.searchable` are 26-only.
+/// * **iPadOS at every version**, because there `.searchable` resolves into the
+///   sidebar's *navigation* bar, which this screen hides — see
+///   `bottomSearchChrome`.
+///
+/// On 26 it takes Liquid Glass so it reads as chrome rather than as a
+/// look-alike; below that it falls back to the raised fill.
+private struct BottomSearchBar: View {
     @Binding var text: String
     let onNewSession: () -> Void
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 16))
-                    .foregroundStyle(Tokens.labelSecondary)
-                TextField("Search", text: $text)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 17))
-                    .foregroundStyle(Tokens.label)
-                    .tint(Tokens.accent)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .focused($isFocused)
-                    .submitLabel(.search)
-                    .accessibilityIdentifier("sessionSearchField")
-                if !text.isEmpty {
-                    Button {
-                        text = ""
-                        isFocused = false
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(Tokens.labelSecondary)
+        GlassChromeContainer(spacing: 10) {
+            HStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Tokens.labelSecondary)
+                    TextField("Search sessions", text: $text)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 17))
+                        .foregroundStyle(Tokens.label)
+                        .tint(Tokens.accent)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .focused($isFocused)
+                        .submitLabel(.search)
+                        .accessibilityIdentifier("sessionSearchField")
+                    if !text.isEmpty {
+                        Button {
+                            text = ""
+                            isFocused = false
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(Tokens.labelSecondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Clear search")
+                        .accessibilityIdentifier("clearSearchButton")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Clear search")
                 }
-            }
-            .padding(.horizontal, 12)
-            .frame(height: 44)
-            .frame(maxWidth: .infinity)
-            .background(Tokens.raised, in: Capsule())
+                .padding(.horizontal, 12)
+                .frame(height: 44)
+                .frame(maxWidth: .infinity)
+                .glassOrRaised(in: Capsule(), fallback: Tokens.raised)
 
-            Button(action: onNewSession) {
-                Image(systemName: "plus")
-                    .font(.system(size: 19, weight: .regular))
-                    .foregroundStyle(Tokens.label)
-                    .frame(width: 44, height: 44)
-                    .background(Tokens.raised, in: Circle())
+                Button(action: onNewSession) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 19, weight: .regular))
+                        .foregroundStyle(Tokens.label)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .glassOrRaised(in: Circle(), fallback: Tokens.raised, interactive: true)
+                .accessibilityLabel("New session")
+                .accessibilityIdentifier("newSessionBar")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("New session")
-            .accessibilityIdentifier("newSessionBar")
         }
         .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 4)
-        .background(.bar)
+        .background(barBackground)
+    }
+
+    /// Glass floats over the list on 26; older OSes need an opaque bar behind
+    /// the two controls or rows scroll visibly under them.
+    @ViewBuilder
+    private var barBackground: some View {
+        if #available(iOS 26.0, *) {
+            Color.clear
+        } else {
+            Rectangle().fill(.bar)
+        }
     }
 }
 
@@ -1050,16 +1072,30 @@ private extension View {
     /// The bottom chrome for the session list: a search field plus a "new
     /// session" button.
     ///
-    /// On iOS 26 this is literally Apple's own setup — `.searchable` supplies the
-    /// field and `DefaultToolbarItem(kind: .search, placement: .bottomBar)` pins
-    /// it into the bottom toolbar next to the plus, so the field gets the
-    /// system's expand/minimize behaviour, Liquid Glass, and keyboard handling
-    /// for free rather than a look-alike. The nav bar is hidden on this screen;
-    /// the bottom bar is a separate bar and is unaffected.
+    /// On iPhone/iOS 26 this is literally Apple's own setup — `.searchable`
+    /// supplies the field and `DefaultToolbarItem(kind: .search, placement:
+    /// .bottomBar)` pins it into the bottom toolbar next to the plus, so the
+    /// field gets the system's expand/minimize behaviour, Liquid Glass, and
+    /// keyboard handling for free rather than a look-alike. The nav bar is
+    /// hidden on this screen; the bottom bar is a separate bar and is
+    /// unaffected.
+    ///
+    /// **iPadOS is excluded on purpose, and this is not a style call.** There
+    /// `.searchable(placement: .toolbar)` resolves into the sidebar column's
+    /// *navigation* bar — `DefaultToolbarItem(kind: .search, placement:
+    /// .bottomBar)` is a no-op — so with the nav bar hidden the field had
+    /// nowhere to render and iPad simply had no search at all, while the plus
+    /// (an ordinary `.bottomBar` item) kept showing and made the bar look
+    /// intact. Verified on iPad Pro 11-inch, iPadOS 26.3: unhiding the nav bar
+    /// made the same `.searchable` appear at the TOP of the sidebar. Rather
+    /// than surrender the top chrome to it, iPad takes the hand-built bar, so
+    /// search sits where it does on iPhone. Keyed on the idiom, not the size
+    /// class: an iPad in Slide Over is compact-width and must not silently lose
+    /// its search field again.
     @ViewBuilder
     func bottomSearchChrome(text: Binding<String>,
                             onNewSession: @escaping () -> Void) -> some View {
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, *), UIDevice.current.userInterfaceIdiom != .pad {
             self
                 .searchable(text: text, placement: .toolbar, prompt: "Search sessions")
                 // Session titles are lowercase prompts and paths — the system
@@ -1079,7 +1115,7 @@ private extension View {
                 }
         } else {
             self.safeAreaInset(edge: .bottom, spacing: 0) {
-                LegacyBottomSearchBar(text: text, onNewSession: onNewSession)
+                BottomSearchBar(text: text, onNewSession: onNewSession)
             }
         }
     }
