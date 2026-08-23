@@ -149,8 +149,16 @@ struct HostInfoResponse: Decodable { let hostId: String; let hostName: String }
 struct SessionStatesResponse: Decodable { let needsInputSessionIds: [String] }
 
 enum RemoteTransport: String, Codable {
+    /// Real mosh when it's installed locally, plain ssh otherwise. Right for
+    /// hosts with a direct UDP path (LAN, a mesh VPN).
     case automatic
+    /// Plain ssh, always.
     case ssh
+    /// mosh with its UDP carried inside the ssh stream (`scripts/mosh-bridged`):
+    /// predictive local echo and roaming over a TCP-only path such as the
+    /// Cloudflare Access ssh aliases. Falls back to ssh if the wrapper is
+    /// missing locally.
+    case moshBridged = "mosh-bridged"
 }
 
 struct DesktopCloudflareCredential: Codable, Equatable {
@@ -567,13 +575,13 @@ enum Config {
             url: "https://lfg-pro.eugenechantk.me",
             ssh: "pro",
             displayName: "Pro",
-            transport: .ssh
+            transport: .moshBridged
         ),
         HostEntry(
             url: "https://lfg-air.eugenechantk.me",
             ssh: "air",
             displayName: "Air",
-            transport: .ssh
+            transport: .moshBridged
         ),
     ]
 
@@ -638,7 +646,21 @@ enum Config {
     }
 
     static func decodeHosts(_ data: Data) -> [HostEntry]? {
-        try? JSONDecoder().decode(HostsFile.self, from: data).hosts
+        guard let hosts = try? JSONDecoder().decode(HostsFile.self, from: data).hosts else { return nil }
+        return hosts.map(migrateBundledTransport)
+    }
+
+    /// The bundled Cloudflare hosts shipped with `"transport": "ssh"` while that
+    /// path could not carry mosh; `mosh-bridged` lifted that. An on-disk entry
+    /// for one of those URLs that still says `ssh` is the old default, not a
+    /// choice, so it reads as bridged mosh. Any other URL's `ssh` is respected.
+    /// The file itself is not rewritten here.
+    static func migrateBundledTransport(_ entry: HostEntry) -> HostEntry {
+        guard entry.transport == .ssh,
+              bundledHosts.contains(where: { $0.url == entry.url }) else { return entry }
+        var migrated = entry
+        migrated.transport = .moshBridged
+        return migrated
     }
 
     static func encodeHosts(_ hosts: [HostEntry]) throws -> Data {
@@ -1614,27 +1636,43 @@ enum DesktopFeatureTestCLI {
                    "preferred desktop host uses the Pro Cloudflare tunnel")
         try expect(Config.preferredHost.displayName == "Pro",
                    "preferred desktop host has the Pro display name")
-        try expect(Config.preferredHost.ssh == "pro" && Config.preferredHost.transport == .ssh,
-                   "preferred desktop host uses the Cloudflare SSH alias and forces SSH")
+        try expect(Config.preferredHost.ssh == "pro" && Config.preferredHost.transport == .moshBridged,
+                   "preferred desktop host uses the Cloudflare SSH alias with bridged mosh")
         try expect(Config.entryForNewHost(url: Config.preferredHost.url, ssh: nil).displayName == "Pro",
                    "adding the preferred URL persists its Pro name")
         try expect(Config.entryForNewHost(url: Config.preferredHost.url, ssh: nil).ssh == "pro",
                    "adding the preferred URL persists its Pro SSH alias")
-        try expect(Config.entryForNewHost(url: Config.preferredHost.url, ssh: nil).transport == .ssh,
-                   "adding the preferred URL cannot fall through to Mosh")
+        try expect(Config.entryForNewHost(url: Config.preferredHost.url, ssh: nil).transport == .moshBridged,
+                   "adding the preferred URL uses bridged mosh, never raw mosh UDP")
         try expect(Config.bundledHosts == [
             Config.HostEntry(
                 url: "https://lfg-pro.eugenechantk.me", ssh: "pro",
-                displayName: "Pro", transport: .ssh),
+                displayName: "Pro", transport: .moshBridged),
             Config.HostEntry(
                 url: "https://lfg-air.eugenechantk.me", ssh: "air",
-                displayName: "Air", transport: .ssh),
+                displayName: "Air", transport: .moshBridged),
         ], "fresh desktop installs bundle the Pro and Air Cloudflare hosts")
         try expect(
             Config.entryForNewHost(url: "https://lfg-air.eugenechantk.me", ssh: nil)
                 == Config.bundledHosts[1],
-            "adding the Air URL persists its name, SSH alias, and forced SSH transport"
+            "adding the Air URL persists its name, SSH alias, and bridged-mosh transport"
         )
+
+        // hosts.json written before mosh-bridged existed says "ssh" for the
+        // bundled Cloudflare hosts — the old default, not a user choice.
+        let preBridgeData = Data(#"{"hosts":[{"url":"https://lfg-pro.eugenechantk.me","ssh":"pro","transport":"ssh"},{"url":"http://studio:8766","ssh":"me@studio","transport":"ssh"},{"url":"https://lfg-air.eugenechantk.me","ssh":"air","transport":"mosh-bridged"}]}"#.utf8)
+        let preBridge = try require(Config.decodeHosts(preBridgeData), "pre-bridge config decodes")
+        try expect(preBridge[0].transport == .moshBridged,
+                   "a bundled Cloudflare host still marked ssh on disk reads as bridged mosh")
+        try expect(preBridge[1].transport == .ssh,
+                   "an explicit ssh transport on any other host is respected")
+        try expect(preBridge[2].transport == .moshBridged, "\"mosh-bridged\" decodes")
+        let bridgedEncoded = try Config.encodeHosts([Config.bundledHosts[0]])
+        let bridgedRoundTrip = try require(Config.decodeHosts(bridgedEncoded)?.first, "bridged host round-trips")
+        try expect(bridgedRoundTrip.transport == .moshBridged, "bridged transport survives encode/decode")
+        let bridgedJSON = String(decoding: bridgedEncoded, as: UTF8.self)
+        try expect(bridgedJSON.contains("\"transport\":\"mosh-bridged\""),
+                   "bridged transport is written with its stable on-disk name")
         try expect(Config.entryForNewHost(url: "http://air:8766", ssh: nil).displayName == nil,
                    "adding another URL preserves the existing unnamed behavior")
 
@@ -1770,8 +1808,37 @@ enum DesktopFeatureTestCLI {
             hostSSHTarget: "pro",
             hostRemoteTransport: .ssh
         )
-        try expect(Opener.transportPath(for: cloudflareItem, availableMoshPath: "/opt/homebrew/bin/mosh") == nil,
-                   "Cloudflare-backed rows force SSH even when Mosh is installed")
+        try expect(Opener.transportPath(for: cloudflareItem, availableMoshPath: "/opt/homebrew/bin/mosh",
+                                        availableMoshBridgedPath: "/Users/me/.local/bin/mosh-bridged") == nil,
+                   "rows that force SSH stay SSH even when mosh and mosh-bridged are installed")
+
+        // Bridged mosh: the wrapper takes mosh's flags, so the attach command is
+        // the mosh one with a different binary; without the wrapper, plain ssh.
+        let bridgedItem = SessionItem(
+            session: cloudflareItem.session, hostURL: cloudflareItem.hostURL, hostId: "pro",
+            hostLabel: "Pro", hostIsLocal: false, hostSSHTarget: "pro", hostRemoteTransport: .moshBridged)
+        try expect(Opener.transportPath(for: bridgedItem, availableMoshPath: "/opt/homebrew/bin/mosh",
+                                        availableMoshBridgedPath: "/Users/me/.local/bin/mosh-bridged")
+                    == "/Users/me/.local/bin/mosh-bridged",
+                   "bridged rows run mosh-bridged, not raw mosh")
+        try expect(Opener.transportPath(for: bridgedItem, availableMoshPath: "/opt/homebrew/bin/mosh",
+                                        availableMoshBridgedPath: nil) == nil,
+                   "bridged rows fall back to ssh when the wrapper is missing — never raw mosh UDP")
+        try expect(Opener.remoteTransportLabel(for: bridgedItem, availableMoshPath: nil,
+                                               availableMoshBridgedPath: "/Users/me/.local/bin/mosh-bridged") == "mosh",
+                   "bridged rows badge as mosh")
+        try expect(Opener.remoteTransportLabel(for: bridgedItem, availableMoshPath: "/opt/homebrew/bin/mosh",
+                                               availableMoshBridgedPath: nil) == "ssh",
+                   "bridged rows badge as ssh when the wrapper is missing")
+        let bridgedAttach = Opener.remoteAttachCommand(
+            sshTarget: "pro", tmuxName: "lfg-abc123", moshPath: "/Users/me/.local/bin/mosh-bridged")
+        try expect(bridgedAttach.hasPrefix("'/Users/me/.local/bin/mosh-bridged' '--server=PATH=/opt/homebrew/bin:/usr/local/bin:$PATH exec mosh-server' '--ssh=ssh -o ConnectTimeout=5' 'pro' -- /bin/sh -c "),
+                   "bridged attach is the mosh attach with the wrapper as the binary")
+        try expect(bridgedAttach.contains("attach-session -t 'lfg-abc123'"), "bridged attach targets the tmux session")
+        try expect(HostsSettingsView.transportDetail(.moshBridged) == "mosh (bridged over ssh)"
+                    && HostsSettingsView.transportDetail(.ssh) == "ssh only"
+                    && HostsSettingsView.transportDetail(.automatic) == "mosh/ssh",
+                   "host settings describe all three transports")
 
         // Every attach hands the window size back to the client first. The pump's
         // `resize-window` latches `window-size manual` on the far side, and a
@@ -2391,19 +2458,39 @@ enum Opener {
     /// `air`/`pro` aliases in ~/.zshrc.
     static let mosh: String? = resolveOptional("mosh")
 
+    /// `scripts/mosh-bridged`, when on the login PATH (~/.local/bin symlink) —
+    /// mosh whose datagrams ride inside `ssh <alias>`, for hosts that are only
+    /// reachable over a TCP path (Cloudflare Access). Same CLI shape as mosh, so
+    /// `remoteAttachCommand` does not care which of the two it got.
+    static let moshBridged: String? = resolveOptional("mosh-bridged")
+
     /// Badge text for a remote row: which transport its window will use.
     static func remoteTransportLabel(for item: SessionItem) -> String {
-        transportPath(for: item, availableMoshPath: mosh) == nil ? "ssh" : "mosh"
+        remoteTransportLabel(for: item, availableMoshPath: mosh, availableMoshBridgedPath: moshBridged)
     }
 
-    static func transportPath(for item: SessionItem, availableMoshPath: String?) -> String? {
-        item.hostRemoteTransport == .ssh ? nil : availableMoshPath
+    static func remoteTransportLabel(
+        for item: SessionItem, availableMoshPath: String?, availableMoshBridgedPath: String?
+    ) -> String {
+        transportPath(for: item, availableMoshPath: availableMoshPath,
+                      availableMoshBridgedPath: availableMoshBridgedPath) == nil ? "ssh" : "mosh"
     }
 
-    /// Resolving `mosh` spawns a login zsh, so warm the lazy static off the
-    /// main thread — otherwise the first list render blocks on it.
+    /// The mosh-flavoured binary to run for this row, or nil for plain ssh.
+    static func transportPath(
+        for item: SessionItem, availableMoshPath: String?, availableMoshBridgedPath: String?
+    ) -> String? {
+        switch item.hostRemoteTransport {
+        case .ssh: return nil
+        case .moshBridged: return availableMoshBridgedPath
+        case .automatic: return availableMoshPath
+        }
+    }
+
+    /// Resolving the transports spawns a login zsh each, so warm the lazy
+    /// statics off the main thread — otherwise the first list render blocks.
     static func warmTransportProbe() {
-        Task.detached(priority: .utility) { _ = mosh }
+        Task.detached(priority: .utility) { _ = mosh; _ = moshBridged }
     }
 
     /// PATH prefix for anything we run on the far side. Both transports land
@@ -2453,7 +2540,8 @@ enum Opener {
                 remoteAttachCommand(
                     sshTarget: target,
                     tmuxName: name,
-                    moshPath: transportPath(for: item, availableMoshPath: mosh)
+                    moshPath: transportPath(for: item, availableMoshPath: mosh,
+                                            availableMoshBridgedPath: moshBridged)
                 )
             )
         }
@@ -2531,8 +2619,8 @@ enum Opener {
             + "\(shq(";")) attach-session -t \(target)"
     }
 
-    /// Attach to a tmux session on another host, over mosh when it's installed
-    /// locally and plain ssh otherwise.
+    /// Attach to a tmux session on another host, over mosh (or `mosh-bridged`,
+    /// which takes the same flags) when `moshPath` is set and plain ssh otherwise.
     ///
     /// The two transports need the remote command shaped differently: ssh runs
     /// it through the remote login shell, but mosh `exec`s its `--` argv
@@ -3399,10 +3487,17 @@ struct HostsSettingsView: View {
         "\(count) \(count == 1 ? "session" : "sessions")"
     }
 
+    static func transportDetail(_ transport: RemoteTransport) -> String {
+        switch transport {
+        case .ssh: return "ssh only"
+        case .moshBridged: return "mosh (bridged over ssh)"
+        case .automatic: return "mosh/ssh"
+        }
+    }
+
     private func sshDetailText(for entry: Config.HostEntry) -> String {
         if let target = Config.sshTarget(for: entry) {
-            let transport = entry.transport == .ssh ? "ssh only" : "mosh/ssh"
-            return "SSH: \(target) · \(transport)"
+            return "SSH: \(target) · \(Self.transportDetail(entry.transport))"
         }
         return "SSH: unavailable"
     }
@@ -4431,11 +4526,22 @@ enum AttachCommandCLI {
         let args = CommandLine.arguments
         guard args.dropFirst().first == "--attach-command" else { return }
         let rest = Array(args.dropFirst(2))
-        guard rest.count == 2 else {
-            print("usage: lfg --attach-command <ssh-target> <tmux-session>")
+        guard rest.count == 2 || rest.count == 3 else {
+            print("usage: lfg --attach-command <ssh-target> <tmux-session> [automatic|ssh|mosh-bridged]")
             Darwin.exit(1)
         }
-        print(Opener.remoteAttachCommand(sshTarget: rest[0], tmuxName: rest[1], moshPath: Opener.mosh))
+        let transport = rest.count == 3 ? RemoteTransport(rawValue: rest[2]) : .automatic
+        guard let transport else {
+            print("unknown transport \(rest[2]); expected automatic, ssh, or mosh-bridged")
+            Darwin.exit(1)
+        }
+        let moshPath: String?
+        switch transport {
+        case .automatic: moshPath = Opener.mosh
+        case .ssh: moshPath = nil
+        case .moshBridged: moshPath = Opener.moshBridged
+        }
+        print(Opener.remoteAttachCommand(sshTarget: rest[0], tmuxName: rest[1], moshPath: moshPath))
         fflush(stdout)
         Darwin.exit(0)
     }

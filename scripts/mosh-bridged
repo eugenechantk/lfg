@@ -1,0 +1,81 @@
+#!/bin/zsh
+# mosh-bridged — mosh whose UDP rides inside an ssh stream.
+#
+# Drop-in for `mosh` when there is no UDP path to the host (Cloudflare Access
+# ssh, jump hosts, VPNs that only carry TCP). mosh-client runs locally exactly
+# as usual — predictive local echo included — and mosh-server binds loopback
+# on the far side; `mosh-bridge` frames the datagrams over `ssh <target>`
+# stdio and respawns that carrier if it drops. Nothing new listens on the
+# remote host's network interfaces.
+#
+#   mosh-bridged [--ssh=CMD] [--server=CMD] [--local-port=N] TARGET [-- CMD ARGS...]
+#
+#   --ssh=CMD      ssh command for both bootstrap and carrier (default: ssh).
+#                  Same meaning as mosh's --ssh, e.g. "ssh -o ConnectTimeout=5".
+#   --server=CMD   remote mosh-server invocation, run through the remote login
+#                  shell (default: "PATH=/opt/homebrew/bin:/usr/local/bin:$PATH exec mosh-server").
+#   --local-port=N UDP port mosh-client talks to on 127.0.0.1 (default: free port).
+#   TARGET         ssh target / config alias (user@host, pro, air).
+#   -- CMD...      command for mosh-server to run instead of the login shell.
+#                  Passed through with no shell, like mosh: wrap in /bin/sh -c
+#                  if you need PATH or quoting.
+#
+# Needs mosh-client locally, mosh-server + ~/.local/bin/mosh-bridge remotely.
+set -euo pipefail
+
+ssh_cmd="ssh"
+server_cmd='PATH=/opt/homebrew/bin:/usr/local/bin:$PATH exec mosh-server'
+lport=""
+remote_range="60100:60199"
+here="${0:A:h}"
+
+while (( $# )); do
+  case "$1" in
+    --ssh=*)        ssh_cmd="${1#--ssh=}"; shift ;;
+    --server=*)     server_cmd="${1#--server=}"; shift ;;
+    --local-port=*) lport="${1#--local-port=}"; shift ;;
+    --)             shift; break ;;
+    -h|--help)      sed -n '2,24p' "$0"; exit 0 ;;
+    -*)             print -u2 "mosh-bridged: unknown option $1"; exit 2 ;;
+    *)              break ;;
+  esac
+done
+(( $# )) || { print -u2 "mosh-bridged: missing TARGET"; exit 2 }
+target="$1"; shift
+if (( $# )) && [[ "$1" == "--" ]]; then shift; fi
+
+ssh_words=(${=ssh_cmd})
+ssh_run=("${ssh_words[@]}" -T -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
+
+if [[ -z "$lport" ]]; then
+  lport=$(/usr/bin/python3 -c 'import socket;s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
+fi
+
+mosh_client=$(command -v mosh-client 2>/dev/null || print /opt/homebrew/bin/mosh-client)
+[[ -x "$mosh_client" ]] || { print -u2 "mosh-bridged: mosh-client not installed locally (brew install mosh)"; exit 1 }
+
+# 1. Bootstrap: mosh-server on the far side, loopback only, via the login shell.
+remote_cmd=""
+if (( $# )); then remote_cmd="-- ${(j: :)${(q)@}}"; fi
+bootstrap=$("${ssh_run[@]}" "$target" \
+  "$server_cmd new -s -i 127.0.0.1 -p $remote_range -l LANG=en_US.UTF-8 -l LC_ALL=en_US.UTF-8 $remote_cmd" 2>&1 || true)
+line=$(print -r -- "$bootstrap" | grep '^MOSH CONNECT ' || true)
+if [[ -z "$line" ]]; then
+  print -u2 "mosh-bridged: mosh-server bootstrap on '$target' failed:"; print -u2 -r -- "$bootstrap"; exit 1
+fi
+rport=${${(s: :)line}[3]}
+key=${${(s: :)line}[4]}
+
+# 2. Carrier: 127.0.0.1:$lport UDP <-> ssh stdio <-> 127.0.0.1:$rport on the host.
+bridge_local="$here/mosh-bridge"
+[[ -x "$bridge_local" ]] || bridge_local="$HOME/.local/bin/mosh-bridge"
+/usr/bin/python3 "$bridge_local" client "$lport" -- \
+  "${ssh_run[@]}" "$target" \
+  'exec /usr/bin/python3 "$HOME/.local/bin/mosh-bridge" server '"$rport" &
+bridge_pid=$!
+trap 'kill $bridge_pid 2>/dev/null' EXIT INT TERM
+
+# 3. mosh-client, with the usual title/prediction behaviour. -# is the window title.
+rc=0
+MOSH_KEY="$key" "$mosh_client" -# "$target" 127.0.0.1 "$lport" || rc=$?
+exit $rc

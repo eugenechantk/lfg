@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+"""Carry mosh's UDP datagrams over a reliable byte stream (ssh stdio).
+
+Frames: 2-byte big-endian length + datagram.
+
+  mosh-bridge server PORT     (remote) stdin/stdout <-> UDP 127.0.0.1:PORT (mosh-server)
+  mosh-bridge client LPORT -- ssh ... mosh-bridge server RPORT
+                              (local) UDP 127.0.0.1:LPORT (mosh-client) <-> ssh child stdio;
+                              respawns the ssh child whenever it exits, so a dropped carrier
+                              is a blip to mosh-client, not a dead session.
+"""
+import os, select, socket, struct, subprocess, sys, time
+
+HDR = struct.Struct("!H")
+
+
+def frames_from(buf, chunk):
+    buf += chunk
+    out = []
+    while len(buf) >= HDR.size:
+        (n,) = HDR.unpack_from(buf)
+        if len(buf) < HDR.size + n:
+            break
+        out.append(bytes(buf[HDR.size:HDR.size + n]))
+        del buf[:HDR.size + n]
+    return out
+
+
+def server(port):
+    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp.connect(("127.0.0.1", port))
+    fin, fout = sys.stdin.fileno(), sys.stdout.fileno()
+    buf = bytearray()
+    while True:
+        r, _, _ = select.select([fin, udp], [], [])
+        if fin in r:
+            chunk = os.read(fin, 65536)
+            if not chunk:
+                return
+            for dg in frames_from(buf, chunk):
+                udp.send(dg)
+        if udp in r:
+            dg = udp.recv(65536)
+            os.write(fout, HDR.pack(len(dg)) + dg)
+
+
+def client(lport, carrier):
+    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp.bind(("127.0.0.1", lport))
+    peer = None
+    proc = None
+    buf = bytearray()
+    backoff = 1.0
+    log = open(os.path.expanduser("~/Library/Logs/mosh-bridge.log"), "a", buffering=1)
+
+    def spawn():
+        nonlocal proc, buf
+        buf = bytearray()
+        proc = subprocess.Popen(carrier, stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0)
+        log.write(f"{time.strftime('%F %T')} carrier pid {proc.pid} started\n")
+
+    spawn()
+    while True:
+        if proc.poll() is not None:
+            log.write(f"{time.strftime('%F %T')} carrier exited {proc.returncode}; respawn in {backoff:.0f}s\n")
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 10)
+            spawn()
+            continue
+        r, _, _ = select.select([udp, proc.stdout], [], [], 1.0)
+        if udp in r:
+            dg, peer = udp.recvfrom(65536)
+            try:
+                proc.stdin.write(HDR.pack(len(dg)) + dg)
+            except (BrokenPipeError, OSError):
+                pass  # carrier dying; loop top will respawn
+        if proc.stdout in r:
+            chunk = os.read(proc.stdout.fileno(), 65536)
+            if not chunk:
+                proc.wait()
+                continue
+            backoff = 1.0
+            if peer:
+                for dg in frames_from(buf, chunk):
+                    udp.sendto(dg, peer)
+
+
+if __name__ == "__main__":
+    mode = sys.argv[1]
+    if mode == "server":
+        server(int(sys.argv[2]))
+    elif mode == "client":
+        sep = sys.argv.index("--")
+        client(int(sys.argv[2]), sys.argv[sep + 1:])
+    else:
+        sys.exit(__doc__)
