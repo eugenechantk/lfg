@@ -104,9 +104,23 @@ struct MessageComposer: View {
     private func submit() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSend else { return }
-        onSend(trimmed, tray.items)
+        // Clear BEFORE handing off, not after.
+        //
+        // `onSend` runs synchronously and mutates observable store state, parent
+        // `@State`, and (in the transcript) a scroll animation — any of which can
+        // re-render this composer inside the same transaction. A `TextField` with
+        // `axis: .vertical` is a UITextView underneath, and on that re-render it
+        // re-seeds itself from the binding, which still held the old text. The
+        // `text = ""` that followed then landed on a text session that had already
+        // decided what it was showing, so the field kept the message — sometimes,
+        // depending on whether the hand-off happened to force a layout pass.
+        //
+        // Settling our own state first makes the composer empty before anyone
+        // else can react, so there is no stale value left to re-seed from.
+        let items = tray.items
         text = ""
         tray.clear()
+        onSend(trimmed, items)
     }
 }
 

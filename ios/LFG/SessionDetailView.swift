@@ -71,6 +71,21 @@ struct SessionDetailView: View {
     /// only when it actually changed.
     @State private var lastMessageIDs: [String] = []
 
+    /// Armed by sending, disarmed when that send's real user turn appears in the
+    /// transcript.
+    ///
+    /// The optimistic bubble and the server's user turn are two different rows.
+    /// `reconcilePending` swaps one for the other whenever the turn lands, which
+    /// on a busy session is well after the tap — so a scroll at send time alone
+    /// leaves the user looking at a row that is shortly replaced by one they
+    /// never get taken to.
+    @State private var followSendUntilLanded = false
+
+    /// Identity of the newest real user turn, so a landing can be told from any
+    /// other transcript mutation. Compared rather than counted because a user
+    /// turn and the reply to it can arrive in the same batch.
+    @State private var newestUserTurnID: String?
+
     /// Index of the oldest rendered message, and the slice from it. `indices` on
     /// the slice are indices into `messages`, so `followsUserBubble` can still
     /// look at the message *above* the window.
@@ -198,12 +213,20 @@ struct SessionDetailView: View {
                         // message — the optimistic bubble + pending strip already
                         // give immediate feedback, so no view-owned spinner.
                         store.dispatchSend(sid, text: text, attachments: atts)
-                        // Sending is an explicit "follow me to the latest" intent:
-                        // re-arm auto-follow even if the user had scrolled up. The
-                        // onChange(of: pending.count) below does the actual scroll
-                        // once the optimistic bubble has laid out.
+                        // Sending is an explicit "follow me to the latest" intent,
+                        // even if the user had scrolled up to read history.
                         isAtBottom = true
-                        scrollProxy?.scrollTo("BOTTOM", anchor: .bottom)
+                        // Two scrolls, because the thing the user wants to look at
+                        // does not exist yet. This one lands on the optimistic
+                        // bubble; `followSendUntilLanded` does it again when the
+                        // real accent bubble replaces it, which on a busy session
+                        // is seconds later.
+                        //
+                        // This used to be `scrollTo("BOTTOM")` — a sentinel the
+                        // inversion rewrite deleted — so it had been a silent
+                        // no-op: sending scrolled nowhere at all.
+                        followSendUntilLanded = true
+                        scheduleJumpToNewest()
                     }
                 }
             }
@@ -224,6 +247,10 @@ struct SessionDetailView: View {
             // session had paged in must not carry over.
             window = TranscriptWindow.pageSize
             lastMessageIDs = messages.map(\.stableID)
+            // Baseline both, or the first history load after opening reads as a
+            // landing and a send from a *previous* session's view stays armed.
+            newestUserTurnID = messages.last(where: \.rendersAsUserBubble)?.stableID
+            followSendUntilLanded = false
             vp("open")
             store.focus(sid)
             store.loadHistory(sid)   // store-owned: not cancelled by view churn
@@ -397,6 +424,22 @@ struct SessionDetailView: View {
                 let new = messages.map(\.stableID)
                 guard old != new else { return }
                 lastMessageIDs = new
+                // Did a real user turn just land? If it was ours, follow it —
+                // this is the scroll the user is actually asking for when they
+                // send: take me to my message once it is really in the
+                // conversation, not to the placeholder standing in for it.
+                //
+                // Checked before the follow/window logic below, which returns
+                // early in the at-the-newest-end case.
+                let newestUserTurn = messages.last(where: \.rendersAsUserBubble)?.stableID
+                if newestUserTurn != newestUserTurnID {
+                    newestUserTurnID = newestUserTurn
+                    if followSendUntilLanded {
+                        followSendUntilLanded = false
+                        vp("sendLanded.jump")
+                        scheduleJumpToNewest()
+                    }
+                }
                 // The ONLY thing a transcript mutation still does. Nothing
                 // scrolls: a reader at the newest end is already at offset 0 and
                 // stays there, and a reader in history is untouched because the
@@ -447,6 +490,24 @@ struct SessionDetailView: View {
         guard let scrollProxy else { return }
         vp("jumpToNewest")
         withAnimation { scrollProxy.scrollTo(Self.newestAnchor, anchor: .top) }
+    }
+
+    /// `jumpToNewest`, but off the current view update.
+    ///
+    /// Scrolling synchronously from inside a view update spins the main thread at
+    /// 100%: the animated scroll drives `onScrollGeometryChange`, which writes
+    /// `isAtBottom`, which invalidates the body, which rebuilds `NewestEndTracker`
+    /// — and because the write happens *within* the same update, the graph never
+    /// gets a runloop turn to settle. Verified as a hard hang (main-thread sample
+    /// pegged in `NewestEndTracker.body`) when the send handler called
+    /// `jumpToNewest` directly.
+    ///
+    /// The double-tap path never hit this because a gesture callback already runs
+    /// between updates. Sending does not: it mutates store state, inserts the
+    /// pending strip (changing `safeAreaInset` height) and scrolls, all in one
+    /// synchronous hand-off from the composer.
+    private func scheduleJumpToNewest() {
+        Task { @MainActor in jumpToNewest() }
     }
 
     /// The row above the oldest rendered message — visually the top of the
