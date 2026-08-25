@@ -21,7 +21,7 @@ final class SessionListReconciliationTests: XCTestCase {
 
     func testSessionListReconcileDropsClosedOnlyWhenCurrentlyLive() {
         let host = Host(url: "air:8766")
-        let live = Session(sessionId: "live", title: "Live", agent: "aisdk")
+        let live = Session(sessionId: "live", title: "Live", agent: "claude")
         let closedLive = ResumableSession(sessionId: "live", title: "Live")
         let closedOther = ResumableSession(sessionId: "closed", title: "Closed")
 
@@ -35,7 +35,7 @@ final class SessionListReconciliationTests: XCTestCase {
 
     func testSessionListReconcileSuppressesOptimisticAndResumedClosedRows() {
         let host = Host(url: "air:8766")
-        let optimistic = Session(sessionId: "optimistic", title: "Pending", agent: "aisdk")
+        let optimistic = Session(sessionId: "optimistic", title: "Pending", agent: "claude")
         let closedOptimistic = ResumableSession(sessionId: "optimistic", title: "Pending")
         let closedResumed = ResumableSession(sessionId: "resumed", title: "Resumed")
         let closedVisible = ResumableSession(sessionId: "visible", title: "Visible")

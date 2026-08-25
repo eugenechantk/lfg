@@ -65,9 +65,6 @@ import {
   spawnManagedSession,
   relaunchSessionWithModel,
   spawnManagedCodexSession,
-  spawnManagedAisdkSession,
-  spawnManagedCodexAisdkSession,
-  spawnManagedOpencodeAisdkSession,
   dismissCodexUpdatePrompt,
   panePidForSession,
   isBusy,
@@ -86,7 +83,6 @@ import type { Server, ServerWebSocket } from "bun";
 /// into memory here, so an unbounded upload is a host-wide stall, not just a
 /// slow request. 64 MB comfortably covers a phone screen recording.
 const MAX_UPLOAD_BYTES = 64 * 1024 * 1024;
-import { appendCmd as appendAisdkCmd, removeEntry as removeAisdkEntry, readEntry as readAisdkEntry, findEntryByAnyId as findAisdkEntryByAnyId } from "../aisdk-registry.ts";
 import { closeAll, defaultCloseDeps, interruptAndConfirm, markClosed } from "../closing.ts";
 import { logOp } from "../ops-log.ts";
 import { assignUser, userRoster } from "../users.ts";
@@ -124,8 +120,6 @@ const CLAUDE_MODEL_IDS = [
 ];
 const CLAUDE_MODEL_ALIASES = ["opus", "fable", "sonnet", "haiku"];
 const CLAUDE_MODELS = [...CLAUDE_MODEL_IDS, ...CLAUDE_MODEL_ALIASES];
-// Models the "aisdk" session kind accepts through the Claude Code provider.
-const AISDK_MODELS = CLAUDE_MODELS;
 const CODEX_MODEL_RE = /^[A-Za-z0-9_.:-]{1,80}$/;
 
 function transcriptFamily(path: string): "claude" | "codex" | null {
@@ -2052,22 +2046,10 @@ export async function cmdServe() {
           user?: string;
           voice?: boolean;
           model?: string;
-          agent?: "claude" | "codex" | "aisdk" | "codex-aisdk" | "opencode";
+          agent?: "claude" | "codex";
           parentSessionId?: unknown;
         } | null;
-        // Default flip (Task B): with no agent specified, the default Claude path
-        // now goes through the AI SDK ("aisdk") rather than the Claude CLI. Every
-        // explicit value still works, INCLUDING explicit "claude" for the CLI.
-        const agent =
-          body?.agent === "codex"
-            ? "codex"
-            : body?.agent === "codex-aisdk"
-              ? "codex-aisdk"
-              : body?.agent === "opencode"
-                ? "opencode"
-                : body?.agent === "claude"
-                  ? "claude"
-                  : "aisdk";
+        const agent = body?.agent === "codex" ? "codex" : "claude";
         // Allowlist Claude models — they land on a shell argv. Unknown value =
         // hard 400, never a silent fallback to some other model. Codex model
         // names are provider/catalog driven, so validate shape instead.
@@ -2076,18 +2058,6 @@ export async function cmdServe() {
           return err(400, `unknown model "${model}" (expected one of ${CLAUDE_MODELS.join(", ")})`);
         if (agent === "codex" && model && !CODEX_MODEL_RE.test(model))
           return err(400, "invalid codex model name");
-        if (agent === "aisdk" && model && !AISDK_MODELS.includes(model))
-          return err(400, `unknown model "${model}" (expected one of ${AISDK_MODELS.join(", ")})`);
-        // codex-aisdk drives codex through the AI SDK, so its model is a codex
-        // slug (gpt-5.x…) — provider/catalog driven like the tmux codex.
-        // Validate by shape, same as the codex branch.
-        if (agent === "codex-aisdk" && model && !CODEX_MODEL_RE.test(model))
-          return err(400, "invalid codex model name");
-        // opencode models are "provider/model" (e.g. anthropic/claude-sonnet-5),
-        // so the validation shape additionally allows a slash. Catalog-driven, so
-        // validate by shape rather than an allowlist.
-        if (agent === "opencode" && model && !/^[A-Za-z0-9_.:\/-]{1,80}$/.test(model))
-          return err(400, "invalid opencode model name");
         // Always spawn in a trusted folder — claude shows a blocking "trust this
         // folder?" dialog for any untrusted cwd, which hangs session startup. The
         // lfg-sessions skill is installed user-level (~/.claude/skills) so the
@@ -2120,48 +2090,11 @@ export async function cmdServe() {
           const snap = await voiceStatusSnapshot();
           prompt = `${prompt ?? ""}\n\n=== SESSION SNAPSHOT (live, at session start) ===\n${snap}\n=== END SNAPSHOT ===`;
         }
-        // aisdk sessions own their sessionId up front (deterministic transcript
-        // path), so we generate it here and hand it to the harness.
-        const aisdkSessionId = agent === "aisdk" ? crypto.randomUUID() : null;
-        // codex-aisdk can't pick its transcript id (codex mints the threadId
-        // after turn 1), so we mint a CONTROL-PLANE KEY instead — it names the
-        // registry/command files and is what serve routes sends through until
-        // the threadId is known. (See the codex-aisdk harness header.)
-        const codexAisdkKey = agent === "codex-aisdk" ? crypto.randomUUID() : null;
-        // opencode mints a control-plane KEY that is ALSO the transcript id: the
-        // harness self-persists the Claude-shaped transcript named by this key, so
-        // the returned sessionId == key (no after-turn-1 id to wait for, unlike
-        // codex-aisdk). See the opencode harness header.
-        const opencodeKey = agent === "opencode" ? crypto.randomUUID() : null;
         const spawnStartedAt = Date.now();
         const r =
           agent === "codex"
             ? spawnManagedCodexSession({ name: tmuxName, cwd, prompt, model })
-            : agent === "aisdk"
-              ? spawnManagedAisdkSession({
-                  name: tmuxName,
-                  cwd,
-                  prompt,
-                  model: model ?? "claude-opus-5",
-                  sessionId: aisdkSessionId!,
-                })
-              : agent === "codex-aisdk"
-                ? spawnManagedCodexAisdkSession({
-                    name: tmuxName,
-                    cwd,
-                    prompt,
-                    model: model ?? "gpt-5.6-sol",
-                    key: codexAisdkKey!,
-                  })
-                : agent === "opencode"
-                  ? spawnManagedOpencodeAisdkSession({
-                      name: tmuxName,
-                      cwd,
-                      prompt,
-                      model: model ?? "anthropic/claude-sonnet-5",
-                      key: opencodeKey!,
-                    })
-                  : spawnManagedSession({ name: tmuxName, cwd, prompt, model });
+            : spawnManagedSession({ name: tmuxName, cwd, prompt, model });
         if (!r.ok) return err(502, r.error || "failed to start session");
         addManaged({
           tmuxName,
@@ -2176,9 +2109,8 @@ export async function cmdServe() {
         // Resolve the sessionId so the client can deep-link straight into the
         // new session. Claude writes a pidfile; Codex writes its rollout after
         // startup/first prompt, and may first show an update selector that we
-        // dismiss automatically. aisdk's id is known immediately — just wait for
-        // the harness to register so the session is listable.
-        let sessionId: string | null = aisdkSessionId;
+        // dismiss automatically.
+        let sessionId: string | null = null;
         const bindPolls =
           agent === "codex" ? CODEX_CREATE_SESSION_BIND_POLLS : DEFAULT_CREATE_SESSION_BIND_POLLS;
         for (let i = 0; i < bindPolls && !sessionId; i++) {
@@ -2220,47 +2152,8 @@ export async function cmdServe() {
           removeManaged(tmuxName);
           return err(504, "Codex started but did not produce a session ID");
         }
-        if (agent === "aisdk") {
-          for (let i = 0; i < 20 && !readAisdkEntry(aisdkSessionId!); i++)
-            await new Promise((res) => setTimeout(res, 250));
-        }
-        // opencode: the harness writes the transcript at the key, so the
-        // sessionId IS the key — just wait for the harness to register so the
-        // session is listable (no after-turn-1 threadId to wait for).
-        if (agent === "opencode") {
-          for (let i = 0; i < 20 && !readAisdkEntry(opencodeKey!); i++)
-            await new Promise((res) => setTimeout(res, 250));
-          sessionId = opencodeKey;
-        }
-        // codex-aisdk: wait for the harness to register (so the session is
-        // listable), then prefer the codex threadId once turn 1 reports it (it
-        // deep-links to the rollout transcript). The threadId only lands after
-        // the first turn completes, so don't block on it — fall back to the
-        // control-plane key, a stable handle serve maps back internally. Total
-        // added wait stays bounded (~5s registration + ~3s threadId).
-        if (agent === "codex-aisdk") {
-          for (let i = 0; i < 20 && !readAisdkEntry(codexAisdkKey!); i++)
-            await new Promise((res) => setTimeout(res, 250));
-          sessionId = codexAisdkKey;
-          for (let i = 0; i < 12; i++) {
-            const tid = readAisdkEntry(codexAisdkKey!)?.threadId;
-            if (tid) {
-              sessionId = tid;
-              break;
-            }
-            await new Promise((res) => setTimeout(res, 250));
-          }
-        }
         if (sessionId) {
-          const entry =
-            aisdkSessionId
-              ? readAisdkEntry(aisdkSessionId)
-              : codexAisdkKey
-                ? readAisdkEntry(codexAisdkKey)
-                : opencodeKey
-                  ? readAisdkEntry(opencodeKey)
-                  : null;
-          const leasePid = entry?.harnessPid ?? panePidForSession(tmuxName);
+          const leasePid = panePidForSession(tmuxName);
           if (leasePid) await acquireLease(sessionId, leasePid);
         }
         return json({ ok: true, tmuxName, cwd, sessionId, agent });
@@ -2348,27 +2241,6 @@ export async function cmdServe() {
               tmuxName: out.tmuxName,
               cwd: out.cwd,
               agent: out.agent,
-              clientId: msg.clientId,
-              msg: msgBody,
-            });
-          }
-          // aisdk / codex-aisdk sessions have no pane — push the turn through the
-          // harness's command file instead of the tmux send-keys queue. The new
-          // user turn surfaces in the transcript (and thus the live view) once
-          // the harness runs it. For codex-aisdk the live-view id is the codex
-          // threadId, not the control-plane key the command file is named by, so
-          // map it back via the registry.
-          if (
-            sess.agent === "aisdk" ||
-            sess.agent === "codex-aisdk" ||
-            sess.agent === "opencode"
-          ) {
-            const key = findAisdkEntryByAnyId(m[1])?.sessionId ?? m[1];
-            appendAisdkCmd(key, { type: "send", text });
-            const msg = recordImmediateMessage(m[1], text, clientId);
-            const { duplicate: _duplicate, ...msgBody } = msg;
-            return json({
-              ok: true,
               clientId: msg.clientId,
               msg: msgBody,
             });
@@ -2598,17 +2470,6 @@ export async function cmdServe() {
             void logOp({ op: "interrupt", sessionId: m[1], ok: false, ms: 0, error: "not-found" });
             return err(404, "session not found");
           }
-          if (
-            sess.agent === "aisdk" ||
-            sess.agent === "codex-aisdk" ||
-            sess.agent === "opencode"
-          ) {
-            // Abort the current turn via the harness (AbortController on its
-            // side). Map a codex-aisdk threadId back to the control-plane key.
-            const key = findAisdkEntryByAnyId(m[1])?.sessionId ?? m[1];
-            appendAisdkCmd(key, { type: "interrupt" });
-            return json({ ok: true });
-          }
           if (!sess.tmuxTarget) {
             void logOp({
               op: "interrupt",
@@ -2659,33 +2520,6 @@ export async function cmdServe() {
           const all = (await listSessions()).filter((s) => s.sessionId === m[1]);
           const sess = all[0];
           if (!sess) return err(404, "session not found");
-          if (
-            sess.agent === "aisdk" ||
-            sess.agent === "codex-aisdk" ||
-            sess.agent === "opencode"
-          ) {
-            // Ask the harness to shut down, then tear down its supervisor pane and
-            // control-plane files. markClosed tombstones the harness pid so the
-            // session drops out of the list immediately. For codex-aisdk the
-            // live-view id is the threadId — map it back to the key the command
-            // file and registry entry are named by.
-            //
-            // Single-row by construction: a harness session is keyed in the aisdk
-            // registry, not discovered per-pane, so it cannot have the duplicate
-            // rows the tmux path below has to sweep.
-            const key = findAisdkEntryByAnyId(m[1])?.sessionId ?? m[1];
-            appendAisdkCmd(key, { type: "close" });
-            if (sess.tmuxName) tmuxKillSession(sess.tmuxName);
-            markClosed(sess.pid);
-            removeAisdkEntry(key);
-            if (sess.tmuxName) {
-              removeManaged(sess.tmuxName);
-              assignUser(sess.tmuxName, null);
-            }
-            clearResolved(m[1]);
-            await releaseLease(m[1]);
-            return json({ ok: true });
-          }
           // EVERY pane backing this session, not just the first. A transcript
           // resumed into a second pane gives one sessionId two live panes; killing
           // `.find()`'s match left the other running, so the row came straight

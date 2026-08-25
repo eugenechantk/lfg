@@ -275,7 +275,7 @@ struct SessionUpsertRecord {
         self.hostId = hostId
         title = LFGStoreRecordHelpers.nonEmpty(session.title)
         cwd = session.cwd
-        agent = sparse && session.agent == "aisdk" ? nil : LFGStoreRecordHelpers.nonEmpty(session.agent)
+        agent = sparse && session.agent == "claude" ? nil : LFGStoreRecordHelpers.nonEmpty(session.agent)
         model = session.model
         closed = sparse && !session.closed ? nil : session.closed
         busy = session.busy

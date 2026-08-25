@@ -1066,7 +1066,7 @@ final class SessionStore: ObservableObject {
 
     func moveTargets(for item: SessionItem) -> [MoveTarget] {
         guard let _ = item.session.sessionId,
-              item.session.agent == "claude" || item.session.agent == "aisdk" else {
+              item.session.agent == "claude" else {
             return []
         }
         return hosts.compactMap { host in
@@ -2552,7 +2552,7 @@ enum Opener {
     }
 
     static func canResume(agent: String) -> Bool {
-        agent == "claude" || agent == "aisdk" || agent == "codex"
+        agent == "claude" || agent == "codex"
     }
 
     /// Pure command selection shared by the opener and headless regression
@@ -2560,7 +2560,7 @@ enum Opener {
     /// use Codex's native id-stable resume subcommand.
     static func resumeAgentCommand(agent: String, sessionId: String) -> String? {
         switch agent {
-        case "claude", "aisdk":
+        case "claude":
             return "\(shq(claude)) --dangerously-skip-permissions --resume \(shq(sessionId))"
         case "codex":
             return "\(shq(codex)) --sandbox danger-full-access --ask-for-approval never "

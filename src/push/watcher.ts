@@ -14,7 +14,6 @@ import {
   type PendingPrompt,
 } from "../sessions.ts";
 import { capturePaneAsync, isBusy, parsePrompt, type PanePrompt } from "../tmux.ts";
-import { findEntryByAnyId } from "../aisdk-registry.ts";
 import { codexDelegationSessionIds } from "../activity.ts";
 import { listDevices } from "./store.ts";
 import {
@@ -375,16 +374,15 @@ export function buildPayload(
 // ---- wiring (the impure parts) ----
 
 // Observe a single session's live state via the same primitives the SSE loop
-// uses. Pane-less aisdk/codex sessions get busy from the registry and never
-// surface pane-scraped prompts (matching the live stream's behavior).
+// uses. Pane-less sessions never surface pane-scraped prompts (matching the
+// live stream's behavior).
 async function observeSession(s: {
   sessionId?: string | null;
   tmuxTarget?: string | null;
 }): Promise<SessionState> {
   const delegated = s.sessionId ? codexDelegationSessionIds().has(s.sessionId) : false;
   if (!s.tmuxTarget) {
-    const entry = s.sessionId ? findEntryByAnyId(s.sessionId) : null;
-    return { busy: (entry ? entry.busy : false) || delegated, promptPresent: false };
+    return { busy: delegated, promptPresent: false };
   }
   const pane = await capturePaneAsync(s.tmuxTarget);
   const tp = s.sessionId ? await resolveTranscript(s.sessionId) : null;

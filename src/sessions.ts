@@ -8,12 +8,6 @@ import { join, basename, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { tmuxTargetForPid, paneTtyForTarget } from "./tmux";
 import { listManaged, patchManaged, type ManagedSession } from "./managed";
-import {
-  listEntries as listAisdkEntries,
-  isPidAlive,
-  patchEntry as patchAisdkEntry,
-  findEntryByAnyId as findAisdkEntryByAnyId,
-} from "./aisdk-registry";
 import { isClosing } from "./closing";
 import { userAssignments } from "./users";
 import { PATHS } from "./config";
@@ -56,7 +50,6 @@ import {
   primeProcSnapshot,
   startTimeMsOf,
   procStartMatches,
-  ppidOf as procPpidOf,
   ttyOf,
 } from "./procinfo";
 
@@ -100,7 +93,7 @@ export type SessionMsg = {
 };
 
 export type Session = {
-  agent: "claude" | "codex" | "aisdk" | "codex-aisdk" | "opencode";
+  agent: "claude" | "codex";
   pid: number;
   cmd: string;
   cwd: string | null;
@@ -791,14 +784,6 @@ export function pickCodexForkThread(
   );
 }
 
-function promptStartsWithTitle(prompt: string | null, title: string | null | undefined): boolean {
-  if (!prompt || !title) return false;
-  const clean = (s: string) => stripConversationPrefix(s).replace(/\s+/g, " ").trim();
-  const p = clean(prompt);
-  const t = clean(title);
-  return !!t && (p === t || p.startsWith(t));
-}
-
 // How far an unclaimed transcript may lag the freshest transcript in the same
 // cwd and still be trusted as a live process's current session. A running
 // `claude` writes its transcript continuously, so the session a pid is on is
@@ -853,24 +838,6 @@ async function newestUnclaimedInCwd(
     return null;
   }
   return { path: best.path, id: best.id };
-}
-
-function inferCodexThreadForHarness(
-  e: { cwd: string; title?: string | null; createdAt: number },
-  threads: CodexThread[],
-  claimed: Set<string>,
-): CodexThread | null {
-  const minTime = (e.createdAt ?? 0) - 30_000;
-  const matches = threads
-    .filter(
-      (t) =>
-        t.cwd === e.cwd &&
-        !claimed.has(t.id) &&
-        (t.createdAt ?? 0) >= minTime &&
-        promptStartsWithTitle(t.firstUserText, e.title),
-    )
-    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-  return matches[0] ?? null;
 }
 
 // AI-SDK backed providers can persist a speaker prefix ("Human:" for Claude,
@@ -2512,20 +2479,11 @@ async function listSessionsUncached(
   // Drop just-closed sessions up front (see closing.ts): /close kills the
   // process but it lingers for a poll or two, so without this a stopped session
   // flickers back into the list until pgrep stops seeing it.
-  // Live "aisdk" harness sessions (the AI-SDK driven kind). Each harness drives a
-  // child `claude` process via the SDK, which pgrep would otherwise surface as a
-  // phantom duplicate session — filter those out by parent pid (and, as a
-  // backstop, by the aisdk sessionId) so only the single aisdk session shows.
-  // Refresh the ps snapshot off the event loop before anything reads it (the
-  // ppidOf filter below, then listProcs/startTimeMsOf/commOf). Keeps the one
-  // per-scan `ps` from blocking HTTP while a cold scan runs under load.
+  // Refresh the ps snapshot off the event loop before anything reads it
+  // (listProcs/startTimeMsOf/commOf). Keeps the one per-scan `ps` from
+  // blocking HTTP while a cold scan runs under load.
   await primeProcSnapshot();
-  const aisdkEntries = listAisdkEntries().filter((e) => isPidAlive(e.harnessPid));
-  const harnessPids = new Set(aisdkEntries.map((e) => e.harnessPid));
-  const aisdkSessionIds = new Set(aisdkEntries.map((e) => e.sessionId));
-  const claudeProcs = listClaudeProcs().filter(
-    (p) => !isClosing(p.pid) && !harnessPids.has(ppidOf(p.pid) ?? -1),
-  );
+  const claudeProcs = listClaudeProcs().filter((p) => !isClosing(p.pid));
   const codexProcs = listCodexProcs();
   // Batch-prime every candidate proc's cwd with a single `lsof` so the per-pid
   // cwdOf() calls in the claude + codex enrichment below hit the cache instead
@@ -2571,12 +2529,6 @@ async function listSessionsUncached(
   const claimed = new Set<string>(
     enriched.filter((e) => e.sessionId).map((e) => e.sessionId as string),
   );
-  // Reserve aisdk transcripts so the newest-unclaimed-in-cwd heuristic can't
-  // bind an unrelated bare `claude` in the same cwd to an aisdk session's
-  // (freshly written) transcript — which would surface it as a phantom claude
-  // duplicate of the aisdk session.
-  for (const id of aisdkSessionIds) claimed.add(id);
-
   // pid → how that process came by its sessionId, for the collision tiebreak in
   // resolveSessionOwners. Kept as a side map rather than a Session field so the
   // REST payload stays byte-identical for clients.
@@ -2593,10 +2545,6 @@ async function listSessionsUncached(
   for (const e of enriched) {
     let transcriptPath: string | null = null;
     let sessionId = e.sessionId;
-    // Backstop for the phantom-child filter above: if this claude proc resolved
-    // to an aisdk session's id, it's the harness's child — skip it (the aisdk
-    // session is added separately with its own control plane).
-    if (sessionId && aisdkSessionIds.has(sessionId)) continue;
     if (sessionId) {
       transcriptPath = await findTranscriptById(sessionId);
     } else if (e.cwd) {
@@ -2699,22 +2647,12 @@ async function listSessionsUncached(
   );
   const codex = await codexThreads(liveOpenCodexPaths);
   const claimedCodex = new Set<string>();
-  // codex-aisdk harnesses each spawn a `codex app-server --listen stdio://`
-  // child that pgrep WILL surface (basename is `codex`). It's the AI-SDK
-  // session's engine, not a standalone TUI codex — so (1) skip the app-server
-  // process below, and (2) reserve the codex-aisdk threadIds here so the
-  // cwd+prompt fallback can't bind one of their rollout transcripts to an
-  // unrelated bare codex in the same cwd. Both guard against the codex-aisdk
-  // session being listed twice (once here as a phantom, once via the registry).
-  for (const e of aisdkEntries) {
-    if (e.agent === "codex" && e.threadId) claimedCodex.add(e.threadId);
-  }
   for (const p of codexProcs) {
     if (isClosing(p.pid)) continue; // just-closed — keep it out of the list
-    // The app-server child of a codex-aisdk harness — not a user-facing codex
-    // session. Its argv is `codex app-server --listen stdio://` (no resume id,
-    // no `--` prompt), so it would otherwise show as a bare, transcript-less
-    // phantom alongside the registry-driven codex-aisdk entry.
+    // `codex app-server` processes (e.g. the one ChatGPT.app runs) are engines
+    // driven by some other frontend, not user-facing TUI sessions. Their argv is
+    // `codex app-server …` (no resume id, no `--` prompt), so they would
+    // otherwise show as bare, transcript-less phantom sessions.
     if (/\bapp-server\b/.test(p.cmd)) continue;
 
     let cwd: string | null = await cwdOf(p.pid);
@@ -2840,92 +2778,6 @@ async function listSessionsUncached(
     });
   }
 
-  // "aisdk" sessions: headless AI-SDK harnesses. Discovery is registry-driven
-  // (not pgrep) — the harness owns the control plane and the SDK writes the same
-  // transcript JSONL as a normal claude session, so the live view reads it as-is.
-  // tmuxName is set (supervisor → kill + managed badge) but tmuxTarget is null
-  // (send/interrupt route through the command file, not the pane).
-  for (const e of aisdkEntries) {
-    const isCodex = e.agent === "codex";
-    // opencode entries own a SELF-WRITTEN Claude-shaped transcript named by the
-    // control-plane key (the harness writes no codex rollout) — so they discover
-    // exactly like a Claude aisdk entry: transcript by sessionId, raw model.
-    const isOpencode = e.agent === "opencode";
-    // Claude/opencode entries name their transcript by the (deterministic)
-    // sessionId. Codex entries persist a rollout under ~/.codex/sessions keyed by
-    // the app-server threadId, which we only know after turn 1 — so the transcript
-    // is null until then, and the live-view id is the threadId once available
-    // (deep-links straight to the rollout) else the control-plane key.
-    let codexThreadId = isCodex ? (e.threadId ?? null) : null;
-    if (isCodex && !codexThreadId) {
-      const inferred = inferCodexThreadForHarness(e, codex, claimedCodex);
-      if (inferred) {
-        codexThreadId = inferred.id;
-        claimedCodex.add(inferred.id);
-        patchAisdkEntry(e.sessionId, { threadId: inferred.id });
-      }
-    }
-    const transcriptPath = isCodex
-      ? codexThreadId
-        ? await findCodexTranscriptById(codexThreadId)
-        : null
-      : await findTranscriptById(e.sessionId);
-    const sessionId = isCodex ? (codexThreadId ?? e.sessionId) : e.sessionId;
-    let last: SessionMsg | null = null;
-    let lastActivityAt: number | null = null;
-    let lastUser: string | null = null;
-    if (transcriptPath) {
-      // Conversation activity from the last message's ts, mtime only as
-      // fallback — same rationale as the claude site above (synced mtimes lie).
-      let mtimeMs: number | null = null;
-      try {
-        mtimeMs = statSync(transcriptPath).mtimeMs;
-      } catch {}
-      // The transcript helpers handle BOTH claude JSONL and codex rollouts
-      // (normalizeCodexLine is tried first inside each), so they're safe for a
-      // codex rollout path too. Guarded with .catch — never throw out of here.
-      last = await previewLast(transcriptPath).catch(() => null);
-      lastActivityAt = last?.ts ?? mtimeMs;
-      lastUser = await lastUserText(transcriptPath).catch(() => null);
-    }
-    const project = projectName(e.cwd);
-    let title = overrides[sessionId] || null;
-    if (!title && transcriptPath)
-      title = await firstPromptTitle(transcriptPath).catch(() => null);
-    if (!title) title = e.title || (e.cwd ? basename(e.cwd) : project);
-    let startedAt: number | null = startTimeMsOf(e.harnessPid) ?? e.createdAt;
-    const delegated = delegatedSessionIds.has(sessionId);
-    out.push({
-      agent: isCodex ? "codex-aisdk" : isOpencode ? "opencode" : "aisdk",
-      pid: e.harnessPid,
-      cmd: isCodex
-        ? `lfg codex-aisdk-session --model ${e.model}`
-        : isOpencode
-          ? `lfg opencode-aisdk-session --model ${e.model}`
-          : `lfg aisdk-session --model ${e.model}`,
-      cwd: e.cwd,
-      project,
-      title,
-      lastUserText: lastUser,
-      sessionId,
-      startedAt,
-      transcriptPath,
-      lastActivityAt,
-      // Headless harness: the registry tracks an accurate per-turn busy flag.
-      busy: e.busy || delegated,
-      last,
-      // No pane I/O — but keep the supervisor name so kill + managed badge work.
-      tmuxTarget: null,
-      tmuxName: e.tmuxName || null,
-      ...managedFieldsForTmuxName(e.tmuxName, managedByName),
-      assignedUser: e.tmuxName ? (assigns[e.tmuxName] ?? null) : null,
-      // Codex slugs and opencode "provider/model" ids aren't Claude aliases —
-      // pass them through raw. modelAlias would leave them unchanged anyway, but
-      // be explicit about intent.
-      model: isCodex || isOpencode ? e.model : modelAlias(e.model),
-      ...computeStatus(last, null),
-    });
-  }
   // Order by start time (stable), not recency: sorting by lastActivityAt made
   // panes reshuffle every time a session became the most-active one. startedAt
   // never changes for a live session, so positions stay put and a new session
@@ -3104,24 +2956,9 @@ function isHeadless(cmd: string): boolean {
   return /(^|\s)(-p|--print)(\s|$)/.test(cmd);
 }
 
-// Parent pid (Linux: /proc/<pid>/stat field 4; macOS: ps -o ppid=). The
-// platform branch lives in ./procinfo.
-function ppidOf(pid: number): number | null {
-  return procPpidOf(pid);
-}
-
 export async function resolveTranscript(sessionId: string): Promise<string | null> {
   if (!UUID.test(sessionId)) return null;
-  const entry = findAisdkEntryByAnyId(sessionId);
-  let id = entry?.agent === "codex" && entry.threadId ? entry.threadId : sessionId;
-  if (entry?.agent === "codex" && !entry.threadId) {
-    const inferred = inferCodexThreadForHarness(entry, await codexThreads(), new Set());
-    if (inferred) {
-      id = inferred.id;
-      patchAisdkEntry(entry.sessionId, { threadId: inferred.id });
-    }
-  }
-  return (await findTranscriptById(id)) ?? findCodexTranscriptById(id);
+  return (await findTranscriptById(sessionId)) ?? findCodexTranscriptById(sessionId);
 }
 
 // The cwd a claude transcript was recorded in. Every claude JSONL line carries a

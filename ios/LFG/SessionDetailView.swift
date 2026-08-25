@@ -882,16 +882,11 @@ private struct SessionOptionsMenu: View {
     }
 
     private var modelOptions: [String] {
-        AgentKind(rawValue: agent)?.models ?? AgentKind.aisdk.models
+        AgentKind(rawValue: agent)?.models ?? AgentKind.claude.models
     }
 
-    /// Fork is available for transcript families whose server lane can branch
-    /// natively. codex-aisdk and opencode remain hidden until supported.
     private var canFork: Bool {
-        !sid.isEmpty
-            && (agent == "claude"
-                || agent == "aisdk"
-                || agent == "codex")
+        !sid.isEmpty && (agent == "claude" || agent == "codex")
     }
 
     private var transferTargets: [Host] {
@@ -907,8 +902,8 @@ private struct SessionOptionsMenu: View {
 
     private var agentIdLabel: String {
         switch agent {
-        case "claude", "aisdk": return "Claude id"
-        case "codex", "codex-aisdk": return "Codex id"
+        case "claude": return "Claude id"
+        case "codex": return "Codex id"
         default: return "Session id"
         }
     }

@@ -865,7 +865,7 @@ import LFGCore
         return Session(
             sessionId: stored.sessionId,
             title: stored.title ?? "",
-            agent: stored.agent ?? "aisdk",
+            agent: Session.normalizedAgent(stored.agent ?? "claude"),
             model: stored.model,
             cwd: stored.cwd,
             assignedUser: stored.assignedUser,
@@ -3769,7 +3769,7 @@ import LFGCore
         let optimistic = Session(
             sessionId: placeholder,
             title: String(firstLine.prefix(60)),
-            agent: req.agent ?? "aisdk",
+            agent: req.agent ?? "claude",
             model: req.model,
             cwd: req.cwd,
             status: "ok",

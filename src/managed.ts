@@ -14,7 +14,10 @@ export type ManagedSession = {
   tmuxName: string;
   cwd: string;
   createdAt: number;
-  agent?: "claude" | "codex" | "aisdk" | "codex-aisdk" | "opencode";
+  // Note: old managed.json records may carry retired values ("aisdk",
+  // "codex-aisdk", "opencode") from the removed AI-SDK path; parsers stay
+  // tolerant and simply never match them.
+  agent?: "claude" | "codex";
   parentSessionId?: string;
   // Authoritative live binding for lfg-managed panes. Claude fills this after
   // the pidfile appears; Codex resume knows it before spawn because resume is

@@ -6,16 +6,14 @@ import LFGCore
 enum Theme {
     static func agentGlyph(_ agent: String) -> String {
         switch agent {
-        case "codex", "codex-aisdk": return "chevron.left.forwardslash.chevron.right"
-        case "opencode": return "curlybraces"
-        default: return "sparkle"            // claude / aisdk
+        case "codex": return "chevron.left.forwardslash.chevron.right"
+        default: return "sparkle"            // claude
         }
     }
 
     static func agentTint(_ agent: String) -> Color {
         switch agent {
-        case "codex", "codex-aisdk": return .indigo
-        case "opencode": return .teal
+        case "codex": return .indigo
         default: return .orange
         }
     }
@@ -93,9 +91,7 @@ struct AgentBadge: View {
     let agent: String
 
     private var logoName: String {
-        if agent.contains("codex") { return "agent-codex" }     // codex + codex-aisdk
-        if agent.contains("opencode") { return "agent-opencode" }
-        return "agent-claude"                                    // claude / aisdk
+        agent.contains("codex") ? "agent-codex" : "agent-claude"
     }
 
     var body: some View {

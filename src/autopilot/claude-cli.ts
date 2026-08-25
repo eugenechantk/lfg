@@ -12,8 +12,8 @@
 // which exists for exactly this reason: a background job that runs on a timer
 // should bill the flat-rate subscription, not per-token API usage.
 //
-// Why not `pipeToClaudeAiSdk` (what autopilot used first): it drives the
-// same binary, but through the `ai-sdk-provider-claude-code` package and with
+// Why not the AI-SDK backend (what autopilot used first, since removed from
+// the repo): it drove the same binary, but through a provider package and with
 // `settingSources: ["user", "project"]`. That loads the project's settings and
 // CLAUDE.md and boots every configured MCP server on each call — measured at
 // 25-56s per retitle batch, with `MCP servers not connected` warnings, for a task

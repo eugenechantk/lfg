@@ -33,7 +33,6 @@ import {
 } from "./tmux.ts";
 import { PaneStitcher } from "./pane-history.ts";
 import { listQueue, reconcileQueued } from "./sendq.ts";
-import { findEntryByAnyId as findAisdkEntryByAnyId } from "./aisdk-registry.ts";
 import {
   codexDelegationSessionIds,
   notePaneBackgroundProcessCount,
@@ -463,16 +462,12 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
     try {
       const delegated = codexDelegationSessionIds().has(w.sid);
       if (!w.target) {
-        // Pane-less: registry busy (aisdk), else transcript-freshness heuristic.
-        const entry = findAisdkEntryByAnyId(w.sid);
+        // Pane-less: transcript-freshness heuristic.
         let baseBusy: boolean;
-        if (entry) baseBusy = entry.busy;
-        else {
-          try {
-            baseBusy = Date.now() - statSync(w.tp).mtimeMs < BARE_BUSY_WINDOW_MS;
-          } catch {
-            baseBusy = false;
-          }
+        try {
+          baseBusy = Date.now() - statSync(w.tp).mtimeMs < BARE_BUSY_WINDOW_MS;
+        } catch {
+          baseBusy = false;
         }
         const busy = busyWithRunningWork(
           baseBusy || delegated,

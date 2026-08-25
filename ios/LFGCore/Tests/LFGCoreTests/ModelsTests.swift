@@ -8,6 +8,7 @@ final class ModelsTests: XCTestCase {
         let json = """
         {"sessions":[
           {"agent":"aisdk","pid":1,"cmd":"x","cwd":"/repo","project":"lfg",
+           "_comment":"legacy aisdk value — must normalize to claude on decode",
            "title":"Audit the auth flow","lastUserText":"hi","sessionId":"a2e5",
            "startedAt":1.0,"transcriptPath":"/t","lastActivityAt":2.0,"last":null,
            "tmuxTarget":"lfg-x:0.0","tmuxName":"lfg-x","managed":true,
@@ -22,6 +23,8 @@ final class ModelsTests: XCTestCase {
         let resp = try JSONDecoder().decode(SessionsResponse.self, from: json)
         XCTAssertEqual(resp.sessions.count, 2)
         let s0 = resp.sessions[0]
+        XCTAssertEqual(s0.agent, "claude")
+        XCTAssertTrue(s0.isClaude)
         XCTAssertEqual(s0.sessionId, "a2e5")
         XCTAssertEqual(s0.model, "sonnet")
         XCTAssertEqual(s0.assignedUser, "eugene")
@@ -121,14 +124,12 @@ final class ModelsTests: XCTestCase {
     }
 
     func testAgentKindModels() {
-        XCTAssertEqual(AgentKind.aisdk.defaultModel, "claude-opus-5")
         XCTAssertEqual(AgentKind.claude.defaultModel, "claude-opus-5")
         XCTAssertEqual(AgentKind.codex.defaultModel, "gpt-5.6-sol")
         XCTAssertTrue(AgentKind.claude.models.contains("claude-fable-5"))
         XCTAssertTrue(AgentKind.claude.models.contains("opus"))
         XCTAssertTrue(AgentKind.codex.models.contains("gpt-5.3-codex-spark"))
-        XCTAssertFalse(AgentKind.opencode.models.contains("anthropic/claude-sonnet-4-6"))
-        XCTAssertEqual(AgentKind.allCases.count, 5)
+        XCTAssertEqual(AgentKind.allCases.count, 2)
     }
 
     func testAgentModelSelectionRestoresValidPersistedPair() {
@@ -150,12 +151,23 @@ final class ModelsTests: XCTestCase {
 
     func testAgentModelSelectionReplacesStaleModelWithAgentsCurrentDefault() {
         let selection = AgentModelSelection.restoring(
-            agentRawValue: "codex-aisdk",
+            agentRawValue: "codex",
             model: "gpt-retired"
         )
 
-        XCTAssertEqual(selection.agent, .codexAisdk)
-        XCTAssertEqual(selection.model, AgentKind.codexAisdk.defaultModel)
+        XCTAssertEqual(selection.agent, .codex)
+        XCTAssertEqual(selection.model, AgentKind.codex.defaultModel)
+    }
+
+    func testAgentModelSelectionReplacesRetiredAisdkAgentWithGlobalDefault() {
+        // "codex-aisdk" was a persistable AgentKind before the AI-SDK path was
+        // removed; a stale persisted pair must fall back to the global default.
+        let selection = AgentModelSelection.restoring(
+            agentRawValue: "codex-aisdk",
+            model: "gpt-5.6-sol"
+        )
+
+        XCTAssertEqual(selection, .default)
     }
 
     func testAgentModelSelectionReplacesUnknownAgentWithGlobalDefault() {

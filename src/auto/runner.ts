@@ -68,17 +68,6 @@ function parseFinding(text: string): { finding: unknown } | null {
 
 const READONLY_TOOLS = ["Read", "Grep", "Glob", "WebSearch", "WebFetch"];
 
-// The AI-SDK backend runs in-process and we scope the agent's cwd with a global
-// process.chdir, so two concurrent runs would clobber each other's working
-// directory. Serialize the chdir-sensitive section across ALL callers (the
-// scheduler is already sequential, but a manual /run could overlap a batch).
-let runChain: Promise<unknown> = Promise.resolve();
-function withCwdLock<T>(fn: () => Promise<T>): Promise<T> {
-  const run = runChain.catch(() => {}).then(fn);
-  runChain = run.catch(() => {});
-  return run;
-}
-
 async function runClaude(
   prompt: string,
   cwd: string,
@@ -87,44 +76,30 @@ async function runClaude(
 ): Promise<string> {
   const allowedTools = [...READONLY_TOOLS, ...extraTools];
   onLog(`[auto] claude run (${prompt.length} chars) in ${cwd} [tools: ${allowedTools.join(",")}]`);
-  // Route through the AI-SDK report backend instead of spawning `claude -p`
-  // directly: it drives the same installed claude binary + subscription auth,
-  // but stays on the AI SDK surface (same as the interactive harnesses) and
-  // returns the assistant text directly — so we no longer parse the CLI's
-  // --output-format json envelope. The agent's read-only toolset is preserved
-  // via allowedTools (this also implicitly excludes AskUserQuestion, which a
-  // headless run can't answer). cwd is honored because pipeToClaudeAiSdk runs
-  // in this process and the auto runner has already chdir'd / the provider
-  // inherits the cwd; we pass it through unchanged in behavior.
-  const { pipeToClaudeAiSdk } = await import("../agents/backends/claude-ai-sdk.ts");
-  try {
-    // The provider drives claude in the current working directory; scope it to
-    // the agent's cwd for the duration of the run. chdir is process-global, so
-    // the whole chdir→run→restore is serialized under withCwdLock.
-    return await withCwdLock(async () => {
-      const prevCwd = process.cwd();
-      try {
-        process.chdir(cwd);
-      } catch {}
-      try {
-        return await pipeToClaudeAiSdk(prompt, onLog, { allowedTools });
-      } finally {
-        try {
-          process.chdir(prevCwd);
-        } catch {}
-      }
-    });
-  } catch (e) {
-    // The report backend throws on an empty generation; the old `claude -p`
-    // path returned the (empty) output and let parseFinding treat it as
-    // silence. Preserve that silent-by-default behavior: a run that produced
-    // nothing yields "" → no parseable finding → null, not a thrown error.
-    if (e instanceof Error && /empty result/i.test(e.message)) {
-      onLog("[auto] ai-sdk produced no output — treating as silence");
-      return "";
-    }
-    throw e;
+  // Headless `claude -p` on the agent's cwd. A run that produces no output is
+  // returned as "" — parseFinding treats it as silence (null finding), which is
+  // the default outcome for a watch agent, not an error.
+  const proc = Bun.spawn({
+    cmd: ["claude", "-p", "--allowedTools", allowedTools.join(",")],
+    cwd,
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process.env },
+  });
+  proc.stdin.write(prompt);
+  await proc.stdin.end();
+  const [out, errText, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  if (exitCode !== 0) {
+    throw new Error(
+      `claude -p exited ${exitCode}: ${(errText || out).slice(0, 400)}`,
+    );
   }
+  return out.trim();
 }
 
 export async function runAutoAgent(

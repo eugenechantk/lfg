@@ -8,7 +8,7 @@ import Foundation
 public struct Session: Codable, Sendable, Identifiable, Hashable {
     public var sessionId: String?
     public var title: String
-    public var agent: String          // "aisdk" | "claude" | "codex" | "codex-aisdk" | "opencode"
+    public var agent: String          // "claude" | "codex" (legacy AI-SDK values normalized at decode)
     public var model: String?         // model id/alias: claude-opus-5, opus, gpt-5.6, …
     public var project: String?
     public var cwd: String?
@@ -67,12 +67,23 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     public var id: String { sessionId ?? tmuxName ?? title }
 
     public var isBlocked: Bool { status == "blocked" }
-    public var isClaude: Bool { agent == "claude" || agent == "aisdk" }
+    public var isClaude: Bool { agent == "claude" }
+
+    /// Map retired AI-SDK agent values from old servers/persisted records onto
+    /// the CLI kinds so downstream switches only ever see "claude"/"codex".
+    /// (aisdk + opencode transcripts are Claude-shaped; codex-aisdk are Codex.)
+    public static func normalizedAgent(_ raw: String) -> String {
+        switch raw {
+        case "aisdk", "opencode": return "claude"
+        case "codex-aisdk": return "codex"
+        default: return raw
+        }
+    }
     /// Only pane-backed (CLI/tmux) sessions can be answered/steered via send-keys.
     public var hasPane: Bool { tmuxTarget != nil }
 
     public init(
-        sessionId: String? = nil, title: String = "", agent: String = "aisdk",
+        sessionId: String? = nil, title: String = "", agent: String = "claude",
         model: String? = nil, project: String? = nil, cwd: String? = nil,
         status: String? = nil, statusReason: String? = nil, statusDetail: String? = nil,
         assignedUser: String? = nil, parentSessionId: String? = nil, lastUserText: String? = nil,
@@ -100,7 +111,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         sessionId = try c.decodeIfPresent(String.self, forKey: .sessionId)
         title = (try c.decodeIfPresent(String.self, forKey: .title)) ?? ""
-        agent = (try c.decodeIfPresent(String.self, forKey: .agent)) ?? "aisdk"
+        agent = Session.normalizedAgent((try c.decodeIfPresent(String.self, forKey: .agent)) ?? "claude")
         model = try c.decodeIfPresent(String.self, forKey: .model)
         project = try c.decodeIfPresent(String.self, forKey: .project)
         cwd = try c.decodeIfPresent(String.self, forKey: .cwd)
@@ -419,7 +430,7 @@ public struct ResumableResponse: Codable, Sendable {
 public struct NewSessionRequest: Codable, Sendable {
     public var cwd: String
     public var prompt: String
-    public var agent: String?     // claude | codex | aisdk | codex-aisdk | opencode
+    public var agent: String?     // claude | codex
     public var model: String?
     public var user: String?
 
@@ -530,35 +541,27 @@ public enum LiveEvent: Sendable, Equatable {
 // MARK: - Agent / model catalogs (mirrors server allowlists)
 
 public enum AgentKind: String, CaseIterable, Sendable, Identifiable {
-    case aisdk            // claude via AI SDK (server default)
-    case claude           // claude CLI (tmux) — needed for the interactive prompt panel
+    case claude           // claude CLI (tmux)
     case codex            // codex CLI
-    case codexAisdk = "codex-aisdk"
-    case opencode
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
-        case .aisdk: return "Claude (ai-sdk)"
-        case .claude: return "Claude (CLI)"
-        case .codex: return "Codex (CLI)"
-        case .codexAisdk: return "Codex (ai-sdk)"
-        case .opencode: return "opencode"
+        case .claude: return "Claude"
+        case .codex: return "Codex"
         }
     }
 
-    /// Models offered for this agent. Claude paths use the server allowlists;
-    /// codex/opencode are catalog-driven so we provide common defaults.
+    /// Models offered for this agent. Claude uses the server allowlists;
+    /// codex is catalog-driven so we provide common defaults.
     public var models: [String] {
         switch self {
         // First entry is the default. Claude → Opus 5, Codex → GPT-5.6 Sol.
-        case .aisdk, .claude:
+        case .claude:
             return ["claude-opus-5", "claude-fable-5", "claude-sonnet-5", "claude-haiku-4-5", "opus", "fable", "sonnet", "haiku"]
-        case .codex, .codexAisdk:
+        case .codex:
             return ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"]
-        case .opencode:
-            return ["anthropic/claude-sonnet-5", "anthropic/claude-opus-5", "anthropic/claude-fable-5", "anthropic/claude-haiku-4-5"]
         }
     }
 

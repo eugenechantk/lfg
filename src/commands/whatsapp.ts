@@ -18,18 +18,10 @@ import { listSessions, recentMessages, resolveTranscript, sessionIdForPid } from
 import {
   dismissCodexUpdatePrompt,
   panePidForSession,
-  spawnManagedAisdkSession,
-  spawnManagedCodexAisdkSession,
   spawnManagedCodexSession,
   spawnManagedSession,
   tmuxKillSession,
 } from "../tmux.ts";
-import { randomUUID } from "node:crypto";
-import {
-  appendCmd as appendAisdkCmd,
-  findEntryByAnyId as findAisdkEntryByAnyId,
-  readEntry as readAisdkEntry,
-} from "../aisdk-registry.ts";
 import { acquireLease, releaseLease } from "../leases.ts";
 
 const HELP = `lfg whatsapp — WhatsApp group sidecar agent
@@ -42,7 +34,7 @@ Usage:
 
 Env:
   LFG_WHATSAPP_ALLOWED_GROUPS   Comma-separated group JIDs, or "*" while discovering
-  LFG_WHATSAPP_AGENT            aisdk|codex(=codex-aisdk)|claude-cli|codex-cli (default: aisdk)
+  LFG_WHATSAPP_AGENT            claude|codex (default: claude)
   LFG_WHATSAPP_AGENT_CWD        Repo cwd for managed sessions (default: LFG_REPO / cwd)
   LFG_WHATSAPP_TRIGGER          Text trigger (default: lfg)
   LFG_WHATSAPP_ALWAYS_ON        true to forward every group message
@@ -52,20 +44,15 @@ Env:
 const PROJECT_REPO = process.env.LFG_REPO ?? process.cwd();
 const AUTH_DIR = process.env.LFG_WHATSAPP_AUTH_DIR ?? join(PATHS.data, "whatsapp-auth");
 const STORE_PATH = join(PATHS.data, "whatsapp-sessions.json");
-// Default routes through the AI-SDK harness (same as serve.ts's /api/sessions/new
-// default): unset / "aisdk" → "aisdk" (claude via AI SDK); "codex" → "codex-aisdk"
-// (codex via AI SDK). CLI escape hatches keep the legacy tmux paths: "claude-cli"
-// and "codex-cli".
-const AGENT: "aisdk" | "codex-aisdk" | "claude" | "codex" = (() => {
+// tmux CLI sessions only. "claude-cli"/"codex-cli" are accepted as aliases from
+// the removed AI-SDK era so an old env keeps working.
+const AGENT: "claude" | "codex" = (() => {
   switch (process.env.LFG_WHATSAPP_AGENT) {
     case "codex":
-      return "codex-aisdk";
-    case "claude-cli":
-      return "claude";
     case "codex-cli":
       return "codex";
     default:
-      return "aisdk";
+      return "claude";
   }
 })();
 const AGENT_CWD = process.env.LFG_WHATSAPP_AGENT_CWD ?? PROJECT_REPO;
@@ -79,7 +66,10 @@ type SavedGroupSession = {
   sessionId: string;
   tmuxName: string;
   cwd: string;
-  agent: "claude" | "codex" | "aisdk" | "codex-aisdk";
+  // Old stores may carry retired values ("aisdk", "codex-aisdk") from the
+  // removed AI-SDK path; those sessions' harnesses are gone, so the liveness
+  // check below fails and they respawn as CLI sessions.
+  agent: "claude" | "codex";
   paused?: boolean;
   createdAt: number;
   updatedAt: number;
@@ -400,18 +390,14 @@ async function handleAgentCommand(sock: WASocket, inbound: Inbound, command: str
 
 async function getOrCreateGroupSession(sock: WASocket, groupJid: string): Promise<SavedGroupSession> {
   const store = await readStore();
-  const existing = store.groups[groupJid];
-  // AI-SDK harness sessions keep a STABLE stored id (the minted uuid/key) — only
-  // the legacy CLI sessions re-key their sessionId on resume, so only refresh
-  // from the live list for those. (For codex-aisdk the live list would report
-  // the threadId, which must NOT clobber our control-plane key.)
-  const isAisdk = existing?.agent === "aisdk" || existing?.agent === "codex-aisdk";
-  const live = existing && !isAisdk ? await liveSessionFor(existing.tmuxName) : null;
-  if (existing && isAisdk) {
-    // Still alive only if the harness entry is present; otherwise fall through to
-    // (re)spawn a fresh one.
-    if (readAisdkEntry(existing.sessionId)) return existing;
-  } else if (existing && live?.sessionId) {
+  // A stored record from the removed AI-SDK path (agent "aisdk"/"codex-aisdk")
+  // has no live harness anymore — treat it as absent so a fresh CLI session
+  // spawns for the group.
+  const stored = store.groups[groupJid];
+  const existing =
+    stored && (stored.agent === "claude" || stored.agent === "codex") ? stored : undefined;
+  const live = existing ? await liveSessionFor(existing.tmuxName) : null;
+  if (existing && live?.sessionId) {
     if (existing.sessionId !== live.sessionId) {
       existing.sessionId = live.sessionId;
       existing.updatedAt = Date.now();
@@ -422,45 +408,26 @@ async function getOrCreateGroupSession(sock: WASocket, groupJid: string): Promis
 
   const groupName = await groupSubject(sock, groupJid);
   const tmuxName = `lfg-wa-${randomBytes(3).toString("hex")}`;
-  // AI-SDK harnesses own their id up front (we mint it), so for aisdk the
-  // sessionId IS the minted uuid; for codex-aisdk we mint a control-plane KEY
-  // (the codex threadId — and thus the readable transcript id — only lands
-  // after turn 1, so we store the key and resolve the threadId lazily in the
-  // relay loop via findEntryByAnyId). The legacy CLI paths discover the
-  // sessionId from the pane/pidfile as before.
-  const aisdkId = AGENT === "aisdk" || AGENT === "codex-aisdk" ? randomUUID() : null;
   const spawned =
-    AGENT === "aisdk"
-      ? spawnManagedAisdkSession({ name: tmuxName, cwd: AGENT_CWD, model: "claude-opus-5", sessionId: aisdkId! })
-      : AGENT === "codex-aisdk"
-        ? spawnManagedCodexAisdkSession({ name: tmuxName, cwd: AGENT_CWD, model: "gpt-5.6-sol", key: aisdkId! })
-        : AGENT === "codex"
-          ? spawnManagedCodexSession({ name: tmuxName, cwd: AGENT_CWD })
-          : spawnManagedSession({ name: tmuxName, cwd: AGENT_CWD });
+    AGENT === "codex"
+      ? spawnManagedCodexSession({ name: tmuxName, cwd: AGENT_CWD })
+      : spawnManagedSession({ name: tmuxName, cwd: AGENT_CWD });
   if (!spawned.ok) throw new Error(spawned.error || "failed to spawn managed session");
   addManaged({ tmuxName, cwd: AGENT_CWD, createdAt: Date.now(), agent: AGENT });
 
   let sessionId: string | null = null;
-  if (aisdkId) {
-    // Wait for the harness to register; the sessionId we track is the minted id
-    // (== transcript id for aisdk; == control-plane key for codex-aisdk).
-    for (let i = 0; i < 20 && !readAisdkEntry(aisdkId); i++) await sleep(250);
-    sessionId = readAisdkEntry(aisdkId) ? aisdkId : null;
-  } else {
-    for (let i = 0; i < 20 && !sessionId; i++) {
-      await sleep(500);
-      if (AGENT === "codex") {
-        dismissCodexUpdatePrompt(`${tmuxName}:0.0`);
-        sessionId = (await liveSessionFor(tmuxName))?.sessionId ?? null;
-      } else {
-        const pid = panePidForSession(tmuxName);
-        if (pid) sessionId = sessionIdForPid(pid);
-      }
+  for (let i = 0; i < 20 && !sessionId; i++) {
+    await sleep(500);
+    if (AGENT === "codex") {
+      dismissCodexUpdatePrompt(`${tmuxName}:0.0`);
+      sessionId = (await liveSessionFor(tmuxName))?.sessionId ?? null;
+    } else {
+      const pid = panePidForSession(tmuxName);
+      if (pid) sessionId = sessionIdForPid(pid);
     }
   }
   if (!sessionId) throw new Error("managed session started but no sessionId was discovered");
-  const entry = aisdkId ? readAisdkEntry(aisdkId) : null;
-  const leasePid = entry?.harnessPid ?? panePidForSession(tmuxName);
+  const leasePid = panePidForSession(tmuxName);
   if (leasePid) await acquireLease(sessionId, leasePid);
 
   const rec: SavedGroupSession = {
@@ -485,29 +452,14 @@ async function liveSessionFor(tmuxName: string) {
   return (await listSessions()).find((s) => s.tmuxName === tmuxName) ?? null;
 }
 
-// Deliver a message to a group's agent on the right transport. AI-SDK harness
-// sessions (aisdk/codex-aisdk) have no tmux pane to type into — serve drives
-// them by appending a "send" command to their control-plane file (keyed by the
-// minted sessionId/key), so we mirror that here. The legacy CLI sessions go
-// through the confirmed-delivery tmux send queue as before.
+// Deliver a message to a group's agent through the confirmed-delivery tmux
+// send queue.
 function sendToSession(session: SavedGroupSession, text: string): void {
-  if (session.agent === "aisdk" || session.agent === "codex-aisdk") {
-    appendAisdkCmd(session.sessionId, { type: "send", text });
-  } else {
-    enqueueMessage(session.sessionId, text);
-  }
+  enqueueMessage(session.sessionId, text);
 }
 
-// Resolve the transcript id used to read assistant replies. For aisdk and the
-// CLI sessions the stored sessionId IS the transcript id. For codex-aisdk the
-// stored id is the control-plane key; the readable rollout transcript lives at
-// the codex threadId, which the harness patches into the registry after turn 1
-// — so map the key → threadId via the registry, falling back to the key until
-// it's known.
+// The stored sessionId IS the transcript id for CLI sessions.
 function transcriptIdFor(session: SavedGroupSession): string {
-  if (session.agent === "codex-aisdk") {
-    return findAisdkEntryByAnyId(session.sessionId)?.threadId ?? session.sessionId;
-  }
   return session.sessionId;
 }
 

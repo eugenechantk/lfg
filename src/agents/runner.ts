@@ -9,12 +9,6 @@ export type RunOptions = {
   date?: string;
   dryRun?: boolean;
   onLog?: (line: string) => void;
-  // Override the report-generation backend for this run. Falls back to
-  // LFG_CLAUDE_BACKEND, then "cli". Lets the web UI pick per-run.
-  backend?: string;
-  // Model for the ai-sdk backend (current Claude id or alias). Ignored by the
-  // cli backend, which uses the installed CLI's configured model.
-  model?: string;
 };
 
 export type RunResult = {
@@ -166,24 +160,10 @@ function fmtChars(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
-// Backend dispatch: "ai-sdk" (now the default) routes through the Vercel AI SDK
-// agent harness via the claude-code community provider (which drives the same
-// installed binary + subscription auth); "cli" spawns `claude -p` directly.
-// Default flip (Task B): the fallback is now "ai-sdk" instead of "cli" — set
-// LFG_CLAUDE_BACKEND=cli to opt back into the direct-CLI path.
 async function pipeToClaude(
   prompt: string,
   log: (s: string) => void,
-  backendOverride?: string,
-  modelOverride?: string,
 ): Promise<string> {
-  const backend = (
-    backendOverride ?? process.env.LFG_CLAUDE_BACKEND ?? "ai-sdk"
-  ).toLowerCase();
-  if (backend === "ai-sdk" || backend === "ai_sdk" || backend === "aisdk") {
-    const { pipeToClaudeAiSdk } = await import("./backends/claude-ai-sdk.ts");
-    return pipeToClaudeAiSdk(prompt, log, { model: modelOverride });
-  }
   return pipeToClaudeCli(prompt, log);
 }
 
@@ -395,7 +375,7 @@ export async function runAgent(
     };
   }
 
-  const report = await pipeToClaude(prompt, log, opts.backend, opts.model);
+  const report = await pipeToClaude(prompt, log);
   const rPath = reportPathFor(name, date);
   await Bun.write(rPath, report);
   log(`[runner] wrote ${rPath} (${report.length} bytes)`);

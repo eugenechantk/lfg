@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import {
   readActionsSidecar,
   updateActionRow,
@@ -6,13 +6,13 @@ import {
   type ActionRow,
 } from "../agents/runner.ts";
 import {
-  spawnManagedAisdkSession,
+  panePidForSession,
+  spawnManagedSession,
   tmuxHasSession,
   capturePane,
 } from "../tmux.ts";
-import { resolveTranscript, recentMessages } from "../sessions.ts";
+import { resolveTranscript, recentMessages, sessionIdForPid } from "../sessions.ts";
 import { addManaged } from "../managed.ts";
-import { readEntry as readAisdkEntry } from "../aisdk-registry.ts";
 import { USERS, assignUser } from "../users.ts";
 import { PATHS } from "../config.ts";
 
@@ -29,6 +29,19 @@ export type ActionResult = {
   summary: string;
   data?: unknown;
 };
+
+// Discover the sessionId of a freshly spawned tmux claude session by polling
+// its pane pid's ~/.claude/sessions pidfile (same discovery serve.ts uses for
+// /api/sessions/new). Returns null if the CLI never registers.
+async function discoverSessionId(tmuxName: string): Promise<string | null> {
+  for (let i = 0; i < 20; i++) {
+    await Bun.sleep(500);
+    const pid = panePidForSession(tmuxName);
+    const sessionId = pid ? sessionIdForPid(pid) : null;
+    if (sessionId) return sessionId;
+  }
+  return null;
+}
 
 // Every action is now just plain text. Executing it dispatches a coding agent
 // (claude, no permission prompts) into the configured repo with the action text plus
@@ -137,29 +150,25 @@ ${text}
 
 ${reportContext ? `# Full report for context\n${reportContext.slice(0, 12000)}` : ""}`;
 
-  // Spawn the action agent through the AI-SDK harness (mirrors serve.ts's
-  // "aisdk" create path) instead of the claude CLI + brief-file path: mint the
-  // sessionId up front (it IS the transcript id) and hand the brief straight in
-  // as the harness prompt — no temp brief file, no pidfile/pane discovery.
-  const sessionId = randomUUID();
-  const spawned = spawnManagedAisdkSession({
-    name: session,
-    cwd: PROJECT_REPO,
-    prompt,
-    model: "claude-opus-5",
-    sessionId,
-  });
+  // Spawn the action agent as a tmux claude CLI session with the brief handed
+  // in as the initial prompt, then discover its sessionId from the pidfile.
+  const spawned = spawnManagedSession({ name: session, cwd: PROJECT_REPO, prompt });
   if (!spawned.ok) {
     return { ok: false, summary: `failed to start agent session: ${spawned.error ?? "unknown"}` };
   }
   // Same lifecycle as a user-created session: register it as managed (clean
   // teardown, badge) and tag it to the operator so it shows under the filter.
-  addManaged({ tmuxName: session, cwd: PROJECT_REPO, createdAt: Date.now(), agent: "aisdk" });
+  addManaged({ tmuxName: session, cwd: PROJECT_REPO, createdAt: Date.now(), agent: "claude" });
   assignUser(session, AGENT_OWNER);
 
-  // Wait for the harness to register so the session is listable; the sessionId
-  // is already known (we minted it), so the UI can deep-link immediately.
-  for (let i = 0; i < 20 && !readAisdkEntry(sessionId); i++) await Bun.sleep(250);
+  const sessionId = await discoverSessionId(session);
+  if (!sessionId) {
+    return {
+      ok: false,
+      summary: `agent session ${session} started but no sessionId was discovered — drive it manually in the session list`,
+      data: { session },
+    };
+  }
 
   watchAgentSession(agentName, date, id, session, sessionId).catch(() => {});
 
@@ -303,23 +312,23 @@ ${taskList}
 
 ${reportContext ? `# Full report for context\n${reportContext.slice(0, 12000)}` : ""}`;
 
-  // Spawn the combined-batch agent through the AI-SDK harness (same as the
-  // single-action path): mint the sessionId and pass the batch brief directly.
-  const sessionId = randomUUID();
-  const spawned = spawnManagedAisdkSession({
-    name: session,
-    cwd: PROJECT_REPO,
-    prompt,
-    model: "claude-opus-5",
-    sessionId,
-  });
+  // Spawn the combined-batch agent as a tmux claude CLI session (same as the
+  // single-action path) and discover its sessionId from the pidfile.
+  const spawned = spawnManagedSession({ name: session, cwd: PROJECT_REPO, prompt });
   if (!spawned.ok) {
     return { ok: false, summary: `failed to start agent session: ${spawned.error ?? "unknown"}` };
   }
-  addManaged({ tmuxName: session, cwd: PROJECT_REPO, createdAt: Date.now(), agent: "aisdk" });
+  addManaged({ tmuxName: session, cwd: PROJECT_REPO, createdAt: Date.now(), agent: "claude" });
   assignUser(session, AGENT_OWNER);
 
-  for (let i = 0; i < 20 && !readAisdkEntry(sessionId); i++) await Bun.sleep(250);
+  const sessionId = await discoverSessionId(session);
+  if (!sessionId) {
+    return {
+      ok: false,
+      summary: `agent session ${session} started but no sessionId was discovered — drive it manually in the session list`,
+      data: { session },
+    };
+  }
 
   watchCombinedSession(agentName, date, rows.map((r) => r.id), session, sessionId).catch(() => {});
 
@@ -434,23 +443,23 @@ ${convo || "(unavailable)"}
 - If the failure was transient (a one-off swallowed key, the target session had since exited) and there is no code bug to fix, do NOT invent a change — explain what happened and stop.
 - On the LAST line of your output, print a one-line result starting with \`RESULT:\` summarizing the root cause and what you changed (or why no change was needed).`;
 
-  // Spawn the send-debug agent through the AI-SDK harness (same pattern as the
-  // report-action agents): mint the sessionId and hand the brief in directly.
-  const sessionId = randomUUID();
-  const spawned = spawnManagedAisdkSession({
-    name: session,
-    cwd: SELF_REPO,
-    prompt,
-    model: "claude-opus-5",
-    sessionId,
-  });
+  // Spawn the send-debug agent as a tmux claude CLI session (same pattern as
+  // the report-action agents) and discover its sessionId from the pidfile.
+  const spawned = spawnManagedSession({ name: session, cwd: SELF_REPO, prompt });
   if (!spawned.ok) {
     return { ok: false, summary: `failed to start debug session: ${spawned.error ?? "unknown"}` };
   }
-  addManaged({ tmuxName: session, cwd: SELF_REPO, createdAt: Date.now(), agent: "aisdk" });
+  addManaged({ tmuxName: session, cwd: SELF_REPO, createdAt: Date.now(), agent: "claude" });
   assignUser(session, AGENT_OWNER);
 
-  for (let i = 0; i < 20 && !readAisdkEntry(sessionId); i++) await Bun.sleep(250);
+  const sessionId = await discoverSessionId(session);
+  if (!sessionId) {
+    return {
+      ok: false,
+      summary: `debug session ${session} started but no sessionId was discovered — drive it manually in the session list`,
+      data: { session },
+    };
+  }
 
   return {
     ok: true,

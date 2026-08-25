@@ -315,16 +315,12 @@ struct ModelSheet: View {
                 SheetSearchField(placeholder: "Search models", text: $query)
 
                 SheetList {
-                    // Every runtime is listed, not just the three the design's
-                    // sample data happened to show — dropping the ai-sdk kinds
-                    // would make them unreachable now the agent pill is gone.
                     ForEach(AgentKind.allCases) { kind in
                         let rows = models(for: kind)
                         if !rows.isEmpty {
                             SectionHeader(title: kind.displayName, topPadding: 11, bottomPadding: 6)
                             // Identity must be runtime+model, not the model name:
-                            // `claude-opus-5` exists under BOTH `aisdk` and `claude`,
-                            // and a duplicate ForEach id makes SwiftUI silently drop
+                            // a duplicate ForEach id makes SwiftUI silently drop
                             // the second group's rows — they keep their layout space
                             // but draw nothing and expose no a11y elements.
                             ForEach(rows.map { ModelChoice(kind: kind, name: $0) }) { choice in
