@@ -54,11 +54,23 @@ fi
 mosh_client=$(command -v mosh-client 2>/dev/null || print /opt/homebrew/bin/mosh-client)
 [[ -x "$mosh_client" ]] || { print -u2 "mosh-bridged: mosh-client not installed locally (brew install mosh)"; exit 1 }
 
+# Colour capability. mosh-server picks the remote TERM purely from `-c COLORS`
+# (256 -> xterm-256color, anything else -> plain xterm, i.e. 8 colours); the stock
+# `mosh` wrapper supplies it by asking mosh-client to count the local terminal's
+# colours, and nothing else in the protocol carries it. Omit it and every remote
+# app sees an 8-colour xterm — tmux's `*256col*:Tc` override stops matching, so
+# tmux flattens 24-bit output to basic ANSI and subtle backgrounds (Claude Code's
+# grey user-message block) disappear entirely. `-l` cannot help here: mosh-server
+# applies only locale variables from it and silently drops anything else
+# (COLORTERM included, verified against mosh 1.4.0).
+colors=$("$mosh_client" -c 2>/dev/null || true)
+[[ "$colors" == <-> ]] || colors=8
+
 # 1. Bootstrap: mosh-server on the far side, loopback only, via the login shell.
 remote_cmd=""
 if (( $# )); then remote_cmd="-- ${(j: :)${(q)@}}"; fi
 bootstrap=$("${ssh_run[@]}" "$target" \
-  "$server_cmd new -s -i 127.0.0.1 -p $remote_range -l LANG=en_US.UTF-8 -l LC_ALL=en_US.UTF-8 $remote_cmd" 2>&1 || true)
+  "$server_cmd new -s -i 127.0.0.1 -p $remote_range -c $colors -l LANG=en_US.UTF-8 -l LC_ALL=en_US.UTF-8 $remote_cmd" 2>&1 || true)
 line=$(print -r -- "$bootstrap" | grep '^MOSH CONNECT ' || true)
 if [[ -z "$line" ]]; then
   print -u2 "mosh-bridged: mosh-server bootstrap on '$target' failed:"; print -u2 -r -- "$bootstrap"; exit 1
