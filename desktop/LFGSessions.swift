@@ -103,6 +103,7 @@ struct ResumableAPISession: Decodable {
     let lastActivityAt: Double?
     let lastUserText: String?
     let agent: String
+    let model: String?
 
     init(
         sessionId: String,
@@ -111,7 +112,8 @@ struct ResumableAPISession: Decodable {
         title: String,
         lastActivityAt: Double?,
         lastUserText: String?,
-        agent: String = "claude"
+        agent: String = "claude",
+        model: String? = nil
     ) {
         self.sessionId = sessionId
         self.cwd = cwd
@@ -120,10 +122,11 @@ struct ResumableAPISession: Decodable {
         self.lastActivityAt = lastActivityAt
         self.lastUserText = lastUserText
         self.agent = agent
+        self.model = model
     }
 
     private enum CodingKeys: String, CodingKey {
-        case sessionId, cwd, project, title, lastActivityAt, lastUserText, agent
+        case sessionId, cwd, project, title, lastActivityAt, lastUserText, agent, model
     }
 
     init(from decoder: Decoder) throws {
@@ -137,6 +140,7 @@ struct ResumableAPISession: Decodable {
         // Hosts predating Codex resume omitted `agent`; every row they emitted
         // was Claude, so that is the only backward-compatible default.
         agent = try c.decodeIfPresent(String.self, forKey: .agent) ?? "claude"
+        model = try c.decodeIfPresent(String.self, forKey: .model)
     }
 }
 struct ResumableResponse: Decodable {
@@ -147,6 +151,14 @@ struct ResumableResponse: Decodable {
 }
 struct HostInfoResponse: Decodable { let hostId: String; let hostName: String }
 struct SessionStatesResponse: Decodable { let needsInputSessionIds: [String] }
+struct DesktopDirsResponse: Decodable { let inbox: String }
+struct DesktopNewSessionResponse: Decodable {
+    let ok: Bool?
+    let sessionId: String?
+    let tmuxName: String?
+    let cwd: String?
+    let agent: String?
+}
 
 enum RemoteTransport: String, Codable {
     /// Real mosh when it's installed locally, plain ssh otherwise. Right for
@@ -472,7 +484,7 @@ enum SessionSearch {
 
     static func matches(_ session: ResumableAPISession, terms: [String]) -> Bool {
         matches(fields: [session.title, session.project, session.cwd, session.lastUserText,
-                         session.sessionId],
+                         session.model, session.agent, session.sessionId],
                 terms: terms)
     }
 
@@ -482,6 +494,128 @@ enum SessionSearch {
             .joined(separator: "\n").lowercased()
         guard !hay.isEmpty else { return false }
         return terms.allSatisfy { hay.contains($0) }
+    }
+}
+
+// MARK: - New-session planning
+
+/// The complete, deterministic decision needed before the API call. Keeping it
+/// value-only makes the search-to-directory behavior headlessly testable.
+struct DesktopNewSessionPlan: Equatable {
+    let hostURL: String
+    let cwd: String
+    let agent: String
+    let model: String
+}
+
+enum DesktopNewSessionPlanner {
+    /// Catalogs mirror `LFGCore.AgentKind` in the iOS client. A transcript may
+    /// carry a retired model, so restore through the current catalog before a
+    /// create request reaches the server's allowlist.
+    private static let modelsByAgent: [String: [String]] = [
+        "claude": ["claude-opus-5", "claude-fable-5", "claude-sonnet-5",
+                   "claude-haiku-4-5", "opus", "fable", "sonnet", "haiku"],
+        "codex": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"],
+    ]
+
+    static let defaultAgent = "claude"
+    static var defaultModel: String { modelsByAgent[defaultAgent]!.first! }
+
+    static func plan(
+        query rawQuery: String,
+        items: [SessionItem],
+        defaultHostURL: String?,
+        inbox: String?
+    ) -> DesktopNewSessionPlan? {
+        let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty {
+            guard let hostURL = nonempty(defaultHostURL), let cwd = normalizedPath(inbox) else {
+                return nil
+            }
+            return DesktopNewSessionPlan(
+                hostURL: hostURL, cwd: cwd, agent: defaultAgent, model: defaultModel)
+        }
+
+        let terms = SessionSearch.terms(query)
+        let matching = items.filter {
+            normalizedPath($0.session.cwd) != nil && SessionSearch.matches($0, terms: terms)
+        }
+        guard let directorySource = matching.max(by: {
+            let left = directoryScore($0, query: query, terms: terms)
+            let right = directoryScore($1, query: query, terms: terms)
+            if left != right { return left < right }
+            let leftActivity = $0.session.lastActivityAt ?? 0
+            let rightActivity = $1.session.lastActivityAt ?? 0
+            return leftActivity == rightActivity ? $0.id > $1.id : leftActivity < rightActivity
+        }), let cwd = normalizedPath(directorySource.session.cwd) else {
+            return nil
+        }
+
+        // Once the query identifies a directory, model inference is deliberately
+        // broader than the matches: the newest session in that exact cwd is the
+        // source of truth even when its title did not contain the query.
+        let history = items
+            .filter {
+                $0.hostURL == directorySource.hostURL
+                    && normalizedPath($0.session.cwd) == cwd
+                    && modelsByAgent[$0.session.agent] != nil
+            }
+            .sorted {
+                let left = $0.session.lastActivityAt ?? 0
+                let right = $1.session.lastActivityAt ?? 0
+                return left == right ? $0.id < $1.id : left > right
+            }
+        // Same two-tier rule as iOS: prefer the newest readable model in the
+        // directory; only when none is readable use the newest known agent's
+        // current default. A newer metadata-only row must not erase a model we
+        // can still recover from the next transcript.
+        let selection = history.first(where: { nonempty($0.session.model) != nil })
+            .map(restoredSelection(for:))
+            ?? history.first.map(restoredSelection(for:))
+            ?? (agent: defaultAgent, model: defaultModel)
+        return DesktopNewSessionPlan(
+            hostURL: directorySource.hostURL,
+            cwd: cwd,
+            agent: selection.agent,
+            model: selection.model
+        )
+    }
+
+    private static func directoryScore(_ item: SessionItem, query: String, terms: [String]) -> Int {
+        guard let cwd = normalizedPath(item.session.cwd) else { return Int.min }
+        let q = query.lowercased()
+        let path = cwd.lowercased()
+        let leaf = (cwd as NSString).lastPathComponent.lowercased()
+        let project = item.session.project.lowercased()
+        if path == q || leaf == q { return 4 }
+        if project == q { return 3 }
+        if leaf.hasPrefix(q) || project.hasPrefix(q) { return 2 }
+        if terms.allSatisfy({ path.contains($0) || project.contains($0) }) { return 1 }
+        return 0
+    }
+
+    private static func restoredSelection(for item: SessionItem) -> (agent: String, model: String) {
+        let agent = item.session.agent
+        guard let models = modelsByAgent[agent], let fallback = models.first else {
+            return (defaultAgent, defaultModel)
+        }
+        guard let model = nonempty(item.session.model), models.contains(model) else {
+            return (agent, fallback)
+        }
+        return (agent, model)
+    }
+
+    private static func normalizedPath(_ raw: String?) -> String? {
+        guard var path = nonempty(raw) else { return nil }
+        while path.count > 1 && path.hasSuffix("/") { path.removeLast() }
+        return path
+    }
+
+    private static func nonempty(_ raw: String?) -> String? {
+        guard let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+        return value
     }
 }
 
@@ -738,6 +872,7 @@ final class SessionStore: ObservableObject {
     @Published var lastRefreshed: Date?
     @Published var movingIds: Set<String> = []
     @Published var closingIds: Set<String> = []
+    @Published var creatingSession = false
 
     // MARK: Search across every session on every host
     //
@@ -791,6 +926,85 @@ final class SessionStore: ObservableObject {
             guard !Task.isCancelled else { return }
             await self?.performSearch(q)
         }
+    }
+
+    /// Ensure the host-backed search for the current text has landed before the
+    /// create planner consumes it. A fast click immediately after typing should
+    /// use the typed context, not whichever result page happened to be present.
+    private func settleSearch(_ raw: String) async {
+        setSearchQuery(raw)
+        if let task = searchTask { await task.value }
+    }
+
+    /// Resolve, create, then hand the returned tmux session to the same opener
+    /// every existing row uses. Returns user-facing error copy, or nil.
+    func createSession(searchQuery rawQuery: String) async -> String? {
+        guard !creatingSession else { return nil }
+        creatingSession = true
+        defer { creatingSession = false }
+
+        let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty { await settleSearch(query) }
+
+        guard let defaultHostURL = defaultCreationHostURL else {
+            return "No host is configured for new sessions."
+        }
+        let inbox: String?
+        if query.isEmpty {
+            do {
+                inbox = try await DesktopSessionCreator.fetchInbox(hostURL: defaultHostURL)
+            } catch {
+                return "Couldn't load Inbox: \(error.localizedDescription)"
+            }
+        } else {
+            inbox = nil
+        }
+
+        let candidates = items + searchClosed
+        guard let plan = DesktopNewSessionPlanner.plan(
+            query: query,
+            items: candidates,
+            defaultHostURL: defaultHostURL,
+            inbox: inbox
+        ) else {
+            return query.isEmpty
+                ? "The default host did not provide an Inbox directory."
+                : "No session with a working directory matches “\(query)”."
+        }
+        guard let host = creationHost(for: plan.hostURL) else {
+            return "The host for \(plan.cwd) is no longer configured."
+        }
+
+        do {
+            let created = try await DesktopSessionCreator.create(plan: plan, host: host)
+            if let error = Opener.open(created) { return error }
+            await refresh()
+            return nil
+        } catch {
+            return "Create failed: \(error.localizedDescription)"
+        }
+    }
+
+    private var defaultCreationHostURL: String? {
+        for entry in configuredHosts {
+            if let state = resolvedState(for: entry), state.error == nil { return entry.url }
+        }
+        return configuredHosts.first?.url ?? hosts.first?.url
+    }
+
+    private func creationHost(for url: String) -> HostState? {
+        let resolved = hosts.first { $0.url == url } ?? duplicateHostsByURL[url]
+        let entry = configuredHosts.first { $0.url == url }
+        guard resolved != nil || entry != nil else { return nil }
+        return HostState(
+            url: url,
+            sshTarget: entry.flatMap { Config.sshTarget(for: $0) } ?? resolved?.sshTarget,
+            remoteTransport: entry?.transport ?? resolved?.remoteTransport ?? .automatic,
+            displayName: entry?.displayName ?? resolved?.displayName,
+            info: resolved?.info,
+            error: resolved?.error,
+            isLocal: resolved?.isLocal ?? isLocalURL(url)
+        )
     }
 
     private func performSearch(_ q: String) async {
@@ -1212,7 +1426,7 @@ final class SessionStore: ObservableObject {
             busy: false,
             lastActivityAt: r.lastActivityAt,
             tmuxName: nil,
-            model: nil,
+            model: r.model,
             status: nil,
             lastUserText: r.lastUserText,
             closed: true
@@ -2094,12 +2308,14 @@ enum DesktopFeatureTestCLI {
         try expect(compactShort < 40,
                    "compact two-host status cluster stays dot-sized")
 
-        // Labels are dropped because they don't fit, not because the window is
-        // narrow — short host names survive a third-of-the-screen window.
-        try expect(ContentView.hostLabelsFit(clusterWidth: 67, windowWidth: 490),
-                   "short host names keep their labels at a third of a 13\" Air")
+        // Labels are dropped because they don't fit beside all four compact
+        // actions, not merely because the window crossed the compact threshold.
+        try expect(ContentView.hostLabelsFit(clusterWidth: 67, windowWidth: 600),
+                   "short host names keep their labels when all compact actions fit")
+        try expect(!ContentView.hostLabelsFit(clusterWidth: 67, windowWidth: 568),
+                   "short labels give way before they can push Create into overflow")
         try expect(!ContentView.hostLabelsFit(clusterWidth: 67, windowWidth: 440),
-                   "at the 440pt minimum even short labels give way to dots")
+                   "at the 440pt minimum short labels remain collapsed to dots")
         try expect(!ContentView.hostLabelsFit(clusterWidth: 300, windowWidth: 700),
                    "long host names drop to dots rather than push an item into the overflow")
         try expect(ContentView.hostLabelsFit(clusterWidth: 300, windowWidth: 900),
@@ -2172,6 +2388,119 @@ enum DesktopFeatureTestCLI {
                    "clearing menu search restores every session")
 
         try runSearchTests()
+        try runNewSessionPlannerTests()
+    }
+
+    /// Creation starts from search context, so pin the directory/model decision
+    /// independently of networking and iTerm automation.
+    @MainActor
+    private static func runNewSessionPlannerTests() throws {
+        let fallback = DesktopNewSessionPlanner.plan(
+            query: "   ",
+            items: [],
+            defaultHostURL: "http://default:8766",
+            inbox: "/Users/me/repos/_inbox"
+        )
+        try expect(fallback == DesktopNewSessionPlan(
+            hostURL: "http://default:8766",
+            cwd: "/Users/me/repos/_inbox",
+            agent: "claude",
+            model: "claude-opus-5"
+        ), "empty search uses the default host Inbox and the iOS default model")
+
+        let exactDirectory = newSessionTestItem(
+            id: "exact-directory", title: "older work", project: "lfg",
+            cwd: "/Users/me/dev/lfg", lastActivity: 100,
+            agent: "claude", model: "sonnet", hostURL: "http://pro:8766")
+        let incidentalMention = newSessionTestItem(
+            id: "incidental", title: "fix the lfg integration", project: "website",
+            cwd: "/Users/me/dev/website", lastActivity: 500,
+            agent: "claude", model: "opus", hostURL: "http://air:8766")
+        let latestInExactDirectory = newSessionTestItem(
+            id: "latest-model", title: "unrelated title", project: "workspace",
+            cwd: "/Users/me/dev/lfg/", lastActivity: 300,
+            agent: "codex", model: "gpt-5.6-sol", hostURL: "http://pro:8766")
+        let inferred = try require(DesktopNewSessionPlanner.plan(
+            query: "lfg",
+            items: [incidentalMention, exactDirectory, latestInExactDirectory],
+            defaultHostURL: "http://default:8766",
+            inbox: "/Users/me/repos/_inbox"
+        ), "search resolves a directory-bearing plan")
+        try expect(inferred == DesktopNewSessionPlan(
+            hostURL: "http://pro:8766",
+            cwd: "/Users/me/dev/lfg",
+            agent: "codex",
+            model: "gpt-5.6-sol"
+        ), "exact directory relevance wins and its newest session supplies agent/model")
+
+        let hostScopedDirectory = newSessionTestItem(
+            id: "host-scoped-directory", title: "selected project", project: "unique-project",
+            cwd: "/Users/me/dev/shared", lastActivity: 100,
+            agent: "codex", model: "gpt-5.6-sol", hostURL: "http://pro:8766")
+        let samePathOtherHost = newSessionTestItem(
+            id: "same-path-other-host", title: "unrelated title", project: "workspace",
+            cwd: "/Users/me/dev/shared", lastActivity: 900,
+            agent: "claude", model: "haiku", hostURL: "http://air:8766")
+        try expect(DesktopNewSessionPlanner.plan(
+            query: "unique-project",
+            items: [hostScopedDirectory, samePathOtherHost],
+            defaultHostURL: "http://default:8766",
+            inbox: "/Users/me/repos/_inbox"
+        )?.model == "gpt-5.6-sol",
+                   "model history stays on the selected host when another host has the same path")
+
+        let noModel = newSessionTestItem(
+            id: "codex-no-model", title: "render pipeline", project: "render",
+            cwd: "/Users/me/dev/render", lastActivity: 10,
+            agent: "codex", model: nil, hostURL: "http://studio:8766")
+        try expect(DesktopNewSessionPlanner.plan(
+            query: "render", items: [noModel],
+            defaultHostURL: "http://default:8766", inbox: "/inbox"
+        )?.model == "gpt-5.6-sol", "known agent without model uses that agent's iOS default")
+
+        let readableOlderModel = newSessionTestItem(
+            id: "render-known-model", title: "older render", project: "render",
+            cwd: "/Users/me/dev/render", lastActivity: 5,
+            agent: "codex", model: "gpt-5.6-terra", hostURL: "http://studio:8766")
+        try expect(DesktopNewSessionPlanner.plan(
+            query: "render", items: [noModel, readableOlderModel],
+            defaultHostURL: "http://default:8766", inbox: "/inbox"
+        )?.model == "gpt-5.6-terra",
+                   "newest readable directory model wins over newer metadata without a model")
+
+        try expect(DesktopNewSessionPlanner.plan(
+            query: "missing", items: [exactDirectory],
+            defaultHostURL: "http://default:8766", inbox: "/inbox"
+        ) == nil, "non-empty search with no directory-bearing match does not fall back to Inbox")
+
+        let request = try DesktopSessionCreator.newSessionRequest(plan: inferred)
+        let body = try require(request.httpBody, "create request has a JSON body")
+        let payload = try require(
+            try JSONSerialization.jsonObject(with: body) as? [String: String],
+            "create request JSON has string fields")
+        try expect(request.httpMethod == "POST" && request.url?.path == "/api/sessions/new",
+                   "create request targets POST /api/sessions/new")
+        try expect(payload == [
+            "cwd": "/Users/me/dev/lfg",
+            "prompt": "",
+            "agent": "codex",
+            "model": "gpt-5.6-sol",
+        ], "create request sends the inferred directory, agent, and model with an empty prompt")
+
+        let createdHost = HostState(
+            url: "http://pro:8766", sshTarget: "pro", remoteTransport: .moshBridged,
+            displayName: "Pro", info: HostInfoResponse(hostId: "pro-id", hostName: "Pro.local"),
+            isLocal: false)
+        let created = try DesktopSessionCreator.createdItem(
+            response: DesktopNewSessionResponse(
+                ok: true, sessionId: "new-id", tmuxName: "lfg-new123",
+                cwd: "/Users/me/dev/lfg", agent: "codex"),
+            plan: inferred,
+            host: createdHost)
+        try expect(created.session.tmuxName == "lfg-new123" && created.session.sessionId == "new-id",
+                   "create response retains the returned tmux and session identifiers")
+        try expect(created.hostSSHTarget == "pro" && created.hostRemoteTransport == .moshBridged,
+                   "created row retains host transport metadata for the existing iTerm opener")
     }
 
     /// Search spans every session on every host, so the rules that keep that
@@ -2269,6 +2598,40 @@ enum DesktopFeatureTestCLI {
             hostIsLocal: true,
             hostSSHTarget: nil,
             needsInput: needsInput
+        )
+    }
+
+    private static func newSessionTestItem(
+        id: String,
+        title: String,
+        project: String,
+        cwd: String,
+        lastActivity: Double,
+        agent: String,
+        model: String?,
+        hostURL: String
+    ) -> SessionItem {
+        SessionItem(
+            session: APISession(
+                agent: agent,
+                pid: id.hashValue,
+                cwd: cwd,
+                project: project,
+                title: title,
+                sessionId: id,
+                busy: false,
+                lastActivityAt: lastActivity,
+                tmuxName: nil,
+                model: model,
+                status: nil,
+                lastUserText: nil,
+                closed: true
+            ),
+            hostURL: hostURL,
+            hostId: hostURL,
+            hostLabel: URL(string: hostURL)?.host ?? hostURL,
+            hostIsLocal: false,
+            hostSSHTarget: nil
         )
     }
 
@@ -2440,6 +2803,113 @@ enum DesktopStatusSnapshotCLI {
         let message: String
         init(_ message: String) { self.message = message }
         var errorDescription: String? { message }
+    }
+}
+
+// MARK: - Creating sessions
+
+enum DesktopSessionCreator {
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        // Codex creation may need several bind polls before its rollout id is
+        // available, so this must exceed the ordinary list request timeout.
+        configuration.timeoutIntervalForRequest = 60
+        return URLSession(configuration: configuration)
+    }()
+
+    static func fetchInbox(hostURL: String) async throws -> String {
+        guard let url = endpoint(hostURL, path: "/api/dirs") else {
+            throw CreationError.message("bad host URL")
+        }
+        let (data, response) = try await session.data(for: DesktopAPI.request(url))
+        try validate(response, data: data)
+        let inbox = try JSONDecoder().decode(DesktopDirsResponse.self, from: data).inbox
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !inbox.isEmpty else { throw CreationError.message("host returned an empty Inbox") }
+        return inbox
+    }
+
+    static func create(plan: DesktopNewSessionPlan, host: HostState) async throws -> SessionItem {
+        let request = try newSessionRequest(plan: plan)
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+        let created = try JSONDecoder().decode(DesktopNewSessionResponse.self, from: data)
+        if created.ok == false { throw CreationError.message("host returned ok=false") }
+        return try createdItem(response: created, plan: plan, host: host)
+    }
+
+    /// Internal request seam used by the headless feature suite.
+    static func newSessionRequest(plan: DesktopNewSessionPlan) throws -> URLRequest {
+        guard let url = endpoint(plan.hostURL, path: "/api/sessions/new") else {
+            throw CreationError.message("bad host URL")
+        }
+        var request = DesktopAPI.request(url, method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "cwd": plan.cwd,
+            "prompt": "",
+            "agent": plan.agent,
+            "model": plan.model,
+        ])
+        return request
+    }
+
+    /// Convert the API response into the existing opener's input rather than
+    /// growing a second local/remote iTerm attachment implementation.
+    static func createdItem(
+        response: DesktopNewSessionResponse,
+        plan: DesktopNewSessionPlan,
+        host: HostState
+    ) throws -> SessionItem {
+        guard let tmuxName = response.tmuxName?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !tmuxName.isEmpty else {
+            throw CreationError.message("host created no tmux session")
+        }
+        let cwd = response.cwd?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedCwd = (cwd?.isEmpty == false ? cwd : nil) ?? plan.cwd
+        let project = (resolvedCwd as NSString).lastPathComponent
+        return SessionItem(
+            session: APISession(
+                agent: response.agent ?? plan.agent,
+                pid: -1,
+                cwd: resolvedCwd,
+                project: project.isEmpty ? resolvedCwd : project,
+                title: "New session",
+                sessionId: response.sessionId,
+                busy: false,
+                lastActivityAt: Date().timeIntervalSince1970 * 1000,
+                tmuxName: tmuxName,
+                model: plan.model,
+                status: nil,
+                lastUserText: nil
+            ),
+            hostURL: host.url,
+            hostId: host.info?.hostId ?? host.url,
+            hostLabel: host.label,
+            hostIsLocal: host.isLocal,
+            hostSSHTarget: host.sshTarget,
+            hostRemoteTransport: host.remoteTransport
+        )
+    }
+
+    private static func endpoint(_ baseURL: String, path: String) -> URL? {
+        URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path)
+    }
+
+    private static func validate(_ response: URLResponse, data: Data) throws {
+        guard let http = response as? HTTPURLResponse else { return }
+        guard (200..<300).contains(http.statusCode) else {
+            let decoded = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let message = decoded?["error"] as? String
+            throw CreationError.message(message ?? "HTTP \(http.statusCode)")
+        }
+    }
+
+    private enum CreationError: LocalizedError {
+        case message(String)
+        var errorDescription: String? {
+            switch self { case .message(let message): return message }
+        }
     }
 }
 
@@ -4117,16 +4587,16 @@ struct ContentView: View {
     /// menu). Re-measure with `--window-fit` after touching any toolbar item.
     static let compactToolbarWidth: CGFloat = 820
 
-    /// Chrome plus the three compact icon items. Whatever a compact window has
+    /// Chrome plus the four standard-size compact icon actions. Whatever a compact window has
     /// left over this is what the host-status cluster may spend on labels.
-    /// Calibrated with `--window-fit`: a 67pt labelled cluster still fits at
-    /// 470 but not 460, so the true reserve is ~403 — 410 keeps a small margin.
-    static let compactStatusReserve: CGFloat = 410
+    /// Runtime AX capture at 568pt showed short host labels pushing Create out;
+    /// 530pt collapses those names there while retaining them around 600pt.
+    static let compactStatusReserve: CGFloat = 530
 
     private var isCompactToolbar: Bool { windowWidth < Self.compactToolbarWidth }
 
-    /// Short host names ("Pro", "Air") still fit in a third-of-the-screen
-    /// window, so only drop to bare dots when they genuinely don't.
+    /// Keep short host names when all four actions still fit; otherwise the
+    /// create action outranks labels and the hosts collapse to bare dots.
     static func hostLabelsFit(clusterWidth: CGFloat, windowWidth: CGFloat) -> Bool {
         guard windowWidth < compactToolbarWidth else { return true }
         return clusterWidth <= windowWidth - compactStatusReserve
@@ -4165,11 +4635,9 @@ struct ContentView: View {
             // gets the same choice for the width of one icon.
             //
             // Directory filtering rides along in this menu when compact. At the
-            // 440pt minimum the toolbar has roughly 140pt for ALL items and
-            // already spends 125 — measured with `--window-fit`, adding a fifth
-            // item there drops refresh AND search into the » overflow. So the
-            // narrow window collapses both display controls into one menu rather
-            // than losing unrelated chrome.
+            // The 568pt minimum has room for this standard-size menu plus the
+            // other three trailing actions. Directory filtering rides along in
+            // the menu rather than consuming a fifth compact toolbar item.
             Menu {
                 picker.pickerStyle(.inline).labelsHidden()
                 Divider()
@@ -4187,6 +4655,61 @@ struct ContentView: View {
         } else {
             picker.pickerStyle(.segmented)
         }
+    }
+
+    private var createSessionButton: some View {
+        Button {
+            Task {
+                if let error = await store.createSession(searchQuery: searchText) {
+                    alertMessage = error
+                }
+            }
+        } label: {
+            if store.creatingSession {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: "plus")
+            }
+        }
+        .disabled(store.creatingSession)
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .help(isSearching ? "Create session from search" : "Create session in Inbox")
+        .accessibilityLabel("Create session")
+        .accessibilityIdentifier("create_session_button")
+    }
+
+    private var refreshButton: some View {
+        Button {
+            Task { await store.refresh() }
+        } label: {
+            if store.refreshing {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: "arrow.clockwise")
+            }
+        }
+        .disabled(store.refreshing)
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .help("Refresh (auto-refreshes every 10s)")
+        .accessibilityIdentifier("refresh_button")
+    }
+
+    private var compactSearchButton: some View {
+        Button {
+            compactSearchShown.toggle()
+            searchFieldFocused = compactSearchShown
+            if !compactSearchShown { searchText = "" }
+        } label: {
+            Image(systemName: searchText.isEmpty
+                  ? "magnifyingglass"
+                  : "line.3.horizontal.decrease.circle.fill")
+        }
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .help(compactSearchShown ? "Hide search" : "Search sessions")
+        .accessibilityIdentifier("compact_search_toggle")
     }
 
     /// Compact windows can't afford a permanent search field in the toolbar,
@@ -4275,10 +4798,9 @@ struct ContentView: View {
             }
         }
         .listStyle(.inset)
-        // 440 is the narrowest width whose toolbar still shows every compact
-        // item (measured with `--window-fit`), and comfortably under a third
-        // of a 13" Air's 1470pt-wide desktop.
-        .frame(minWidth: 440, minHeight: 420)
+        // 568 is the measured minimum that keeps all four standard-size compact
+        // actions visible on the trailing edge without an overflow menu.
+        .frame(minWidth: 568, minHeight: 420)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { width in
@@ -4330,38 +4852,14 @@ struct ContentView: View {
                 .sharedBackgroundVisibility(.hidden)
             }
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    Task { await store.refresh() }
-                } label: {
-                    if store.refreshing {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                }
-                .disabled(store.refreshing)
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
-                .help("Refresh (auto-refreshes every 10s)")
+                refreshButton
             }
             // Adjacent items in one placement share a glass capsule by
             // default; hide it so refresh is its own circle beside search.
             .sharedBackgroundVisibility(.hidden)
             if isCompactToolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        compactSearchShown.toggle()
-                        searchFieldFocused = compactSearchShown
-                        if !compactSearchShown { searchText = "" }
-                    } label: {
-                        Image(systemName: searchText.isEmpty
-                              ? "magnifyingglass"
-                              : "line.3.horizontal.decrease.circle.fill")
-                    }
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
-                    .help(compactSearchShown ? "Hide search" : "Search sessions")
-                    .accessibilityIdentifier("compact_search_toggle")
+                    compactSearchButton
                 }
                 .sharedBackgroundVisibility(.hidden)
             } else {
@@ -4380,6 +4878,11 @@ struct ContentView: View {
                     .frame(width: 150, height: 30)
                 }
             }
+            // Mirrors iOS's search-then-plus reading order at every width.
+            ToolbarItem(placement: .primaryAction) {
+                createSessionButton
+            }
+            .sharedBackgroundVisibility(.hidden)
         }
         // One presentation site for both routes into the panel — the toolbar
         // button when there's room, the grouping menu when there isn't. Anchored
