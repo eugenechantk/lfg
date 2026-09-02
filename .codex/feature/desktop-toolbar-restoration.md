@@ -16,7 +16,7 @@ As an LFG desktop user, I want the toolbar actions to use normal macOS control s
 - [x] SC2: All four actions appear together on the trailing/right side, while host status remains leading/left. — **Verify by:** deterministic window snapshots and independent macOS visual audit.
 - [x] SC3: No toolbar action overflows at any allowed window width. — **Verify by:** `--window-fit` at the measured minimum, compact threshold, and full width.
 - [x] SC4: Create-session behavior and existing desktop behavior remain intact. — **Verify by:** complete `--desktop-feature-test` suite and clean desktop build.
-- [ ] SC5: The corrected bundle is installed and running on Pro and Air. — **Verify by:** matching installed executable hashes, signature validation, and installed-binary feature tests on both hosts.
+- [x] SC5: The corrected bundle is installed and running on Pro and Air. — **Verify by:** matching installed executable hashes, signature validation, and installed-binary feature tests on both hosts.
 
 ## Test Strategy
 
@@ -49,11 +49,13 @@ As an LFG desktop user, I want the toolbar actions to use normal macOS control s
 | SC2 | PASS | Independent audit confirms host status left and all four actions trailing/right at 568pt and 900pt. |
 | SC3 | PASS | `03-window-fit.log`: `fits:true`, `dropped:[]` at 568, 600, 700, 819, 820, and 900pt. |
 | SC4 | PASS | Fresh build succeeded; `02-desktop-feature-test.log` reports 128/128 passing assertions. |
-| SC5 | Pending | Install and cross-host verification follow the scoped commit. |
+| SC5 | PASS | Commit `8066b3c` was built and signed in an isolated worktree. Pro and Air both run `/Applications/lfg.app` with SHA-256 `28b2f5ed03273ba30ce788be518c8efc9ce3d97299bd3c67761df04f50955571`; the installed binary reports 128/128 passing assertions on each host. |
+
+Independent audit: **PASS** — `.claude/evidence/20260902-110946-verification-audit/evidence.md`.
 
 ## Residual Risks
 
-- The independent audit is PARTIAL only because installed-bundle verification on Pro and Air is the remaining phase.
+- None. Previous installed bundles remain recoverable in each Mac's Trash.
 
 ## Bugs
 
