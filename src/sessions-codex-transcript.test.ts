@@ -566,3 +566,82 @@ describe("Codex CLI transcript parity", () => {
     expect(normalizeLineMessages(record("event_msg", { type: "future_bookkeeping" }))).toEqual([]);
   });
 });
+
+// Codex records a FAILED turn only as `task_complete` with an `error` object —
+// no assistant message, no standalone `error` event (verified across every
+// Sep 2026 rollout; the older `error` events were compaction stream hiccups).
+// Two usage-limited sessions on 2026-09-06/07 therefore rendered nothing at all.
+describe("codex turn errors (task_complete.error)", () => {
+  const usageLimit = {
+    type: "task_complete",
+    turn_id: "t1",
+    last_agent_message: null,
+    error: {
+      message:
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 9:00 PM.",
+      codex_error_info: "usage_limit_exceeded",
+    },
+    started_at: 1788715972,
+    completed_at: 1788715976,
+    duration_ms: 4117,
+  };
+
+  test("usage limit becomes an assistant API-error turn", () => {
+    const msgs = normalizeLineMessages(record("event_msg", usageLimit));
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).toMatchObject({
+      role: "assistant",
+      kind: "text",
+      apiError: true,
+      errorCode: "usage_limit_exceeded",
+      ts: Date.parse(timestamp),
+    });
+    expect(msgs[0].text).toBe(usageLimit.error.message);
+    expect(msgs[0].id).toBeTruthy();
+  });
+
+  test("a JSON-wrapped upstream 400 is unwrapped to its message", () => {
+    const wrapped = JSON.stringify({
+      type: "error",
+      status: 400,
+      error: {
+        type: "invalid_request_error",
+        message: "The 'gpt-5.4' model is not supported when using Codex with a ChatGPT account.",
+      },
+    });
+    const [msg] = normalizeLineMessages(
+      record("event_msg", {
+        type: "task_complete",
+        error: { message: wrapped, codex_error_info: "other" },
+      }),
+    );
+    expect(msg).toMatchObject({ role: "assistant", apiError: true, errorCode: "other" });
+    expect(msg.text).toBe(
+      "The 'gpt-5.4' model is not supported when using Codex with a ChatGPT account.",
+    );
+  });
+
+  test("an HTML error page is cut at the status line", () => {
+    const [msg] = normalizeLineMessages(
+      record("event_msg", {
+        type: "task_complete",
+        error: {
+          message: "unexpected status 403 Forbidden: <html>\n  <head><style>body{}</style></head></html>",
+          codex_error_info: "other",
+        },
+      }),
+    );
+    expect(msg.text).toBe("unexpected status 403 Forbidden:");
+  });
+
+  test("a successful task_complete still renders nothing", () => {
+    expect(
+      normalizeLineMessages(
+        record("event_msg", { type: "task_complete", turn_id: "t2", last_agent_message: "done", error: null }),
+      ),
+    ).toEqual([]);
+    expect(
+      normalizeLineMessages(record("event_msg", { type: "task_complete", turn_id: "t3" })),
+    ).toEqual([]);
+  });
+});

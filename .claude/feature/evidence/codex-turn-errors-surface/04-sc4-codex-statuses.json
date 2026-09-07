@@ -1,0 +1,56 @@
+{
+  "sessionId": "01a0763b-ad64-7f80-b7fb-cfa1dd3cbaf7",
+  "status": "ok",
+  "statusReason": null,
+  "statusDetail": null,
+  "tmuxName": "lfg-37d7c4",
+  "lastActivityAt": 1788690631626
+}
+{
+  "sessionId": "01a07207-b399-7213-bb18-95fe1de17ca6",
+  "status": "ok",
+  "statusReason": null,
+  "statusDetail": null,
+  "tmuxName": "lfg-4bf7f5",
+  "lastActivityAt": 1788700609877
+}
+{
+  "sessionId": "01a07641-e0cf-7660-8394-3058cbd461dc",
+  "status": "ok",
+  "statusReason": null,
+  "statusDetail": null,
+  "tmuxName": "lfg-514c45",
+  "lastActivityAt": 1788692572668
+}
+{
+  "sessionId": "01a0722d-c95c-7e30-931c-4e7de6aebd9c",
+  "status": "ok",
+  "statusReason": null,
+  "statusDetail": null,
+  "tmuxName": "lfg-b4f5b8",
+  "lastActivityAt": 1788704149163
+}
+{
+  "sessionId": "01a076bc-cc43-78e2-a9b7-78f2bdda4109",
+  "status": "blocked",
+  "statusReason": "out_of_credits",
+  "statusDetail": "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 9:00 PM.",
+  "tmuxName": "lfg-162d30",
+  "lastActivityAt": 1788711854818
+}
+{
+  "sessionId": "01a07733-a9ee-7ea1-a46a-17fa446b8b9b",
+  "status": "ok",
+  "statusReason": null,
+  "statusDetail": null,
+  "tmuxName": "lfg-26fd21",
+  "lastActivityAt": 1788707950886
+}
+{
+  "sessionId": "01a077c7-b6bf-7431-9bb0-1775dfd7e54b",
+  "status": "blocked",
+  "statusReason": "out_of_credits",
+  "statusDetail": "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 9:00 PM.",
+  "tmuxName": "lfg-62558a",
+  "lastActivityAt": 1788715976605
+}

@@ -204,6 +204,21 @@ function computeStatus(
     };
   }
 
+  // --- codex vocabulary -------------------------------------------------
+  // A codex turn error carries `codex_error_info` (surfaced as errorCode) and
+  // prose, never an HTTP status — deliberately: its "unexpected status 403
+  // Forbidden" is an edge/HTML page from chatgpt.com, not an auth failure, and
+  // must not land in the "run /login" branch above. Its two named cases map
+  // onto the existing reasons so no client needs a protocol change; the detail
+  // keeps codex's own sentence, which is where the reset time lives.
+  const firstLine = (max: number) => text.split("\n")[0].trim().slice(0, max);
+  if (code === "usage_limit_exceeded") {
+    return { status: "blocked", statusReason: "out_of_credits", statusDetail: firstLine(240) };
+  }
+  if (/\bmodel (?:is not supported\b|requires a newer version\b)/i.test(text)) {
+    return { status: "blocked", statusReason: "model_unavailable", statusDetail: firstLine(240) };
+  }
+
   // --- prose as a labeller, never as the gate ---------------------------
   // These stay because no structured code has been observed for the model and
   // credit cases yet. They now only *label* a turn already proven to be an API
@@ -1382,6 +1397,25 @@ function codexMessage(
   return { id: suffix && id ? `${id}#${suffix}` : id, role, kind, text, ts };
 }
 
+// The human-readable core of a codex `task_complete.error.message`. Two shapes
+// observed that hide the actual sentence: the upstream 400 comes JSON-wrapped
+// (`{"type":"error","status":400,"error":{"message":"The 'gpt-5.4' model is
+// not supported…"}}`), and a 403 from chatgpt.com carries an entire HTML page
+// after the status line. Unwrap the first, cut the second at the markup.
+function codexTurnErrorText(message: string): string {
+  let text = message.trim();
+  if (text.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(text) as { error?: { message?: unknown }; message?: unknown };
+      const inner = parsed?.error?.message ?? parsed?.message;
+      if (typeof inner === "string" && inner.trim()) text = inner.trim();
+    } catch {}
+  }
+  const markup = text.search(/<(?:!doctype|html)\b/i);
+  if (markup >= 0) text = text.slice(0, markup).trim();
+  return text;
+}
+
 function mcpResultText(result: unknown): string {
   if (!result || typeof result !== "object" || Array.isArray(result)) return "";
   const tagged = result as { Ok?: unknown; Err?: unknown };
@@ -1682,6 +1716,23 @@ function normalizeCodexLine(
     }
     if (p.type === "error" && p.message?.trim()) {
       return [codexMessage(x, "system", "tool_result", p.message.trim(), ts)];
+    }
+    // A FAILED turn. Codex records it nowhere else: no assistant message, no
+    // standalone `error` event (those are transient stream/compaction hiccups
+    // it retries on its own). Two usage-limited sessions on 2026-09-06/07
+    // showed nothing at all because this fell through to `[]`. It is emitted
+    // in the same shape Claude Code writes an API error — an assistant text
+    // turn flagged `apiError` — so `lastAssistantMsg` → `computeStatus` grades
+    // it and the client's "API error" label / "Build paused" banner render it.
+    if (p.type === "task_complete") {
+      const err = p.error;
+      if (!err || typeof err !== "object" || Array.isArray(err)) return [];
+      const { message, codex_error_info } = err as { message?: unknown; codex_error_info?: unknown };
+      const text = typeof message === "string" ? codexTurnErrorText(message) : "";
+      if (!text) return [];
+      const errorCode =
+        typeof codex_error_info === "string" && codex_error_info ? codex_error_info : "other";
+      return [{ ...codexMessage(x, "assistant", "text", text, ts), apiError: true, errorCode }];
     }
     if ((p.type === "warning" || p.type === "guardian_warning") && p.message?.trim()) {
       return [codexMessage(x, "system", "tool_result", `Warning\n${p.message.trim()}`, ts)];
@@ -2720,6 +2771,7 @@ async function listSessionsUncached(
 
     const transcriptPath = thread?.path ?? (sessionId ? await findCodexTranscriptById(sessionId) : null);
     let last: SessionMsg | null = null;
+    let lastAssistant: SessionMsg | null = null;
     let lastActivityAt: number | null = null;
     let lastUser: string | null = null;
     let liveModel: string | null = null;
@@ -2734,6 +2786,10 @@ async function listSessionsUncached(
       lastActivityAt = last?.ts ?? mtimeMs;
       lastUser = await lastUserText(transcriptPath).catch(() => null);
       liveModel = await lastCodexModel(transcriptPath).catch(() => null);
+      // Status is graded from the last ASSISTANT turn, same as the claude site:
+      // grading `last` (any role) meant sending into a usage-limited codex
+      // session put a user row at the tail and erased its "blocked".
+      lastAssistant = await lastAssistantMsg(transcriptPath).catch(() => null);
     }
     const project = projectName(cwd);
     let title = (sessionId && overrides[sessionId]) || null;
@@ -2774,7 +2830,7 @@ async function listSessionsUncached(
       // the arg alone left the row with no model at all. Names are surfaced
       // verbatim: codex slugs are catalog-driven, not the Claude aliases.
       model: liveModel ?? p.cmd.match(/--model\s+(\S+)/)?.[1] ?? null,
-      ...computeStatus(last, null),
+      ...computeStatus(lastAssistant, null),
     });
   }
 

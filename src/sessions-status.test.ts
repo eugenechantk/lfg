@@ -195,3 +195,80 @@ describe("computeStatus — selecting the row to classify", () => {
     } catch {}
   });
 });
+
+// Codex has its own error vocabulary: no isApiErrorMessage, no HTTP status —
+// just `task_complete.error.codex_error_info` + prose. These are the exact
+// messages from the Sep 2026 rollouts that shipped invisibly.
+describe("computeStatus — codex turn errors", () => {
+  const codexError = (message: string, codex_error_info: string, ts = 0): string =>
+    JSON.stringify({
+      timestamp: new Date(ts).toISOString(),
+      type: "event_msg",
+      payload: { type: "task_complete", turn_id: "t", last_agent_message: null, error: { message, codex_error_info } },
+    });
+  const usageLimit =
+    "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 9:00 PM.";
+
+  test("usage limit is blocked as out_of_credits, with codex's message as the detail", () => {
+    const r = classify(codexError(usageLimit, "usage_limit_exceeded"), null);
+    expect(r.status).toBe("blocked");
+    expect(r.statusReason).toBe("out_of_credits");
+    // The reset time is the one thing the user needs; keep the sentence intact.
+    expect(r.statusDetail).toBe(usageLimit);
+  });
+
+  test("an unsupported / too-new model is model_unavailable", () => {
+    const wrap = (message: string) =>
+      JSON.stringify({ type: "error", status: 400, error: { type: "invalid_request_error", message } });
+    const unsupported = classify(
+      codexError(wrap("The 'gpt-5.4' model is not supported when using Codex with a ChatGPT account."), "other"),
+      null,
+    );
+    expect(unsupported.statusReason).toBe("model_unavailable");
+    expect(unsupported.statusDetail).toBe(
+      "The 'gpt-5.4' model is not supported when using Codex with a ChatGPT account.",
+    );
+    const tooNew = classify(
+      codexError(
+        wrap("The 'gpt-6-astra' model requires a newer version of Codex. Please upgrade to the latest app or CLI."),
+        "other",
+      ),
+      null,
+    );
+    expect(tooNew.statusReason).toBe("model_unavailable");
+  });
+
+  test("any other codex turn error is blocked as unknown with the first line", () => {
+    const r = classify(
+      codexError("unexpected status 404 Not Found: Unknown error, url: https://chatgpt.com/backend-api/codex/responses", "other"),
+      null,
+    );
+    expect(r.status).toBe("blocked");
+    expect(r.statusReason).toBe("unknown");
+    expect(r.statusDetail).toMatch(/^unexpected status 404 Not Found/);
+  });
+
+  test("a codex 403 HTML page is NOT routed to the /login advice", () => {
+    // It's an edge/Cloudflare page from chatgpt.com, not an auth failure.
+    const r = classify(codexError("unexpected status 403 Forbidden: <html><body>blocked</body></html>", "other"), null);
+    expect(r.status).toBe("blocked");
+    expect(r.statusReason).toBe("unknown");
+  });
+
+  test("selection: a later codex user row does not erase the block", async () => {
+    // Same latch as the Claude case above, on the codex rollout shape: the
+    // codex list path used to grade `previewLast` (any role), so sending into
+    // the wedged session flipped it back to "ok".
+    const dir = mkdtempSync(join(tmpdir(), "status-codex-"));
+    const p = join(dir, "rollout.jsonl");
+    const userRow = JSON.stringify({
+      timestamp: new Date(1).toISOString(),
+      type: "event_msg",
+      payload: { type: "user_message", message: "are you there?" },
+    });
+    writeFileSync(p, [codexError(usageLimit, "usage_limit_exceeded"), userRow].join("\n") + "\n");
+    const r = statusForTest(await lastAssistantForTest(p), null);
+    expect(r.statusReason).toBe("out_of_credits");
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

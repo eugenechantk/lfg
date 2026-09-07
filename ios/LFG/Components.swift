@@ -322,12 +322,18 @@ struct PausedBannerView: View {
     private var title: String {
         session.statusReason == "out_of_credits" ? "Build paused — out of credits" : "Build paused"
     }
+    /// The server's `statusDetail` is the agent's own sentence and wins when
+    /// present: for a codex usage limit it carries the reset time ("try again
+    /// at 9:00 PM"), which a generic "top up" line would hide. The model-switch
+    /// hint is only true advice for `model_unavailable`.
     private var detail: String {
+        let hint = session.statusReason == "model_unavailable"
+            ? " Switch to a working model to continue." : ""
+        if let text = session.statusDetail, !text.isEmpty { return text + hint }
         if session.statusReason == "out_of_credits" {
             return "This session's agent ran out of AI credits. Top up to resume."
         }
-        return (session.statusDetail ?? "The selected model isn't available.")
-             + " Switch to a working model to continue."
+        return "The selected model isn't available." + hint
     }
 }
 
