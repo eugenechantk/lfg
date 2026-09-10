@@ -24,7 +24,12 @@
 set -euo pipefail
 
 ssh_cmd="ssh"
-server_cmd='PATH=/opt/homebrew/bin:/usr/local/bin:$PATH exec mosh-server'
+# ~/.local/mosh-faint (both hosts) is mosh master + a patch that carries SGR 2
+# (dim/faint) through the emulator — stock mosh 1.4.0 drops it, which visibly
+# flattens codex's dim-heavy TUI. Prepending the dir is a no-op where it does
+# not exist, so stock mosh remains the fallback on either side.
+# See .claude/diagnosis-codex-mosh-dim-20260905.md.
+server_cmd='PATH=$HOME/.local/mosh-faint/bin:/opt/homebrew/bin:/usr/local/bin:$PATH exec mosh-server'
 lport=""
 remote_range="60100:60199"
 here="${0:A:h}"
@@ -47,11 +52,126 @@ if (( $# )) && [[ "$1" == "--" ]]; then shift; fi
 ssh_words=(${=ssh_cmd})
 ssh_run=("${ssh_words[@]}" -T -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
 
+# LAN fast path. Both Macs sit on the same LAN much of the time, yet the
+# Cloudflare path detours every keystroke through the VPN exit and a CF edge
+# (~150-250ms echo, measured 2026-09-05); direct LAN ssh is ~20-30ms. The
+# peers' Surfshark blocks unsolicited inbound UDP (so real mosh UDP can't run
+# Air->Pro) but LAN TCP/22 passes both ways, so we keep the same datagram
+# bridge and just carry it over direct ssh when the peer answers on the LAN.
+# DHCP addresses are pinned below on purpose: mDNS (.local) is blocked by the
+# VPN and a failed lookup stalls the probe for seconds, while a stale IP just
+# fails the 1s TCP probe; lan_discover then sweeps the subnet for the peer's
+# host key, so a reassigned lease costs ~2s once, not a manual re-pin. LFG_MOSH_NO_LAN=1 skips the probe (testing / misbehaving
+# LAN). See .claude/diagnosis-mosh-sluggish-20260905.md.
+# Candidates are probed in order: LAN address first, then the Tailscale
+# address (100.x — direct WireGuard when both Macs run Tailscale; probes fail
+# instantly with no route while Tailscale is stopped, so the tier costs
+# nothing until it's enabled). Host keys for every candidate are pre-seeded.
+typeset -A direct_hosts=(
+  pro "eugenechan@192.168.0.193 eugenechan@192.168.0.242 eugenechan@100.120.101.14"
+  air "eugenechan@192.168.0.14 eugenechan@192.168.0.76 eugenechan@100.75.162.40"
+)
+# The peers' ed25519 host keys. LAN discovery (lan_discover) accepts only a host
+# presenting exactly this key, so a stranger on the subnet can never be picked.
+typeset -A direct_hostkeys=(
+  pro "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFzAU0Yt24HB73NvFcFACrUfa6xHTAZERmLaPRy2CCxS"
+  air "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID0xO9HBk7GvK0woPu57vtAwfl5/hniqof/vHsAF+k8e"
+)
+cache_dir="${LFG_MOSH_CACHE_DIR:-$HOME/.cache/mosh-bridged}"
+log="$HOME/Library/Logs/mosh-bridge.log"
+zmodload zsh/datetime
+
+# lan_discover TARGET — the router hands out fresh DHCP leases after a day away
+# and offers no MAC binding, so when every pinned/cached address fails, sweep
+# the local /24 for sshd (parallel TCP/22 probes, ~1-2s) and keep the host whose
+# ed25519 key equals direct_hostkeys[TARGET]. Prints user@ip. Only on a /24
+# behind a non-VPN default route, at most once per 120s. See
+# .claude/feature/mosh-bridged-lan-discovery.md.
+lan_discover() {
+  local t="$1"
+  local want="${direct_hostkeys[$t]:-}"
+  local user="${${=direct_hosts[$t]}[1]%@*}"
+  [[ -n "$want" ]] || return 1
+  local iface myip mask prefix stamp=0 now=$EPOCHSECONDS
+  iface=$(netstat -rn -f inet 2>/dev/null | awk '$1=="default" && $NF !~ /^utun/ {print $NF; exit}')
+  [[ -n "$iface" ]] || return 1
+  myip=$(ipconfig getifaddr "$iface" 2>/dev/null) || return 1
+  mask=$(ifconfig "$iface" 2>/dev/null | awk '/inet /{print $4; exit}')
+  [[ "$mask" == 0xffffff00 ]] || return 1
+  mkdir -p "$cache_dir"
+  [[ -f "$cache_dir/$t.sweep" ]] && stamp=$(<"$cache_dir/$t.sweep")
+  (( now - stamp >= 120 )) || return 1
+  print -r -- "$now" >| "$cache_dir/$t.sweep"
+  prefix="${myip%.*}"
+  local tmp="$cache_dir/$t.sweep.$$" ip got found=""
+  : >| "$tmp"
+  ( for i in {1..254}; do
+      ip="$prefix.$i"
+      [[ "$ip" == "$myip" ]] && continue
+      ( nc -z -G 1 "$ip" 22 >/dev/null 2>&1 && print -r -- "$ip" >> "$tmp" ) &
+    done; wait )
+  for ip in $(sort -t. -k4 -n "$tmp"); do
+    # ssh-keyscan prints its "# host:22 banner" comment on stdout; skip it.
+    got=$(ssh-keyscan -t ed25519 -T 2 "$ip" 2>/dev/null | awk '$1 !~ /^#/ {print $2" "$3; exit}') || true
+    if [[ "$got" == "$want" ]]; then found="$ip"; break; fi
+  done
+  rm -f "$tmp"
+  if [[ -z "$found" ]]; then
+    print -r -- "$(date '+%F %T') $t: sweep of $prefix.0/24 found no host with $t's key" >>| "$log"
+    return 1
+  fi
+  # Seed known_hosts so StrictHostKeyChecking=yes accepts it; drop a stale entry
+  # for this address first (some other device held it before).
+  if ! ssh-keygen -F "$found" -f "$HOME/.ssh/known_hosts" 2>/dev/null | grep -q -F -- "${want#* }"; then
+    ssh-keygen -R "$found" -f "$HOME/.ssh/known_hosts" >/dev/null 2>&1 || true
+    print -r -- "$found $want" >> "$HOME/.ssh/known_hosts"
+  fi
+  print -r -- "$user@$found" >| "$cache_dir/$t.lan"
+  print -r -- "$(date '+%F %T') $t: LAN discovered $user@$found by sweep of $prefix.0/24 (host key matched)" >>| "$log"
+  print -r -- "$user@$found"
+}
+
+lan_ssh=""
+lan_cands=()
+if [[ -z "${LFG_MOSH_NO_LAN:-}" && -n "${direct_hosts[$target]:-}" ]]; then
+  lan_cands=(${=direct_hosts[$target]})
+  cached=""
+  [[ -f "$cache_dir/$target.lan" ]] && cached=$(<"$cache_dir/$target.lan")
+  # Last address that worked goes first (leases flip between known values;
+  # each miss costs a 1s probe).
+  if [[ -n "$cached" ]]; then
+    lan_cands=("$cached" "${(@)lan_cands:#$cached}")
+  fi
+  for lan_cand in "${lan_cands[@]}"; do
+    if nc -z -G 1 "${lan_cand#*@}" 22 2>/dev/null; then
+      lan_ssh="$lan_cand"
+      if [[ "$lan_cand" != "$cached" ]]; then
+        mkdir -p "$cache_dir" && print -r -- "$lan_cand" >| "$cache_dir/$target.lan"
+      fi
+      break
+    fi
+  done
+  if [[ -z "$lan_ssh" ]]; then
+    discovered=$(lan_discover "$target" 2>/dev/null || true)
+    if [[ -n "$discovered" ]]; then
+      lan_ssh="$discovered"
+      lan_cands=("$discovered" "${lan_cands[@]}")
+    fi
+  fi
+fi
+# StrictHostKeyChecking=yes on purpose: on a foreign network another device
+# could hold one of these RFC1918 addresses, and TOFU-ing its key would poison
+# known_hosts for the real host. The legit LAN host keys are pre-seeded (ssh
+# fails fast on anything else and we fall back to the tunnel).
+lan_run=(ssh -T -o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=yes \
+  -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
+
 if [[ -z "$lport" ]]; then
   lport=$(/usr/bin/python3 -c 'import socket;s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
 fi
 
-mosh_client=$(command -v mosh-client 2>/dev/null || print /opt/homebrew/bin/mosh-client)
+mosh_client="$HOME/.local/mosh-faint/bin/mosh-client"
+[[ -x "$mosh_client" ]] || mosh_client=$(command -v mosh-client 2>/dev/null || print /opt/homebrew/bin/mosh-client)
 [[ -x "$mosh_client" ]] || { print -u2 "mosh-bridged: mosh-client not installed locally (brew install mosh)"; exit 1 }
 
 # Colour capability. mosh-server picks the remote TERM purely from `-c COLORS`
@@ -66,12 +186,70 @@ mosh_client=$(command -v mosh-client 2>/dev/null || print /opt/homebrew/bin/mosh
 colors=$("$mosh_client" -c 2>/dev/null || true)
 [[ "$colors" == <-> ]] || colors=8
 
+# Default fg/bg colours. mosh's emulator swallows OSC 10/11 queries (it is a
+# state-sync emulator, not a byte pipe, so they can never reach the real
+# terminal), and apps that probe their background before painting — codex's
+# composer refuses its grey fill without an answer — silently degrade. Ask the
+# local terminal once here, and hand the values to the patched mosh-server
+# (~/.local/mosh-faint), whose emulator answers OSC 10/11 from MOSH_OSC_FG/BG.
+# Best-effort: no tty, no reply, or stock mosh-server → everything behaves as
+# before. See .claude/diagnosis-codex-mosh-dim-20260905.md.
+osc_env=""
+if [[ -t 0 ]]; then
+  osc_reply=$(/usr/bin/python3 - <<'PYEOF' 2>/dev/null
+import os, re, select, sys, termios, time, tty
+try:
+    fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
+except OSError:
+    sys.exit(0)
+old = termios.tcgetattr(fd)
+buf = b""
+try:
+    tty.setraw(fd)
+    os.write(fd, b"\x1b]10;?\x1b\\\x1b]11;?\x1b\\")
+    end = time.time() + 0.35
+    while time.time() < end and buf.count(b"rgb:") < 2:
+        r, _, _ = select.select([fd], [], [], max(0.01, end - time.time()))
+        if not r:
+            break
+        buf += os.read(fd, 256)
+finally:
+    termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    os.close(fd)
+m = dict(re.findall(rb"\x1b\](1[01]);(rgb:[0-9a-fA-F/]+)", buf))
+fg = m.get(b"10", b"").decode()
+bg = m.get(b"11", b"").decode()
+if fg or bg:
+    print(fg or "-", bg or "-")
+PYEOF
+  )
+  if [[ -n "$osc_reply" ]]; then
+    osc_fg=${osc_reply%% *}
+    osc_bg=${osc_reply##* }
+    [[ "$osc_fg" == rgb:* ]] && osc_env+="MOSH_OSC_FG=$osc_fg "
+    [[ "$osc_bg" == rgb:* ]] && osc_env+="MOSH_OSC_BG=$osc_bg "
+  fi
+fi
+
 # 1. Bootstrap: mosh-server on the far side, loopback only, via the login shell.
 remote_cmd=""
 if (( $# )); then remote_cmd="-- ${(j: :)${(q)@}}"; fi
-bootstrap=$("${ssh_run[@]}" "$target" \
-  "$server_cmd new -s -i 127.0.0.1 -p $remote_range -c $colors -l LANG=en_US.UTF-8 -l LC_ALL=en_US.UTF-8 $remote_cmd" 2>&1 || true)
-line=$(print -r -- "$bootstrap" | grep '^MOSH CONNECT ' || true)
+bootstrap_cmd="$osc_env$server_cmd new -s -i 127.0.0.1 -p $remote_range -c $colors -l LANG=en_US.UTF-8 -l LC_ALL=en_US.UTF-8 $remote_cmd"
+line=""
+if [[ -n "$lan_ssh" ]]; then
+  bootstrap=$("${lan_run[@]}" "$lan_ssh" "$bootstrap_cmd" 2>&1 || true)
+  line=$(print -r -- "$bootstrap" | grep '^MOSH CONNECT ' || true)
+  if [[ -z "$line" ]]; then
+    # LAN answered TCP but ssh couldn't finish (key mismatch, sshd config…) —
+    # fall back to the Cloudflare path rather than dying on the fast path.
+    print -r -- "$(date '+%F %T') $target: LAN bootstrap via $lan_ssh failed, falling back to tunnel" >>| "$HOME/Library/Logs/mosh-bridge.log"
+    lan_ssh=""
+  fi
+fi
+if [[ -z "$line" ]]; then
+  bootstrap=$("${ssh_run[@]}" "$target" "$bootstrap_cmd" 2>&1 || true)
+  line=$(print -r -- "$bootstrap" | grep '^MOSH CONNECT ' || true)
+fi
 if [[ -z "$line" ]]; then
   print -u2 "mosh-bridged: mosh-server bootstrap on '$target' failed:"; print -u2 -r -- "$bootstrap"; exit 1
 fi
@@ -84,9 +262,22 @@ bridge_local="$here/mosh-bridge"
 readyfile="${TMPDIR:-/tmp}/mosh-bridged-ready.$$"
 rm -f "$readyfile"
 log="$HOME/Library/Logs/mosh-bridge.log"
-LFG_BRIDGE_READY="$readyfile" /usr/bin/python3 "$bridge_local" client "$lport" -- \
-  "${ssh_run[@]}" "$target" \
-  'exec /usr/bin/python3 "$HOME/.local/bin/mosh-bridge" server '"$rport" &
+remote_bridge='exec /usr/bin/python3 "$HOME/.local/bin/mosh-bridge" server '"$rport"
+if [[ -n "$lan_ssh" ]]; then
+  # Try the LAN on every (re)spawn and fall through to the tunnel when it
+  # fails, so a session survives walking out of the house: the dropped LAN
+  # carrier respawns onto Cloudflare, and a respawn back at home picks the
+  # LAN up again.
+  carrier_cascade=""
+  for cand in "${lan_cands[@]}"; do
+    carrier_cascade+="${(j: :)${(q)lan_run[@]}} ${(q)cand} ${(q)remote_bridge} || "
+  done
+  carrier=(/bin/sh -c "${carrier_cascade}exec ${(j: :)${(q)ssh_run[@]}} ${(q)target} ${(q)remote_bridge}")
+  print -r -- "$(date '+%F %T') $target: LAN fast path via $lan_ssh (tunnel fallback armed)" >>| "$log"
+else
+  carrier=("${ssh_run[@]}" "$target" "$remote_bridge")
+fi
+LFG_BRIDGE_READY="$readyfile" /usr/bin/python3 "$bridge_local" client "$lport" -- "${carrier[@]}" &
 bridge_pid=$!
 trap 'kill $bridge_pid 2>/dev/null; rm -f "$readyfile"' EXIT INT TERM
 
