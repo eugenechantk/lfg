@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "LFG Sign in on Phone",
+  "version": "0.1.0",
+  "minimum_chrome_version": "120",
+  "description": "Receive a login from your phone in this Chrome profile.",
+  "permissions": ["cookies", "storage", "alarms"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "optional_host_permissions": ["https://*/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "options_page": "options.html",
+  "action": { "default_title": "Set up phone sign-in" },
+  "incognito": "not_allowed"
+}

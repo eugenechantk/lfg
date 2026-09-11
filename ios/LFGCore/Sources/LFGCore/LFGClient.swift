@@ -269,6 +269,35 @@ public struct LFGClient: Sendable {
         }
     }
 
+    // Phone sign-in deliberately bypasses transcript/attachment paths.
+    public func phoneSignInTargets() async throws -> [PhoneSignInTarget] {
+        try await get("api/browser-sign-in/targets", as: PhoneSignInTargets.self).targets
+    }
+
+    public func phoneSignInRequest(_ transfer: PhoneSignInTransfer) throws -> URLRequest {
+        _ = try PhoneSignInPolicy.loginURL(baseURL.absoluteString)
+        var request = URLRequest(url: url("api/browser-sign-in/transfer"), cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 25)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(transfer)
+        return authenticated(request)
+    }
+
+    public func sendPhoneSignIn(_ transfer: PhoneSignInTransfer) async throws -> PhoneSignInResult {
+        let request = try phoneSignInRequest(transfer)
+        // An ephemeral session prevents cookie bundles from entering a shared URL cache.
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.httpCookieStorage = nil
+        let transport = URLSession(configuration: configuration, delegate: PhoneSignInRedirectGuard(), delegateQueue: nil)
+        defer { transport.invalidateAndCancel() }
+        let (data, response) = try await transport.data(for: request)
+        guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode) else {
+            throw LFGError.notReachable(underlying: "Sign-in could not be delivered. Check the destination before retrying.")
+        }
+        return try JSONDecoder().decode(PhoneSignInResult.self, from: data)
+    }
+
     // MARK: Reachability
 
     public func ping() async -> Reachability {
@@ -979,5 +1008,13 @@ public struct MessageHistoryPages: AsyncSequence, Sendable {
                 maxBytes: currentByteLimit
             )
         }
+    }
+}
+
+/// Never replay a credential-bearing POST or host access headers to a redirect destination.
+private final class PhoneSignInRedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+        completionHandler(nil)
     }
 }

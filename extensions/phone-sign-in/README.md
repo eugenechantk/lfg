@@ -1,0 +1,61 @@
+# LFG Sign in on Phone
+
+Send a login from LFG on iPhone/iPad to the **same normal Chrome profile** used by Claude in Chrome, or to an agent's existing Playwright context. No debugger permission, content scripts, Chrome restart, password transfer or agent transcript messages.
+
+## Chrome setup
+
+1. Use a host running this branch of LFG (`feature/phone-sign-in`). This change does not restart or deploy the host automatically.
+2. On that Mac, run `bun scripts/browser-sign-in-setup.ts` from this repository. It creates a random connection token in `~/.lfg/browser-sign-in.token` with mode 0600. The explicitly invoked command displays the token for setup. Do not paste it into an agent chat.
+3. In **the Chrome profile that contains Claude's extension**, open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select this `extensions/phone-sign-in` directory.
+4. Click the LFG extension icon to open its options. Give the browser a recognizable name, paste the connection token, and save. Keep port **8766** for your normal LFG host. The extension always connects to this Mac's loopback, never a remote URL.
+5. Under **Allowed websites**, allow the domains you plan to send, or choose **Allow all websites** for all HTTPS sites. The phone still sends only selected cookie domains. Permission is requested only after your click. Remove permissions there when no longer wanted. A transfer for any unapproved domain fails before changing cookies.
+
+The token stays in Chrome extension-local storage, never sync storage. There are no content scripts or externally-connectable messages. All adapters on one Mac use the same local token; possession authorizes registration as a destination. Restart the host and reconnect adapters after deliberately rotating that token. Install in a second profile with a distinct browser name if you want both selectable. Incognito is unsupported.
+
+## Phone flow
+
+Open a session → **More → Sign in on Phone**. Choose the connected browser, enter an HTTPS website, and sign in. Tap **Review**, select domains, then **Send sign-in**. The destination must still be online; reconnecting creates a new destination identity and requires reselection.
+
+The phone transfers only the selected domains' cookies. A successful result confirms cookie installation, not that the website accepted the session. Refresh the destination website yourself, then tell Claude/Codex to continue. Pause automation before replacing its login. No tab is automatically reloaded or navigated.
+
+## Playwright: existing context
+
+Use this with the exact `BrowserContext` the agent already owns (Bun/TypeScript):
+
+```ts
+import { connectPhoneSignIn } from '/path/to/lfg/src/browser-sign-in-playwright.ts';
+const bridge = connectPhoneSignIn(context, { name: 'Research browser' });
+// When no longer needed:
+bridge.close(); // Does not close the context or browser.
+```
+
+The bridge reads the local token file automatically. `baseURL` can override the default `http://127.0.0.1:8766` for a separate test host; remote adapter connections are rejected.
+
+For an automation browser already exposing a **local CDP endpoint**, attach without changing its context:
+
+```sh
+bun scripts/browser-sign-in-playwright.ts http://127.0.0.1:9222 'Research browser'
+```
+
+With multiple contexts, supply the intended index as the fourth argument after the LFG URL. This command does not launch Chrome or enable a debug port. Do not use it to attach your default personal Chrome; use the extension there. A browser that exposes neither a context nor CDP needs integration in its owning process; the bridge does not discover arbitrary Playwright processes automatically.
+
+## Boundaries
+
+- Cookies are credentials. Transfers use HTTPS off-loopback, reject redirects, have no extra on-disk cookie bundle, and bypass agent transcripts, journals, shared URL caches and logs.
+- Each target has one in-flight transfer, bounded to 128 cookies / 256 KiB with a 15-second deadline. No offline queue or retry/replay. Timeout/disconnect means **unknown delivery**, not failure to write; inspect the browser before retrying.
+- The iOS website store is nonpersistent and discarded on dismissal/completion. Background snapshots hide the login view; returning from a password manager or 2FA app can continue the login.
+- Session/expiry, domain/host-only, path, Secure, HttpOnly and available SameSite metadata are preserved. WKWebView's cookie export is not a full browser-state export. Partitioned cookie state, localStorage, IndexedDB and device-bound session keys are unsupported.
+- Google embedded OAuth is not supported. There is no user-agent spoofing. Sign in directly on your Mac for unsupported sign-in providers. Browser Stream is currently hidden in the iOS app.
+- HTTP is allowed only for localhost development. Production phone connections should use the existing Cloudflare Access HTTPS host. The adapter socket separately requires the local setup token; no token is sent in a URL.
+
+## Verification
+
+```sh
+bunx playwright-core install chromium
+bun test src/browser-sign-in.test.ts src/browser-sign-in.integration.test.ts
+swift test --package-path ios/LFGCore --filter PhoneSignIn
+```
+
+The integration tests use an isolated Chromium profile and synthetic credentials. Their test-only extension manifest pregrants `portal.example.com`; production permission requests still require user consent. Tests check a protected page, HttpOnly/Secure/session attributes, wrong-target isolation and unapproved-site rejection.
+
+For the complete phone UI fixture, run `bun scripts/browser-sign-in-fixture.ts`, point a simulator build at `http://127.0.0.1:9982`, then sign into `http://127.0.0.1:9982/fixture/login` using any **synthetic** email/password. `/fixture/status` confirms whether the real destination Playwright context received the cookie. The fixture checks port availability, uses no database or production LFG endpoints, and closes its own browser on Ctrl-C.

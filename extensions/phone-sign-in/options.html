@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>LFG · Sign in on Phone</title>
+    <style>
+      body {
+        font: 16px system-ui;
+        max-width: 580px;
+        margin: 48px auto;
+        padding: 24px;
+        color: #222;
+      }
+      label {
+        display: block;
+        margin-top: 20px;
+      }
+      input {
+        display: block;
+        box-sizing: border-box;
+        width: 100%;
+        padding: 10px;
+        margin: 6px 0;
+      }
+      button {
+        padding: 10px 18px;
+        margin: 12px 0;
+        cursor: pointer;
+      }
+      p {
+        line-height: 1.5;
+      }
+      #status,
+      #permissionStatus {
+        min-height: 24px;
+      }
+      code {
+        background: #eee;
+        padding: 3px;
+      }
+      small {
+        color: #555;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Sign in on Phone</h1>
+    <p>
+      This extension receives logins in this Chrome profile. Install it
+      alongside Claude’s extension.
+    </p>
+    <p id="status" role="status">Checking connection…</p>
+    <form id="connection">
+      <label
+        >Browser name<input
+          id="name"
+          maxlength="80"
+          placeholder="Chrome — personal"
+          required /></label
+      ><label
+        >LFG port<input
+          id="port"
+          inputmode="numeric"
+          value="8766"
+          required /></label
+      ><label
+        >Connection token<input
+          id="token"
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          required /></label
+      ><small
+        >Run <code>bun scripts/browser-sign-in-setup.ts</code> on your Mac, then
+        paste the token here. It stays in this extension.</small
+      ><br /><button type="submit">Save connection</button>
+    </form>
+    <h2>Allowed websites</h2>
+    <p>
+      Allow individual domains or all HTTPS websites. The phone sends only the
+      cookie domains you select. Sending replaces matching login cookies in this profile.
+    </p>
+    <button type="button" id="allowAll">Allow all websites</button>
+    <p><small>This grants cookie access across HTTPS websites. You can remove this permission below.</small></p>
+    <form id="permission">
+      <label
+        >Website domain<input
+          id="domain"
+          placeholder="example.com"
+          required /></label
+      ><button type="submit">Allow website</button>
+    </form>
+    <p id="permissionStatus" role="status"></p>
+    <ul id="grants"></ul>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

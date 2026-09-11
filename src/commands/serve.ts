@@ -1,3 +1,4 @@
+import { BrowserSignInHub, signInHTTP, allowsSignInAdapter } from "../browser-sign-in.ts";
 import { readdir, realpath, stat } from "node:fs/promises";
 import { statSync, mkdirSync, type Dirent } from "node:fs";
 import { tmpdir, homedir } from "node:os";
@@ -938,7 +939,7 @@ function sseHeaders(): Record<string, string> {
 
 // Per-socket state for the browser terminal: which tmux session it attaches to
 // and the initial geometry the client reported at connect time.
-type TermSocketData = { sessionName: string; cols: number; rows: number };
+type TermSocketData = { sessionName: string; cols: number; rows: number; browserSignIn?: boolean };
 
 // Live PTY bridges keyed by their websocket, so message/close handlers can find
 // the bridge to write to / tear down.
@@ -987,6 +988,7 @@ export async function cmdServe() {
   const journalPath = join(PATHS.data, "journal.db");
   const journal = Journal.open(journalPath);
   const browserFrames = new BrowserFrameStore();
+  const browserSignIn = new BrowserSignInHub();
   setSendqJournal(journal);
   setSendqStore(SendqStore.open(journalPath));
   startJournalPump(journal, {
@@ -1017,6 +1019,7 @@ export async function cmdServe() {
       // as binary frames — the full raw VT byte stream a faithful renderer wants.
       idleTimeout: 600,
       open(ws: ServerWebSocket<TermSocketData>) {
+        if (ws.data.browserSignIn) { browserSignIn.open(ws); return; }
         try {
           const { sessionName, cols, rows } = ws.data;
           const bridge = new PtyBridge(
@@ -1042,6 +1045,7 @@ export async function cmdServe() {
         }
       },
       message(ws: ServerWebSocket<TermSocketData>, message) {
+        if (ws.data.browserSignIn) { browserSignIn.message(ws, message); return; }
         const bridge = termBridges.get(ws);
         if (!bridge) return;
         if (typeof message === "string") {
@@ -1061,6 +1065,7 @@ export async function cmdServe() {
         bridge.write(message as Uint8Array);
       },
       close(ws: ServerWebSocket<TermSocketData>) {
+        if (ws.data.browserSignIn) { browserSignIn.close(ws); return; }
         const bridge = termBridges.get(ws);
         termBridges.delete(ws);
         // Tears down our attach client; the tmux session itself persists so the
@@ -1093,6 +1098,13 @@ export async function cmdServe() {
   ): Promise<Response | undefined> {
       const url = new URL(req.url);
       const path = url.pathname;
+
+      if (path === "/api/browser-sign-in/adapter") {
+        if (req.method !== "GET" || !allowsSignInAdapter(req)) return err(403, "Local browser adapter required");
+        const ok = server.upgrade(req, { data: { browserSignIn: true, sessionName: "", cols: 0, rows: 0 } });
+        return ok ? undefined : err(400, "Expected a websocket upgrade");
+      }
+      if (path.startsWith("/api/browser-sign-in/")) return signInHTTP(req, browserSignIn);
 
       // TEMPORARY (2026-08-07): memory-leak instrumentation. Splits the growth
       // between the JS heap, external/ArrayBuffer bytes, and everything else, so

@@ -5,11 +5,13 @@ import UIKit
 struct SessionDetailView: View {
     private enum PresentedSheet: Identifiable {
         case attachments
+        case phoneSignIn
         case childSessions(selectedID: String?)
         case inversionSpike
 
         var id: String {
             switch self {
+            case .phoneSignIn: "phone-sign-in"
             case .attachments: "attachments"
             case .childSessions(let selectedID): "child-sessions-\(selectedID ?? "all")"
             case .inversionSpike: "inversion-spike"
@@ -269,6 +271,9 @@ struct SessionDetailView: View {
         }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
+            case .phoneSignIn:
+                PhoneSignInView(sessionID: sid)
+                    .presentationDetents([.large])
             case .attachments:
                 AttachmentsSheet(messages: messages)
             case .inversionSpike:
@@ -625,6 +630,7 @@ struct SessionDetailView: View {
                 childAgents: childAgents,
                 dismissedBrowserFrameID: dismissedBrowserFrameID,
                 onShowAttachments: { presentedSheet = .attachments },
+                onShowPhoneSignIn: { presentedSheet = .phoneSignIn },
                 onShowInversionSpike: { presentedSheet = .inversionSpike },
                 onShowChildSessions: { selectedID in
                     presentedSheet = .childSessions(selectedID: selectedID)
@@ -719,6 +725,7 @@ private struct SessionOptionsMenu: View {
     let childAgents: [ChildAgentSession]
     let dismissedBrowserFrameID: String?
     let onShowAttachments: () -> Void
+    let onShowPhoneSignIn: () -> Void
     let onShowInversionSpike: () -> Void
     let onShowChildSessions: (String?) -> Void
     let onRename: () -> Void
@@ -768,6 +775,7 @@ private struct SessionOptionsMenu: View {
             ))
         }
 
+        primary.append(action("Sign in on Phone", systemImage: "key", handler: onShowPhoneSignIn))
         primary.append(action("Files & Links", systemImage: "paperclip", handler: onShowAttachments))
         // PHASE-2 SPIKE entry — remove with the spike.
         primary.append(action("Spike: inverted transcript", systemImage: "arrow.up.arrow.down",
