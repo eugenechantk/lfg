@@ -32,6 +32,7 @@
 		8950528E1385EF07CB2814AD /* LFGApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909139FA5D9B976298B7AA3F /* LFGApp.swift */; };
 		8A8BAA0AADCD3A860CCA5B39 /* HostLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */; };
 		8D3E23D31117026A9BF00460 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 649DB6E8EC8E3C5852C813C8 /* LaunchScreen.storyboard */; };
+		9BD737F30A094A4E06868ABE /* BrowserStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A95AD89DFAD2828183C1353 /* BrowserStreamView.swift */; };
 		A541589C33833A613D05AD8B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6461434AE6C2B0858AC679ED /* RootView.swift */; };
 		A716F8EE7E18B6F5630135D0 /* LFGFleetActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 491B12C3F1E687BB82CC93AE /* LFGFleetActivityWidget.swift */; };
 		A9769E2F571F58BFBE480AB0 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAECB64072CE4F5286C7591E /* LiveActivityManager.swift */; };
@@ -81,6 +82,7 @@
 
 /* Begin PBXFileReference section */
 		073FCBCA797989A55F83BAE4 /* MessageComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageComposer.swift; sourceTree = "<group>"; };
+		0A95AD89DFAD2828183C1353 /* BrowserStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserStreamView.swift; sourceTree = "<group>"; };
 		0D5CF03B9589A96341781809 /* LFG.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LFG.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0E9D14391A3FEF1D22D41A2B /* AttachmentsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentsSheet.swift; sourceTree = "<group>"; };
 		20B34D8A3106C01BA13F2DC2 /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
@@ -185,6 +187,7 @@
 				BCD4448C18939CAC5940F467 /* AttachmentTray.swift */,
 				9D1BD4A3061EFB2858AB2A4B /* BackgroundSender.swift */,
 				B465BA01F1A3FC7DAF7ADF56 /* BrowserPreviewCard.swift */,
+				0A95AD89DFAD2828183C1353 /* BrowserStreamView.swift */,
 				F4C23B1D7493D21B0344531F /* Components.swift */,
 				D48FAC07EBFC6249487EAEB9 /* ConnectionLogView.swift */,
 				565F8BC62A1D403CDD690340 /* FleetActivityController.swift */,
@@ -380,6 +383,7 @@
 				FD027D56F957D150BB87EBA7 /* AttachmentsSheet.swift in Sources */,
 				5942295A0F639DE68C4FF451 /* BackgroundSender.swift in Sources */,
 				037A25ADA39F6E527D36B73D /* BrowserPreviewCard.swift in Sources */,
+				9BD737F30A094A4E06868ABE /* BrowserStreamView.swift in Sources */,
 				FDC78A1C6A82751D9F56E521 /* Components.swift in Sources */,
 				02F689F65D6FDF5099FADF31 /* ConnectionLogView.swift in Sources */,
 				BF6314DDC10C441712E87E2E /* FleetActivityController.swift in Sources */,

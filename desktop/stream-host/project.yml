@@ -1,0 +1,30 @@
+name: LFGStreamHost
+options:
+  deploymentTarget:
+    macOS: "14.0"
+targets:
+  LFGStreamHost:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.eugenechan.lfg-stream-host
+        SWIFT_VERSION: 5.0
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 39GJBP8V5A
+        ENABLE_APP_SANDBOX: NO
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: LFG Browser Stream
+        LSUIElement: true
+        NSHighResolutionCapable: true
+        NSScreenCaptureUsageDescription: Stream a selected Mac window to your LFG client.
+        NSPrincipalClass: NSApplication
+schemes:
+  LFGStreamHost:
+    build:
+      targets:
+        LFGStreamHost: all

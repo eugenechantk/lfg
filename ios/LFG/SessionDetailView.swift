@@ -5,11 +5,13 @@ import UIKit
 struct SessionDetailView: View {
     private enum PresentedSheet: Identifiable {
         case attachments
+        case browserStream
         case childSessions(selectedID: String?)
         case inversionSpike
 
         var id: String {
             switch self {
+            case .browserStream: "browser-stream"
             case .attachments: "attachments"
             case .childSessions(let selectedID): "child-sessions-\(selectedID ?? "all")"
             case .inversionSpike: "inversion-spike"
@@ -206,6 +208,18 @@ struct SessionDetailView: View {
                             presentedSheet = .childSessions(selectedID: nil)
                         }
                     }
+                    Button {
+                        presentedSheet = .browserStream
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "desktopcomputer")
+                            Text("Browser Stream").font(.subheadline.weight(.medium))
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption)
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 8)
+                    }
+                    .accessibilityIdentifier("browser_stream_composer_button")
                     MessageComposer(text: $draft, sending: false) { text, atts in
                         // Hand the send to the store, which owns it for the app's
                         // lifetime (under a background-task assertion). Leaving
@@ -269,6 +283,9 @@ struct SessionDetailView: View {
         }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
+            case .browserStream:
+                BrowserStreamView(sessionID: sid)
+                    .presentationDetents([.large])
             case .attachments:
                 AttachmentsSheet(messages: messages)
             case .inversionSpike:
@@ -625,6 +642,7 @@ struct SessionDetailView: View {
                 childAgents: childAgents,
                 dismissedBrowserFrameID: dismissedBrowserFrameID,
                 onShowAttachments: { presentedSheet = .attachments },
+                onShowBrowserStream: { presentedSheet = .browserStream },
                 onShowInversionSpike: { presentedSheet = .inversionSpike },
                 onShowChildSessions: { selectedID in
                     presentedSheet = .childSessions(selectedID: selectedID)
@@ -719,6 +737,7 @@ private struct SessionOptionsMenu: View {
     let childAgents: [ChildAgentSession]
     let dismissedBrowserFrameID: String?
     let onShowAttachments: () -> Void
+    let onShowBrowserStream: () -> Void
     let onShowInversionSpike: () -> Void
     let onShowChildSessions: (String?) -> Void
     let onRename: () -> Void
@@ -768,6 +787,7 @@ private struct SessionOptionsMenu: View {
             ))
         }
 
+        primary.append(action("Browser Stream", systemImage: "desktopcomputer", handler: onShowBrowserStream))
         primary.append(action("Files & Links", systemImage: "paperclip", handler: onShowAttachments))
         // PHASE-2 SPIKE entry — remove with the spike.
         primary.append(action("Spike: inverted transcript", systemImage: "arrow.up.arrow.down",

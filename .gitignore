@@ -47,3 +47,6 @@ ios/fastlane/*.bak
 # Desktop app build output
 desktop/build/
 .worktrees/
+
+# Worktree-local Apple build artifacts
+.codex/build/

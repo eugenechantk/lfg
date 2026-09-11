@@ -156,6 +156,16 @@ public struct LFGClient: Sendable {
     /// A request for an API or host-owned resource. Access credentials are
     /// scoped to the exact origin (scheme + host + effective port), so a
     /// transcript's arbitrary external image URL can never receive them.
+    public func browserStreamRequest() -> URLRequest {
+        // Apply same-origin Access credentials before changing http(s) to ws(s).
+        var request = authenticated(URLRequest(url: url("api/browser/stream")))
+        var components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!
+        components.scheme = components.scheme == "https" ? "wss" : "ws"
+        request.url = components.url
+        request.timeoutInterval = 20
+        return request
+    }
+
     public func resourceRequest(for resourceURL: URL) -> URLRequest {
         authenticated(URLRequest(url: resourceURL))
     }

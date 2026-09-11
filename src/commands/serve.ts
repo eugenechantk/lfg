@@ -1,3 +1,4 @@
+import { BrowserStreamBridge } from "../browser-stream.ts";
 import { readdir, realpath, stat } from "node:fs/promises";
 import { statSync, mkdirSync, type Dirent } from "node:fs";
 import { tmpdir, homedir } from "node:os";
@@ -938,7 +939,7 @@ function sseHeaders(): Record<string, string> {
 
 // Per-socket state for the browser terminal: which tmux session it attaches to
 // and the initial geometry the client reported at connect time.
-type TermSocketData = { sessionName: string; cols: number; rows: number };
+type TermSocketData = { sessionName: string; cols: number; rows: number; browserStream?: boolean };
 
 // Live PTY bridges keyed by their websocket, so message/close handlers can find
 // the bridge to write to / tear down.
@@ -987,6 +988,7 @@ export async function cmdServe() {
   const journalPath = join(PATHS.data, "journal.db");
   const journal = Journal.open(journalPath);
   const browserFrames = new BrowserFrameStore();
+  const browserStream = new BrowserStreamBridge();
   setSendqJournal(journal);
   setSendqStore(SendqStore.open(journalPath));
   startJournalPump(journal, {
@@ -1017,6 +1019,7 @@ export async function cmdServe() {
       // as binary frames — the full raw VT byte stream a faithful renderer wants.
       idleTimeout: 600,
       open(ws: ServerWebSocket<TermSocketData>) {
+        if (ws.data.browserStream) { browserStream.open(ws); return; }
         try {
           const { sessionName, cols, rows } = ws.data;
           const bridge = new PtyBridge(
@@ -1042,6 +1045,7 @@ export async function cmdServe() {
         }
       },
       message(ws: ServerWebSocket<TermSocketData>, message) {
+        if (ws.data.browserStream) { browserStream.message(ws, message); return; }
         const bridge = termBridges.get(ws);
         if (!bridge) return;
         if (typeof message === "string") {
@@ -1061,6 +1065,7 @@ export async function cmdServe() {
         bridge.write(message as Uint8Array);
       },
       close(ws: ServerWebSocket<TermSocketData>) {
+        if (ws.data.browserStream) { browserStream.close(ws); return; }
         const bridge = termBridges.get(ws);
         termBridges.delete(ws);
         // Tears down our attach client; the tmux session itself persists so the
@@ -1145,6 +1150,18 @@ export async function cmdServe() {
         });
         if (!meta) return err(400, "unsupported, empty, oversized, or duplicate frame");
         return json(meta, { status: 201 });
+      }
+
+      // Native clients authenticate through the same host/Cloudflare route.
+      // Reject cross-origin browser upgrades (localhost must not be driveable
+      // by an arbitrary web page). This does not introduce a public listener.
+      if (path === "/api/browser/stream" && req.method === "GET") {
+        const origin = req.headers.get("origin");
+        if (origin && origin !== url.origin) return err(403, "cross-origin stream forbidden");
+        const ok = server.upgrade(req, {
+          data: { browserStream: true, sessionName: "", cols: 0, rows: 0 },
+        });
+        return ok ? undefined : err(400, "expected a websocket upgrade");
       }
 
       // ---- browser terminal (websocket upgrade) ----
