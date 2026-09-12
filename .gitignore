@@ -47,3 +47,9 @@ ios/fastlane/*.bak
 # Desktop app build output
 desktop/build/
 .worktrees/
+
+# Local iOS build output
+.codex/build/
+
+# Public per-app release configuration (credentials stay ignored).
+!ios/fastlane/.env
