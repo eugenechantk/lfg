@@ -988,7 +988,7 @@ export async function cmdServe() {
   const journalPath = join(PATHS.data, "journal.db");
   const journal = Journal.open(journalPath);
   const browserFrames = new BrowserFrameStore();
-  const browserSignIn = new BrowserSignInHub();
+  const browserSignIn = new BrowserSignInHub(undefined, {historyPath: join(homedir(), ".lfg", "phone-sign-in-history.json")});
   setSendqJournal(journal);
   setSendqStore(SendqStore.open(journalPath));
   startJournalPump(journal, {

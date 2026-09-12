@@ -2,6 +2,7 @@
 const HELP = `lfg — run and manage your AI coding agents on your own box
 
 Usage:
+  lfg browser-sign-in             Request website login from iPhone (see help)
   lfg serve                        Run the web UI + control server (default :8766)
   lfg agents [list|run|show]       Run / inspect insight agents (see 'agents help')
   lfg autopilot [list|run]         Periodic maintenance over lfg's own state
@@ -15,6 +16,10 @@ Env (read from process env / .env, see .env.example):
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   switch (cmd) {
+    case "browser-sign-in": {
+      const { cmdBrowserSignIn } = await import("./commands/browser-sign-in.ts");
+      return await cmdBrowserSignIn(rest);
+    }
     case "serve": {
       const { cmdServe } = await import("./commands/serve.ts");
       return await cmdServe();

@@ -283,8 +283,31 @@ public struct LFGClient: Sendable {
         return authenticated(request)
     }
 
+    public func phoneSignInRequests(sessionID: String) async throws -> [PhoneSignInAgentRequest] {
+        try await get("api/browser-sign-in/requests", query: [.init(name: "sessionId", value: sessionID)], as: PhoneSignInAgentRequests.self).requests
+    }
+    public func phoneSignInRequestStatus(_ id: String) async throws -> PhoneSignInAgentRequest {
+        try await get("api/browser-sign-in/requests/\(id)", as: PhoneSignInAgentRequest.self)
+    }
+    public func cancelPhoneSignInRequest(_ id: String) async throws {
+        _ = try await send("POST", "api/browser-sign-in/requests/\(id)/cancel", json: [:])
+    }
+    public func agentPhoneSignInRequest(_ id: String, cookies: [PhoneSignInCookie]) throws -> URLRequest {
+        _ = try PhoneSignInPolicy.loginURL(baseURL.absoluteString)
+        var request = URLRequest(url: url("api/browser-sign-in/requests/\(id)/complete"), cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 25)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        struct Payload: Encodable { let cookies: [PhoneSignInCookie] }
+        request.httpBody = try JSONEncoder().encode(Payload(cookies: cookies))
+        return authenticated(request)
+    }
+    public func completePhoneSignInRequest(_ id: String, cookies: [PhoneSignInCookie]) async throws -> PhoneSignInAgentRequest {
+        try await deliverPhoneSignIn(agentPhoneSignInRequest(id, cookies: cookies), as: PhoneSignInAgentRequest.self)
+    }
     public func sendPhoneSignIn(_ transfer: PhoneSignInTransfer) async throws -> PhoneSignInResult {
-        let request = try phoneSignInRequest(transfer)
+        try await deliverPhoneSignIn(phoneSignInRequest(transfer), as: PhoneSignInResult.self)
+    }
+    private func deliverPhoneSignIn<T: Decodable>(_ request: URLRequest, as type: T.Type) async throws -> T {
         // An ephemeral session prevents cookie bundles from entering a shared URL cache.
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
@@ -295,7 +318,7 @@ public struct LFGClient: Sendable {
         guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode) else {
             throw LFGError.notReachable(underlying: "Sign-in could not be delivered. Check the destination before retrying.")
         }
-        return try JSONDecoder().decode(PhoneSignInResult.self, from: data)
+        return try JSONDecoder().decode(T.self, from: data)
     }
 
     // MARK: Reachability

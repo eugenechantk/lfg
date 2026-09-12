@@ -38,7 +38,7 @@ const server = Bun.serve({
     if (path === "/fixture/login")
       return new Response(
         `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font:18px system-ui;padding:24px}input,button{display:block;font:inherit;padding:12px;margin:12px 0;width:90%}</style><h1>Test portal</h1><p>Synthetic credentials only.</p><form action="/fixture/auth" method="post"><label>Email<input name="email" type="email" autocomplete="username"></label><label>Password<input name="password" type="password" autocomplete="current-password"></label><button>Sign in</button></form>`,
-        { headers: { "Content-Type": "text/html" } },
+        { headers: { "Content-Type": "text/html", "Set-Cookie": "fixture_prelogin=synthetic; Path=/; SameSite=Lax" } },
       );
     if (path === "/fixture/auth" && req.method === "POST")
       return new Response(null, {
@@ -54,12 +54,17 @@ const server = Bun.serve({
         .get("cookie")
         ?.includes("fixture_session=synthetic-login");
       return new Response(
-        `<meta name="viewport" content="width=device-width, initial-scale=1"><h1>${loggedIn ? "Signed in to test portal" : "Sign-in required"}</h1><p>${loggedIn ? "Tap Review in LFG to transfer this test login." : "No login cookie."}</p>`,
+        `<meta name="viewport" content="width=device-width, initial-scale=1"><h1>${loggedIn ? "Signed in to test portal" : "Sign-in required"}</h1><p>${loggedIn ? "Tap Done in LFG to transfer this test login." : "No login cookie."}</p>${loggedIn ? '<button>Sign out</button>' : ''}`,
         {
           status: loggedIn ? 200 : 401,
           headers: { "Content-Type": "text/html" },
         },
       );
+    }
+    if (path === "/fixture/request" && req.method === "POST") {
+      const target = hub.targets()[0];
+      if (!target) return Response.json({error:"No fixture browser"},{status:503});
+      return Response.json(hub.requests.create({sessionId:sid,targetId:target.id,url:"http://127.0.0.1:9982/fixture/login"}));
     }
     if (path === "/fixture/status")
       return Response.json({

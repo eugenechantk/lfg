@@ -8,13 +8,29 @@ Send a login from LFG on iPhone/iPad to the **same normal Chrome profile** used 
 2. On that Mac, run `bun scripts/browser-sign-in-setup.ts` from this repository. It creates a random connection token in `~/.lfg/browser-sign-in.token` with mode 0600. The explicitly invoked command displays the token for setup. Do not paste it into an agent chat.
 3. In **the Chrome profile that contains Claude's extension**, open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select this `extensions/phone-sign-in` directory.
 4. Click the LFG extension icon to open its options. Give the browser a recognizable name, paste the connection token, and save. Keep port **8766** for your normal LFG host. The extension always connects to this Mac's loopback, never a remote URL.
-5. Under **Allowed websites**, allow the domains you plan to send, or choose **Allow all websites** for all HTTPS sites. The phone still sends only selected cookie domains. Permission is requested only after your click. Remove permissions there when no longer wanted. A transfer for any unapproved domain fails before changing cookies.
+5. Under **Allowed websites**, allow the domains you plan to send, or choose **Allow all websites** for all HTTPS sites. Agent-requested sign-ins send all exportable cookies from the isolated phone session; manual sign-in lets you select domains. Permission is requested only after your click. Remove permissions there when no longer wanted. A transfer for any unapproved domain fails before changing cookies.
 
 The token stays in Chrome extension-local storage, never sync storage. There are no content scripts or externally-connectable messages. All adapters on one Mac use the same local token; possession authorizes registration as a destination. Restart the host and reconnect adapters after deliberately rotating that token. Install in a second profile with a distinct browser name if you want both selectable. Incognito is unsupported.
 
+## Agent-requested sign-in (primary flow)
+
+Install the shared Claude/Codex skill with `bun scripts/install-phone-sign-in-skill.ts /path/to/lfg`. The global skill is `request-phone-sign-in`.
+
+An agent hitting a login wall lists `bun src/cli.ts browser-sign-in targets`, identifies the browser it already controls, and runs:
+
+```sh
+bun src/cli.ts browser-sign-in request --session <session-id> --target <browser-id> --url https://website.example/login
+```
+
+The command waits for a result. LFG shows **Sign in to website.example** above that session's composer. Tap it, sign in, then tap **Done**. The URL and target are already bound; all unexpired, exportable cookies from that fresh web session are sent, including login-provider domains. There is no browser picker or domain checklist in this flow. A successful acknowledgment releases the waiting command, and the agent must refresh/check the protected website before proceeding.
+
+Requests expire after 15 minutes and never silently retarget after a browser reconnect. More → Sign in on iPhone opens a medium-height, session-scoped history sheet, with up to 128 recent records across the host. Completed entries show results; waiting entries reopen sign-in. The host saves website origins, destination names/IDs, timestamps and outcomes in `~/.lfg/phone-sign-in-history.json` (owner-only), never cookies or URL paths/query strings. After restart, pending requests become expired and in-progress deliveries become unconfirmed; neither is replayed. `status`, `wait`, and `cancel` take a request ID. There is one active request per browser; duplicates reuse the original request. Cookie payloads are never persisted or returned to the agent. Existing cookie count/size limits still apply; oversized exports fail instead of silently truncating.
+
+The following manual flow remains available as a fallback.
+
 ## Phone flow
 
-Open a session → **More → Sign in on Phone**. Choose the connected browser, enter an HTTPS website, and sign in. Tap **Review**, select domains, then **Send sign-in**. The destination must still be online; reconnecting creates a new destination identity and requires reselection.
+Open a session → **More → Sign in on iPhone → +**. Choose the connected browser, enter an HTTPS website, and sign in. Tap **Review**, select domains, then **Send sign-in**. The destination must still be online; reconnecting creates a new destination identity and requires reselection.
 
 The phone transfers only the selected domains' cookies. A successful result confirms cookie installation, not that the website accepted the session. Refresh the destination website yourself, then tell Claude/Codex to continue. Pause automation before replacing its login. No tab is automatically reloaded or navigated.
 

@@ -41,3 +41,44 @@ import Testing
     #expect(wire.path == "/account")
     #expect(wire.expires == nil)
 }
+
+@Test func agentSignInDoneSendsAllDomainsWithoutClientRetargeting() throws {
+    let client = LFGClient(baseURL: URL(string: "https://host.example.com")!)
+    let values = [
+        PhoneSignInCookie(name: "portal", value: "synthetic", domain: ".example.com", hostOnly: false, path: "/", secure: true, httpOnly: true),
+        PhoneSignInCookie(name: "sso", value: "synthetic", domain: "id.example.net", hostOnly: true, path: "/", secure: true, httpOnly: true)
+    ]
+    let request = try client.agentPhoneSignInRequest("request-id", cookies: values)
+    #expect(request.url?.path == "/api/browser-sign-in/requests/request-id/complete")
+    let body = try #require(JSONSerialization.jsonObject(with: request.httpBody!) as? [String: Any])
+    #expect(Set(body.keys) == ["cookies"])
+    #expect((body["cookies"] as? [[String: Any]])?.count == 2)
+    #expect(request.cachePolicy == .reloadIgnoringLocalCacheData)
+}
+
+@Test func phoneSignInHistoryDistinguishesOutcomesAndDecodesMilliseconds() throws {
+    let labels = ["waiting":"Waiting for sign-in", "delivering":"Sending", "installed":"Sent", "partial":"Partially sent", "failed":"Failed", "cancelled":"Cancelled", "expired":"Expired", "offline":"Browser disconnected", "unknown":"Delivery unconfirmed"]
+    for (state, title) in labels {
+        let data = try JSONSerialization.data(withJSONObject: ["id":"r", "sessionId":"s", "url":"https://portal.example.com", "target":["id":"b","name":"Browser","kind":"playwright"], "state":state, "createdAt":1234000, "expiresAt":2234000])
+        let request = try JSONDecoder().decode(PhoneSignInAgentRequest.self, from:data)
+        #expect(request.statusTitle == title)
+        #expect(request.isWaiting == (state == "waiting"))
+        #expect(request.requestedAt.timeIntervalSince1970 == 1234)
+        #expect(request.website == "portal.example.com")
+    }
+}
+
+@Test func phoneSignInReadinessNeedsCookiesAndCompletionEvidence() {
+    func ready(cookies: Bool = true, loading: Bool = false, login: Bool = false, account: Bool = false, sameSite: Bool = true, confirmed: Bool = false) -> Bool {
+        PhoneSignInPolicy.canFinish(hasCookies: cookies, loading: loading, hasLoginFields: login, hasAccountControls: account, onRequestedHost: sameSite, userConfirmed: confirmed)
+    }
+    #expect(!ready()) // Pre-login/analytics cookies alone are insufficient.
+    #expect(ready(account: true))
+    #expect(!ready(cookies: false, account: true))
+    #expect(!ready(loading: true, account: true))
+    #expect(!ready(login: true, account: true))
+    #expect(!ready(account: true, sameSite: false))
+    #expect(ready(confirmed: true))
+    #expect(!ready(cookies: false, confirmed: true))
+    #expect(!ready(loading: true, confirmed: true))
+}

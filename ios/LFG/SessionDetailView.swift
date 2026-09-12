@@ -5,13 +5,15 @@ import UIKit
 struct SessionDetailView: View {
     private enum PresentedSheet: Identifiable {
         case attachments
-        case phoneSignIn
+        case phoneSignIn(requestID: String?)
+        case requestedSignIn(PhoneSignInAgentRequest)
         case childSessions(selectedID: String?)
         case inversionSpike
 
         var id: String {
             switch self {
-            case .phoneSignIn: "phone-sign-in"
+            case .phoneSignIn(let requestID): "phone-sign-in-\(requestID ?? "all")"
+            case .requestedSignIn(let request): "sign-in-\(request.id)"
             case .attachments: "attachments"
             case .childSessions(let selectedID): "child-sessions-\(selectedID ?? "all")"
             case .inversionSpike: "inversion-spike"
@@ -29,6 +31,8 @@ struct SessionDetailView: View {
     @Environment(SessionStore.self) private var store
     @Environment(AppSettings.self) private var settings
 
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var signInRequests: [PhoneSignInAgentRequest] = []
     @State private var draft = ""
     @State private var renaming = false
     /// Tapping the (truncated) nav-bar title reveals the full one in a card below it.
@@ -208,6 +212,40 @@ struct SessionDetailView: View {
                             presentedSheet = .childSessions(selectedID: nil)
                         }
                     }
+                    ForEach(signInRequests.filter(\.isWaiting)) { request in
+                        Button { presentedSheet = .requestedSignIn(request) } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "key.fill")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.tint)
+                                    .frame(width: 28)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("Sign in to \(request.website)")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.primary)
+                                    Text(request.target.name)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 8)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                                    .accessibilityHidden(true)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
+                            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 11))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 11)
+                                    .stroke(Color(.separator).opacity(0.55), lineWidth: 0.5)
+                            )
+                            .contentShape(RoundedRectangle(cornerRadius: 11))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 16)
+                        .accessibilityIdentifier("phone_sign_in_request_button")
+                    }
                     MessageComposer(text: $draft, sending: false) { text, atts in
                         // Hand the send to the store, which owns it for the app's
                         // lifetime (under a background-task assertion). Leaving
@@ -269,11 +307,24 @@ struct SessionDetailView: View {
                 ))
             }
         }
+        .task(id: "phone-sign-in-\(sid)-\(scenePhase)") {
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                if let host = store.host(forSession: sid), let client = settings.client(for: host) {
+                    signInRequests = (try? await client.phoneSignInRequests(sessionID: sid)) ?? []
+                }
+                do { try await Task.sleep(for: .seconds(3)) } catch { break }
+            }
+        }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
-            case .phoneSignIn:
-                PhoneSignInView(sessionID: sid)
+            case .requestedSignIn(let request):
+                PhoneSignInView(sessionID: sid, agentRequest: request)
                     .presentationDetents([.large])
+            case .phoneSignIn(let requestID):
+                PhoneSignInRequestsSheet(sessionID: sid, initialRequestID: requestID)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
             case .attachments:
                 AttachmentsSheet(messages: messages)
             case .inversionSpike:
@@ -628,9 +679,10 @@ struct SessionDetailView: View {
                 tmuxIdentifier: session.tmuxName ?? session.tmuxTarget,
                 isBusy: isBusy,
                 childAgents: childAgents,
+                signInRequests: signInRequests,
                 dismissedBrowserFrameID: dismissedBrowserFrameID,
                 onShowAttachments: { presentedSheet = .attachments },
-                onShowPhoneSignIn: { presentedSheet = .phoneSignIn },
+                onShowPhoneSignIn: { requestID in presentedSheet = .phoneSignIn(requestID: requestID) },
                 onShowInversionSpike: { presentedSheet = .inversionSpike },
                 onShowChildSessions: { selectedID in
                     presentedSheet = .childSessions(selectedID: selectedID)
@@ -723,9 +775,10 @@ private struct SessionOptionsMenu: View {
     let tmuxIdentifier: String?
     let isBusy: Bool
     let childAgents: [ChildAgentSession]
+    let signInRequests: [PhoneSignInAgentRequest]
     let dismissedBrowserFrameID: String?
     let onShowAttachments: () -> Void
-    let onShowPhoneSignIn: () -> Void
+    let onShowPhoneSignIn: (String?) -> Void
     let onShowInversionSpike: () -> Void
     let onShowChildSessions: (String?) -> Void
     let onRename: () -> Void
@@ -775,7 +828,10 @@ private struct SessionOptionsMenu: View {
             ))
         }
 
-        primary.append(action("Sign in on Phone", systemImage: "key", handler: onShowPhoneSignIn))
+        primary.append(action(
+            signInRequests.isEmpty ? "Sign in on iPhone" : "Sign in on iPhone (\(signInRequests.count))",
+            systemImage: "key"
+        ) { onShowPhoneSignIn(nil) })
         primary.append(action("Files & Links", systemImage: "paperclip", handler: onShowAttachments))
         // PHASE-2 SPIKE entry — remove with the spike.
         primary.append(action("Spike: inverted transcript", systemImage: "arrow.up.arrow.down",

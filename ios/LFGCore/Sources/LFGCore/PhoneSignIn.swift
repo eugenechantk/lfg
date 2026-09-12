@@ -49,6 +49,13 @@ public struct PhoneSignInResult: Decodable, Sendable {
     }
 }
 public enum PhoneSignInPolicy {
+    /// Account controls are a conservative hint, not a universal authentication API.
+    /// Explicit user confirmation supports sites whose UI cannot be recognized.
+    public static func canFinish(hasCookies: Bool, loading: Bool, hasLoginFields: Bool,
+                                 hasAccountControls: Bool, onRequestedHost: Bool, userConfirmed: Bool) -> Bool {
+        hasCookies && !loading && (userConfirmed || (onRequestedHost && !hasLoginFields && hasAccountControls))
+    }
+
     public static func loginURL(_ input:String) throws -> URL {
         var text=input.trimmingCharacters(in:.whitespacesAndNewlines)
         guard !text.isEmpty else {throw LFGError.badURL}
@@ -62,3 +69,53 @@ public enum PhoneSignInPolicy {
         cookies.filter { domains.contains(domain($0.domain)) && ($0.expires == nil || $0.expires! > now.timeIntervalSince1970) }
     }
 }
+
+
+/// Metadata only: no cookies or credentials appear in agent requests.
+public struct PhoneSignInAgentRequest: Decodable, Sendable, Identifiable {
+    public let id: String
+    public let sessionId: String
+    public let url: String
+    public let target: PhoneSignInTarget
+    public let state: String
+    public let createdAt: Double
+    public let expiresAt: Double
+    public let result: PhoneSignInResult?
+    public var website: String { URL(string: url)?.host ?? "website" }
+    public var isWaiting: Bool { state == "waiting" }
+    public var requestedAt: Date { Date(timeIntervalSince1970: createdAt / 1000) }
+    public var statusTitle: String {
+        switch state {
+        case "waiting": "Waiting for sign-in"
+        case "delivering": "Sending"
+        case "installed": "Sent"
+        case "partial": "Partially sent"
+        case "failed": "Failed"
+        case "cancelled": "Cancelled"
+        case "expired": "Expired"
+        case "offline": "Browser disconnected"
+        default: "Delivery unconfirmed"
+        }
+    }
+    public var statusSystemImage: String {
+        switch state {
+        case "waiting": "key.fill"
+        case "delivering": "arrow.up.circle"
+        case "installed": "checkmark.circle"
+        case "cancelled": "xmark.circle"
+        case "expired": "clock"
+        default: "exclamationmark.circle"
+        }
+    }
+    public var message: String {
+        switch state {
+        case "installed": "Sign-in sent. Your agent can continue."
+        case "cancelled": "Sign-in cancelled. Your agent has been notified."
+        case "expired": "This sign-in request expired. Ask the agent to request it again."
+        case "offline": "The requested browser disconnected. Ask the agent for a new sign-in request."
+        case "delivering": "Sign-in delivery is in progress. Check its status before trying again."
+        default: result?.message ?? "Delivery could not be confirmed. Check the destination browser."
+        }
+    }
+}
+public struct PhoneSignInAgentRequests: Decodable, Sendable { public let requests: [PhoneSignInAgentRequest] }

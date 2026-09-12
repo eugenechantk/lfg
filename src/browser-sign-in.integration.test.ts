@@ -112,14 +112,34 @@ test("real HTTP → WebSocket → existing Playwright context authenticates only
       401,
     );
     await waitFor(() => f.hub.targets().length === 1);
-    expect(await send(f.hub.targets()[0]!.id)).toEqual({
-      state: "installed",
-      installed: 1,
-      total: 1,
-    });
+    const tokenDir = await mkdtemp(join(tmpdir(), "lfg-sign-in-agent-test-"));
+    const tokenFile = join(tokenDir, "token");
+    await writeFile(tokenFile, "a".repeat(64), {mode:0o600});
+    const env = {...process.env, LFG_BROWSER_SIGN_IN_URL:"http://127.0.0.1:9983", LFG_BROWSER_SIGN_IN_TOKEN_FILE:tokenFile};
+    let waiter: ReturnType<typeof Bun.spawn> | undefined;
+    try {
+      const command = Bun.spawn([process.execPath, "src/cli.ts", "browser-sign-in", "request", "--session", "11111111-1111-4111-8111-111111111111", "--target", f.hub.targets()[0]!.id, "--url", "https://portal.example.com/", "--no-wait"], {env,stdout:"pipe",stderr:"pipe"});
+      const created = JSON.parse(await new Response(command.stdout).text());
+      expect(await command.exited).toBe(0);
+      expect(created.state).toBe("waiting");
+      waiter = Bun.spawn([process.execPath,"src/cli.ts","browser-sign-in","wait",created.id],{env,stdout:"pipe",stderr:"pipe"});
+      await Bun.sleep(100);
+      expect(waiter.exitCode).toBeNull();
+      const complete: any = await fetch(`http://127.0.0.1:9983/api/browser-sign-in/requests/${created.id}/complete`, {
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({cookies:[cookie,{...cookie,name:"sso",domain:"id.example.net"}],targetId:"forged-target",url:"https://wrong.example/"})
+      }).then(r=>r.json());
+      expect(complete.state).toBe("installed");
+      expect(complete.result).toEqual({state:"installed",installed:2,total:2});
+      const output=await new Response(waiter.stdout as ReadableStream).text();
+      expect(await waiter.exited).toBe(0);
+      expect(JSON.parse(output).state).toBe("installed");
+      expect(output).not.toContain("synthetic-login");
+      expect((await context.cookies()).some(c=>c.domain==="id.example.net")).toBe(true);
+    } finally { waiter?.kill(); await rm(tokenDir,{recursive:true,force:true}); }
     expect((await page.reload())?.status()).toBe(200);
     expect(await untouched.cookies()).toHaveLength(0);
-    const c = (await context.cookies())[0]!;
+    const c = (await context.cookies()).find(c=>c.name === "session")!;
     expect(c.httpOnly).toBe(true);
     expect(c.secure).toBe(true);
     expect(c.expires).toBe(-1);

@@ -1,3 +1,4 @@
+import { PhoneSignInRequests } from "./phone-sign-in-requests.ts";
 import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -165,14 +166,21 @@ type Pending = {
   resolve: (r: SignInResult) => void;
   timer: ReturnType<typeof setTimeout>;
 };
-/** Contains no retained cookie payloads, journals or file writes. Destinations are connection-scoped. */
+/** Contains no retained cookie payloads. Destinations are connection-scoped; history is metadata only. */
 export class BrowserSignInHub {
+  readonly requests: PhoneSignInRequests;
+  authenticatesAgent(req: Request): boolean {
+    const secret = this.token();
+    const supplied = req.headers.get("authorization")?.replace(/^Bearer /, "");
+    return !!secret && !!supplied && Buffer.byteLength(secret) === Buffer.byteLength(supplied)
+      && timingSafeEqual(Buffer.from(secret), Buffer.from(supplied));
+  }
   private peers = new Map<Socket, Peer>();
   private pending = new Map<string, Pending>();
   constructor(
     private token: () => string | undefined = readSignInToken,
-    private options: { timeout?: number } = {},
-  ) {}
+    private options: { timeout?: number; historyPath?: string } = {},
+  ) { this.requests = new PhoneSignInRequests(this, Date.now, 15 * 60_000, options.historyPath); }
   open(socket: Socket) {
     if (this.peers.size >= 16) {
       socket.close(1013, "Too many browsers");
@@ -329,8 +337,18 @@ export async function signInHTTP(
     return response({ error: "Sign-in requires HTTPS." }, 403);
   if (url.pathname === "/api/browser-sign-in/targets" && req.method === "GET")
     return response({ targets: hub.targets() });
-  if (url.pathname !== "/api/browser-sign-in/transfer" || req.method !== "POST")
+  const requestRoot = "/api/browser-sign-in/requests";
+  const requestPath = url.pathname.match(/^\/api\/browser-sign-in\/requests\/([a-f0-9-]{36})(?:\/(complete|cancel))?$/);
+  if (req.method === "GET" && url.pathname === requestRoot)
+    return response({requests: hub.requests.list(url.searchParams.get("sessionId") || "")});
+  if (req.method === "GET" && requestPath && !requestPath[2]) {
+    const request = hub.requests.get(requestPath[1]!);
+    return request ? response(request) : response({error:"Sign-in request no longer exists."},404);
+  }
+  if (req.method !== "POST" || !(url.pathname === "/api/browser-sign-in/transfer" || url.pathname === requestRoot || requestPath?.[2]))
     return response({ error: "Not found" }, 404);
+  if (url.pathname === requestRoot && (!allowsSignInAdapter(req) || !hub.authenticatesAgent(req)))
+    return response({error:"Local agent connection required."},403);
   if (!req.headers.get("content-type")?.startsWith("application/json"))
     return response({ error: "JSON required" }, 415);
   // Stream-bound before parsing; Content-Length alone is not trusted.
@@ -350,6 +368,9 @@ export async function signInHTTP(
       chunks.push(value);
     }
     const data = JSON.parse(Buffer.concat(chunks).toString());
+    if (url.pathname === requestRoot) return response(hub.requests.create(data));
+    if (requestPath?.[2] === "cancel") return response(hub.requests.cancel(requestPath[1]!));
+    if (requestPath?.[2] === "complete") return response(await hub.requests.complete(requestPath[1]!, data.cookies));
     validateTransfer(data);
     return response(await hub.transfer(data));
   } catch {
