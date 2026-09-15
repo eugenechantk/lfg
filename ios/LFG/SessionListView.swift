@@ -64,6 +64,8 @@ struct SessionListView: View {
     /// Directory-filter panel. A sheet rather than a menu because the panel needs
     /// a text field for a path or pattern, which a `Menu` cannot host.
     @State private var showDirectoryFilter = false
+    /// Full-screen shell on the default host (`TerminalScreen`).
+    @State private var showTerminal = false
 
     /// Collapsible UI state is in-memory per the current run. Sections default
     /// expanded, and only store their id here after the user collapses them.
@@ -822,11 +824,15 @@ struct SessionListView: View {
                     // bar, where the system puts it on iOS 26.
                     hiddenDirectoriesButton
                     groupSortMenu(groupMode: groupMode, sortMode: sortMode)
+                    headerButton("apple.terminal", size: 15, weight: .regular) { showTerminal = true }
+                        .accessibilityIdentifier("terminalButton")
+                        .accessibilityLabel("Terminal")
                     headerButton("gearshape", size: 16, weight: .regular) { showSettings = true }
                         .accessibilityIdentifier("sessionSettingsButton")
                 }
             }
         }
+        .fullScreenCover(isPresented: $showTerminal) { TerminalScreen() }
         .padding(.top, 6)
         .padding(.horizontal, 16)
         .padding(.bottom, 2)

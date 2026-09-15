@@ -14,6 +14,12 @@ packages:
   MarkdownUI:
     url: https://github.com/gonzalezreal/swift-markdown-ui
     from: "2.4.0"
+  SwiftTerm:
+    # Vendored SwiftTerm v1.11.2 with a local latency patch (see Vendor/SwiftTerm/PATCHES.md).
+    # Stay on 1.11.x: 1.12 added a Metal GPU renderer, which needs Xcode's separately
+    # downloaded Metal Toolchain on every build machine, and 1.19 added a build-tool
+    # plugin that Xcode won't run until someone trusts it. Both break unattended archives.
+    path: Vendor/SwiftTerm
 targets:
   LFG:
     type: application
@@ -33,6 +39,8 @@ targets:
         product: LFGCore
       - package: MarkdownUI
         product: MarkdownUI
+      - package: SwiftTerm
+        product: SwiftTerm
       - sdk: ActivityKit.framework
       - sdk: Security.framework
       - target: LFGWidgets

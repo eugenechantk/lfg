@@ -187,6 +187,13 @@ public struct LFGClient: Sendable {
         }
     }
 
+    /// Attach this host's Access credential unconditionally. For requests whose
+    /// URL is derived from `baseURL` but can't pass the origin check, such as the
+    /// ws/wss terminal socket.
+    func applyAccessCredential(to request: inout URLRequest) {
+        accessCredential?.apply(to: &request)
+    }
+
     private func authenticated(_ request: URLRequest) -> URLRequest {
         guard let accessCredential,
               Self.sameOrigin(request.url, baseURL) else { return request }
