@@ -557,11 +557,11 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable {
     /// codex is catalog-driven so we provide common defaults.
     public var models: [String] {
         switch self {
-        // First entry is the default. Claude → Opus 5, Codex → GPT-5.6 Sol.
+        // First entry is the default. Claude → Opus 5, Codex → GPT-6 Astra.
         case .claude:
             return ["claude-opus-5", "claude-fable-5", "claude-sonnet-5", "claude-haiku-4-5", "opus", "fable", "sonnet", "haiku"]
         case .codex:
-            return ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"]
+            return ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"]
         }
     }
 

@@ -515,7 +515,8 @@ enum DesktopNewSessionPlanner {
     private static let modelsByAgent: [String: [String]] = [
         "claude": ["claude-opus-5", "claude-fable-5", "claude-sonnet-5",
                    "claude-haiku-4-5", "opus", "fable", "sonnet", "haiku"],
-        "codex": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"],
+        "codex": ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+                  "gpt-5.3-codex-spark"],
     ]
 
     static let defaultAgent = "claude"
@@ -2456,7 +2457,7 @@ enum DesktopFeatureTestCLI {
         try expect(DesktopNewSessionPlanner.plan(
             query: "render", items: [noModel],
             defaultHostURL: "http://default:8766", inbox: "/inbox"
-        )?.model == "gpt-5.6-sol", "known agent without model uses that agent's iOS default")
+        )?.model == "gpt-6-astra", "known agent without model uses that agent's iOS default")
 
         let readableOlderModel = newSessionTestItem(
             id: "render-known-model", title: "older render", project: "render",

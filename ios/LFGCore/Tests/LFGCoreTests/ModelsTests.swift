@@ -125,10 +125,11 @@ final class ModelsTests: XCTestCase {
 
     func testAgentKindModels() {
         XCTAssertEqual(AgentKind.claude.defaultModel, "claude-opus-5")
-        XCTAssertEqual(AgentKind.codex.defaultModel, "gpt-5.6-sol")
+        XCTAssertEqual(AgentKind.codex.defaultModel, "gpt-6-astra")
         XCTAssertTrue(AgentKind.claude.models.contains("claude-fable-5"))
         XCTAssertTrue(AgentKind.claude.models.contains("opus"))
         XCTAssertTrue(AgentKind.codex.models.contains("gpt-5.3-codex-spark"))
+        XCTAssertTrue(AgentKind.codex.models.contains("gpt-5.6-sol"))
         XCTAssertEqual(AgentKind.allCases.count, 2)
     }
 
