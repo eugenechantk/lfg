@@ -73,6 +73,7 @@ import {
 import { addManaged, forkLineageForSession, normalizeParentSessionId, patchManaged, removeManaged } from "../managed.ts";
 import { PtyBridge, termSessionName } from "../pty.ts";
 import { accessConfigFromEnv, authorizeTunnelledRequest, cachedJwks } from "../access-jwt.ts";
+import { TermScroll } from "../term-scroll.ts";
 import { capturePaneScroll, capturePaneEscaped, paneWidth, ensureFolderTrusted } from "../tmux.ts";
 import { rootDir, inboxDir, setInbox, createDir, expandUserPath } from "../dirs.ts";
 import { detectUrls } from "../links.ts";
@@ -945,6 +946,7 @@ type TermSocketData = { sessionName: string; cols: number; rows: number; browser
 // Live PTY bridges keyed by their websocket, so message/close handlers can find
 // the bridge to write to / tear down.
 const termBridges = new WeakMap<object, PtyBridge>();
+const termScrolls = new WeakMap<object, TermScroll>();
 // A shell reached through the tunnel must prove Access let it in, not just rely
 // on the edge policy being right (see src/access-jwt.ts). Read once at startup.
 const termAccess = accessConfigFromEnv();
@@ -1042,6 +1044,7 @@ export async function cmdServe() {
             } catch {}
           });
           termBridges.set(ws, bridge);
+          termScrolls.set(ws, new TermScroll(sessionName));
         } catch (e) {
           try {
             ws.send(`\r\n[lfg] failed to open terminal: ${(e as Error).message}\r\n`);
@@ -1060,19 +1063,28 @@ export async function cmdServe() {
               t?: string;
               cols?: number;
               rows?: number;
+              lines?: number;
             };
             if (ctrl.t === "resize" && ctrl.cols && ctrl.rows)
               bridge.resize(ctrl.cols, ctrl.rows);
+            // Touch scrolling through tmux history (src/term-scroll.ts).
+            if (ctrl.t === "scroll" && typeof ctrl.lines === "number")
+              void termScrolls.get(ws)?.scroll(ctrl.lines);
           } catch {}
           return;
         }
-        // Binary frame = raw keystrokes.
-        bridge.write(message as Uint8Array);
+        // Binary frame = raw keystrokes. Routed through the scroller so a
+        // keystroke after scrolling leaves copy-mode first, in order.
+        const bytes = new Uint8Array(message as Uint8Array);
+        const scroll = termScrolls.get(ws);
+        if (scroll) scroll.input(() => bridge.write(bytes));
+        else bridge.write(bytes);
       },
       close(ws: ServerWebSocket<TermSocketData>) {
         if (ws.data.browserSignIn) { browserSignIn.close(ws); return; }
         const bridge = termBridges.get(ws);
         termBridges.delete(ws);
+        termScrolls.delete(ws);
         // Tears down our attach client; the tmux session itself persists so the
         // shell (and any in-flight OAuth / long command) survives a reconnect.
         bridge?.close();
