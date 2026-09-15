@@ -22,6 +22,11 @@ understand it before you run it anywhere shared.
 
 - **Never bind to a public interface.** Keep `LFG_HOST=127.0.0.1`. The provided
   systemd unit hard-sets this so a stale `.env` can't override it.
+- **The terminal is gated separately.** `/api/term` is a real shell. Through a
+  Cloudflare tunnel it also requires a verified Cloudflare Access JWT
+  (`LFG_ACCESS_TEAM_DOMAIN` + `LFG_ACCESS_AUD`, see `src/access-jwt.ts`), so a
+  wrong Access policy can't turn it into a public shell. Unconfigured means
+  local-only.
 - **Reach it over Tailscale, not the internet.** Use `tailscale serve` (HTTPS on
   your MagicDNS name, tailnet members only). Do **not** use `tailscale funnel`,
   and do not open `8766`/`443` in your cloud firewall. `scripts/setup.sh` sets

@@ -72,6 +72,7 @@ import {
 } from "../tmux.ts";
 import { addManaged, forkLineageForSession, normalizeParentSessionId, patchManaged, removeManaged } from "../managed.ts";
 import { PtyBridge, termSessionName } from "../pty.ts";
+import { accessConfigFromEnv, authorizeTunnelledRequest, cachedJwks } from "../access-jwt.ts";
 import { capturePaneScroll, capturePaneEscaped, paneWidth, ensureFolderTrusted } from "../tmux.ts";
 import { rootDir, inboxDir, setInbox, createDir, expandUserPath } from "../dirs.ts";
 import { detectUrls } from "../links.ts";
@@ -944,6 +945,10 @@ type TermSocketData = { sessionName: string; cols: number; rows: number; browser
 // Live PTY bridges keyed by their websocket, so message/close handlers can find
 // the bridge to write to / tear down.
 const termBridges = new WeakMap<object, PtyBridge>();
+// A shell reached through the tunnel must prove Access let it in, not just rely
+// on the edge policy being right (see src/access-jwt.ts). Read once at startup.
+const termAccess = accessConfigFromEnv();
+const termAccessKeys = cachedJwks();
 
 // Parse a terminal dimension from a query param, clamped to a sane range so a
 // bogus value can't allocate an absurd pty winsize.
@@ -1160,6 +1165,13 @@ export async function cmdServe() {
       }
 
       // ---- browser terminal (websocket upgrade) ----
+      if (path === "/api/term" || path === "/api/term/scan") {
+        const access = await authorizeTunnelledRequest(req, termAccess, termAccessKeys);
+        if (!access.ok) {
+          console.warn(`[term] refused tunnelled ${path}: ${access.reason}`);
+          return err(403, "terminal requires a verified Cloudflare Access session");
+        }
+      }
       if (path === "/api/term") {
         const sessionName = termSessionName(url.searchParams.get("session") || "main");
         const cols = clampDim(url.searchParams.get("cols"), 80);
