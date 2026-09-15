@@ -1,0 +1,44 @@
+-rwxr-xr-x    2 root   wheel      3212 Aug 13 10:5
+1 zdiff
+-rwxr-xr-x    6 root   wheel    153376 Aug 13 10:5
+1 zegrep
+-rwxr-xr-x    6 root   wheel    153376 Aug 13 10:5
+1 zfgrep
+-rwxr-xr-x    1 root   wheel      1390 Aug 13 10:5
+1 zforce
+-rwxr-xr-x    6 root   wheel    153376 Aug 13 10:5
+1 zgrep
+-rwxr-xr-x    1 root   wheel    404864 Aug 13 10:5
+1 zip
+-rwxr-xr-x    1 root   wheel    238384 Aug 13 10:5
+1 zipcloak
+-rwxr-xr-x    2 root   wheel     60065 Aug 13 10:5
+1 zipdetails
+-rwxr-xr-x    2 root   wheel     60065 Aug 13 10:5
+1 zipdetails5.34
+-rwxr-xr-x    1 root   wheel      2953 Aug 13 10:5
+1 zipgrep
+-rwxr-xr-x    2 root   wheel    453344 Aug 13 10:5
+1 zipinfo
+-rwxr-xr-x    1 root   wheel    221328 Aug 13 10:5
+1 zipnote
+-rwxr-xr-x    1 root   wheel    237856 Aug 13 10:5
+1 zipsplit
+-rwxr-xr-x    2 root   wheel      2018 Aug 13 10:5
+1 zless
+-rwxr-xr-x    2 root   wheel      2018 Aug 13 10:5
+1 zmore
+-rwxr-xr-x    1 root   wheel      3314 Aug 13 10:5
+1 znew
+-rwxr-xr-x    1 root   wheel    169936 Aug 13 10:5
+1 zprint
+
+☸ arn:aws:eks:us-west-2:472386928882:cluster/olymp
+us-staging (eugene-test) in ~ via  v26.0.0 on ☁️
+ (us-west-2)
+❯ top
+
+☸ arn:aws:eks:us-west-2:472386928882:cluster/olymp
+us-staging (eugene-test) in ~ via  v26.0.0 on ☁️
+ (us-west-2) took 7s
+❯

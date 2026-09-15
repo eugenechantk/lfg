@@ -1,0 +1,44 @@
+#
+# Network services, Internet style
+#
+# Note that it is presently the policy of IANA to
+assign a single well-known
+# port number for both TCP and UDP; hence, most en
+tries here have two entries
+# even if the protocol doesn't support UDP operati
+ons.
+#
+# The latest IANA port assignments can be gotten f
+rom
+#
+#       http://www.iana.org/assignments/port-numbe
+rs
+#
+# The Well Known Ports are those from 0 through 10
+23.
+# The Registered Ports are those from 1024 through
+ 49151
+# The Dynamic and/or Private Ports are those from
+49152 through 65535
+#
+# $FreeBSD: src/etc/services,v 1.89 2002/12/17 23:
+59:10 eric Exp $
+#       From: @(#)services      5.8 (Berkeley) 5/9
+/91
+#
+# WELL KNOWN PORT NUMBERS
+#
+rtmp              1/ddp    #Routing Table Maintena
+nce Protocol
+tcpmux            1/udp     # TCP Port Service Mul
+tiplexer
+tcpmux            1/tcp     # TCP Port Service Mul
+tiplexer
+#                          Mark Lottor <MKL@nisc.s
+ri.com>
+nbp               2/ddp    #Name Binding Protocol
+compressnet       2/udp     # Management Utility
+compressnet       2/tcp     # Management Utility
+compressnet       3/udp     # Compression Process
+compressnet       3/tcp     # Compression Process
+/etc/services

@@ -1,0 +1,854 @@
+{
+  "accessibility" : {
+    "element_count" : 51,
+    "frame_space" : "points",
+    "tree" : [
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 437
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 874,
+          "width" : 402,
+          "x" : 0,
+          "y" : 0
+        },
+        "label" : "lfg",
+        "role" : "Application",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 248,
+          "y" : 506
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 874,
+          "width" : 250,
+          "x" : 123,
+          "y" : 69
+        },
+        "role" : "Group",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 248,
+          "y" : 111
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 64,
+          "width" : 250,
+          "x" : 123,
+          "y" : 79
+        },
+        "id" : "checkmark",
+        "label" : "Eugenes-MacBook-Pro (127.0.0.1:9982)",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 248,
+          "y" : 175
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 64,
+          "width" : 250,
+          "x" : 123,
+          "y" : 143
+        },
+        "id" : "",
+        "label" : "Eugenes-MacBook-Pro (lfg-pro.eugenechantk.me)",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 248,
+          "y" : 239
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 64,
+          "width" : 250,
+          "x" : 123,
+          "y" : 207
+        },
+        "id" : "",
+        "label" : "Eugenes-MacBook-Air",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 17,
+          "y" : 857
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 30,
+          "width" : 30,
+          "x" : 2,
+          "y" : 842
+        },
+        "label" : "esc",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 51,
+          "y" : 857
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 30,
+          "width" : 30,
+          "x" : 36,
+          "y" : 842
+        },
+        "label" : "ctrl",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 81,
+          "y" : 857
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 30,
+          "width" : 22,
+          "x" : 70,
+          "y" : 842
+        },
+        "label" : "tab",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 111,
+          "y" : 857
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 30,
+          "width" : 30,
+          "x" : 96,
+          "y" : 842
+        },
+        "label" : "~",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 145,
+          "y" : 857
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 30,
+          "width" : 30,
+          "x" : 130,
+          "y" : 842
+        },
+        "label" : "|",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 179,
+          "y" : 857
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 30,
+          "width" : 30,
+          "x" : 164,
+          "y" : 842
+        },
+        "label" : "\/",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 213,
+          "y" : 857
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 30,
+          "width" : 30,
+          "x" : 198,
+          "y" : 842
+        },
+        "label" : "-",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 253,
+          "y" : 857
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 30,
+          "width" : 22,
+          "x" : 242,
+          "y" : 842
+        },
+        "label" : "Left",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 279,
+          "y" : 857
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 30,
+          "width" : 22,
+          "x" : 268,
+          "y" : 842
+        },
+        "label" : "Down",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 305,
+          "y" : 857
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 30,
+          "width" : 22,
+          "x" : 294,
+          "y" : 842
+        },
+        "label" : "Up",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 331,
+          "y" : 857
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 30,
+          "width" : 22,
+          "x" : 320,
+          "y" : 842
+        },
+        "label" : "Right",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 357,
+          "y" : 857
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 30,
+          "width" : 23,
+          "x" : 346,
+          "y" : 842
+        },
+        "label" : "hand.draw",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 386,
+          "y" : 857
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 30,
+          "width" : 27,
+          "x" : 373,
+          "y" : 842
+        },
+        "label" : "hide keyboard",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 24,
+          "y" : 925
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 4,
+          "y" : 898
+        },
+        "label" : "q",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 63,
+          "y" : 925
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 44,
+          "y" : 898
+        },
+        "label" : "w",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 103,
+          "y" : 925
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 83,
+          "y" : 898
+        },
+        "label" : "e",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 142,
+          "y" : 925
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 122,
+          "y" : 898
+        },
+        "label" : "r",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 182,
+          "y" : 925
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 162,
+          "y" : 898
+        },
+        "label" : "t",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 221,
+          "y" : 925
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 202,
+          "y" : 898
+        },
+        "label" : "y",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 261,
+          "y" : 925
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 241,
+          "y" : 898
+        },
+        "label" : "u",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 300,
+          "y" : 925
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 281,
+          "y" : 898
+        },
+        "label" : "i",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 340,
+          "y" : 925
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 320,
+          "y" : 898
+        },
+        "label" : "o",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 379,
+          "y" : 925
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 360,
+          "y" : 898
+        },
+        "label" : "p",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 43,
+          "y" : 979
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 24,
+          "y" : 952
+        },
+        "label" : "a",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 83,
+          "y" : 979
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 63,
+          "y" : 952
+        },
+        "label" : "s",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 122,
+          "y" : 979
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 103,
+          "y" : 952
+        },
+        "label" : "d",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 162,
+          "y" : 979
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 142,
+          "y" : 952
+        },
+        "label" : "f",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 202,
+          "y" : 979
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 182,
+          "y" : 952
+        },
+        "label" : "g",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 241,
+          "y" : 979
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 221,
+          "y" : 952
+        },
+        "label" : "h",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 280,
+          "y" : 979
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 261,
+          "y" : 952
+        },
+        "label" : "j",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 320,
+          "y" : 979
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 300,
+          "y" : 952
+        },
+        "label" : "k",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 359,
+          "y" : 979
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 340,
+          "y" : 952
+        },
+        "label" : "l",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 30,
+          "y" : 1033
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 51,
+          "x" : 4,
+          "y" : 1006
+        },
+        "id" : "shift",
+        "label" : "shift",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 83,
+          "y" : 1033
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 63,
+          "y" : 1006
+        },
+        "label" : "z",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 122,
+          "y" : 1033
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 103,
+          "y" : 1006
+        },
+        "label" : "x",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 162,
+          "y" : 1033
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 142,
+          "y" : 1006
+        },
+        "label" : "c",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 202,
+          "y" : 1033
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 182,
+          "y" : 1006
+        },
+        "label" : "v",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 241,
+          "y" : 1033
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 221,
+          "y" : 1006
+        },
+        "label" : "b",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 280,
+          "y" : 1033
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 261,
+          "y" : 1006
+        },
+        "label" : "n",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 320,
+          "y" : 1033
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 300,
+          "y" : 1006
+        },
+        "label" : "m",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 373,
+          "y" : 1033
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 51,
+          "x" : 348,
+          "y" : 1006
+        },
+        "id" : "delete",
+        "label" : "delete",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 29,
+          "y" : 1087
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 49,
+          "x" : 4,
+          "y" : 1060
+        },
+        "id" : "more",
+        "label" : "numbers",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 78,
+          "y" : 1087
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 49,
+          "x" : 53,
+          "y" : 1060
+        },
+        "id" : "emoji",
+        "label" : "Emoji",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 1087
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 197,
+          "x" : 103,
+          "y" : 1060
+        },
+        "id" : "space",
+        "label" : " ",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 350,
+          "y" : 1087
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 99,
+          "x" : 300,
+          "y" : 1060
+        },
+        "id" : "Return",
+        "label" : "return",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 437
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 874,
+          "width" : 402,
+          "x" : 0,
+          "y" : 0
+        },
+        "label" : "Dismiss context menu",
+        "role" : "Button",
+        "visible" : true
+      }
+    ]
+  },
+  "schemaVersion" : "1.0.0",
+  "screenshot" : {
+    "captured" : true,
+    "height" : 874,
+    "optimized" : false,
+    "path" : "\/Users\/eugenechan\/dev\/personal\/lfg\/.worktrees\/ios-terminal\/.claude\/evidence\/20260915-152237-ios-visual-audit-2\/30-host-menu.png",
+    "pixel_height" : 874,
+    "pixel_width" : 402,
+    "point_height" : 874,
+    "point_width" : 402,
+    "size_bytes" : 122237,
+    "unit" : "points",
+    "width" : 402
+  },
+  "simulator" : {
+    "name" : "Simulator",
+    "runtime" : "iOS",
+    "udid" : "E0DC8228-3248-4630-8929-FBC5DFC6AE6D"
+  },
+  "success" : true,
+  "timestamp" : "2026-09-15T07:33:21Z",
+  "type" : "ui_snapshot"
+}

@@ -1,0 +1,44 @@
+
+☸ arn:aws:eks:us-west-2:472386928882:cluster/olymp
+us-staging (eugene-test) in ~ via  v26.0.0 on ☁️
+ (us-west-2)
+❯
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,44 @@
+Processes: 1286 total, 4 running, 2 stuck, 1280 sl
+15:29:43 Load Avg: 5.29, 5.60, 5.84
+CPU usage: 21.4% user, 8.95% sys, 70.0% idle
+SharedLibs: 711M resident, 140M data, 144M linkedi
+MemRegions: 0 total, 0B resident, 375M private, 24
+PhysMem: 34G used (5190M wired, 10G compressor), 7
+VM: 555T vsize, 6144M framework vsize, 0(0) swapin
+Networks: packets: 43048619/38G in, 28485568/11G o
+Disks: 98652522/1400G read, 15475768/419G written.
+
+PID    COMMAND      %CPU  TIME     #TH    #WQ
+1763   bun          122.4 36:29:06 21/1   1
+29221  mediaanalysi 73.2  25:08:30 32/1   6/1
+791    fileprovider 35.2  02:59:09 6      5/1
+0      kernel_task  19.1  08:40:12 842/14 0
+752    DeskIn       12.1  03:17:28 52     6
+11520  SimRenderSer 9.6   02:18.50 8      6
+94005  top          8.2   00:00.80 1/1    0
+87029  claude       7.6   00:09.36 27     2
+27837  flowdeck     7.5   02:06.86 6      5
+52203  bun          6.9   07:33.68 22     1
+11551  backboardd   6.4   02:21.88 12     7
+474    coreaudiod   5.4   02:23:32 9      1
+11522  SimMetalHost 4.1   01:25.54 6      4
+1210   com.apple.Co 4.0   03:47.77 13     11
+93172  simctl       3.4   00:01.21 7      3
+78301  LFG          2.9   00:28.16 10     6
+63794  Simulator    2.3   03:09.12 6      4
+2463   syncthing    2.2   22:45:03 26     1
+455    WindowServer 2.1   03:28:44 23     3
+11560  CoreSimulato 2.0   01:21.24 4      3
+56608  claude       2.0   03:18.64 28     2
+381    logd         1.8   47:07.19 4      3
+456    tccd         1.8   05:18.36 4      3
+7096   claude       1.4   15:50.08 27     2
+515    syspolicyd   1.4   08:00.24 5      3
+1      launchd      1.4   33:29.89 8      7
+93175  VTEncoderXPC 1.1   00:00.43 5      2
+713    iTerm2       1.1   02:48:23 10     7
+462    trustd       0.9   10:38.27 3      2
+517    mDNSResponde 0.8   01:32.33 4      2
+26496  com.surfshar 0.8   02:44.93 25     3
+767    Surfshark    0.6   23:20.26 17     2
+877    tmux         0.5   43:39.17 1      0

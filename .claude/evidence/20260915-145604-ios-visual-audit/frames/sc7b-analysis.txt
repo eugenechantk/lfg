@@ -1,0 +1,5 @@
+offset host-video 1789455783.608333
+per-sample ms (glyph frame - pty receive, synced on status-bar minute tick):
+[69, 76, 64, 74, 76, 78, 68, 65, 63, 64, 62, 64, 66, 71, 73, 76, 74, 62, 62, 77, 65, 74, 63, 74, 66, 65, 71, 67, 64, 62, 71, 61, 64, 70, 71, 62, 64, 67, 75, 61, 73, 69]
+median 67 p90 75 min 61 max 78 stdev 5.1
+gaps between pty receipts ms [1543, 1544, 1542, 1548, 1533]
