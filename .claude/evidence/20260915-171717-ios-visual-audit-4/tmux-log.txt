@@ -1,0 +1,35 @@
+== before: 0 pos=
+== swipe-down-1: 1 pos=29
+== swipe-down-2: 1 pos=58
+== swipe-up-1: 1 pos=34
+== flick-down: 1 pos=123
+== pre: 1 pos=123 | bufs=1
+== swipe-up-2: 1 pos=88 | bufs=1
+== swipe-up-3: 1 pos=53 | bufs=1
+== horiz-right: 1 pos=53 | bufs=1
+== horiz-left: 1 pos=53 | bufs=1
+== single-tap: 1 pos=53 | bufs=1
+us-staging (eugene-test) in ~ via  v26.0.0 on ☁️
+ (us-west-2)
+❯
+== after-type: 0 pos=
+== after-enter: 0 pos=
+400
+
+☸ arn:aws:eks:us-west-2:472386928882:cluster/olymp
+us-staging (eugene-test) in ~ via  v26.0.0 on ☁️
+ (us-west-2)
+❯ echo AUDIT4_$((6*7))
+AUDIT4_42
+
+☸ arn:aws:eks:us-west-2:472386928882:cluster/olymp
+us-staging (eugene-test) in ~ via  v26.0.0 on ☁️
+ (us-west-2)
+❯
+== live-pre: 0 pos= | lastline=[❯]
+== live-swipe-up-at-bottom: 0 pos= | lastline=[❯]
+== small-swipe-down: 1 pos=15 | lastline=[❯]
+== swipe-up-to-bottom-1: 1 pos=59 | lastline=[❯]
+== back-to-bottom-1: 1 pos=8 | lastline=[❯]
+== back-to-bottom-2: 0 pos= | lastline=[❯]
+== back-to-bottom-3: 0 pos= | lastline=[❯]

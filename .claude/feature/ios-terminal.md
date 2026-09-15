@@ -48,6 +48,17 @@ the Pro through the Cloudflare tunnel + Access.
   a 60fps Simulator recording analysed frame by frame by `ios_visual_evidence_auditor`
   (key-press frame → glyph frame).
 
+- [x] SC8: A vertical swipe on the terminal scrolls through the shell's transcript (tmux
+  history). Finger down shows older output, up comes back. It never sends arrow keys and never
+  sends mouse events or pastes anything into the shell. The first keystroke after scrolling
+  returns to the live screen and is delivered in order. **Verify by:**
+  `src/term-scroll.test.ts` (unit + real tmux), `TerminalConnectionTests.testScrollControlFrameMatchesServerFormat`,
+  a sim swipe with `tmux display '#{pane_in_mode} #{scroll_position}'` + type-back check, and
+  the auditor's recording.
+- [x] SC9: The session detail ••• menu has "Open Terminal", which opens the terminal on that
+  session's host, not the default host. **Verify by:** sim, for a session whose host is not
+  the default: menu → Open Terminal → header shows that host (auditor).
+
 ## Platform & Stack
 
 - **Server:** Bun 1.3.14 / TypeScript (`src/pty.ts`, `src/commands/serve.ts`, new `src/access-jwt.ts`)
@@ -151,8 +162,27 @@ the Pro through the Cloudflare tunnel + Access.
 | SC7 (tunnel, VPN bypassed) | raw ws client bound to en0 (`ws_en0_latency.py`), 2×100 keys | p50 **115 / 146 ms**, p90 269 / 287 ms, p99 870 / 445 ms; same-time localhost p50 1.2ms, p99 14.7ms → the tail is the Cloudflare hop | scratchpad `ws_en0_latency.py` |
 | BUG2 found + fixed | sim: switch host in the menu → terminal stays blank; the server shows a client attached | `TerminalHostingView` kept the first controller's UIView; fixed with `.id(ObjectIdentifier(controller))` | `.claude/evidence/s5-tunnel.png` (bug) |
 | app through tunnel | sim → host menu → lfg-pro → `echo TUNNEL_$((20+22)) from $(hostname -s)` | `TUNNEL_42 from Eugenes-MacBook-Pro`, using the app's real Keychain Access credential; the ✕ close icon renders | `.claude/evidence/s6-tunnel.png` |
+| SC8/SC9 audit #3 | auditor on the shared sim E0DC8228 | **invalid**: another session reinstalled the main-checkout build mid-audit. It did reproduce BUG3 on that old build (a tap pasted tmux buffer0) | `.claude/evidence/20260915-170637-ios-visual-audit-3/evidence.md` |
+| SC8/SC9 audit #4 | auditor on the dedicated sim `cc-48a12e88-iphone` (72C21E2D). Scratch host (own `LFG_DATA`) is default; sessions routed to the Pro | **PASS**. SC8: scroll 0→29→58→34→123 (flick)→88→53; swipe up at the bottom exits; horizontal swipes and taps type nothing; nothing pasted; `AUDIT4_42` runs from scrolled state. SC9: a session's Open Terminal opened the Pro host (tmux client parent = the :8766 server) while the default is Scratch; the list button opens Scratch (client parent = the :9982 server). Regression: typing responsive, reopen reattaches | `.claude/evidence/20260915-171717-ios-visual-audit-4/evidence.md` |
 | regression | `bun test <file>` for each of the 66 test files | all pass individually | — |
 | regression (pre-existing) | `bun test` (whole suite, one process) | hangs until killed, **also on untouched base `e72b400`**, so not caused by this branch | — |
+
+## Iteration 2 (2026-09-15): swipe scrolling + Open Terminal menu item
+
+Findings while building it:
+- **tmux holds the transcript.** SwiftTerm only ever sees tmux's redrawn screen, so the
+  emulator had no scrollback to show. Scrolling has to drive tmux copy-mode on the server
+  (`{"t":"scroll","lines":n}` → `TermScroll`). Input after scrolling cancels copy-mode first,
+  on the same queue.
+- **BUG3 (found, fixed): a swipe pasted a tmux buffer into the shell.** Eugene's tmux has
+  `mouse on` globally, so SwiftTerm forwarded touches as mouse events. A swipe was read as a
+  paste of the most recent tmux buffer, which lfg uses to deliver agent messages. The shell
+  received a Noto chat reply and zsh sat at a `∙` quote-continuation prompt, which looked like
+  "input lost". Fix: `allowMouseReporting = false`, plus vendored patch 3 (remove the toggle
+  from the key bar). This also explains the reported "swipe triggers arrow keys".
+- The custom pan needed `shouldRecognizeSimultaneouslyWith → true`. Otherwise SwiftTerm's own
+  recognizers kept it from ever firing (it passed `shouldBegin`, the handler never ran).
+- Vendored patch 2: SwiftTerm's pan-to-arrow-keys path removed.
 
 ## Residual Risks / Follow-ups
 

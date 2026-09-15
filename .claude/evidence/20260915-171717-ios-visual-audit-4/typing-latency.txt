@@ -1,0 +1,3 @@
+'echo R': flowdeck cmd 0.46s, pane shows text 0.007s after cmd returned
+'EGR': flowdeck cmd 0.39s, pane shows text 0.006s after cmd returned
+'ESS_OK': flowdeck cmd 0.46s, pane shows text 0.007s after cmd returned

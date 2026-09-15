@@ -1,0 +1,44 @@
+ (us-west-2)
+❯ echo SWIPE_OK
+SWIPE_OK
+
+☸ arn:aws:eks:us-west-2:472386928882:cluster/olymp
+us-staging (eugene-test) in ~ via  v26.0.0 on ☁️
+ (us-west-2)
+❯ 家的90後, the show with your mom
+- Planning: 我和我家9 0後Project.md has the list o
+f possible topics, the episode order, the pipeline
+ checklist (first cut → review → final cut → clips
+ and Threads → scheduled), your inspiration shows
+and your episode structures. 我和我家的90後 - mark
+eting.md covers the formats that did well, editing
+ rules, the two personas (lost you and your wise 6
+0-year-old mom), hooks, and running notes on Reels
+ vs. Threads.
+- Episode brainstorms (13 notes): EP 1 介紹 (plus
+a redo), EP 2 成長 and EP 2 工作, EP 4 戀愛和婚姻,
+ EP 5 30而立, EP 6 90後戀愛觀, EP 7 香港黃金年代已
+逝, EP 8 生活哲學, EP 9 金錢觀與財富, EP 10 代溝,
+EP 11 生與死, and EP 12 Season wrap up, which is o
+nly an outline. There's no EP 3 note.
+- Transcripts (9, about 60–80KB each): EP 2, 5, 6,
+ 7 (two versions: v3.7.3 and final cut), 8, 9, 10,
+ 11. There are none for EP 1 or EP 4.
+
+Related notes
+- Projects/Arya’s podcast.md has your prep notes f
+or being a guest on Arya's show in June: UWC, drop
+ping out, Palantir, Exa, AI taste, distribution. T
+wo chats in Chats/ go with it (Noto quizzed you on
+ the questions you hadn't prepared yet).
+- Chats/Can you dig through my podcast notes and t
+ranscript and summ.md is an earlier summary of you
+r views on love, taken from EP 4 and EP 6.
+- In your daily notes from 2026-03-31 to 04-02 you
+ were tired of making clips every week, wanted to
+wrap the podcast up, and felt bad about comments o
+n a Threads post.
+- inbox/2026-09-10 has a new idea: use a podcast t
+o build authority for the sleep and looksmaxxing a
+pp.clear; seq 1 400
+∙

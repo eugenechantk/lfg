@@ -1,0 +1,6 @@
+# captured 17:21 after menu -> Open Terminal (tmux list-clients + ps)
+/dev/ttys020 pid=77035 50x45 created=Tue Sep 15 17:21:05 2026
+77035 41409 tmux new-session -A -s lfg-term-phone
+41409  1743 /Users/eugenechan/.bun/bin/bun run src/cli.ts serve   <- listens on 127.0.0.1:8766 (production server behind lfg-pro.eugenechantk.me)
+ 1743     1 bash scripts/serve-forever.sh
+# Scratch server is pid 57499 on 127.0.0.1:9982
