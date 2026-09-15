@@ -29,3 +29,16 @@ repaints still coalesce.
 Measured in the lfg Simulator (in-app `CACurrentMediaTime` probes, 16–24 keystrokes, local
 server), key sent → frame drawn, median: **33.3 ms before, 20.3 ms after** (18.0 ms once
 URLSession callbacks were also delivered on the main queue in `TerminalScreen.swift`).
+
+### 2. Drags never send arrow keys (`iOS/iOSTerminalView.swift`)
+
+`panSelectionHandler` turned a drag into ↑/↓/←/→ keystrokes whenever `allowMouseReporting`
+was off (which the key bar's hand button toggles). A swipe meant to scroll recalled shell
+history instead. The arrow branch is removed. lfg owns vertical drags and scrolls tmux history
+through `/api/term` (`TerminalScreen.swift`, `src/term-scroll.ts`).
+
+### 3. No mouse-reporting toggle in the key bar (`iOS/iOSAccessoryView.swift`)
+
+The hand button toggled `allowMouseReporting`. lfg sets it to `false` permanently: with tmux
+`mouse on`, touches became tmux mouse events, and a swipe pasted a tmux buffer (lfg's queued
+agent messages) into the shell. The button is still built, but it is no longer added to the bar.

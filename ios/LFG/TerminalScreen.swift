@@ -18,6 +18,12 @@ struct TerminalScreen: View {
     @State private var hostURL: String?
     @State private var controller: TerminalController?
 
+    /// `initialHostURL` opens on that host (a session's host, from its menu);
+    /// nil uses the default host.
+    init(initialHostURL: String? = nil) {
+        _hostURL = State(initialValue: initialHostURL)
+    }
+
     private var host: Host? {
         settings.hosts.first { $0.url == hostURL }
             ?? settings.hosts.first(where: \.isDefault)
@@ -197,9 +203,70 @@ final class TerminalController: NSObject {
         view.nativeForegroundColor = UIColor(white: 0.92, alpha: 1)
         view.backgroundColor = .black
         view.accessibilityIdentifier = "terminalView"
+        // Never forward touches as mouse events. tmux here runs with `mouse on`,
+        // so a swipe became clicks and drags inside tmux, and one pasted a tmux
+        // buffer (lfg's queued agent messages) into the shell.
+        view.allowMouseReporting = false
         terminalView = view
         super.init()
         view.terminalDelegate = self
+
+        // Vertical drags scroll the transcript. The shell runs in tmux, so history
+        // lives on the server; this view only ever holds the visible screen, and
+        // its own UIScrollView pan had nothing to scroll.
+        view.isScrollEnabled = false
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleScrollPan(_:)))
+        pan.delegate = self
+        view.addGestureRecognizer(pan)
+    }
+
+    // MARK: Transcript scrolling
+
+    @ObservationIgnored private var scrollRemainder: CGFloat = 0
+    @ObservationIgnored private var flingTask: Task<Void, Never>?
+
+    private var rowHeight: CGFloat {
+        let rows = max(1, terminalView.getTerminal().rows)
+        return max(8, terminalView.bounds.height / CGFloat(rows))
+    }
+
+    @objc private func handleScrollPan(_ pan: UIPanGestureRecognizer) {
+        switch pan.state {
+        case .began:
+            flingTask?.cancel()
+            scrollRemainder = 0
+        case .changed:
+            // Finger down reveals older output, as in any scroll view.
+            let dy = pan.translation(in: terminalView).y
+            pan.setTranslation(.zero, in: terminalView)
+            scrollBy(points: dy)
+        case .ended:
+            fling(velocity: pan.velocity(in: terminalView).y)
+        default:
+            break
+        }
+    }
+
+    private func scrollBy(points: CGFloat) {
+        scrollRemainder += points / rowHeight
+        let lines = Int(scrollRemainder.rounded(.towardZero))
+        guard lines != 0 else { return }
+        scrollRemainder -= CGFloat(lines)
+        socket?.scroll(lines: lines)
+    }
+
+    /// A short, decaying glide after a flick, sent in small steps.
+    private func fling(velocity: CGFloat) {
+        flingTask?.cancel()
+        guard abs(velocity) > 300 else { return }
+        flingTask = Task { @MainActor [weak self] in
+            var v = velocity
+            while abs(v) >= 60, !Task.isCancelled {
+                self?.scrollBy(points: v / 30)
+                v *= 0.88
+                try? await Task.sleep(for: .milliseconds(33))
+            }
+        }
     }
 
     func connect() {
@@ -247,6 +314,23 @@ final class TerminalController: NSObject {
     /// if the user is looking at a disconnect banner they haven't acted on.
     func resumeIfDetached() {
         if phase == .detached { connect() }
+    }
+}
+
+extension TerminalController: UIGestureRecognizerDelegate {
+    /// Only mostly-vertical drags scroll, and never while a text selection is
+    /// being adjusted.
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
+        let v = pan.velocity(in: terminalView)
+        return abs(v.y) > abs(v.x) && !terminalView.selectionActive
+    }
+
+    /// SwiftTerm's own recognizers on the same view (the scroll view's pan, tap and
+    /// long-press) otherwise keep this one from ever firing.
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        true
     }
 }
 

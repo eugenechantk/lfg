@@ -215,7 +215,10 @@ public class TerminalAccessory: UIInputView, UIInputViewAudioFeedback {
         rightViews.append(makeAutoRepeatButton ("arrow.right", #selector(right)))
         touchButton = makeButton ("", #selector(toggleTouch), icon: "hand.draw", isNormal: false)
         touchButton.isSelected = terminalView?.allowMouseReporting ?? false
-        rightViews.append (touchButton)
+        // LFG PATCH (see PATCHES.md): the mouse-reporting toggle is not offered.
+        // lfg keeps mouse reporting off; on, a swipe became tmux mouse events
+        // that could paste a tmux buffer into the shell.
+        // rightViews.append (touchButton)
         keyboardButton = makeButton ("", #selector(toggleInputKeyboard), icon: "keyboard.chevron.compact.down", isNormal: false)
         rightViews.append (keyboardButton)
 

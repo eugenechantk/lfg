@@ -10,6 +10,12 @@ public enum TerminalControl {
     public static func resize(cols: Int, rows: Int) -> String {
         #"{"t":"resize","cols":\#(clamp(cols)),"rows":\#(clamp(rows))}"#
     }
+
+    /// Scroll the shell's tmux history: positive = back (older output), negative
+    /// = forward. The server drives tmux copy-mode (`src/term-scroll.ts`).
+    public static func scroll(lines: Int) -> String {
+        #"{"t":"scroll","lines":\#(max(-1000, min(1000, lines)))}"#
+    }
 }
 
 /// Why a terminal socket ended, in the terms the UI shows.
@@ -118,6 +124,11 @@ public final class TerminalSocket: NSObject, URLSessionWebSocketDelegate, @unche
 
     public func resize(cols: Int, rows: Int) {
         currentTask()?.send(.string(TerminalControl.resize(cols: cols, rows: rows))) { _ in }
+    }
+
+    public func scroll(lines: Int) {
+        guard lines != 0 else { return }
+        currentTask()?.send(.string(TerminalControl.scroll(lines: lines))) { _ in }
     }
 
     /// Detach on purpose. Does not report a disconnect.

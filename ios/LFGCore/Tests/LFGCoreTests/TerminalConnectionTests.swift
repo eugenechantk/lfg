@@ -51,6 +51,14 @@ final class TerminalConnectionTests: XCTestCase {
         XCTAssertEqual(obj["rows"] as? Int, 40)
     }
 
+    func testScrollControlFrameMatchesServerFormat() throws {
+        for (lines, expected) in [(12, 12), (-7, -7), (5000, 1000), (-5000, -1000)] {
+            let obj = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(TerminalControl.scroll(lines: lines).utf8)) as? [String: Any])
+            XCTAssertEqual(obj["t"] as? String, "scroll")
+            XCTAssertEqual(obj["lines"] as? Int, expected)
+        }
+    }
+
     func testDimensionsAreClampedToServerRange() {
         XCTAssertEqual(TerminalControl.clamp(0), 1)
         XCTAssertEqual(TerminalControl.clamp(9999), 500)

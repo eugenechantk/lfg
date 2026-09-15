@@ -801,16 +801,12 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
                 }
                 setNeedsDisplay()
             } else {
-                if let ps = panStart {
-                    let deltaRow = ps.row - hit.row
-                    if allowMouseReporting {
-                        // TODO: what scenario would have this?
-                        scrollDown (lines: deltaRow)
-                    } else {
-                        let deltaCol = ps.col - hit.col
-                        
-                        sendKey (deltaCol: deltaCol, deltaRow: deltaRow)
-                    }
+                // LFG PATCH (see PATCHES.md): a drag never turns into arrow
+                // keystrokes. The host app owns vertical drags (it scrolls tmux
+                // history), and a swipe typing ↑/↓ into the shell recalled
+                // commands unasked.
+                if let ps = panStart, allowMouseReporting {
+                    scrollDown (lines: ps.row - hit.row)
                 }
             }
         case .ended:

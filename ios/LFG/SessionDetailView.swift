@@ -48,6 +48,8 @@ struct SessionDetailView: View {
     // deliberate scroll-up and freezing auto-follow before the view settles.
     @State private var dismissedBrowserFrameID: String?
     @State private var presentedSheet: PresentedSheet?
+    /// The shell on this session's host (`TerminalScreen`), from the ••• menu.
+    @State private var showTerminal = false
     /// How many of the newest messages the transcript actually renders. The store
     /// still holds the whole conversation — this bounds only what SwiftUI has to
     /// place. See `TranscriptWindow` for the profile that motivates it.
@@ -315,6 +317,9 @@ struct SessionDetailView: View {
                 }
                 do { try await Task.sleep(for: .seconds(3)) } catch { break }
             }
+        }
+        .fullScreenCover(isPresented: $showTerminal) {
+            TerminalScreen(initialHostURL: store.host(forSession: sid)?.url)
         }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
@@ -682,6 +687,7 @@ struct SessionDetailView: View {
                 signInRequests: signInRequests,
                 dismissedBrowserFrameID: dismissedBrowserFrameID,
                 onShowAttachments: { presentedSheet = .attachments },
+                onOpenTerminal: { showTerminal = true },
                 onShowPhoneSignIn: { requestID in presentedSheet = .phoneSignIn(requestID: requestID) },
                 onShowInversionSpike: { presentedSheet = .inversionSpike },
                 onShowChildSessions: { selectedID in
@@ -778,6 +784,7 @@ private struct SessionOptionsMenu: View {
     let signInRequests: [PhoneSignInAgentRequest]
     let dismissedBrowserFrameID: String?
     let onShowAttachments: () -> Void
+    let onOpenTerminal: () -> Void
     let onShowPhoneSignIn: (String?) -> Void
     let onShowInversionSpike: () -> Void
     let onShowChildSessions: (String?) -> Void
@@ -833,6 +840,7 @@ private struct SessionOptionsMenu: View {
             systemImage: "key"
         ) { onShowPhoneSignIn(nil) })
         primary.append(action("Files & Links", systemImage: "paperclip", handler: onShowAttachments))
+        primary.append(action("Open Terminal", systemImage: "apple.terminal", handler: onOpenTerminal))
         // PHASE-2 SPIKE entry — remove with the spike.
         primary.append(action("Spike: inverted transcript", systemImage: "arrow.up.arrow.down",
                               handler: onShowInversionSpike))
