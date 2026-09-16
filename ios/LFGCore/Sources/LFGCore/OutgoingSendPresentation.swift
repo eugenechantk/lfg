@@ -88,6 +88,33 @@ public enum SendFailureDisposition: Equatable, Sendable {
     public var announcesToUser: Bool { self == .failed }
 }
 
+/// The mutually-exclusive pending-row flags implied by a send failure outcome.
+///
+/// Keeping this transition explicit prevents a terminal failure from retaining
+/// an older `queuedOffline` promise. The strip intentionally renders queued
+/// state first, so allowing both flags to remain true hides the Retry action and
+/// contradicts the terminal “Message not sent” banner.
+public struct SendFailurePendingState: Equatable, Sendable {
+    public let failed: Bool
+    public let queuedOffline: Bool
+
+    public init(failed: Bool, queuedOffline: Bool) {
+        self.failed = failed
+        self.queuedOffline = queuedOffline
+    }
+
+    public static func resolve(
+        _ disposition: SendFailureDisposition
+    ) -> SendFailurePendingState {
+        switch disposition {
+        case .failed:
+            SendFailurePendingState(failed: true, queuedOffline: false)
+        case .requeued:
+            SendFailurePendingState(failed: false, queuedOffline: true)
+        }
+    }
+}
+
 public enum SendFailurePolicy {
 
     /// - Parameters:

@@ -43,17 +43,19 @@ import LFGCore
     var lastError: String? {
         get { lastErrorStorage }
         set {
-            lastErrorStorage = newValue
-            // Only real failures raise an event. `refresh()` sets this to nil on
-            // every successful poll — roughly once a second — so a banner reading
-            // `lastError` directly would blink out before it could be read. The
-            // event has its own lifetime, owned by whoever presents it.
-            if let newValue, !newValue.isEmpty {
-                errorEvent = StoreErrorEvent(message: newValue)
-            }
+            recordError(newValue, audience: .global)
         }
     }
     private var lastErrorStorage: String?
+
+    private func recordError(
+        _ message: String?,
+        audience: TransientErrorAudience
+    ) {
+        lastErrorStorage = message
+        guard let message, !message.isEmpty else { return }
+        errorEvent = StoreErrorEvent(message: message, audience: audience)
+    }
 
     /// The most recent failure worth telling the user about, as a distinct event.
     ///
@@ -63,11 +65,44 @@ import LFGCore
     private(set) var errorEvent: StoreErrorEvent?
 
     struct StoreErrorEvent: Identifiable, Equatable {
+        static let lifetimeMs: Double = 6_000
+
         let id = UUID()
         let message: String
+        let audience: TransientErrorAudience
+        let raisedAt = Date()
+
+        func remainingLifetimeMs(now: Date = Date()) -> Double {
+            max(Self.lifetimeMs - now.timeIntervalSince(raisedAt) * 1_000, 0)
+        }
     }
 
     func dismissErrorEvent() { errorEvent = nil }
+
+    /// Return only an error that still describes the detail currently on screen.
+    ///
+    /// The slot is store-owned and can be filled while the session list is up.
+    /// Previously its six-second timer did not even start until a detail appeared,
+    /// so a launch-time send error waited indefinitely and leaked into whichever
+    /// session was opened next. Send failures additionally require their failed
+    /// pending row to still exist; reconciliation makes the banner obsolete.
+    func errorEvent(for sessionID: String, now: Date = Date()) -> StoreErrorEvent? {
+        guard let event = errorEvent else { return nil }
+        let failedClientIDs = Set(
+            (pendingSends[sessionID] ?? [])
+                .filter(\.failed)
+                .map { $0.clientId ?? $0.id }
+        )
+        let ageMs = now.timeIntervalSince(event.raisedAt) * 1_000
+        guard TransientErrorPresentation.shouldPresent(
+            audience: event.audience,
+            viewingSessionID: sessionID,
+            failedPendingClientIDs: failedClientIDs,
+            ageMs: ageMs,
+            lifetimeMs: StoreErrorEvent.lifetimeMs
+        ) else { return nil }
+        return event
+    }
 
     /// Consecutive failed polls since the last success, PER host. Now used ONLY
     /// to drive `HostHealth.shouldProbe`'s cold back-off — it no longer debounces
@@ -1164,13 +1199,20 @@ import LFGCore
     /// queued bubble already says so. See `SendFailurePolicy`.
     private func markPendingFailed(clientId: String) {
         guard let location = pendingLocation(clientId: clientId) else { return }
-        mutatePending(location.sid, location.pid) { $0.failed = true }
+        let terminal = SendFailurePendingState.resolve(.failed)
+        mutatePending(location.sid, location.pid) {
+            $0.failed = terminal.failed
+            $0.queuedOffline = terminal.queuedOffline
+        }
         // Prefer the host's own sentence, which the send site already stored on
         // the row, over a generic "not sent".
         let reason = pendingSends[location.sid]?
             .first { $0.id == location.pid }?
             .failureReason
-        lastError = SendFailurePolicy.bannerMessage(reason: reason)
+        recordError(
+            SendFailurePolicy.bannerMessage(reason: reason),
+            audience: .pendingSend(sessionID: location.sid, clientID: clientId)
+        )
     }
 
     private func replayPendingOutboxOnStart() async {

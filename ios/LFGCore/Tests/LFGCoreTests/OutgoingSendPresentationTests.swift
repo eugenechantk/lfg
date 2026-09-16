@@ -82,6 +82,23 @@ final class OutgoingSendPresentationTests: XCTestCase {
 /// trouble.
 final class SendFailurePolicyTests: XCTestCase {
 
+    /// A row can arrive here after an earlier offline attempt. Terminal failure
+    /// must replace that queued promise, not coexist with it — the strip renders
+    /// `queuedOffline` before `failed`, which otherwise hides Retry forever.
+    func testTerminalFailurePresentationClearsQueuedState() {
+        XCTAssertEqual(
+            SendFailurePendingState.resolve(.failed),
+            SendFailurePendingState(failed: true, queuedOffline: false)
+        )
+    }
+
+    func testRequeuedFailurePresentationIsNotTerminal() {
+        XCTAssertEqual(
+            SendFailurePendingState.resolve(.requeued),
+            SendFailurePendingState(failed: false, queuedOffline: true)
+        )
+    }
+
     /// The exact shape of the spurious banner: host down, so the row is
     /// re-queued and the queued bubble already says "will send when reachable".
     func testUnreachableHostRequeuesSilently() {

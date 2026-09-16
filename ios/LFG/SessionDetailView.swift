@@ -163,14 +163,14 @@ struct SessionDetailView: View {
             // an alert would interrupt a conversation to say something the user
             // can only acknowledge.
             .overlay(alignment: .top) {
-                if let event = store.errorEvent {
+                if let event = store.errorEvent(for: sid) {
                     SessionErrorBanner(message: event.message) {
                         store.dismissErrorEvent()
                     }
                     .id(event.id)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .task(id: event.id) {
-                        try? await Task.sleep(for: .seconds(6))
+                        try? await Task.sleep(for: .milliseconds(Int(event.remainingLifetimeMs())))
                         guard !Task.isCancelled else { return }
                         store.dismissErrorEvent()
                     }
