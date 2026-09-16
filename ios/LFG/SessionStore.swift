@@ -368,6 +368,10 @@ import LFGCore
     /// Pending delayed teardown while backgrounded (grace window so a quick
     /// app-switch keeps every stream alive).
     private var backgroundStopTask: Task<Void, Never>?
+    /// The `lfg.linger` background-task assertion backing that grace window.
+    /// Three paths race to end it (expiry, the 25s sleeper, foreground cancel);
+    /// `endLingerAssertion()` is the only place allowed to end it.
+    private var lingerAssertion: UIBackgroundTaskIdentifier = .invalid
     private var pollTask: Task<Void, Never>?
     /// Launch/foreground reconnect burst — see `startReconnectBurst`.
     private var reconnectBurstTask: Task<Void, Never>?
@@ -1881,23 +1885,40 @@ import LFGCore
         // of that are precisely the window a cellular investigation needs.
         ConnectionLog.shared.flush()
         let app = UIApplication.shared
-        var bgTask: UIBackgroundTaskIdentifier = .invalid
-        bgTask = app.beginBackgroundTask(withName: "lfg.linger") { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.stop()
-                app.endBackgroundTask(bgTask)
+        lingerAssertion = app.beginBackgroundTask(withName: "lfg.linger") { [weak self] in
+            // iOS calls this on the main thread and requires the assertion to
+            // be ended SYNCHRONOUSLY. The old Task { @MainActor } hop could
+            // miss the deadline whenever the main actor was busy, and
+            // RunningBoard kills the process for an unexpired assertion —
+            // reads as a background crash. assumeIsolated (legal: main
+            // thread) keeps the whole path synchronous, and cancelling the
+            // sleeper here prevents it from double-ending the assertion.
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.backgroundStopTask?.cancel()
+                self.backgroundStopTask = nil
+                self.stop()
+                self.endLingerAssertion()
             }
         }
         backgroundStopTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(25))
             guard !Task.isCancelled else {
-                if bgTask != .invalid { app.endBackgroundTask(bgTask) }
+                self?.endLingerAssertion()
                 return
             }
             self?.backgroundStopTask = nil
             self?.stop()
-            if bgTask != .invalid { app.endBackgroundTask(bgTask) }
+            self?.endLingerAssertion()
         }
+    }
+
+    /// End the linger assertion exactly once, whichever of the three racing
+    /// paths gets here first.
+    private func endLingerAssertion() {
+        guard lingerAssertion != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(lingerAssertion)
+        lingerAssertion = .invalid
     }
 
     /// Foregrounding: cancel any pending teardown, restart links (cursor resume

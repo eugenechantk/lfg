@@ -174,7 +174,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         UIApplication.shared.registerForRemoteNotifications()
         // Must register before launch completes; the handler hops to the main
         // actor for the sync and completes the task either way.
-        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.refreshTaskID, using: nil) { task in
+        //
+        // `using:` MUST be .main: this closure is MainActor-isolated (inferred
+        // from the @MainActor AppDelegate context), and with `using: nil`
+        // BGTaskScheduler invokes it on its own queue — the Swift 6 runtime
+        // isolation check then traps at closure entry (dispatch_assert_queue,
+        // EXC_BREAKPOINT), crashing every background refresh launch. Seen live
+        // in TestFlight crash 2026-07-11. The expiration handler runs on the
+        // same queue, so it is covered too.
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.refreshTaskID, using: .main) { task in
             guard let refresh = task as? BGAppRefreshTask else {
                 task.setTaskCompleted(success: false); return
             }
