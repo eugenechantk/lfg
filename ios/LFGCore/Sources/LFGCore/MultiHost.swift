@@ -101,6 +101,26 @@ public enum MultiHost {
                                          visibleClosed: visibleClosed)
     }
 
+    /// Id-stable resumes (codex) suppress their own closed row only while the
+    /// revived pane has yet to show up live. Returns the ids whose suppression
+    /// is over: seen live (so a later End shows Closed again instead of the row
+    /// vanishing until relaunch), or never landed within `ttl` (the pane died
+    /// during bootstrap — the row must come back so the user can retry).
+    /// Claude's old-id suppression is deliberately not tracked here: that id is
+    /// a stale duplicate transcript, not a gap-filler.
+    public static func settledResumes(
+        pending: [String: Date],
+        liveIds: Set<String>,
+        now: Date,
+        ttl: TimeInterval = 60
+    ) -> Set<String> {
+        var out = Set<String>()
+        for (id, at) in pending where liveIds.contains(id) || now.timeIntervalSince(at) > ttl {
+            out.insert(id)
+        }
+        return out
+    }
+
     /// Which host a per-session op must be sent to during a partial outage.
     ///
     /// - `owner` reachable → **owner**. The common case.

@@ -393,6 +393,11 @@ import LFGCore
     /// sessionId while the old transcript lingers on disk (so it keeps showing as
     /// resumable) — suppress the stale closed card once we've revived it.
     private var resumedIds: Set<String> = []
+    /// Id-stable (codex) resumes still waiting to be seen live, by the time we
+    /// asked. `MultiHost.settledResumes` lifts their `resumedIds` suppression
+    /// once live or after a TTL, so a revive whose pane died during bootstrap
+    /// falls back to "Closed" instead of disappearing until relaunch.
+    private var pendingResumes: [String: Date] = [:]
 
     /// Sessions this client has asked a host to revive, and hasn't seen come back
     /// live yet — the "Restarting" group. Marked when we ask (before the POST, so
@@ -2422,6 +2427,13 @@ import LFGCore
         // fall through the live/closed gap after its host recovered from an
         // outage — present in neither bucket until app relaunch.
         let okHosts = settings.hosts.filter { hostStateByHost[$0.id]?.isLive == true }
+        // Settle id-stable resumes against the PREVIOUS merge's live ids before
+        // this merge is built: an id that was live and is not any more must be
+        // allowed back into Closed on this very rebuild, not one later.
+        for id in MultiHost.settledResumes(pending: pendingResumes, liveIds: liveIds, now: Date()) {
+            pendingResumes[id] = nil
+            resumedIds.remove(id)
+        }
         let reconciled = MultiHost.reconcileSessionList(
             perHostLive: perHostLive,
             closedPerHost: closedPages(for: okHosts),
@@ -3513,6 +3525,7 @@ import LFGCore
         }
         if old == new {
             resumedIds.insert(old)
+            pendingResumes[old] = Date()
             if let i = sessions.firstIndex(where: { $0.sessionId == old }) {
                 sessions[i].closed = false   // id-stable resume: same row is now reviving
             }
