@@ -41,6 +41,7 @@ import {
   runningBackgroundProcessCounts as claudeBackgroundProcessCounts,
   withChildSessionActivity,
   withSessionWorkActivity,
+  type SubagentSession,
 } from "./subagents.ts";
 import {
   listProcs,
@@ -116,6 +117,11 @@ export type Session = {
   // is deduplicated; active children also promote `busy` so every consumer sees
   // the parent as working even while its own pane is idle.
   runningChildAgentCount?: number;
+  // The child agents behind `runningChildAgentCount` (all statuses), present
+  // only when there are any. Lets the client seed its detail view from the
+  // list row instead of a per-session read that may route to a peer host whose
+  // synced sidecars lag (see withSessionWorkActivity).
+  childAgents?: SubagentSession[];
   // Number of SPAWNED child sessions (separate live sessions carrying this
   // session's id as `parentSessionId`) currently busy. A delegated worker
   // session is the parent's work in flight exactly like a subagent, so these

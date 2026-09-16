@@ -39,14 +39,18 @@ export function busyWithRunningWork(
  * own turn state. This stays generic so the transcript readers remain
  * independent of the much larger sessions module.
  */
-export function withSessionWorkActivity<T extends ParentWithBusy>(
+export function withSessionWorkActivity<
+  T extends ParentWithBusy,
+  A extends Pick<SubagentSession, "status">,
+>(
   parent: T,
-  agents: ReadonlyArray<Pick<SubagentSession, "status">>,
+  agents: ReadonlyArray<A>,
   runningBackgroundProcessCount: number,
 ): Omit<T, "busy"> & {
   busy: boolean;
   runningChildAgentCount: number;
   runningBackgroundProcessCount: number;
+  childAgents?: A[];
 } {
   const runningChildAgentCount = agents.filter((agent) => agent.status === "running").length;
   return {
@@ -54,6 +58,14 @@ export function withSessionWorkActivity<T extends ParentWithBusy>(
     busy: busyWithRunningWork(parent.busy, runningChildAgentCount),
     runningChildAgentCount,
     runningBackgroundProcessCount,
+    // The agents themselves ride on the row, not only their count. The iOS
+    // detail view reads `/subagents` through per-session routing, which lands
+    // on a PEER host whenever the owner is not live — and the peer's synced
+    // copy of ~/.claude/projects lags by minutes, so it 404s for a session the
+    // list badge (this count) says has agents running. Seeding the client from
+    // the same row that carries the badge keeps the two surfaces from
+    // disagreeing. Omitted when empty so idle rows stay byte-identical.
+    ...(agents.length > 0 ? { childAgents: [...agents] } : {}),
   };
 }
 

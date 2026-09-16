@@ -128,6 +128,22 @@ describe("Claude subagent discovery", () => {
       busy: true,
       runningChildAgentCount: 2,
       runningBackgroundProcessCount: 0,
+      // The row carries the agents themselves, not only their count: the
+      // client's detail view seeds from this when the owner host is not live
+      // and the per-session /subagents read would land on a peer whose synced
+      // sidecars lag by minutes (diagnosis 2026-09-07).
+      childAgents: [...agents],
+    });
+  });
+
+  test("a session without child agents keeps the row shape byte-identical", () => {
+    const row = withSessionWorkActivity({ id: "parent", busy: false }, [], 0);
+    expect("childAgents" in row).toBe(false);
+    expect(row).toEqual({
+      id: "parent",
+      busy: false,
+      runningChildAgentCount: 0,
+      runningBackgroundProcessCount: 0,
     });
   });
 
@@ -141,6 +157,7 @@ describe("Claude subagent discovery", () => {
       busy: true,
       runningChildAgentCount: 0,
       runningBackgroundProcessCount: 0,
+      childAgents: [{ status: "completed" }, { status: "stopped" }],
     });
   });
 
