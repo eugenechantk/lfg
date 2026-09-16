@@ -1,0 +1,1 @@
+[codex] using /opt/homebrew/bin/codex (0.153.4); other copies: /Users/eugenechan/.bun/bin/codex (0.153.4)

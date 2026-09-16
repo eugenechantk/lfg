@@ -1,0 +1,33 @@
+# stub.log analysis (phase 4)
+## all transcript-status hits
+37:2026-09-15T09:41:31.223Z GET /api/sessions/abc/transcript-status
+81:2026-09-15T09:45:16.436Z GET /api/sessions/50980bea-162f-45ae-8b0f-92e54bb42a2e/transcript-status
+93:2026-09-15T09:46:32.037Z GET /api/sessions/50980bea-162f-45ae-8b0f-92e54bb42a2e/transcript-status
+99:2026-09-15T09:47:28.234Z GET /api/sessions/50980bea-162f-45ae-8b0f-92e54bb42a2e/transcript-status
+108:2026-09-15T09:48:35.836Z GET /api/sessions/50980bea-162f-45ae-8b0f-92e54bb42a2e/transcript-status
+115:2026-09-15T09:49:13.910Z GET /api/sessions/x/transcript-status
+119:2026-09-15T09:49:36.236Z GET /api/sessions/50980bea-162f-45ae-8b0f-92e54bb42a2e/transcript-status
+
+## all close / CLOSE lines
+32:2026-09-15T09:18:58.876Z POST /api/sessions/50980bea-162f-45ae-8b0f-92e54bb42a2e/close
+33:2026-09-15T09:18:58.876Z CLOSE 50980bea-162f-45ae-8b0f-92e54bb42a2e
+
+## stub restarts
+1:2026-09-15T09:07:12.442Z stub up on 8799 claiming 50980bea-162f-45ae-8b0f-92e54bb42a2e
+10:2026-09-15T09:11:40.338Z stub up on 8799 claiming 50980bea-162f-45ae-8b0f-92e54bb42a2e
+18:2026-09-15T09:16:22.148Z stub up on 8799 claiming 50980bea-162f-45ae-8b0f-92e54bb42a2e
+36:2026-09-15T09:41:30.215Z stub up on 8799 claiming 50980bea-162f-45ae-8b0f-92e54bb42a2e
+114:2026-09-15T09:49:12.916Z stub up on 8799 claiming 50980bea-162f-45ae-8b0f-92e54bb42a2e
+
+## any POST after line 33 (09:18:58Z)
+2026-09-15T09:43:41.488Z POST /api/push/register
+2026-09-15T09:43:41.488Z POST /api/push/register -> 404
+2026-09-15T09:43:42.302Z POST /api/push/register
+2026-09-15T09:43:42.302Z POST /api/push/register -> 404
+(end)
+
+## screenshot mtimes (HKT = UTC+8)
+Sep 15 17:49:12 2026 .claude/feature/evidence/transfer-from-offline-host/sc7-missing-transcript-banner.jpg
+Sep 15 17:49:12 2026 .claude/feature/evidence/transfer-from-offline-host/sc7-missing-transcript-tree.json
+Sep 15 17:50:03 2026 .claude/feature/evidence/transfer-from-offline-host/sc8-stale-copy-dialog.png
+Sep 15 17:50:35 2026 .claude/feature/evidence/transfer-from-offline-host/stub.log

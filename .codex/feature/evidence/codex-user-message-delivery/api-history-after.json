@@ -1,0 +1,25 @@
+{
+  "userCount": 8,
+  "originalUsersBeforeReplies": [
+    {
+      "user": "Can astra transcribe audio from my videos into different languages? Maybe the video is in Cantonese and English",
+      "userTs": 1788690021120,
+      "responseTs": 1788690024874
+    },
+    {
+      "user": "Does other model do that like 5.6?",
+      "userTs": 1788690340343,
+      "responseTs": 1788690343115
+    },
+    {
+      "user": "Does other model do that like 5.6?",
+      "userTs": 1788690357097,
+      "responseTs": 1788690362214
+    },
+    {
+      "user": "Does other model do that like 5.6?",
+      "userTs": 1788690368148,
+      "responseTs": 1788690372417
+    }
+  ]
+}

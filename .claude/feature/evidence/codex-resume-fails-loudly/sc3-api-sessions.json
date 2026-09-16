@@ -1,0 +1,11 @@
+dict ['sessions']
+[
+ {
+  "sessionId": "01a07207-b399-7213-bb18-95fe1de17ca6",
+  "tmuxName": "lfg-4bf7f5",
+  "tmuxTarget": "lfg-4bf7f5:0.0",
+  "agent": "codex",
+  "busy": false,
+  "pid": 57039
+ }
+]

@@ -1,0 +1,51 @@
+{
+  "source": "/Users/eugenechan/.codex/sessions/2026/09/06/rollout-2026-09-06T18-20-17-01a0763b-ad64-7f80-b7fb-cfa1dd3cbaf7.jsonl",
+  "cutoff": "2026-09-06T10:26:13Z",
+  "normalizedCount": 18,
+  "userCount": 4,
+  "users": [
+    {
+      "id": "2026-09-06T10:20:21.120Z:message::Can astra transcribe audio from my videos into d",
+      "role": "user",
+      "kind": "text",
+      "text": "Can astra transcribe audio from my videos into different languages? Maybe the video is in Cantonese and English",
+      "ts": 1788690021120
+    },
+    {
+      "id": "2026-09-06T10:25:40.343Z:message::Does other model do that like 5.6?",
+      "role": "user",
+      "kind": "text",
+      "text": "Does other model do that like 5.6?",
+      "ts": 1788690340343
+    },
+    {
+      "id": "2026-09-06T10:25:57.097Z:message::Does other model do that like 5.6?",
+      "role": "user",
+      "kind": "text",
+      "text": "Does other model do that like 5.6?",
+      "ts": 1788690357097
+    },
+    {
+      "id": "2026-09-06T10:26:08.148Z:message::Does other model do that like 5.6?",
+      "role": "user",
+      "kind": "text",
+      "text": "Does other model do that like 5.6?",
+      "ts": 1788690368148
+    }
+  ],
+  "queueResults": [
+    {
+      "idleConfirmed": false,
+      "status": "delivered",
+      "changed": true,
+      "kick": false
+    },
+    {
+      "idleConfirmed": true,
+      "status": "delivered",
+      "changed": true,
+      "kick": false
+    }
+  ],
+  "allReadersAgree": true
+}

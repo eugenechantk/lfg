@@ -1,0 +1,93 @@
+ M .claude/CLAUDE.md
+ M desktop/LFGSessions.swift
+ M ios/LFG.xcodeproj/project.pbxproj
+ M ios/LFG/AttachmentTray.swift
+ M ios/LFG/Components.swift
+ M ios/LFG/LFGApp.swift
+ M ios/LFG/MessageComposer.swift
+ M ios/LFG/NewSession/NewSessionComposer.swift
+ M ios/LFG/PushManager.swift
+ M ios/LFG/RichContent.swift
+ M ios/LFG/SessionDetailView.swift
+ M ios/LFG/SessionListView.swift
+ M ios/LFG/SessionStore.swift
+ M ios/LFGCore/Sources/LFGCore/Attachments.swift
+ M ios/LFGCore/Sources/LFGCore/JournalFreshness.swift
+ M ios/LFGCore/Sources/LFGCore/LFGClient.swift
+ M ios/LFGCore/Sources/LFGCore/Models.swift
+ M ios/LFGCore/Sources/LFGCore/MultiHost.swift
+ M ios/LFGCore/Tests/LFGCoreTests/JournalFreshnessTests.swift
+ M ios/LFGCore/Tests/LFGCoreTests/LFGStoreTests.swift
+ M ios/LFGCore/Tests/LFGCoreTests/ModelsTests.swift
+ M scripts/mosh-bridged
+ M scripts/serve-forever.sh
+ M src/commands/serve.ts
+ M src/sessions.ts
+ M src/subagents.test.ts
+ M src/subagents.ts
+ M src/tmux-composer-border.test.ts
+ M src/tmux.ts
+?? .claude/brainstorm/agent-portal-login-from-ios.md
+?? .claude/diagnosis-async-agents-not-nested-20260829.md
+?? .claude/diagnosis-codex-mosh-dim-20260905.md
+?? .claude/diagnosis-codex-resume-version-skew-20260906.md
+?? .claude/diagnosis-desktop-closed-list-starved-20260825.md
+?? .claude/diagnosis-ios-background-crash-20260830.md
+?? .claude/diagnosis-live-activity-duplicate-cards-20260906.md
+?? .claude/diagnosis-mosh-sluggish-20260905.md
+?? .claude/evidence/20260901-133626-verification-audit/
+?? .claude/evidence/20260901-134644-verification-audit/
+?? .claude/evidence/20260902-110946-verification-audit/
+?? .claude/evidence/20260904-192214-verification-audit/
+?? .claude/evidence/20260906-215937-ios-visual-audit/
+?? .claude/feature/codex-resume-fails-loudly.md
+?? .claude/feature/evidence/
+?? .claude/feature/occupied-branch-followup-delivery.md
+?? .claude/feature/remove-aisdk-path.md
+?? .claude/feature/select-text-sheet.md
+?? .claude/tools/
+?? .codex/brainstorm/offline-host-session-continuity.md
+?? .codex/feature/authoritative-idle-status.md
+?? .codex/feature/codex-user-message-delivery.md
+?? .codex/feature/evidence/
+?? .codex/feature/outgoing-message-attachments.md
+?? .codex/feature/readable-markdown-tables.md
+?? .codex/feature/user-message-scrubber.md
+?? improvement-log/improvement-log-0167JUdGTHxzYBZBuupfv7Mf.md
+?? improvement-log/improvement-log-20260823-134757.md
+?? improvement-log/improvement-log-20260823-134848.md
+?? improvement-log/improvement-log-20260825-000000.md
+?? improvement-log/improvement-log-20260825-025235.md
+?? improvement-log/improvement-log-20260825-070517.md
+?? improvement-log/improvement-log-20260825-070644.md
+?? improvement-log/improvement-log-20260829-032516.md
+?? improvement-log/improvement-log-20260829-032924.md
+?? improvement-log/improvement-log-20260829-085516.md
+?? improvement-log/improvement-log-20260829-165403.md
+?? improvement-log/improvement-log-20260829-nested-agents.md
+?? improvement-log/improvement-log-20260830-000000.md
+?? improvement-log/improvement-log-20260901-051849.md
+?? improvement-log/improvement-log-20260905-144354.md
+?? improvement-log/improvement-log-20260905-144450.md
+?? improvement-log/improvement-log-20260906-095308.md
+?? improvement-log/improvement-log-20260906-095839.md
+?? improvement-log/improvement-log-20260906-095847.md
+?? improvement-log/improvement-log-20260906-121836.md
+?? improvement-log/improvement-log-20260906-121844.md
+?? improvement-log/improvement-log-20260906-125036.md
+?? improvement-log/improvement-log-20260906-125045.md
+?? improvement-log/improvement-log-20260906-134143.md
+?? improvement-log/improvement-log-20260906-134151.md
+?? ios/LFG/SelectableTextSheet.swift
+?? ios/LFGCore/Sources/LFGCore/SelectableText.swift
+?? ios/LFGCore/Sources/LFGCore/UserMessageScrubber.swift
+?? ios/LFGCore/Tests/LFGCoreTests/OutgoingAttachmentMessageTests.swift
+?? ios/LFGCore/Tests/LFGCoreTests/ResumeSettlementTests.swift
+?? ios/LFGCore/Tests/LFGCoreTests/SelectableTextTests.swift
+?? ios/LFGCore/Tests/LFGCoreTests/UserMessageScrubberTests.swift
+?? src/codex-bin.test.ts
+?? src/hidden-dirs.test.ts
+?? src/hidden-dirs.ts
+?? src/sessions-codex-user-messages.test.ts
+?? src/sessions-resumable-exclude.test.ts
+a21a6c9

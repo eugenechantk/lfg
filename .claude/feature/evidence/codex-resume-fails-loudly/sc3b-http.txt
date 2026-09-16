@@ -1,0 +1,2 @@
+HTTP 200 in 7.905228s
+{"ok":true,"tmuxName":"lfg-742c64","cwd":"/private/tmp/claude-501/-Users-eugenechan-dev-personal-lfg/f6d7f271-8029-4b5c-bc95-b728b2d6db7f/scratchpad/codexrepro","sessionId":"01a0762b-fd62-7cc2-a690-ec5839c93789","resumedFrom":"01a0762b-fd62-7cc2-a690-ec5839c93789","agent":"codex"}

@@ -1,0 +1,18 @@
+# Phase 4 build-freshness check
+build log: ~/.flowdeck/logs/734d3b6e4105/build.log — BUILD SUCCEEDED at 2026-09-15 17:41:55 (HKT)
+source mtimes: SessionStore.swift 17:40:31, SessionDetailView.swift 17:40:04, SessionTransfer.swift 17:39:13, Models.swift 17:38:31, LFGClient.swift 17:38:39
+live-seam artefacts: sc7 jpg 17:49:12, sc8 png 17:50:03
+
+Sep 15 17:41:56 2026 30410496 bytes /Users/eugenechan/Library/Developer/FlowDeck/DerivedData/ios-734d3b6e4105/Build/Products/Debug-iphonesimulator/LFG.app/LFG.debug.dylib
+
+## phase-4 strings present in LFG.debug.dylib (count of matches per needle)
+doesn't have this transcript yet         1
+Move anyway?                             1
+Confirm the move to continue             1
+transcript-status                        1
+has no                                   6
+can't reach                              1
+
+## LFGCore strings (package linked in)
+/Users/eugenechan/Library/Developer/FlowDeck/DerivedData/ios-734d3b6e4105/Build/Products/Debug-iphonesimulator/LFGCore.o
+1

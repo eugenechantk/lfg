@@ -1,0 +1,80 @@
+diff --git a/src/terminal/terminalframebuffer.cc b/src/terminal/terminalframebuffer.cc
+index ae6b832..d49191c 100644
+--- a/src/terminal/terminalframebuffer.cc
++++ b/src/terminal/terminalframebuffer.cc
+@@ -492,9 +492,15 @@ void Renditions::set_rendition( color_type num )
+   bool value = num < 9;
+   switch ( num ) {
+     case 1:
+-    case 22:
+       set_attribute( bold, value );
+       break;
++    case 2:
++      set_attribute( faint, value );
++      break;
++    case 22: /* normal intensity: neither bold nor faint */
++      set_attribute( bold, false );
++      set_attribute( faint, false );
++      break;
+     case 3:
+     case 23:
+       set_attribute( italic, value );
+@@ -546,6 +552,8 @@ std::string Renditions::sgr( void ) const
+   ret.append( "\033[0" );
+   if ( get_attribute( bold ) )
+     ret.append( ";1" );
++  if ( get_attribute( faint ) )
++    ret.append( ";2" );
+   if ( get_attribute( italic ) )
+     ret.append( ";3" );
+   if ( get_attribute( underlined ) )
+diff --git a/src/terminal/terminalfunctions.cc b/src/terminal/terminalfunctions.cc
+index a823fab..a4f7ead 100644
+--- a/src/terminal/terminalfunctions.cc
++++ b/src/terminal/terminalfunctions.cc
+@@ -31,7 +31,9 @@
+ */
+ 
+ #include <algorithm>
++#include <cctype>
+ #include <cstdio>
++#include <cstdlib>
+ #include <string>
+ #include <utility>
+ #include <vector>
+@@ -626,6 +628,35 @@ static void OSC_8( const std::string& OSC_string, Framebuffer* fb )
+ /* xterm uses an Operating System Command to set the window title */
+ void Dispatcher::OSC_dispatch( const Parser::OSC_End* act __attribute( ( unused ) ), Framebuffer* fb )
+ {
++  /* Answer OSC 10/11 default fg/bg colour queries from env-provided values
++     (MOSH_OSC_FG / MOSH_OSC_BG, e.g. "rgb:1e1e/2222/2727"). mosh is a
++     state-synchronising emulator, not a byte pipe, so these queries can never
++     reach the real terminal; apps that probe their background (and refuse to
++     paint without an answer) need the emulator itself to reply. */
++  if ( ( OSC_string.size() == 4 ) && ( OSC_string[0] == L'1' )
++       && ( ( OSC_string[1] == L'0' ) || ( OSC_string[1] == L'1' ) )
++       && ( OSC_string[2] == L';' ) && ( OSC_string[3] == L'?' ) ) {
++    bool is_bg = ( OSC_string[1] == L'1' );
++    const char* val = getenv( is_bg ? "MOSH_OSC_BG" : "MOSH_OSC_FG" );
++    if ( val && val[0] ) {
++      std::string safe;
++      for ( const char* p = val; *p && safe.size() < 64; p++ ) {
++        if ( isalnum( (unsigned char)*p ) || *p == ':' || *p == '/' || *p == '#' ) {
++          safe.push_back( *p );
++        } else {
++          safe.clear();
++          break;
++        }
++      }
++      if ( !safe.empty() ) {
++        terminal_to_host.append( is_bg ? "\033]11;" : "\033]10;" );
++        terminal_to_host.append( safe );
++        terminal_to_host.append( "\033\\" );
++      }
++    }
++    return;
++  }
++
+   /* handle osc copy clipboard sequence 52;c; */
+   if ( OSC_string.size() >= 5 && OSC_string[0] == L'5' && OSC_string[1] == L'2' && OSC_string[2] == L';'
+        && OSC_string[3] == L'c' && OSC_string[4] == L';' ) {

@@ -1,0 +1,2763 @@
+diff --git a/.claude/CLAUDE.md b/.claude/CLAUDE.md
+index 588bd05..c672c68 100644
+--- a/.claude/CLAUDE.md
++++ b/.claude/CLAUDE.md
+@@ -17,6 +17,7 @@ lfg runs many concurrent Claude Code agent sessions on a single host, with a Bun
+ - **Machine identity is not session-constant.** A conversation can migrate hosts (Air↔Pro) mid-session; pids, sim UDIDs, and paths from earlier turns are then stale. Re-verify `hostname` before ANY machine-state op (kill, config write, deploy). Before restarting a REMOTE host's lfg server, confirm a second exec path onto that machine first (see memory [[air-ssh-access]]) — killing its server with no way back wedges the host until a human intervenes. "Done" for multi-host work includes `git push` + probing the OTHER host's live behavior.
+ - **Bun auto-loads `.env`.** `ps eww` does not show a Bun process's effective env — `cat .env` before reconstructing what a running server sees.
+ - **A server restarted over ssh loses `tmux`, and nothing says so.** `src/tmux.ts` spawns bare `"tmux"` inside try/catch, so when `/opt/homebrew/bin` is missing from the server's PATH — exactly what a non-interactive `ssh host 'cmd'` restart gives you (`PATH=/usr/bin:/bin:/usr/sbin:/sbin`) — every session on that host reports `tmuxTarget: null` and send/resume/spawn fail, while the host stays green in every client. In the desktop app those rows go grey and unopenable (`canOpen == tmuxName != nil`), which reads as a client bug. `scripts/serve-forever.sh` now prepends Homebrew itself and warns when tmux is unresolvable; if the symptom reappears, check the *launch env* (`ps eww <pid> | tr ' ' '\n' | grep ^PATH=`) before touching client code.
++- **A managed pane that dies silently: replay it with `remain-on-exit` before theorizing.** lfg spawns `codex`/`claude` bare in the pane, so a bootstrap death takes stderr with it and the tmux session is just gone — `sendq.log`, `lfg-serve.log` and codex's own `~/.codex/logs_2.sqlite` all stay blank (a codex that dies in `thread/resume` never logs). Rebuild the exact argv (`managedCodexSessionArgv` via `bun -e`), run it under `tmux set -g remain-on-exit on`, `capture-pane` the dead pane. 2026-09-06 that one step printed the cause after an hour of hypotheses: **codex version skew** — `~/.bun/bin/codex` (codex's own updater; first on Eugene's shell PATH) wrote threads that `/opt/homebrew/bin/codex` (what the server's PATH resolved) could not deserialize. **Policy since 2026-09-06: one codex per Mac, the bun copy at `~/.bun/bin/codex`** (the TUI's "Update now" writes there; the Homebrew npm copy was uninstalled; `serve-forever.sh` prepends `~/.bun/bin`). `codexBin()` still picks the newest install if two reappear (`LFG_CODEX_BIN` pins), and the resume path keeps the pane for a watch window and returns codex's error as a 502 instead of "delivered". See `.claude/diagnosis-codex-resume-version-skew-20260906.md`.
+ - **codex delegation inside a claude tmux pane breaks that session's send path.** The codex child makes two session rows claim one pane; the pane-collision guard nulls `tmuxTarget` and sends 409. Fingerprint: `tmuxName` set but `tmuxTarget: null`.
+ - **No bare `setInterval` fan-out over a collection** on the single Bun event loop — a growing collection turns the tick into a spawn storm. Batch or stagger.
+ - **Restarting a port-bound service:** kill by PORT, not by pkill pattern (stale processes silently keep the port), and verify the NEW code answers (probe a changed endpoint) before declaring the deploy done. **The `-sTCP:LISTEN` filter is not optional**: bare `lsof -ti :8766` also returns every *client* holding a connection — the `lfg` CLI, the desktop app, the phone — so it hands you a multi-PID list that either kills Eugene's apps or fails outright. Use `lsof -nP -iTCP:8766 -sTCP:LISTEN -t`.
+diff --git a/desktop/LFGSessions.swift b/desktop/LFGSessions.swift
+index eaa9d90..d1a8114 100644
+--- a/desktop/LFGSessions.swift
++++ b/desktop/LFGSessions.swift
+@@ -307,6 +307,9 @@ struct HostState: Identifiable {
+     var info: HostInfoResponse?
+     var sessions: [APISession] = []
+     var closedSessions: [APISession] = []
++    /// Cursor for the page after `closedSessions`, from the host's `nextBefore`.
++    /// nil when the host's closed corpus is exhausted (or predates paging).
++    var closedNextBefore: Double? = nil
+     var needsInputSessionIds: Set<String> = []
+     var error: String?
+     var isLocal: Bool = false
+@@ -515,7 +518,8 @@ enum DesktopNewSessionPlanner {
+     private static let modelsByAgent: [String: [String]] = [
+         "claude": ["claude-opus-5", "claude-fable-5", "claude-sonnet-5",
+                    "claude-haiku-4-5", "opus", "fable", "sonnet", "haiku"],
+-        "codex": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"],
++        "codex": ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
++                  "gpt-5.3-codex-spark"],
+     ]
+ 
+     static let defaultAgent = "claude"
+@@ -1009,11 +1013,13 @@ final class SessionStore: ObservableObject {
+ 
+     private func performSearch(_ q: String) async {
+         let entries = Config.loadHosts()
++        let excludes = hiddenDirs.paths
+         var pages: [(String, [ResumableAPISession], Double?)] = []
+         await withTaskGroup(of: (String, [ResumableAPISession], Double?).self) { group in
+             for entry in entries {
+                 group.addTask {
+-                    let page = await Self.fetchSearchPage(entry: entry, query: q, before: nil)
++                    let page = await Self.fetchSearchPage(
++                        entry: entry, query: q, before: nil, excludes: excludes)
+                     return (entry.url, page.sessions, page.nextBefore)
+                 }
+             }
+@@ -1038,12 +1044,14 @@ final class SessionStore: ObservableObject {
+         defer { searchLoadingMore = false }
+ 
+         let entries = Config.loadHosts().filter { cursors[$0.url] != nil }
++        let excludes = hiddenDirs.paths
+         var pages: [(String, [ResumableAPISession], Double?)] = []
+         await withTaskGroup(of: (String, [ResumableAPISession], Double?).self) { group in
+             for entry in entries {
+                 let before = cursors[entry.url]
+                 group.addTask {
+-                    let page = await Self.fetchSearchPage(entry: entry, query: q, before: before)
++                    let page = await Self.fetchSearchPage(
++                        entry: entry, query: q, before: before, excludes: excludes)
+                     return (entry.url, page.sessions, page.nextBefore)
+                 }
+             }
+@@ -1057,6 +1065,88 @@ final class SessionStore: ObservableObject {
+         rebuildSearchResults()
+     }
+ 
++    // MARK: Closed-list paging (infinite scroll)
++    //
++    // `fetchHost` loads each host's newest closed page on every refresh;
++    // reaching the bottom of the list pulls deeper pages here. Deeper pages
++    // live OUTSIDE HostState so the periodic refresh replacing page 1 cannot
++    // discard what the user scrolled down to. Cursor ownership: page 1's
++    // `nextBefore` seeds a host's cursor, but once a deeper page has loaded,
++    // the deepest page owns it — a refresh must not rewind the cursor or every
++    // poll would re-fetch page 2 forever.
++
++    @Published var closedLoadingMore = false
++    /// Deeper closed pages per host URL, in load order (already row-shaped).
++    private var moreClosedByHost: [String: [APISession]] = [:]
++    /// Where the next deeper page starts, per host URL.
++    private var closedNextBeforeByHost: [String: Double] = [:]
++    /// Hosts whose closed corpus was paged to the end. Terminal on purpose:
++    /// anything that closes later is newer than every loaded row and arrives
++    /// via page 1, never via a deeper page.
++    private var closedExhaustedHosts: Set<String> = []
++
++    var canLoadMoreClosed: Bool { !closedNextBeforeByHost.isEmpty }
++
++    func loadMoreClosed() async {
++        guard !closedLoadingMore else { return }
++        let cursors = closedNextBeforeByHost
++        guard !cursors.isEmpty else { return }
++        closedLoadingMore = true
++        defer { closedLoadingMore = false }
++
++        let excludes = hiddenDirs.paths
++        let entries = Config.loadHosts().filter { cursors[$0.url] != nil }
++        var pages: [(String, [ResumableAPISession], Double?)] = []
++        await withTaskGroup(of: (String, [ResumableAPISession], Double?).self) { group in
++            for entry in entries {
++                let before = cursors[entry.url]
++                group.addTask {
++                    // An empty query hits the host's plain (unsearched) closed
++                    // list — same endpoint, same page shape, same cursor.
++                    let page = await Self.fetchSearchPage(
++                        entry: entry, query: "", before: before, excludes: excludes)
++                    return (entry.url, page.sessions, page.nextBefore)
++                }
++            }
++            for await r in group { pages.append(r) }
++        }
++        for (url, sessions, next) in pages {
++            // A failed fetch looks like ([], nil). Leaving the cursor alone
++            // retries on the next bottom-reach; marking exhausted here would
++            // silently end paging on one flaky request.
++            guard !sessions.isEmpty || next != nil else { continue }
++            moreClosedByHost[url, default: []]
++                .append(contentsOf: sessions.map(Self.closedSession(from:)))
++            if let next {
++                closedNextBeforeByHost[url] = next
++            } else {
++                closedNextBeforeByHost.removeValue(forKey: url)
++                closedExhaustedHosts.insert(url)
++            }
++        }
++        mergeDeeperClosedPages()
++    }
++
++    /// Fold the deeper pages into the already-built `hosts`, applying the same
++    /// live/duplicate filters the refresh merge applies to page 1.
++    private func mergeDeeperClosedPages() {
++        guard !moreClosedByHost.isEmpty else { return }
++        let liveIds = Set(hosts.flatMap { $0.sessions.filter { !$0.closed }.compactMap(\.sessionId) })
++        var seenIds = Set(hosts.flatMap { $0.sessions.compactMap(\.sessionId) })
++        for i in hosts.indices {
++            guard let extra = moreClosedByHost[hosts[i].url], !extra.isEmpty else { continue }
++            let fresh = extra.filter { session in
++                guard let id = session.sessionId else { return false }
++                if liveIds.contains(id) { return false }
++                return seenIds.insert(id).inserted
++            }
++            guard !fresh.isEmpty else { continue }
++            hosts[i].sessions = (hosts[i].sessions + fresh).sorted {
++                ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0)
++            }
++        }
++    }
++
+     /// Collapse every host's search page into one list.
+     ///
+     /// Same three jobs as the normal closed merge — dedupe the transcripts both
+@@ -1231,10 +1321,17 @@ final class SessionStore: ObservableObject {
+         defer { refreshing = false; lastRefreshed = Date() }
+         let entries = Config.loadHosts()
+         applyConfiguration(entries)
++        // The hidden set rides along as `exclude` params so the host filters
++        // BEFORE paginating. Filtering only client-side starves the closed
++        // list: gbrain autopilot churn can own the entire newest-100 page,
++        // leaving a handful of visible rows while real history sits behind a
++        // cursor this list never follows. The local `visible()` filter stays as
++        // the backstop for hosts that predate the param.
++        let excludes = hiddenDirs.paths
+         var results: [HostState] = []
+         await withTaskGroup(of: HostState.self) { group in
+             for entry in entries {
+-                group.addTask { await Self.fetchHost(entry: entry) }
++                group.addTask { await Self.fetchHost(entry: entry, excludes: excludes) }
+             }
+             for await state in group { results.append(state) }
+         }
+@@ -1265,7 +1362,11 @@ final class SessionStore: ObservableObject {
+         let liveIds = Set(uniqueHosts.flatMap { $0.sessions.compactMap(\.sessionId) })
+         var seenClosedIds = Set<String>()
+         for i in uniqueHosts.indices {
+-            let closed = uniqueHosts[i].closedSessions.filter { session in
++            let url = uniqueHosts[i].url
++            // Page 1 is fresh from this refresh; deeper pages the user already
++            // scrolled to ride along so the rebuild can't shrink the list.
++            let deeper = moreClosedByHost[url] ?? []
++            let closed = (uniqueHosts[i].closedSessions + deeper).filter { session in
+                 guard let id = session.sessionId else { return false }
+                 if liveIds.contains(id) { return false }
+                 return seenClosedIds.insert(id).inserted
+@@ -1273,6 +1374,16 @@ final class SessionStore: ObservableObject {
+             uniqueHosts[i].sessions = (uniqueHosts[i].sessions + closed).sorted {
+                 ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0)
+             }
++            // Page 1 seeds the cursor only while no deeper page owns it —
++            // rewinding on every poll would re-fetch page 2 forever. A host
++            // paged to its end stays ended; later closures arrive via page 1.
++            if !closedExhaustedHosts.contains(url), deeper.isEmpty {
++                if let nb = uniqueHosts[i].closedNextBefore {
++                    closedNextBeforeByHost[url] = nb
++                } else {
++                    closedNextBeforeByHost.removeValue(forKey: url)
++                }
++            }
+         }
+         duplicateHostsByURL = duplicates
+         hosts = uniqueHosts
+@@ -1363,7 +1474,13 @@ final class SessionStore: ObservableObject {
+         }
+     }
+ 
+-    private static func fetchHost(entry: Config.HostEntry) async -> HostState {
++    /// `exclude` query items for the caller's hidden-dir globs, shared by the
++    /// list fetch and search so the two can't drift.
++    static func excludeQueryItems(_ excludes: [String]) -> [URLQueryItem] {
++        excludes.map { URLQueryItem(name: "exclude", value: $0) }
++    }
++
++    private static func fetchHost(entry: Config.HostEntry, excludes: [String] = []) async -> HostState {
+         let url = entry.url
+         var state = HostState(
+             url: url,
+@@ -1377,9 +1494,12 @@ final class SessionStore: ObservableObject {
+             return c
+         }())
+         do {
++            var resumableComps = URLComponents(string: url + "/api/sessions/resumable")
++            resumableComps?.queryItems =
++                [URLQueryItem(name: "limit", value: "100")] + excludeQueryItems(excludes)
+             guard let infoURL = URL(string: url + "/api/info"),
+                   let sessURL = URL(string: url + "/api/sessions"),
+-                  let resumableURL = URL(string: url + "/api/sessions/resumable?limit=100"),
++                  let resumableURL = resumableComps?.url,
+                   let statesURL = URL(string: url + "/api/session-states") else {
+                 state.error = "bad URL"
+                 return state
+@@ -1401,6 +1521,7 @@ final class SessionStore: ObservableObject {
+             if let (resumableData, _) = try? await session.data(for: DesktopAPI.request(resumableURL)),
+                let resumable = try? JSONDecoder().decode(ResumableResponse.self, from: resumableData) {
+                 state.closedSessions = resumable.sessions.map(Self.closedSession(from:))
++                state.closedNextBefore = resumable.nextBefore
+             }
+         } catch {
+             state.error = "unreachable"
+@@ -1439,13 +1560,15 @@ final class SessionStore: ObservableObject {
+     static func fetchSearchPage(
+         entry: Config.HostEntry,
+         query: String,
+-        before: Double?
++        before: Double?,
++        excludes: [String] = []
+     ) async -> (sessions: [ResumableAPISession], nextBefore: Double?) {
+         var comps = URLComponents(string: entry.url + "/api/sessions/resumable")
+         var q = [
+             URLQueryItem(name: "limit", value: String(searchPageSize)),
+             URLQueryItem(name: "q", value: query),
+         ]
++        q += excludeQueryItems(excludes)
+         if let before { q.append(URLQueryItem(name: "before", value: String(before))) }
+         comps?.queryItems = q
+         guard let url = comps?.url else { return ([], nil) }
+@@ -2456,7 +2579,7 @@ enum DesktopFeatureTestCLI {
+         try expect(DesktopNewSessionPlanner.plan(
+             query: "render", items: [noModel],
+             defaultHostURL: "http://default:8766", inbox: "/inbox"
+-        )?.model == "gpt-5.6-sol", "known agent without model uses that agent's iOS default")
++        )?.model == "gpt-6-astra", "known agent without model uses that agent's iOS default")
+ 
+         let readableOlderModel = newSessionTestItem(
+             id: "render-known-model", title: "older render", project: "render",
+@@ -4770,6 +4893,20 @@ struct ContentView: View {
+                     .font(.system(size: 12))
+                     .foregroundStyle(.secondary)
+             }
++            // Closed-list infinite scroll: the sentinel sits at the very
++            // bottom, so it being created means the user reached the end of
++            // what's loaded. Scrolling away and back recreates it, which
++            // re-fires onAppear for the following page.
++            if !isSearching, store.canLoadMoreClosed {
++                HStack(spacing: 6) {
++                    ProgressView().controlSize(.small)
++                    Text("Loading older sessions…")
++                        .font(.system(size: 12))
++                        .foregroundStyle(.secondary)
++                }
++                .accessibilityIdentifier("load_more_closed")
++                .onAppear { Task { await store.loadMoreClosed() } }
++            }
+             // Search pages independently of the list, so this pulls the next
+             // page of MATCHES — never the next page of the closed list.
+             if isSearching, store.canLoadMoreSearch {
+diff --git a/ios/LFG.xcodeproj/project.pbxproj b/ios/LFG.xcodeproj/project.pbxproj
+index 4e1a926..787f534 100644
+--- a/ios/LFG.xcodeproj/project.pbxproj
++++ b/ios/LFG.xcodeproj/project.pbxproj
+@@ -14,6 +14,7 @@
+ 		11D0A935DB980CB4EBEF35AC /* HostCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5AB3889AD4A389149350563 /* HostCredentialStore.swift */; };
+ 		16B0F6A79CE890FBF2B0E5E2 /* LFGFleetAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */; };
+ 		17E5CC9417E33D6CADF1F707 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25CBF3AE8C40F2EE10BB4BD0 /* Theme.swift */; };
++		1C4DEA4B71CE025D7E79107E /* SelectableProse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C932111B6E38085D1F5EDE8 /* SelectableProse.swift */; };
+ 		50F6EF746AAEB80DB6229E05 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 073FCBCA797989A55F83BAE4 /* MessageComposer.swift */; };
+ 		53041C690C2CB5A6B7ADFAD5 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 76672CAA13A7F7B59D2B0A72 /* SwiftUI.framework */; };
+ 		55469BC6D5744CDBA92DC030 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20B34D8A3106C01BA13F2DC2 /* SessionStore.swift */; };
+@@ -106,6 +107,7 @@
+ 		847BA9F87A178565C0EEC901 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+ 		909139FA5D9B976298B7AA3F /* LFGApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGApp.swift; sourceTree = "<group>"; };
+ 		90C243BC659878B4353ED8C8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
++		9C932111B6E38085D1F5EDE8 /* SelectableProse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableProse.swift; sourceTree = "<group>"; };
+ 		9D1BD4A3061EFB2858AB2A4B /* BackgroundSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSender.swift; sourceTree = "<group>"; };
+ 		9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostLink.swift; sourceTree = "<group>"; };
+ 		B256A006CA36864233180E24 /* UnreadBadges.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnreadBadges.swift; sourceTree = "<group>"; };
+@@ -201,6 +203,7 @@
+ 				CDCC421082566E268167E6E7 /* RetiredSessionActivity.swift */,
+ 				C22EA76E51E2B0A745EE8847 /* RichContent.swift */,
+ 				6461434AE6C2B0858AC679ED /* RootView.swift */,
++				9C932111B6E38085D1F5EDE8 /* SelectableProse.swift */,
+ 				512247CB20DB703CAE731727 /* SessionDetailView.swift */,
+ 				2641AAFED0A103CF2409D79C /* SessionListView.swift */,
+ 				20B34D8A3106C01BA13F2DC2 /* SessionStore.swift */,
+@@ -277,8 +280,6 @@
+ 			dependencies = (
+ 			);
+ 			name = LFGWidgets;
+-			packageProductDependencies = (
+-			);
+ 			productName = LFGWidgets;
+ 			productReference = D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */;
+ 			productType = "com.apple.product-type.app-extension";
+@@ -399,6 +400,7 @@
+ 				F2BF12A27D8AF0AA5A35222B /* RetiredSessionActivity.swift in Sources */,
+ 				85C03A175F9DF48F0DAF9D6E /* RichContent.swift in Sources */,
+ 				A541589C33833A613D05AD8B /* RootView.swift in Sources */,
++				1C4DEA4B71CE025D7E79107E /* SelectableProse.swift in Sources */,
+ 				D9DD48F43B87E8793C27102F /* SessionDetailView.swift in Sources */,
+ 				D34242B9518E03AED793C989 /* SessionListView.swift in Sources */,
+ 				55469BC6D5744CDBA92DC030 /* SessionStore.swift in Sources */,
+@@ -499,7 +501,8 @@
+ 			isa = XCBuildConfiguration;
+ 			buildSettings = {
+ 				APPLICATION_EXTENSION_API_ONLY = YES;
+-				CODE_SIGN_STYLE = Automatic;
++				CODE_SIGN_IDENTITY = "Apple Distribution";
++				CODE_SIGN_STYLE = Manual;
+ 				CURRENT_PROJECT_VERSION = 1;
+ 				DEVELOPMENT_TEAM = 39GJBP8V5A;
+ 				INFOPLIST_FILE = LFGWidgets/Info.plist;
+@@ -511,6 +514,7 @@
+ 				);
+ 				MARKETING_VERSION = 1.3.0;
+ 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
++				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
+ 				SDKROOT = iphoneos;
+ 				SUPPORTS_MACCATALYST = NO;
+ 				TARGETED_DEVICE_FAMILY = "1,2";
+@@ -523,8 +527,8 @@
+ 				APS_ENVIRONMENT = production;
+ 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+ 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
+-				CODE_SIGN_IDENTITY = "iPhone Developer";
+-				CODE_SIGN_STYLE = Automatic;
++				CODE_SIGN_IDENTITY = "Apple Distribution";
++				CODE_SIGN_STYLE = Manual;
+ 				CURRENT_PROJECT_VERSION = 1;
+ 				DEVELOPMENT_TEAM = 39GJBP8V5A;
+ 				INFOPLIST_FILE = LFG/Info.plist;
+@@ -535,6 +539,7 @@
+ 				);
+ 				MARKETING_VERSION = 1.3.0;
+ 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
++				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
+ 				SDKROOT = iphoneos;
+ 				SUPPORTS_MACCATALYST = NO;
+ 				TARGETED_DEVICE_FAMILY = "1,2";
+@@ -547,8 +552,8 @@
+ 				APS_ENVIRONMENT = development;
+ 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+ 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
+-				CODE_SIGN_IDENTITY = "iPhone Developer";
+-				CODE_SIGN_STYLE = Automatic;
++				CODE_SIGN_IDENTITY = "Apple Distribution";
++				CODE_SIGN_STYLE = Manual;
+ 				CURRENT_PROJECT_VERSION = 1;
+ 				DEVELOPMENT_TEAM = 39GJBP8V5A;
+ 				INFOPLIST_FILE = LFG/Info.plist;
+@@ -559,6 +564,7 @@
+ 				);
+ 				MARKETING_VERSION = 1.3.0;
+ 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
++				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
+ 				SDKROOT = iphoneos;
+ 				SUPPORTS_MACCATALYST = NO;
+ 				TARGETED_DEVICE_FAMILY = "1,2";
+@@ -569,7 +575,8 @@
+ 			isa = XCBuildConfiguration;
+ 			buildSettings = {
+ 				APPLICATION_EXTENSION_API_ONLY = YES;
+-				CODE_SIGN_STYLE = Automatic;
++				CODE_SIGN_IDENTITY = "Apple Distribution";
++				CODE_SIGN_STYLE = Manual;
+ 				CURRENT_PROJECT_VERSION = 1;
+ 				DEVELOPMENT_TEAM = 39GJBP8V5A;
+ 				INFOPLIST_FILE = LFGWidgets/Info.plist;
+@@ -581,6 +588,7 @@
+ 				);
+ 				MARKETING_VERSION = 1.3.0;
+ 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
++				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
+ 				SDKROOT = iphoneos;
+ 				SUPPORTS_MACCATALYST = NO;
+ 				TARGETED_DEVICE_FAMILY = "1,2";
+diff --git a/ios/LFG/AttachmentTray.swift b/ios/LFG/AttachmentTray.swift
+index a882d8a..3d3a800 100644
+--- a/ios/LFG/AttachmentTray.swift
++++ b/ios/LFG/AttachmentTray.swift
+@@ -170,9 +170,11 @@ struct AttachmentMenuItems: View {
+         Button { tray.choose(.photos) } label: {
+             Label("Photos & Videos", systemImage: "photo.on.rectangle")
+         }
++        .accessibilityIdentifier("composer.attach.photos")
+         Button { tray.choose(.files) } label: {
+             Label("Files", systemImage: "folder")
+         }
++        .accessibilityIdentifier("composer.attach.files")
+     }
+ }
+ 
+@@ -244,6 +246,7 @@ struct AttachmentChips: View {
+             .padding(.vertical, 2)
+             .padding(.trailing, 6)   // room for the last chip's ✕ overhang
+         }
++        .accessibilityIdentifier("composer.attachments")
+     }
+ 
+     @ViewBuilder
+diff --git a/ios/LFG/Components.swift b/ios/LFG/Components.swift
+index 6e2306a..7621b2b 100644
+--- a/ios/LFG/Components.swift
++++ b/ios/LFG/Components.swift
+@@ -75,16 +75,17 @@ private struct TextBubble: View {
+                 Spacer(minLength: 36)
+                 VStack(alignment: .trailing, spacing: 6) {
+                     if !displayText.isEmpty {
+-                        Text(displayText)
+-                            .textSelection(.enabled)
+-                            .padding(.horizontal, 12).padding(.vertical, 8)
+-                            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
+-                            .foregroundStyle(.white)
+-                            .contentShape(RoundedRectangle(cornerRadius: 14))
+-                            // Tap the bubble to reveal the sent time; tap again to hide.
+-                            .onTapGesture {
+-                                withAnimation(.easeInOut(duration: 0.15)) { showTimestamp.toggle() }
+-                            }
++                        // Native text view: long-press for the cursor, drag to
++                        // highlight, system Copy — in place. The tap that
++                        // reveals the sent time comes back through `onTap`
++                        // because the text view sees touches first.
++                        SelectableProseView(plain: displayText, palette: .onAccent, hugsContent: true) {
++                            withAnimation(.easeInOut(duration: 0.15)) { showTimestamp.toggle() }
++                        }
++                        .fixedSize(horizontal: false, vertical: true)
++                        .padding(.horizontal, 12).padding(.vertical, 8)
++                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
++                        .contentShape(RoundedRectangle(cornerRadius: 14))
+                     }
+                     // Narrower than assistant attachments so the cards read as
+                     // part of the trailing bubble run.
+@@ -103,6 +104,9 @@ private struct TextBubble: View {
+         } else {
+             // Assistant turns are full-width markdown — no bubble.
+             VStack(alignment: .leading, spacing: 6) {
++                // MarkdownUI layout; each paragraph / table cell / code block
++                // is a native text view (see `Theme.lfgFlat`), so a long-press
++                // selects in place, scoped to that block.
+                 ProseView(text: prose)
+                     .frame(maxWidth: .infinity, alignment: .leading)
+                 if !media.isEmpty { MediaAttachmentsView(refs: media) }
+diff --git a/ios/LFG/LFGApp.swift b/ios/LFG/LFGApp.swift
+index dd400ed..d7974fa 100644
+--- a/ios/LFG/LFGApp.swift
++++ b/ios/LFG/LFGApp.swift
+@@ -47,9 +47,25 @@ struct LFGApp: App {
+ 
+     var body: some Scene {
+         WindowGroup {
++            #if DEBUG
++            if ProcessInfo.processInfo.environment["LFG_MARKDOWN_TABLE_FIXTURE"] == "1" {
++                NavigationStack {
++                    MarkdownTableLayoutFixture()
++                }
++            } else if ProcessInfo.processInfo.environment["LFG_SELECT_TEXT_FIXTURE"] == "1" {
++                NavigationStack {
++                    SelectTextFixture()
++                }
++            } else {
++                RootView()
++                    .environment(settings)
++                    .environment(store)
++            }
++            #else
+             RootView()
+                 .environment(settings)
+                 .environment(store)
++            #endif
+         }
+     }
+ }
+diff --git a/ios/LFG/MessageComposer.swift b/ios/LFG/MessageComposer.swift
+index b696d94..388b9fd 100644
+--- a/ios/LFG/MessageComposer.swift
++++ b/ios/LFG/MessageComposer.swift
+@@ -33,7 +33,7 @@ struct MessageComposer: View {
+     @FocusState private var focused: Bool
+ 
+     private var canSend: Bool {
+-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !tray.isEmpty
++        OutgoingAttachmentMessage.canSend(text: text, attachmentCount: tray.items.count)
+     }
+ 
+     var body: some View {
+@@ -45,6 +45,7 @@ struct MessageComposer: View {
+                 .lineLimit(1...8)
+                 .focused($focused)
+                 .font(.body)
++                .accessibilityIdentifier("composer.message")
+ 
+             // Controls row, below the input.
+             HStack(spacing: 14) {
+diff --git a/ios/LFG/NewSession/NewSessionComposer.swift b/ios/LFG/NewSession/NewSessionComposer.swift
+index e44ad6e..55eb0d2 100644
+--- a/ios/LFG/NewSession/NewSessionComposer.swift
++++ b/ios/LFG/NewSession/NewSessionComposer.swift
+@@ -1,5 +1,6 @@
+ import PhotosUI
+ import SwiftUI
++import LFGCore
+ 
+ struct ConfigChip: View {
+     enum Kind {
+@@ -82,7 +83,7 @@ struct NewSessionComposer: View {
+     @FocusState private var focused: Bool
+ 
+     private var canSend: Bool {
+-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
++        OutgoingAttachmentMessage.canSend(text: text, attachmentCount: tray.items.count)
+     }
+ 
+     private var composerLineSpacing: CGFloat {
+@@ -232,8 +233,9 @@ struct NewSessionComposer: View {
+     private func submit() {
+         guard canSend, !sending else { return }
+         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+-        onSend(trimmed, tray.items)
++        let items = tray.items
+         text = ""
+         tray.clear()
++        onSend(trimmed, items)
+     }
+ }
+diff --git a/ios/LFG/PushManager.swift b/ios/LFG/PushManager.swift
+index 55bb842..4bffc93 100644
+--- a/ios/LFG/PushManager.swift
++++ b/ios/LFG/PushManager.swift
+@@ -174,7 +174,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
+         UIApplication.shared.registerForRemoteNotifications()
+         // Must register before launch completes; the handler hops to the main
+         // actor for the sync and completes the task either way.
+-        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.refreshTaskID, using: nil) { task in
++        //
++        // `using:` MUST be .main: this closure is MainActor-isolated (inferred
++        // from the @MainActor AppDelegate context), and with `using: nil`
++        // BGTaskScheduler invokes it on its own queue — the Swift 6 runtime
++        // isolation check then traps at closure entry (dispatch_assert_queue,
++        // EXC_BREAKPOINT), crashing every background refresh launch. Seen live
++        // in TestFlight crash 2026-07-11. The expiration handler runs on the
++        // same queue, so it is covered too.
++        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.refreshTaskID, using: .main) { task in
+             guard let refresh = task as? BGAppRefreshTask else {
+                 task.setTaskCompleted(success: false); return
+             }
+diff --git a/ios/LFG/RichContent.swift b/ios/LFG/RichContent.swift
+index 659deee..7f037a4 100644
+--- a/ios/LFG/RichContent.swift
++++ b/ios/LFG/RichContent.swift
+@@ -62,10 +62,73 @@ extension EnvironmentValues {
+ 
+ // MARK: - Markdown prose
+ 
++/// Gives MarkdownUI's `Grid` an ideal size measured at the same bounded width
++/// used to render the cell. A flexible `frame(minWidth:maxWidth:)` clamps the
++/// cell after its child reports an unwrapped ideal height, which can leave a
++/// later multiline cell drawing through the rows below it.
++private struct BoundedTableCellLayout: Layout {
++    let minWidth: CGFloat
++    let maxWidth: CGFloat
++
++    func sizeThatFits(
++        proposal: ProposedViewSize,
++        subviews: Subviews,
++        cache: inout ()
++    ) -> CGSize {
++        guard let subview = subviews.first else { return .zero }
++
++        let width: CGFloat
++        if let proposedWidth = proposal.width {
++            if proposedWidth.isFinite {
++                width = min(max(proposedWidth, minWidth), maxWidth)
++            } else {
++                width = maxWidth
++            }
++        } else {
++            let idealWidth = subview.sizeThatFits(.unspecified).width
++            width = min(max(idealWidth, minWidth), maxWidth)
++        }
++
++        let contentSize = subview.sizeThatFits(
++            ProposedViewSize(width: width, height: proposal.height)
++        )
++        return CGSize(width: width, height: contentSize.height)
++    }
++
++    func placeSubviews(
++        in bounds: CGRect,
++        proposal: ProposedViewSize,
++        subviews: Subviews,
++        cache: inout ()
++    ) {
++        guard let subview = subviews.first else { return }
++        subview.place(
++            at: bounds.origin,
++            anchor: .topLeading,
++            proposal: ProposedViewSize(width: bounds.width, height: nil)
++        )
++    }
++}
++
++/// Marker and content top-aligned; see `Theme.lfgFlat`'s `.listItem`.
++private struct TopAlignedListItemLabelStyle: LabelStyle {
++    func makeBody(configuration: Configuration) -> some View {
++        HStack(alignment: .top, spacing: 4) {
++            configuration.icon
++                // Centre the marker on the first line of the item's text.
++                .alignmentGuide(.top) { d in
++                    d[VerticalAlignment.center] - SelectableTextRenderer.firstLineHeight / 2
++                }
++            configuration.title
++        }
++    }
++}
++
+ extension MarkdownUI.Theme {
+     /// GitHub styling, but with the body-text background container removed so the
+     /// assistant response flows directly on the page (no gray box). Code blocks,
+     /// inline code, headings, lists, tables keep their own styling.
++    @MainActor
+     static var lfgFlat: MarkdownUI.Theme {
+         MarkdownUI.Theme.gitHub
+             .text {
+@@ -73,6 +136,59 @@ extension MarkdownUI.Theme {
+                 BackgroundColor(.clear)
+                 FontSize(16)
+             }
++            // Paragraphs, code blocks and table cells render their text in a
++            // native `UITextView` (`SelectableProseView`) so a long-press gives
++            // the cursor + handles in place. Selection is scoped to the block —
++            // one paragraph, one cell — which is what keeps MarkdownUI's own
++            // layout (tables, lists, code chrome) exactly as it was.
++            .paragraph { configuration in
++                SelectableProseView(markdown: configuration.content.renderMarkdown())
++                    .fixedSize(horizontal: false, vertical: true)
++                    .markdownMargin(top: 0, bottom: 16)
++            }
++            // A UIKit text view has no text baseline for SwiftUI, so the default
++            // `Label` style centred the bullet on the whole item (wrong for an
++            // item holding a nested list). Pin marker and content to the top.
++            .listItem { configuration in
++                configuration.label
++                    .labelStyle(TopAlignedListItemLabelStyle())
++                    .markdownMargin(top: .em(0.25))
++            }
++            .codeBlock { configuration in
++                ScrollView(.horizontal) {
++                    SelectableProseView(code: configuration.content)
++                        .padding(16)
++                }
++                .background(Color(.secondarySystemBackground))
++                .clipShape(RoundedRectangle(cornerRadius: 6))
++                .markdownMargin(top: 0, bottom: 16)
++            }
++            .table { configuration in
++                ScrollView(.horizontal, showsIndicators: true) {
++                    configuration.label
++                        // Keep readable column widths; the table scrolls instead
++                        // of compressing the columns to fit the viewport.
++                        .fixedSize(horizontal: true, vertical: false)
++                        .markdownTableBorderStyle(.init(color: Color(.separator)))
++                        .markdownTableBackgroundStyle(
++                            .alternatingRows(
++                                Color(.systemBackground),
++                                Color(.secondarySystemBackground)
++                            )
++                        )
++                }
++                .markdownMargin(top: 0, bottom: 16)
++            }
++            .tableCell { configuration in
++                BoundedTableCellLayout(minWidth: 140, maxWidth: 280) {
++                    SelectableProseView(
++                        markdown: configuration.content.renderMarkdown(),
++                        semibold: configuration.row == 0
++                    )
++                }
++                .padding(.vertical, 6)
++                .padding(.horizontal, 13)
++            }
+     }
+ }
+ 
+@@ -83,21 +199,43 @@ struct ProseView: View {
+     @Environment(\.hostFiles) private var hostFiles
+ 
+     var body: some View {
++        // No `.textSelection(.enabled)`: on iOS it only offers "copy the whole
++        // block". Range selection comes from the native text views the
++        // `lfgFlat` theme puts inside each paragraph / cell / code block.
+         Markdown(text)
+             .markdownImageProvider(HostImageProvider(hostFiles: hostFiles))
+             .markdownTheme(.lfgFlat)
+-            // Tables size columns to their content and scroll horizontally so
+-            // wide tables stay readable instead of being crushed to fit.
+-            .markdownBlockStyle(\.table) { configuration in
+-                ScrollView(.horizontal, showsIndicators: true) {
+-                    configuration.label
+-                        .fixedSize(horizontal: true, vertical: false)
+-                }
+-            }
+-            .textSelection(.enabled)
+     }
+ }
+ 
++#if DEBUG
++/// Launch with `LFG_MARKDOWN_TABLE_FIXTURE=1` to exercise the case where a
++/// later cell, rather than the leading cell, determines the row height.
++struct MarkdownTableLayoutFixture: View {
++    private let markdown = """
++    # Table row sizing
++
++    | Property | Validation |
++    | --- | --- |
++    | font-family | `var(--disp) — Avenir Next / Futura / Century Gothic / Helvetica Neue / Franklin Gothic` |
++    | font-weight | 600 |
++    | font-size | 16px |
++    | letter-spacing | -0.01em |
++
++    The row below the wrapped value must begin after all three lines.
++    """
++
++    var body: some View {
++        ScrollView {
++            ProseView(text: markdown)
++                .padding()
++        }
++        .navigationTitle("Table layout fixture")
++        .accessibilityIdentifier("markdownTableLayoutFixture")
++    }
++}
++#endif
++
+ private struct HostImageProvider: ImageProvider {
+     let hostFiles: HostFiles?
+     func makeImage(url: URL?) -> some View {
+diff --git a/ios/LFG/SessionDetailView.swift b/ios/LFG/SessionDetailView.swift
+index 3ef66b6..0a35d69 100644
+--- a/ios/LFG/SessionDetailView.swift
++++ b/ios/LFG/SessionDetailView.swift
+@@ -49,6 +49,14 @@ struct SessionDetailView: View {
+     /// True from the moment a page is added until the reader's position has been
+     /// restored — see `extendWindow` for why this gate is load-bearing.
+     @State private var extending = false
++    /// Snapshot only when transcript identity changes. Dragging the edge index
++    /// writes state every time it crosses an anchor, so deriving this in `body`
++    /// would turn each gesture update into an O(transcript) filter.
++    @State private var userMessageAnchors: [UserMessageAnchor] = []
++    @State private var selectedUserMessageAnchorIndex: Int?
++    /// Cancels stale next-runloop scrolls when a fast drag crosses several
++    /// anchors before SwiftUI finishes revealing an older render window.
++    @State private var pendingUserMessageTargetID: String?
+ 
+     /// PHASE-1 INSTRUMENTATION — remove before shipping. Every code path that
+     /// can move the viewport logs through here, tagged LFGVP for `log stream`.
+@@ -247,6 +255,7 @@ struct SessionDetailView: View {
+             // session had paged in must not carry over.
+             window = TranscriptWindow.pageSize
+             lastMessageIDs = messages.map(\.stableID)
++            userMessageAnchors = UserMessageScrubber.anchors(in: messages)
+             // Baseline both, or the first history load after opening reads as a
+             // landing and a send from a *previous* session's view stays armed.
+             newestUserTurnID = messages.last(where: \.rendersAsUserBubble)?.stableID
+@@ -413,6 +422,24 @@ struct SessionDetailView: View {
+             // The flip would draw the indicator down the wrong edge and run it
+             // backwards; there is no correct-looking version of it here.
+             .scrollIndicators(.hidden)
++            .overlay(alignment: .trailing) {
++                NativeUserMessageScrubber(
++                    messageCount: userMessageAnchors.count,
++                    selectedIndex: selectedUserMessageAnchorIndex,
++                    onSelect: selectUserMessage(at:)
++                )
++                .frame(width: 44)
++                .accessibilityElement(children: .ignore)
++                .accessibilityLabel("User message index")
++                .accessibilityValue(userMessageScrubberAccessibilityValue)
++                .accessibilityHint("Long press and drag vertically to jump between your messages.")
++                .accessibilityIdentifier("userMessageScrubber")
++                .accessibilityHidden(userMessageAnchors.isEmpty)
++                .accessibilityAdjustableAction { direction in
++                    adjustUserMessageSelection(direction)
++                }
++            }
++            .sensoryFeedback(.selection, trigger: selectedUserMessageAnchorIndex)
+             // Offset-only "am I at the newest end". Deliberately does not read
+             // content height — see `TranscriptWindow.isAtNewestEnd`.
+             .modifier(NewestEndTracker { atNewest in
+@@ -424,6 +451,7 @@ struct SessionDetailView: View {
+                 let new = messages.map(\.stableID)
+                 guard old != new else { return }
+                 lastMessageIDs = new
++                userMessageAnchors = UserMessageScrubber.anchors(in: messages)
+                 // Did a real user turn just land? If it was ours, follow it —
+                 // this is the scroll the user is actually asking for when they
+                 // send: take me to my message once it is really in the
+@@ -481,6 +509,56 @@ struct SessionDetailView: View {
+       }
+     }
+ 
++    private var userMessageScrubberAccessibilityValue: String {
++        guard !userMessageAnchors.isEmpty else { return "No user messages" }
++        guard let selectedUserMessageAnchorIndex else {
++            return "\(userMessageAnchors.count) messages"
++        }
++        return "Message \(selectedUserMessageAnchorIndex + 1) of \(userMessageAnchors.count)"
++    }
++
++    private func adjustUserMessageSelection(_ direction: AccessibilityAdjustmentDirection) {
++        guard !userMessageAnchors.isEmpty else { return }
++        let current = selectedUserMessageAnchorIndex ?? (userMessageAnchors.count - 1)
++        switch direction {
++        case .increment:
++            selectUserMessage(at: min(current + 1, userMessageAnchors.count - 1))
++        case .decrement:
++            selectUserMessage(at: max(current - 1, 0))
++        @unknown default:
++            break
++        }
++    }
++
++    /// Reveal an older suffix before scrolling. A next-main-actor-turn scroll is
++    /// required because the destination does not exist in the lazy stack until
++    /// the larger `window` has gone through layout.
++    private func selectUserMessage(at index: Int) {
++        guard userMessageAnchors.indices.contains(index), let scrollProxy else { return }
++        let anchor = userMessageAnchors[index]
++        guard selectedUserMessageAnchorIndex != index || pendingUserMessageTargetID != anchor.id
++        else { return }
++
++        selectedUserMessageAnchorIndex = index
++        pendingUserMessageTargetID = anchor.id
++        let requiredWindow = UserMessageScrubber.requiredWindow(
++            totalMessages: messages.count,
++            targetMessageIndex: anchor.messageIndex,
++            currentWindow: window
++        )
++        if requiredWindow != window {
++            vp("userScrubber.grow", "win \(window)->\(requiredWindow)")
++            window = requiredWindow
++        }
++
++        Task { @MainActor in
++            await Task.yield()
++            guard pendingUserMessageTargetID == anchor.id else { return }
++            vp("userScrubber.jump", "index=\(index) id=\(anchor.id)")
++            scrollProxy.scrollTo(anchor.id, anchor: .center)
++        }
++    }
++
+     /// Sentinel at the array start, i.e. the visual bottom.
+     private static let newestAnchor = "NEWEST"
+ 
+@@ -704,6 +782,147 @@ struct SessionDetailView: View {
+ 
+ }
+ 
++/// A transparent 44-point activation zone backed by a real `UIScrollView`.
++/// Its own content never renders; only UIKit's native vertical scroll indicator
++/// appears, flashes while the long-press moves, and fades on the system's timing.
++private struct NativeUserMessageScrubber: UIViewRepresentable {
++    let messageCount: Int
++    let selectedIndex: Int?
++    let onSelect: (Int) -> Void
++
++    func makeCoordinator() -> Coordinator {
++        Coordinator(messageCount: messageCount, onSelect: onSelect)
++    }
++
++    func makeUIView(context: Context) -> NativeIndicatorScrollView {
++        let scrollView = NativeIndicatorScrollView()
++        scrollView.backgroundColor = .clear
++        scrollView.contentInsetAdjustmentBehavior = .never
++        scrollView.showsHorizontalScrollIndicator = false
++        scrollView.showsVerticalScrollIndicator = true
++        scrollView.indicatorStyle = .default
++        scrollView.verticalScrollIndicatorInsets = UIEdgeInsets(
++            top: 3, left: 0, bottom: 3, right: 3
++        )
++        scrollView.bounces = false
++        scrollView.alwaysBounceVertical = false
++        // The custom long press supplies one-finger anchor semantics. Keep the
++        // native pan recognizer enabled (UIKit uses it when managing indicator
++        // presentation), but move it to two fingers so this invisible auxiliary
++        // view never steals an ordinary one-finger transcript edge swipe.
++        scrollView.panGestureRecognizer.minimumNumberOfTouches = 2
++
++        let press = UILongPressGestureRecognizer(
++            target: context.coordinator,
++            action: #selector(Coordinator.handlePress(_:))
++        )
++        press.minimumPressDuration = 0.28
++        press.allowableMovement = 18
++        scrollView.addGestureRecognizer(press)
++        context.coordinator.scrollView = scrollView
++        return scrollView
++    }
++
++    func updateUIView(_ scrollView: NativeIndicatorScrollView, context: Context) {
++        context.coordinator.messageCount = messageCount
++        context.coordinator.onSelect = onSelect
++        scrollView.messageCount = messageCount
++        scrollView.selectedIndex = selectedIndex
++        scrollView.isUserInteractionEnabled = messageCount > 0
++        scrollView.setNeedsLayout()
++    }
++
++    final class Coordinator: NSObject {
++        var messageCount: Int
++        var onSelect: (Int) -> Void
++        weak var scrollView: NativeIndicatorScrollView?
++        private var indicatorRefreshTimer: Timer?
++
++        init(messageCount: Int, onSelect: @escaping (Int) -> Void) {
++            self.messageCount = messageCount
++            self.onSelect = onSelect
++        }
++
++        @objc func handlePress(_ recognizer: UILongPressGestureRecognizer) {
++            guard recognizer.state == .began || recognizer.state == .changed else {
++                stopIndicatorRefresh()
++                return
++            }
++            if recognizer.state == .began {
++                startIndicatorRefresh()
++            }
++            guard let scrollView,
++                  let index = UserMessageScrubber.anchorIndex(
++                    at: Double(recognizer.location(in: scrollView).y),
++                    height: Double(scrollView.bounds.height),
++                    count: messageCount
++                  ) else { return }
++
++            if #available(iOS 17.4, *) {
++                scrollView.withScrollIndicatorsShown(forContentOffsetChanges: {
++                    scrollView.selectedIndex = index
++                    scrollView.updateIndicatorPosition(animated: false)
++                })
++            } else {
++                scrollView.selectedIndex = index
++                scrollView.updateIndicatorPosition(animated: false)
++            }
++            scrollView.flashScrollIndicators()
++            onSelect(index)
++        }
++
++        private func startIndicatorRefresh() {
++            indicatorRefreshTimer?.invalidate()
++            refreshIndicator()
++            indicatorRefreshTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) {
++                [weak self] _ in self?.refreshIndicator()
++            }
++        }
++
++        private func stopIndicatorRefresh() {
++            indicatorRefreshTimer?.invalidate()
++            indicatorRefreshTimer = nil
++        }
++
++        @objc private func refreshIndicator() {
++            scrollView?.flashScrollIndicators()
++        }
++
++        deinit {
++            indicatorRefreshTimer?.invalidate()
++        }
++    }
++
++    final class NativeIndicatorScrollView: UIScrollView {
++        var messageCount = 0
++        var selectedIndex: Int?
++
++        override func layoutSubviews() {
++            super.layoutSubviews()
++            updateIndicatorPosition(animated: false)
++        }
++
++        func updateIndicatorPosition(animated: Bool) {
++            guard bounds.height > 0 else { return }
++            // One viewport per user turn gives UIKit enough scroll range to
++            // size and place its indicator while keeping the mapping linear.
++            contentSize = CGSize(
++                width: max(bounds.width, 1),
++                height: max(bounds.height * CGFloat(max(messageCount, 1)), bounds.height + 1)
++            )
++            guard let selectedIndex else { return }
++            let progress = messageCount > 1
++                ? CGFloat(selectedIndex) / CGFloat(messageCount - 1)
++                : 0.5
++            let maximumOffset = max(contentSize.height - bounds.height, 0)
++            let target = CGPoint(x: 0, y: maximumOffset * progress)
++            if abs(contentOffset.y - target.y) > 0.5 {
++                setContentOffset(target, animated: animated)
++            }
++        }
++    }
++}
++
+ /// Apple's native pull-down menu, backed by a stable UIKit menu object.
+ ///
+ /// A SwiftUI `Menu` directly inside this transcript-observing toolbar is rebuilt
+diff --git a/ios/LFG/SessionListView.swift b/ios/LFG/SessionListView.swift
+index 98c5427..8ed3389 100644
+--- a/ios/LFG/SessionListView.swift
++++ b/ios/LFG/SessionListView.swift
+@@ -750,11 +750,21 @@ struct SessionListView: View {
+                                             }
+                                         }
+                                     } else if store.canLoadMoreClosed {
++                                        // Infinite scroll: this row only exists
++                                        // at the bottom of the closed section,
++                                        // so its creation means the user is at
++                                        // the end of what's loaded — fetch the
++                                        // next page without requiring the tap.
++                                        // The button stays as the retry path
++                                        // for a page that failed mid-flight.
+                                         loadMoreRow(title: "Load more",
+                                                     loading: store.isLoadingMoreClosed,
+                                                     identifier: "loadMoreClosedButton") {
+                                             await store.loadMoreClosed()
+                                         }
++                                        .onAppear {
++                                            Task { await store.loadMoreClosed() }
++                                        }
+                                     }
+                                 }
+                             }
+diff --git a/ios/LFG/SessionStore.swift b/ios/LFG/SessionStore.swift
+index 4e66519..cd746eb 100644
+--- a/ios/LFG/SessionStore.swift
++++ b/ios/LFG/SessionStore.swift
+@@ -272,6 +272,10 @@ import LFGCore
+     /// The create request behind each placeholder id, kept so a failed create
+     /// can be retried straight from the optimistic kickoff bubble.
+     private var pendingCreates: [String: NewSessionRequest] = [:]
++    /// Attachment bytes for a create that has not reached `/new` yet. Unlike an
++    /// in-session send there is no real session id/outbox row to own these until
++    /// creation succeeds, so the placeholder retains them across inline Retry.
++    private var pendingCreateAttachments: [String: [ComposerAttachment]] = [:]
+     /// placeholder id -> server id, for the update where `selection` still names
+     /// the placeholder. Bounded: entries are only added by `remap`, which runs
+     /// once per created session.
+@@ -352,6 +356,10 @@ import LFGCore
+     /// Pending delayed teardown while backgrounded (grace window so a quick
+     /// app-switch keeps every stream alive).
+     private var backgroundStopTask: Task<Void, Never>?
++    /// The `lfg.linger` background-task assertion backing that grace window.
++    /// Three paths race to end it (expiry, the 25s sleeper, foreground cancel);
++    /// `endLingerAssertion()` is the only place allowed to end it.
++    private var lingerAssertion: UIBackgroundTaskIdentifier = .invalid
+     private var pollTask: Task<Void, Never>?
+     /// Launch/foreground reconnect burst — see `startReconnectBurst`.
+     private var reconnectBurstTask: Task<Void, Never>?
+@@ -389,6 +397,11 @@ import LFGCore
+     /// sessionId while the old transcript lingers on disk (so it keeps showing as
+     /// resumable) — suppress the stale closed card once we've revived it.
+     private var resumedIds: Set<String> = []
++    /// Id-stable (codex) resumes still waiting to be seen live, by the time we
++    /// asked. `MultiHost.settledResumes` lifts their `resumedIds` suppression
++    /// once live or after a TTL, so a revive whose pane died during bootstrap
++    /// falls back to "Closed" instead of disappearing until relaunch.
++    private var pendingResumes: [String: Date] = [:]
+ 
+     /// Sessions this client has asked a host to revive, and hasn't seen come back
+     /// live yet — the "Restarting" group. Marked when we ask (before the POST, so
+@@ -403,6 +416,10 @@ import LFGCore
+     /// sessions to the merged list rather than having them vanish for a poll —
+     /// the resilience the single-host path got from the server's `lastGood`.
+     private var lastSessionsByHost: [String: [Session]] = [:]
++    /// Request start for each host's last successful live-session snapshot.
++    /// This orders REST level state against journal deltas without preserving a
++    /// stale `busy: true` for the full fallback TTL.
++    private var lastSnapshotStartedAtByHost: [String: Date] = [:]
+ 
+     /// Whether `GET /api/dirs` has ever succeeded. The create-flow metadata is
+     /// loaded once at launch off the agnostic host; if EVERY host was down then, it
+@@ -997,8 +1014,11 @@ import LFGCore
+             paths.append(path)
+         }
+ 
+-        let full = ([row.text] + paths).filter { !$0.isEmpty }.joined(separator: "\n")
+-        guard !full.isEmpty else { throw OutboxAttachmentError.replayProducedEmptyMessage }
++        let full = try OutgoingAttachmentMessage.assemble(
++            text: row.text,
++            uploadedPaths: paths,
++            expectedAttachmentCount: files.count
++        )
+         guard await enqueueOutboxForTransport(
+             clientId: row.clientId,
+             sessionId: row.sessionId,
+@@ -1287,10 +1307,13 @@ import LFGCore
+         }
+     }
+ 
+-    private func retryOutboxRow(_ row: LFGOutboxRow) async {
++    private func retryOutboxRow(
++        _ row: LFGOutboxRow,
++        trigger: OutboxSendTrigger = .automatic
++    ) async {
+         // Boundary check. The callers already decided, but this is the POST and
+         // the POST owns the invariant — see `outboxSendPermitted`.
+-        guard await outboxSendPermitted(clientId: row.clientId, trigger: .automatic) else { return }
++        guard await outboxSendPermitted(clientId: row.clientId, trigger: trigger) else { return }
+         appendPendingFromOutbox(row)
+         guard let host = settings.hosts.first(where: { $0.id == row.hostId }),
+               let client = settings.client(for: host) else {
+@@ -1808,25 +1831,42 @@ import LFGCore
+         // of that are precisely the window a cellular investigation needs.
+         ConnectionLog.shared.flush()
+         let app = UIApplication.shared
+-        var bgTask: UIBackgroundTaskIdentifier = .invalid
+-        bgTask = app.beginBackgroundTask(withName: "lfg.linger") { [weak self] in
+-            Task { @MainActor [weak self] in
+-                self?.stop()
+-                app.endBackgroundTask(bgTask)
++        lingerAssertion = app.beginBackgroundTask(withName: "lfg.linger") { [weak self] in
++            // iOS calls this on the main thread and requires the assertion to
++            // be ended SYNCHRONOUSLY. The old Task { @MainActor } hop could
++            // miss the deadline whenever the main actor was busy, and
++            // RunningBoard kills the process for an unexpired assertion —
++            // reads as a background crash. assumeIsolated (legal: main
++            // thread) keeps the whole path synchronous, and cancelling the
++            // sleeper here prevents it from double-ending the assertion.
++            MainActor.assumeIsolated {
++                guard let self else { return }
++                self.backgroundStopTask?.cancel()
++                self.backgroundStopTask = nil
++                self.stop()
++                self.endLingerAssertion()
+             }
+         }
+         backgroundStopTask = Task { [weak self] in
+             try? await Task.sleep(for: .seconds(25))
+             guard !Task.isCancelled else {
+-                if bgTask != .invalid { app.endBackgroundTask(bgTask) }
++                self?.endLingerAssertion()
+                 return
+             }
+             self?.backgroundStopTask = nil
+             self?.stop()
+-            if bgTask != .invalid { app.endBackgroundTask(bgTask) }
++            self?.endLingerAssertion()
+         }
+     }
+ 
++    /// End the linger assertion exactly once, whichever of the three racing
++    /// paths gets here first.
++    private func endLingerAssertion() {
++        guard lingerAssertion != .invalid else { return }
++        UIApplication.shared.endBackgroundTask(lingerAssertion)
++        lingerAssertion = .invalid
++    }
++
+     /// Foregrounding: cancel any pending teardown, restart links (cursor resume
+     /// makes this one cheap round-trip per host), and reconcile immediately.
+     ///
+@@ -1911,6 +1951,7 @@ import LFGCore
+         let host: Host
+         let sessions: [Session]?
+         let reach: Reachability
++        let snapshotStartedAt: Date
+     }
+ 
+     private struct HostResumableFetch: Sendable {
+@@ -1939,11 +1980,33 @@ import LFGCore
+         await withTaskGroup(of: HostFetch.self) { group in
+             for (h, c, timeout) in pairs {
+                 group.addTask {
+-                    guard let c else { return HostFetch(host: h, sessions: nil, reach: .badResponse("Invalid URL")) }
+-                    do { return HostFetch(host: h, sessions: try await c.sessions(timeout: timeout), reach: .ok) }
+-                    catch let LFGError.notReachable(u) { return HostFetch(host: h, sessions: nil, reach: .hostUnreachable(u)) }
+-                    catch let LFGError.http(status, _) { return HostFetch(host: h, sessions: nil, reach: .badResponse("HTTP \(status)")) }
+-                    catch { return HostFetch(host: h, sessions: nil, reach: .badResponse("Bad response")) }
++                    let snapshotStartedAt = Date()
++                    guard let c else {
++                        return HostFetch(host: h, sessions: nil,
++                                         reach: .badResponse("Invalid URL"),
++                                         snapshotStartedAt: snapshotStartedAt)
++                    }
++                    do {
++                        return HostFetch(host: h,
++                                         sessions: try await c.sessions(timeout: timeout),
++                                         reach: .ok,
++                                         snapshotStartedAt: snapshotStartedAt)
++                    }
++                    catch let LFGError.notReachable(u) {
++                        return HostFetch(host: h, sessions: nil,
++                                         reach: .hostUnreachable(u),
++                                         snapshotStartedAt: snapshotStartedAt)
++                    }
++                    catch let LFGError.http(status, _) {
++                        return HostFetch(host: h, sessions: nil,
++                                         reach: .badResponse("HTTP \(status)"),
++                                         snapshotStartedAt: snapshotStartedAt)
++                    }
++                    catch {
++                        return HostFetch(host: h, sessions: nil,
++                                         reach: .badResponse("Bad response"),
++                                         snapshotStartedAt: snapshotStartedAt)
++                    }
+                 }
+             }
+             for await f in group { onResult(f) }
+@@ -1957,13 +2020,20 @@ import LFGCore
+                                      beforeByHost: [String: Double?] = [:],
+                                      q: String? = nil) async -> [HostResumableFetch] {
+         let pairs: [(Int, LFGClient?)] = hosts.enumerated().map { ($0, settings.client(for: $1)) }
++        // The hidden set rides along on every LIST fetch (first page, load
++        // more, search) so the host filters before paginating. The targeted
++        // by-id lookup (`closedSession(for:)`) deliberately does NOT come
++        // through here: hiding is a viewing preference and must never make a
++        // deep-linked session unreachable.
++        let exclude = settings.hiddenDirs.paths
+         let results = await withTaskGroup(of: (Int, HostResumableFetch?).self) { group -> [(Int, HostResumableFetch?)] in
+             for (i, c) in pairs {
+                 let host = hosts[i]
+                 let before = beforeByHost[host.id] ?? nil
+                 group.addTask {
+                     guard let c else { return (i, nil) }
+-                    guard let page = try? await c.resumable(limit: 60, before: before, q: q) else { return (i, nil) }
++                    guard let page = try? await c.resumable(limit: 60, before: before, q: q, exclude: exclude)
++                    else { return (i, nil) }
+                     return (i, HostResumableFetch(host: host, sessions: page.sessions, nextBefore: page.nextBefore))
+                 }
+             }
+@@ -2195,6 +2265,7 @@ import LFGCore
+         // Prune state for hosts removed from settings.
+         let hostIds = Set(hosts.map(\.id))
+         lastSessionsByHost = lastSessionsByHost.filter { hostIds.contains($0.key) }
++        lastSnapshotStartedAtByHost = lastSnapshotStartedAtByHost.filter { hostIds.contains($0.key) }
+         failuresByHost = failuresByHost.filter { hostIds.contains($0.key) }
+         hostStateByHost = hostStateByHost.filter { hostIds.contains($0.key) }
+         catchUpBuffers = catchUpBuffers.filter { hostIds.contains($0.key) }
+@@ -2339,6 +2410,7 @@ import LFGCore
+             signal(f.host.id, .probeSucceeded)
+             failuresByHost[f.host.id] = 0
+             lastSessionsByHost[f.host.id] = fetchedSessions
++            lastSnapshotStartedAtByHost[f.host.id] = f.snapshotStartedAt
+         } else {
+             // failuresByHost now only feeds the cold-probe back-off. The visible
+             // debounce is the state machine's grace window: a probe failure
+@@ -2366,6 +2438,13 @@ import LFGCore
+         // fall through the live/closed gap after its host recovered from an
+         // outage — present in neither bucket until app relaunch.
+         let okHosts = settings.hosts.filter { hostStateByHost[$0.id]?.isLive == true }
++        // Settle id-stable resumes against the PREVIOUS merge's live ids before
++        // this merge is built: an id that was live and is not any more must be
++        // allowed back into Closed on this very rebuild, not one later.
++        for id in MultiHost.settledResumes(pending: pendingResumes, liveIds: liveIds, now: Date()) {
++            pendingResumes[id] = nil
++            resumedIds.remove(id)
++        }
+         let reconciled = MultiHost.reconcileSessionList(
+             perHostLive: perHostLive,
+             closedPerHost: closedPages(for: okHosts),
+@@ -2450,7 +2529,12 @@ import LFGCore
+         for s in fresh {
+             guard let sid = s.sessionId, let b = s.busy else { continue }
+             guard !unreachable.contains(sid) else { continue }
+-            guard JournalFreshness.snapshotWins(journalStatedAt: busyStatedAt[sid], now: now)
++            let snapshotStartedAt = hostBySession[sid]
++                .flatMap { lastSnapshotStartedAtByHost[$0] }
++            guard JournalFreshness.snapshotWins(
++                journalStatedAt: busyStatedAt[sid],
++                snapshotStartedAt: snapshotStartedAt,
++                now: now)
+             else { continue }
+             busy[sid] = b
+         }
+@@ -2465,7 +2549,12 @@ import LFGCore
+         for s in fresh {
+             guard let sid = s.sessionId else { continue }
+             guard !unreachable.contains(sid) else { continue }
+-            guard JournalFreshness.snapshotWins(journalStatedAt: promptStatedAt[sid], now: now)
++            let snapshotStartedAt = hostBySession[sid]
++                .flatMap { lastSnapshotStartedAtByHost[$0] }
++            guard JournalFreshness.snapshotWins(
++                journalStatedAt: promptStatedAt[sid],
++                snapshotStartedAt: snapshotStartedAt,
++                now: now)
+             else { continue }
+             // Equality-guarded like `apply(.prompt)`: an unconditional write
+             // dirties @Observable every refresh and re-animates a scrollTo over
+@@ -3288,13 +3377,15 @@ import LFGCore
+     /// Returns the row's id so the caller can watch it land
+     /// (`watchForTurnLanding`); nil when there was nothing to add.
+     @discardableResult
+-    func addPending(_ sid: String, text: String) -> String? {
++    func addPending(_ sid: String, text: String, displayText: String? = nil) -> String? {
+         let typed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+-        guard !typed.isEmpty else { return nil }
++        let display = displayText?
++            .trimmingCharacters(in: .whitespacesAndNewlines) ?? typed
++        guard !display.isEmpty else { return nil }
+         let nowMs = Date().timeIntervalSince1970 * 1000
+         let pid = UUID().uuidString
+         pendingSends[sid, default: []].append(
+-            PendingSend(id: pid, displayText: typed, matchText: typed, ts: nowMs, showSent: true))
++            PendingSend(id: pid, displayText: display, matchText: typed, ts: nowMs, showSent: true))
+         reconcilePending(sid)
+         return pendingSends[sid]?.contains { $0.id == pid } == true ? pid : nil
+     }
+@@ -3317,7 +3408,12 @@ import LFGCore
+         if let req = pendingCreates[sid] {
+             mutatePending(sid, pending.id) { $0.failed = false }
+             busy[sid] = true
+-            await attemptCreate(sid, req, on: pendingCreateHost[sid], attachments: [])
++            await attemptCreate(
++                sid,
++                req,
++                on: pendingCreateHost[sid],
++                attachments: pendingCreateAttachments[sid] ?? []
++            )
+             return
+         }
+         let clientId = pending.clientId ?? pending.id
+@@ -3332,6 +3428,15 @@ import LFGCore
+             // make the tap look like it did nothing.
+             $0.queuedOffline = false
+         }
++        // An upload failure leaves the original bytes in durable sidecars. Retry
++        // must re-enter the upload pipeline before it can POST the message; using
++        // `pending.matchText` here would resend only the typed text (or nothing).
++        if !outboxAttachmentFiles(clientId: clientId).isEmpty,
++           let store = localStore,
++           let row = try? await store.outbox(clientId: clientId) {
++            await retryOutboxRow(row, trigger: trigger)
++            return
++        }
+         if let qid = pending.serverQueueID {
+             guard let hostId = routeHostId(forSession: sid),
+                   await enqueueOutboxForTransport(clientId: clientId, sessionId: sid, hostId: hostId, text: pending.matchText) else {
+@@ -3422,6 +3527,7 @@ import LFGCore
+         }
+         if old == new {
+             resumedIds.insert(old)
++            pendingResumes[old] = Date()
+             if let i = sessions.firstIndex(where: { $0.sessionId == old }) {
+                 sessions[i].closed = false   // id-stable resume: same row is now reviving
+             }
+@@ -3547,26 +3653,31 @@ import LFGCore
+                         queuedForResume: presentation == .queuedForResume,
+                         confirmed: presentation.isConfirmed))
+ 
+-        // 2) Offline sends persist attachment bytes as sidecars and leave the outbox
+-        //    text as typed text only; replay uploads the bytes and bakes paths in.
+-        if offlineAtSend {
+-            do {
+-                try persistOutboxAttachments(attachments, clientId: clientId)
+-            } catch {
+-                lastError = "Queue attachments failed: \(error.localizedDescription)"
+-                mutatePending(id, pid) { $0.failed = true }
+-                return
+-            }
++        // 2) Persist the send before the first upload. The old online path kept
++        //    attachment bytes only in this task and used `try?` for each upload:
++        //    an attachment-only failure vanished, while a mixed send continued as
++        //    text-only. Sidecars make the original intent durable and retryable.
++        do {
++            try persistOutboxAttachments(attachments, clientId: clientId)
++        } catch {
++            let reason = "Couldn't save attachments for sending: \(error.localizedDescription)"
++            mutatePending(id, pid) { $0.failed = true; $0.failureReason = reason }
++            lastError = reason
++            return
++        }
+ 
+-            guard let hostId = routeHostId(forSession: id),
+-                  await enqueueOutboxForTransport(clientId: clientId, sessionId: id, hostId: hostId, text: typed) else {
+-                // Terminal in the other direction: the sidecars are gone and no
+-                // drain will ever pick this up, so it needs the same banner the
+-                // other give-up paths get. It was silent before.
+-                deleteOutboxAttachments(clientId: clientId)
+-                markPendingFailed(clientId: clientId)
+-                return
+-            }
++        guard let hostId = routeHostId(forSession: id),
++              await enqueueOutboxForTransport(
++                clientId: clientId,
++                sessionId: id,
++                hostId: hostId,
++                text: typed
++              ) else {
++            mutatePending(id, pid) { $0.failed = true }
++            return
++        }
++
++        if offlineAtSend {
+             // Nothing has reached a host, so this cannot read as received: it
+             // waits in the pending bar ("Queued") until the reconnect replay
+             // sends it, whatever the session looked like at send time. The
+@@ -3576,27 +3687,47 @@ import LFGCore
+             return
+         }
+ 
+-        // 3) Online sends upload attachments immediately, then assemble the full text
+-        //    the agent will record.
+-        var paths: [String] = []
+-        for att in attachments {
+-            if let p = try? await client.upload(
+-                id,
+-                data: att.data,
+-                contentType: att.meta.contentType,
+-                filename: att.meta.filename
+-            ) { paths.append(p) }
++        // 3) Online sends require every upload, then assemble one exact agent
++        //    message. A partial upload is a failed send, never permission to
++        //    change the user's message.
++        let full: String
++        do {
++            var paths: [String] = []
++            for att in attachments {
++                paths.append(try await client.upload(
++                    id,
++                    data: att.data,
++                    contentType: att.meta.contentType,
++                    filename: att.meta.filename
++                ))
++            }
++            full = try OutgoingAttachmentMessage.assemble(
++                text: typed,
++                uploadedPaths: paths,
++                expectedAttachmentCount: attachments.count
++            )
++        } catch {
++            let reason = Self.pendingFailureReason(error)
++            mutatePending(id, pid) { $0.failureReason = reason }
++            await markOutboxState(clientId, state: "failed")
++            markPendingFailed(clientId: clientId)
++            return
+         }
+-        let full = ([typed] + paths).filter { !$0.isEmpty }.joined(separator: "\n")
+-        guard !full.isEmpty else { removePending(id, pid); return }
+         mutatePending(id, pid) { $0.matchText = full }
+ 
+-        // 4) Save to the durable outbox first.
+-        guard let hostId = routeHostId(forSession: id),
+-              await enqueueOutboxForTransport(clientId: clientId, sessionId: id, hostId: hostId, text: full) else {
++        // 4) Replace the typed-only draft with the exact upload-backed payload.
++        //    Delete sidecars only after that durable update succeeds; after this
++        //    point Retry can reuse host paths without uploading again.
++        guard await enqueueOutboxForTransport(
++            clientId: clientId,
++            sessionId: id,
++            hostId: hostId,
++            text: full
++        ) else {
+             mutatePending(id, pid) { $0.failed = true }
+             return
+         }
++        deleteOutboxAttachments(clientId: clientId)
+ 
+         // 5) Send. On failure mark the bubble failed (Retry); on success let the
+         //    queue/transcript reconcile it.
+@@ -3765,7 +3896,8 @@ import LFGCore
+         let placeholder = "local-" + UUID().uuidString
+         let nowMs = Date().timeIntervalSince1970 * 1000
+         let typed = req.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+-        let firstLine = typed.split(whereSeparator: \.isNewline).first.map(String.init) ?? "New session"
++        let displayText = typed.isEmpty ? Self.attachmentSummary(attachments) : typed
++        let firstLine = displayText.split(whereSeparator: \.isNewline).first.map(String.init) ?? "New session"
+         let optimistic = Session(
+             sessionId: placeholder,
+             title: String(firstLine.prefix(60)),
+@@ -3774,12 +3906,13 @@ import LFGCore
+             cwd: req.cwd,
+             status: "ok",
+             assignedUser: req.user,
+-            lastUserText: typed,
++            lastUserText: displayText,
+             startedAt: nowMs,
+             lastActivityAt: nowMs)
+         optimisticSessions.append(optimistic)
+         sessions.append(optimistic)
+         pendingCreates[placeholder] = req
++        pendingCreateAttachments[placeholder] = attachments
+         pendingCreateHost[placeholder] = host
+         // Route any early op on the placeholder to the chosen host (until refresh
+         // maps the real id).
+@@ -3791,7 +3924,7 @@ import LFGCore
+         // kickoff (it starts a new session's tail at EOF) and the detail view's one
+         // history fetch races the transcript into existence — see
+         // `watchForTurnLanding`.
+-        if let pid = addPending(placeholder, text: typed) {
++        if let pid = addPending(placeholder, text: typed, displayText: displayText) {
+             watchForTurnLanding(clientId: pid)
+         }
+         Task { await attemptCreate(placeholder, req, on: host, attachments: attachments) }
+@@ -3802,13 +3935,50 @@ import LFGCore
+     /// server-assigned id and point navigation at it. On failure, surface the
+     /// kickoff bubble's Retry (which re-enters here).
+     private func attemptCreate(_ placeholder: String, _ req: NewSessionRequest, on host: Host?, attachments: [ComposerAttachment]) async {
+-        guard let client = (host ?? agnosticHost).flatMap({ settings.client(for: $0) }) else { return }
++        guard let client = (host ?? agnosticHost).flatMap({ settings.client(for: $0) }) else {
++            lastError = "Create failed: no host is available."
++            busy[placeholder] = false
++            if var pend = pendingSends[placeholder] {
++                for i in pend.indices {
++                    pend[i].failed = true
++                    pend[i].failureReason = "No host is available."
++                }
++                pendingSends[placeholder] = pend
++            }
++            return
++        }
+         do {
+-            let resp = try await client.newSession(req)
++            // Upload before `/new` so text and every attachment path become the
++            // session's ONE kickoff prompt. The upload endpoint deliberately
++            // uses a UUID namespace without requiring that a session already
++            // exists, which also keeps this compatible with older LFG hosts.
++            let uploadNamespace = UUID().uuidString
++            var paths: [String] = []
++            for att in attachments {
++                paths.append(try await client.upload(
++                    uploadNamespace,
++                    data: att.data,
++                    contentType: att.meta.contentType,
++                    filename: att.meta.filename
++                ))
++            }
++            let full = try OutgoingAttachmentMessage.assemble(
++                text: req.prompt,
++                uploadedPaths: paths,
++                expectedAttachmentCount: attachments.count
++            )
++            if var pend = pendingSends[placeholder] {
++                for i in pend.indices { pend[i].matchText = full }
++                pendingSends[placeholder] = pend
++            }
++            var createRequest = req
++            createRequest.prompt = full
++            let resp = try await client.newSession(createRequest)
+             guard let realId = resp.sessionId else {
+                 throw LFGError.http(status: 0, body: "Create returned no session id")
+             }
+             pendingCreates[placeholder] = nil
++            pendingCreateAttachments[placeholder] = nil
+             pendingCreateHost[placeholder] = nil
+             // Deliberately no `requestSelection(realId)`: the detail is already
+             // open on the placeholder, which `navID` keeps as this session's
+@@ -3816,9 +3986,6 @@ import LFGCore
+             // what pushed a SECOND detail on top of the first.
+             remap(from: placeholder, to: realId, aliasNavigation: true)
+             await refresh()
+-            if !attachments.isEmpty {
+-                await sendWithAttachments(realId, text: "", attachments: attachments)
+-            }
+         } catch {
+             lastError = "Create failed: \(error.localizedDescription)"
+             busy[placeholder] = false
+diff --git a/ios/LFGCore/Sources/LFGCore/Attachments.swift b/ios/LFGCore/Sources/LFGCore/Attachments.swift
+index 07e703d..03cd592 100644
+--- a/ios/LFGCore/Sources/LFGCore/Attachments.swift
++++ b/ios/LFGCore/Sources/LFGCore/Attachments.swift
+@@ -52,6 +52,58 @@ public struct AttachmentMeta: Codable, Sendable, Equatable {
+     }
+ }
+ 
++/// Builds the exact text handed to an agent after attachment uploads finish.
++///
++/// The attachment count is an invariant, not advisory: sending a mixed message
++/// after only some uploads succeeded silently changes what the user asked the
++/// agent to inspect. Callers must surface the upload error and retain the
++/// original attachment bytes for retry instead.
++public enum OutgoingAttachmentMessage {
++    public enum Error: Swift.Error, LocalizedError, Equatable, Sendable {
++        case missingUploads(expected: Int, actual: Int)
++        case emptyMessage
++
++        public var errorDescription: String? {
++            switch self {
++            case .missingUploads(let expected, let actual):
++                return "Only \(actual) of \(expected) attachments uploaded"
++            case .emptyMessage:
++                return "Message contains no text or attachments"
++            }
++        }
++    }
++
++    public static func canSend(text: String, attachmentCount: Int) -> Bool {
++        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
++            || attachmentCount > 0
++    }
++
++    public static func assemble(
++        text: String,
++        uploadedPaths: [String],
++        expectedAttachmentCount: Int
++    ) throws -> String {
++        guard uploadedPaths.count == expectedAttachmentCount else {
++            throw Error.missingUploads(expected: expectedAttachmentCount, actual: uploadedPaths.count)
++        }
++
++        let typed = text.trimmingCharacters(in: .whitespacesAndNewlines)
++        let paths = uploadedPaths.map {
++            $0.trimmingCharacters(in: .whitespacesAndNewlines)
++        }
++        guard paths.allSatisfy({ !$0.isEmpty }) else {
++            throw Error.missingUploads(
++                expected: expectedAttachmentCount,
++                actual: paths.filter { !$0.isEmpty }.count
++            )
++        }
++
++        let message = ([typed] + paths).filter { !$0.isEmpty }.joined(separator: "\n")
++        guard !message.isEmpty else { throw Error.emptyMessage }
++        return message
++    }
++}
++
+ public enum AttachmentNaming {
+     /// Characters allowed to survive into a stored filename. Everything else
+     /// collapses to `_` — including whitespace, which matters more than it looks:
+diff --git a/ios/LFGCore/Sources/LFGCore/JournalFreshness.swift b/ios/LFGCore/Sources/LFGCore/JournalFreshness.swift
+index d0a3e51..474c55f 100644
+--- a/ios/LFGCore/Sources/LFGCore/JournalFreshness.swift
++++ b/ios/LFGCore/Sources/LFGCore/JournalFreshness.swift
+@@ -27,10 +27,11 @@ import Foundation
+ /// running when the client connected emits no event (no change), so the client
+ /// would clobber a correct live value with a poll-old one and flicker.
+ ///
+-/// So: the journal wins **while its last word is recent enough to still be the
+-/// fresher one**, and the snapshot wins after that. Time is the only thing that
+-/// distinguishes "quiet because nothing changed" from "quiet because nobody is
+-/// talking", so time is what the rule is written in.
++/// So: use request ordering when it is known. A snapshot whose request began
++/// after the journal's last statement is newer and wins immediately. A journal
++/// statement received during an in-flight request wins because that response may
++/// describe the instant before the transition. The TTL remains the fallback for
++/// restored snapshots and other paths where request ordering is unavailable.
+ public enum JournalFreshness {
+     /// How long a journal value keeps out-voting the snapshot.
+     ///
+@@ -46,12 +47,17 @@ public enum JournalFreshness {
+     ///   session, or `nil` if it never has (a session already in whatever state
+     ///   it is in since before this client connected — the snapshot is then the
+     ///   *only* source and must always be taken).
++    /// - `snapshotStartedAt`: when the request producing this snapshot began.
++    ///   If it is at or after `statedAt`, the snapshot is ordered after the
++    ///   journal statement and wins without waiting for the TTL.
+     public static func snapshotWins(
+         journalStatedAt statedAt: Date?,
++        snapshotStartedAt: Date? = nil,
+         now: Date,
+         ttl: TimeInterval = defaultTTL
+     ) -> Bool {
+         guard let statedAt else { return true }
++        if let snapshotStartedAt, snapshotStartedAt >= statedAt { return true }
+         // A `statedAt` in the future means the device clock moved backwards
+         // (NTP correction, timezone-independent but real). Treat it as fresh
+         // rather than as an enormous age, so a clock skip can't flap the list.
+diff --git a/ios/LFGCore/Sources/LFGCore/LFGClient.swift b/ios/LFGCore/Sources/LFGCore/LFGClient.swift
+index fb133a0..88c5a4f 100644
+--- a/ios/LFGCore/Sources/LFGCore/LFGClient.swift
++++ b/ios/LFGCore/Sources/LFGCore/LFGClient.swift
+@@ -371,12 +371,19 @@ public struct LFGClient: Sendable {
+     public func resumable(limit: Int = 30,
+                           before: Double? = nil,
+                           q: String? = nil,
++                          exclude: [String] = [],
+                           timeout: TimeInterval = LFGClient.readTimeout) async throws -> ResumableResponse {
+         var query = [URLQueryItem(name: "limit", value: String(limit))]
+         if let before { query.append(URLQueryItem(name: "before", value: String(before))) }
+         if let q, !q.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+             query.append(URLQueryItem(name: "q", value: q))
+         }
++        // Hidden-dir globs, filtered by the host BEFORE pagination. Filtering
++        // only client-side starves the page: a churny population can own the
++        // entire newest-mtime window, so a page of 60 yields a handful of
++        // visible rows. Old hosts ignore the param; the client-side filter
++        // stays as the backstop either way.
++        for e in exclude { query.append(URLQueryItem(name: "exclude", value: e)) }
+         return try await get("api/sessions/resumable",
+                              query: query,
+                              timeout: timeout,
+diff --git a/ios/LFGCore/Sources/LFGCore/Models.swift b/ios/LFGCore/Sources/LFGCore/Models.swift
+index 8dd065b..5c2595e 100644
+--- a/ios/LFGCore/Sources/LFGCore/Models.swift
++++ b/ios/LFGCore/Sources/LFGCore/Models.swift
+@@ -557,11 +557,11 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable {
+     /// codex is catalog-driven so we provide common defaults.
+     public var models: [String] {
+         switch self {
+-        // First entry is the default. Claude → Opus 5, Codex → GPT-5.6 Sol.
++        // First entry is the default. Claude → Opus 5, Codex → GPT-6 Astra.
+         case .claude:
+             return ["claude-opus-5", "claude-fable-5", "claude-sonnet-5", "claude-haiku-4-5", "opus", "fable", "sonnet", "haiku"]
+         case .codex:
+-            return ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"]
++            return ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"]
+         }
+     }
+ 
+diff --git a/ios/LFGCore/Sources/LFGCore/MultiHost.swift b/ios/LFGCore/Sources/LFGCore/MultiHost.swift
+index 38b51dc..35e0939 100644
+--- a/ios/LFGCore/Sources/LFGCore/MultiHost.swift
++++ b/ios/LFGCore/Sources/LFGCore/MultiHost.swift
+@@ -101,6 +101,26 @@ public enum MultiHost {
+                                          visibleClosed: visibleClosed)
+     }
+ 
++    /// Id-stable resumes (codex) suppress their own closed row only while the
++    /// revived pane has yet to show up live. Returns the ids whose suppression
++    /// is over: seen live (so a later End shows Closed again instead of the row
++    /// vanishing until relaunch), or never landed within `ttl` (the pane died
++    /// during bootstrap — the row must come back so the user can retry).
++    /// Claude's old-id suppression is deliberately not tracked here: that id is
++    /// a stale duplicate transcript, not a gap-filler.
++    public static func settledResumes(
++        pending: [String: Date],
++        liveIds: Set<String>,
++        now: Date,
++        ttl: TimeInterval = 60
++    ) -> Set<String> {
++        var out = Set<String>()
++        for (id, at) in pending where liveIds.contains(id) || now.timeIntervalSince(at) > ttl {
++            out.insert(id)
++        }
++        return out
++    }
++
+     /// Which host a per-session op must be sent to during a partial outage.
+     ///
+     /// - `owner` reachable → **owner**. The common case.
+diff --git a/ios/LFGCore/Tests/LFGCoreTests/JournalFreshnessTests.swift b/ios/LFGCore/Tests/LFGCoreTests/JournalFreshnessTests.swift
+index 1b807fb..32316c9 100644
+--- a/ios/LFGCore/Tests/LFGCoreTests/JournalFreshnessTests.swift
++++ b/ios/LFGCore/Tests/LFGCoreTests/JournalFreshnessTests.swift
+@@ -25,6 +25,38 @@ struct JournalFreshnessTests {
+         #expect(!JournalFreshness.snapshotWins(journalStatedAt: stated, now: now))
+     }
+ 
++    @Test("a snapshot requested after the journal statement wins immediately")
++    func newerSnapshotWinsImmediately() {
++        let stated = now.addingTimeInterval(-2)
++        let snapshotStarted = now.addingTimeInterval(-1)
++        #expect(JournalFreshness.snapshotWins(
++            journalStatedAt: stated,
++            snapshotStartedAt: snapshotStarted,
++            now: now
++        ))
++    }
++
++    @Test("a journal statement received during the request out-votes that snapshot")
++    func inFlightJournalWins() {
++        let snapshotStarted = now.addingTimeInterval(-2)
++        let stated = now.addingTimeInterval(-1)
++        #expect(!JournalFreshness.snapshotWins(
++            journalStatedAt: stated,
++            snapshotStartedAt: snapshotStarted,
++            now: now
++        ))
++    }
++
++    @Test("equal request and journal timestamps let the level snapshot win")
++    func equalOrderingSnapshotWins() {
++        let stated = now.addingTimeInterval(-1)
++        #expect(JournalFreshness.snapshotWins(
++            journalStatedAt: stated,
++            snapshotStartedAt: stated,
++            now: now
++        ))
++    }
++
+     @Test("a journal value past the TTL yields to the snapshot")
+     func staleJournalYields() {
+         // THE BUG. The pump stopped; this value is the last thing it ever said.
+diff --git a/ios/LFGCore/Tests/LFGCoreTests/LFGStoreTests.swift b/ios/LFGCore/Tests/LFGCoreTests/LFGStoreTests.swift
+index a195e6b..11c566f 100644
+--- a/ios/LFGCore/Tests/LFGCoreTests/LFGStoreTests.swift
++++ b/ios/LFGCore/Tests/LFGCoreTests/LFGStoreTests.swift
+@@ -152,6 +152,29 @@ final class LFGStoreTests: XCTestCase {
+         XCTAssertNil(deliveredRow)
+     }
+ 
++    func testAttachmentOnlyOutboxCanStartEmptyThenReceiveUploadedPaths() async throws {
++        let store = try LFGStore.inMemory()
++
++        try await store.enqueueOutbox(
++            clientId: "attachment-only",
++            sessionId: "s1",
++            hostId: "h1",
++            text: ""
++        )
++        let staged = try await store.outbox(clientId: "attachment-only")
++        XCTAssertEqual(staged?.text, "")
++
++        try await store.enqueueOutbox(
++            clientId: "attachment-only",
++            sessionId: "s1",
++            hostId: "h1",
++            text: "/tmp/lfg-uploads/photo.png"
++        )
++        let ready = try await store.outbox(clientId: "attachment-only")
++        XCTAssertEqual(ready?.text, "/tmp/lfg-uploads/photo.png")
++        XCTAssertEqual(ready?.state, "pending")
++    }
++
+     /// `failed` must not be a black hole. `pendingOutbox` hides those rows on
+     /// purpose, but the replay paths read `retryableOutbox` so a host coming back
+     /// can re-attempt them — and so a relaunch still restores the bubble instead
+diff --git a/ios/LFGCore/Tests/LFGCoreTests/ModelsTests.swift b/ios/LFGCore/Tests/LFGCoreTests/ModelsTests.swift
+index 41fdcbc..15f85bd 100644
+--- a/ios/LFGCore/Tests/LFGCoreTests/ModelsTests.swift
++++ b/ios/LFGCore/Tests/LFGCoreTests/ModelsTests.swift
+@@ -125,10 +125,11 @@ final class ModelsTests: XCTestCase {
+ 
+     func testAgentKindModels() {
+         XCTAssertEqual(AgentKind.claude.defaultModel, "claude-opus-5")
+-        XCTAssertEqual(AgentKind.codex.defaultModel, "gpt-5.6-sol")
++        XCTAssertEqual(AgentKind.codex.defaultModel, "gpt-6-astra")
+         XCTAssertTrue(AgentKind.claude.models.contains("claude-fable-5"))
+         XCTAssertTrue(AgentKind.claude.models.contains("opus"))
+         XCTAssertTrue(AgentKind.codex.models.contains("gpt-5.3-codex-spark"))
++        XCTAssertTrue(AgentKind.codex.models.contains("gpt-5.6-sol"))
+         XCTAssertEqual(AgentKind.allCases.count, 2)
+     }
+ 
+diff --git a/scripts/mosh-bridged b/scripts/mosh-bridged
+index c78f196..9c6a6fa 100755
+--- a/scripts/mosh-bridged
++++ b/scripts/mosh-bridged
+@@ -24,7 +24,12 @@
+ set -euo pipefail
+ 
+ ssh_cmd="ssh"
+-server_cmd='PATH=/opt/homebrew/bin:/usr/local/bin:$PATH exec mosh-server'
++# ~/.local/mosh-faint (both hosts) is mosh master + a patch that carries SGR 2
++# (dim/faint) through the emulator — stock mosh 1.4.0 drops it, which visibly
++# flattens codex's dim-heavy TUI. Prepending the dir is a no-op where it does
++# not exist, so stock mosh remains the fallback on either side.
++# See .claude/diagnosis-codex-mosh-dim-20260905.md.
++server_cmd='PATH=$HOME/.local/mosh-faint/bin:/opt/homebrew/bin:/usr/local/bin:$PATH exec mosh-server'
+ lport=""
+ remote_range="60100:60199"
+ here="${0:A:h}"
+@@ -47,11 +52,47 @@ if (( $# )) && [[ "$1" == "--" ]]; then shift; fi
+ ssh_words=(${=ssh_cmd})
+ ssh_run=("${ssh_words[@]}" -T -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
+ 
++# LAN fast path. Both Macs sit on the same LAN much of the time, yet the
++# Cloudflare path detours every keystroke through the VPN exit and a CF edge
++# (~150-250ms echo, measured 2026-09-05); direct LAN ssh is ~20-30ms. The
++# peers' Surfshark blocks unsolicited inbound UDP (so real mosh UDP can't run
++# Air->Pro) but LAN TCP/22 passes both ways, so we keep the same datagram
++# bridge and just carry it over direct ssh when the peer answers on the LAN.
++# DHCP addresses are pinned below on purpose: mDNS (.local) is blocked by the
++# VPN and a failed lookup stalls the probe for seconds, while a stale IP just
++# fails the 1s TCP probe and falls back to Cloudflare. Update them if the
++# router reassigns. LFG_MOSH_NO_LAN=1 skips the probe (testing / misbehaving
++# LAN). See .claude/diagnosis-mosh-sluggish-20260905.md.
++# Candidates are probed in order: LAN address first, then the Tailscale
++# address (100.x — direct WireGuard when both Macs run Tailscale; probes fail
++# instantly with no route while Tailscale is stopped, so the tier costs
++# nothing until it's enabled). Host keys for every candidate are pre-seeded.
++typeset -A direct_hosts=(
++  pro "eugenechan@192.168.0.242 eugenechan@100.120.101.14"
++  air "eugenechan@192.168.0.76 eugenechan@100.75.162.40"
++)
++lan_ssh=""
++if [[ -z "${LFG_MOSH_NO_LAN:-}" && -n "${direct_hosts[$target]:-}" ]]; then
++  for lan_cand in ${=direct_hosts[$target]}; do
++    if nc -z -G 1 "${lan_cand#*@}" 22 2>/dev/null; then
++      lan_ssh="$lan_cand"
++      break
++    fi
++  done
++fi
++# StrictHostKeyChecking=yes on purpose: on a foreign network another device
++# could hold one of these RFC1918 addresses, and TOFU-ing its key would poison
++# known_hosts for the real host. The legit LAN host keys are pre-seeded (ssh
++# fails fast on anything else and we fall back to the tunnel).
++lan_run=(ssh -T -o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=yes \
++  -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
++
+ if [[ -z "$lport" ]]; then
+   lport=$(/usr/bin/python3 -c 'import socket;s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
+ fi
+ 
+-mosh_client=$(command -v mosh-client 2>/dev/null || print /opt/homebrew/bin/mosh-client)
++mosh_client="$HOME/.local/mosh-faint/bin/mosh-client"
++[[ -x "$mosh_client" ]] || mosh_client=$(command -v mosh-client 2>/dev/null || print /opt/homebrew/bin/mosh-client)
+ [[ -x "$mosh_client" ]] || { print -u2 "mosh-bridged: mosh-client not installed locally (brew install mosh)"; exit 1 }
+ 
+ # Colour capability. mosh-server picks the remote TERM purely from `-c COLORS`
+@@ -66,12 +107,70 @@ mosh_client=$(command -v mosh-client 2>/dev/null || print /opt/homebrew/bin/mosh
+ colors=$("$mosh_client" -c 2>/dev/null || true)
+ [[ "$colors" == <-> ]] || colors=8
+ 
++# Default fg/bg colours. mosh's emulator swallows OSC 10/11 queries (it is a
++# state-sync emulator, not a byte pipe, so they can never reach the real
++# terminal), and apps that probe their background before painting — codex's
++# composer refuses its grey fill without an answer — silently degrade. Ask the
++# local terminal once here, and hand the values to the patched mosh-server
++# (~/.local/mosh-faint), whose emulator answers OSC 10/11 from MOSH_OSC_FG/BG.
++# Best-effort: no tty, no reply, or stock mosh-server → everything behaves as
++# before. See .claude/diagnosis-codex-mosh-dim-20260905.md.
++osc_env=""
++if [[ -t 0 ]]; then
++  osc_reply=$(/usr/bin/python3 - <<'PYEOF' 2>/dev/null
++import os, re, select, sys, termios, time, tty
++try:
++    fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
++except OSError:
++    sys.exit(0)
++old = termios.tcgetattr(fd)
++buf = b""
++try:
++    tty.setraw(fd)
++    os.write(fd, b"\x1b]10;?\x1b\\\x1b]11;?\x1b\\")
++    end = time.time() + 0.35
++    while time.time() < end and buf.count(b"rgb:") < 2:
++        r, _, _ = select.select([fd], [], [], max(0.01, end - time.time()))
++        if not r:
++            break
++        buf += os.read(fd, 256)
++finally:
++    termios.tcsetattr(fd, termios.TCSADRAIN, old)
++    os.close(fd)
++m = dict(re.findall(rb"\x1b\](1[01]);(rgb:[0-9a-fA-F/]+)", buf))
++fg = m.get(b"10", b"").decode()
++bg = m.get(b"11", b"").decode()
++if fg or bg:
++    print(fg or "-", bg or "-")
++PYEOF
++  )
++  if [[ -n "$osc_reply" ]]; then
++    osc_fg=${osc_reply%% *}
++    osc_bg=${osc_reply##* }
++    [[ "$osc_fg" == rgb:* ]] && osc_env+="MOSH_OSC_FG=$osc_fg "
++    [[ "$osc_bg" == rgb:* ]] && osc_env+="MOSH_OSC_BG=$osc_bg "
++  fi
++fi
++
+ # 1. Bootstrap: mosh-server on the far side, loopback only, via the login shell.
+ remote_cmd=""
+ if (( $# )); then remote_cmd="-- ${(j: :)${(q)@}}"; fi
+-bootstrap=$("${ssh_run[@]}" "$target" \
+-  "$server_cmd new -s -i 127.0.0.1 -p $remote_range -c $colors -l LANG=en_US.UTF-8 -l LC_ALL=en_US.UTF-8 $remote_cmd" 2>&1 || true)
+-line=$(print -r -- "$bootstrap" | grep '^MOSH CONNECT ' || true)
++bootstrap_cmd="$osc_env$server_cmd new -s -i 127.0.0.1 -p $remote_range -c $colors -l LANG=en_US.UTF-8 -l LC_ALL=en_US.UTF-8 $remote_cmd"
++line=""
++if [[ -n "$lan_ssh" ]]; then
++  bootstrap=$("${lan_run[@]}" "$lan_ssh" "$bootstrap_cmd" 2>&1 || true)
++  line=$(print -r -- "$bootstrap" | grep '^MOSH CONNECT ' || true)
++  if [[ -z "$line" ]]; then
++    # LAN answered TCP but ssh couldn't finish (key mismatch, sshd config…) —
++    # fall back to the Cloudflare path rather than dying on the fast path.
++    print -r -- "$(date '+%F %T') $target: LAN bootstrap via $lan_ssh failed, falling back to tunnel" >>| "$HOME/Library/Logs/mosh-bridge.log"
++    lan_ssh=""
++  fi
++fi
++if [[ -z "$line" ]]; then
++  bootstrap=$("${ssh_run[@]}" "$target" "$bootstrap_cmd" 2>&1 || true)
++  line=$(print -r -- "$bootstrap" | grep '^MOSH CONNECT ' || true)
++fi
+ if [[ -z "$line" ]]; then
+   print -u2 "mosh-bridged: mosh-server bootstrap on '$target' failed:"; print -u2 -r -- "$bootstrap"; exit 1
+ fi
+@@ -84,9 +183,22 @@ bridge_local="$here/mosh-bridge"
+ readyfile="${TMPDIR:-/tmp}/mosh-bridged-ready.$$"
+ rm -f "$readyfile"
+ log="$HOME/Library/Logs/mosh-bridge.log"
+-LFG_BRIDGE_READY="$readyfile" /usr/bin/python3 "$bridge_local" client "$lport" -- \
+-  "${ssh_run[@]}" "$target" \
+-  'exec /usr/bin/python3 "$HOME/.local/bin/mosh-bridge" server '"$rport" &
++remote_bridge='exec /usr/bin/python3 "$HOME/.local/bin/mosh-bridge" server '"$rport"
++if [[ -n "$lan_ssh" ]]; then
++  # Try the LAN on every (re)spawn and fall through to the tunnel when it
++  # fails, so a session survives walking out of the house: the dropped LAN
++  # carrier respawns onto Cloudflare, and a respawn back at home picks the
++  # LAN up again.
++  carrier_cascade=""
++  for cand in ${=direct_hosts[$target]}; do
++    carrier_cascade+="${(j: :)${(q)lan_run[@]}} ${(q)cand} ${(q)remote_bridge} || "
++  done
++  carrier=(/bin/sh -c "${carrier_cascade}exec ${(j: :)${(q)ssh_run[@]}} ${(q)target} ${(q)remote_bridge}")
++  print -r -- "$(date '+%F %T') $target: LAN fast path via $lan_ssh (tunnel fallback armed)" >>| "$log"
++else
++  carrier=("${ssh_run[@]}" "$target" "$remote_bridge")
++fi
++LFG_BRIDGE_READY="$readyfile" /usr/bin/python3 "$bridge_local" client "$lport" -- "${carrier[@]}" &
+ bridge_pid=$!
+ trap 'kill $bridge_pid 2>/dev/null; rm -f "$readyfile"' EXIT INT TERM
+ 
+diff --git a/scripts/serve-forever.sh b/scripts/serve-forever.sh
+index fa82b6a..ccf04b6 100755
+--- a/scripts/serve-forever.sh
++++ b/scripts/serve-forever.sh
+@@ -42,7 +42,11 @@ cd "$(dirname "$0")/.."
+ # 409'd, and resume failed — with the host showing perfectly healthy and green.
+ # A missing directory on PATH is invisible in every symptom it causes, so fix it
+ # here rather than depending on the launcher's environment.
+-for dir in /opt/homebrew/bin /usr/local/bin; do
++# ~/.bun/bin is where codex installs itself ("Update now" runs `bun install -g`);
++# it is the ONE codex copy kept on Eugene's Macs since 2026-09-06 (the Homebrew
++# npm copy was removed after a version skew between the two made every codex
++# resume die — see .claude/diagnosis-codex-resume-version-skew-20260906.md).
++for dir in "$HOME/.bun/bin" /opt/homebrew/bin /usr/local/bin; do
+   case ":$PATH:" in *":$dir:"*) ;; *) [ -d "$dir" ] && PATH="$dir:$PATH" ;; esac
+ done
+ export PATH
+diff --git a/src/commands/serve.ts b/src/commands/serve.ts
+index 3e56b9c..9c655f9 100644
+--- a/src/commands/serve.ts
++++ b/src/commands/serve.ts
+@@ -68,6 +68,8 @@ import {
+   dismissCodexUpdatePrompt,
+   panePidForSession,
+   isBusy,
++  tmuxSetRemainOnExit,
++  awaitCodexBootstrap,
+ } from "../tmux.ts";
+ import { addManaged, forkLineageForSession, normalizeParentSessionId, patchManaged, removeManaged } from "../managed.ts";
+ import { PtyBridge, termSessionName } from "../pty.ts";
+@@ -200,19 +202,35 @@ async function resumeClosedSession(opts: {
+     const spawnStartedAt = Date.now();
+     const r = spawnManagedCodexSession({ name: tmuxName, cwd, resume: sessionId, prompt: opts.prompt });
+     if (!r.ok) return { ok: false, status: 502, error: r.error || "failed to resume session" };
++    // `tmux new-session` exiting 0 only proves the pane was created. Codex can
++    // still die during its own bootstrap — a thread written by a newer codex
++    // than this one fails `thread/resume` ~3s in — and a bare pane takes its
++    // stderr with it, so the old code reported ok, recorded the message as
++    // delivered, and the session simply vanished. Keep the pane on screen for
++    // a watch window and read the `Error:` line back if it dies.
++    tmuxSetRemainOnExit(tmuxName, true);
+     // Codex resume is id-stable. Persist that intended id immediately so every
+     // later listSessions()/refreshWatchSet pass binds this pane by known id
+     // instead of the create-path skew heuristic.
+     addManaged({ tmuxName, cwd, createdAt: spawnStartedAt, agent: "codex", sessionId });
+     if (opts.user) assignUser(tmuxName, opts.user);
+-    for (let i = 0; i < 12; i++) {
+-      const pid = panePidForSession(tmuxName);
+-      if (pid) {
+-        await acquireLease(sessionId, pid);
+-        break;
+-      }
+-      await new Promise((res) => setTimeout(res, 250));
++    const failure = await awaitCodexBootstrap({
++      name: tmuxName,
++      watchMs: CODEX_RESUME_WATCH_MS,
++      pollMs: CODEX_RESUME_WATCH_POLL_MS,
++      onPid: (pid) => acquireLease(sessionId, pid),
++    });
++    if (failure) {
++      // Row first, then pane: a listSessions() between the two must not see a
++      // managed row with no pane behind it.
++      removeManaged(tmuxName);
++      assignUser(tmuxName, null);
++      tmuxKillSession(tmuxName);
++      await releaseLease(sessionId);
++      console.log(`[resume] codex ${sessionId} died during bootstrap: ${failure}`);
++      return { ok: false, status: 502, error: `codex could not resume this session: ${failure}` };
+     }
++    tmuxSetRemainOnExit(tmuxName, false);
+     return { ok: true, tmuxName, cwd, newId: sessionId, agent: "codex" };
+   }
+   // Relaunch on the model the conversation was last using (read from the
+@@ -340,6 +358,13 @@ const HOST = process.env.LFG_HOST ?? "127.0.0.1";
+ const CREATE_SESSION_BIND_POLL_MS = 500;
+ const DEFAULT_CREATE_SESSION_BIND_POLLS = 12;
+ const CODEX_CREATE_SESSION_BIND_POLLS = 28;
++// Cap on how long a codex RESUME watches its pane for a bootstrap death. The
++// watch normally ends much earlier — the moment the composer renders — so
++// this only bounds a pane that stays blank (a huge rollout still loading).
++// The 18MB thread of 2026-09-06 took >6s to fail under load; a 6s cap let
++// that death slip past and the resume reported ok.
++const CODEX_RESUME_WATCH_MS = 30_000;
++const CODEX_RESUME_WATCH_POLL_MS = 250;
+ const CODEX_CREATE_FALLBACK_WINDOW_MS =
+   CODEX_CREATE_SESSION_BIND_POLLS * CREATE_SESSION_BIND_POLL_MS;
+ const UUID_RE = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
+@@ -1994,9 +2019,14 @@ export async function cmdServe() {
+         // unchanged and a client that never sends `q` behaves exactly as before.
+         // Without it, search could only ever see the pages already loaded.
+         const q = (url.searchParams.get("q") ?? "").trim();
++        // Repeated `exclude` params carry the client's hidden-dir globs so the
++        // filter runs BEFORE pagination. Filtering client-side after paging
++        // starves the list: a churny population (gbrain autopilot) can own the
++        // whole newest-mtime page, leaving a handful of visible rows out of 100.
++        const exclude = url.searchParams.getAll("exclude");
+         const page = q
+-          ? await searchResumable({ q, limit, before: cursor })
+-          : await listResumable({ limit, before: cursor });
++          ? await searchResumable({ q, limit, before: cursor, exclude })
++          : await listResumable({ limit, before: cursor, exclude });
+         return json(page);
+       }
+ 
+diff --git a/src/sessions.ts b/src/sessions.ts
+index c47295b..e1fa680 100644
+--- a/src/sessions.ts
++++ b/src/sessions.ts
+@@ -21,6 +21,7 @@ import {
+   type IndexEntry,
+ } from "./session-index";
+ import { anyFreshAt, ensureLease } from "./leases";
++import { hidesCwd, normalizeExcludes } from "./hidden-dirs";
+ import {
+   flattenTitles,
+   parseTitleFile,
+@@ -851,6 +852,23 @@ function stripConversationPrefix(text: string): string {
+   return text.replace(/^(?:Human|User):[ \t]+/i, "");
+ }
+ 
++// Newer Codex rollouts persist human turns only as response items. Their
++// per-content provenance separates real input from injected user-role context.
++// Older rollouts lack these kinds and also emit user_message events; leave
++// those response items hidden so their existing event identity stays canonical.
++function codexResponseUserText(payload: {
++  content?: unknown;
++  internal_chat_message_metadata_passthrough?: unknown;
++}): string | null {
++  const metadata = payload.internal_chat_message_metadata_passthrough;
++  if (!metadata || typeof metadata !== "object") return null;
++  const kinds = (metadata as { content_item_kinds?: unknown }).content_item_kinds;
++  if (!Array.isArray(kinds) || !Array.isArray(payload.content)) return null;
++  const content = payload.content.filter((_, index) => kinds[index] === "user.text");
++  const text = stripConversationPrefix(codexContentText(content).trim());
++  return text || null;
++}
++
+ function extractText(content: unknown): string {
+   if (typeof content === "string") return content;
+   if (Array.isArray(content)) {
+@@ -1738,7 +1756,11 @@ function normalizeCodexLine(
+ 
+   if (p.type === "message") {
+     const role = p.role || "assistant";
+-    if (role === "system" || role === "developer" || role === "user") return [];
++    if (role === "system" || role === "developer") return [];
++    if (role === "user") {
++      const text = codexResponseUserText(p);
++      return text ? [codexMessage(x, role, "text", text, ts)] : [];
++    }
+     const text = codexContentText(p.content).trim();
+     return text ? [codexMessage(x, role, "text", text, ts)] : [];
+   }
+@@ -2158,13 +2180,16 @@ function userTurnFromLine(line: string, maxChars: number): string | null {
+   // Tool-heavy transcripts can contain multi-megabyte assistant/output rows.
+   // Avoid materialising those through JSON.parse when neither transcript format
+   // can possibly classify the row as a user message.
+-  if (!/"type"\s*:\s*"(?:user|user_message)"/.test(line)) return null;
++  if (!/"(?:type|role)"\s*:\s*"(?:user|user_message)"/.test(line)) return null;
+   let x: {
+     type?: string;
+     isMeta?: boolean;
+     toolUseResult?: unknown;
+     message?: { content?: unknown };
+-    payload?: { type?: string; message?: string };
++    payload?: {
++      type?: string; role?: string; message?: string; content?: unknown;
++      internal_chat_message_metadata_passthrough?: unknown;
++    };
+   };
+   try {
+     x = JSON.parse(line);
+@@ -2176,6 +2201,8 @@ function userTurnFromLine(line: string, maxChars: number): string | null {
+     text = x.payload.message
+       ? stripConversationPrefix(x.payload.message).trim().replace(/\s+/g, " ")
+       : null;
++  } else if (x.type === "response_item" && x.payload?.type === "message" && x.payload.role === "user") {
++    text = codexResponseUserText(x.payload)?.replace(/\s+/g, " ") ?? null;
+   } else if (x.type === "user" && !x.isMeta) {
+     // A tool result is recorded as a `user` turn. `extractText` drops the
+     // `tool_result` blocks themselves, but a record can carry a stray text
+@@ -3178,11 +3205,44 @@ async function enrichCandidate(
+ }
+ 
+ export async function listResumable(
+-  opts: { limit?: number; before?: number | null } = {},
++  opts: { limit?: number; before?: number | null; exclude?: string[] } = {},
+ ): Promise<ResumablePage> {
+   const limit = Math.max(1, Math.min(100, opts.limit ?? 30));
++  const exclude = normalizeExcludes(opts.exclude);
+   await refreshLeasesForLiveSessions();
+   const before = typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
++  // Excluding by cwd needs a cwd for every candidate BEFORE the page fills, and
++  // candidates are deliberately unenriched (readdir + stat, no reads). The
++  // search index already carries cwd for the whole corpus and refreshes
++  // incrementally, so the exclude path pages over it — filter BEFORE paginate,
++  // which is the entire point: filtering the page after the fact starves the
++  // list when one churny population (gbrain autopilot) owns the newest-mtime
++  // window. Only the surviving rows pay enrichment, same as the plain path.
++  if (exclude.length > 0) {
++    const overrides = await readTitleOverrides();
++    const index = applyTitleOverrides(await refreshSearchIndex(), overrides);
++    const entries = matchingEntries(index, [], before).filter((e) => !hidesCwd(e.cwd, exclude));
++    const page: IndexEntry[] = [];
++    let nextBefore: number | null = null;
++    for (let i = 0; i < entries.length; i++) {
++      const e = entries[i];
++      if (await anyFreshAt(e.sessionId, e.path)) continue;
++      page.push(e);
++      if (page.length >= limit) {
++        nextBefore = entries.length > i + 1 ? e.mtime : null;
++        break;
++      }
++    }
++    const out: ResumableSession[] = [];
++    for (const e of page)
++      out.push(
++        await enrichCandidate(
++          { agent: e.agent, id: e.sessionId, path: e.path, mtime: e.mtime, cwdHint: e.cwd },
++          overrides,
++        ),
++      );
++    return { sessions: out, nextBefore };
++  }
+   const candidates = (await collectResumableCandidates()).filter(
+     (c) => before == null || c.mtime < before,
+   );
+@@ -3344,18 +3404,19 @@ async function refreshSearchIndex(): Promise<IndexEntry[]> {
+  * client can therefore feed the result through the same cross-host reconcile.
+  */
+ export async function searchResumable(
+-  opts: { q: string; limit?: number; before?: number | null },
++  opts: { q: string; limit?: number; before?: number | null; exclude?: string[] },
+ ): Promise<ResumablePage> {
+   const limit = Math.max(1, Math.min(100, opts.limit ?? 30));
++  const exclude = normalizeExcludes(opts.exclude);
+   const before =
+     typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
+   const terms = queryTerms(opts.q ?? "");
+-  if (terms.length === 0) return listResumable({ limit, before });
++  if (terms.length === 0) return listResumable({ limit, before, exclude });
+ 
+   await refreshLeasesForLiveSessions();
+   const overrides = await readTitleOverrides();
+   const index = applyTitleOverrides(await refreshSearchIndex(), overrides);
+-  const matches = matchingEntries(index, terms, before);
++  const matches = matchingEntries(index, terms, before).filter((e) => !hidesCwd(e.cwd, exclude));
+ 
+   const page: IndexEntry[] = [];
+   let nextBefore: number | null = null;
+diff --git a/src/subagents.test.ts b/src/subagents.test.ts
+index 22e8ff4..db24129 100644
+--- a/src/subagents.test.ts
++++ b/src/subagents.test.ts
+@@ -403,6 +403,76 @@ describe("Claude subagent discovery", () => {
+     expect(session.finishedAt).toBe(Date.parse("2026-08-20T04:03:00.000Z"));
+   });
+ 
++  test("an async launch receipt leaves the child running until it actually finishes", async () => {
++    // A BACKGROUND Agent launch records `{agentId, status: "async_launched"}`
++    // in the very same toolUseResult shape a synchronous completion uses. Read
++    // as a lifecycle it maps to "unknown", so every live background agent was
++    // reported finished the moment it started: runningChildAgentCount 0, the
++    // parent idle while three agents worked, and nothing to nest in the client.
++    const f = fixture();
++    child(f.sidecars, {
++      id: "async-child",
++      toolUseId: "tool-async",
++      description: "Evidence sweep",
++      lastTimestamp: "2026-08-20T04:04:00.000Z",
++    });
++    writeFileSync(f.parent, [
++      launch("tool-async", "Evidence sweep", "2026-08-20T04:01:00.000Z"),
++      line({
++        type: "user",
++        timestamp: "2026-08-20T04:02:00.000Z",
++        toolUseResult: {
++          isAsync: true,
++          status: "async_launched",
++          agentId: "async-child",
++          description: "Evidence sweep",
++        },
++        message: {
++          content: [{ type: "tool_result", tool_use_id: "tool-async", content: "launched" }],
++        },
++      }),
++    ].join(""));
++
++    const [running] = await listSubagentSessions(
++      f.parent,
++      Date.parse("2026-08-20T04:05:00.000Z"),
++    );
++    expect(running.status).toBe("running");
++    expect(running.finishedAt).toBeNull();
++    expect(withSessionWorkActivity({ busy: false }, [running], 0)).toMatchObject({
++      busy: true,
++      runningChildAgentCount: 1,
++    });
++
++    // The real outcome still arrives as a notification and must win.
++    const g = fixture();
++    child(g.sidecars, {
++      id: "async-child",
++      toolUseId: "tool-async",
++      description: "Evidence sweep",
++      lastTimestamp: "2026-08-20T04:04:00.000Z",
++    });
++    writeFileSync(g.parent, [
++      launch("tool-async", "Evidence sweep", "2026-08-20T04:01:00.000Z"),
++      line({
++        type: "user",
++        timestamp: "2026-08-20T04:02:00.000Z",
++        toolUseResult: { isAsync: true, status: "async_launched", agentId: "async-child" },
++        message: {
++          content: [{ type: "tool_result", tool_use_id: "tool-async", content: "launched" }],
++        },
++      }),
++      notification("async-child", "tool-async", "completed", "2026-08-20T04:06:00.000Z"),
++    ].join(""));
++
++    const [finished] = await listSubagentSessions(
++      g.parent,
++      Date.parse("2026-08-20T04:07:00.000Z"),
++    );
++    expect(finished.status).toBe("completed");
++    expect(finished.finishedAt).toBe(Date.parse("2026-08-20T04:06:00.000Z"));
++  });
++
+   test("a running child with no completion record and no recent activity degrades to unknown", async () => {
+     // Parent killed mid-agent: no notification and no tool_result will ever
+     // arrive, so without a clock backstop the child latches "running" across
+diff --git a/src/subagents.ts b/src/subagents.ts
+index 6cee852..7f40672 100644
+--- a/src/subagents.ts
++++ b/src/subagents.ts
+@@ -196,7 +196,17 @@ function consumeParentEventLine(line: string, events: ParentEvents): void {
+   const resultAgentId = nonempty(toolUseResult?.agentId);
+   const resultStatus = nonempty(toolUseResult?.status);
+   if (resultAgentId && resultStatus && SAFE_AGENT_ID.test(resultAgentId)) {
+-    events.lifecycleByAgentId.set(resultAgentId, { status: mapStatus(resultStatus), timestamp: at });
++    // Only a status we RECOGNISE may record a lifecycle. An ASYNC launch writes
++    // the same `{agentId, status}` shape with `status: "async_launched"` — a
++    // launch receipt, not an outcome; its real completion arrives later as a
++    // <task-notification>. Mapping it through here stamped every background
++    // agent "unknown" the instant it started, which zeroed
++    // runningChildAgentCount, left the parent reading idle while three agents
++    // worked, and hid them from the clients' child-session surfaces.
++    const resultLifecycle = mapStatus(resultStatus);
++    if (resultLifecycle !== "unknown") {
++      events.lifecycleByAgentId.set(resultAgentId, { status: resultLifecycle, timestamp: at });
++    }
+   }
+   const backgroundProcessId = nonempty(toolUseResult?.backgroundTaskId);
+   if (backgroundProcessId && SAFE_AGENT_ID.test(backgroundProcessId)) {
+diff --git a/src/tmux-composer-border.test.ts b/src/tmux-composer-border.test.ts
+index 580713f..a4c5fc1 100644
+--- a/src/tmux-composer-border.test.ts
++++ b/src/tmux-composer-border.test.ts
+@@ -55,6 +55,24 @@ const BRANCH_INLINE = [
+   "",
+ ].join("\n");
+ 
++// Claude's numbered branch view can put a truncated branch prompt before the
++// label and draw only one trailing dash. This is the live shape from
++// cy-180000-26557: the old generic rule predicate rejected the top border,
++// paired the bottom border with an unrelated earlier rule, and returned the
++// artifact transcript as the composer.
++const NUMBERED_BRANCH_WITH_PROMPT = [
++  RULE_77,
++  "  › /private/tmp/session/scratchpad/e2e/control-sheet.png (437.5KB)",
++  " since 80% of quiz responses are stressing about the menopause belly, we can",
++  "cater the quiz for weigh (Branch 3) ─",
++  "❯ fix the guarantee card copy for the belly branch",
++  RULE_77,
++  "─".repeat(37),
++  "  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents          /rc",
++  "  ⧉  refs-artifact · artifact · artifact",
++  "",
++].join("\n");
++
+ test("healthy pane still yields its composer", () => {
+   expect(inputBoxFromPane(HEALTHY)).toBe("❯ ");
+ });
+@@ -70,6 +88,12 @@ test("branch label trailing a wrapped transcript line still bounds the composer"
+   expect(inputBoxFromPane(BRANCH_INLINE)).toBe("❯ ");
+ });
+ 
++test("numbered branch label after a truncated prompt bounds the composer", () => {
++  expect(inputBoxFromPane(NUMBERED_BRANCH_WITH_PROMPT)).toBe(
++    "❯ fix the guarantee card copy for the belly branch",
++  );
++});
++
+ test("a queued send's own text is findable in the branch composer", () => {
+   // deliver() substring-matches its needle against this region; an empty region
+   // is what stranded the send in a retype loop.
+@@ -103,6 +127,7 @@ test("isRuleLine accepts every border Claude draws and rejects content", () => {
+   expect(isRuleLine(RULE_77)).toBe(true);
+   expect(isRuleLine("─".repeat(8))).toBe(true); // wrap continuation
+   expect(isRuleLine("(Branch) ──")).toBe(true); // label prefix, 2 dashes
++  expect(isRuleLine("cater the quiz for weigh (Branch 3) ─")).toBe(true);
+   expect(isRuleLine("──── my-session ──")).toBe(true); // centred label
+   expect(isRuleLine(RULE_77 + "   ")).toBe(true); // trailing whitespace
+ 
+diff --git a/src/tmux.ts b/src/tmux.ts
+index b337bf5..92795bc 100644
+--- a/src/tmux.ts
++++ b/src/tmux.ts
+@@ -1,7 +1,7 @@
+ // Map a live process to its tmux pane and inject input. Claude Code sessions
+ // run inside tmux panes; we discover the `claude` pid via pgrep/proc, walk up
+ // its parent chain to the pane's top process, and `send-keys` into that pane.
+-import { readFileSync, writeFileSync, existsSync } from "node:fs";
++import { readFileSync, writeFileSync, existsSync, realpathSync, statSync } from "node:fs";
+ import { homedir } from "node:os";
+ import { ppidOf as procPpidOf, ttyOf, normalizeTty } from "./procinfo";
+ 
+@@ -133,20 +133,133 @@ export function claudeBin(): string {
+   return (_claudeBin = "claude"); // last resort: let the failure surface
+ }
+ 
++// Resolve `codex` to the NEWEST copy installed on the box, not the first one
++// on the server's PATH. Codex threads are only readable by a CLI at least as
++// new as the one that wrote them, and the two drift apart on Eugene's Macs:
++// codex's own "Update now" installs into ~/.bun/bin (first on his shell PATH,
++// absent from the server's), while /opt/homebrew/bin/codex stays at whatever
++// npm last installed. Measured 2026-09-06: shell wrote a thread with 0.153.4,
++// lfg resumed it with 0.146.0 → "failed to deserialize stored thread item …
++// unknown variant `completed`", pane dead in 3s, nothing logged anywhere.
++// See .claude/diagnosis-codex-resume-version-skew-20260906.md.
+ let _codexBin: string | null = null;
+-export function codexBin(): string {
+-  if (_codexBin) return _codexBin;
+-  const onPath = Bun.which("codex");
+-  if (onPath) return (_codexBin = onPath);
+-  const home = process.env.HOME ?? homedir();
+-  for (const p of [
+-    `${home}/.local/bin/codex`,
+-    `${home}/.bun/bin/codex`,
+-    "/usr/local/bin/codex",
+-  ]) {
+-    if (existsSync(p)) return (_codexBin = p);
++export type CodexCandidate = { path: string; version: string | null };
++
++/** `codex-cli 0.153.4` → `0.153.4`; null when no dotted triple is present. */
++export function parseCodexVersion(out: string): string | null {
++  const m = out.match(/\b(\d+)\.(\d+)\.(\d+)\b/);
++  return m ? m[0] : null;
++}
++
++function cmpSemver(a: string, b: string): number {
++  const pa = a.split(".").map(Number);
++  const pb = b.split(".").map(Number);
++  for (let i = 0; i < 3; i++) {
++    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
++  }
++  return 0;
++}
++
++/**
++ * Highest version wins. A candidate whose version is unknown loses to any
++ * known one; ties (same version, e.g. two symlinks to one install) keep the
++ * earliest, which preserves PATH order.
++ */
++export function pickNewestCodex(cands: CodexCandidate[]): CodexCandidate | null {
++  let best: CodexCandidate | null = null;
++  for (const c of cands) {
++    if (!best) {
++      best = c;
++      continue;
++    }
++    if (c.version && (!best.version || cmpSemver(c.version, best.version) > 0)) best = c;
++  }
++  return best;
++}
++
++/** Every distinct `codex` executable: PATH dirs first, then the known install dirs. */
++export function codexCandidatePaths(env: NodeJS.ProcessEnv = process.env): string[] {
++  const home = env.HOME ?? homedir();
++  const dirs = [
++    ...(env.PATH ?? "").split(":").filter(Boolean),
++    `${home}/.bun/bin`,
++    `${home}/.local/bin`,
++    "/usr/local/bin",
++    "/opt/homebrew/bin",
++  ];
++  const seen = new Set<string>();
++  const out: string[] = [];
++  for (const d of dirs) {
++    const p = `${d}/codex`;
++    try {
++      if (!existsSync(p)) continue;
++      const real = realpathSync(p);
++      if (seen.has(real)) continue;
++      seen.add(real);
++      out.push(p);
++    } catch {
++      // unreadable/broken symlink — not a candidate
++    }
+   }
+-  return (_codexBin = "codex");
++  return out;
++}
++
++function codexVersionAt(path: string): string | null {
++  try {
++    const r = Bun.spawnSync([path, "--version"], { timeout: 5000 });
++    return r.exitCode === 0 ? parseCodexVersion(new TextDecoder().decode(r.stdout)) : null;
++  } catch {
++    return null;
++  }
++}
++
++/**
++ * Identity of the current set of installs: which paths exist and when each
++ * resolved binary last changed. The server is long-lived by policy, so the
++ * resolution is re-done whenever this changes — a codex that self-updates
++ * into ~/.bun/bin after boot is picked up on the next spawn, not the next
++ * restart (the audit's point: caching for the process lifetime would have
++ * re-created the 2026-09-06 skew at the next upgrade).
++ */
++function codexInstallFingerprint(paths: string[]): string {
++  return paths
++    .map((p) => {
++      try {
++        const real = realpathSync(p);
++        return `${p}→${real}@${statSync(real).mtimeMs}`;
++      } catch {
++        return `${p}→?`;
++      }
++    })
++    .join("|");
++}
++
++let _codexFingerprint: string | null = null;
++
++/** Uncached: the newest codex for this environment (unit-testable with a fake PATH). */
++export function resolveCodexBin(env: NodeJS.ProcessEnv = process.env): CodexCandidate | null {
++  const cands = codexCandidatePaths(env).map((path) => ({ path, version: codexVersionAt(path) }));
++  const best = pickNewestCodex(cands);
++  if (best && cands.length > 1) {
++    const others = cands
++      .filter((c) => c !== best)
++      .map((c) => `${c.path} (${c.version ?? "?"})`)
++      .join(", ");
++    console.log(`[codex] using ${best.path} (${best.version ?? "?"}); other copies: ${others}`);
++  }
++  return best;
++}
++
++export function codexBin(env: NodeJS.ProcessEnv = process.env): string {
++  // Explicit pin (also how the resume-failure path is exercised live: point it
++  // at an older codex than the thread's writer).
++  const pinned = env.LFG_CODEX_BIN?.trim();
++  if (pinned) return pinned;
++  const fingerprint = codexInstallFingerprint(codexCandidatePaths(env));
++  if (_codexBin && fingerprint === _codexFingerprint) return _codexBin;
++  const best = resolveCodexBin(env);
++  _codexFingerprint = fingerprint;
++  return (_codexBin = best?.path ?? "codex"); // last resort: let the failure surface
+ }
+ 
+ // Spawned agents run with cwd set to one repo, but Claude Code scopes tool
+@@ -264,6 +377,166 @@ export function tmuxKillPane(target: string): boolean {
+   }
+ }
+ 
++// Keep (or stop keeping) a session's first pane on screen after its process
++// exits. lfg spawns codex bare — no shell wrapper — so when codex dies during
++// bootstrap its stderr dies with the pane and the tmux session is simply gone;
++// the resume path switches this on for its watch window so the `Error:` line
++// can be read back, then off again so a normal exit later doesn't leave a
++// dead pane (and a managed row) behind as a phantom card.
++export function tmuxSetRemainOnExit(name: string, on: boolean): boolean {
++  try {
++    return (
++      Bun.spawnSync([
++        "tmux", "set-option", "-w", "-t", `=${name}:0`, "remain-on-exit", on ? "on" : "off",
++      ]).exitCode === 0
++    );
++  } catch {
++    return false;
++  }
++}
++
++/** `null` when the session no longer exists at all. */
++export function paneDeadStatus(name: string): { dead: boolean; status: number | null } | null {
++  try {
++    const r = Bun.spawnSync([
++      "tmux", "display-message", "-p", "-t", `=${name}:0`, "#{pane_dead} #{pane_dead_status}",
++    ]);
++    if (r.exitCode !== 0) return null;
++    const [d, s] = new TextDecoder().decode(r.stdout).trim().split(/\s+/);
++    const status = s != null && s !== "" && Number.isFinite(Number(s)) ? Number(s) : null;
++    return { dead: d === "1", status };
++  } catch {
++    return null;
++  }
++}
++
++/**
++ * codex's fatal line from a dead pane's capture. The TUI prints a single
++ * `Error: …` line that the pane hard-wraps at its width (mid-word, no
++ * hyphenation), and tmux appends `Pane is dead (status N, …)` under
++ * remain-on-exit; rejoin the wrapped fragments and drop the tmux trailer.
++ */
++export function codexErrorFromPane(text: string): string | null {
++  const at = text.indexOf("Error:");
++  if (at >= 0) {
++    const lines = text.slice(at).split("\n");
++    const kept: string[] = [];
++    for (const raw of lines) {
++      const line = raw.replace(/\s+$/, "");
++      if (/^Pane is dead\b/.test(line)) break;
++      if (line.trim() === "") {
++        if (kept.length) break;
++        continue;
++      }
++      kept.push(line);
++    }
++    const joined = kept.join("").trim();
++    return joined ? joined.slice(0, 600) : null;
++  }
++  // No `Error:` anchor: the TUI printed the head of the line on the alternate
++  // screen and it was lost when the screen restored (seen with a prompt on
++  // argv). Fall back to the trailing block right above tmux's dead-pane
++  // trailer — that is the tail of the same message.
++  const dead = text.search(/^Pane is dead\b/m);
++  if (dead < 0) return null;
++  const before = text
++    .slice(0, dead)
++    .split("\n")
++    .map((l) => l.replace(/\s+$/, ""));
++  const block: string[] = [];
++  for (let i = before.length - 1; i >= 0 && block.length < 6; i--) {
++    if (before[i].trim() === "") {
++      if (block.length) break;
++      continue;
++    }
++    block.unshift(before[i]);
++  }
++  const joined = block.join("").trim();
++  return joined ? joined.slice(0, 600) : null;
++}
++
++/**
++ * Why a just-spawned codex pane is no longer running, or `null` while it is.
++ * Requires remain-on-exit (see tmuxSetRemainOnExit) for the error text; a
++ * session that vanished anyway still reports a failure, just a generic one.
++ */
++export function codexPaneFailure(name: string): string | null {
++  if (!tmuxHasSession(name)) return "codex exited before its pane could be inspected";
++  const d = paneDeadStatus(name);
++  if (!d?.dead) return null;
++  const text = capturePane(`${name}:0.0`) ?? "";
++  return codexErrorFromPane(text) ?? `codex exited with status ${d.status ?? "?"} during startup`;
++}
++
++/**
++ * The codex TUI has finished loading the thread: its composer row (`› …`, not
++ * a numbered selector item such as `› 1. Update now`) AND the status line
++ * (`gpt-6-astra high · ~/repo`) are both on screen. The composer alone is not
++ * enough — measured 2026-09-06 on 0.153.4: composer at ~250ms, `thread/resume`
++ * failure printed at ~480ms, status line (needs the thread's model/cwd) only in
++ * the success case at ~370ms. A resume that fails on 0.146 draws nothing until
++ * the error. Callers still add a dwell after this flips true.
++ */
++export function codexPaneSettled(text: string): boolean {
++  const lines = text.split("\n");
++  const composer = lines.some((l) => /^›\s/.test(l) && !/^›\s+\d+\.\s/.test(l));
++  const status = lines.some((l) => /^\s{2,}\S.*\s·\s\S/.test(l));
++  return composer && status;
++}
++
++/**
++ * Watch a just-spawned codex pane through its bootstrap. Dismisses the
++ * "Update available" selector like the create/fork paths do, hands the pane pid
++ * to `onPid` once (for the lease), and returns the failure text the moment the
++ * pane dies. Returns `null` once the TUI has settled (codexPaneSettled) and
++ * stayed that way for `settleDwellMs`, or, failing either signal, at the
++ * `watchMs` cap — the cap is only for a pane that stays blank, e.g. a huge
++ * rollout still being read; the 18MB thread of 2026-09-06 took >6s to fail
++ * under load, so the cap must not be tight.
++ * Requires remain-on-exit on the pane (tmuxSetRemainOnExit) for the error text.
++ */
++export async function awaitCodexBootstrap(opts: {
++  name: string;
++  watchMs: number;
++  pollMs?: number;
++  settleDwellMs?: number;
++  onPid?: (pid: number) => Promise<unknown> | void;
++  onTick?: (info: { t: number; failure: string | null; dismissed: boolean; settled: boolean }) => void;
++}): Promise<string | null> {
++  const target = `${opts.name}:0.0`;
++  const started = Date.now();
++  const pollMs = opts.pollMs ?? 250;
++  const dwell = opts.settleDwellMs ?? 1000;
++  let leased = false;
++  let settledSince: number | null = null;
++  while (Date.now() - started < opts.watchMs) {
++    const failure = codexPaneFailure(opts.name);
++    const dismissed = failure ? false : dismissCodexUpdatePrompt(target);
++    const settledNow = !failure && !dismissed && codexPaneSettled(capturePane(target) ?? "");
++    if (!settledNow) settledSince = null;
++    else settledSince ??= Date.now();
++    const settled = settledSince != null && Date.now() - settledSince >= dwell;
++    opts.onTick?.({ t: Date.now() - started, failure, dismissed, settled });
++    if (failure) return failure;
++    if (settled) {
++      if (!leased && opts.onPid) {
++        const pid = panePidForSession(opts.name);
++        if (pid) await opts.onPid(pid);
++      }
++      return null;
++    }
++    if (!leased && opts.onPid) {
++      const pid = panePidForSession(opts.name);
++      if (pid) {
++        leased = true;
++        await opts.onPid(pid);
++      }
++    }
++    await new Promise((res) => setTimeout(res, pollMs));
++  }
++  return null;
++}
++
+ // Tear down a whole tmux session by name — the clean teardown for a session
+ // lfg started itself (one session == one managed claude, no sibling panes to
+ // preserve, unlike tmuxKillPane).
+@@ -1233,6 +1506,14 @@ export function isRuleLine(line: string): boolean {
+   const s = line.replace(/[ \t]+$/, "");
+   if (!s.endsWith("─")) return false;
+   if (s.includes("❯")) return false;
++  // Numbered Claude branch views render the top border as the tail of a
++  // truncated branch prompt, for example:
++  //   cater the quiz for weigh (Branch 3) ─
++  // It has only one dash and an arbitrarily long prefix, so it intentionally
++  // cannot pass the generic dash-count/short-label guard below. Match the
++  // distinctive, terminal Claude branch marker without relaxing that guard
++  // for ordinary transcript prose.
++  if (/\(Branch(?:\s+\d+)?\)\s+─+\s*$/.test(s)) return true;
+   const dashes = (s.match(/─/g) ?? []).length;
+   if (dashes < 2) return false;
+   // Cap the label so a wrapped transcript line that happens to end in a rule

@@ -1,0 +1,10 @@
+⚠ `--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.
+⚠ `--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.
+• You have 3 usage limit resets available. Run /usage to use one.
+• Yes. Staging and production accounts are separate because they live in separate databases.
+  - FiftyStrong Staging uses staging accounts.
+  - FiftyStrong uses production accounts.
+  The same email can exist in both, but its subscription, workouts, and progress are independent. Creating an account in
+  one doesn’t create it in the other.
+› Ask Codex to do anything
+  gpt-6-astra high fast · ~/dev/personal/fiftyworkout

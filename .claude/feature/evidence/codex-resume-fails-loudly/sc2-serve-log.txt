@@ -1,0 +1,1 @@
+[resume] codex 01a07644-573e-72a3-8212-aa1865861042 died during bootstrap: 73e-72a3-8212-aa1865861042.jsonl: thread/resume failed during TUI bootstrap: thread/resume failed: failed to deserialize stored thread item subagent-completed-01a0720b-1a65-7f10-a24a-f98447f96630: unknown variant `completed`, expected one of `started`, `interacted`, `interrupted` (code -32603)

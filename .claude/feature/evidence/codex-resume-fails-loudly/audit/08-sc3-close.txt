@@ -1,0 +1,11 @@
+{"ok":true,"panes":1}
+HTTP 200
+--- tmux ls after close:
+lfg-37d7c4: 1 windows (created Sun Sep  6 18:20:17 2026)
+lfg-4bf7f5: 1 windows (created Sun Sep  6 18:24:02 2026)
+lfg-514c45: 1 windows (created Sun Sep  6 18:27:03 2026)
+lfg-9f9e10: 1 windows (created Sun Sep  6 17:53:07 2026)
+lfg-f59c9d: 1 windows (created Sun Sep  6 17:58:38 2026)
+--- has-session lfg-f054fa exit: can't find session: lfg-f054fa
+1
+--- global remain-on-exit: remain-on-exit off

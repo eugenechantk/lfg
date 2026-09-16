@@ -1,0 +1,246 @@
+diff --git a/src/sessions.ts b/src/sessions.ts
+index c47295b..f2e5569 100644
+--- a/src/sessions.ts
++++ b/src/sessions.ts
+@@ -21,6 +21,7 @@ import {
+   type IndexEntry,
+ } from "./session-index";
+ import { anyFreshAt, ensureLease } from "./leases";
++import { hidesCwd, normalizeExcludes } from "./hidden-dirs";
+ import {
+   flattenTitles,
+   parseTitleFile,
+@@ -204,6 +205,21 @@ function computeStatus(
+     };
+   }
+ 
++  // --- codex vocabulary -------------------------------------------------
++  // A codex turn error carries `codex_error_info` (surfaced as errorCode) and
++  // prose, never an HTTP status — deliberately: its "unexpected status 403
++  // Forbidden" is an edge/HTML page from chatgpt.com, not an auth failure, and
++  // must not land in the "run /login" branch above. Its two named cases map
++  // onto the existing reasons so no client needs a protocol change; the detail
++  // keeps codex's own sentence, which is where the reset time lives.
++  const firstLine = (max: number) => text.split("\n")[0].trim().slice(0, max);
++  if (code === "usage_limit_exceeded") {
++    return { status: "blocked", statusReason: "out_of_credits", statusDetail: firstLine(240) };
++  }
++  if (/\bmodel (?:is not supported\b|requires a newer version\b)/i.test(text)) {
++    return { status: "blocked", statusReason: "model_unavailable", statusDetail: firstLine(240) };
++  }
++
+   // --- prose as a labeller, never as the gate ---------------------------
+   // These stay because no structured code has been observed for the model and
+   // credit cases yet. They now only *label* a turn already proven to be an API
+@@ -851,6 +867,23 @@ function stripConversationPrefix(text: string): string {
+   return text.replace(/^(?:Human|User):[ \t]+/i, "");
+ }
+ 
++// Newer Codex rollouts persist human turns only as response items. Their
++// per-content provenance separates real input from injected user-role context.
++// Older rollouts lack these kinds and also emit user_message events; leave
++// those response items hidden so their existing event identity stays canonical.
++function codexResponseUserText(payload: {
++  content?: unknown;
++  internal_chat_message_metadata_passthrough?: unknown;
++}): string | null {
++  const metadata = payload.internal_chat_message_metadata_passthrough;
++  if (!metadata || typeof metadata !== "object") return null;
++  const kinds = (metadata as { content_item_kinds?: unknown }).content_item_kinds;
++  if (!Array.isArray(kinds) || !Array.isArray(payload.content)) return null;
++  const content = payload.content.filter((_, index) => kinds[index] === "user.text");
++  const text = stripConversationPrefix(codexContentText(content).trim());
++  return text || null;
++}
++
+ function extractText(content: unknown): string {
+   if (typeof content === "string") return content;
+   if (Array.isArray(content)) {
+@@ -1382,6 +1415,25 @@ function codexMessage(
+   return { id: suffix && id ? `${id}#${suffix}` : id, role, kind, text, ts };
+ }
+ 
++// The human-readable core of a codex `task_complete.error.message`. Two shapes
++// observed that hide the actual sentence: the upstream 400 comes JSON-wrapped
++// (`{"type":"error","status":400,"error":{"message":"The 'gpt-5.4' model is
++// not supported…"}}`), and a 403 from chatgpt.com carries an entire HTML page
++// after the status line. Unwrap the first, cut the second at the markup.
++function codexTurnErrorText(message: string): string {
++  let text = message.trim();
++  if (text.startsWith("{")) {
++    try {
++      const parsed = JSON.parse(text) as { error?: { message?: unknown }; message?: unknown };
++      const inner = parsed?.error?.message ?? parsed?.message;
++      if (typeof inner === "string" && inner.trim()) text = inner.trim();
++    } catch {}
++  }
++  const markup = text.search(/<(?:!doctype|html)\b/i);
++  if (markup >= 0) text = text.slice(0, markup).trim();
++  return text;
++}
++
+ function mcpResultText(result: unknown): string {
+   if (!result || typeof result !== "object" || Array.isArray(result)) return "";
+   const tagged = result as { Ok?: unknown; Err?: unknown };
+@@ -1683,6 +1735,23 @@ function normalizeCodexLine(
+     if (p.type === "error" && p.message?.trim()) {
+       return [codexMessage(x, "system", "tool_result", p.message.trim(), ts)];
+     }
++    // A FAILED turn. Codex records it nowhere else: no assistant message, no
++    // standalone `error` event (those are transient stream/compaction hiccups
++    // it retries on its own). Two usage-limited sessions on 2026-09-06/07
++    // showed nothing at all because this fell through to `[]`. It is emitted
++    // in the same shape Claude Code writes an API error — an assistant text
++    // turn flagged `apiError` — so `lastAssistantMsg` → `computeStatus` grades
++    // it and the client's "API error" label / "Build paused" banner render it.
++    if (p.type === "task_complete") {
++      const err = p.error;
++      if (!err || typeof err !== "object" || Array.isArray(err)) return [];
++      const { message, codex_error_info } = err as { message?: unknown; codex_error_info?: unknown };
++      const text = typeof message === "string" ? codexTurnErrorText(message) : "";
++      if (!text) return [];
++      const errorCode =
++        typeof codex_error_info === "string" && codex_error_info ? codex_error_info : "other";
++      return [{ ...codexMessage(x, "assistant", "text", text, ts), apiError: true, errorCode }];
++    }
+     if ((p.type === "warning" || p.type === "guardian_warning") && p.message?.trim()) {
+       return [codexMessage(x, "system", "tool_result", `Warning\n${p.message.trim()}`, ts)];
+     }
+@@ -1738,7 +1807,11 @@ function normalizeCodexLine(
+ 
+   if (p.type === "message") {
+     const role = p.role || "assistant";
+-    if (role === "system" || role === "developer" || role === "user") return [];
++    if (role === "system" || role === "developer") return [];
++    if (role === "user") {
++      const text = codexResponseUserText(p);
++      return text ? [codexMessage(x, role, "text", text, ts)] : [];
++    }
+     const text = codexContentText(p.content).trim();
+     return text ? [codexMessage(x, role, "text", text, ts)] : [];
+   }
+@@ -2158,13 +2231,16 @@ function userTurnFromLine(line: string, maxChars: number): string | null {
+   // Tool-heavy transcripts can contain multi-megabyte assistant/output rows.
+   // Avoid materialising those through JSON.parse when neither transcript format
+   // can possibly classify the row as a user message.
+-  if (!/"type"\s*:\s*"(?:user|user_message)"/.test(line)) return null;
++  if (!/"(?:type|role)"\s*:\s*"(?:user|user_message)"/.test(line)) return null;
+   let x: {
+     type?: string;
+     isMeta?: boolean;
+     toolUseResult?: unknown;
+     message?: { content?: unknown };
+-    payload?: { type?: string; message?: string };
++    payload?: {
++      type?: string; role?: string; message?: string; content?: unknown;
++      internal_chat_message_metadata_passthrough?: unknown;
++    };
+   };
+   try {
+     x = JSON.parse(line);
+@@ -2176,6 +2252,8 @@ function userTurnFromLine(line: string, maxChars: number): string | null {
+     text = x.payload.message
+       ? stripConversationPrefix(x.payload.message).trim().replace(/\s+/g, " ")
+       : null;
++  } else if (x.type === "response_item" && x.payload?.type === "message" && x.payload.role === "user") {
++    text = codexResponseUserText(x.payload)?.replace(/\s+/g, " ") ?? null;
+   } else if (x.type === "user" && !x.isMeta) {
+     // A tool result is recorded as a `user` turn. `extractText` drops the
+     // `tool_result` blocks themselves, but a record can carry a stray text
+@@ -2720,6 +2798,7 @@ async function listSessionsUncached(
+ 
+     const transcriptPath = thread?.path ?? (sessionId ? await findCodexTranscriptById(sessionId) : null);
+     let last: SessionMsg | null = null;
++    let lastAssistant: SessionMsg | null = null;
+     let lastActivityAt: number | null = null;
+     let lastUser: string | null = null;
+     let liveModel: string | null = null;
+@@ -2734,6 +2813,10 @@ async function listSessionsUncached(
+       lastActivityAt = last?.ts ?? mtimeMs;
+       lastUser = await lastUserText(transcriptPath).catch(() => null);
+       liveModel = await lastCodexModel(transcriptPath).catch(() => null);
++      // Status is graded from the last ASSISTANT turn, same as the claude site:
++      // grading `last` (any role) meant sending into a usage-limited codex
++      // session put a user row at the tail and erased its "blocked".
++      lastAssistant = await lastAssistantMsg(transcriptPath).catch(() => null);
+     }
+     const project = projectName(cwd);
+     let title = (sessionId && overrides[sessionId]) || null;
+@@ -2774,7 +2857,7 @@ async function listSessionsUncached(
+       // the arg alone left the row with no model at all. Names are surfaced
+       // verbatim: codex slugs are catalog-driven, not the Claude aliases.
+       model: liveModel ?? p.cmd.match(/--model\s+(\S+)/)?.[1] ?? null,
+-      ...computeStatus(last, null),
++      ...computeStatus(lastAssistant, null),
+     });
+   }
+ 
+@@ -3178,11 +3261,44 @@ async function enrichCandidate(
+ }
+ 
+ export async function listResumable(
+-  opts: { limit?: number; before?: number | null } = {},
++  opts: { limit?: number; before?: number | null; exclude?: string[] } = {},
+ ): Promise<ResumablePage> {
+   const limit = Math.max(1, Math.min(100, opts.limit ?? 30));
++  const exclude = normalizeExcludes(opts.exclude);
+   await refreshLeasesForLiveSessions();
+   const before = typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
++  // Excluding by cwd needs a cwd for every candidate BEFORE the page fills, and
++  // candidates are deliberately unenriched (readdir + stat, no reads). The
++  // search index already carries cwd for the whole corpus and refreshes
++  // incrementally, so the exclude path pages over it — filter BEFORE paginate,
++  // which is the entire point: filtering the page after the fact starves the
++  // list when one churny population (gbrain autopilot) owns the newest-mtime
++  // window. Only the surviving rows pay enrichment, same as the plain path.
++  if (exclude.length > 0) {
++    const overrides = await readTitleOverrides();
++    const index = applyTitleOverrides(await refreshSearchIndex(), overrides);
++    const entries = matchingEntries(index, [], before).filter((e) => !hidesCwd(e.cwd, exclude));
++    const page: IndexEntry[] = [];
++    let nextBefore: number | null = null;
++    for (let i = 0; i < entries.length; i++) {
++      const e = entries[i];
++      if (await anyFreshAt(e.sessionId, e.path)) continue;
++      page.push(e);
++      if (page.length >= limit) {
++        nextBefore = entries.length > i + 1 ? e.mtime : null;
++        break;
++      }
++    }
++    const out: ResumableSession[] = [];
++    for (const e of page)
++      out.push(
++        await enrichCandidate(
++          { agent: e.agent, id: e.sessionId, path: e.path, mtime: e.mtime, cwdHint: e.cwd },
++          overrides,
++        ),
++      );
++    return { sessions: out, nextBefore };
++  }
+   const candidates = (await collectResumableCandidates()).filter(
+     (c) => before == null || c.mtime < before,
+   );
+@@ -3344,18 +3460,19 @@ async function refreshSearchIndex(): Promise<IndexEntry[]> {
+  * client can therefore feed the result through the same cross-host reconcile.
+  */
+ export async function searchResumable(
+-  opts: { q: string; limit?: number; before?: number | null },
++  opts: { q: string; limit?: number; before?: number | null; exclude?: string[] },
+ ): Promise<ResumablePage> {
+   const limit = Math.max(1, Math.min(100, opts.limit ?? 30));
++  const exclude = normalizeExcludes(opts.exclude);
+   const before =
+     typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
+   const terms = queryTerms(opts.q ?? "");
+-  if (terms.length === 0) return listResumable({ limit, before });
++  if (terms.length === 0) return listResumable({ limit, before, exclude });
+ 
+   await refreshLeasesForLiveSessions();
+   const overrides = await readTitleOverrides();
+   const index = applyTitleOverrides(await refreshSearchIndex(), overrides);
+-  const matches = matchingEntries(index, terms, before);
++  const matches = matchingEntries(index, terms, before).filter((e) => !hidesCwd(e.cwd, exclude));
+ 
+   const page: IndexEntry[] = [];
+   let nextBefore: number | null = null;

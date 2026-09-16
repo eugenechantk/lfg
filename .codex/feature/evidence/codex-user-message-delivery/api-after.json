@@ -1,0 +1,11 @@
+{
+  "sessionCount": 7,
+  "example": [
+    {
+      "sessionId": "01a0763b-ad64-7f80-b7fb-cfa1dd3cbaf7",
+      "pid": 51188,
+      "lastUserText": "Does other model do that like 5.6?",
+      "tmuxTarget": "lfg-37d7c4:0.0"
+    }
+  ]
+}
