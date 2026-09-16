@@ -28,7 +28,13 @@ import {
   feedbackPromptOpen,
   tmuxDismissFeedback,
 } from "./tmux.ts";
-import { listSessions, resolveTranscript, recentMessages, type Session } from "./sessions.ts";
+import {
+  listSessions,
+  resolveTranscript,
+  recentMessages,
+  type Session,
+  type SessionMsg,
+} from "./sessions.ts";
 import { PATHS } from "./config.ts";
 import type { Journal } from "./journal.ts";
 import { SendqStore, type SendqRow } from "./sendq-store.ts";
@@ -471,6 +477,79 @@ const ORPHAN_IDLE_GRACE_MS = 10_000;
 // up and failing it, so a message that genuinely can't land doesn't loop forever.
 const MAX_REDELIVERIES = 2;
 
+// Re-driving is only safe once the agent is provably idle, and ONE pane capture
+// cannot prove that: our own paste into the composer redraws the pane and
+// `isBusy` reads false for a second or two mid-turn (journal `busy` flipped
+// false at 07:36:07/10Z on 2026-09-07, each on a sendq deliver-start). A single
+// such capture re-typed a batch of seven messages 17 minutes before the turn
+// actually ended. Idle must hold across polls for this long before it counts.
+const IDLE_CONFIRM_MS = 3_000;
+
+export class IdleConfirmer {
+  private firstIdleAt = new Map<string, number>();
+  constructor(private readonly minMs: number = IDLE_CONFIRM_MS) {}
+  /** Feed one observation; true only once idle has held for ≥ minMs. */
+  observe(sid: string, idle: boolean, now: number): boolean {
+    if (!idle) {
+      this.firstIdleAt.delete(sid);
+      return false;
+    }
+    const since = this.firstIdleAt.get(sid);
+    if (since == null) {
+      this.firstIdleAt.set(sid, now);
+      return false;
+    }
+    return now - since >= this.minMs;
+  }
+}
+const idleConfirmer = new IdleConfirmer();
+
+// When the 40-message window does not reach back to when a queued message was
+// created (a long turn's tool calls pushed its absorbed turn out of view), read
+// a deeper tail before deciding — but not on every poll tick.
+const DEEP_SCAN_BYTES = 4 * 1024 * 1024;
+const DEEP_SCAN_MIN_INTERVAL_MS = 30_000;
+const lastDeepScanAt = new Map<string, number>();
+
+// Pure: mark every "queued" message whose needle appears in `userText` as
+// delivered. Returns the rows it promoted (caller persists/journals them).
+export function promoteSurfacedCore(msgs: QueuedMsg[], userText: string, now: number): QueuedMsg[] {
+  const turn = norm(userText);
+  if (!turn) return [];
+  const promoted: QueuedMsg[] = [];
+  for (const m of msgs) {
+    if (m.status !== "queued") continue;
+    const needle = norm(m.text).slice(0, NEEDLE_LEN);
+    if (!needle || !turn.includes(needle)) continue;
+    m.status = "delivered";
+    m.error = undefined;
+    m.updatedAt = now;
+    promoted.push(m);
+  }
+  return promoted;
+}
+
+// Called by the journal pump for every user text turn it journals, so a message
+// Claude absorbed mid-turn (see queueOperationMessage in sessions.ts) is
+// acknowledged the moment the transcript records it — not on some later
+// reconcile, whose 40-message window a long turn's tool calls have usually
+// pushed the turn out of by the time the session goes idle.
+export function noteSurfacedUserTurn(sessionId: string, m: SessionMsg): void {
+  if (m.role !== "user" || m.kind !== "text") return;
+  ensureRecovered();
+  const s = queues.get(sessionId);
+  if (!s || !s.msgs.some((x) => x.status === "queued")) return;
+  const promoted = promoteSurfacedCore(s.msgs, m.text, Date.now());
+  if (!promoted.length) return;
+  for (const p of promoted) {
+    persistMsg(sessionId, p);
+    traceQueue(sessionId, p, "surfaced-delivered", { userTurnId: m.id });
+    journalDelivered(sessionId, p, m.id);
+  }
+  pruneTerminal(s);
+  store?.pruneTerminal(sessionId, KEEP_TERMINAL);
+}
+
 // Whether our pending draft is currently sitting in the composer. For a typed
 // (single-line) send that's the needle verbatim; for a pasted (multi-line) send
 // Claude collapses the draft to a "[Pasted text +N lines]" chip, so the needle
@@ -610,7 +689,17 @@ async function transcriptUserMatches(
 export function reconcileQueuedCore(
   msgs: QueuedMsg[],
   recentUserTexts: string[],
-  opts: { idleConfirmed: boolean; now: number; graceMs?: number },
+  opts: {
+    idleConfirmed: boolean;
+    now: number;
+    graceMs?: number;
+    // Timestamp of the oldest transcript message `recentUserTexts` was drawn
+    // from. A message created BEFORE that point may have surfaced out of view
+    // (Claude absorbed it into a long turn), so its absence from the window
+    // proves nothing and it must not be re-driven or failed. null = the window
+    // reaches the start of the transcript.
+    windowStartTs?: number | null;
+  },
 ): { changed: boolean; kick: boolean } {
   const grace = opts.graceMs ?? ORPHAN_IDLE_GRACE_MS;
   const normedTurns = recentUserTexts.map(norm);
@@ -619,10 +708,13 @@ export function reconcileQueuedCore(
   for (const m of msgs) {
     if (m.status !== "queued") continue;
     const needle = norm(m.text).slice(0, NEEDLE_LEN);
+    const covered = opts.windowStartTs == null || opts.windowStartTs <= m.createdAt;
     if (normedTurns.some((t) => t.includes(needle))) {
       m.status = "delivered";
       m.updatedAt = opts.now;
       changed = true;
+    } else if (!covered) {
+      continue;
     } else if (opts.idleConfirmed && opts.now - m.updatedAt > grace) {
       if ((m.redeliveries ?? 0) < MAX_REDELIVERIES) {
         // Re-drive on the now-idle agent. Reset attempts so deliver()'s per-call
@@ -667,22 +759,46 @@ export async function reconcileQueued(sessionId: string): Promise<boolean> {
   } catch {
     return false;
   }
-  const recentUserMsgs = recent.filter((r) => r.role === "user" && r.kind === "text");
-  const recentUserTexts = recentUserMsgs.map((r) => r.text);
-
   // We can only re-drive a queued message once we've confirmed the session is
   // idle — a busy Claude may still be mid-turn with the message legitimately
   // waiting in its queue, so re-driving then would double-send. If we can't read
   // the pane, treat it as not-idle (leave the message queued) rather than risk
-  // it. Probe the pane only when there's an aged candidate to re-drive.
+  // it. Probe the pane only when there's an aged candidate to re-drive, never
+  // while our own delivery loop is typing into it (the paste redraws the pane
+  // and reads as idle mid-turn), and only count idle once it has held across
+  // polls (IdleConfirmer).
   const now = Date.now();
   const hasAged = pending.some((m) => now - m.updatedAt > ORPHAN_IDLE_GRACE_MS);
   let idleConfirmed = false;
   if (hasAged) {
-    const target = (await listSessions()).find((x) => x.sessionId === sessionId)?.tmuxTarget;
-    const pane = target ? capturePane(target) : null;
-    idleConfirmed = pane != null && !isBusy(pane);
+    if (s.running) {
+      idleConfirmer.observe(sessionId, false, now);
+    } else {
+      const target = (await listSessions()).find((x) => x.sessionId === sessionId)?.tmuxTarget;
+      const pane = target ? capturePane(target) : null;
+      idleConfirmed = idleConfirmer.observe(sessionId, pane != null && !isBusy(pane), now);
+    }
   }
+
+  // The window must reach back to when each aged message was queued, or its
+  // absence proves nothing (Claude may have absorbed it into a long turn whose
+  // tool calls pushed the turn out of the last 40 messages). If it doesn't,
+  // read a deeper tail — rate-limited, since this runs on the pump's poll.
+  let windowStartTs = firstTimestamp(recent);
+  if (
+    idleConfirmed &&
+    windowStartTs != null &&
+    pending.some((m) => m.createdAt < windowStartTs!) &&
+    now - (lastDeepScanAt.get(sessionId) ?? 0) >= DEEP_SCAN_MIN_INTERVAL_MS
+  ) {
+    lastDeepScanAt.set(sessionId, now);
+    try {
+      recent = await recentMessages(transcriptPath, 0, { maxBytes: DEEP_SCAN_BYTES });
+      windowStartTs = firstTimestamp(recent);
+    } catch {}
+  }
+  const recentUserMsgs = recent.filter((r) => r.role === "user" && r.kind === "text");
+  const recentUserTexts = recentUserMsgs.map((r) => r.text);
 
   const before = new Map(
     s.msgs.map((m) => [
@@ -698,6 +814,7 @@ export async function reconcileQueued(sessionId: string): Promise<boolean> {
   const { changed, kick: needsKick } = reconcileQueuedCore(s.msgs, recentUserTexts, {
     idleConfirmed,
     now,
+    windowStartTs,
   });
   if (changed) {
     for (const m of s.msgs) {
@@ -733,6 +850,11 @@ export async function reconcileQueued(sessionId: string): Promise<boolean> {
   // actually (re)submitted to the now-idle agent. kick() no-ops if already busy.
   if (needsKick) kick(sessionId);
   return changed;
+}
+
+function firstTimestamp(msgs: SessionMsg[]): number | null {
+  for (const m of msgs) if (m.ts != null) return m.ts;
+  return null;
 }
 
 // If the session-rating overlay is up it swallows Enter, so clear it before we

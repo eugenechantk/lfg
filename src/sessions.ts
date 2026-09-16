@@ -2024,6 +2024,46 @@ function collapseCodexLifecycleMessages(messages: SessionMsg[]): SessionMsg[] {
   return collapsed;
 }
 
+// Claude Code (2.1.2xx+) records its native message queue in the transcript as
+// `queue-operation` lines. A message sent while the agent is mid-turn is
+// `enqueue`d and then — instead of running as its own turn — folded into the
+// running turn at the next tool boundary and `remove`d with a consumption
+// reason. The text is persisted NOWHERE else: not as a user turn, not inside
+// the tool_result it rode along with. Before this, an absorbed message vanished
+// from every client and the send queue re-typed it as "never picked up" (see
+// .claude/diagnosis-queued-messages-absorbed-mid-turn-20260907.md). Synthesise
+// the user turn here so every consumer — transcript pages, the live journal,
+// sendq's "did it surface?" check, the phone's pending strip — sees it at the
+// point it was absorbed. `dequeue` (popped as the next real turn) is followed by
+// a genuine user line and is deliberately NOT synthesised. Any reason outside
+// this set means "not delivered", so a genuinely dropped message still re-drives.
+const QUEUE_CONSUMED_REASONS = new Set([
+  "absorbed_mid_turn",
+  "delivered_to_agent",
+  "delivered_as_tool_result",
+]);
+
+export function queueOperationMessage(x: {
+  operation?: string;
+  reason?: string;
+  content?: unknown;
+  timestamp?: string;
+}): SessionMsg[] {
+  if (x.operation !== "remove" || !QUEUE_CONSUMED_REASONS.has(x.reason ?? "")) return [];
+  if (typeof x.content !== "string") return [];
+  const text = stripHumanPrefix(x.content);
+  // Claude Code routes its own poll events (<task-notification>, …) through the
+  // same queue; those are plumbing, not conversation (same `<` rule as the
+  // title/preview readers).
+  const t = text.trim();
+  if (!t || t.startsWith("<")) return [];
+  const ts = x.timestamp ? Date.parse(x.timestamp) : null;
+  // These lines carry no `uuid`; clients dedup on id across stream replays, so
+  // derive a stable one from what the line does have.
+  const id = `queued:${Number.isFinite(ts) ? ts : 0}:${Bun.hash(x.content).toString(16)}`;
+  return [{ id, role: "user", kind: "text", text, ts: Number.isFinite(ts) ? ts : null }];
+}
+
 function normalizeLineUnsafe(line: string, codexState: CodexNormalizationState): SessionMsg[] {
   const codex = normalizeCodexLine(line, codexState);
   if (codex) return codex;
@@ -2039,12 +2079,17 @@ function normalizeLineUnsafe(line: string, codexState: CodexNormalizationState):
     isMeta?: boolean;
     toolUseResult?: unknown;
     message?: { role?: string; content?: unknown };
+    // `queue-operation` lines only.
+    operation?: string;
+    reason?: string;
+    content?: unknown;
   };
   try {
     x = JSON.parse(line);
   } catch {
     return [];
   }
+  if (x.type === "queue-operation") return queueOperationMessage(x);
   if (x.type !== "assistant" && x.type !== "user" && x.type !== "system")
     return [];
   // Skip system-injected turns. Claude Code stamps `isMeta: true` on the

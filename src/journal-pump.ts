@@ -32,7 +32,7 @@ import {
   stripAnsi,
 } from "./tmux.ts";
 import { PaneStitcher } from "./pane-history.ts";
-import { listQueue, reconcileQueued } from "./sendq.ts";
+import { listQueue, noteSurfacedUserTurn, reconcileQueued } from "./sendq.ts";
 import {
   codexDelegationSessionIds,
   notePaneBackgroundProcessCount,
@@ -452,6 +452,10 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
         if (frame && deps.browserFrames) publishBrowserFrame(j, deps.browserFrames, w.sid, frame);
         for (const m of normalizeLineMessages(l, w.codexNormalization)) {
           j.append(w.sid, "msg", { sid: w.sid, m });
+          // A queued send that Claude absorbed mid-turn only ever surfaces as
+          // this journaled turn; acknowledge it now rather than on a later
+          // reconcile (see noteSurfacedUserTurn).
+          noteSurfacedUserTurn(w.sid, m);
         }
       }
       j.setOffset(w.sid, size);
