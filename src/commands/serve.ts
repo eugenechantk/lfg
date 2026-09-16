@@ -2030,9 +2030,14 @@ export async function cmdServe() {
         // unchanged and a client that never sends `q` behaves exactly as before.
         // Without it, search could only ever see the pages already loaded.
         const q = (url.searchParams.get("q") ?? "").trim();
+        // Repeated `exclude` params carry the client's hidden-dir globs so the
+        // filter runs BEFORE pagination. Filtering client-side after paging
+        // starves the list: a churny population (gbrain autopilot) can own the
+        // whole newest-mtime page, leaving a handful of visible rows out of 100.
+        const exclude = url.searchParams.getAll("exclude");
         const page = q
-          ? await searchResumable({ q, limit, before: cursor })
-          : await listResumable({ limit, before: cursor });
+          ? await searchResumable({ q, limit, before: cursor, exclude })
+          : await listResumable({ limit, before: cursor, exclude });
         return json(page);
       }
 

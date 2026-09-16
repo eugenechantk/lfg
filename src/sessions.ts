@@ -21,6 +21,7 @@ import {
   type IndexEntry,
 } from "./session-index";
 import { anyFreshAt, ensureLease } from "./leases";
+import { hidesCwd, normalizeExcludes } from "./hidden-dirs";
 import {
   flattenTitles,
   parseTitleFile,
@@ -3234,11 +3235,44 @@ async function enrichCandidate(
 }
 
 export async function listResumable(
-  opts: { limit?: number; before?: number | null } = {},
+  opts: { limit?: number; before?: number | null; exclude?: string[] } = {},
 ): Promise<ResumablePage> {
   const limit = Math.max(1, Math.min(100, opts.limit ?? 30));
+  const exclude = normalizeExcludes(opts.exclude);
   await refreshLeasesForLiveSessions();
   const before = typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
+  // Excluding by cwd needs a cwd for every candidate BEFORE the page fills, and
+  // candidates are deliberately unenriched (readdir + stat, no reads). The
+  // search index already carries cwd for the whole corpus and refreshes
+  // incrementally, so the exclude path pages over it — filter BEFORE paginate,
+  // which is the entire point: filtering the page after the fact starves the
+  // list when one churny population (gbrain autopilot) owns the newest-mtime
+  // window. Only the surviving rows pay enrichment, same as the plain path.
+  if (exclude.length > 0) {
+    const overrides = await readTitleOverrides();
+    const index = applyTitleOverrides(await refreshSearchIndex(), overrides);
+    const entries = matchingEntries(index, [], before).filter((e) => !hidesCwd(e.cwd, exclude));
+    const page: IndexEntry[] = [];
+    let nextBefore: number | null = null;
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      if (await anyFreshAt(e.sessionId, e.path)) continue;
+      page.push(e);
+      if (page.length >= limit) {
+        nextBefore = entries.length > i + 1 ? e.mtime : null;
+        break;
+      }
+    }
+    const out: ResumableSession[] = [];
+    for (const e of page)
+      out.push(
+        await enrichCandidate(
+          { agent: e.agent, id: e.sessionId, path: e.path, mtime: e.mtime, cwdHint: e.cwd },
+          overrides,
+        ),
+      );
+    return { sessions: out, nextBefore };
+  }
   const candidates = (await collectResumableCandidates()).filter(
     (c) => before == null || c.mtime < before,
   );
@@ -3400,18 +3434,19 @@ async function refreshSearchIndex(): Promise<IndexEntry[]> {
  * client can therefore feed the result through the same cross-host reconcile.
  */
 export async function searchResumable(
-  opts: { q: string; limit?: number; before?: number | null },
+  opts: { q: string; limit?: number; before?: number | null; exclude?: string[] },
 ): Promise<ResumablePage> {
   const limit = Math.max(1, Math.min(100, opts.limit ?? 30));
+  const exclude = normalizeExcludes(opts.exclude);
   const before =
     typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
   const terms = queryTerms(opts.q ?? "");
-  if (terms.length === 0) return listResumable({ limit, before });
+  if (terms.length === 0) return listResumable({ limit, before, exclude });
 
   await refreshLeasesForLiveSessions();
   const overrides = await readTitleOverrides();
   const index = applyTitleOverrides(await refreshSearchIndex(), overrides);
-  const matches = matchingEntries(index, terms, before);
+  const matches = matchingEntries(index, terms, before).filter((e) => !hidesCwd(e.cwd, exclude));
 
   const page: IndexEntry[] = [];
   let nextBefore: number | null = null;
