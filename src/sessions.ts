@@ -2584,7 +2584,7 @@ export async function modelAliasForTranscript(path: string): Promise<string | nu
   return modelAlias(await lastAssistantModel(path));
 }
 
-async function previewLast(path: string): Promise<SessionMsg | null> {
+export async function previewLast(path: string): Promise<SessionMsg | null> {
   return scanBack(path, (line) => {
     const msgs = normalizeLineMessages(line);
     return msgs.length ? msgs[msgs.length - 1] : null;

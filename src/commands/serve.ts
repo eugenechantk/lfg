@@ -1,6 +1,6 @@
 import { BrowserSignInHub, signInHTTP, allowsSignInAdapter } from "../browser-sign-in.ts";
 import { readdir, realpath, stat } from "node:fs/promises";
-import { statSync, mkdirSync, type Dirent } from "node:fs";
+import { statSync, mkdirSync, type Dirent, existsSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -38,6 +38,7 @@ import { startAutopilot } from "../autopilot/tick.ts";
 import {
   listSessions,
   resolveTranscript,
+  previewLast,
   recentMessages,
   snapshotMessages,
   messagePage,
@@ -168,11 +169,84 @@ type ResumeOutcome =
   | { ok: true; tmuxName: string; cwd: string; newId: string | null; agent: "claude" | "codex"; alreadyLive?: boolean }
   | { ok: false; status: number; error: string; liveOn?: string };
 
+/**
+ * The "is a PEER still on this session?" veto behind resume. A fresh lease
+ * written by another host normally blocks a resume here (the session would run
+ * twice). `force` is the client's assertion that the peer is unreachable —
+ * only the client can observe that: from this host, "peer is down" and "peer is
+ * fine but the phone can't reach it" both look like a fresh synced lease. With
+ * `force` the veto is skipped and logged; the claude resume mints a NEW id on
+ * this host, so the peer's copy and this one never share a session id, and the
+ * client closes the peer's orphaned pane when that host next comes back.
+ */
+export async function foreignLeaseVeto(sessionId: string, force = false): Promise<ResumeOutcome | null> {
+  const liveOn = await foreignFresh(sessionId);
+  if (!liveOn) return null;
+  if (force) {
+    console.log(`[resume] ${sessionId} forced over fresh lease held by ${liveOn} (client reports that host unreachable)`);
+    return null;
+  }
+  return { ok: false, status: 409, error: "session is live on another host", liveOn };
+}
+
+/**
+ * Pre-flight for "Move to host": does THIS host hold the synced transcript a
+ * transfer would resume from, and how far behind is it? The client asks the
+ * TARGET before it touches the source — closing the source and only then
+ * discovering the target has no copy (sync lag, Syncthing not running, a cwd
+ * that exists on one Mac only) left the user with a dead session for nothing.
+ * `found: false` is a 200, not a 404: a 404 means an older server without this
+ * route, which the client treats as "unknown, proceed as before".
+ */
+export type TranscriptStatus =
+  | { found: false }
+  | {
+      found: true;
+      agent: "claude" | "codex" | null;
+      cwd: string | null;
+      cwdExists: boolean;
+      bytes: number;
+      mtimeMs: number | null;
+      /** Last message timestamp (not mtime — the sync daemon rewrites mtimes). */
+      lastActivityAt: number | null;
+    };
+
+export async function transcriptStatus(
+  sessionId: string,
+  resolve: (sid: string) => Promise<string | null> = resolveTranscript,
+): Promise<TranscriptStatus> {
+  const path = await resolve(sessionId);
+  if (!path) return { found: false };
+  let bytes = 0;
+  let mtimeMs: number | null = null;
+  try {
+    const st = statSync(path);
+    bytes = st.size;
+    mtimeMs = st.mtimeMs;
+  } catch {
+    return { found: false };
+  }
+  const cwd = await cwdForTranscript(path);
+  const cwdExists = !!cwd && existsSync(cwd);
+  const last = await previewLast(path).catch(() => null);
+  return {
+    found: true,
+    agent: transcriptFamily(path),
+    cwd,
+    cwdExists,
+    bytes,
+    mtimeMs,
+    lastActivityAt: last?.ts ?? mtimeMs,
+  };
+}
+
 async function resumeClosedSession(opts: {
   sessionId: string;
   model?: string;
   user?: string;
   prompt?: string;
+  /** Skip the foreign-lease veto: the caller has observed the lease holder is unreachable. */
+  force?: boolean;
 }): Promise<ResumeOutcome> {
   const sessionId = opts.sessionId.trim();
   if (!sessionId) return { ok: false, status: 400, error: "sessionId required" };
@@ -190,9 +264,8 @@ async function resumeClosedSession(opts: {
       alreadyLive: true,
     };
   }
-  const liveOn = await foreignFresh(sessionId);
-  if (liveOn)
-    return { ok: false, status: 409, error: "session is live on another host", liveOn };
+  const veto = await foreignLeaseVeto(sessionId, opts.force === true);
+  if (veto) return veto;
   const transcript = await resolveTranscript(sessionId);
   if (!transcript) return { ok: false, status: 404, error: "no transcript found for that session" };
   const agent = transcriptFamily(transcript);
@@ -2042,6 +2115,11 @@ export async function cmdServe() {
       // --resume`. After the box reboots, the live list (pgrep-based) is empty
       // but every transcript survives on disk — this surfaces those so the UI
       // can offer to resume one. Excludes anything currently live.
+      {
+        const m = path.match(/^\/api\/sessions\/([^/]+)\/transcript-status$/);
+        if (m && req.method === "GET") return json(await transcriptStatus(decodeURIComponent(m[1])));
+      }
+
       if (path === "/api/sessions/resumable" && req.method === "GET") {
         const liveIds = new Set(
           (await listSessions()).map((s) => s.sessionId).filter((x): x is string => !!x),
@@ -2076,11 +2154,14 @@ export async function cmdServe() {
           model?: string;
           user?: string;
           prompt?: string;
+          force?: boolean;
         } | null;
         const sessionId = body?.sessionId?.trim();
         if (!sessionId) return err(400, "sessionId required");
         const model = body?.model?.trim() || undefined;
-        const out = await resumeClosedSession({ sessionId, model, user: body?.user, prompt: body?.prompt });
+        const out = await resumeClosedSession({
+          sessionId, model, user: body?.user, prompt: body?.prompt, force: body?.force === true,
+        });
         if (!out.ok) return err(out.status, out.error, out.liveOn ? { liveOn: out.liveOn } : undefined);
         if (out.alreadyLive)
           return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId, alreadyLive: true, agent: out.agent });
