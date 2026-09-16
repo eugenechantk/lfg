@@ -1506,6 +1506,14 @@ export function isRuleLine(line: string): boolean {
   const s = line.replace(/[ \t]+$/, "");
   if (!s.endsWith("─")) return false;
   if (s.includes("❯")) return false;
+  // Numbered Claude branch views render the top border as the tail of a
+  // truncated branch prompt, for example:
+  //   cater the quiz for weigh (Branch 3) ─
+  // It has only one dash and an arbitrarily long prefix, so it intentionally
+  // cannot pass the generic dash-count/short-label guard below. Match the
+  // distinctive, terminal Claude branch marker without relaxing that guard
+  // for ordinary transcript prose.
+  if (/\(Branch(?:\s+\d+)?\)\s+─+\s*$/.test(s)) return true;
   const dashes = (s.match(/─/g) ?? []).length;
   if (dashes < 2) return false;
   // Cap the label so a wrapped transcript line that happens to end in a rule

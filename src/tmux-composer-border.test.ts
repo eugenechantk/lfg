@@ -55,6 +55,24 @@ const BRANCH_INLINE = [
   "",
 ].join("\n");
 
+// Claude's numbered branch view can put a truncated branch prompt before the
+// label and draw only one trailing dash. This is the live shape from
+// cy-180000-26557: the old generic rule predicate rejected the top border,
+// paired the bottom border with an unrelated earlier rule, and returned the
+// artifact transcript as the composer.
+const NUMBERED_BRANCH_WITH_PROMPT = [
+  RULE_77,
+  "  › /private/tmp/session/scratchpad/e2e/control-sheet.png (437.5KB)",
+  " since 80% of quiz responses are stressing about the menopause belly, we can",
+  "cater the quiz for weigh (Branch 3) ─",
+  "❯ fix the guarantee card copy for the belly branch",
+  RULE_77,
+  "─".repeat(37),
+  "  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents          /rc",
+  "  ⧉  refs-artifact · artifact · artifact",
+  "",
+].join("\n");
+
 test("healthy pane still yields its composer", () => {
   expect(inputBoxFromPane(HEALTHY)).toBe("❯ ");
 });
@@ -68,6 +86,12 @@ test("branch view with a wrapped bottom border yields the draft, not empty", () 
 
 test("branch label trailing a wrapped transcript line still bounds the composer", () => {
   expect(inputBoxFromPane(BRANCH_INLINE)).toBe("❯ ");
+});
+
+test("numbered branch label after a truncated prompt bounds the composer", () => {
+  expect(inputBoxFromPane(NUMBERED_BRANCH_WITH_PROMPT)).toBe(
+    "❯ fix the guarantee card copy for the belly branch",
+  );
 });
 
 test("a queued send's own text is findable in the branch composer", () => {
@@ -103,6 +127,7 @@ test("isRuleLine accepts every border Claude draws and rejects content", () => {
   expect(isRuleLine(RULE_77)).toBe(true);
   expect(isRuleLine("─".repeat(8))).toBe(true); // wrap continuation
   expect(isRuleLine("(Branch) ──")).toBe(true); // label prefix, 2 dashes
+  expect(isRuleLine("cater the quiz for weigh (Branch 3) ─")).toBe(true);
   expect(isRuleLine("──── my-session ──")).toBe(true); // centred label
   expect(isRuleLine(RULE_77 + "   ")).toBe(true); // trailing whitespace
 
