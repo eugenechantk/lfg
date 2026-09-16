@@ -42,7 +42,11 @@ cd "$(dirname "$0")/.."
 # 409'd, and resume failed — with the host showing perfectly healthy and green.
 # A missing directory on PATH is invisible in every symptom it causes, so fix it
 # here rather than depending on the launcher's environment.
-for dir in /opt/homebrew/bin /usr/local/bin; do
+# ~/.bun/bin is where codex installs itself ("Update now" runs `bun install -g`);
+# it is the ONE codex copy kept on Eugene's Macs since 2026-09-06 (the Homebrew
+# npm copy was removed after a version skew between the two made every codex
+# resume die — see .claude/diagnosis-codex-resume-version-skew-20260906.md).
+for dir in "$HOME/.bun/bin" /opt/homebrew/bin /usr/local/bin; do
   case ":$PATH:" in *":$dir:"*) ;; *) [ -d "$dir" ] && PATH="$dir:$PATH" ;; esac
 done
 export PATH

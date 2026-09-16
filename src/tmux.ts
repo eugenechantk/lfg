@@ -1,7 +1,7 @@
 // Map a live process to its tmux pane and inject input. Claude Code sessions
 // run inside tmux panes; we discover the `claude` pid via pgrep/proc, walk up
 // its parent chain to the pane's top process, and `send-keys` into that pane.
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { ppidOf as procPpidOf, ttyOf, normalizeTty } from "./procinfo";
 
@@ -133,20 +133,133 @@ export function claudeBin(): string {
   return (_claudeBin = "claude"); // last resort: let the failure surface
 }
 
+// Resolve `codex` to the NEWEST copy installed on the box, not the first one
+// on the server's PATH. Codex threads are only readable by a CLI at least as
+// new as the one that wrote them, and the two drift apart on Eugene's Macs:
+// codex's own "Update now" installs into ~/.bun/bin (first on his shell PATH,
+// absent from the server's), while /opt/homebrew/bin/codex stays at whatever
+// npm last installed. Measured 2026-09-06: shell wrote a thread with 0.153.4,
+// lfg resumed it with 0.146.0 → "failed to deserialize stored thread item …
+// unknown variant `completed`", pane dead in 3s, nothing logged anywhere.
+// See .claude/diagnosis-codex-resume-version-skew-20260906.md.
 let _codexBin: string | null = null;
-export function codexBin(): string {
-  if (_codexBin) return _codexBin;
-  const onPath = Bun.which("codex");
-  if (onPath) return (_codexBin = onPath);
-  const home = process.env.HOME ?? homedir();
-  for (const p of [
-    `${home}/.local/bin/codex`,
-    `${home}/.bun/bin/codex`,
-    "/usr/local/bin/codex",
-  ]) {
-    if (existsSync(p)) return (_codexBin = p);
+export type CodexCandidate = { path: string; version: string | null };
+
+/** `codex-cli 0.153.4` → `0.153.4`; null when no dotted triple is present. */
+export function parseCodexVersion(out: string): string | null {
+  const m = out.match(/\b(\d+)\.(\d+)\.(\d+)\b/);
+  return m ? m[0] : null;
+}
+
+function cmpSemver(a: string, b: string): number {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
   }
-  return (_codexBin = "codex");
+  return 0;
+}
+
+/**
+ * Highest version wins. A candidate whose version is unknown loses to any
+ * known one; ties (same version, e.g. two symlinks to one install) keep the
+ * earliest, which preserves PATH order.
+ */
+export function pickNewestCodex(cands: CodexCandidate[]): CodexCandidate | null {
+  let best: CodexCandidate | null = null;
+  for (const c of cands) {
+    if (!best) {
+      best = c;
+      continue;
+    }
+    if (c.version && (!best.version || cmpSemver(c.version, best.version) > 0)) best = c;
+  }
+  return best;
+}
+
+/** Every distinct `codex` executable: PATH dirs first, then the known install dirs. */
+export function codexCandidatePaths(env: NodeJS.ProcessEnv = process.env): string[] {
+  const home = env.HOME ?? homedir();
+  const dirs = [
+    ...(env.PATH ?? "").split(":").filter(Boolean),
+    `${home}/.bun/bin`,
+    `${home}/.local/bin`,
+    "/usr/local/bin",
+    "/opt/homebrew/bin",
+  ];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const d of dirs) {
+    const p = `${d}/codex`;
+    try {
+      if (!existsSync(p)) continue;
+      const real = realpathSync(p);
+      if (seen.has(real)) continue;
+      seen.add(real);
+      out.push(p);
+    } catch {
+      // unreadable/broken symlink — not a candidate
+    }
+  }
+  return out;
+}
+
+function codexVersionAt(path: string): string | null {
+  try {
+    const r = Bun.spawnSync([path, "--version"], { timeout: 5000 });
+    return r.exitCode === 0 ? parseCodexVersion(new TextDecoder().decode(r.stdout)) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Identity of the current set of installs: which paths exist and when each
+ * resolved binary last changed. The server is long-lived by policy, so the
+ * resolution is re-done whenever this changes — a codex that self-updates
+ * into ~/.bun/bin after boot is picked up on the next spawn, not the next
+ * restart (the audit's point: caching for the process lifetime would have
+ * re-created the 2026-09-06 skew at the next upgrade).
+ */
+function codexInstallFingerprint(paths: string[]): string {
+  return paths
+    .map((p) => {
+      try {
+        const real = realpathSync(p);
+        return `${p}→${real}@${statSync(real).mtimeMs}`;
+      } catch {
+        return `${p}→?`;
+      }
+    })
+    .join("|");
+}
+
+let _codexFingerprint: string | null = null;
+
+/** Uncached: the newest codex for this environment (unit-testable with a fake PATH). */
+export function resolveCodexBin(env: NodeJS.ProcessEnv = process.env): CodexCandidate | null {
+  const cands = codexCandidatePaths(env).map((path) => ({ path, version: codexVersionAt(path) }));
+  const best = pickNewestCodex(cands);
+  if (best && cands.length > 1) {
+    const others = cands
+      .filter((c) => c !== best)
+      .map((c) => `${c.path} (${c.version ?? "?"})`)
+      .join(", ");
+    console.log(`[codex] using ${best.path} (${best.version ?? "?"}); other copies: ${others}`);
+  }
+  return best;
+}
+
+export function codexBin(env: NodeJS.ProcessEnv = process.env): string {
+  // Explicit pin (also how the resume-failure path is exercised live: point it
+  // at an older codex than the thread's writer).
+  const pinned = env.LFG_CODEX_BIN?.trim();
+  if (pinned) return pinned;
+  const fingerprint = codexInstallFingerprint(codexCandidatePaths(env));
+  if (_codexBin && fingerprint === _codexFingerprint) return _codexBin;
+  const best = resolveCodexBin(env);
+  _codexFingerprint = fingerprint;
+  return (_codexBin = best?.path ?? "codex"); // last resort: let the failure surface
 }
 
 // Spawned agents run with cwd set to one repo, but Claude Code scopes tool
@@ -262,6 +375,166 @@ export function tmuxKillPane(target: string): boolean {
   } catch {
     return false;
   }
+}
+
+// Keep (or stop keeping) a session's first pane on screen after its process
+// exits. lfg spawns codex bare — no shell wrapper — so when codex dies during
+// bootstrap its stderr dies with the pane and the tmux session is simply gone;
+// the resume path switches this on for its watch window so the `Error:` line
+// can be read back, then off again so a normal exit later doesn't leave a
+// dead pane (and a managed row) behind as a phantom card.
+export function tmuxSetRemainOnExit(name: string, on: boolean): boolean {
+  try {
+    return (
+      Bun.spawnSync([
+        "tmux", "set-option", "-w", "-t", `=${name}:0`, "remain-on-exit", on ? "on" : "off",
+      ]).exitCode === 0
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** `null` when the session no longer exists at all. */
+export function paneDeadStatus(name: string): { dead: boolean; status: number | null } | null {
+  try {
+    const r = Bun.spawnSync([
+      "tmux", "display-message", "-p", "-t", `=${name}:0`, "#{pane_dead} #{pane_dead_status}",
+    ]);
+    if (r.exitCode !== 0) return null;
+    const [d, s] = new TextDecoder().decode(r.stdout).trim().split(/\s+/);
+    const status = s != null && s !== "" && Number.isFinite(Number(s)) ? Number(s) : null;
+    return { dead: d === "1", status };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * codex's fatal line from a dead pane's capture. The TUI prints a single
+ * `Error: …` line that the pane hard-wraps at its width (mid-word, no
+ * hyphenation), and tmux appends `Pane is dead (status N, …)` under
+ * remain-on-exit; rejoin the wrapped fragments and drop the tmux trailer.
+ */
+export function codexErrorFromPane(text: string): string | null {
+  const at = text.indexOf("Error:");
+  if (at >= 0) {
+    const lines = text.slice(at).split("\n");
+    const kept: string[] = [];
+    for (const raw of lines) {
+      const line = raw.replace(/\s+$/, "");
+      if (/^Pane is dead\b/.test(line)) break;
+      if (line.trim() === "") {
+        if (kept.length) break;
+        continue;
+      }
+      kept.push(line);
+    }
+    const joined = kept.join("").trim();
+    return joined ? joined.slice(0, 600) : null;
+  }
+  // No `Error:` anchor: the TUI printed the head of the line on the alternate
+  // screen and it was lost when the screen restored (seen with a prompt on
+  // argv). Fall back to the trailing block right above tmux's dead-pane
+  // trailer — that is the tail of the same message.
+  const dead = text.search(/^Pane is dead\b/m);
+  if (dead < 0) return null;
+  const before = text
+    .slice(0, dead)
+    .split("\n")
+    .map((l) => l.replace(/\s+$/, ""));
+  const block: string[] = [];
+  for (let i = before.length - 1; i >= 0 && block.length < 6; i--) {
+    if (before[i].trim() === "") {
+      if (block.length) break;
+      continue;
+    }
+    block.unshift(before[i]);
+  }
+  const joined = block.join("").trim();
+  return joined ? joined.slice(0, 600) : null;
+}
+
+/**
+ * Why a just-spawned codex pane is no longer running, or `null` while it is.
+ * Requires remain-on-exit (see tmuxSetRemainOnExit) for the error text; a
+ * session that vanished anyway still reports a failure, just a generic one.
+ */
+export function codexPaneFailure(name: string): string | null {
+  if (!tmuxHasSession(name)) return "codex exited before its pane could be inspected";
+  const d = paneDeadStatus(name);
+  if (!d?.dead) return null;
+  const text = capturePane(`${name}:0.0`) ?? "";
+  return codexErrorFromPane(text) ?? `codex exited with status ${d.status ?? "?"} during startup`;
+}
+
+/**
+ * The codex TUI has finished loading the thread: its composer row (`› …`, not
+ * a numbered selector item such as `› 1. Update now`) AND the status line
+ * (`gpt-6-astra high · ~/repo`) are both on screen. The composer alone is not
+ * enough — measured 2026-09-06 on 0.153.4: composer at ~250ms, `thread/resume`
+ * failure printed at ~480ms, status line (needs the thread's model/cwd) only in
+ * the success case at ~370ms. A resume that fails on 0.146 draws nothing until
+ * the error. Callers still add a dwell after this flips true.
+ */
+export function codexPaneSettled(text: string): boolean {
+  const lines = text.split("\n");
+  const composer = lines.some((l) => /^›\s/.test(l) && !/^›\s+\d+\.\s/.test(l));
+  const status = lines.some((l) => /^\s{2,}\S.*\s·\s\S/.test(l));
+  return composer && status;
+}
+
+/**
+ * Watch a just-spawned codex pane through its bootstrap. Dismisses the
+ * "Update available" selector like the create/fork paths do, hands the pane pid
+ * to `onPid` once (for the lease), and returns the failure text the moment the
+ * pane dies. Returns `null` once the TUI has settled (codexPaneSettled) and
+ * stayed that way for `settleDwellMs`, or, failing either signal, at the
+ * `watchMs` cap — the cap is only for a pane that stays blank, e.g. a huge
+ * rollout still being read; the 18MB thread of 2026-09-06 took >6s to fail
+ * under load, so the cap must not be tight.
+ * Requires remain-on-exit on the pane (tmuxSetRemainOnExit) for the error text.
+ */
+export async function awaitCodexBootstrap(opts: {
+  name: string;
+  watchMs: number;
+  pollMs?: number;
+  settleDwellMs?: number;
+  onPid?: (pid: number) => Promise<unknown> | void;
+  onTick?: (info: { t: number; failure: string | null; dismissed: boolean; settled: boolean }) => void;
+}): Promise<string | null> {
+  const target = `${opts.name}:0.0`;
+  const started = Date.now();
+  const pollMs = opts.pollMs ?? 250;
+  const dwell = opts.settleDwellMs ?? 1000;
+  let leased = false;
+  let settledSince: number | null = null;
+  while (Date.now() - started < opts.watchMs) {
+    const failure = codexPaneFailure(opts.name);
+    const dismissed = failure ? false : dismissCodexUpdatePrompt(target);
+    const settledNow = !failure && !dismissed && codexPaneSettled(capturePane(target) ?? "");
+    if (!settledNow) settledSince = null;
+    else settledSince ??= Date.now();
+    const settled = settledSince != null && Date.now() - settledSince >= dwell;
+    opts.onTick?.({ t: Date.now() - started, failure, dismissed, settled });
+    if (failure) return failure;
+    if (settled) {
+      if (!leased && opts.onPid) {
+        const pid = panePidForSession(opts.name);
+        if (pid) await opts.onPid(pid);
+      }
+      return null;
+    }
+    if (!leased && opts.onPid) {
+      const pid = panePidForSession(opts.name);
+      if (pid) {
+        leased = true;
+        await opts.onPid(pid);
+      }
+    }
+    await new Promise((res) => setTimeout(res, pollMs));
+  }
+  return null;
 }
 
 // Tear down a whole tmux session by name — the clean teardown for a session

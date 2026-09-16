@@ -69,6 +69,8 @@ import {
   dismissCodexUpdatePrompt,
   panePidForSession,
   isBusy,
+  tmuxSetRemainOnExit,
+  awaitCodexBootstrap,
 } from "../tmux.ts";
 import { addManaged, forkLineageForSession, normalizeParentSessionId, patchManaged, removeManaged } from "../managed.ts";
 import { PtyBridge, termSessionName } from "../pty.ts";
@@ -203,19 +205,35 @@ async function resumeClosedSession(opts: {
     const spawnStartedAt = Date.now();
     const r = spawnManagedCodexSession({ name: tmuxName, cwd, resume: sessionId, prompt: opts.prompt });
     if (!r.ok) return { ok: false, status: 502, error: r.error || "failed to resume session" };
+    // `tmux new-session` exiting 0 only proves the pane was created. Codex can
+    // still die during its own bootstrap — a thread written by a newer codex
+    // than this one fails `thread/resume` ~3s in — and a bare pane takes its
+    // stderr with it, so the old code reported ok, recorded the message as
+    // delivered, and the session simply vanished. Keep the pane on screen for
+    // a watch window and read the `Error:` line back if it dies.
+    tmuxSetRemainOnExit(tmuxName, true);
     // Codex resume is id-stable. Persist that intended id immediately so every
     // later listSessions()/refreshWatchSet pass binds this pane by known id
     // instead of the create-path skew heuristic.
     addManaged({ tmuxName, cwd, createdAt: spawnStartedAt, agent: "codex", sessionId });
     if (opts.user) assignUser(tmuxName, opts.user);
-    for (let i = 0; i < 12; i++) {
-      const pid = panePidForSession(tmuxName);
-      if (pid) {
-        await acquireLease(sessionId, pid);
-        break;
-      }
-      await new Promise((res) => setTimeout(res, 250));
+    const failure = await awaitCodexBootstrap({
+      name: tmuxName,
+      watchMs: CODEX_RESUME_WATCH_MS,
+      pollMs: CODEX_RESUME_WATCH_POLL_MS,
+      onPid: (pid) => acquireLease(sessionId, pid),
+    });
+    if (failure) {
+      // Row first, then pane: a listSessions() between the two must not see a
+      // managed row with no pane behind it.
+      removeManaged(tmuxName);
+      assignUser(tmuxName, null);
+      tmuxKillSession(tmuxName);
+      await releaseLease(sessionId);
+      console.log(`[resume] codex ${sessionId} died during bootstrap: ${failure}`);
+      return { ok: false, status: 502, error: `codex could not resume this session: ${failure}` };
     }
+    tmuxSetRemainOnExit(tmuxName, false);
     return { ok: true, tmuxName, cwd, newId: sessionId, agent: "codex" };
   }
   // Relaunch on the model the conversation was last using (read from the
@@ -343,6 +361,13 @@ const HOST = process.env.LFG_HOST ?? "127.0.0.1";
 const CREATE_SESSION_BIND_POLL_MS = 500;
 const DEFAULT_CREATE_SESSION_BIND_POLLS = 12;
 const CODEX_CREATE_SESSION_BIND_POLLS = 28;
+// Cap on how long a codex RESUME watches its pane for a bootstrap death. The
+// watch normally ends much earlier — the moment the composer renders — so
+// this only bounds a pane that stays blank (a huge rollout still loading).
+// The 18MB thread of 2026-09-06 took >6s to fail under load; a 6s cap let
+// that death slip past and the resume reported ok.
+const CODEX_RESUME_WATCH_MS = 30_000;
+const CODEX_RESUME_WATCH_POLL_MS = 250;
 const CODEX_CREATE_FALLBACK_WINDOW_MS =
   CODEX_CREATE_SESSION_BIND_POLLS * CREATE_SESSION_BIND_POLL_MS;
 const UUID_RE = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
