@@ -1,0 +1,7 @@
+window40: count 40 firstTs 1788771317868 2026-09-07T08:55:17.868Z
+contains pre-fix text: false
+user text turns in window: [
+  [ "queued:1788771364198:7ec3c3677939db3d", "lfg live check A: absorbed-mid-turn verification, no action " ], [ "queued:1788771364198:8303977aa06863bd", "lfg live check B: absorbed-mid-turn verification, no action " ], [ "e432444b-218e-410a-bb5f-1842f4894a26",
+    "auditor live check: absorbed-mid-turn audit sample, no actio"
+  ]
+]

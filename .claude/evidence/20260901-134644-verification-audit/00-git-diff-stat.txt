@@ -1,0 +1,13 @@
+ desktop/LFGSessions.swift                   | 801 +++++++++++++++++++++++++---
+ ios/LFG.xcodeproj/project.pbxproj           |  20 +-
+ ios/LFG/PushManager.swift                   |  10 +-
+ ios/LFG/RichContent.swift                   |  43 +-
+ ios/LFG/SessionDetailView.swift             | 219 ++++++++
+ ios/LFG/SessionListView.swift               |  10 +
+ ios/LFG/SessionStore.swift                  |  44 +-
+ ios/LFGCore/Sources/LFGCore/LFGClient.swift |   7 +
+ src/commands/serve.ts                       |   9 +-
+ src/sessions.ts                             |  43 +-
+ src/subagents.test.ts                       |  70 +++
+ src/subagents.ts                            |  12 +-
+ 12 files changed, 1188 insertions(+), 100 deletions(-)

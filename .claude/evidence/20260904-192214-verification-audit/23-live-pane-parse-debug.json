@@ -1,0 +1,68 @@
+{
+  "parsedFull": "❯ ",
+  "parsedTail": "❯ ",
+  "tailLines": [
+    "",
+    "✽ Thundering… (3m 13s · ↓ 9.6k tokens)",
+    "                     Update available! Run: brew upgrade claude-code@latest",
+    " since 80% of quiz responses are stressing about the menopause belly, we can",
+    "cater the quiz for weigh (Branch 3) ─",
+    "❯ ",
+    "─────────────────────────────────────────────────────────────────────────────",
+    "─────────────────────────────────────",
+    "  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt · ← for…",
+    "                                                                        /rc",
+    "  ⧉  refs-artifact · artifact · artifact · belly-walkthrough",
+    ""
+  ],
+  "ruleFlags": [
+    {
+      "line": "",
+      "isRule": false
+    },
+    {
+      "line": "✽ Thundering… (3m 13s · ↓ 9.6k tokens)",
+      "isRule": false
+    },
+    {
+      "line": "                     Update available! Run: brew upgrade claude-code@latest",
+      "isRule": false
+    },
+    {
+      "line": " since 80% of quiz responses are stressing about the menopause belly, we can",
+      "isRule": false
+    },
+    {
+      "line": "cater the quiz for weigh (Branch 3) ─",
+      "isRule": true
+    },
+    {
+      "line": "❯ ",
+      "isRule": false
+    },
+    {
+      "line": "─────────────────────────────────────────────────────────────────────────────",
+      "isRule": true
+    },
+    {
+      "line": "─────────────────────────────────────",
+      "isRule": true
+    },
+    {
+      "line": "  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt · ← for…",
+      "isRule": false
+    },
+    {
+      "line": "                                                                        /rc",
+      "isRule": false
+    },
+    {
+      "line": "  ⧉  refs-artifact · artifact · artifact · belly-walkthrough",
+      "isRule": false
+    },
+    {
+      "line": "",
+      "isRule": false
+    }
+  ]
+}

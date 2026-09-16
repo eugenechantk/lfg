@@ -1,0 +1,4 @@
+42236e9c0924c446d331ac64957162d07d3fbd1abf4409128a91240ab41b288a  .claude/evidence/20260901-133626-verification-audit/08-window-compact-440-search.png
+42236e9c0924c446d331ac64957162d07d3fbd1abf4409128a91240ab41b288a  .codex/evidence/desktop-create-session/compact-440-final.png
+22dd9fcdbc0e612c9f8ae8e4eaa9882d021a42a69a07234298b1f13cae4a0bf1  .claude/evidence/20260901-133626-verification-audit/09-window-compact-568-search.png
+483f7756d6b30e2856c51e1ac18ce8c70e90dfd13d2d112939da1f3749fe71ef  .codex/evidence/desktop-create-session/compact-568-final.png

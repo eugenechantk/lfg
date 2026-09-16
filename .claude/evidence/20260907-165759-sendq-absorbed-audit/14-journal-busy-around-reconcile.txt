@@ -1,0 +1,3 @@
+== journal non-msg events for session 08:57:30Z-08:59:10Z
+933560|08:58:49.681|queue|{"kind":"delivered","clientId":"5E2F112B-FD4C-429E-B77E-4C0FF67A3C95","msgId":"1b654fd84bde2158","userTurnId":"queued:1788770521391:b8d7d093661eff9b"}
+933561|08:58:49.971|queue|{"sid":"5894849f-a36f-4b5c-8b25-acb10db35137","queue":[{"id":"1b654fd84bde2158","text":"After a message is done, the session will turn idle and all the queued m

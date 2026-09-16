@@ -1,0 +1,30 @@
+􀟈  Test nestedListsCarryDepthAndMarkers() started.
+􀟈  Test thematicBreakBecomesRule() started.
+􀟈  Test continuationParagraphInListItemHasNoMarker() started.
+􀟈  Test emptyInputYieldsNoBlocks() started.
+􀟈  Test tableBecomesHeaderAndRows() started.
+􀟈  Test plainTextIsOneParagraph() started.
+􀟈  Test inlineStylesAreCarriedOnSpans() started.
+􀟈  Test codeBlockKeepsContentVerbatim() started.
+􀟈  Test raggedTableRowsArePaddedToHeaderWidth() started.
+􀟈  Test headingsCarryLevel() started.
+􀟈  Test plainTextRenderingJoinsTableCellsWithTabs() started.
+􀟈  Test blockquoteIsMarked() started.
+􀟈  Test softAndHardLineBreaksInsideParagraph() started.
+􁁛  Test emptyInputYieldsNoBlocks() passed after 0.015 seconds.
+􁁛  Test continuationParagraphInListItemHasNoMarker() passed after 0.015 seconds.
+􁁛  Test blockquoteIsMarked() passed after 0.015 seconds.
+􁁛  Test headingsCarryLevel() passed after 0.015 seconds.
+􁁛  Test linksSurviveAsSpans() passed after 0.015 seconds.
+􁁛  Test plainTextIsOneParagraph() passed after 0.015 seconds.
+􁁛  Test softAndHardLineBreaksInsideParagraph() passed after 0.015 seconds.
+􁁛  Test thematicBreakBecomesRule() passed after 0.015 seconds.
+􁁛  Test inlineStylesAreCarriedOnSpans() passed after 0.015 seconds.
+􁁛  Test nestedListsCarryDepthAndMarkers() passed after 0.015 seconds.
+􁁛  Test unparseableInputFallsBackToRawParagraph() passed after 0.015 seconds.
+􁁛  Test codeBlockKeepsContentVerbatim() passed after 0.015 seconds.
+􁁛  Test raggedTableRowsArePaddedToHeaderWidth() passed after 0.015 seconds.
+􁁛  Test plainTextRenderingJoinsTableCellsWithTabs() passed after 0.015 seconds.
+􁁛  Test tableBecomesHeaderAndRows() passed after 0.015 seconds.
+􁁛  Suite "SelectableText" passed after 0.016 seconds.
+􁁛  Test run with 15 tests in 1 suite passed after 0.016 seconds.

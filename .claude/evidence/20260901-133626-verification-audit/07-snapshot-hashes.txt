@@ -1,0 +1,6 @@
+d800dfd4bcfb902747a9dacc51b2e11beb50041f360c6e939579ccee0bd115c1  .claude/evidence/20260901-133626-verification-audit/04-window-compact-440.png
+42236e9c0924c446d331ac64957162d07d3fbd1abf4409128a91240ab41b288a  .codex/evidence/desktop-create-session/compact-440-final.png
+b155f5e5bab2f403ac9ed6dd89cbd532d7a32cc46fed44c5a86790b4fba1b679  .claude/evidence/20260901-133626-verification-audit/05-window-full-900.png
+b155f5e5bab2f403ac9ed6dd89cbd532d7a32cc46fed44c5a86790b4fba1b679  .codex/evidence/desktop-create-session/full-900-final.png
+22634cf06b36eeeacb7d47c7384eaa23ff327b6d6ebee1516981f56c4f8517f6  .claude/evidence/20260901-133626-verification-audit/06-window-compact-568.png
+483f7756d6b30e2856c51e1ac18ce8c70e90dfd13d2d112939da1f3749fe71ef  .codex/evidence/desktop-create-session/compact-568-final.png

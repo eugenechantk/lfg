@@ -1,0 +1,6 @@
+check it, or read the runbook.
+Host	Port	Status
+eugenes-macbook-pro	8766	healthy
+eugenes-macbook-air	8766	degraded
+Next steps:
+•	Restart the

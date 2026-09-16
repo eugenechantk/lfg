@@ -1,0 +1,79 @@
+  walked again. Cards show $0 then $19.99 a month, and $14.99 with $19.99
+  struck. The FAQ says "month by month". Stripe minted a session on the
+  monthly trial price.
+
+  Normal quiz regression. 29 screens with a non-weight goal, all intact: the
+  "you're not unfit" and physiology screens, all movement questions, the
+  starting-point summary, week and what-matters acts, profile and 12-week
+  plan screens, then the paywall. The paywall has its hero, "12-week plan"
+  copy, "15 minutes, three days a week", the original testimonials and the
+  "after 12 weeks" FAQ, with no belly markup. The sheet says "one payment of
+  $59, nothing renews" and Stripe minted the control trial session.
+
+  Tracking. Every session carries the right metadata. Belly runs stamp
+  quiz_branch=belly with the belly arm, the control run stamps control with
+  trial59. The page super properties matched at the paywall in all three
+  runs.
+
+  Also. Unit suite: 95 files, 1080 pass. Console shows only Stripe.js
+  warnings about HTTP and Apple Pay on localhost.
+
+  Two things to know.
+  - The belly branch now asks age right after the goal question, because the
+    goal screen was moved to the front in the merge. Routing still works.
+  - Still open from before: the guarantee card says "in your 12 weeks" on the
+    belly paywall, and the belly testimonials are specimens.
+
+  Not covered: the zh-TW page, a real card confirmation, and the webhook to
+  welcome path.
+
+  ---
+  Summary: Belly branch (both arms) and normal quiz walked end to end on main
+  with screenshots, checkout sessions and tracking verified; no regressions
+  found.
+  Actions:
+  - Confirmed the checkout matches origin/main; full unit suite green
+  - Generic walker screenshotted every screen of three runs and opened each
+    checkout sheet; contact sheets built and sent
+  - Read back the minted Stripe sessions to confirm price, arm and branch
+    metadata
+  - Recorded the evidence in the feature doc
+    Files: edited .claude/feature/quiz-belly-branch.md; screenshots in the
+    session scratchpad e2e/
+
+✻ Sautéed for 8m 10s · done 6:56 PM
+
+❯ Show me all the screenshots and put them in an artifact
+
+⏺ Skill(artifact-design)
+  ⎿  Successfully loaded skill
+
+⏺ Building the gallery: three runs, every screen as a tappable thumbnail with
+  the full paywalls and checkout sheets, and a sticky run switcher.
+
+  Read 1 file, ran 3 shell commands
+
+⏺ Artifact(/private/tmp/claude-501/-Users-eugenechan-dev-personal-fiftyworkou
+          t/3a89c99d-156f-422b-a264-c82f76205a39/scratchpad/belly-walkthrough
+          .html)
+  ⎿  Published ⧉ https://claude.ai/code/artifact/d8ec170e-fa38-4031-bd1f
+     -97f55b368597
+
+⏺ Host the standalone gallery page on the Cloudflare pages domain · 35s
+  ⎿  $ cd /Users/eugenechan/dev/personal/fiftyworkout/.claude/quiz-belly &&
+     ls e2e-page; cat e2e-page/.cf-project-name 2>/dev/null; uv run python
+     ~/.claude/skills/publish-as-webpage/publish.py e2e-page --slug
+     "belly-branch-walkthrough-d8ec170e" --label "FiftyStrong belly branch
+     e2e walkthrough screensho… (35s · 2 lines)
+     (ctrl+b ctrl+b (twice) to run in background)
+
+✽ Thundering… (3m 13s · ↓ 9.6k tokens)
+                     Update available! Run: brew upgrade claude-code@latest
+ since 80% of quiz responses are stressing about the menopause belly, we can
+cater the quiz for weigh (Branch 3) ─
+❯ 
+─────────────────────────────────────────────────────────────────────────────
+─────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt · ← for…
+                                                                        /rc
+  ⧉  refs-artifact · artifact · artifact · belly-walkthrough

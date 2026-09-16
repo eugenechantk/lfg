@@ -1,0 +1,43 @@
+== as of 09:01:42Z
+== all queue-operation lines now:
+6
+2026-09-07T08:41:53.118Z enqueue None 'After a message is done, the session will turn idl'
+2026-09-07T08:42:01.391Z remove absorbed_mid_turn 'After a message is done, the session will turn idl'
+2026-09-07T08:55:33.884Z enqueue None 'lfg live check A: absorbed-mid-turn verification, '
+2026-09-07T08:55:34.343Z enqueue None 'lfg live check B: absorbed-mid-turn verification, '
+2026-09-07T08:56:04.198Z remove absorbed_mid_turn 'lfg live check A: absorbed-mid-turn verification, '
+2026-09-07T08:56:04.198Z remove absorbed_mid_turn 'lfg live check B: absorbed-mid-turn verification, '
+
+== transcript lines 08:58:30Z onward (type, ts, uuid, tool names / text head):
+assistant 2026-09-07T08:58:33.254Z 2dba87d5   [('tool_use', 'Bash')]
+user 2026-09-07T08:58:33.612Z 4d5d48bf   [('tool_result', '')]
+attachment 2026-09-07T08:58:33.612Z 902ff8be   None
+attachment 2026-09-07T08:58:33.620Z 6a57be44   None
+attachment 2026-09-07T08:58:33.621Z 19a9eed6   None
+attachment 2026-09-07T08:58:33.621Z 72e0fc25   None
+attachment 2026-09-07T08:58:33.622Z d76c6d5e   None
+assistant 2026-09-07T08:58:45.409Z dd55b7d4   [('thinking', '')]
+assistant 2026-09-07T08:58:45.440Z dab138fa   [('text', 'Everything except the independent audit is done and recorded')]
+system 2026-09-07T08:58:45.602Z 51a2d279  stop_hook_summary None
+system 2026-09-07T08:58:45.605Z d444b0c4  turn_duration None
+user 2026-09-07T09:00:03.371Z e432444b   auditor live check: absorbed-mid-turn audit sample, no action needed
+attachment 2026-09-07T09:00:03.371Z b62e2a13   None
+assistant 2026-09-07T09:00:09.656Z 63cd5152   [('thinking', '')]
+assistant 2026-09-07T09:00:10.009Z 5fe65c19   [('text', "That was the auditor's own live sample landing here as a nor")]
+system 2026-09-07T09:00:10.179Z 2acc1718  stop_hook_summary None
+system 2026-09-07T09:00:10.181Z 51e38058  turn_duration None
+user 2026-09-07T09:00:49.860Z 333ac056   Now in this session: lfg-299741
+
+The client has a bunch of stacked up user messa
+attachment 2026-09-07T09:00:49.860Z 5034f42b   None
+assistant 2026-09-07T09:00:57.986Z 54c7241d   [('thinking', '')]
+assistant 2026-09-07T09:00:59.489Z b43cbdbb   [('text', 'Looking at that session now: which transcript it is, what it')]
+assistant 2026-09-07T09:01:08.048Z 2173cfc4   [('tool_use', 'Bash')]
+user 2026-09-07T09:01:08.698Z 99c49878   [('tool_result', '')]
+attachment 2026-09-07T09:01:08.698Z acd39909   None
+attachment 2026-09-07T09:01:08.705Z 095e9765   None
+attachment 2026-09-07T09:01:08.706Z 22cc298f   None
+assistant 2026-09-07T09:01:26.943Z ff3328fc   [('thinking', '')]
+assistant 2026-09-07T09:01:26.982Z 7abc350e   [('text', "That session is the one from this morning's report (`038215e")]
+system 2026-09-07T09:01:27.131Z 5571a627  stop_hook_summary None
+system 2026-09-07T09:01:27.132Z 5436b5a3  turn_duration None

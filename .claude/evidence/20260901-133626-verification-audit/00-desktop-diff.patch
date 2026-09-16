@@ -1,0 +1,905 @@
+diff --git a/desktop/LFGSessions.swift b/desktop/LFGSessions.swift
+index fffc917..8ac4607 100644
+--- a/desktop/LFGSessions.swift
++++ b/desktop/LFGSessions.swift
+@@ -103,6 +103,7 @@ struct ResumableAPISession: Decodable {
+     let lastActivityAt: Double?
+     let lastUserText: String?
+     let agent: String
++    let model: String?
+ 
+     init(
+         sessionId: String,
+@@ -111,7 +112,8 @@ struct ResumableAPISession: Decodable {
+         title: String,
+         lastActivityAt: Double?,
+         lastUserText: String?,
+-        agent: String = "claude"
++        agent: String = "claude",
++        model: String? = nil
+     ) {
+         self.sessionId = sessionId
+         self.cwd = cwd
+@@ -120,10 +122,11 @@ struct ResumableAPISession: Decodable {
+         self.lastActivityAt = lastActivityAt
+         self.lastUserText = lastUserText
+         self.agent = agent
++        self.model = model
+     }
+ 
+     private enum CodingKeys: String, CodingKey {
+-        case sessionId, cwd, project, title, lastActivityAt, lastUserText, agent
++        case sessionId, cwd, project, title, lastActivityAt, lastUserText, agent, model
+     }
+ 
+     init(from decoder: Decoder) throws {
+@@ -137,6 +140,7 @@ struct ResumableAPISession: Decodable {
+         // Hosts predating Codex resume omitted `agent`; every row they emitted
+         // was Claude, so that is the only backward-compatible default.
+         agent = try c.decodeIfPresent(String.self, forKey: .agent) ?? "claude"
++        model = try c.decodeIfPresent(String.self, forKey: .model)
+     }
+ }
+ struct ResumableResponse: Decodable {
+@@ -147,6 +151,14 @@ struct ResumableResponse: Decodable {
+ }
+ struct HostInfoResponse: Decodable { let hostId: String; let hostName: String }
+ struct SessionStatesResponse: Decodable { let needsInputSessionIds: [String] }
++struct DesktopDirsResponse: Decodable { let inbox: String }
++struct DesktopNewSessionResponse: Decodable {
++    let ok: Bool?
++    let sessionId: String?
++    let tmuxName: String?
++    let cwd: String?
++    let agent: String?
++}
+ 
+ enum RemoteTransport: String, Codable {
+     /// Real mosh when it's installed locally, plain ssh otherwise. Right for
+@@ -295,6 +307,9 @@ struct HostState: Identifiable {
+     var info: HostInfoResponse?
+     var sessions: [APISession] = []
+     var closedSessions: [APISession] = []
++    /// Cursor for the page after `closedSessions`, from the host's `nextBefore`.
++    /// nil when the host's closed corpus is exhausted (or predates paging).
++    var closedNextBefore: Double? = nil
+     var needsInputSessionIds: Set<String> = []
+     var error: String?
+     var isLocal: Bool = false
+@@ -472,7 +487,7 @@ enum SessionSearch {
+ 
+     static func matches(_ session: ResumableAPISession, terms: [String]) -> Bool {
+         matches(fields: [session.title, session.project, session.cwd, session.lastUserText,
+-                         session.sessionId],
++                         session.model, session.agent, session.sessionId],
+                 terms: terms)
+     }
+ 
+@@ -485,6 +500,124 @@ enum SessionSearch {
+     }
+ }
+ 
++// MARK: - New-session planning
++
++/// The complete, deterministic decision needed before the API call. Keeping it
++/// value-only makes the search-to-directory behavior headlessly testable.
++struct DesktopNewSessionPlan: Equatable {
++    let hostURL: String
++    let cwd: String
++    let agent: String
++    let model: String
++}
++
++enum DesktopNewSessionPlanner {
++    /// Catalogs mirror `LFGCore.AgentKind` in the iOS client. A transcript may
++    /// carry a retired model, so restore through the current catalog before a
++    /// create request reaches the server's allowlist.
++    private static let modelsByAgent: [String: [String]] = [
++        "claude": ["claude-opus-5", "claude-fable-5", "claude-sonnet-5",
++                   "claude-haiku-4-5", "opus", "fable", "sonnet", "haiku"],
++        "codex": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"],
++    ]
++
++    static let defaultAgent = "claude"
++    static var defaultModel: String { modelsByAgent[defaultAgent]!.first! }
++
++    static func plan(
++        query rawQuery: String,
++        items: [SessionItem],
++        defaultHostURL: String?,
++        inbox: String?
++    ) -> DesktopNewSessionPlan? {
++        let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
++        if query.isEmpty {
++            guard let hostURL = nonempty(defaultHostURL), let cwd = normalizedPath(inbox) else {
++                return nil
++            }
++            return DesktopNewSessionPlan(
++                hostURL: hostURL, cwd: cwd, agent: defaultAgent, model: defaultModel)
++        }
++
++        let terms = SessionSearch.terms(query)
++        let matching = items.filter {
++            normalizedPath($0.session.cwd) != nil && SessionSearch.matches($0, terms: terms)
++        }
++        guard let directorySource = matching.max(by: {
++            let left = directoryScore($0, query: query, terms: terms)
++            let right = directoryScore($1, query: query, terms: terms)
++            if left != right { return left < right }
++            let leftActivity = $0.session.lastActivityAt ?? 0
++            let rightActivity = $1.session.lastActivityAt ?? 0
++            return leftActivity == rightActivity ? $0.id > $1.id : leftActivity < rightActivity
++        }), let cwd = normalizedPath(directorySource.session.cwd) else {
++            return nil
++        }
++
++        // Once the query identifies a directory, model inference is deliberately
++        // broader than the matches: the newest session in that exact cwd is the
++        // source of truth even when its title did not contain the query.
++        let history = items
++            .filter { normalizedPath($0.session.cwd) == cwd && modelsByAgent[$0.session.agent] != nil }
++            .sorted {
++                let left = $0.session.lastActivityAt ?? 0
++                let right = $1.session.lastActivityAt ?? 0
++                return left == right ? $0.id < $1.id : left > right
++            }
++        // Same two-tier rule as iOS: prefer the newest readable model in the
++        // directory; only when none is readable use the newest known agent's
++        // current default. A newer metadata-only row must not erase a model we
++        // can still recover from the next transcript.
++        let selection = history.first(where: { nonempty($0.session.model) != nil })
++            .map(restoredSelection(for:))
++            ?? history.first.map(restoredSelection(for:))
++            ?? (agent: defaultAgent, model: defaultModel)
++        return DesktopNewSessionPlan(
++            hostURL: directorySource.hostURL,
++            cwd: cwd,
++            agent: selection.agent,
++            model: selection.model
++        )
++    }
++
++    private static func directoryScore(_ item: SessionItem, query: String, terms: [String]) -> Int {
++        guard let cwd = normalizedPath(item.session.cwd) else { return Int.min }
++        let q = query.lowercased()
++        let path = cwd.lowercased()
++        let leaf = (cwd as NSString).lastPathComponent.lowercased()
++        let project = item.session.project.lowercased()
++        if path == q || leaf == q { return 4 }
++        if project == q { return 3 }
++        if leaf.hasPrefix(q) || project.hasPrefix(q) { return 2 }
++        if terms.allSatisfy({ path.contains($0) || project.contains($0) }) { return 1 }
++        return 0
++    }
++
++    private static func restoredSelection(for item: SessionItem) -> (agent: String, model: String) {
++        let agent = item.session.agent
++        guard let models = modelsByAgent[agent], let fallback = models.first else {
++            return (defaultAgent, defaultModel)
++        }
++        guard let model = nonempty(item.session.model), models.contains(model) else {
++            return (agent, fallback)
++        }
++        return (agent, model)
++    }
++
++    private static func normalizedPath(_ raw: String?) -> String? {
++        guard var path = nonempty(raw) else { return nil }
++        while path.count > 1 && path.hasSuffix("/") { path.removeLast() }
++        return path
++    }
++
++    private static func nonempty(_ raw: String?) -> String? {
++        guard let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
++            return nil
++        }
++        return value
++    }
++}
++
+ // MARK: - Config
+ 
+ enum Config {
+@@ -738,6 +871,7 @@ final class SessionStore: ObservableObject {
+     @Published var lastRefreshed: Date?
+     @Published var movingIds: Set<String> = []
+     @Published var closingIds: Set<String> = []
++    @Published var creatingSession = false
+ 
+     // MARK: Search across every session on every host
+     //
+@@ -793,13 +927,94 @@ final class SessionStore: ObservableObject {
+         }
+     }
+ 
++    /// Ensure the host-backed search for the current text has landed before the
++    /// create planner consumes it. A fast click immediately after typing should
++    /// use the typed context, not whichever result page happened to be present.
++    private func settleSearch(_ raw: String) async {
++        setSearchQuery(raw)
++        if let task = searchTask { await task.value }
++    }
++
++    /// Resolve, create, then hand the returned tmux session to the same opener
++    /// every existing row uses. Returns user-facing error copy, or nil.
++    func createSession(searchQuery rawQuery: String) async -> String? {
++        guard !creatingSession else { return nil }
++        creatingSession = true
++        defer { creatingSession = false }
++
++        let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
++        if !query.isEmpty { await settleSearch(query) }
++
++        guard let defaultHostURL = defaultCreationHostURL else {
++            return "No host is configured for new sessions."
++        }
++        let inbox: String?
++        if query.isEmpty {
++            do {
++                inbox = try await DesktopSessionCreator.fetchInbox(hostURL: defaultHostURL)
++            } catch {
++                return "Couldn't load Inbox: \(error.localizedDescription)"
++            }
++        } else {
++            inbox = nil
++        }
++
++        let candidates = items + searchClosed
++        guard let plan = DesktopNewSessionPlanner.plan(
++            query: query,
++            items: candidates,
++            defaultHostURL: defaultHostURL,
++            inbox: inbox
++        ) else {
++            return query.isEmpty
++                ? "The default host did not provide an Inbox directory."
++                : "No session with a working directory matches “\(query)”."
++        }
++        guard let host = creationHost(for: plan.hostURL) else {
++            return "The host for \(plan.cwd) is no longer configured."
++        }
++
++        do {
++            let created = try await DesktopSessionCreator.create(plan: plan, host: host)
++            if let error = Opener.open(created) { return error }
++            await refresh()
++            return nil
++        } catch {
++            return "Create failed: \(error.localizedDescription)"
++        }
++    }
++
++    private var defaultCreationHostURL: String? {
++        for entry in configuredHosts {
++            if let state = resolvedState(for: entry), state.error == nil { return entry.url }
++        }
++        return configuredHosts.first?.url ?? hosts.first?.url
++    }
++
++    private func creationHost(for url: String) -> HostState? {
++        let resolved = hosts.first { $0.url == url } ?? duplicateHostsByURL[url]
++        let entry = configuredHosts.first { $0.url == url }
++        guard resolved != nil || entry != nil else { return nil }
++        return HostState(
++            url: url,
++            sshTarget: entry.flatMap { Config.sshTarget(for: $0) } ?? resolved?.sshTarget,
++            remoteTransport: entry?.transport ?? resolved?.remoteTransport ?? .automatic,
++            displayName: entry?.displayName ?? resolved?.displayName,
++            info: resolved?.info,
++            error: resolved?.error,
++            isLocal: resolved?.isLocal ?? isLocalURL(url)
++        )
++    }
++
+     private func performSearch(_ q: String) async {
+         let entries = Config.loadHosts()
++        let excludes = hiddenDirs.paths
+         var pages: [(String, [ResumableAPISession], Double?)] = []
+         await withTaskGroup(of: (String, [ResumableAPISession], Double?).self) { group in
+             for entry in entries {
+                 group.addTask {
+-                    let page = await Self.fetchSearchPage(entry: entry, query: q, before: nil)
++                    let page = await Self.fetchSearchPage(
++                        entry: entry, query: q, before: nil, excludes: excludes)
+                     return (entry.url, page.sessions, page.nextBefore)
+                 }
+             }
+@@ -824,12 +1039,14 @@ final class SessionStore: ObservableObject {
+         defer { searchLoadingMore = false }
+ 
+         let entries = Config.loadHosts().filter { cursors[$0.url] != nil }
++        let excludes = hiddenDirs.paths
+         var pages: [(String, [ResumableAPISession], Double?)] = []
+         await withTaskGroup(of: (String, [ResumableAPISession], Double?).self) { group in
+             for entry in entries {
+                 let before = cursors[entry.url]
+                 group.addTask {
+-                    let page = await Self.fetchSearchPage(entry: entry, query: q, before: before)
++                    let page = await Self.fetchSearchPage(
++                        entry: entry, query: q, before: before, excludes: excludes)
+                     return (entry.url, page.sessions, page.nextBefore)
+                 }
+             }
+@@ -843,6 +1060,88 @@ final class SessionStore: ObservableObject {
+         rebuildSearchResults()
+     }
+ 
++    // MARK: Closed-list paging (infinite scroll)
++    //
++    // `fetchHost` loads each host's newest closed page on every refresh;
++    // reaching the bottom of the list pulls deeper pages here. Deeper pages
++    // live OUTSIDE HostState so the periodic refresh replacing page 1 cannot
++    // discard what the user scrolled down to. Cursor ownership: page 1's
++    // `nextBefore` seeds a host's cursor, but once a deeper page has loaded,
++    // the deepest page owns it — a refresh must not rewind the cursor or every
++    // poll would re-fetch page 2 forever.
++
++    @Published var closedLoadingMore = false
++    /// Deeper closed pages per host URL, in load order (already row-shaped).
++    private var moreClosedByHost: [String: [APISession]] = [:]
++    /// Where the next deeper page starts, per host URL.
++    private var closedNextBeforeByHost: [String: Double] = [:]
++    /// Hosts whose closed corpus was paged to the end. Terminal on purpose:
++    /// anything that closes later is newer than every loaded row and arrives
++    /// via page 1, never via a deeper page.
++    private var closedExhaustedHosts: Set<String> = []
++
++    var canLoadMoreClosed: Bool { !closedNextBeforeByHost.isEmpty }
++
++    func loadMoreClosed() async {
++        guard !closedLoadingMore else { return }
++        let cursors = closedNextBeforeByHost
++        guard !cursors.isEmpty else { return }
++        closedLoadingMore = true
++        defer { closedLoadingMore = false }
++
++        let excludes = hiddenDirs.paths
++        let entries = Config.loadHosts().filter { cursors[$0.url] != nil }
++        var pages: [(String, [ResumableAPISession], Double?)] = []
++        await withTaskGroup(of: (String, [ResumableAPISession], Double?).self) { group in
++            for entry in entries {
++                let before = cursors[entry.url]
++                group.addTask {
++                    // An empty query hits the host's plain (unsearched) closed
++                    // list — same endpoint, same page shape, same cursor.
++                    let page = await Self.fetchSearchPage(
++                        entry: entry, query: "", before: before, excludes: excludes)
++                    return (entry.url, page.sessions, page.nextBefore)
++                }
++            }
++            for await r in group { pages.append(r) }
++        }
++        for (url, sessions, next) in pages {
++            // A failed fetch looks like ([], nil). Leaving the cursor alone
++            // retries on the next bottom-reach; marking exhausted here would
++            // silently end paging on one flaky request.
++            guard !sessions.isEmpty || next != nil else { continue }
++            moreClosedByHost[url, default: []]
++                .append(contentsOf: sessions.map(Self.closedSession(from:)))
++            if let next {
++                closedNextBeforeByHost[url] = next
++            } else {
++                closedNextBeforeByHost.removeValue(forKey: url)
++                closedExhaustedHosts.insert(url)
++            }
++        }
++        mergeDeeperClosedPages()
++    }
++
++    /// Fold the deeper pages into the already-built `hosts`, applying the same
++    /// live/duplicate filters the refresh merge applies to page 1.
++    private func mergeDeeperClosedPages() {
++        guard !moreClosedByHost.isEmpty else { return }
++        let liveIds = Set(hosts.flatMap { $0.sessions.filter { !$0.closed }.compactMap(\.sessionId) })
++        var seenIds = Set(hosts.flatMap { $0.sessions.compactMap(\.sessionId) })
++        for i in hosts.indices {
++            guard let extra = moreClosedByHost[hosts[i].url], !extra.isEmpty else { continue }
++            let fresh = extra.filter { session in
++                guard let id = session.sessionId else { return false }
++                if liveIds.contains(id) { return false }
++                return seenIds.insert(id).inserted
++            }
++            guard !fresh.isEmpty else { continue }
++            hosts[i].sessions = (hosts[i].sessions + fresh).sorted {
++                ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0)
++            }
++        }
++    }
++
+     /// Collapse every host's search page into one list.
+     ///
+     /// Same three jobs as the normal closed merge — dedupe the transcripts both
+@@ -1017,10 +1316,17 @@ final class SessionStore: ObservableObject {
+         defer { refreshing = false; lastRefreshed = Date() }
+         let entries = Config.loadHosts()
+         applyConfiguration(entries)
++        // The hidden set rides along as `exclude` params so the host filters
++        // BEFORE paginating. Filtering only client-side starves the closed
++        // list: gbrain autopilot churn can own the entire newest-100 page,
++        // leaving a handful of visible rows while real history sits behind a
++        // cursor this list never follows. The local `visible()` filter stays as
++        // the backstop for hosts that predate the param.
++        let excludes = hiddenDirs.paths
+         var results: [HostState] = []
+         await withTaskGroup(of: HostState.self) { group in
+             for entry in entries {
+-                group.addTask { await Self.fetchHost(entry: entry) }
++                group.addTask { await Self.fetchHost(entry: entry, excludes: excludes) }
+             }
+             for await state in group { results.append(state) }
+         }
+@@ -1051,7 +1357,11 @@ final class SessionStore: ObservableObject {
+         let liveIds = Set(uniqueHosts.flatMap { $0.sessions.compactMap(\.sessionId) })
+         var seenClosedIds = Set<String>()
+         for i in uniqueHosts.indices {
+-            let closed = uniqueHosts[i].closedSessions.filter { session in
++            let url = uniqueHosts[i].url
++            // Page 1 is fresh from this refresh; deeper pages the user already
++            // scrolled to ride along so the rebuild can't shrink the list.
++            let deeper = moreClosedByHost[url] ?? []
++            let closed = (uniqueHosts[i].closedSessions + deeper).filter { session in
+                 guard let id = session.sessionId else { return false }
+                 if liveIds.contains(id) { return false }
+                 return seenClosedIds.insert(id).inserted
+@@ -1059,6 +1369,16 @@ final class SessionStore: ObservableObject {
+             uniqueHosts[i].sessions = (uniqueHosts[i].sessions + closed).sorted {
+                 ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0)
+             }
++            // Page 1 seeds the cursor only while no deeper page owns it —
++            // rewinding on every poll would re-fetch page 2 forever. A host
++            // paged to its end stays ended; later closures arrive via page 1.
++            if !closedExhaustedHosts.contains(url), deeper.isEmpty {
++                if let nb = uniqueHosts[i].closedNextBefore {
++                    closedNextBeforeByHost[url] = nb
++                } else {
++                    closedNextBeforeByHost.removeValue(forKey: url)
++                }
++            }
+         }
+         duplicateHostsByURL = duplicates
+         hosts = uniqueHosts
+@@ -1149,7 +1469,13 @@ final class SessionStore: ObservableObject {
+         }
+     }
+ 
+-    private static func fetchHost(entry: Config.HostEntry) async -> HostState {
++    /// `exclude` query items for the caller's hidden-dir globs, shared by the
++    /// list fetch and search so the two can't drift.
++    static func excludeQueryItems(_ excludes: [String]) -> [URLQueryItem] {
++        excludes.map { URLQueryItem(name: "exclude", value: $0) }
++    }
++
++    private static func fetchHost(entry: Config.HostEntry, excludes: [String] = []) async -> HostState {
+         let url = entry.url
+         var state = HostState(
+             url: url,
+@@ -1163,9 +1489,12 @@ final class SessionStore: ObservableObject {
+             return c
+         }())
+         do {
++            var resumableComps = URLComponents(string: url + "/api/sessions/resumable")
++            resumableComps?.queryItems =
++                [URLQueryItem(name: "limit", value: "100")] + excludeQueryItems(excludes)
+             guard let infoURL = URL(string: url + "/api/info"),
+                   let sessURL = URL(string: url + "/api/sessions"),
+-                  let resumableURL = URL(string: url + "/api/sessions/resumable?limit=100"),
++                  let resumableURL = resumableComps?.url,
+                   let statesURL = URL(string: url + "/api/session-states") else {
+                 state.error = "bad URL"
+                 return state
+@@ -1187,6 +1516,7 @@ final class SessionStore: ObservableObject {
+             if let (resumableData, _) = try? await session.data(for: DesktopAPI.request(resumableURL)),
+                let resumable = try? JSONDecoder().decode(ResumableResponse.self, from: resumableData) {
+                 state.closedSessions = resumable.sessions.map(Self.closedSession(from:))
++                state.closedNextBefore = resumable.nextBefore
+             }
+         } catch {
+             state.error = "unreachable"
+@@ -1212,7 +1542,7 @@ final class SessionStore: ObservableObject {
+             busy: false,
+             lastActivityAt: r.lastActivityAt,
+             tmuxName: nil,
+-            model: nil,
++            model: r.model,
+             status: nil,
+             lastUserText: r.lastUserText,
+             closed: true
+@@ -1225,13 +1555,15 @@ final class SessionStore: ObservableObject {
+     static func fetchSearchPage(
+         entry: Config.HostEntry,
+         query: String,
+-        before: Double?
++        before: Double?,
++        excludes: [String] = []
+     ) async -> (sessions: [ResumableAPISession], nextBefore: Double?) {
+         var comps = URLComponents(string: entry.url + "/api/sessions/resumable")
+         var q = [
+             URLQueryItem(name: "limit", value: String(searchPageSize)),
+             URLQueryItem(name: "q", value: query),
+         ]
++        q += excludeQueryItems(excludes)
+         if let before { q.append(URLQueryItem(name: "before", value: String(before))) }
+         comps?.queryItems = q
+         guard let url = comps?.url else { return ([], nil) }
+@@ -2094,12 +2426,14 @@ enum DesktopFeatureTestCLI {
+         try expect(compactShort < 40,
+                    "compact two-host status cluster stays dot-sized")
+ 
+-        // Labels are dropped because they don't fit, not because the window is
+-        // narrow — short host names survive a third-of-the-screen window.
+-        try expect(ContentView.hostLabelsFit(clusterWidth: 67, windowWidth: 490),
+-                   "short host names keep their labels at a third of a 13\" Air")
++        // Labels are dropped because they don't fit beside all four compact
++        // actions, not merely because the window crossed the compact threshold.
++        try expect(ContentView.hostLabelsFit(clusterWidth: 67, windowWidth: 600),
++                   "short host names keep their labels when all compact actions fit")
++        try expect(!ContentView.hostLabelsFit(clusterWidth: 67, windowWidth: 568),
++                   "short labels give way before they can push Create into overflow")
+         try expect(!ContentView.hostLabelsFit(clusterWidth: 67, windowWidth: 440),
+-                   "at the 440pt minimum even short labels give way to dots")
++                   "at the 440pt minimum short labels remain collapsed to dots")
+         try expect(!ContentView.hostLabelsFit(clusterWidth: 300, windowWidth: 700),
+                    "long host names drop to dots rather than push an item into the overflow")
+         try expect(ContentView.hostLabelsFit(clusterWidth: 300, windowWidth: 900),
+@@ -2172,6 +2506,103 @@ enum DesktopFeatureTestCLI {
+                    "clearing menu search restores every session")
+ 
+         try runSearchTests()
++        try runNewSessionPlannerTests()
++    }
++
++    /// Creation starts from search context, so pin the directory/model decision
++    /// independently of networking and iTerm automation.
++    @MainActor
++    private static func runNewSessionPlannerTests() throws {
++        let fallback = DesktopNewSessionPlanner.plan(
++            query: "   ",
++            items: [],
++            defaultHostURL: "http://default:8766",
++            inbox: "/Users/me/repos/_inbox"
++        )
++        try expect(fallback == DesktopNewSessionPlan(
++            hostURL: "http://default:8766",
++            cwd: "/Users/me/repos/_inbox",
++            agent: "claude",
++            model: "claude-opus-5"
++        ), "empty search uses the default host Inbox and the iOS default model")
++
++        let exactDirectory = newSessionTestItem(
++            id: "exact-directory", title: "older work", project: "lfg",
++            cwd: "/Users/me/dev/lfg", lastActivity: 100,
++            agent: "claude", model: "sonnet", hostURL: "http://pro:8766")
++        let incidentalMention = newSessionTestItem(
++            id: "incidental", title: "fix the lfg integration", project: "website",
++            cwd: "/Users/me/dev/website", lastActivity: 500,
++            agent: "claude", model: "opus", hostURL: "http://air:8766")
++        let latestInExactDirectory = newSessionTestItem(
++            id: "latest-model", title: "unrelated title", project: "workspace",
++            cwd: "/Users/me/dev/lfg/", lastActivity: 300,
++            agent: "codex", model: "gpt-5.6-sol", hostURL: "http://pro:8766")
++        let inferred = try require(DesktopNewSessionPlanner.plan(
++            query: "lfg",
++            items: [incidentalMention, exactDirectory, latestInExactDirectory],
++            defaultHostURL: "http://default:8766",
++            inbox: "/Users/me/repos/_inbox"
++        ), "search resolves a directory-bearing plan")
++        try expect(inferred == DesktopNewSessionPlan(
++            hostURL: "http://pro:8766",
++            cwd: "/Users/me/dev/lfg",
++            agent: "codex",
++            model: "gpt-5.6-sol"
++        ), "exact directory relevance wins and its newest session supplies agent/model")
++
++        let noModel = newSessionTestItem(
++            id: "codex-no-model", title: "render pipeline", project: "render",
++            cwd: "/Users/me/dev/render", lastActivity: 10,
++            agent: "codex", model: nil, hostURL: "http://studio:8766")
++        try expect(DesktopNewSessionPlanner.plan(
++            query: "render", items: [noModel],
++            defaultHostURL: "http://default:8766", inbox: "/inbox"
++        )?.model == "gpt-5.6-sol", "known agent without model uses that agent's iOS default")
++
++        let readableOlderModel = newSessionTestItem(
++            id: "render-known-model", title: "older render", project: "render",
++            cwd: "/Users/me/dev/render", lastActivity: 5,
++            agent: "codex", model: "gpt-5.6-terra", hostURL: "http://studio:8766")
++        try expect(DesktopNewSessionPlanner.plan(
++            query: "render", items: [noModel, readableOlderModel],
++            defaultHostURL: "http://default:8766", inbox: "/inbox"
++        )?.model == "gpt-5.6-terra",
++                   "newest readable directory model wins over newer metadata without a model")
++
++        try expect(DesktopNewSessionPlanner.plan(
++            query: "missing", items: [exactDirectory],
++            defaultHostURL: "http://default:8766", inbox: "/inbox"
++        ) == nil, "non-empty search with no directory-bearing match does not fall back to Inbox")
++
++        let request = try DesktopSessionCreator.newSessionRequest(plan: inferred)
++        let body = try require(request.httpBody, "create request has a JSON body")
++        let payload = try require(
++            try JSONSerialization.jsonObject(with: body) as? [String: String],
++            "create request JSON has string fields")
++        try expect(request.httpMethod == "POST" && request.url?.path == "/api/sessions/new",
++                   "create request targets POST /api/sessions/new")
++        try expect(payload == [
++            "cwd": "/Users/me/dev/lfg",
++            "prompt": "",
++            "agent": "codex",
++            "model": "gpt-5.6-sol",
++        ], "create request sends the inferred directory, agent, and model with an empty prompt")
++
++        let createdHost = HostState(
++            url: "http://pro:8766", sshTarget: "pro", remoteTransport: .moshBridged,
++            displayName: "Pro", info: HostInfoResponse(hostId: "pro-id", hostName: "Pro.local"),
++            isLocal: false)
++        let created = try DesktopSessionCreator.createdItem(
++            response: DesktopNewSessionResponse(
++                ok: true, sessionId: "new-id", tmuxName: "lfg-new123",
++                cwd: "/Users/me/dev/lfg", agent: "codex"),
++            plan: inferred,
++            host: createdHost)
++        try expect(created.session.tmuxName == "lfg-new123" && created.session.sessionId == "new-id",
++                   "create response retains the returned tmux and session identifiers")
++        try expect(created.hostSSHTarget == "pro" && created.hostRemoteTransport == .moshBridged,
++                   "created row retains host transport metadata for the existing iTerm opener")
+     }
+ 
+     /// Search spans every session on every host, so the rules that keep that
+@@ -2272,6 +2703,40 @@ enum DesktopFeatureTestCLI {
+         )
+     }
+ 
++    private static func newSessionTestItem(
++        id: String,
++        title: String,
++        project: String,
++        cwd: String,
++        lastActivity: Double,
++        agent: String,
++        model: String?,
++        hostURL: String
++    ) -> SessionItem {
++        SessionItem(
++            session: APISession(
++                agent: agent,
++                pid: id.hashValue,
++                cwd: cwd,
++                project: project,
++                title: title,
++                sessionId: id,
++                busy: false,
++                lastActivityAt: lastActivity,
++                tmuxName: nil,
++                model: model,
++                status: nil,
++                lastUserText: nil,
++                closed: true
++            ),
++            hostURL: hostURL,
++            hostId: hostURL,
++            hostLabel: URL(string: hostURL)?.host ?? hostURL,
++            hostIsLocal: false,
++            hostSSHTarget: nil
++        )
++    }
++
+     /// Counted at runtime — a hand-maintained literal silently under-reports
+     /// the moment someone adds or drops an assertion.
+     private nonisolated(unsafe) static var assertionCount = 0
+@@ -2443,6 +2908,113 @@ enum DesktopStatusSnapshotCLI {
+     }
+ }
+ 
++// MARK: - Creating sessions
++
++enum DesktopSessionCreator {
++    private static let session: URLSession = {
++        let configuration = URLSessionConfiguration.ephemeral
++        // Codex creation may need several bind polls before its rollout id is
++        // available, so this must exceed the ordinary list request timeout.
++        configuration.timeoutIntervalForRequest = 60
++        return URLSession(configuration: configuration)
++    }()
++
++    static func fetchInbox(hostURL: String) async throws -> String {
++        guard let url = endpoint(hostURL, path: "/api/dirs") else {
++            throw CreationError.message("bad host URL")
++        }
++        let (data, response) = try await session.data(for: DesktopAPI.request(url))
++        try validate(response, data: data)
++        let inbox = try JSONDecoder().decode(DesktopDirsResponse.self, from: data).inbox
++            .trimmingCharacters(in: .whitespacesAndNewlines)
++        guard !inbox.isEmpty else { throw CreationError.message("host returned an empty Inbox") }
++        return inbox
++    }
++
++    static func create(plan: DesktopNewSessionPlan, host: HostState) async throws -> SessionItem {
++        let request = try newSessionRequest(plan: plan)
++        let (data, response) = try await session.data(for: request)
++        try validate(response, data: data)
++        let created = try JSONDecoder().decode(DesktopNewSessionResponse.self, from: data)
++        if created.ok == false { throw CreationError.message("host returned ok=false") }
++        return try createdItem(response: created, plan: plan, host: host)
++    }
++
++    /// Internal request seam used by the headless feature suite.
++    static func newSessionRequest(plan: DesktopNewSessionPlan) throws -> URLRequest {
++        guard let url = endpoint(plan.hostURL, path: "/api/sessions/new") else {
++            throw CreationError.message("bad host URL")
++        }
++        var request = DesktopAPI.request(url, method: "POST")
++        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
++        request.httpBody = try JSONSerialization.data(withJSONObject: [
++            "cwd": plan.cwd,
++            "prompt": "",
++            "agent": plan.agent,
++            "model": plan.model,
++        ])
++        return request
++    }
++
++    /// Convert the API response into the existing opener's input rather than
++    /// growing a second local/remote iTerm attachment implementation.
++    static func createdItem(
++        response: DesktopNewSessionResponse,
++        plan: DesktopNewSessionPlan,
++        host: HostState
++    ) throws -> SessionItem {
++        guard let tmuxName = response.tmuxName?.trimmingCharacters(in: .whitespacesAndNewlines),
++              !tmuxName.isEmpty else {
++            throw CreationError.message("host created no tmux session")
++        }
++        let cwd = response.cwd?.trimmingCharacters(in: .whitespacesAndNewlines)
++        let resolvedCwd = (cwd?.isEmpty == false ? cwd : nil) ?? plan.cwd
++        let project = (resolvedCwd as NSString).lastPathComponent
++        return SessionItem(
++            session: APISession(
++                agent: response.agent ?? plan.agent,
++                pid: -1,
++                cwd: resolvedCwd,
++                project: project.isEmpty ? resolvedCwd : project,
++                title: "New session",
++                sessionId: response.sessionId,
++                busy: false,
++                lastActivityAt: Date().timeIntervalSince1970 * 1000,
++                tmuxName: tmuxName,
++                model: plan.model,
++                status: nil,
++                lastUserText: nil
++            ),
++            hostURL: host.url,
++            hostId: host.info?.hostId ?? host.url,
++            hostLabel: host.label,
++            hostIsLocal: host.isLocal,
++            hostSSHTarget: host.sshTarget,
++            hostRemoteTransport: host.remoteTransport
++        )
++    }
++
++    private static func endpoint(_ baseURL: String, path: String) -> URL? {
++        URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path)
++    }
++
++    private static func validate(_ response: URLResponse, data: Data) throws {
++        guard let http = response as? HTTPURLResponse else { return }
++        guard (200..<300).contains(http.statusCode) else {
++            let decoded = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
++            let message = decoded?["error"] as? String
++            throw CreationError.message(message ?? "HTTP \(http.statusCode)")
++        }
++    }
++
++    private enum CreationError: LocalizedError {
++        case message(String)
++        var errorDescription: String? {
++            switch self { case .message(let message): return message }
++        }
++    }
++}
++
+ // MARK: - Opening sessions in iTerm2
+ 
+ enum Opener {
+@@ -4117,16 +4689,16 @@ struct ContentView: View {
+     /// menu). Re-measure with `--window-fit` after touching any toolbar item.
+     static let compactToolbarWidth: CGFloat = 820
+ 
+-    /// Chrome plus the three compact icon items. Whatever a compact window has
++    /// Chrome plus the four compact icon items. Whatever a compact window has
+     /// left over this is what the host-status cluster may spend on labels.
+-    /// Calibrated with `--window-fit`: a 67pt labelled cluster still fits at
+-    /// 470 but not 460, so the true reserve is ~403 — 410 keeps a small margin.
+-    static let compactStatusReserve: CGFloat = 410
++    /// Runtime AX capture at 568pt showed short host labels pushing Create out;
++    /// 530pt collapses those names there while retaining them around 600pt.
++    static let compactStatusReserve: CGFloat = 530
+ 
+     private var isCompactToolbar: Bool { windowWidth < Self.compactToolbarWidth }
+ 
+-    /// Short host names ("Pro", "Air") still fit in a third-of-the-screen
+-    /// window, so only drop to bare dots when they genuinely don't.
++    /// Keep short host names when all four actions still fit; otherwise the
++    /// create action outranks labels and the hosts collapse to bare dots.
+     static func hostLabelsFit(clusterWidth: CGFloat, windowWidth: CGFloat) -> Bool {
+         guard windowWidth < compactToolbarWidth else { return true }
+         return clusterWidth <= windowWidth - compactStatusReserve
+@@ -4189,6 +4761,28 @@ struct ContentView: View {
+         }
+     }
+ 
++    private var createSessionButton: some View {
++        Button {
++            Task {
++                if let error = await store.createSession(searchQuery: searchText) {
++                    alertMessage = error
++                }
++            }
++        } label: {
++            if store.creatingSession {
++                ProgressView().controlSize(.small)
++            } else {
++                Image(systemName: "plus")
++            }
++        }
++        .disabled(store.creatingSession)
++        .buttonStyle(.glass)
++        .buttonBorderShape(.circle)
++        .help(isSearching ? "Create session from search" : "Create session in Inbox")
++        .accessibilityLabel("Create session")
++        .accessibilityIdentifier("create_session_button")
++    }
++
+     /// Compact windows can't afford a permanent search field in the toolbar,
+     /// so search becomes a toggle that reveals a row under it.
+     private var compactSearchRow: some View {
+@@ -4247,6 +4841,20 @@ struct ContentView: View {
+                     .font(.system(size: 12))
+                     .foregroundStyle(.secondary)
+             }
++            // Closed-list infinite scroll: the sentinel sits at the very
++            // bottom, so it being created means the user reached the end of
++            // what's loaded. Scrolling away and back recreates it, which
++            // re-fires onAppear for the following page.
++            if !isSearching, store.canLoadMoreClosed {
++                HStack(spacing: 6) {
++                    ProgressView().controlSize(.small)
++                    Text("Loading older sessions…")
++                        .font(.system(size: 12))
++                        .foregroundStyle(.secondary)
++                }
++                .accessibilityIdentifier("load_more_closed")
++                .onAppear { Task { await store.loadMoreClosed() } }
++            }
+             // Search pages independently of the list, so this pulls the next
+             // page of MATCHES — never the next page of the closed list.
+             if isSearching, store.canLoadMoreSearch {
+@@ -4293,7 +4901,13 @@ struct ContentView: View {
+         // area, search + actions on the trailing edge.
+         .toolbar {
+             ToolbarItem(placement: .navigation) {
+-                DesktopConnectionStatusBar(compact: !showsHostLabels)
++                HStack(spacing: 8) {
++                    DesktopConnectionStatusBar(compact: !showsHostLabels)
++                    // Center/trailing controls are macOS's first overflow
++                    // victims in compact windows. Keep the primary creation
++                    // action in the preserved leading cluster instead.
++                    if isCompactToolbar { createSessionButton }
++                }
+             }
+             .sharedBackgroundVisibility(.hidden)
+             // A centered item costs twice the wider side's width in reserved
+@@ -4380,6 +4994,14 @@ struct ContentView: View {
+                     .frame(width: 150, height: 30)
+                 }
+             }
++            if !isCompactToolbar {
++                // Mirrors iOS's search-then-plus reading order when there is
++                // room for the complete full-width toolbar.
++                ToolbarItem(placement: .primaryAction) {
++                    createSessionButton
++                }
++                .sharedBackgroundVisibility(.hidden)
++            }
+         }
+         // One presentation site for both routes into the panel — the toolbar
+         // button when there's room, the grouping menu when there isn't. Anchored

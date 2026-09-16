@@ -1,0 +1,15 @@
+{
+  "count": 1,
+  "ids": [
+    "a0cf0e87-e32b-4edd-afde-a260b6ddfe67"
+  ],
+  "items": [
+    {
+      "id": "a0cf0e87-e32b-4edd-afde-a260b6ddfe67",
+      "role": "user",
+      "kind": "text",
+      "text": "Show me all the screenshots and put them in an artifact",
+      "ts": 1788520811965
+    }
+  ]
+}

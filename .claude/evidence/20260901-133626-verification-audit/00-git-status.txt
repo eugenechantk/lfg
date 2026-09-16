@@ -1,0 +1,40 @@
+ M desktop/LFGSessions.swift
+ M ios/LFG.xcodeproj/project.pbxproj
+ M ios/LFG/PushManager.swift
+ M ios/LFG/RichContent.swift
+ M ios/LFG/SessionDetailView.swift
+ M ios/LFG/SessionListView.swift
+ M ios/LFG/SessionStore.swift
+ M ios/LFGCore/Sources/LFGCore/LFGClient.swift
+ M src/commands/serve.ts
+ M src/sessions.ts
+ M src/subagents.test.ts
+ M src/subagents.ts
+?? .claude/diagnosis-async-agents-not-nested-20260829.md
+?? .claude/diagnosis-desktop-closed-list-starved-20260825.md
+?? .claude/diagnosis-ios-background-crash-20260830.md
+?? .claude/evidence/20260901-133626-verification-audit/
+?? .claude/feature/evidence/
+?? .claude/feature/remove-aisdk-path.md
+?? .claude/tools/
+?? .codex/feature/desktop-create-session.md
+?? .codex/feature/readable-markdown-tables.md
+?? .codex/feature/user-message-scrubber.md
+?? improvement-log/improvement-log-20260823-134757.md
+?? improvement-log/improvement-log-20260823-134848.md
+?? improvement-log/improvement-log-20260825-000000.md
+?? improvement-log/improvement-log-20260825-025235.md
+?? improvement-log/improvement-log-20260825-070517.md
+?? improvement-log/improvement-log-20260825-070644.md
+?? improvement-log/improvement-log-20260829-032516.md
+?? improvement-log/improvement-log-20260829-032924.md
+?? improvement-log/improvement-log-20260829-085516.md
+?? improvement-log/improvement-log-20260829-165403.md
+?? improvement-log/improvement-log-20260829-nested-agents.md
+?? improvement-log/improvement-log-20260830-000000.md
+?? improvement-log/improvement-log-20260901-051849.md
+?? ios/LFGCore/Sources/LFGCore/UserMessageScrubber.swift
+?? ios/LFGCore/Tests/LFGCoreTests/UserMessageScrubberTests.swift
+?? src/hidden-dirs.test.ts
+?? src/hidden-dirs.ts
+?? src/sessions-resumable-exclude.test.ts

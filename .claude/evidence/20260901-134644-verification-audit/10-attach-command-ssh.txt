@@ -1,0 +1,1 @@
+ssh -t -o ConnectTimeout=5 'pro' "PATH=/opt/homebrew/bin:/usr/local/bin:$PATH exec tmux set-option -w -t 'lfg-new123' window-size latest ';' attach-session -t 'lfg-new123'"
