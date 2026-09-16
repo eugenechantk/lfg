@@ -74,17 +74,30 @@ export function buildArgs(model: string, system?: string): string[] {
 }
 
 /**
- * Strip every API-key route out of the child's environment.
+ * Strip every non-keychain credential route out of the child's environment.
  *
  * This is the whole point of the module, and it must be unconditional: if any of
  * these is set — by `.env`, a shell profile, or a parent agent — the CLI
  * silently switches to per-token API billing and nothing in the output says so.
+ *
+ * CLAUDE_CODE_OAUTH_TOKEN is the same class of bug with a worse failure mode.
+ * The CLI prefers it over the keychain and never refreshes it, so a server
+ * started from a shell that exported one works until that token's TTL and then
+ * 403s on every spawn for the rest of the process's life. Observed 2026-08-25:
+ * lfg pid 10518 went 18 successes -> 394 consecutive
+ * "Failed to authenticate. API Error: 403 Request not allowed", while pid 34496
+ * ran concurrently on the same account at 148 ok / 4 403. Only a restart
+ * cleared it. Scrub it so the child always resolves the keychain, which the
+ * CLI's own supervisor keeps refreshed.
  */
 export function scrubbedEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const env = { ...base };
   delete env.ANTHROPIC_API_KEY;
   delete env.ANTHROPIC_AUTH_TOKEN;
   delete env.ANTHROPIC_BASE_URL;
+  delete env.CLAUDE_CODE_OAUTH_TOKEN;
+  delete env.CLAUDE_CODE_USE_BEDROCK;
+  delete env.CLAUDE_CODE_USE_VERTEX;
   return env;
 }
 

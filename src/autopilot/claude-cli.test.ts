@@ -17,10 +17,27 @@ describe("scrubbedEnv", () => {
     expect(env.PATH).toBe("/usr/bin"); // everything else survives
   });
 
+  test("removes an inherited OAuth token so the child resolves the keychain", () => {
+    // Worse than the API-key routes: the CLI prefers this token over the
+    // keychain and never refreshes it, so an inherited one works until its TTL
+    // and then 403s every spawn until the server restarts.
+    const env = scrubbedEnv({
+      CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat-xxx",
+      CLAUDE_CODE_USE_BEDROCK: "1",
+      CLAUDE_CODE_USE_VERTEX: "1",
+      PATH: "/usr/bin",
+    });
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+    expect(env.CLAUDE_CODE_USE_BEDROCK).toBeUndefined();
+    expect(env.CLAUDE_CODE_USE_VERTEX).toBeUndefined();
+    expect(env.PATH).toBe("/usr/bin");
+  });
+
   test("does not mutate the environment it was handed", () => {
-    const base = { ANTHROPIC_API_KEY: "sk-ant-xxx" };
+    const base = { ANTHROPIC_API_KEY: "sk-ant-xxx", CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat-xxx" };
     scrubbedEnv(base);
     expect(base.ANTHROPIC_API_KEY).toBe("sk-ant-xxx");
+    expect(base.CLAUDE_CODE_OAUTH_TOKEN).toBe("sk-ant-oat-xxx");
   });
 });
 
