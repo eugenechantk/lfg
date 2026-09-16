@@ -797,6 +797,15 @@ private struct SessionOptionsMenu: View {
     @Environment(AppSettings.self) private var settings
     @State private var forking = false
     @State private var transferring = false
+    /// A move the target's pre-flight said would resume from an older copy.
+    /// Held until the user confirms or cancels — never moved silently.
+    @State private var staleMove: StaleMove?
+
+    struct StaleMove: Identifiable {
+        let target: Host
+        let behindSeconds: TimeInterval
+        var id: String { target.id }
+    }
 
     var body: some View {
         NativeSessionOptionsButton { menuElements }
@@ -804,6 +813,24 @@ private struct SessionOptionsMenu: View {
             // turning the system glass circle into a capsule for short titles.
             // Match the fixed 44pt footprint of the native back control.
             .frame(width: 44, height: 44)
+            .confirmationDialog(
+                "Move anyway?",
+                isPresented: Binding(get: { staleMove != nil }, set: { if !$0 { staleMove = nil } }),
+                titleVisibility: .visible,
+                presenting: staleMove
+            ) { move in
+                Button("Move to \(move.target.label)") {
+                    Task {
+                        transferring = true
+                        defer { transferring = false }
+                        _ = await store.transfer(sid, to: move.target, preflight: .ready)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { move in
+                let source = store.host(forSession: sid)?.label ?? "the current host"
+                Text("\(move.target.label)'s copy of this conversation is \(SessionTransfer.behindLabel(move.behindSeconds)) behind \(source). Moving now continues from that older copy; the newer turns stay only on \(source).")
+            }
     }
 
     private var menuElements: [UIMenuElement] {
@@ -992,7 +1019,13 @@ private struct SessionOptionsMenu: View {
         guard !transferring else { return }
         transferring = true
         defer { transferring = false }
-        _ = await store.transfer(sid, to: target)
+        // Ask the target first; the source is untouched until this says go.
+        let check = await store.transferPreflight(sid, to: target)
+        if case .behind(let seconds) = check {
+            staleMove = StaleMove(target: target, behindSeconds: seconds)
+            return
+        }
+        _ = await store.transfer(sid, to: target, preflight: check)
     }
 
     private func markUnreadAndExit() {

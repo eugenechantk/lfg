@@ -342,6 +342,18 @@ import LFGCore
     /// Per-host delayed re-evaluation of the sustained-failure banner rule.
     private var bannerRecheck: [String: Task<Void, Never>] = [:]
 
+    /// Source-side closes a transfer skipped because that host was unreachable
+    /// (see `transfer` and `SessionTransfer`). Replayed once when the host next
+    /// comes back live; persisted so an app relaunch in between doesn't leak the
+    /// orphaned pane.
+    private static let deferredSourceClosesKey = "lfg.deferredSourceCloses"
+    private var deferredSourceCloses = DeferredSourceCloses.decode(
+        UserDefaults.standard.data(forKey: SessionStore.deferredSourceClosesKey)) {
+        didSet {
+            UserDefaults.standard.set(deferredSourceCloses.encoded(), forKey: Self.deferredSourceClosesKey)
+        }
+    }
+
     /// Events replayed while a link is catching up are coalesced here so SwiftUI
     /// renders the final post-replay state instead of every intermediate flip.
     private var catchUpBuffers: [String: [LiveEvent]] = [:]
@@ -1812,9 +1824,34 @@ import LFGCore
             // fleet being healthy ends the "Reconnecting…" state immediately — the
             // burst task itself may still be asleep between probes.
             if allHostsReachable { isReconnecting = false }
-            if !wasLive { Task { await self.replayPendingOutbox(forHost: hostId) } }
+            if !wasLive {
+                Task { await self.replayPendingOutbox(forHost: hostId) }
+                Task { await self.replayDeferredSourceCloses(forHost: hostId) }
+            }
         }
         recomputeFleetState()
+    }
+
+    /// A host that was unreachable when one of its sessions was moved away is
+    /// back: close the orphaned source copies now. One-shot and best effort —
+    /// the conversation continued on the target under a new id, so this only
+    /// stops an idle pane; its transcript is untouched.
+    private func replayDeferredSourceCloses(forHost hostId: String) async {
+        let owed = deferredSourceCloses.take(host: hostId)
+        guard !owed.isEmpty,
+              let host = settings.hosts.first(where: { $0.id == hostId }),
+              let client = settings.client(for: host) else { return }
+        for sid in owed {
+            do {
+                try await client.close(sid)
+                ConnectionLog.shared.log(.state, "closed orphaned source copy \(sid.prefix(8)) after transfer",
+                                         host: host.label)
+            } catch {
+                ConnectionLog.shared.log(.state, "deferred close of \(sid.prefix(8)) failed: \(error.localizedDescription)",
+                                         host: host.label)
+            }
+        }
+        await refresh()
     }
 
     private func recomputeFleetState() {
@@ -3857,7 +3894,12 @@ import LFGCore
     /// failure (see `SessionDetailView`'s "End session" button).
     @discardableResult
     func close(_ id: String) async -> Bool {
-        await run("End session", for: id) { try await $0.close(id) }
+        let ok = await run("End session", for: id) { try await $0.close(id) }
+        // Closed by hand → no longer owed a deferred close from a past transfer.
+        // Only on success: a close that failed (host still down) leaves the
+        // orphan in place, and the replay is what will clean it up.
+        if ok { deferredSourceCloses.forget(session: id) }
+        return ok
     }
     func retry(_ id: String, _ messageID: String) async { await run("Retry", for: id) { try await $0.retryQueued(id, messageID: messageID) } }
 
@@ -4100,13 +4142,46 @@ import LFGCore
         } catch { lastError = "Fork failed: \(error.localizedDescription)"; return nil }
     }
 
+    /// Ask a prospective transfer target about its copy of the transcript. Never
+    /// touches the source. A 404 is an older server without the route and means
+    /// "unknown" (proceed as before), not "missing"; any other failure means the
+    /// target can't be reached, which would sink the move anyway.
+    func transferPreflight(_ id: String, to target: Host) async -> SessionTransfer.Preflight {
+        guard let client = settings.client(for: target) else { return .targetUnreachable("invalid host") }
+        do {
+            let status = try await client.transcriptStatus(id)
+            return SessionTransfer.preflight(status: status, sourceLastActivityAt: session(id)?.lastActivityAt)
+        } catch LFGError.http(let status, _) where status == 404 {
+            return .unknown
+        } catch {
+            return .targetUnreachable(error.localizedDescription)
+        }
+    }
+
     /// Transfer a live session to another host: stop its pane on the SOURCE host,
     /// then resume the (synced) transcript on the TARGET host, and point routing +
     /// navigation at the new live id. Returns the new sessionId, or nil on failure
     /// (the source close having already happened — the session is then resumable
     /// on the target and can be retried). See `.claude/brainstorm/multi-host-plan.md`.
+    ///
+    /// The source close is NOT a precondition. When the source host is known
+    /// down — or the close itself dies at the transport layer — the move goes
+    /// ahead without it: the target is asked to resume with `force` (its lease
+    /// veto would otherwise refuse, since nothing can release the offline
+    /// host's still-fresh lease), and the source-side close is deferred until
+    /// that host is next reachable. Being unable to reach a host is exactly why
+    /// a session gets moved, so refusing in that case defeated the feature.
+    /// Rules live in `SessionTransfer` (tested in LFGCore).
+    ///
+    /// Before anything touches the source, the TARGET is asked whether it holds
+    /// the synced transcript and how fresh it is (`transferPreflight`). The move
+    /// is only ever "resume from the target's copy", so a target without the
+    /// file, without the cwd, or with an old copy is refused (or, for an old
+    /// copy, confirmed by the user in the view) while the source is still live.
+    /// Pass `preflight` when the view already ran it — `.ready` after the user
+    /// confirmed a stale copy.
     @discardableResult
-    func transfer(_ id: String, to target: Host) async -> String? {
+    func transfer(_ id: String, to target: Host, preflight: SessionTransfer.Preflight? = nil) async -> String? {
         guard let source = host(forSession: id) else {
             lastError = "Transfer: unknown source host for session"; return nil
         }
@@ -4115,17 +4190,53 @@ import LFGCore
               let targetClient = settings.client(for: target) else {
             lastError = "Transfer: invalid host"; return nil
         }
-        // 1) Stop the live pane on the source. The transcript survives (synced).
-        do { try await sourceClient.close(id) }
-        catch {
-            lastError = "Transfer: closing on \(source.label) failed: \(error.localizedDescription)"
+        let check: SessionTransfer.Preflight
+        if let preflight { check = preflight } else { check = await transferPreflight(id, to: target) }
+        switch check {
+        case .missing:
+            lastError = "Transfer: \(target.label) doesn't have this transcript yet — the synced copy hasn't arrived. Try again in a few minutes."
             return nil
+        case .cwdMissing(let cwd):
+            lastError = "Transfer: \(target.label) has no \(cwd) — this session's directory only exists on \(source.label)."
+            return nil
+        case .targetUnreachable(let why):
+            lastError = "Transfer: can't reach \(target.label): \(why)"
+            return nil
+        case .behind(let seconds):
+            // The view is expected to confirm and call back with `.ready`.
+            lastError = "Transfer: \(target.label)'s copy is \(SessionTransfer.behindLabel(seconds)) behind \(source.label). Confirm the move to continue."
+            return nil
+        case .unknown, .ready:
+            break
         }
-        // 1b) Give the source a moment to reap the pane before resuming.
-        for _ in 0..<8 {
-            try? await Task.sleep(for: .milliseconds(400))
-            let stillLive = (try? await sourceClient.sessions())?.contains { $0.sessionId == id } ?? false
-            if !stillLive { break }
+        var plan = SessionTransfer.plan(sourceKnownDown: !isNotKnownDown(source))
+        if plan.closeSource {
+            // 1) Stop the live pane on the source. The transcript survives (synced).
+            do { try await sourceClient.close(id) }
+            catch where SessionTransfer.closeFailureIsUnreachable(error) {
+                // The host went away between the state machine's last word and
+                // now. Same situation as known-down: move on without it.
+                ConnectionLog.shared.log(.state,
+                    "transfer of \(id.prefix(8)): close unreachable (\(error.localizedDescription)) — moving without it",
+                    host: source.label)
+                plan = .sourceUnreachable
+            }
+            catch {
+                lastError = "Transfer: closing on \(source.label) failed: \(error.localizedDescription)"
+                return nil
+            }
+        }
+        if plan.closeSource {
+            // 1b) Give the source a moment to reap the pane before resuming.
+            for _ in 0..<8 {
+                try? await Task.sleep(for: .milliseconds(400))
+                let stillLive = (try? await sourceClient.sessions())?.contains { $0.sessionId == id } ?? false
+                if !stillLive { break }
+            }
+        } else {
+            ConnectionLog.shared.log(.state,
+                "transfer of \(id.prefix(8)) to \(target.label): source unreachable, skipping close (deferred)",
+                host: source.label)
         }
         // 2) Resume on the target. The server's resume dedupes against live
         //    sessions ("already running → don't double-spawn"); right after the
@@ -4138,12 +4249,13 @@ import LFGCore
         //    1b the session is still live on the source, and saying "Restarting"
         //    while a host still reports it live would fight `confirmLive`.
         restarts.mark(id, at: Date())
+        let request = ResumeRequest(sessionId: id, force: plan.force ? true : nil)
         do {
-            var resp = try await targetClient.resume(ResumeRequest(sessionId: id))
+            var resp = try await targetClient.resume(request)
             var attempts = 0
             while resp.alreadyLive == true && attempts < 10 {
                 try? await Task.sleep(for: .milliseconds(700))
-                resp = try await targetClient.resume(ResumeRequest(sessionId: id))
+                resp = try await targetClient.resume(request)
                 attempts += 1
             }
             if resp.alreadyLive == true {
@@ -4152,6 +4264,10 @@ import LFGCore
                 return nil
             }
             let newId = resp.sessionId ?? id
+            // Only once the target has actually taken over: a failed forced
+            // resume must not leave a close queued against a session that is
+            // still the user's only live copy.
+            if plan.deferSourceClose { deferredSourceCloses.add(host: source.id, session: id) }
             if newId != id { remap(from: id, to: newId) }
             hostBySession[newId] = target.id
             await refresh()
@@ -4159,7 +4275,14 @@ import LFGCore
             return newId
         } catch {
             restarts.clear(id)
-            lastError = "Transfer: resuming on \(target.label) failed: \(error.localizedDescription)"
+            if case LFGError.http(let status, _) = error, status == 409 {
+                // The target's lease veto (server predating `force`, or a source
+                // we did not know was down): the source's synced lease is still
+                // fresh. It goes stale ~90s after the source's last heartbeat.
+                lastError = "Transfer: \(target.label) still sees this session running on \(source.label). Try again in a minute."
+            } else {
+                lastError = "Transfer: resuming on \(target.label) failed: \(error.localizedDescription)"
+            }
             return nil
         }
     }

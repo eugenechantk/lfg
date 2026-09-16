@@ -455,8 +455,47 @@ public struct ResumeRequest: Codable, Sendable {
     public var model: String?
     public var user: String?
     public var prompt: String?
-    public init(sessionId: String, model: String? = nil, user: String? = nil, prompt: String? = nil) {
-        self.sessionId = sessionId; self.model = model; self.user = user; self.prompt = prompt
+    /// Take the session over even though another host still holds a fresh
+    /// lease on it. Only set when the client itself has observed that host to
+    /// be unreachable (transfer from an offline host — see `SessionTransfer`);
+    /// the server has no way to tell "peer is down" from "peer is fine".
+    public var force: Bool?
+    public init(sessionId: String, model: String? = nil, user: String? = nil, prompt: String? = nil, force: Bool? = nil) {
+        self.sessionId = sessionId; self.model = model; self.user = user; self.prompt = prompt; self.force = force
+    }
+}
+
+/// GET /api/sessions/{id}/transcript-status — asked of a prospective transfer
+/// TARGET before the source is touched: does it hold the synced transcript, and
+/// how fresh is its copy? `found == false` arrives as a 200 body; an HTTP 404
+/// means a server that predates the route.
+public struct TranscriptStatus: Codable, Sendable, Equatable {
+    public var found: Bool
+    public var agent: String?
+    public var cwd: String?
+    public var cwdExists: Bool?
+    public var bytes: Double?
+    public var mtimeMs: Double?
+    /// Last message timestamp in ms (mtime fallback), same clock as `Session.lastActivityAt`.
+    public var lastActivityAt: Double?
+
+    public init(found: Bool, agent: String? = nil, cwd: String? = nil, cwdExists: Bool? = nil,
+                bytes: Double? = nil, mtimeMs: Double? = nil, lastActivityAt: Double? = nil) {
+        self.found = found; self.agent = agent; self.cwd = cwd; self.cwdExists = cwdExists
+        self.bytes = bytes; self.mtimeMs = mtimeMs; self.lastActivityAt = lastActivityAt
+    }
+
+    enum CodingKeys: String, CodingKey { case found, agent, cwd, cwdExists, bytes, mtimeMs, lastActivityAt }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        found = (try? c.decodeIfPresent(Bool.self, forKey: .found)) ?? false
+        agent = try? c.decodeIfPresent(String.self, forKey: .agent)
+        cwd = try? c.decodeIfPresent(String.self, forKey: .cwd)
+        cwdExists = try? c.decodeIfPresent(Bool.self, forKey: .cwdExists)
+        bytes = try? c.decodeIfPresent(Double.self, forKey: .bytes)
+        mtimeMs = try? c.decodeIfPresent(Double.self, forKey: .mtimeMs)
+        lastActivityAt = try? c.decodeIfPresent(Double.self, forKey: .lastActivityAt)
     }
 }
 

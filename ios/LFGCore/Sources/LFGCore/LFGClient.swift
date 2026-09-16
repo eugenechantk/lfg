@@ -543,8 +543,16 @@ public struct LFGClient: Sendable {
     public func resume(_ r: ResumeRequest) async throws -> NewSessionResponse {
         let data = try await send("POST", "api/sessions/resume", json: [
             "sessionId": r.sessionId, "model": r.model, "user": r.user, "prompt": r.prompt,
+            "force": r.force == true ? true : nil,
         ])
         return try JSONDecoder().decode(NewSessionResponse.self, from: data)
+    }
+
+    /// Transfer pre-flight: does this host hold the synced transcript for `id`,
+    /// and how fresh is its copy? Throws `.http(404)` on a server that predates
+    /// the route — callers treat that as "unknown", not "missing".
+    public func transcriptStatus(_ id: String) async throws -> TranscriptStatus {
+        try await get("api/sessions/\(id)/transcript-status", timeout: 12, as: TranscriptStatus.self)
     }
 
     public func fork(_ r: ForkRequest) async throws -> NewSessionResponse {
