@@ -59,3 +59,7 @@ train 1.3.0 is the highest; internalBuildState IN_BETA_TESTING. Logs:
 Not yet checked: the glass chrome on a device. The build carries the code (commit `2f087cf`); install
 it from TestFlight and open a session to confirm the nav bar and composer render as glass with the
 gradient fade.
+
+## Follow-up build
+
+Build `202609162053` (20:53, same iOS code; cut after the desktop and docs commits at Eugene's request) — DoD PASS: VALID on train 1.3.0, IN_BETA_TESTING. Logs: `ios/fastlane/deploy-202609162053.log`, `ios/fastlane/verify-202609162053.log`.
