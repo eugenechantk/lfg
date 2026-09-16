@@ -440,9 +440,13 @@ async function firstPromptTitle(path: string): Promise<string | null> {
       } catch {
         continue;
       }
-      const cm = normalizeCodexLine(line, createCodexNormalizationState())?.[0];
-      if (cm?.role === "user" && cm.kind === "text") {
-        const t = stripConversationPrefix(cm.text).trim().replace(/\s+/g, " ");
+      const cms = normalizeCodexLine(line, createCodexNormalizationState());
+      const codexHuman = cms
+        ?.filter((message) => message.role === "user" && message.kind === "text")
+        .map((message) => message.text)
+        .join("\n\n");
+      if (codexHuman) {
+        const t = stripConversationPrefix(codexHuman).trim().replace(/\s+/g, " ");
         if (t && !t.startsWith("<"))
           return t.length > TITLE_MAX ? t.slice(0, TITLE_MAX - 1) + "…" : t;
       }
@@ -641,11 +645,13 @@ export async function firstUserTextFromTop(path: string): Promise<string | null>
       const p = x.payload;
       if (!p) continue;
       if (x.type === "event_msg" && p.type === "user_message" && p.message?.trim()) {
-        return stripConversationPrefix(p.message.trim());
+        const human = codexHumanText(stripConversationPrefix(p.message.trim()));
+        if (human) return human;
+        continue;
       }
       if (fallback || x.type !== "response_item" || p.type !== "message" || p.role !== "user")
         continue;
-      const text = stripConversationPrefix(codexContentText(p.content).trim());
+      const text = codexHumanText(stripConversationPrefix(codexContentText(p.content).trim()));
       if (text && !isInjectedCodexUserContext(text)) fallback = text;
     }
   } catch {}
@@ -865,6 +871,23 @@ function stripHumanPrefix(text: string): string {
 
 function stripConversationPrefix(text: string): string {
   return text.replace(/^(?:Human|User):[ \t]+/i, "");
+}
+
+// Newer Codex rollouts persist human turns only as response items. Their
+// per-content provenance separates real input from injected user-role context.
+// Older rollouts lack these kinds and also emit user_message events; leave
+// those response items hidden so their existing event identity stays canonical.
+function codexResponseUserText(payload: {
+  content?: unknown;
+  internal_chat_message_metadata_passthrough?: unknown;
+}): string | null {
+  const metadata = payload.internal_chat_message_metadata_passthrough;
+  if (!metadata || typeof metadata !== "object") return null;
+  const kinds = (metadata as { content_item_kinds?: unknown }).content_item_kinds;
+  if (!Array.isArray(kinds) || !Array.isArray(payload.content)) return null;
+  const content = payload.content.filter((_, index) => kinds[index] === "user.text");
+  const text = stripConversationPrefix(codexContentText(content).trim());
+  return text || null;
 }
 
 function extractText(content: unknown): string {
@@ -1398,6 +1421,66 @@ function codexMessage(
   return { id: suffix && id ? `${id}#${suffix}` : id, role, kind, text, ts };
 }
 
+type CodexUserTextSegment =
+  | { kind: "human"; text: string }
+  | { kind: "local-command-stdout"; text: string };
+
+/**
+ * Split Codex's reserved local-command wrapper out of the next human turn.
+ *
+ * Model changes and similar local UI commands are persisted inside the next
+ * user response item, even though the wrapped text is status output rather than
+ * something the human said. Keep source order so clients can render the status
+ * exactly where Codex placed it. An incomplete wrapper is left untouched: an
+ * active rollout may have been read between writes, and dropping that text
+ * would be worse than briefly showing the envelope.
+ */
+function codexUserTextSegments(text: string): CodexUserTextSegment[] {
+  const pattern = /<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/gi;
+  const matches = Array.from(text.matchAll(pattern));
+  if (matches.length === 0) return [{ kind: "human", text }];
+
+  const segments: CodexUserTextSegment[] = [];
+  let offset = 0;
+  for (const match of matches) {
+    const index = match.index ?? offset;
+    const human = text.slice(offset, index).trim();
+    const output = (match[1] ?? "").trim();
+    if (human) segments.push({ kind: "human", text: human });
+    if (output) segments.push({ kind: "local-command-stdout", text: output });
+    offset = index + match[0].length;
+  }
+  const trailing = text.slice(offset).trim();
+  if (trailing) segments.push({ kind: "human", text: trailing });
+  return segments;
+}
+
+function codexHumanText(text: string): string | null {
+  const human = codexUserTextSegments(text)
+    .filter((segment): segment is Extract<CodexUserTextSegment, { kind: "human" }> =>
+      segment.kind === "human")
+    .map((segment) => segment.text)
+    .join("\n\n")
+    .trim();
+  return human || null;
+}
+
+function codexUserMessages(
+  x: { timestamp?: string; type?: string; payload?: { type?: string; call_id?: string } },
+  text: string,
+  ts: number | null,
+): SessionMsg[] {
+  return codexUserTextSegments(text).map((segment, index) =>
+    codexMessage(
+      x,
+      segment.kind === "human" ? "user" : "system",
+      segment.kind === "human" ? "text" : "tool_result",
+      segment.text,
+      ts,
+      index,
+    ));
+}
+
 // The human-readable core of a codex `task_complete.error.message`. Two shapes
 // observed that hide the actual sentence: the upstream 400 comes JSON-wrapped
 // (`{"type":"error","status":400,"error":{"message":"The 'gpt-5.4' model is
@@ -1637,7 +1720,7 @@ function normalizeCodexLine(
   if (x.type === "event_msg") {
     if (p.type === "user_message" && p.message?.trim()) {
       const text = stripConversationPrefix(p.message.trim());
-      return [codexMessage(x, "user", "text", text, ts)];
+      return codexUserMessages(x, text, ts);
     }
     if (p.type === "patch_apply_end") {
       if (p.success === false) {
@@ -1790,7 +1873,11 @@ function normalizeCodexLine(
 
   if (p.type === "message") {
     const role = p.role || "assistant";
-    if (role === "system" || role === "developer" || role === "user") return [];
+    if (role === "system" || role === "developer") return [];
+    if (role === "user") {
+      const text = codexResponseUserText(p);
+      return text ? codexUserMessages(x, text, ts) : [];
+    }
     const text = codexContentText(p.content).trim();
     return text ? [codexMessage(x, role, "text", text, ts)] : [];
   }
@@ -2141,9 +2228,13 @@ async function lastUserText(path: string): Promise<string | null> {
     } catch {
       return null;
     }
-    const cm = normalizeCodexLine(line, createCodexNormalizationState())?.[0];
-    if (cm?.role === "user" && cm.kind === "text") {
-      const t = stripConversationPrefix(cm.text).trim().replace(/\s+/g, " ");
+    const cms = normalizeCodexLine(line, createCodexNormalizationState());
+    const codexHuman = cms
+      ?.filter((message) => message.role === "user" && message.kind === "text")
+      .map((message) => message.text)
+      .join("\n\n");
+    if (codexHuman) {
+      const t = stripConversationPrefix(codexHuman).trim().replace(/\s+/g, " ");
       if (t && !t.startsWith("<")) return t.length > 140 ? t.slice(0, 139) + "…" : t;
     }
     if (x.type !== "user" || x.isMeta) return null;
@@ -2210,13 +2301,16 @@ function userTurnFromLine(line: string, maxChars: number): string | null {
   // Tool-heavy transcripts can contain multi-megabyte assistant/output rows.
   // Avoid materialising those through JSON.parse when neither transcript format
   // can possibly classify the row as a user message.
-  if (!/"type"\s*:\s*"(?:user|user_message)"/.test(line)) return null;
+  if (!/"(?:type|role)"\s*:\s*"(?:user|user_message)"/.test(line)) return null;
   let x: {
     type?: string;
     isMeta?: boolean;
     toolUseResult?: unknown;
     message?: { content?: unknown };
-    payload?: { type?: string; message?: string };
+    payload?: {
+      type?: string; role?: string; message?: string; content?: unknown;
+      internal_chat_message_metadata_passthrough?: unknown;
+    };
   };
   try {
     x = JSON.parse(line);
@@ -2226,8 +2320,12 @@ function userTurnFromLine(line: string, maxChars: number): string | null {
   let text: string | null = null;
   if (x.type === "event_msg" && x.payload?.type === "user_message") {
     text = x.payload.message
-      ? stripConversationPrefix(x.payload.message).trim().replace(/\s+/g, " ")
+      ? codexHumanText(stripConversationPrefix(x.payload.message))
       : null;
+    text = text?.trim().replace(/\s+/g, " ") ?? null;
+  } else if (x.type === "response_item" && x.payload?.type === "message" && x.payload.role === "user") {
+    const raw = codexResponseUserText(x.payload);
+    text = raw ? codexHumanText(raw)?.replace(/\s+/g, " ") ?? null : null;
   } else if (x.type === "user" && !x.isMeta) {
     // A tool result is recorded as a `user` turn. `extractText` drops the
     // `tool_result` blocks themselves, but a record can carry a stray text
@@ -2351,9 +2449,13 @@ export async function lastUserPromptText(path: string): Promise<string | null> {
     } catch {
       return null;
     }
-    const cm = normalizeCodexLine(line, createCodexNormalizationState())?.[0];
-    if (cm?.role === "user" && cm.kind === "text") {
-      const t = stripConversationPrefix(cm.text).trim().replace(/\s+/g, " ");
+    const cms = normalizeCodexLine(line, createCodexNormalizationState());
+    const codexHuman = cms
+      ?.filter((message) => message.role === "user" && message.kind === "text")
+      .map((message) => message.text)
+      .join("\n\n");
+    if (codexHuman) {
+      const t = stripConversationPrefix(codexHuman).trim().replace(/\s+/g, " ");
       if (t && !t.startsWith("<")) return t;
     }
     if (x.type !== "user" || x.isMeta) return null;
