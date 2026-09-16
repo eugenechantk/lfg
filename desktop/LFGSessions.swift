@@ -307,6 +307,9 @@ struct HostState: Identifiable {
     var info: HostInfoResponse?
     var sessions: [APISession] = []
     var closedSessions: [APISession] = []
+    /// Cursor for the page after `closedSessions`, from the host's `nextBefore`.
+    /// nil when the host's closed corpus is exhausted (or predates paging).
+    var closedNextBefore: Double? = nil
     var needsInputSessionIds: Set<String> = []
     var error: String?
     var isLocal: Bool = false
@@ -1010,11 +1013,13 @@ final class SessionStore: ObservableObject {
 
     private func performSearch(_ q: String) async {
         let entries = Config.loadHosts()
+        let excludes = hiddenDirs.paths
         var pages: [(String, [ResumableAPISession], Double?)] = []
         await withTaskGroup(of: (String, [ResumableAPISession], Double?).self) { group in
             for entry in entries {
                 group.addTask {
-                    let page = await Self.fetchSearchPage(entry: entry, query: q, before: nil)
+                    let page = await Self.fetchSearchPage(
+                        entry: entry, query: q, before: nil, excludes: excludes)
                     return (entry.url, page.sessions, page.nextBefore)
                 }
             }
@@ -1039,12 +1044,14 @@ final class SessionStore: ObservableObject {
         defer { searchLoadingMore = false }
 
         let entries = Config.loadHosts().filter { cursors[$0.url] != nil }
+        let excludes = hiddenDirs.paths
         var pages: [(String, [ResumableAPISession], Double?)] = []
         await withTaskGroup(of: (String, [ResumableAPISession], Double?).self) { group in
             for entry in entries {
                 let before = cursors[entry.url]
                 group.addTask {
-                    let page = await Self.fetchSearchPage(entry: entry, query: q, before: before)
+                    let page = await Self.fetchSearchPage(
+                        entry: entry, query: q, before: before, excludes: excludes)
                     return (entry.url, page.sessions, page.nextBefore)
                 }
             }
@@ -1056,6 +1063,88 @@ final class SessionStore: ObservableObject {
             searchNextBeforeByHost[url] = next
         }
         rebuildSearchResults()
+    }
+
+    // MARK: Closed-list paging (infinite scroll)
+    //
+    // `fetchHost` loads each host's newest closed page on every refresh;
+    // reaching the bottom of the list pulls deeper pages here. Deeper pages
+    // live OUTSIDE HostState so the periodic refresh replacing page 1 cannot
+    // discard what the user scrolled down to. Cursor ownership: page 1's
+    // `nextBefore` seeds a host's cursor, but once a deeper page has loaded,
+    // the deepest page owns it — a refresh must not rewind the cursor or every
+    // poll would re-fetch page 2 forever.
+
+    @Published var closedLoadingMore = false
+    /// Deeper closed pages per host URL, in load order (already row-shaped).
+    private var moreClosedByHost: [String: [APISession]] = [:]
+    /// Where the next deeper page starts, per host URL.
+    private var closedNextBeforeByHost: [String: Double] = [:]
+    /// Hosts whose closed corpus was paged to the end. Terminal on purpose:
+    /// anything that closes later is newer than every loaded row and arrives
+    /// via page 1, never via a deeper page.
+    private var closedExhaustedHosts: Set<String> = []
+
+    var canLoadMoreClosed: Bool { !closedNextBeforeByHost.isEmpty }
+
+    func loadMoreClosed() async {
+        guard !closedLoadingMore else { return }
+        let cursors = closedNextBeforeByHost
+        guard !cursors.isEmpty else { return }
+        closedLoadingMore = true
+        defer { closedLoadingMore = false }
+
+        let excludes = hiddenDirs.paths
+        let entries = Config.loadHosts().filter { cursors[$0.url] != nil }
+        var pages: [(String, [ResumableAPISession], Double?)] = []
+        await withTaskGroup(of: (String, [ResumableAPISession], Double?).self) { group in
+            for entry in entries {
+                let before = cursors[entry.url]
+                group.addTask {
+                    // An empty query hits the host's plain (unsearched) closed
+                    // list — same endpoint, same page shape, same cursor.
+                    let page = await Self.fetchSearchPage(
+                        entry: entry, query: "", before: before, excludes: excludes)
+                    return (entry.url, page.sessions, page.nextBefore)
+                }
+            }
+            for await r in group { pages.append(r) }
+        }
+        for (url, sessions, next) in pages {
+            // A failed fetch looks like ([], nil). Leaving the cursor alone
+            // retries on the next bottom-reach; marking exhausted here would
+            // silently end paging on one flaky request.
+            guard !sessions.isEmpty || next != nil else { continue }
+            moreClosedByHost[url, default: []]
+                .append(contentsOf: sessions.map(Self.closedSession(from:)))
+            if let next {
+                closedNextBeforeByHost[url] = next
+            } else {
+                closedNextBeforeByHost.removeValue(forKey: url)
+                closedExhaustedHosts.insert(url)
+            }
+        }
+        mergeDeeperClosedPages()
+    }
+
+    /// Fold the deeper pages into the already-built `hosts`, applying the same
+    /// live/duplicate filters the refresh merge applies to page 1.
+    private func mergeDeeperClosedPages() {
+        guard !moreClosedByHost.isEmpty else { return }
+        let liveIds = Set(hosts.flatMap { $0.sessions.filter { !$0.closed }.compactMap(\.sessionId) })
+        var seenIds = Set(hosts.flatMap { $0.sessions.compactMap(\.sessionId) })
+        for i in hosts.indices {
+            guard let extra = moreClosedByHost[hosts[i].url], !extra.isEmpty else { continue }
+            let fresh = extra.filter { session in
+                guard let id = session.sessionId else { return false }
+                if liveIds.contains(id) { return false }
+                return seenIds.insert(id).inserted
+            }
+            guard !fresh.isEmpty else { continue }
+            hosts[i].sessions = (hosts[i].sessions + fresh).sorted {
+                ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0)
+            }
+        }
     }
 
     /// Collapse every host's search page into one list.
@@ -1232,10 +1321,17 @@ final class SessionStore: ObservableObject {
         defer { refreshing = false; lastRefreshed = Date() }
         let entries = Config.loadHosts()
         applyConfiguration(entries)
+        // The hidden set rides along as `exclude` params so the host filters
+        // BEFORE paginating. Filtering only client-side starves the closed
+        // list: gbrain autopilot churn can own the entire newest-100 page,
+        // leaving a handful of visible rows while real history sits behind a
+        // cursor this list never follows. The local `visible()` filter stays as
+        // the backstop for hosts that predate the param.
+        let excludes = hiddenDirs.paths
         var results: [HostState] = []
         await withTaskGroup(of: HostState.self) { group in
             for entry in entries {
-                group.addTask { await Self.fetchHost(entry: entry) }
+                group.addTask { await Self.fetchHost(entry: entry, excludes: excludes) }
             }
             for await state in group { results.append(state) }
         }
@@ -1266,13 +1362,27 @@ final class SessionStore: ObservableObject {
         let liveIds = Set(uniqueHosts.flatMap { $0.sessions.compactMap(\.sessionId) })
         var seenClosedIds = Set<String>()
         for i in uniqueHosts.indices {
-            let closed = uniqueHosts[i].closedSessions.filter { session in
+            let url = uniqueHosts[i].url
+            // Page 1 is fresh from this refresh; deeper pages the user already
+            // scrolled to ride along so the rebuild can't shrink the list.
+            let deeper = moreClosedByHost[url] ?? []
+            let closed = (uniqueHosts[i].closedSessions + deeper).filter { session in
                 guard let id = session.sessionId else { return false }
                 if liveIds.contains(id) { return false }
                 return seenClosedIds.insert(id).inserted
             }
             uniqueHosts[i].sessions = (uniqueHosts[i].sessions + closed).sorted {
                 ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0)
+            }
+            // Page 1 seeds the cursor only while no deeper page owns it —
+            // rewinding on every poll would re-fetch page 2 forever. A host
+            // paged to its end stays ended; later closures arrive via page 1.
+            if !closedExhaustedHosts.contains(url), deeper.isEmpty {
+                if let nb = uniqueHosts[i].closedNextBefore {
+                    closedNextBeforeByHost[url] = nb
+                } else {
+                    closedNextBeforeByHost.removeValue(forKey: url)
+                }
             }
         }
         duplicateHostsByURL = duplicates
@@ -1364,7 +1474,13 @@ final class SessionStore: ObservableObject {
         }
     }
 
-    private static func fetchHost(entry: Config.HostEntry) async -> HostState {
+    /// `exclude` query items for the caller's hidden-dir globs, shared by the
+    /// list fetch and search so the two can't drift.
+    static func excludeQueryItems(_ excludes: [String]) -> [URLQueryItem] {
+        excludes.map { URLQueryItem(name: "exclude", value: $0) }
+    }
+
+    private static func fetchHost(entry: Config.HostEntry, excludes: [String] = []) async -> HostState {
         let url = entry.url
         var state = HostState(
             url: url,
@@ -1378,9 +1494,12 @@ final class SessionStore: ObservableObject {
             return c
         }())
         do {
+            var resumableComps = URLComponents(string: url + "/api/sessions/resumable")
+            resumableComps?.queryItems =
+                [URLQueryItem(name: "limit", value: "100")] + excludeQueryItems(excludes)
             guard let infoURL = URL(string: url + "/api/info"),
                   let sessURL = URL(string: url + "/api/sessions"),
-                  let resumableURL = URL(string: url + "/api/sessions/resumable?limit=100"),
+                  let resumableURL = resumableComps?.url,
                   let statesURL = URL(string: url + "/api/session-states") else {
                 state.error = "bad URL"
                 return state
@@ -1402,6 +1521,7 @@ final class SessionStore: ObservableObject {
             if let (resumableData, _) = try? await session.data(for: DesktopAPI.request(resumableURL)),
                let resumable = try? JSONDecoder().decode(ResumableResponse.self, from: resumableData) {
                 state.closedSessions = resumable.sessions.map(Self.closedSession(from:))
+                state.closedNextBefore = resumable.nextBefore
             }
         } catch {
             state.error = "unreachable"
@@ -1440,13 +1560,15 @@ final class SessionStore: ObservableObject {
     static func fetchSearchPage(
         entry: Config.HostEntry,
         query: String,
-        before: Double?
+        before: Double?,
+        excludes: [String] = []
     ) async -> (sessions: [ResumableAPISession], nextBefore: Double?) {
         var comps = URLComponents(string: entry.url + "/api/sessions/resumable")
         var q = [
             URLQueryItem(name: "limit", value: String(searchPageSize)),
             URLQueryItem(name: "q", value: query),
         ]
+        q += excludeQueryItems(excludes)
         if let before { q.append(URLQueryItem(name: "before", value: String(before))) }
         comps?.queryItems = q
         guard let url = comps?.url else { return ([], nil) }
@@ -2071,6 +2193,23 @@ enum DesktopFeatureTestCLI {
             try expect(remote.contains("set-option -w -t 'lfg-abc123' window-size latest"),
                        "remote attach releases the window too — this is where the bug shows up")
         }
+
+        // A command that dies instantly used to take the window — and the
+        // reason — with it: iTerm closes the session on exit, `create window`
+        // returns missing value, and the only thing the user saw was "Can't get
+        // bounds of missing value" (2026-09-16, an unreachable Air). Every
+        // window command is wrapped so a failure holds the window open.
+        let held = Opener.holdOnFailure(localAttach)
+        try expect(held.hasPrefix("/bin/sh -c \"") && held.hasSuffix("\""),
+                   "window commands run under sh as one double-quoted iTerm argument")
+        try expect(held.contains("\(localAttach); s=$?;"),
+                   "the original command runs unchanged and its exit status is captured")
+        try expect(held.contains("if [ $s -ne 0 ]") && held.contains("read _ </dev/tty"),
+                   "a non-zero exit prints the status and waits for Return; a clean detach still closes")
+        try expect(held.range(of: "stty sane </dev/tty")!.upperBound < held.range(of: "read _")!.lowerBound,
+                   "the tty is reset before the wait — a crashed mosh-client leaves it raw with VMIN=0, where read returns EOF")
+        try expect(Opener.holdOnFailure(sshAttach).contains("\\\"PATH="),
+                   "a remote command's own double quotes are escaped one level deeper for iTerm's tokenizer")
 
         // Resume is a lifecycle state, not a fallback for a missing tmux name.
         // A live non-tmux Codex process cannot be attached, but starting a
@@ -3117,6 +3256,31 @@ enum Opener {
         ].joined(separator: " ")
     }
 
+    /// Wrap a window command so a failure stays on screen.
+    ///
+    /// iTerm's default profile closes the session the moment its command
+    /// exits, and `create window … command` then hands AppleScript
+    /// `missing value` — so a command that died instantly (stale tmux session,
+    /// unreachable host, a Cloudflare tunnel refusing the ssh handshake) took
+    /// its own error message with it, and all anyone ever saw was
+    /// "Can't get bounds of missing value". Running the line under `sh -c`
+    /// changes nothing on success (the quoting is already POSIX: single quotes,
+    /// `';'` as its own tmux argument) and on a non-zero exit prints the status
+    /// and waits for Return, leaving the real reason readable in the window.
+    ///
+    /// The `stty sane` / `tput rmcup` before the prompt are load-bearing: a
+    /// mosh-client that dies abnormally (carrier never came up) leaves the tty
+    /// raw with VMIN=0 and on the alternate screen, so a plain `read` returns
+    /// EOF at once and the window closes anyway — measured 2026-09-16 with a
+    /// simulated `stty raw min 0 time 0`: the plain hold vanished, this held.
+    static func holdOnFailure(_ command: String) -> String {
+        let hold = "s=$?; if [ $s -ne 0 ]; then "
+            + "stty sane </dev/tty 2>/dev/null; tput rmcup 2>/dev/null; "
+            + "printf '\\n[lfg] command exited with status %s. Press Return to close this window.\\n' $s; "
+            + "read _ </dev/tty; fi"
+        return "/bin/sh -c " + itermDoubleQuoted("\(command); \(hold)")
+    }
+
     /// Single-quote a string for zsh.
     private static func shq(_ s: String) -> String {
         "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
@@ -3153,22 +3317,36 @@ enum Opener {
         return (out, p.terminationStatus == 0 ? nil : (err.isEmpty ? "osascript failed" : err))
     }
 
+    /// What the open script returns when iTerm hands back no window at all.
+    private static let vanishedMarker = "lfg:window-vanished"
+
     private static func runInNewITermWindow(_ shellCommand: String) -> String? {
         // Launch via the profile `command` parameter, NOT create-then-`write text`:
         // written text races the shell's startup and zsh's line-editor init can
         // swallow it (the window opens to a bare prompt and nothing runs). The
         // command param has no shell in the loop — iTerm tokenizes it itself
         // (single-quoted args OK, but no shell builtins like `exec`).
+        //
+        // `holdOnFailure` keeps a failing command's window (and its error text)
+        // on screen; the `missing value` check below is the backstop for the
+        // cases it can't cover (iTerm still launching, a profile that closes
+        // windows regardless), so the user gets a sentence instead of
+        // "Can't get bounds of missing value".
         let script = """
         tell application "iTerm"
             activate
-            set w to (create window with default profile command "\(asq(shellCommand))")
+            set w to (create window with default profile command "\(asq(holdOnFailure(shellCommand)))")
+            if w is missing value then return "\(vanishedMarker)"
             set b to bounds of w
             return (id of w as string) & "," & (item 1 of b) & "," & (item 2 of b) & "," & (item 3 of b) & "," & (item 4 of b)
         end tell
         """
         let (out, err) = runAppleScript(script)
         if let err { return "iTerm2 scripting failed: \(err)" }
+        if out == vanishedMarker {
+            return "iTerm2 closed the new window as soon as it opened — the command exited immediately.\n"
+                + "Run it by hand to see why:\n\(shellCommand)"
+        }
         stretchToFullDesktopHeight(out)
         return nil
     }
@@ -4771,6 +4949,20 @@ struct ContentView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
+            // Closed-list infinite scroll: the sentinel sits at the very
+            // bottom, so it being created means the user reached the end of
+            // what's loaded. Scrolling away and back recreates it, which
+            // re-fires onAppear for the following page.
+            if !isSearching, store.canLoadMoreClosed {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Loading older sessions…")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityIdentifier("load_more_closed")
+                .onAppear { Task { await store.loadMoreClosed() } }
+            }
             // Search pages independently of the list, so this pulls the next
             // page of MATCHES — never the next page of the closed list.
             if isSearching, store.canLoadMoreSearch {
@@ -5020,7 +5212,8 @@ struct ContentView: View {
     }
 }
 
-/// Prints the exact command a remote row would hand iTerm2, so the transport
+/// Prints the exact command a remote row would hand iTerm2 (before the
+/// `holdOnFailure` wrapper the window adds around it), so the transport
 /// can be exercised for real without driving the GUI. iTerm tokenizes this
 /// string itself with no shell in the loop, so verify it the same way
 /// (`shlex.split` + `execvp`) — running it through zsh would expand the `$PATH`
@@ -5029,9 +5222,14 @@ enum AttachCommandCLI {
     static func runIfRequested() {
         let args = CommandLine.arguments
         guard args.dropFirst().first == "--attach-command" else { return }
-        let rest = Array(args.dropFirst(2))
+        var rest = Array(args.dropFirst(2))
+        // `held`: print what the iTerm window is actually handed — the attach
+        // wrapped in `holdOnFailure` — so the window-side quoting can be
+        // exercised against a real iTerm without clicking a row.
+        let held = rest.last == "held"
+        if held { rest.removeLast() }
         guard rest.count == 2 || rest.count == 3 else {
-            print("usage: lfg --attach-command <ssh-target> <tmux-session> [automatic|ssh|mosh-bridged]")
+            print("usage: lfg --attach-command <ssh-target> <tmux-session> [automatic|ssh|mosh-bridged] [held]")
             Darwin.exit(1)
         }
         let transport = rest.count == 3 ? RemoteTransport(rawValue: rest[2]) : .automatic
@@ -5045,7 +5243,8 @@ enum AttachCommandCLI {
         case .ssh: moshPath = nil
         case .moshBridged: moshPath = Opener.moshBridged
         }
-        print(Opener.remoteAttachCommand(sshTarget: rest[0], tmuxName: rest[1], moshPath: moshPath))
+        let attach = Opener.remoteAttachCommand(sshTarget: rest[0], tmuxName: rest[1], moshPath: moshPath)
+        print(held ? Opener.holdOnFailure(attach) : attach)
         fflush(stdout)
         Darwin.exit(0)
     }

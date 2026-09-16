@@ -93,5 +93,8 @@ PLIST
 # rebuilds (an ad-hoc signature changes every build and re-prompts).
 IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
   | awk -F'"' '/Developer ID Application/{print $2; exit}')
-codesign --force --sign "${IDENTITY:--}" "$APP"
+# --timestamp=none: the identity signature is only for a stable TCC identity,
+# and a timestamp-server hiccup otherwise fails the sign ("A timestamp was
+# expected but was not found") and quietly leaves the app ad-hoc signed.
+codesign --force --timestamp=none --sign "${IDENTITY:--}" "$APP"
 echo "Built: $PWD/$APP"
