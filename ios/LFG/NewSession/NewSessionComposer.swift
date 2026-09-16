@@ -1,5 +1,6 @@
 import PhotosUI
 import SwiftUI
+import LFGCore
 
 struct ConfigChip: View {
     enum Kind {
@@ -82,7 +83,7 @@ struct NewSessionComposer: View {
     @FocusState private var focused: Bool
 
     private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        OutgoingAttachmentMessage.canSend(text: text, attachmentCount: tray.items.count)
     }
 
     private var composerLineSpacing: CGFloat {
@@ -232,8 +233,9 @@ struct NewSessionComposer: View {
     private func submit() {
         guard canSend, !sending else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        onSend(trimmed, tray.items)
+        let items = tray.items
         text = ""
         tray.clear()
+        onSend(trimmed, items)
     }
 }

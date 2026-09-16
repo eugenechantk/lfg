@@ -170,9 +170,11 @@ struct AttachmentMenuItems: View {
         Button { tray.choose(.photos) } label: {
             Label("Photos & Videos", systemImage: "photo.on.rectangle")
         }
+        .accessibilityIdentifier("composer.attach.photos")
         Button { tray.choose(.files) } label: {
             Label("Files", systemImage: "folder")
         }
+        .accessibilityIdentifier("composer.attach.files")
     }
 }
 
@@ -244,6 +246,7 @@ struct AttachmentChips: View {
             .padding(.vertical, 2)
             .padding(.trailing, 6)   // room for the last chip's ✕ overhang
         }
+        .accessibilityIdentifier("composer.attachments")
     }
 
     @ViewBuilder

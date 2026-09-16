@@ -52,6 +52,58 @@ public struct AttachmentMeta: Codable, Sendable, Equatable {
     }
 }
 
+/// Builds the exact text handed to an agent after attachment uploads finish.
+///
+/// The attachment count is an invariant, not advisory: sending a mixed message
+/// after only some uploads succeeded silently changes what the user asked the
+/// agent to inspect. Callers must surface the upload error and retain the
+/// original attachment bytes for retry instead.
+public enum OutgoingAttachmentMessage {
+    public enum Error: Swift.Error, LocalizedError, Equatable, Sendable {
+        case missingUploads(expected: Int, actual: Int)
+        case emptyMessage
+
+        public var errorDescription: String? {
+            switch self {
+            case .missingUploads(let expected, let actual):
+                return "Only \(actual) of \(expected) attachments uploaded"
+            case .emptyMessage:
+                return "Message contains no text or attachments"
+            }
+        }
+    }
+
+    public static func canSend(text: String, attachmentCount: Int) -> Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || attachmentCount > 0
+    }
+
+    public static func assemble(
+        text: String,
+        uploadedPaths: [String],
+        expectedAttachmentCount: Int
+    ) throws -> String {
+        guard uploadedPaths.count == expectedAttachmentCount else {
+            throw Error.missingUploads(expected: expectedAttachmentCount, actual: uploadedPaths.count)
+        }
+
+        let typed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let paths = uploadedPaths.map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard paths.allSatisfy({ !$0.isEmpty }) else {
+            throw Error.missingUploads(
+                expected: expectedAttachmentCount,
+                actual: paths.filter { !$0.isEmpty }.count
+            )
+        }
+
+        let message = ([typed] + paths).filter { !$0.isEmpty }.joined(separator: "\n")
+        guard !message.isEmpty else { throw Error.emptyMessage }
+        return message
+    }
+}
+
 public enum AttachmentNaming {
     /// Characters allowed to survive into a stored filename. Everything else
     /// collapses to `_` — including whitespace, which matters more than it looks:

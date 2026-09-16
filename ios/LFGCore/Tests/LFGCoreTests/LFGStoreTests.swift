@@ -152,6 +152,29 @@ final class LFGStoreTests: XCTestCase {
         XCTAssertNil(deliveredRow)
     }
 
+    func testAttachmentOnlyOutboxCanStartEmptyThenReceiveUploadedPaths() async throws {
+        let store = try LFGStore.inMemory()
+
+        try await store.enqueueOutbox(
+            clientId: "attachment-only",
+            sessionId: "s1",
+            hostId: "h1",
+            text: ""
+        )
+        let staged = try await store.outbox(clientId: "attachment-only")
+        XCTAssertEqual(staged?.text, "")
+
+        try await store.enqueueOutbox(
+            clientId: "attachment-only",
+            sessionId: "s1",
+            hostId: "h1",
+            text: "/tmp/lfg-uploads/photo.png"
+        )
+        let ready = try await store.outbox(clientId: "attachment-only")
+        XCTAssertEqual(ready?.text, "/tmp/lfg-uploads/photo.png")
+        XCTAssertEqual(ready?.state, "pending")
+    }
+
     /// `failed` must not be a black hole. `pendingOutbox` hides those rows on
     /// purpose, but the replay paths read `retryableOutbox` so a host coming back
     /// can re-attempt them — and so a relaunch still restores the bubble instead

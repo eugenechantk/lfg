@@ -33,7 +33,7 @@ struct MessageComposer: View {
     @FocusState private var focused: Bool
 
     private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !tray.isEmpty
+        OutgoingAttachmentMessage.canSend(text: text, attachmentCount: tray.items.count)
     }
 
     var body: some View {

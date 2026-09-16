@@ -272,6 +272,10 @@ import LFGCore
     /// The create request behind each placeholder id, kept so a failed create
     /// can be retried straight from the optimistic kickoff bubble.
     private var pendingCreates: [String: NewSessionRequest] = [:]
+    /// Attachment bytes for a create that has not reached `/new` yet. Unlike an
+    /// in-session send there is no real session id/outbox row to own these until
+    /// creation succeeds, so the placeholder retains them across inline Retry.
+    private var pendingCreateAttachments: [String: [ComposerAttachment]] = [:]
     /// placeholder id -> server id, for the update where `selection` still names
     /// the placeholder. Bounded: entries are only added by `remap`, which runs
     /// once per created session.
@@ -997,8 +1001,11 @@ import LFGCore
             paths.append(path)
         }
 
-        let full = ([row.text] + paths).filter { !$0.isEmpty }.joined(separator: "\n")
-        guard !full.isEmpty else { throw OutboxAttachmentError.replayProducedEmptyMessage }
+        let full = try OutgoingAttachmentMessage.assemble(
+            text: row.text,
+            uploadedPaths: paths,
+            expectedAttachmentCount: files.count
+        )
         guard await enqueueOutboxForTransport(
             clientId: row.clientId,
             sessionId: row.sessionId,
@@ -1287,10 +1294,13 @@ import LFGCore
         }
     }
 
-    private func retryOutboxRow(_ row: LFGOutboxRow) async {
+    private func retryOutboxRow(
+        _ row: LFGOutboxRow,
+        trigger: OutboxSendTrigger = .automatic
+    ) async {
         // Boundary check. The callers already decided, but this is the POST and
         // the POST owns the invariant — see `outboxSendPermitted`.
-        guard await outboxSendPermitted(clientId: row.clientId, trigger: .automatic) else { return }
+        guard await outboxSendPermitted(clientId: row.clientId, trigger: trigger) else { return }
         appendPendingFromOutbox(row)
         guard let host = settings.hosts.first(where: { $0.id == row.hostId }),
               let client = settings.client(for: host) else {
@@ -3288,13 +3298,15 @@ import LFGCore
     /// Returns the row's id so the caller can watch it land
     /// (`watchForTurnLanding`); nil when there was nothing to add.
     @discardableResult
-    func addPending(_ sid: String, text: String) -> String? {
+    func addPending(_ sid: String, text: String, displayText: String? = nil) -> String? {
         let typed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !typed.isEmpty else { return nil }
+        let display = displayText?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? typed
+        guard !display.isEmpty else { return nil }
         let nowMs = Date().timeIntervalSince1970 * 1000
         let pid = UUID().uuidString
         pendingSends[sid, default: []].append(
-            PendingSend(id: pid, displayText: typed, matchText: typed, ts: nowMs, showSent: true))
+            PendingSend(id: pid, displayText: display, matchText: typed, ts: nowMs, showSent: true))
         reconcilePending(sid)
         return pendingSends[sid]?.contains { $0.id == pid } == true ? pid : nil
     }
@@ -3317,7 +3329,12 @@ import LFGCore
         if let req = pendingCreates[sid] {
             mutatePending(sid, pending.id) { $0.failed = false }
             busy[sid] = true
-            await attemptCreate(sid, req, on: pendingCreateHost[sid], attachments: [])
+            await attemptCreate(
+                sid,
+                req,
+                on: pendingCreateHost[sid],
+                attachments: pendingCreateAttachments[sid] ?? []
+            )
             return
         }
         let clientId = pending.clientId ?? pending.id
@@ -3331,6 +3348,15 @@ import LFGCore
             // via "Send now"; leaving it on the static "Queued" capsule would
             // make the tap look like it did nothing.
             $0.queuedOffline = false
+        }
+        // An upload failure leaves the original bytes in durable sidecars. Retry
+        // must re-enter the upload pipeline before it can POST the message; using
+        // `pending.matchText` here would resend only the typed text (or nothing).
+        if !outboxAttachmentFiles(clientId: clientId).isEmpty,
+           let store = localStore,
+           let row = try? await store.outbox(clientId: clientId) {
+            await retryOutboxRow(row, trigger: trigger)
+            return
         }
         if let qid = pending.serverQueueID {
             guard let hostId = routeHostId(forSession: sid),
@@ -3510,21 +3536,9 @@ import LFGCore
         //    turn comes back from the host. Keeping the two distinct is the point:
         //    an accent-coloured bubble means received.
         //
-        //    A resume send is a closed session whose detail we're showing, either
-        //    from the list, from search, or carried forward because its pane was
-        //    reaped while focused (`focusedSnapshot`) / it was opened straight from
-        //    a tapped push notification (`deepLinkSession`). Either way the message
-        //    has to revive the conversation server-side before anything runs it.
-        let isClosed = session(id)?.closed == true
-        let needsResume = isClosed
-            || (!sessions.contains { $0.sessionId == id }
-                && (focusedSnapshot?.sessionId == id || deepLinkSession?.sessionId == id))
-        let offlineAtSend = isOffline(id)
-        let presentation = OutgoingSendPresentation.classify(
-            hostUnreachable: offlineAtSend,
-            sessionNeedsResume: needsResume,
-            agentBusy: busy[id] == true,
-            awaitingPrompt: prompts[id] != nil)
+        //    The presentation was captured synchronously at dispatch, before the
+        //    store's optimistic busy write could contaminate the classification.
+        let offlineAtSend = presentation == .offlineQueued
         // A send that has to wake the session is a restart request — the list
         // should say so from the tap, not from the response. (`.queuedForResume`
         // already excludes the offline case, where nothing leaves the phone.)
@@ -3547,26 +3561,31 @@ import LFGCore
                         queuedForResume: presentation == .queuedForResume,
                         confirmed: presentation.isConfirmed))
 
-        // 2) Offline sends persist attachment bytes as sidecars and leave the outbox
-        //    text as typed text only; replay uploads the bytes and bakes paths in.
-        if offlineAtSend {
-            do {
-                try persistOutboxAttachments(attachments, clientId: clientId)
-            } catch {
-                lastError = "Queue attachments failed: \(error.localizedDescription)"
-                mutatePending(id, pid) { $0.failed = true }
-                return
-            }
+        // 2) Persist the send before the first upload. The old online path kept
+        //    attachment bytes only in this task and used `try?` for each upload:
+        //    an attachment-only failure vanished, while a mixed send continued as
+        //    text-only. Sidecars make the original intent durable and retryable.
+        do {
+            try persistOutboxAttachments(attachments, clientId: clientId)
+        } catch {
+            let reason = "Couldn't save attachments for sending: \(error.localizedDescription)"
+            mutatePending(id, pid) { $0.failed = true; $0.failureReason = reason }
+            lastError = reason
+            return
+        }
 
-            guard let hostId = routeHostId(forSession: id),
-                  await enqueueOutboxForTransport(clientId: clientId, sessionId: id, hostId: hostId, text: typed) else {
-                // Terminal in the other direction: the sidecars are gone and no
-                // drain will ever pick this up, so it needs the same banner the
-                // other give-up paths get. It was silent before.
-                deleteOutboxAttachments(clientId: clientId)
-                markPendingFailed(clientId: clientId)
-                return
-            }
+        guard let hostId = routeHostId(forSession: id),
+              await enqueueOutboxForTransport(
+                clientId: clientId,
+                sessionId: id,
+                hostId: hostId,
+                text: typed
+              ) else {
+            mutatePending(id, pid) { $0.failed = true }
+            return
+        }
+
+        if offlineAtSend {
             // Nothing has reached a host, so this cannot read as received: it
             // waits in the pending bar ("Queued") until the reconnect replay
             // sends it, whatever the session looked like at send time. The
@@ -3576,27 +3595,47 @@ import LFGCore
             return
         }
 
-        // 3) Online sends upload attachments immediately, then assemble the full text
-        //    the agent will record.
-        var paths: [String] = []
-        for att in attachments {
-            if let p = try? await client.upload(
-                id,
-                data: att.data,
-                contentType: att.meta.contentType,
-                filename: att.meta.filename
-            ) { paths.append(p) }
+        // 3) Online sends require every upload, then assemble one exact agent
+        //    message. A partial upload is a failed send, never permission to
+        //    change the user's message.
+        let full: String
+        do {
+            var paths: [String] = []
+            for att in attachments {
+                paths.append(try await client.upload(
+                    id,
+                    data: att.data,
+                    contentType: att.meta.contentType,
+                    filename: att.meta.filename
+                ))
+            }
+            full = try OutgoingAttachmentMessage.assemble(
+                text: typed,
+                uploadedPaths: paths,
+                expectedAttachmentCount: attachments.count
+            )
+        } catch {
+            let reason = Self.pendingFailureReason(error)
+            mutatePending(id, pid) { $0.failureReason = reason }
+            await markOutboxState(clientId, state: "failed")
+            markPendingFailed(clientId: clientId)
+            return
         }
-        let full = ([typed] + paths).filter { !$0.isEmpty }.joined(separator: "\n")
-        guard !full.isEmpty else { removePending(id, pid); return }
         mutatePending(id, pid) { $0.matchText = full }
 
-        // 4) Save to the durable outbox first.
-        guard let hostId = routeHostId(forSession: id),
-              await enqueueOutboxForTransport(clientId: clientId, sessionId: id, hostId: hostId, text: full) else {
+        // 4) Replace the typed-only draft with the exact upload-backed payload.
+        //    Delete sidecars only after that durable update succeeds; after this
+        //    point Retry can reuse host paths without uploading again.
+        guard await enqueueOutboxForTransport(
+            clientId: clientId,
+            sessionId: id,
+            hostId: hostId,
+            text: full
+        ) else {
             mutatePending(id, pid) { $0.failed = true }
             return
         }
+        deleteOutboxAttachments(clientId: clientId)
 
         // 5) Send. On failure mark the bubble failed (Retry); on success let the
         //    queue/transcript reconcile it.
@@ -3765,7 +3804,8 @@ import LFGCore
         let placeholder = "local-" + UUID().uuidString
         let nowMs = Date().timeIntervalSince1970 * 1000
         let typed = req.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        let firstLine = typed.split(whereSeparator: \.isNewline).first.map(String.init) ?? "New session"
+        let displayText = typed.isEmpty ? Self.attachmentSummary(attachments) : typed
+        let firstLine = displayText.split(whereSeparator: \.isNewline).first.map(String.init) ?? "New session"
         let optimistic = Session(
             sessionId: placeholder,
             title: String(firstLine.prefix(60)),
@@ -3774,12 +3814,13 @@ import LFGCore
             cwd: req.cwd,
             status: "ok",
             assignedUser: req.user,
-            lastUserText: typed,
+            lastUserText: displayText,
             startedAt: nowMs,
             lastActivityAt: nowMs)
         optimisticSessions.append(optimistic)
         sessions.append(optimistic)
         pendingCreates[placeholder] = req
+        pendingCreateAttachments[placeholder] = attachments
         pendingCreateHost[placeholder] = host
         // Route any early op on the placeholder to the chosen host (until refresh
         // maps the real id).
@@ -3791,7 +3832,7 @@ import LFGCore
         // kickoff (it starts a new session's tail at EOF) and the detail view's one
         // history fetch races the transcript into existence — see
         // `watchForTurnLanding`.
-        if let pid = addPending(placeholder, text: typed) {
+        if let pid = addPending(placeholder, text: typed, displayText: displayText) {
             watchForTurnLanding(clientId: pid)
         }
         Task { await attemptCreate(placeholder, req, on: host, attachments: attachments) }
@@ -3802,13 +3843,50 @@ import LFGCore
     /// server-assigned id and point navigation at it. On failure, surface the
     /// kickoff bubble's Retry (which re-enters here).
     private func attemptCreate(_ placeholder: String, _ req: NewSessionRequest, on host: Host?, attachments: [ComposerAttachment]) async {
-        guard let client = (host ?? agnosticHost).flatMap({ settings.client(for: $0) }) else { return }
+        guard let client = (host ?? agnosticHost).flatMap({ settings.client(for: $0) }) else {
+            lastError = "Create failed: no host is available."
+            busy[placeholder] = false
+            if var pend = pendingSends[placeholder] {
+                for i in pend.indices {
+                    pend[i].failed = true
+                    pend[i].failureReason = "No host is available."
+                }
+                pendingSends[placeholder] = pend
+            }
+            return
+        }
         do {
-            let resp = try await client.newSession(req)
+            // Upload before `/new` so text and every attachment path become the
+            // session's ONE kickoff prompt. The upload endpoint deliberately
+            // uses a UUID namespace without requiring that a session already
+            // exists, which also keeps this compatible with older LFG hosts.
+            let uploadNamespace = UUID().uuidString
+            var paths: [String] = []
+            for att in attachments {
+                paths.append(try await client.upload(
+                    uploadNamespace,
+                    data: att.data,
+                    contentType: att.meta.contentType,
+                    filename: att.meta.filename
+                ))
+            }
+            let full = try OutgoingAttachmentMessage.assemble(
+                text: req.prompt,
+                uploadedPaths: paths,
+                expectedAttachmentCount: attachments.count
+            )
+            if var pend = pendingSends[placeholder] {
+                for i in pend.indices { pend[i].matchText = full }
+                pendingSends[placeholder] = pend
+            }
+            var createRequest = req
+            createRequest.prompt = full
+            let resp = try await client.newSession(createRequest)
             guard let realId = resp.sessionId else {
                 throw LFGError.http(status: 0, body: "Create returned no session id")
             }
             pendingCreates[placeholder] = nil
+            pendingCreateAttachments[placeholder] = nil
             pendingCreateHost[placeholder] = nil
             // Deliberately no `requestSelection(realId)`: the detail is already
             // open on the placeholder, which `navID` keeps as this session's
@@ -3816,9 +3894,6 @@ import LFGCore
             // what pushed a SECOND detail on top of the first.
             remap(from: placeholder, to: realId, aliasNavigation: true)
             await refresh()
-            if !attachments.isEmpty {
-                await sendWithAttachments(realId, text: "", attachments: attachments)
-            }
         } catch {
             lastError = "Create failed: \(error.localizedDescription)"
             busy[placeholder] = false
