@@ -2016,13 +2016,20 @@ import LFGCore
                                      beforeByHost: [String: Double?] = [:],
                                      q: String? = nil) async -> [HostResumableFetch] {
         let pairs: [(Int, LFGClient?)] = hosts.enumerated().map { ($0, settings.client(for: $1)) }
+        // The hidden set rides along on every LIST fetch (first page, load
+        // more, search) so the host filters before paginating. The targeted
+        // by-id lookup (`closedSession(for:)`) deliberately does NOT come
+        // through here: hiding is a viewing preference and must never make a
+        // deep-linked session unreachable.
+        let exclude = settings.hiddenDirs.paths
         let results = await withTaskGroup(of: (Int, HostResumableFetch?).self) { group -> [(Int, HostResumableFetch?)] in
             for (i, c) in pairs {
                 let host = hosts[i]
                 let before = beforeByHost[host.id] ?? nil
                 group.addTask {
                     guard let c else { return (i, nil) }
-                    guard let page = try? await c.resumable(limit: 60, before: before, q: q) else { return (i, nil) }
+                    guard let page = try? await c.resumable(limit: 60, before: before, q: q, exclude: exclude)
+                    else { return (i, nil) }
                     return (i, HostResumableFetch(host: host, sessions: page.sessions, nextBefore: page.nextBefore))
                 }
             }

@@ -430,12 +430,19 @@ public struct LFGClient: Sendable {
     public func resumable(limit: Int = 30,
                           before: Double? = nil,
                           q: String? = nil,
+                          exclude: [String] = [],
                           timeout: TimeInterval = LFGClient.readTimeout) async throws -> ResumableResponse {
         var query = [URLQueryItem(name: "limit", value: String(limit))]
         if let before { query.append(URLQueryItem(name: "before", value: String(before))) }
         if let q, !q.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             query.append(URLQueryItem(name: "q", value: q))
         }
+        // Hidden-dir globs, filtered by the host BEFORE pagination. Filtering
+        // only client-side starves the page: a churny population can own the
+        // entire newest-mtime window, so a page of 60 yields a handful of
+        // visible rows. Old hosts ignore the param; the client-side filter
+        // stays as the backstop either way.
+        for e in exclude { query.append(URLQueryItem(name: "exclude", value: e)) }
         return try await get("api/sessions/resumable",
                              query: query,
                              timeout: timeout,

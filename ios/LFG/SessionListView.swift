@@ -752,10 +752,20 @@ struct SessionListView: View {
                                             }
                                         }
                                     } else if store.canLoadMoreClosed {
+                                        // Infinite scroll: this row only exists
+                                        // at the bottom of the closed section,
+                                        // so its creation means the user is at
+                                        // the end of what's loaded — fetch the
+                                        // next page without requiring the tap.
+                                        // The button stays as the retry path
+                                        // for a page that failed mid-flight.
                                         loadMoreRow(title: "Load more",
                                                     loading: store.isLoadingMoreClosed,
                                                     identifier: "loadMoreClosedButton") {
                                             await store.loadMoreClosed()
+                                        }
+                                        .onAppear {
+                                            Task { await store.loadMoreClosed() }
                                         }
                                     }
                                 }
