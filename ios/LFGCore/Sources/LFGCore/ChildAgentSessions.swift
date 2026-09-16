@@ -177,3 +177,66 @@ public enum SessionWorkListPresentation {
         return "\(count) background process\(count == 1 ? "" : "es") running"
     }
 }
+
+/// How `SessionStore.childAgentsBySession` takes input from its two sources.
+///
+/// The list row (`Session.childAgents`) and the per-session `/subagents` read
+/// describe the same sidecar directory, but they can come from different hosts
+/// and different moments. The row is served from the owner's LAST GOOD snapshot
+/// even while the owner is connecting/degraded; the read goes to the owner (send
+/// routing) and fails honestly while it is down — or, for a closed session, to a
+/// peer whose synced copy of `~/.claude/projects` lags by minutes. Before this
+/// rule the read landed on that peer for LIVE sessions too, its 404 was written
+/// through as "no agents", and the detail view lost the bar and menu entry while
+/// the list badge still said `👥 2` (diagnosis 2026-09-07).
+///
+/// Two invariants: an EMPTY answer only counts when it comes from the owner, and
+/// a frozen row never re-asserts an older status over a fresher poll result — the
+/// same trap `JournalFreshness` exists to prevent for `busy`.
+public enum ChildAgentSnapshotMerge {
+
+    public enum FetchOutcome: Equatable {
+        case agents([ChildAgentSession])
+        /// 404 — the host has no transcript for this session.
+        case notFound
+        /// Transport/decoding failure: the host said nothing at all.
+        case failed
+    }
+
+    /// Newest activity across a set; nil when nothing carries a timestamp.
+    static func newestActivity(_ agents: [ChildAgentSession]) -> Double? {
+        agents.compactMap(ChildSessionsBarVisibility.latestActivity(of:)).max()
+    }
+
+    /// Seed from a list row. Never blanks with an empty row; between two
+    /// non-empty sets the fresher one wins and a tie keeps what the store has,
+    /// because the poll is the authoritative writer.
+    public static func seed(
+        existing: [ChildAgentSession]?,
+        row: [ChildAgentSession]
+    ) -> [ChildAgentSession]? {
+        guard !row.isEmpty else { return existing }
+        guard let existing, !existing.isEmpty else { return row }
+        guard let rowAt = newestActivity(row) else { return existing }
+        guard let existingAt = newestActivity(existing) else { return row }
+        return rowAt > existingAt ? row : existing
+    }
+
+    /// Apply a `/subagents` result. `fromOwner` is whether the request went to
+    /// the session's owning host — the only host whose sidecars are guaranteed.
+    public static func applyFetch(
+        existing: [ChildAgentSession]?,
+        outcome: FetchOutcome,
+        fromOwner: Bool
+    ) -> [ChildAgentSession]? {
+        switch outcome {
+        case .agents(let agents):
+            if fromOwner || !agents.isEmpty { return agents }
+            return existing
+        case .notFound:
+            return fromOwner ? [] : existing
+        case .failed:
+            return existing
+        }
+    }
+}

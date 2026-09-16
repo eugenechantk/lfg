@@ -30,6 +30,12 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     /// Active Claude child agents. Older hosts omit it, which decodes as zero.
     /// The server also folds this into `busy`, keeping every status surface in sync.
     public var runningChildAgentCount: Int
+    /// The agents behind `runningChildAgentCount` (every status), as the list
+    /// row carries them. Older hosts omit it, which decodes as empty. This is the
+    /// detail view's seed: the per-session `/subagents` read routes to the owner,
+    /// which may be unreachable while this row — served from the host's last good
+    /// snapshot — still shows the badge. See `ChildAgentSnapshotMerge`.
+    public var childAgents: [ChildAgentSession]
     /// Active background shell processes. Older hosts omit it, which decodes as zero.
     public var runningBackgroundProcessCount: Int
     /// The session's newest transcript message, as the server's `previewLast` sees
@@ -90,6 +96,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         startedAt: Double? = nil, lastActivityAt: Double? = nil,
         tmuxTarget: String? = nil, tmuxName: String? = nil, managed: Bool? = nil,
         busy: Bool? = nil, runningChildAgentCount: Int = 0,
+        childAgents: [ChildAgentSession] = [],
         runningBackgroundProcessCount: Int = 0,
         last: SessionMessage? = nil, closed: Bool = false,
         prompt: AgentPrompt? = nil
@@ -102,6 +109,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         self.startedAt = startedAt; self.lastActivityAt = lastActivityAt
         self.tmuxTarget = tmuxTarget; self.tmuxName = tmuxName; self.managed = managed
         self.busy = busy; self.runningChildAgentCount = max(0, runningChildAgentCount)
+        self.childAgents = childAgents
         self.runningBackgroundProcessCount = max(0, runningBackgroundProcessCount)
         self.last = last; self.closed = closed
         self.prompt = prompt
@@ -131,6 +139,9 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
             0,
             try c.decodeIfPresent(Int.self, forKey: .runningChildAgentCount) ?? 0
         )
+        // Same tolerance as `last`/`prompt`: a malformed agent list must not
+        // fail the whole session decode and blank the list.
+        childAgents = (try? c.decodeIfPresent([ChildAgentSession].self, forKey: .childAgents)) ?? []
         runningBackgroundProcessCount = max(
             0,
             try c.decodeIfPresent(Int.self, forKey: .runningBackgroundProcessCount) ?? 0

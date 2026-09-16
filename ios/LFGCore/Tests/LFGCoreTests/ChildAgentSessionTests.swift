@@ -187,4 +187,60 @@ final class ChildSessionsBarVisibilityTests: XCTestCase {
             t0)
         XCTAssertNil(ChildSessionsBarVisibility.latestActivity(of: agent("a", .completed)))
     }
+
+    // MARK: - ChildAgentSnapshotMerge
+
+    private func agent(_ id: String, status: ChildAgentStatus = .running, at: Double? = nil) -> ChildAgentSession {
+        ChildAgentSession(id: id, status: status, startedAt: at, lastActivityAt: at)
+    }
+
+    func testSeedFillsAnEmptyStoreFromTheRow() {
+        let row = [agent("a", at: 10)]
+        XCTAssertEqual(ChildAgentSnapshotMerge.seed(existing: nil, row: row), row)
+        XCTAssertEqual(ChildAgentSnapshotMerge.seed(existing: [], row: row), row)
+    }
+
+    func testSeedNeverClobbersWithAnEmptyRow() {
+        let existing = [agent("a", at: 10)]
+        XCTAssertEqual(ChildAgentSnapshotMerge.seed(existing: existing, row: []), existing)
+        XCTAssertNil(ChildAgentSnapshotMerge.seed(existing: nil, row: []))
+    }
+
+    func testSeedPrefersTheFresherSetAndKeepsExistingOnTie() {
+        let older = [agent("a", status: .running, at: 10)]
+        let newer = [agent("a", status: .completed, at: 20), agent("b", at: 15)]
+        // A row from a fresher snapshot supersedes a stale poll result…
+        XCTAssertEqual(ChildAgentSnapshotMerge.seed(existing: older, row: newer), newer)
+        // …but a frozen row never re-asserts an older status over a fresher poll.
+        XCTAssertEqual(ChildAgentSnapshotMerge.seed(existing: newer, row: older), newer)
+        // Tie: keep what the store has (the poll is the authoritative writer).
+        let tie = [agent("a", status: .completed, at: 20)]
+        XCTAssertEqual(ChildAgentSnapshotMerge.seed(existing: tie, row: newer), tie)
+    }
+
+    func testFetchFromTheOwnerIsAuthoritativeEvenWhenEmpty() {
+        let existing = [agent("a")]
+        XCTAssertEqual(ChildAgentSnapshotMerge.applyFetch(existing: existing, outcome: .agents([]), fromOwner: true), [])
+        XCTAssertEqual(ChildAgentSnapshotMerge.applyFetch(existing: existing, outcome: .notFound, fromOwner: true), [])
+        let fresh = [agent("b")]
+        XCTAssertEqual(ChildAgentSnapshotMerge.applyFetch(existing: existing, outcome: .agents(fresh), fromOwner: true), fresh)
+    }
+
+    func testFetchFromAPeerNeverBlanksWhatTheOwnerSaid() {
+        // The peer's synced copy of ~/.claude/projects lags by minutes: its 404 or
+        // empty answer is ignorance, not a retraction.
+        let existing = [agent("a")]
+        XCTAssertEqual(ChildAgentSnapshotMerge.applyFetch(existing: existing, outcome: .notFound, fromOwner: false), existing)
+        XCTAssertEqual(ChildAgentSnapshotMerge.applyFetch(existing: existing, outcome: .agents([]), fromOwner: false), existing)
+        XCTAssertNil(ChildAgentSnapshotMerge.applyFetch(existing: nil, outcome: .notFound, fromOwner: false))
+        // A peer that does have data is still useful when the store has nothing.
+        let synced = [agent("b")]
+        XCTAssertEqual(ChildAgentSnapshotMerge.applyFetch(existing: nil, outcome: .agents(synced), fromOwner: false), synced)
+    }
+
+    func testTransportFailureKeepsTheSnapshotRegardlessOfHost() {
+        let existing = [agent("a")]
+        XCTAssertEqual(ChildAgentSnapshotMerge.applyFetch(existing: existing, outcome: .failed, fromOwner: true), existing)
+        XCTAssertEqual(ChildAgentSnapshotMerge.applyFetch(existing: existing, outcome: .failed, fromOwner: false), existing)
+    }
 }

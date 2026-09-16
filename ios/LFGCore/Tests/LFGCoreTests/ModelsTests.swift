@@ -43,6 +43,33 @@ final class ModelsTests: XCTestCase {
         XCTAssertFalse(s1.hasPane)
     }
 
+    func testDecodeSessionChildAgentsLeniently() throws {
+        // The list row carries the agents the badge counted (server folds them in
+        // `withSessionWorkActivity`). Older servers omit the key → empty array.
+        let json = """
+        {"sessions":[
+          {"agent":"claude","sessionId":"with","title":"t","runningChildAgentCount":1,
+           "childAgents":[{"id":"a1","description":"Audit","agentType":"auditor",
+                           "status":"running","startedAt":10.0},
+                          {"id":"a2","status":"weird-new-status"}]},
+          {"agent":"claude","sessionId":"without","title":"t2"}
+        ]}
+        """.data(using: .utf8)!
+        let resp = try JSONDecoder().decode(SessionsResponse.self, from: json)
+        let with = resp.sessions[0]
+        XCTAssertEqual(with.childAgents.map(\.id), ["a1", "a2"])
+        XCTAssertEqual(with.childAgents[0].status, .running)
+        XCTAssertEqual(with.childAgents[0].description, "Audit")
+        XCTAssertEqual(with.childAgents[1].status, .unknown)
+        XCTAssertEqual(with.childAgents[1].description, "Child agent")
+        XCTAssertEqual(resp.sessions[1].childAgents, [])
+        // A malformed agent list must not fail the whole session decode.
+        let bad = """
+        {"sessions":[{"agent":"claude","sessionId":"bad","title":"t","childAgents":"nope"}]}
+        """.data(using: .utf8)!
+        XCTAssertEqual(try JSONDecoder().decode(SessionsResponse.self, from: bad).sessions[0].childAgents, [])
+    }
+
     func testDecodeResumableSessionsFromServerFields() throws {
         // Mirrors the real /api/sessions/resumable payload: the server sends
         // `lastActivityAt` + `lastUserText` (not `mtime`), and no `agent`.

@@ -480,18 +480,35 @@ import LFGCore
     }
 
     func refreshChildAgents(_ sessionId: String) async {
-        guard !sessionId.isEmpty, let client = readClient(forSession: sessionId) else { return }
+        guard !sessionId.isEmpty else { return }
+        // SEND routing, not read routing: sidecars are only guaranteed on the
+        // owner. `readClient` sends a live session's read to a peer whenever the
+        // owner is merely connecting/degraded, and the peer's synced copy of
+        // ~/.claude/projects lags by minutes — its 404 used to be written through
+        // as "no agents" while the list badge still counted them.
+        let owner = host(forSession: sessionId)
+        let target = MultiHost.routeHost(owner: owner, isClosed: isClosed(sessionId),
+                                         reachable: isReachable, agnostic: agnosticHost)
+        guard let target, let client = settings.client(for: target) else { return }
+        let fromOwner = owner != nil && target.id == owner?.id
+        let outcome: ChildAgentSnapshotMerge.FetchOutcome
         do {
-            childAgentsBySession[sessionId] = try await client.childAgents(sessionId)
+            outcome = .agents(try await client.childAgents(sessionId))
         } catch let error as LFGError {
             // Older hosts and sessions without a materialized transcript both
-            // answer 404. That is the feature's empty state, not a banner-worthy
-            // connection failure. Keep the existing snapshot on real transport
-            // errors so a momentary host blip does not make the strip disappear.
+            // answer 404 — the feature's empty state when the OWNER says it, and
+            // mere ignorance when a peer does. `applyFetch` tells them apart.
             if case .http(let status, _) = error, status == 404 {
-                childAgentsBySession[sessionId] = []
+                outcome = .notFound
+            } else {
+                outcome = .failed
             }
-        } catch {}
+        } catch {
+            outcome = .failed
+        }
+        let merged = ChildAgentSnapshotMerge.applyFetch(
+            existing: childAgentsBySession[sessionId], outcome: outcome, fromOwner: fromOwner)
+        if merged != childAgentsBySession[sessionId] { childAgentsBySession[sessionId] = merged }
     }
 
     func childAgentMessages(parentID: String, childID: String) async throws -> [SessionMessage] {
@@ -2398,6 +2415,15 @@ import LFGCore
         closedCache = reconciled.visibleClosed.map(Self.closedSession(from:))
         let closed = closedCache
         sessions = fresh + optimistic + closed
+        // Seed child agents from the rows that carry the 👥 badge, so the detail
+        // view has the same data the list counted even when the owner is not
+        // live and the per-session read cannot reach it. `seed` never blanks and
+        // never lets a frozen row out-vote a fresher poll (see the rule's doc).
+        for s in fresh {
+            guard let sid = s.sessionId, !s.childAgents.isEmpty else { continue }
+            let merged = ChildAgentSnapshotMerge.seed(existing: childAgentsBySession[sid], row: s.childAgents)
+            if merged != childAgentsBySession[sid] { childAgentsBySession[sid] = merged }
+        }
         // First poll after upgrading: convert old open-times into seen-message ids.
         migrateReadState()
         // The session on screen is seen by definition — keep its mark current against
