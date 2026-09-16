@@ -84,7 +84,7 @@ Independent audit (verification-auditor): see `evidence/codex-turn-errors-surfac
 
 ## Deploy note
 
-Only the Pro host (`Eugenes-MacBook-Pro`) runs the new server code. The Air still runs the old `sessions.ts` until this is committed, pulled there, and its `serve` process restarted. Nothing has been committed.
+Committed as `f5160df` and pushed to `origin/main` (2026-09-07). Pro: server restarted (pid 84261). Air: working tree was already synced (Syncthing) so HEAD was fast-forwarded with `git reset --mixed origin/main` (dirty set unchanged, 99 entries; undo anchor stash object `9a967020`), then the server was restarted by port under `serve-forever.sh` (pid 1038). The Air had no codex sessions to show blocked at the time; the code path is identical to the Pro's. Reached the Air via the `air` ssh alias (Cloudflare `ssh-air.eugenechantk.me`); the bare `eugenes-macbook-air` hostname and the LAN IP did not resolve/answer.
 
 ## Bugs
 
