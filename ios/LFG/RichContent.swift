@@ -62,16 +62,132 @@ extension EnvironmentValues {
 
 // MARK: - Markdown prose
 
+/// Gives MarkdownUI's `Grid` an ideal size measured at the same bounded width
+/// used to render the cell. A flexible `frame(minWidth:maxWidth:)` clamps the
+/// cell after its child reports an unwrapped ideal height, which can leave a
+/// later multiline cell drawing through the rows below it.
+private struct BoundedTableCellLayout: Layout {
+    let minWidth: CGFloat
+    let maxWidth: CGFloat
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        guard let subview = subviews.first else { return .zero }
+
+        let width: CGFloat
+        if let proposedWidth = proposal.width {
+            if proposedWidth.isFinite {
+                width = min(max(proposedWidth, minWidth), maxWidth)
+            } else {
+                width = maxWidth
+            }
+        } else {
+            let idealWidth = subview.sizeThatFits(.unspecified).width
+            width = min(max(idealWidth, minWidth), maxWidth)
+        }
+
+        let contentSize = subview.sizeThatFits(
+            ProposedViewSize(width: width, height: proposal.height)
+        )
+        return CGSize(width: width, height: contentSize.height)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        guard let subview = subviews.first else { return }
+        subview.place(
+            at: bounds.origin,
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: bounds.width, height: nil)
+        )
+    }
+}
+
+/// Marker and content top-aligned; see `Theme.lfgFlat`'s `.listItem`.
+private struct TopAlignedListItemLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .top, spacing: 4) {
+            configuration.icon
+                // Centre the marker on the first line of the item's text.
+                .alignmentGuide(.top) { d in
+                    d[VerticalAlignment.center] - SelectableTextRenderer.firstLineHeight / 2
+                }
+            configuration.title
+        }
+    }
+}
+
 extension MarkdownUI.Theme {
     /// GitHub styling, but with the body-text background container removed so the
     /// assistant response flows directly on the page (no gray box). Code blocks,
     /// inline code, headings, lists, tables keep their own styling.
+    @MainActor
     static var lfgFlat: MarkdownUI.Theme {
         MarkdownUI.Theme.gitHub
             .text {
                 ForegroundColor(.primary)
                 BackgroundColor(.clear)
                 FontSize(16)
+            }
+            // Paragraphs, code blocks and table cells render their text in a
+            // native `UITextView` (`SelectableProseView`) so a long-press gives
+            // the cursor + handles in place. Selection is scoped to the block —
+            // one paragraph, one cell — which is what keeps MarkdownUI's own
+            // layout (tables, lists, code chrome) exactly as it was.
+            .paragraph { configuration in
+                SelectableProseView(markdown: configuration.content.renderMarkdown())
+                    .fixedSize(horizontal: false, vertical: true)
+                    .markdownMargin(top: 0, bottom: 16)
+            }
+            // A UIKit text view has no text baseline for SwiftUI, so the default
+            // `Label` style centred the bullet on the whole item (wrong for an
+            // item holding a nested list). Pin marker and content to the top.
+            .listItem { configuration in
+                configuration.label
+                    .labelStyle(TopAlignedListItemLabelStyle())
+                    .markdownMargin(top: .em(0.25))
+            }
+            .codeBlock { configuration in
+                ScrollView(.horizontal) {
+                    SelectableProseView(code: configuration.content)
+                        .padding(16)
+                }
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .markdownMargin(top: 0, bottom: 16)
+            }
+            .table { configuration in
+                ScrollView(.horizontal, showsIndicators: true) {
+                    configuration.label
+                        // Keep readable column widths; the table scrolls instead
+                        // of compressing the columns to fit the viewport.
+                        .fixedSize(horizontal: true, vertical: false)
+                        .markdownTableBorderStyle(.init(color: Color(.separator)))
+                        .markdownTableBackgroundStyle(
+                            .alternatingRows(
+                                Color(.systemBackground),
+                                Color(.secondarySystemBackground)
+                            )
+                        )
+                }
+                .markdownMargin(top: 0, bottom: 16)
+            }
+            .tableCell { configuration in
+                BoundedTableCellLayout(minWidth: 140, maxWidth: 280) {
+                    SelectableProseView(
+                        markdown: configuration.content.renderMarkdown(),
+                        semibold: configuration.row == 0
+                    )
+                }
+                .padding(.vertical, 6)
+                .padding(.horizontal, 13)
             }
     }
 }
@@ -83,20 +199,42 @@ struct ProseView: View {
     @Environment(\.hostFiles) private var hostFiles
 
     var body: some View {
+        // No `.textSelection(.enabled)`: on iOS it only offers "copy the whole
+        // block". Range selection comes from the native text views the
+        // `lfgFlat` theme puts inside each paragraph / cell / code block.
         Markdown(text)
             .markdownImageProvider(HostImageProvider(hostFiles: hostFiles))
             .markdownTheme(.lfgFlat)
-            // Tables size columns to their content and scroll horizontally so
-            // wide tables stay readable instead of being crushed to fit.
-            .markdownBlockStyle(\.table) { configuration in
-                ScrollView(.horizontal, showsIndicators: true) {
-                    configuration.label
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-            }
-            .textSelection(.enabled)
     }
 }
+
+#if DEBUG
+/// Launch with `LFG_MARKDOWN_TABLE_FIXTURE=1` to exercise the case where a
+/// later cell, rather than the leading cell, determines the row height.
+struct MarkdownTableLayoutFixture: View {
+    private let markdown = """
+    # Table row sizing
+
+    | Property | Validation |
+    | --- | --- |
+    | font-family | `var(--disp) — Avenir Next / Futura / Century Gothic / Helvetica Neue / Franklin Gothic` |
+    | font-weight | 600 |
+    | font-size | 16px |
+    | letter-spacing | -0.01em |
+
+    The row below the wrapped value must begin after all three lines.
+    """
+
+    var body: some View {
+        ScrollView {
+            ProseView(text: markdown)
+                .padding()
+        }
+        .navigationTitle("Table layout fixture")
+        .accessibilityIdentifier("markdownTableLayoutFixture")
+    }
+}
+#endif
 
 private struct HostImageProvider: ImageProvider {
     let hostFiles: HostFiles?

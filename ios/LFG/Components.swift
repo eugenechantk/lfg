@@ -75,16 +75,17 @@ private struct TextBubble: View {
                 Spacer(minLength: 36)
                 VStack(alignment: .trailing, spacing: 6) {
                     if !displayText.isEmpty {
-                        Text(displayText)
-                            .textSelection(.enabled)
-                            .padding(.horizontal, 12).padding(.vertical, 8)
-                            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
-                            .foregroundStyle(.white)
-                            .contentShape(RoundedRectangle(cornerRadius: 14))
-                            // Tap the bubble to reveal the sent time; tap again to hide.
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.15)) { showTimestamp.toggle() }
-                            }
+                        // Native text view: long-press for the cursor, drag to
+                        // highlight, system Copy — in place. The tap that
+                        // reveals the sent time comes back through `onTap`
+                        // because the text view sees touches first.
+                        SelectableProseView(plain: displayText, palette: .onAccent, hugsContent: true) {
+                            withAnimation(.easeInOut(duration: 0.15)) { showTimestamp.toggle() }
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
+                        .contentShape(RoundedRectangle(cornerRadius: 14))
                     }
                     // Narrower than assistant attachments so the cards read as
                     // part of the trailing bubble run.
@@ -103,6 +104,9 @@ private struct TextBubble: View {
         } else {
             // Assistant turns are full-width markdown — no bubble.
             VStack(alignment: .leading, spacing: 6) {
+                // MarkdownUI layout; each paragraph / table cell / code block
+                // is a native text view (see `Theme.lfgFlat`), so a long-press
+                // selects in place, scoped to that block.
                 ProseView(text: prose)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if !media.isEmpty { MediaAttachmentsView(refs: media) }
