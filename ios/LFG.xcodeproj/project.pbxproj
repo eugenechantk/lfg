@@ -14,6 +14,8 @@
 		11D0A935DB980CB4EBEF35AC /* HostCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5AB3889AD4A389149350563 /* HostCredentialStore.swift */; };
 		16B0F6A79CE890FBF2B0E5E2 /* LFGFleetAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */; };
 		17E5CC9417E33D6CADF1F707 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25CBF3AE8C40F2EE10BB4BD0 /* Theme.swift */; };
+		1C4DEA4B71CE025D7E79107E /* SelectableProse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C932111B6E38085D1F5EDE8 /* SelectableProse.swift */; };
+		20A5B356DC3393D9F80883A9 /* SessionSendFollowFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5ED2523205ABC71E4CAFB8 /* SessionSendFollowFixture.swift */; };
 		406EF855180AB2BA0E75D26A /* TerminalScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 210FE0F59E5CE42AA932EF9E /* TerminalScreen.swift */; };
 		50F6EF746AAEB80DB6229E05 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 073FCBCA797989A55F83BAE4 /* MessageComposer.swift */; };
 		53041C690C2CB5A6B7ADFAD5 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 76672CAA13A7F7B59D2B0A72 /* SwiftUI.framework */; };
@@ -45,6 +47,7 @@
 		C189723845E8FF48DC379B21 /* NewSessionPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 527BBB8AABCE2FF8891A9B59 /* NewSessionPresentation.swift */; };
 		C1B5BCFA6FA382188AFC753C /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */; };
 		C6D0589CE81A10D9963D3BCA /* PrivateResources in Resources */ = {isa = PBXBuildFile; fileRef = F13AC9330D0FCC5623AF2347 /* PrivateResources */; };
+		CB98916E2422E0C76151160D /* LocalCommandOutputFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9437477BDAC213AC221941D /* LocalCommandOutputFixture.swift */; };
 		D2F9456B4314172C7546226F /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */; };
 		D34242B9518E03AED793C989 /* SessionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2641AAFED0A103CF2409D79C /* SessionListView.swift */; };
 		D8A5A082EB39555E1426606E /* FleetActivityViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80338C36975F1F607F2D9487 /* FleetActivityViews.swift */; };
@@ -111,6 +114,7 @@
 		847BA9F87A178565C0EEC901 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		909139FA5D9B976298B7AA3F /* LFGApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGApp.swift; sourceTree = "<group>"; };
 		90C243BC659878B4353ED8C8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		9C932111B6E38085D1F5EDE8 /* SelectableProse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableProse.swift; sourceTree = "<group>"; };
 		9D1BD4A3061EFB2858AB2A4B /* BackgroundSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSender.swift; sourceTree = "<group>"; };
 		9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostLink.swift; sourceTree = "<group>"; };
 		B256A006CA36864233180E24 /* UnreadBadges.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnreadBadges.swift; sourceTree = "<group>"; };
@@ -123,7 +127,9 @@
 		D48FAC07EBFC6249487EAEB9 /* ConnectionLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionLogView.swift; sourceTree = "<group>"; };
 		D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = SharedAssets.xcassets; sourceTree = "<group>"; };
 		D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LFGWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D9437477BDAC213AC221941D /* LocalCommandOutputFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCommandOutputFixture.swift; sourceTree = "<group>"; };
 		DCC29666952B14BD03881471 /* SwiftTerm */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SwiftTerm; path = Vendor/SwiftTerm; sourceTree = SOURCE_ROOT; };
+		DD5ED2523205ABC71E4CAFB8 /* SessionSendFollowFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSendFollowFixture.swift; sourceTree = "<group>"; };
 		E4FDFAEC4C595AA92D818A8C /* NewSessionAtoms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionAtoms.swift; sourceTree = "<group>"; };
 		E73816164B94C119D0706DA8 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		EAECB64072CE4F5286C7591E /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
@@ -202,6 +208,7 @@
 				5C0AF429850CD7F98D54334E /* LFG.entitlements */,
 				909139FA5D9B976298B7AA3F /* LFGApp.swift */,
 				EAECB64072CE4F5286C7591E /* LiveActivityManager.swift */,
+				D9437477BDAC213AC221941D /* LocalCommandOutputFixture.swift */,
 				073FCBCA797989A55F83BAE4 /* MessageComposer.swift */,
 				27C81E2B22DECF886C37B1A7 /* NewSessionView.swift */,
 				700413D2AB6235CADFEDC13F /* PhoneSignInView.swift */,
@@ -209,8 +216,10 @@
 				CDCC421082566E268167E6E7 /* RetiredSessionActivity.swift */,
 				C22EA76E51E2B0A745EE8847 /* RichContent.swift */,
 				6461434AE6C2B0858AC679ED /* RootView.swift */,
+				9C932111B6E38085D1F5EDE8 /* SelectableProse.swift */,
 				512247CB20DB703CAE731727 /* SessionDetailView.swift */,
 				2641AAFED0A103CF2409D79C /* SessionListView.swift */,
+				DD5ED2523205ABC71E4CAFB8 /* SessionSendFollowFixture.swift */,
 				20B34D8A3106C01BA13F2DC2 /* SessionStore.swift */,
 				847BA9F87A178565C0EEC901 /* SettingsView.swift */,
 				210FE0F59E5CE42AA932EF9E /* TerminalScreen.swift */,
@@ -287,6 +296,8 @@
 			dependencies = (
 			);
 			name = LFGWidgets;
+			packageProductDependencies = (
+			);
 			productName = LFGWidgets;
 			productReference = D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -346,7 +357,7 @@
 			packageReferences = (
 				51E8A3A0C2443D478A2B7FA6 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 				6ED60432A99F7EC822DF9350 /* XCLocalSwiftPackageReference "LFGCore" */,
-				4237D469E7BD1A7B7BC8F201 /* XCLocalSwiftPackageReference "SwiftTerm" */,
+				4237D469E7BD1A7B7BC8F201 /* XCLocalSwiftPackageReference "Vendor/SwiftTerm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 73237F52945A981B453A84AA /* Products */;
@@ -398,6 +409,7 @@
 				8950528E1385EF07CB2814AD /* LFGApp.swift in Sources */,
 				16B0F6A79CE890FBF2B0E5E2 /* LFGFleetAttributes.swift in Sources */,
 				A9769E2F571F58BFBE480AB0 /* LiveActivityManager.swift in Sources */,
+				CB98916E2422E0C76151160D /* LocalCommandOutputFixture.swift in Sources */,
 				50F6EF746AAEB80DB6229E05 /* MessageComposer.swift in Sources */,
 				042B67FEFC81B19353989F4A /* NewSessionAtoms.swift in Sources */,
 				62E8EB3B75DC4806D6857766 /* NewSessionComposer.swift in Sources */,
@@ -410,8 +422,10 @@
 				F2BF12A27D8AF0AA5A35222B /* RetiredSessionActivity.swift in Sources */,
 				85C03A175F9DF48F0DAF9D6E /* RichContent.swift in Sources */,
 				A541589C33833A613D05AD8B /* RootView.swift in Sources */,
+				1C4DEA4B71CE025D7E79107E /* SelectableProse.swift in Sources */,
 				D9DD48F43B87E8793C27102F /* SessionDetailView.swift in Sources */,
 				D34242B9518E03AED793C989 /* SessionListView.swift in Sources */,
+				20A5B356DC3393D9F80883A9 /* SessionSendFollowFixture.swift in Sources */,
 				55469BC6D5744CDBA92DC030 /* SessionStore.swift in Sources */,
 				0B5E6EC8D0198C245E872599 /* SettingsView.swift in Sources */,
 				406EF855180AB2BA0E75D26A /* TerminalScreen.swift in Sources */,
@@ -511,8 +525,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFGWidgets/Info.plist;
@@ -524,7 +537,6 @@
 				);
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -537,8 +549,8 @@
 				APS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
@@ -549,7 +561,6 @@
 				);
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -562,8 +573,8 @@
 				APS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
@@ -574,7 +585,6 @@
 				);
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -585,8 +595,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFGWidgets/Info.plist;
@@ -598,7 +607,6 @@
 				);
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -696,7 +704,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		4237D469E7BD1A7B7BC8F201 /* XCLocalSwiftPackageReference "SwiftTerm" */ = {
+		4237D469E7BD1A7B7BC8F201 /* XCLocalSwiftPackageReference "Vendor/SwiftTerm" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Vendor/SwiftTerm;
 		};

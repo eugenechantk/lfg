@@ -47,9 +47,33 @@ struct LFGApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["LFG_MARKDOWN_TABLE_FIXTURE"] == "1" {
+                NavigationStack {
+                    MarkdownTableLayoutFixture()
+                }
+            } else if ProcessInfo.processInfo.environment["LFG_SELECT_TEXT_FIXTURE"] == "1" {
+                NavigationStack {
+                    SelectTextFixture()
+                }
+            } else if ProcessInfo.processInfo.environment["LFG_SEND_FOLLOW_FIXTURE"] == "1" {
+                SessionSendFollowFixture()
+                    .environment(settings)
+                    .environment(store)
+            } else if ProcessInfo.processInfo.environment["LFG_LOCAL_COMMAND_OUTPUT_FIXTURE"] == "1" {
+                NavigationStack {
+                    LocalCommandOutputFixture()
+                }
+            } else {
+                RootView()
+                    .environment(settings)
+                    .environment(store)
+            }
+            #else
             RootView()
                 .environment(settings)
                 .environment(store)
+            #endif
         }
     }
 }
