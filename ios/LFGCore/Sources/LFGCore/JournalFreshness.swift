@@ -27,10 +27,11 @@ import Foundation
 /// running when the client connected emits no event (no change), so the client
 /// would clobber a correct live value with a poll-old one and flicker.
 ///
-/// So: the journal wins **while its last word is recent enough to still be the
-/// fresher one**, and the snapshot wins after that. Time is the only thing that
-/// distinguishes "quiet because nothing changed" from "quiet because nobody is
-/// talking", so time is what the rule is written in.
+/// So: use request ordering when it is known. A snapshot whose request began
+/// after the journal's last statement is newer and wins immediately. A journal
+/// statement received during an in-flight request wins because that response may
+/// describe the instant before the transition. The TTL remains the fallback for
+/// restored snapshots and other paths where request ordering is unavailable.
 public enum JournalFreshness {
     /// How long a journal value keeps out-voting the snapshot.
     ///
@@ -46,12 +47,17 @@ public enum JournalFreshness {
     ///   session, or `nil` if it never has (a session already in whatever state
     ///   it is in since before this client connected — the snapshot is then the
     ///   *only* source and must always be taken).
+    /// - `snapshotStartedAt`: when the request producing this snapshot began.
+    ///   If it is at or after `statedAt`, the snapshot is ordered after the
+    ///   journal statement and wins without waiting for the TTL.
     public static func snapshotWins(
         journalStatedAt statedAt: Date?,
+        snapshotStartedAt: Date? = nil,
         now: Date,
         ttl: TimeInterval = defaultTTL
     ) -> Bool {
         guard let statedAt else { return true }
+        if let snapshotStartedAt, snapshotStartedAt >= statedAt { return true }
         // A `statedAt` in the future means the device clock moved backwards
         // (NTP correction, timezone-independent but real). Treat it as fresh
         // rather than as an enormous age, so a clock skip can't flap the list.

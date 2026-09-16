@@ -407,6 +407,10 @@ import LFGCore
     /// sessions to the merged list rather than having them vanish for a poll —
     /// the resilience the single-host path got from the server's `lastGood`.
     private var lastSessionsByHost: [String: [Session]] = [:]
+    /// Request start for each host's last successful live-session snapshot.
+    /// This orders REST level state against journal deltas without preserving a
+    /// stale `busy: true` for the full fallback TTL.
+    private var lastSnapshotStartedAtByHost: [String: Date] = [:]
 
     /// Whether `GET /api/dirs` has ever succeeded. The create-flow metadata is
     /// loaded once at launch off the agnostic host; if EVERY host was down then, it
@@ -1938,6 +1942,7 @@ import LFGCore
         let host: Host
         let sessions: [Session]?
         let reach: Reachability
+        let snapshotStartedAt: Date
     }
 
     private struct HostResumableFetch: Sendable {
@@ -1966,11 +1971,33 @@ import LFGCore
         await withTaskGroup(of: HostFetch.self) { group in
             for (h, c, timeout) in pairs {
                 group.addTask {
-                    guard let c else { return HostFetch(host: h, sessions: nil, reach: .badResponse("Invalid URL")) }
-                    do { return HostFetch(host: h, sessions: try await c.sessions(timeout: timeout), reach: .ok) }
-                    catch let LFGError.notReachable(u) { return HostFetch(host: h, sessions: nil, reach: .hostUnreachable(u)) }
-                    catch let LFGError.http(status, _) { return HostFetch(host: h, sessions: nil, reach: .badResponse("HTTP \(status)")) }
-                    catch { return HostFetch(host: h, sessions: nil, reach: .badResponse("Bad response")) }
+                    let snapshotStartedAt = Date()
+                    guard let c else {
+                        return HostFetch(host: h, sessions: nil,
+                                         reach: .badResponse("Invalid URL"),
+                                         snapshotStartedAt: snapshotStartedAt)
+                    }
+                    do {
+                        return HostFetch(host: h,
+                                         sessions: try await c.sessions(timeout: timeout),
+                                         reach: .ok,
+                                         snapshotStartedAt: snapshotStartedAt)
+                    }
+                    catch let LFGError.notReachable(u) {
+                        return HostFetch(host: h, sessions: nil,
+                                         reach: .hostUnreachable(u),
+                                         snapshotStartedAt: snapshotStartedAt)
+                    }
+                    catch let LFGError.http(status, _) {
+                        return HostFetch(host: h, sessions: nil,
+                                         reach: .badResponse("HTTP \(status)"),
+                                         snapshotStartedAt: snapshotStartedAt)
+                    }
+                    catch {
+                        return HostFetch(host: h, sessions: nil,
+                                         reach: .badResponse("Bad response"),
+                                         snapshotStartedAt: snapshotStartedAt)
+                    }
                 }
             }
             for await f in group { onResult(f) }
@@ -2222,6 +2249,7 @@ import LFGCore
         // Prune state for hosts removed from settings.
         let hostIds = Set(hosts.map(\.id))
         lastSessionsByHost = lastSessionsByHost.filter { hostIds.contains($0.key) }
+        lastSnapshotStartedAtByHost = lastSnapshotStartedAtByHost.filter { hostIds.contains($0.key) }
         failuresByHost = failuresByHost.filter { hostIds.contains($0.key) }
         hostStateByHost = hostStateByHost.filter { hostIds.contains($0.key) }
         catchUpBuffers = catchUpBuffers.filter { hostIds.contains($0.key) }
@@ -2366,6 +2394,7 @@ import LFGCore
             signal(f.host.id, .probeSucceeded)
             failuresByHost[f.host.id] = 0
             lastSessionsByHost[f.host.id] = fetchedSessions
+            lastSnapshotStartedAtByHost[f.host.id] = f.snapshotStartedAt
         } else {
             // failuresByHost now only feeds the cold-probe back-off. The visible
             // debounce is the state machine's grace window: a probe failure
@@ -2486,7 +2515,12 @@ import LFGCore
         for s in fresh {
             guard let sid = s.sessionId, let b = s.busy else { continue }
             guard !unreachable.contains(sid) else { continue }
-            guard JournalFreshness.snapshotWins(journalStatedAt: busyStatedAt[sid], now: now)
+            let snapshotStartedAt = hostBySession[sid]
+                .flatMap { lastSnapshotStartedAtByHost[$0] }
+            guard JournalFreshness.snapshotWins(
+                journalStatedAt: busyStatedAt[sid],
+                snapshotStartedAt: snapshotStartedAt,
+                now: now)
             else { continue }
             busy[sid] = b
         }
@@ -2501,7 +2535,12 @@ import LFGCore
         for s in fresh {
             guard let sid = s.sessionId else { continue }
             guard !unreachable.contains(sid) else { continue }
-            guard JournalFreshness.snapshotWins(journalStatedAt: promptStatedAt[sid], now: now)
+            let snapshotStartedAt = hostBySession[sid]
+                .flatMap { lastSnapshotStartedAtByHost[$0] }
+            guard JournalFreshness.snapshotWins(
+                journalStatedAt: promptStatedAt[sid],
+                snapshotStartedAt: snapshotStartedAt,
+                now: now)
             else { continue }
             // Equality-guarded like `apply(.prompt)`: an unconditional write
             // dirties @Observable every refresh and re-animates a scrollTo over

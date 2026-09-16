@@ -25,6 +25,38 @@ struct JournalFreshnessTests {
         #expect(!JournalFreshness.snapshotWins(journalStatedAt: stated, now: now))
     }
 
+    @Test("a snapshot requested after the journal statement wins immediately")
+    func newerSnapshotWinsImmediately() {
+        let stated = now.addingTimeInterval(-2)
+        let snapshotStarted = now.addingTimeInterval(-1)
+        #expect(JournalFreshness.snapshotWins(
+            journalStatedAt: stated,
+            snapshotStartedAt: snapshotStarted,
+            now: now
+        ))
+    }
+
+    @Test("a journal statement received during the request out-votes that snapshot")
+    func inFlightJournalWins() {
+        let snapshotStarted = now.addingTimeInterval(-2)
+        let stated = now.addingTimeInterval(-1)
+        #expect(!JournalFreshness.snapshotWins(
+            journalStatedAt: stated,
+            snapshotStartedAt: snapshotStarted,
+            now: now
+        ))
+    }
+
+    @Test("equal request and journal timestamps let the level snapshot win")
+    func equalOrderingSnapshotWins() {
+        let stated = now.addingTimeInterval(-1)
+        #expect(JournalFreshness.snapshotWins(
+            journalStatedAt: stated,
+            snapshotStartedAt: stated,
+            now: now
+        ))
+    }
+
     @Test("a journal value past the TTL yields to the snapshot")
     func staleJournalYields() {
         // THE BUG. The pump stopped; this value is the last thing it ever said.
