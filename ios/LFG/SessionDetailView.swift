@@ -3,6 +3,8 @@ import LFGCore
 import UIKit
 
 struct SessionDetailView: View {
+    private static let bottomTranscriptClearance: CGFloat = 16
+
     private enum PresentedSheet: Identifiable {
         case attachments
         case phoneSignIn(requestID: String?)
@@ -28,6 +30,10 @@ struct SessionDetailView: View {
     /// gets stuck on `DetailLoading` ("Opening session…").
     var onEnded: () -> Void = {}
     var onMarkedUnread: () -> Void = {}
+    #if DEBUG
+    /// Deterministic wrapped draft for the network-free send-follow UI fixture.
+    var debugInitialDraft = ""
+    #endif
     @Environment(SessionStore.self) private var store
     @Environment(AppSettings.self) private var settings
 
@@ -42,6 +48,12 @@ struct SessionDetailView: View {
     /// The queued message the user tapped (drives the remove / edit / send-now sheet).
     @State private var queueAction: SessionStore.PendingSend?
     @State private var isAtBottom = true
+    @State private var composerFocused = false
+    /// Keyboard height captured from UIKit notifications. The transcript keeps
+    /// its full-screen viewport for performance, while one animated content
+    /// clearance moves its visual bottom with the floating composer.
+    @State private var keyboardOcclusionHeight: CGFloat = 0
+    @State private var keyboardBottomClearance: CGFloat = 0
     @State private var scrollProxy: ScrollViewProxy?
     // True while the open-at-bottom lifecycle follows history loading. Guards the
     // BOTTOM-anchor debounce from mistaking a still-loading transcript for a
@@ -57,7 +69,32 @@ struct SessionDetailView: View {
     /// True from the moment a page is added until the reader's position has been
     /// restored — see `extendWindow` for why this gate is load-bearing.
     @State private var extending = false
+    /// Snapshot only when transcript identity changes. Dragging the edge index
+    /// writes state every time it crosses an anchor, so deriving this in `body`
+    /// would turn each gesture update into an O(transcript) filter.
+    @State private var userMessageAnchors: [UserMessageAnchor] = []
+    @State private var selectedUserMessageAnchorIndex: Int?
+    /// Cancels stale next-runloop scrolls when a fast drag crosses several
+    /// anchors before SwiftUI finishes revealing an older render window.
+    @State private var pendingUserMessageTargetID: String?
+    /// Includes the full dynamic bottom stack and its home-indicator clearance:
+    /// pending/offline notices, child-agent and sign-in controls, plus composer.
+    /// On iOS 26 this becomes a scroll-content margin at the inverted list's
+    /// visual bottom, keeping the newest row above every floating control while
+    /// older rows can pass behind the stack.
+    @State private var bottomChromeHeight: CGFloat = 0
 
+    /// Structural top is the visual bottom because the transcript is inverted.
+    /// A scroll-content margin keeps this boundary outside the transcript's
+    /// scrollable rows while placing the newest row above the floating chrome.
+    private var transcriptBottomContentMargin: CGFloat {
+        CGFloat(TranscriptWindow.bottomContentMargin(
+            keyboardOcclusionHeight: Double(keyboardBottomClearance),
+            bottomChromeHeight: Double(bottomChromeHeight),
+            bottomSafeAreaInset: Double(windowBottomSafeAreaInset),
+            bottomTranscriptClearance: Double(Self.bottomTranscriptClearance)
+        ))
+    }
     /// PHASE-1 INSTRUMENTATION — remove before shipping. Every code path that
     /// can move the viewport logs through here, tagged LFGVP for `log stream`.
     private func vp(_ trigger: String, _ detail: String = "") {
@@ -130,6 +167,10 @@ struct SessionDetailView: View {
         pending.filter { $0.showSent && !hasLanded($0) }
     }
 
+    private var unmatchedSentBubbleIDs: [String] {
+        unmatchedSentBubbles.map(\.id)
+    }
+
     /// Sends still waiting on the host: the one-line bars above the composer.
     /// Filtered against the transcript for the same reason the bubbles are — the
     /// bar must clear in the SAME render pass the real user turn appears, so the
@@ -147,7 +188,7 @@ struct SessionDetailView: View {
     }
 
     var body: some View {
-        transcript
+        sessionSurface
             // Full title, revealed by tapping the (truncated) nav-bar title. An overlay
             // card rather than an expanded bar, because these titles are whole
             // sentences and can need several lines (see `fullTitle` for where the
@@ -188,90 +229,6 @@ struct SessionDetailView: View {
                 }
             }
             .animation(.easeOut(duration: 0.2), value: store.browserFrames[sid]?.frameId)
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 8) {
-                    // A send the backend hasn't taken yet (queued behind a running
-                    // turn, offline, or failed) waits here as a one-line bar — not
-                    // as a transcript bubble. It becomes a blue bubble only when
-                    // the real user turn comes back from the host, so "queued" and
-                    // "received" never look the same.
-                    PendingStripView(sessionID: sid, items: pendingBars) { tapped in
-                        queueAction = tapped
-                    }
-                    .padding(.horizontal, 16)
-                    // This session is LIVE on a host that is currently unreachable.
-                    // Keep the draft editable; the store queues sends durably until
-                    // the owning host comes back.
-                    if store.isOffline(sid) {
-                        OfflineComposerNotice(hostLabel: store.host(forSession: sid)?.label ?? "This host")
-                    }
-                    // Store-driven, not `!childAgents.isEmpty`: the bar has to
-                    // stay dismissed across navigation, and "is this work still
-                    // worth interrupting the composer for" is a question about
-                    // send history, which the view does not own.
-                    if store.showsChildSessionsBar(sid) {
-                        ChildSessionsComposerBar(agents: childAgents) {
-                            presentedSheet = .childSessions(selectedID: nil)
-                        }
-                    }
-                    ForEach(signInRequests.filter(\.isWaiting)) { request in
-                        Button { presentedSheet = .requestedSignIn(request) } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "key.fill")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.tint)
-                                    .frame(width: 28)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text("Sign in to \(request.website)")
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.primary)
-                                    Text(request.target.name)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer(minLength: 8)
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.tertiary)
-                                    .accessibilityHidden(true)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
-                            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 11))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 11)
-                                    .stroke(Color(.separator).opacity(0.55), lineWidth: 0.5)
-                            )
-                            .contentShape(RoundedRectangle(cornerRadius: 11))
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 16)
-                        .accessibilityIdentifier("phone_sign_in_request_button")
-                    }
-                    MessageComposer(text: $draft, sending: false) { text, atts in
-                        // Hand the send to the store, which owns it for the app's
-                        // lifetime (under a background-task assertion). Leaving
-                        // this view or backgrounding the app no longer drops the
-                        // message — the optimistic bubble + pending strip already
-                        // give immediate feedback, so no view-owned spinner.
-                        store.dispatchSend(sid, text: text, attachments: atts)
-                        // Sending is an explicit "follow me to the latest" intent,
-                        // even if the user had scrolled up to read history.
-                        isAtBottom = true
-                        // Two scrolls, because the thing the user wants to look at
-                        // does not exist yet. This one lands on the optimistic
-                        // bubble; `followSendUntilLanded` does it again when the
-                        // real accent bubble replaces it, which on a busy session
-                        // is seconds later.
-                        //
-                        // This used to be `scrollTo("BOTTOM")` — a sentinel the
-                        // inversion rewrite deleted — so it had been a silent
-                        // no-op: sending scrolled nowhere at all.
-                        followSendUntilLanded = true
-                        scheduleJumpToNewest()
-                    }
-                }
-            }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         // Resolve relative file refs in this session's transcript (e.g.
@@ -279,7 +236,12 @@ struct SessionDetailView: View {
         .transformEnvironment(\.hostFiles) { hf in
             if let cwd = session.cwd, !cwd.isEmpty { hf?.cwd = cwd }
         }
+        // Keep this system-owned: on iOS 26 the native navigation toolbar
+        // supplies adaptive Liquid Glass and coordinates its scroll edge with
+        // the transcript behind it. A custom background here would make it
+        // more opaque and break that integration.
         .toolbar { toolbarMenu }
+        .modifier(SessionNavigationBarBackdropVisibility())
         .task(id: sid) {
             // Opening is now just state: the inverted list rests at the newest
             // message because that is `contentOffset == 0`. There is nothing to
@@ -289,10 +251,15 @@ struct SessionDetailView: View {
             // session had paged in must not carry over.
             window = TranscriptWindow.pageSize
             lastMessageIDs = messages.map(\.stableID)
+            userMessageAnchors = UserMessageScrubber.anchors(in: messages)
             // Baseline both, or the first history load after opening reads as a
             // landing and a send from a *previous* session's view stays armed.
             newestUserTurnID = messages.last(where: \.rendersAsUserBubble)?.stableID
             followSendUntilLanded = false
+            keyboardBottomClearance = 0
+            #if DEBUG
+            if draft.isEmpty { draft = debugInitialDraft }
+            #endif
             vp("open")
             store.focus(sid)
             store.loadHistory(sid)   // store-owned: not cancelled by view churn
@@ -300,6 +267,15 @@ struct SessionDetailView: View {
         }
         .onDisappear {
             store.blur(sid)
+        }
+        .onChange(of: unmatchedSentBubbleIDs) { _, ids in
+            guard followSendUntilLanded, let newestPendingID = ids.last else { return }
+            scheduleJumpToMessage(Self.pendingMessageAnchor(newestPendingID))
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: UIResponder.keyboardWillChangeFrameNotification
+        )) { notification in
+            updateKeyboardOcclusion(from: notification)
         }
         .task(id: "child-agents-\(sid)") {
             while !Task.isCancelled {
@@ -395,6 +371,217 @@ struct SessionDetailView: View {
         }
     }
 
+    /// The transcript is the full-screen content layer. On iOS 26 the custom
+    /// composer floats independently above it, so rows continue behind both
+    /// pieces of glass instead of terminating at opaque safe-area boundaries.
+    @ViewBuilder
+    private var sessionSurface: some View {
+        if #available(iOS 26.0, *) {
+            GeometryReader { safeAreaProxy in
+                // This reader stays in the navigation-safe content region. Its
+                // global top is therefore the exact status + navigation chrome
+                // height, even though the transcript inside expands behind it.
+                let topChromeHeight = max(safeAreaProxy.frame(in: .global).minY, 0)
+
+                // Keep keyboard avoidance local to the composer. When both
+                // layers were one overlay chain, every keyboard animation step
+                // changed the transcript's proposed height and made the lazy
+                // stack re-place its visible Markdown/TextKit rows. Separate
+                // siblings let the transcript keep one stable viewport while
+                // the composer alone follows the keyboard-safe-area boundary.
+                ZStack(alignment: .bottom) {
+                    transcript
+                        .ignoresSafeArea(.container, edges: [.top, .bottom])
+                        .ignoresSafeArea(.keyboard, edges: .bottom)
+                        // The 180-degree transcript transform confuses SwiftUI's
+                        // automatic edge detector, expanding its blur through the
+                        // viewport instead of confining it to a bar boundary.
+                        .scrollEdgeEffectHidden(true, for: [.top, .bottom])
+                        .overlay(alignment: .top) {
+                            topChromeFade(chromeHeight: topChromeHeight)
+                                .offset(y: -topChromeHeight)
+                        }
+
+                    // This sibling intentionally still respects `.keyboard`.
+                    // Its safe-area padding lifts the glass composer above the
+                    // software keyboard without resizing the transcript behind it.
+                    measuredBottomChrome
+                }
+            }
+        } else {
+            transcript
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    bottomChrome
+                }
+        }
+    }
+
+    /// Noto-style top scroll treatment: true Liquid Glass over the status and
+    /// navigation region, then a short alpha fade into the sharp transcript.
+    /// Masking the glass removes the divider-like lower edge of a rectangular
+    /// plane while keeping the inverted scroll view's broken automatic edge
+    /// effect disabled.
+    @available(iOS 26.0, *)
+    private func topChromeFade(chromeHeight: CGFloat) -> some View {
+        let fadeHeight: CGFloat = 34
+        let totalHeight = chromeHeight + fadeHeight
+        let solidStop = totalHeight > 0 ? max((chromeHeight - 12) / totalHeight, 0) : 0
+
+        // Keep the original regular Liquid Glass blur. Its shape is inset
+        // negatively so the specular perimeter is rendered outside this field;
+        // the existing mask still owns the visible fade and clips that rim away.
+        return Rectangle()
+            .fill(.clear)
+            .frame(height: totalHeight)
+            .glassEffect(.regular, in: Rectangle().inset(by: -48))
+            .mask {
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: solidStop),
+                        .init(color: .clear, location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    private var bottomChrome: some View {
+        VStack(spacing: 8) {
+            // A send the backend hasn't taken yet (queued behind a running
+            // turn, offline, or failed) waits here as a one-line bar — not
+            // as a transcript bubble. It becomes a blue bubble only when
+            // the real user turn comes back from the host, so "queued" and
+            // "received" never look the same.
+            PendingStripView(sessionID: sid, items: pendingBars) { tapped in
+                queueAction = tapped
+            }
+            .padding(.horizontal, 16)
+
+            // Keep the draft editable while its owning host is unreachable;
+            // the store queues sends durably until the host comes back.
+            if store.isOffline(sid) {
+                OfflineComposerNotice(hostLabel: store.host(forSession: sid)?.label ?? "This host")
+            }
+
+            if store.showsChildSessionsBar(sid) {
+                ChildSessionsComposerBar(agents: childAgents) {
+                    presentedSheet = .childSessions(selectedID: nil)
+                }
+            }
+
+            ForEach(signInRequests.filter(\.isWaiting)) { request in
+                Button { presentedSheet = .requestedSignIn(request) } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "key.fill")
+                            .font(.subheadline)
+                            .foregroundStyle(.tint)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Sign in to \(request.website)")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text(request.target.name)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 11))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 11)
+                            .stroke(Color(.separator).opacity(0.55), lineWidth: 0.5)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 11))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .accessibilityIdentifier("phone_sign_in_request_button")
+            }
+
+            MessageComposer(
+                text: $draft,
+                sending: false,
+                onFocusChange: { isFocused in
+                    composerFocused = isFocused
+                    applyKeyboardTransition(
+                        occlusionHeight: keyboardOcclusionHeight,
+                        animation: .easeOut(duration: 0.25)
+                    )
+                }
+            ) { text, atts in
+                let wasAtBottom = isAtBottom
+                let shouldJump = TranscriptWindow.shouldJumpAfterSend(
+                    isAtBottom: wasAtBottom,
+                    composerFocused: composerFocused
+                )
+                // Arm this before dispatch: the optimistic bubble is inserted
+                // asynchronously and its appearance is the first reliable point
+                // at which SwiftUI can resolve that row as a scroll target.
+                followSendUntilLanded = shouldJump
+                store.dispatchSend(sid, text: text, attachments: atts)
+                // Sending is an explicit "follow me to the latest" intent,
+                // even if the user had scrolled up to read history.
+                isAtBottom = true
+                // A reader in history first returns to the newest edge. A reader
+                // already at offset zero does not take this redundant jump; when
+                // its focused composer covers the tail, the pending-row observer
+                // below follows the keyboard-aware transcript boundary instead.
+                if !wasAtBottom { scheduleJumpToNewest() }
+            }
+        }
+    }
+
+    private var measuredBottomChrome: some View {
+        // Measure outside the stack—not around MessageComposer—so every
+        // conditional row automatically enlarges transcript clearance when it
+        // appears and gives that space back when it disappears. Keep the probe
+        // *inside* safeAreaPadding, though: otherwise the software keyboard's
+        // animated safe-area height is published as chrome height on every
+        // frame, rewriting LazyVStack padding throughout the transition.
+        bottomChrome
+            .background {
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: SessionBottomChromeHeightKey.self,
+                        value: proxy.size.height
+                    )
+                }
+            }
+            .safeAreaPadding(.bottom)
+            .onPreferenceChange(SessionBottomChromeHeightKey.self) {
+                // UIWindow's inset is the stable device/container inset; it
+                // does not grow with SwiftUI's keyboard safe-area region.
+                let measuredHeight = $0 + windowBottomSafeAreaInset
+                guard abs(bottomChromeHeight - measuredHeight) > 0.5 else { return }
+                let shouldFollowNewest = isAtBottom
+                bottomChromeHeight = measuredHeight
+                // A growing multiline draft raises the top of the composer
+                // without changing keyboard height. If the reader was already
+                // at the newest edge, follow that discrete boundary change once.
+                if shouldFollowNewest {
+                    scheduleJumpToNewest()
+                }
+            }
+    }
+
+    private var windowBottomSafeAreaInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets.bottom ?? 0
+    }
+
     // MARK: Transcript
 
     private var transcript: some View {
@@ -435,7 +622,9 @@ struct SessionDetailView: View {
                     // Reversed so that, once the stack is flipped back, they read
                     // in send order.
                     ForEach(unmatchedSentBubbles.reversed()) {
-                        OptimisticUserBubble(sessionID: sid, pending: $0).flippedRow()
+                        OptimisticUserBubble(sessionID: sid, pending: $0)
+                            .id(Self.pendingMessageAnchor($0.id))
+                            .flippedRow()
                     }
 
                     if messages.isEmpty && !isBusy {
@@ -468,16 +657,43 @@ struct SessionDetailView: View {
                     }
                     // ---- visual TOP (oldest) ----
                 }
-                .padding()
+                // Preserve ordinary side and visual-top breathing room. Do not
+                // add structural-top padding here: after inversion that becomes
+                // a second visual-bottom spacer reachable only by manual drag.
+                .padding(.horizontal)
+                .padding(.bottom)
             }
+            // Structural top is the visual bottom. Reserve the floating chrome
+            // outside the transcript so it cannot become a blank tail the user
+            // can scroll into.
+            .contentMargins(.top, transcriptBottomContentMargin, for: .scrollContent)
             .flippedRow()
             // The flip would draw the indicator down the wrong edge and run it
             // backwards; there is no correct-looking version of it here.
             .scrollIndicators(.hidden)
+            .overlay(alignment: .trailing) {
+                NativeUserMessageScrubber(
+                    messageCount: userMessageAnchors.count,
+                    selectedIndex: selectedUserMessageAnchorIndex,
+                    onSelect: selectUserMessage(at:)
+                )
+                .frame(width: 44)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("User message index")
+                .accessibilityValue(userMessageScrubberAccessibilityValue)
+                .accessibilityHint("Long press and drag vertically to jump between your messages.")
+                .accessibilityIdentifier("userMessageScrubber")
+                .accessibilityHidden(userMessageAnchors.isEmpty)
+                .accessibilityAdjustableAction { direction in
+                    adjustUserMessageSelection(direction)
+                }
+            }
+            .sensoryFeedback(.selection, trigger: selectedUserMessageAnchorIndex)
             // Offset-only "am I at the newest end". Deliberately does not read
             // content height — see `TranscriptWindow.isAtNewestEnd`.
             .modifier(NewestEndTracker { atNewest in
-                if isAtBottom != atNewest { vp("tracker.atNewest", "-> \(atNewest)") }
+                guard isAtBottom != atNewest else { return }
+                vp("tracker.atNewest", "-> \(atNewest)")
                 isAtBottom = atNewest
             })
             .onChange(of: store.transcriptVersion[sid] ?? 0) { _, _ in
@@ -485,6 +701,7 @@ struct SessionDetailView: View {
                 let new = messages.map(\.stableID)
                 guard old != new else { return }
                 lastMessageIDs = new
+                userMessageAnchors = UserMessageScrubber.anchors(in: messages)
                 // Did a real user turn just land? If it was ours, follow it —
                 // this is the scroll the user is actually asking for when they
                 // send: take me to my message once it is really in the
@@ -498,7 +715,9 @@ struct SessionDetailView: View {
                     if followSendUntilLanded {
                         followSendUntilLanded = false
                         vp("sendLanded.jump")
-                        scheduleJumpToNewest()
+                        if let newestUserTurn {
+                            scheduleJumpToMessage(newestUserTurn)
+                        }
                     }
                 }
                 // The ONLY thing a transcript mutation still does. Nothing
@@ -522,7 +741,12 @@ struct SessionDetailView: View {
             // focus is its own private @FocusState, so this goes through the
             // responder chain. Simultaneous, so a tap that lands on a link,
             // attachment card or button still activates it.
-            .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
+            .simultaneousGesture(
+                SpatialTapGesture().onEnded { event in
+                    guard event.location.y < geo.size.height - bottomChromeHeight else { return }
+                    dismissKeyboard()
+                }
+            )
             .scrollDismissesKeyboard(.interactively)
             // Double-tap the LOWER band to jump to the latest message.
             //
@@ -534,6 +758,7 @@ struct SessionDetailView: View {
             // jump-to-oldest, and nothing silently expands the window.
             .simultaneousGesture(
                 SpatialTapGesture(count: 2).onEnded { event in
+                    guard event.location.y < geo.size.height - bottomChromeHeight else { return }
                     guard event.location.y > geo.size.height * 0.70 else { return }
                     jumpToNewest()
                 }
@@ -542,15 +767,71 @@ struct SessionDetailView: View {
       }
     }
 
+    private var userMessageScrubberAccessibilityValue: String {
+        guard !userMessageAnchors.isEmpty else { return "No user messages" }
+        guard let selectedUserMessageAnchorIndex else {
+            return "\(userMessageAnchors.count) messages"
+        }
+        return "Message \(selectedUserMessageAnchorIndex + 1) of \(userMessageAnchors.count)"
+    }
+
+    private func adjustUserMessageSelection(_ direction: AccessibilityAdjustmentDirection) {
+        guard !userMessageAnchors.isEmpty else { return }
+        let current = selectedUserMessageAnchorIndex ?? (userMessageAnchors.count - 1)
+        switch direction {
+        case .increment:
+            selectUserMessage(at: min(current + 1, userMessageAnchors.count - 1))
+        case .decrement:
+            selectUserMessage(at: max(current - 1, 0))
+        @unknown default:
+            break
+        }
+    }
+
+    /// Reveal an older suffix before scrolling. A next-main-actor-turn scroll is
+    /// required because the destination does not exist in the lazy stack until
+    /// the larger `window` has gone through layout.
+    private func selectUserMessage(at index: Int) {
+        guard userMessageAnchors.indices.contains(index), let scrollProxy else { return }
+        let anchor = userMessageAnchors[index]
+        guard selectedUserMessageAnchorIndex != index || pendingUserMessageTargetID != anchor.id
+        else { return }
+
+        selectedUserMessageAnchorIndex = index
+        pendingUserMessageTargetID = anchor.id
+        let requiredWindow = UserMessageScrubber.requiredWindow(
+            totalMessages: messages.count,
+            targetMessageIndex: anchor.messageIndex,
+            currentWindow: window
+        )
+        if requiredWindow != window {
+            vp("userScrubber.grow", "win \(window)->\(requiredWindow)")
+            window = requiredWindow
+        }
+
+        Task { @MainActor in
+            await Task.yield()
+            guard pendingUserMessageTargetID == anchor.id else { return }
+            vp("userScrubber.jump", "index=\(index) id=\(anchor.id)")
+            scrollProxy.scrollTo(anchor.id, anchor: .center)
+        }
+    }
+
     /// Sentinel at the array start, i.e. the visual bottom.
     private static let newestAnchor = "NEWEST"
+
+    private static func pendingMessageAnchor(_ id: String) -> String {
+        "pending-user-\(id)"
+    }
 
     /// The one remaining programmatic scroll, and only on an explicit user
     /// action (double-tap the lower band, or sending a message).
     private func jumpToNewest() {
         guard let scrollProxy else { return }
         vp("jumpToNewest")
-        withAnimation { scrollProxy.scrollTo(Self.newestAnchor, anchor: .top) }
+        withAnimation {
+            scrollProxy.scrollTo(Self.newestAnchor, anchor: .top)
+        }
     }
 
     /// `jumpToNewest`, but off the current view update.
@@ -569,6 +850,71 @@ struct SessionDetailView: View {
     /// synchronous hand-off from the composer.
     private func scheduleJumpToNewest() {
         Task { @MainActor in jumpToNewest() }
+    }
+
+    /// Follow the real newest boundary after SwiftUI inserts or reconciles the
+    /// outgoing row. The content margin owns composer and keyboard clearance, so
+    /// an interior row anchor would only create a second, blank resting offset.
+    private func scheduleJumpToMessage(_ id: String) {
+        Task { @MainActor in
+            await Task.yield()
+            guard let scrollProxy else { return }
+            vp("jumpToSentMessage", "id=\(id)")
+            withAnimation(.easeOut(duration: 0.25)) {
+                scrollProxy.scrollTo(Self.newestAnchor, anchor: .top)
+            }
+        }
+    }
+
+    private func updateKeyboardOcclusion(from notification: Notification) {
+        guard let screenFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey]
+                as? CGRect,
+              let window = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .flatMap(\.windows)
+                .first(where: \.isKeyWindow)
+        else { return }
+
+        let frame = window.convert(screenFrame, from: nil)
+        let occlusionHeight = max(window.bounds.maxY - frame.minY, 0)
+        keyboardOcclusionHeight = occlusionHeight
+
+        let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey]
+            as? Double ?? 0.25
+        applyKeyboardTransition(
+            occlusionHeight: occlusionHeight,
+            animation: .easeOut(duration: duration)
+        )
+    }
+
+    private func applyKeyboardTransition(
+        occlusionHeight: CGFloat,
+        animation: Animation
+    ) {
+        let transition = TranscriptWindow.keyboardTransition(
+            occlusionHeight: Double(occlusionHeight),
+            composerFocused: composerFocused,
+            previousBottomClearance: Double(keyboardBottomClearance),
+            readerAtNewest: isAtBottom
+        )
+        let clearance = CGFloat(transition.bottomClearance)
+        guard abs(keyboardBottomClearance - clearance) > 0.5
+                || transition.shouldFollowNewest
+        else { return }
+
+        withAnimation(animation) {
+            keyboardBottomClearance = clearance
+        }
+        guard transition.shouldFollowNewest else { return }
+        isAtBottom = true
+        Task { @MainActor in
+            await Task.yield()
+            guard let scrollProxy else { return }
+            vp("keyboard.jumpToNewest", "clearance=\(clearance)")
+            withAnimation(animation) {
+                scrollProxy.scrollTo(Self.newestAnchor, anchor: .top)
+            }
+        }
     }
 
     /// The row above the oldest rendered message — visually the top of the
@@ -766,6 +1112,168 @@ struct SessionDetailView: View {
         return nil
     }
 
+}
+
+/// The custom full-width glass fade owns the navigation backdrop on iOS 26.
+/// Earlier systems keep their existing system navigation-bar appearance.
+private struct SessionNavigationBarBackdropVisibility: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.toolbarBackground(.hidden, for: .navigationBar)
+        } else {
+            content
+        }
+    }
+}
+
+/// A transparent 44-point activation zone backed by a real `UIScrollView`.
+/// Its own content never renders; only UIKit's native vertical scroll indicator
+/// appears, flashes while the long-press moves, and fades on the system's timing.
+private struct SessionBottomChromeHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct NativeUserMessageScrubber: UIViewRepresentable {
+    let messageCount: Int
+    let selectedIndex: Int?
+    let onSelect: (Int) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(messageCount: messageCount, onSelect: onSelect)
+    }
+
+    func makeUIView(context: Context) -> NativeIndicatorScrollView {
+        let scrollView = NativeIndicatorScrollView()
+        scrollView.backgroundColor = .clear
+        scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.showsVerticalScrollIndicator = true
+        scrollView.indicatorStyle = .default
+        scrollView.verticalScrollIndicatorInsets = UIEdgeInsets(
+            top: 3, left: 0, bottom: 3, right: 3
+        )
+        scrollView.bounces = false
+        scrollView.alwaysBounceVertical = false
+        // The custom long press supplies one-finger anchor semantics. Keep the
+        // native pan recognizer enabled (UIKit uses it when managing indicator
+        // presentation), but move it to two fingers so this invisible auxiliary
+        // view never steals an ordinary one-finger transcript edge swipe.
+        scrollView.panGestureRecognizer.minimumNumberOfTouches = 2
+
+        let press = UILongPressGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handlePress(_:))
+        )
+        press.minimumPressDuration = 0.28
+        press.allowableMovement = 18
+        scrollView.addGestureRecognizer(press)
+        context.coordinator.scrollView = scrollView
+        return scrollView
+    }
+
+    func updateUIView(_ scrollView: NativeIndicatorScrollView, context: Context) {
+        context.coordinator.messageCount = messageCount
+        context.coordinator.onSelect = onSelect
+        scrollView.messageCount = messageCount
+        scrollView.selectedIndex = selectedIndex
+        scrollView.isUserInteractionEnabled = messageCount > 0
+        scrollView.setNeedsLayout()
+    }
+
+    final class Coordinator: NSObject {
+        var messageCount: Int
+        var onSelect: (Int) -> Void
+        weak var scrollView: NativeIndicatorScrollView?
+        private var indicatorRefreshTimer: Timer?
+
+        init(messageCount: Int, onSelect: @escaping (Int) -> Void) {
+            self.messageCount = messageCount
+            self.onSelect = onSelect
+        }
+
+        @objc func handlePress(_ recognizer: UILongPressGestureRecognizer) {
+            guard recognizer.state == .began || recognizer.state == .changed else {
+                stopIndicatorRefresh()
+                return
+            }
+            if recognizer.state == .began {
+                startIndicatorRefresh()
+            }
+            guard let scrollView,
+                  let index = UserMessageScrubber.anchorIndex(
+                    at: Double(recognizer.location(in: scrollView).y),
+                    height: Double(scrollView.bounds.height),
+                    count: messageCount
+                  ) else { return }
+
+            if #available(iOS 17.4, *) {
+                scrollView.withScrollIndicatorsShown(forContentOffsetChanges: {
+                    scrollView.selectedIndex = index
+                    scrollView.updateIndicatorPosition(animated: false)
+                })
+            } else {
+                scrollView.selectedIndex = index
+                scrollView.updateIndicatorPosition(animated: false)
+            }
+            scrollView.flashScrollIndicators()
+            onSelect(index)
+        }
+
+        private func startIndicatorRefresh() {
+            indicatorRefreshTimer?.invalidate()
+            refreshIndicator()
+            indicatorRefreshTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) {
+                [weak self] _ in self?.refreshIndicator()
+            }
+        }
+
+        private func stopIndicatorRefresh() {
+            indicatorRefreshTimer?.invalidate()
+            indicatorRefreshTimer = nil
+        }
+
+        @objc private func refreshIndicator() {
+            scrollView?.flashScrollIndicators()
+        }
+
+        deinit {
+            indicatorRefreshTimer?.invalidate()
+        }
+    }
+
+    final class NativeIndicatorScrollView: UIScrollView {
+        var messageCount = 0
+        var selectedIndex: Int?
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            updateIndicatorPosition(animated: false)
+        }
+
+        func updateIndicatorPosition(animated: Bool) {
+            guard bounds.height > 0 else { return }
+            // One viewport per user turn gives UIKit enough scroll range to
+            // size and place its indicator while keeping the mapping linear.
+            contentSize = CGSize(
+                width: max(bounds.width, 1),
+                height: max(bounds.height * CGFloat(max(messageCount, 1)), bounds.height + 1)
+            )
+            guard let selectedIndex else { return }
+            let progress = messageCount > 1
+                ? CGFloat(selectedIndex) / CGFloat(messageCount - 1)
+                : 0.5
+            let maximumOffset = max(contentSize.height - bounds.height, 0)
+            let target = CGPoint(x: 0, y: maximumOffset * progress)
+            if abs(contentOffset.y - target.y) > 0.5 {
+                setContentOffset(target, animated: animated)
+            }
+        }
+    }
 }
 
 /// Apple's native pull-down menu, backed by a stable UIKit menu object.
@@ -1115,27 +1623,14 @@ private extension View {
 private struct NewestEndTracker: ViewModifier {
     let onChange: (Bool) -> Void
 
-    private struct AtNewest: Equatable {
-        var value: Bool
-        /// PHASE-1 INSTRUMENTATION — coarse buckets so the geometry trace fires
-        /// on real movement without per-frame spam.
-        var yBucket: Int
-        var contentBucket: Int
-    }
-
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
-            content.onScrollGeometryChange(for: AtNewest.self) { geo in
-                AtNewest(
-                    value: TranscriptWindow.isAtNewestEnd(offsetY: geo.contentOffset.y),
-                    yBucket: Int(geo.contentOffset.y / 40),
-                    contentBucket: Int(geo.contentSize.height / 100)
+            content.onScrollGeometryChange(for: Bool.self) { geo in
+                TranscriptWindow.newestEndTrackingValue(
+                    offsetY: Double(geo.contentOffset.y)
                 )
-            } action: { _, p in
-                #if DEBUG
-                NSLog("LFGVP geo y=\(p.yBucket * 40) contentH=\(p.contentBucket * 100) atNewest=\(p.value)")
-                #endif
-                onChange(p.value)
+            } action: { _, atNewest in
+                onChange(atNewest)
             }
         } else {
             content

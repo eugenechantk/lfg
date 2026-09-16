@@ -26,6 +26,7 @@ struct MessageComposer: View {
     var placeholder: String = "Message"
     var sending: Bool = false
     var autofocus = false
+    var onFocusChange: (Bool) -> Void = { _ in }
     /// Receives the trimmed text and any picked attachments.
     let onSend: (String, [ComposerAttachment]) -> Void
 
@@ -45,6 +46,10 @@ struct MessageComposer: View {
                 .lineLimit(1...8)
                 .focused($focused)
                 .font(.body)
+                .accessibilityIdentifier("composer.message")
+                .onChange(of: focused) { _, isFocused in
+                    onFocusChange(isFocused)
+                }
 
             // Controls row, below the input.
             HStack(spacing: 14) {
@@ -140,10 +145,21 @@ func dismissKeyboard() {
 /// Liquid Glass panel on iOS 26+, with a material fallback for iOS 17–25.
 struct GlassPanel: ViewModifier {
     let cornerRadius: CGFloat
+
+    @ViewBuilder
     func body(content: Content) -> some View {
-        content.glassOrRaised(
-            in: RoundedRectangle(cornerRadius: cornerRadius),
-            fallback: Color(.secondarySystemBackground)
-        )
+        if #available(iOS 26.0, *) {
+            // Regular glass keeps the transcript perceptible as movement and
+            // color without letting sharp text compete with the input itself.
+            content.glassEffect(
+                .regular,
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+        } else {
+            content.background(
+                Color(.secondarySystemBackground),
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+        }
     }
 }

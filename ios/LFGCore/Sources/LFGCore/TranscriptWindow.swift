@@ -40,6 +40,16 @@ public enum TranscriptHistoryTopRow: Equatable, Sendable {
 // while the store keeps the full transcript.
 
 public enum TranscriptWindow {
+    public struct KeyboardTransition: Equatable, Sendable {
+        public let bottomClearance: Double
+        public let shouldFollowNewest: Bool
+
+        public init(bottomClearance: Double, shouldFollowNewest: Bool) {
+            self.bottomClearance = bottomClearance
+            self.shouldFollowNewest = shouldFollowNewest
+        }
+    }
+
     /// Rows rendered on open, and the amount added by one extend. Big enough
     /// that reaching the top takes a deliberate scroll rather than happening by
     /// accident on open, small enough that placement cost stays in the flat part
@@ -118,6 +128,57 @@ public enum TranscriptWindow {
         isOpening: Bool
     ) -> Bool {
         isOpening || isAtBottom
+    }
+
+    /// Sending while already pinned needs no imperative scroll only when the
+    /// newest content is actually visible. The iOS 26 transcript deliberately
+    /// keeps its full-height viewport behind a focused composer/keyboard, so
+    /// offset zero can be newest while the outgoing user row is obscured.
+    public static func shouldJumpAfterSend(
+        isAtBottom: Bool,
+        composerFocused: Bool
+    ) -> Bool {
+        !isAtBottom || composerFocused
+    }
+
+    /// A focused software keyboard occludes the full-height transcript even
+    /// though the composer itself moves above it. Reserve exactly that covered
+    /// height. Follow the newest edge only when the reader was already there;
+    /// focusing or dismissing the composer while reading history must preserve
+    /// that position. Keeping this as one transition avoids feeding animated
+    /// safe-area measurements back into transcript state on every frame.
+    public static func keyboardTransition(
+        occlusionHeight: Double,
+        composerFocused: Bool,
+        previousBottomClearance: Double,
+        readerAtNewest: Bool
+    ) -> KeyboardTransition {
+        let clearance = composerFocused ? max(occlusionHeight, 0) : 0
+        return KeyboardTransition(
+            bottomClearance: clearance,
+            shouldFollowNewest: readerAtNewest
+                && (clearance > 0 || previousBottomClearance > 0)
+        )
+    }
+
+    /// Visual boundary reserved below the transcript's newest row. This belongs
+    /// to the scroll view's content margin rather than the transcript stack so
+    /// the composer and keyboard do not become scrollable blank content.
+    public static func bottomContentMargin(
+        keyboardOcclusionHeight: Double,
+        bottomChromeHeight: Double,
+        bottomSafeAreaInset: Double,
+        bottomTranscriptClearance: Double
+    ) -> Double {
+        let keyboardHeight = max(keyboardOcclusionHeight, 0)
+        if keyboardHeight > 0 {
+            // The software keyboard owns the home-indicator region. The
+            // measured chrome includes that same inset, so count it only once.
+            return keyboardHeight
+                + max(bottomChromeHeight - max(bottomSafeAreaInset, 0), 0)
+        }
+        return max(bottomChromeHeight, 0)
+            + max(bottomTranscriptClearance, 0)
     }
 
     /// The opening pin exists only to establish the newest visible tail. Older
@@ -226,6 +287,16 @@ public enum TranscriptWindow {
     /// overscroll bounce.
     public static func isAtNewestEnd(offsetY: Double, epsilon: Double = 24) -> Bool {
         offsetY <= epsilon
+    }
+
+    /// The complete value observed by SwiftUI's scroll-geometry tracker.
+    ///
+    /// Keep this deliberately boolean. Adding diagnostic offset/content-size
+    /// buckets makes `onScrollGeometryChange` publish throughout every drag,
+    /// which reintroduces parent-view work on the scrolling hot path even though
+    /// product behavior only changes when the reader crosses the newest edge.
+    public static func newestEndTrackingValue(offsetY: Double) -> Bool {
+        isAtNewestEnd(offsetY: offsetY)
     }
 
     /// Whether the transcript is scrolled to (or within a hair of) its newest

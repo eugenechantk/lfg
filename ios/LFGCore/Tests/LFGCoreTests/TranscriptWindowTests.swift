@@ -146,6 +146,147 @@ final class TranscriptWindowTests: XCTestCase {
         ))
     }
 
+    func testSendingAtNewestUsesNaturalOffsetWithoutAnExtraJump() {
+        XCTAssertFalse(TranscriptWindow.shouldJumpAfterSend(
+            isAtBottom: true,
+            composerFocused: false
+        ))
+    }
+
+    func testSendingFromHistoryExplicitlyReturnsToNewest() {
+        XCTAssertTrue(TranscriptWindow.shouldJumpAfterSend(
+            isAtBottom: false,
+            composerFocused: false
+        ))
+    }
+
+    func testSendingWithFocusedComposerRevealsMessageAboveKeyboard() {
+        XCTAssertTrue(TranscriptWindow.shouldJumpAfterSend(
+            isAtBottom: true,
+            composerFocused: true
+        ))
+    }
+
+    func testFocusedKeyboardReservesItsOccludedHeightAndFollowsNewest() {
+        XCTAssertEqual(
+            TranscriptWindow.keyboardTransition(
+                occlusionHeight: 291,
+                composerFocused: true,
+                previousBottomClearance: 0,
+                readerAtNewest: true
+            ),
+            .init(bottomClearance: 291, shouldFollowNewest: true)
+        )
+    }
+
+    func testUnfocusedComposerDoesNotMoveTranscriptForKeyboardFrame() {
+        XCTAssertEqual(
+            TranscriptWindow.keyboardTransition(
+                occlusionHeight: 291,
+                composerFocused: false,
+                previousBottomClearance: 0,
+                readerAtNewest: true
+            ),
+            .init(bottomClearance: 0, shouldFollowNewest: false)
+        )
+    }
+
+    func testHiddenKeyboardClearsTranscriptReserveWithoutFollowing() {
+        XCTAssertEqual(
+            TranscriptWindow.keyboardTransition(
+                occlusionHeight: 0,
+                composerFocused: true,
+                previousBottomClearance: 0,
+                readerAtNewest: true
+            ),
+            .init(bottomClearance: 0, shouldFollowNewest: false)
+        )
+    }
+
+    func testNegativeKeyboardOcclusionIsClampedToZero() {
+        XCTAssertEqual(
+            TranscriptWindow.keyboardTransition(
+                occlusionHeight: -40,
+                composerFocused: true,
+                previousBottomClearance: 0,
+                readerAtNewest: true
+            ),
+            .init(bottomClearance: 0, shouldFollowNewest: false)
+        )
+    }
+
+    func testHidingKeyboardReturnsFollowingTranscriptToOrdinaryNewestEdge() {
+        XCTAssertEqual(
+            TranscriptWindow.keyboardTransition(
+                occlusionHeight: 0,
+                composerFocused: false,
+                previousBottomClearance: 291,
+                readerAtNewest: true
+            ),
+            .init(bottomClearance: 0, shouldFollowNewest: true)
+        )
+    }
+
+    func testFocusedKeyboardPreservesReaderPositionInHistory() {
+        XCTAssertEqual(
+            TranscriptWindow.keyboardTransition(
+                occlusionHeight: 291,
+                composerFocused: true,
+                previousBottomClearance: 0,
+                readerAtNewest: false
+            ),
+            .init(bottomClearance: 291, shouldFollowNewest: false)
+        )
+    }
+
+    func testHidingKeyboardPreservesReaderPositionInHistory() {
+        XCTAssertEqual(
+            TranscriptWindow.keyboardTransition(
+                occlusionHeight: 0,
+                composerFocused: false,
+                previousBottomClearance: 291,
+                readerAtNewest: false
+            ),
+            .init(bottomClearance: 0, shouldFollowNewest: false)
+        )
+    }
+
+    func testIdleBottomBoundaryIsAContentMarginNotTranscriptContent() {
+        XCTAssertEqual(
+            TranscriptWindow.bottomContentMargin(
+                keyboardOcclusionHeight: 0,
+                bottomChromeHeight: 122,
+                bottomSafeAreaInset: 34,
+                bottomTranscriptClearance: 16
+            ),
+            138
+        )
+    }
+
+    func testFocusedBottomBoundaryAvoidsDuplicateKeyboardSafeArea() {
+        XCTAssertEqual(
+            TranscriptWindow.bottomContentMargin(
+                keyboardOcclusionHeight: 335,
+                bottomChromeHeight: 122,
+                bottomSafeAreaInset: 34,
+                bottomTranscriptClearance: 16
+            ),
+            423
+        )
+    }
+
+    func testBottomContentMarginClampsInvalidGeometry() {
+        XCTAssertEqual(
+            TranscriptWindow.bottomContentMargin(
+                keyboardOcclusionHeight: -40,
+                bottomChromeHeight: -12,
+                bottomSafeAreaInset: -34,
+                bottomTranscriptClearance: -8
+            ),
+            0
+        )
+    }
+
     func testOpeningSettlesAsSoonAsTheNewestTailCanRender() {
         XCTAssertTrue(TranscriptWindow.shouldSettleInitialPin(
             isOpening: true,
@@ -278,6 +419,22 @@ final class ScrolledToEndTests: XCTestCase {
         XCTAssertFalse(TranscriptWindow.isScrolledToEnd(
             contentHeight: 5000, containerHeight: container,
             offsetY: 4000, bottomInset: 100))
+    }
+}
+
+final class NewestEndTrackingTests: XCTestCase {
+
+    func testHistoryOffsetsCollapseToOneTrackingValue() {
+        let values = stride(from: 80.0, through: 800.0, by: 40.0).map {
+            TranscriptWindow.newestEndTrackingValue(offsetY: $0)
+        }
+
+        XCTAssertEqual(Set(values), [false])
+    }
+
+    func testTrackingValueChangesOnlyAcrossNewestBoundary() {
+        XCTAssertTrue(TranscriptWindow.newestEndTrackingValue(offsetY: 24))
+        XCTAssertFalse(TranscriptWindow.newestEndTrackingValue(offsetY: 24.1))
     }
 }
 

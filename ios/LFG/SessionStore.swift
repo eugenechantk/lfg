@@ -3673,6 +3673,18 @@ import LFGCore
     /// still grants the in-flight POST a grace period to finish. (Taking it
     /// inside the async Task would race the suspension and lose the message.)
     func dispatchSend(_ id: String, text: String, attachments: [ComposerAttachment]) {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["LFG_SEND_FOLLOW_FIXTURE"] == "1" {
+            dispatchSendFollowFixture(id, text: text)
+            return
+        }
+        #endif
+
+        // Snapshot how this send should present BEFORE the optimistic busy write
+        // below. Reading `busy[id]` later inside the Task classifies every idle
+        // send as queued-behind-turn, briefly inserts a pending strip, and grows
+        // the measured bottom chrome under the transcript.
+        let presentationAtDispatch = outgoingSendPresentation(for: id)
         // Optimistic "running", matching the optimistic bubble that already
         // appears. Measured on a live host: the keystrokes land at ~740ms and the
         // journal pump reports the turn at ~1490ms, so without this the row sits
@@ -3697,17 +3709,112 @@ import LFGCore
         }
         let key = UUID()
         inflightSends[key] = Task { [weak self] in
-            await self?.sendWithAttachments(id, text: text, attachments: attachments)
+            await self?.sendWithAttachments(
+                id,
+                text: text,
+                attachments: attachments,
+                presentationAtDispatch: presentationAtDispatch
+            )
             self?.inflightSends[key] = nil
             if bg != .invalid { app.endBackgroundTask(bg); bg = .invalid }
         }
     }
 
+    #if DEBUG
+    /// Seed the real detail view without touching a host. The companion launch
+    /// mode exercises composer focus, optimistic insertion, scroll targeting,
+    /// and real-turn reconciliation through the shipping view hierarchy.
+    func installSendFollowFixture() -> Session {
+        let id = "local-send-follow-fixture"
+        var fixtureMessages: [SessionMessage] = []
+        for index in 1...36 {
+            fixtureMessages.append(SessionMessage(
+                id: "fixture-user-\(index)",
+                role: "user",
+                kind: "text",
+                text: "Earlier user message \(index)",
+                ts: Double(index * 2)
+            ))
+            fixtureMessages.append(SessionMessage(
+                id: "fixture-assistant-\(index)",
+                role: "assistant",
+                kind: "text",
+                text: "Earlier assistant response \(index). This fixture is intentionally long enough to scroll away from the newest turn.",
+                ts: Double(index * 2 + 1)
+            ))
+        }
+        let fixture = Session(
+            sessionId: id,
+            title: "Send follows latest user message",
+            agent: "codex",
+            cwd: "/tmp/lfg-send-follow-fixture",
+            busy: false,
+            last: fixtureMessages.last
+        )
+        sessions = [fixture]
+        transcripts[id] = fixtureMessages
+        pendingSends[id] = []
+        busy[id] = false
+        bumpTranscript(id)
+        return fixture
+    }
+
+    private func dispatchSendFollowFixture(_ id: String, text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let pendingID = "fixture-pending-\(UUID().uuidString)"
+        let timestamp = Date().timeIntervalSince1970 * 1_000
+        pendingSends[id, default: []].append(PendingSend(
+            id: pendingID,
+            clientId: pendingID,
+            displayText: trimmed,
+            matchText: trimmed,
+            ts: timestamp,
+            showSent: true,
+            confirmed: true
+        ))
+        busy[id] = true
+
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(700))
+            guard let self else { return }
+            self.transcripts[id, default: []].append(SessionMessage(
+                id: "fixture-landed-\(pendingID)",
+                role: "user",
+                kind: "text",
+                text: trimmed,
+                ts: timestamp + 1
+            ))
+            self.bumpTranscript(id)
+            self.reconcilePending(id)
+            self.busy[id] = false
+        }
+    }
+    #endif
+
     /// Upload any image attachments, then send the text with their paths appended
     /// (Claude Code reads local image paths as image input). The message shows as
     /// an optimistic user bubble immediately — before uploads or the network
     /// round-trip — and is reconciled away once the agent records the real turn.
-    func sendWithAttachments(_ id: String, text: String, attachments: [ComposerAttachment]) async {
+    private func outgoingSendPresentation(for id: String) -> OutgoingSendPresentation {
+        let isClosed = session(id)?.closed == true
+        let needsResume = isClosed
+            || (!sessions.contains { $0.sessionId == id }
+                && (focusedSnapshot?.sessionId == id || deepLinkSession?.sessionId == id))
+        return OutgoingSendPresentation.classify(
+            hostUnreachable: isOffline(id),
+            sessionNeedsResume: needsResume,
+            agentBusy: busy[id] == true,
+            awaitingPrompt: prompts[id] != nil
+        )
+    }
+
+    func sendWithAttachments(
+        _ id: String,
+        text: String,
+        attachments: [ComposerAttachment],
+        presentationAtDispatch presentation: OutgoingSendPresentation
+    ) async {
         guard let client = client(forSession: id) else { return }
         let typed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !typed.isEmpty || !attachments.isEmpty else { return }
