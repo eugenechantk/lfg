@@ -420,6 +420,76 @@ describe("Claude subagent discovery", () => {
     expect(session.finishedAt).toBe(Date.parse("2026-08-20T04:03:00.000Z"));
   });
 
+  test("an async launch receipt leaves the child running until it actually finishes", async () => {
+    // A BACKGROUND Agent launch records `{agentId, status: "async_launched"}`
+    // in the very same toolUseResult shape a synchronous completion uses. Read
+    // as a lifecycle it maps to "unknown", so every live background agent was
+    // reported finished the moment it started: runningChildAgentCount 0, the
+    // parent idle while three agents worked, and nothing to nest in the client.
+    const f = fixture();
+    child(f.sidecars, {
+      id: "async-child",
+      toolUseId: "tool-async",
+      description: "Evidence sweep",
+      lastTimestamp: "2026-08-20T04:04:00.000Z",
+    });
+    writeFileSync(f.parent, [
+      launch("tool-async", "Evidence sweep", "2026-08-20T04:01:00.000Z"),
+      line({
+        type: "user",
+        timestamp: "2026-08-20T04:02:00.000Z",
+        toolUseResult: {
+          isAsync: true,
+          status: "async_launched",
+          agentId: "async-child",
+          description: "Evidence sweep",
+        },
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "tool-async", content: "launched" }],
+        },
+      }),
+    ].join(""));
+
+    const [running] = await listSubagentSessions(
+      f.parent,
+      Date.parse("2026-08-20T04:05:00.000Z"),
+    );
+    expect(running.status).toBe("running");
+    expect(running.finishedAt).toBeNull();
+    expect(withSessionWorkActivity({ busy: false }, [running], 0)).toMatchObject({
+      busy: true,
+      runningChildAgentCount: 1,
+    });
+
+    // The real outcome still arrives as a notification and must win.
+    const g = fixture();
+    child(g.sidecars, {
+      id: "async-child",
+      toolUseId: "tool-async",
+      description: "Evidence sweep",
+      lastTimestamp: "2026-08-20T04:04:00.000Z",
+    });
+    writeFileSync(g.parent, [
+      launch("tool-async", "Evidence sweep", "2026-08-20T04:01:00.000Z"),
+      line({
+        type: "user",
+        timestamp: "2026-08-20T04:02:00.000Z",
+        toolUseResult: { isAsync: true, status: "async_launched", agentId: "async-child" },
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "tool-async", content: "launched" }],
+        },
+      }),
+      notification("async-child", "tool-async", "completed", "2026-08-20T04:06:00.000Z"),
+    ].join(""));
+
+    const [finished] = await listSubagentSessions(
+      g.parent,
+      Date.parse("2026-08-20T04:07:00.000Z"),
+    );
+    expect(finished.status).toBe("completed");
+    expect(finished.finishedAt).toBe(Date.parse("2026-08-20T04:06:00.000Z"));
+  });
+
   test("a running child with no completion record and no recent activity degrades to unknown", async () => {
     // Parent killed mid-agent: no notification and no tool_result will ever
     // arrive, so without a clock backstop the child latches "running" across

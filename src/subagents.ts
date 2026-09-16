@@ -208,7 +208,17 @@ function consumeParentEventLine(line: string, events: ParentEvents): void {
   const resultAgentId = nonempty(toolUseResult?.agentId);
   const resultStatus = nonempty(toolUseResult?.status);
   if (resultAgentId && resultStatus && SAFE_AGENT_ID.test(resultAgentId)) {
-    events.lifecycleByAgentId.set(resultAgentId, { status: mapStatus(resultStatus), timestamp: at });
+    // Only a status we RECOGNISE may record a lifecycle. An ASYNC launch writes
+    // the same `{agentId, status}` shape with `status: "async_launched"` — a
+    // launch receipt, not an outcome; its real completion arrives later as a
+    // <task-notification>. Mapping it through here stamped every background
+    // agent "unknown" the instant it started, which zeroed
+    // runningChildAgentCount, left the parent reading idle while three agents
+    // worked, and hid them from the clients' child-session surfaces.
+    const resultLifecycle = mapStatus(resultStatus);
+    if (resultLifecycle !== "unknown") {
+      events.lifecycleByAgentId.set(resultAgentId, { status: resultLifecycle, timestamp: at });
+    }
   }
   const backgroundProcessId = nonempty(toolUseResult?.backgroundTaskId);
   if (backgroundProcessId && SAFE_AGENT_ID.test(backgroundProcessId)) {
