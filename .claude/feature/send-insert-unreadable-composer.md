@@ -97,3 +97,6 @@ send. The failure mode if it is wrong is bounded: an Enter on a pane that never
 received the text, which the transcript probe declines to confirm, so the
 attempt loop retries exactly as it does today. It cannot strand a send that the
 old code would have delivered.
+
+
+> **Superseded 2026-09-17.** The pre-Enter confirmation is gone entirely; see `send-submit-transcript-authority.md`.

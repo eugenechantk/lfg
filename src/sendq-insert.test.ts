@@ -1,41 +1,45 @@
-// Insertion-confirmation policy: an unreadable composer is not evidence that
-// the send failed. See .claude/feature/send-insert-unreadable-composer.md —
-// treating null as failure is what stranded sends ("message never left the
-// input box after retries") whose keystrokes had landed perfectly.
+// Submit policy: type, Enter, let the transcript judge. No reading of the
+// composer may block the Enter or fail the send — six weeks of sendq.log
+// showed the pre-Enter confirmation rescued one send and failed 54 (see the
+// submitOutcome comment in sendq.ts and
+// .claude/feature/send-submit-transcript-authority.md).
 import { describe, expect, test } from "bun:test";
-import { insertionOutcome } from "./sendq.ts";
+import { submitOutcome } from "./sendq.ts";
 
-describe("insertionOutcome", () => {
-  test("composer holds our draft -> settled", () => {
-    expect(insertionOutcome(true, false)).toBe("settled");
-    // An open selector is irrelevant once we can see our own draft.
-    expect(insertionOutcome(true, true)).toBe("settled");
+describe("submitOutcome", () => {
+  test("transcript growth is delivered, whatever the composer says", () => {
+    for (const held of [true, false, null]) {
+      expect(submitOutcome(true, held, false)).toBe("delivered");
+      expect(submitOutcome(true, held, true)).toBe("delivered");
+    }
   });
 
-  test("composer is readable and our draft is absent -> retry", () => {
-    // This is the only real evidence of a failed insertion: we could read the
-    // box and our text was not in it.
-    expect(insertionOutcome(false, false)).toBe("retry");
+  test("draft gone from a readable composer -> queued (busy Claude took it)", () => {
+    expect(submitOutcome(false, false, false)).toBe("queued");
   });
 
-  test("composer is unreadable -> submit unconfirmed, let the transcript judge", () => {
-    // The regression this guards: a scrolled output view, an overlay, or an
-    // unrecognised border shape (cf. the `(Branch) ──` bug) makes the parser
-    // return null. That used to clear + retype 3x and fail.
-    expect(insertionOutcome(null, false)).toBe("unconfirmed");
+  test("unreadable composer is not evidence of failure -> queued", () => {
+    // A scrolled view, an overlay opened by the submit, or a border shape the
+    // parser can't follow. Treating this as failure is what stranded sends.
+    expect(submitOutcome(false, null, false)).toBe("queued");
   });
 
-  test("composer unreadable but a selector is open -> retry, never Enter into it", () => {
-    // Enter here would pick an option in a permission/question dialog rather
-    // than submit a message, so an unreadable composer is not enough.
-    expect(insertionOutcome(null, true)).toBe("retry");
+  test("a slash command that left the box is delivered, not queued", () => {
+    // /clear, /model … execute at once and never surface as a user turn.
+    expect(submitOutcome(false, false, true)).toBe("delivered");
+    expect(submitOutcome(false, null, true)).toBe("delivered");
   });
 
-  test("only an explicit false ever reports insertion failure", () => {
-    const outcomes = [
-      insertionOutcome(true, false),
-      insertionOutcome(null, false),
-    ];
-    expect(outcomes.every((o) => o !== "retry")).toBe(true);
+  test("only a POSITIVE 'still in the box' reading keeps watching", () => {
+    expect(submitOutcome(false, true, false)).toBe("hold");
+    expect(submitOutcome(false, true, true)).toBe("hold");
+  });
+
+  test("no observation ever yields a failure", () => {
+    const all: string[] = [];
+    for (const grew of [true, false])
+      for (const held of [true, false, null])
+        for (const cmd of [true, false]) all.push(submitOutcome(grew, held, cmd));
+    expect(all).not.toContain("failed");
   });
 });

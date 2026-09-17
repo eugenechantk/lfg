@@ -565,31 +565,51 @@ function composerHoldsInput(target: string, needle: string): boolean | null {
   return composerTextHoldsNeedle(box, needle);
 }
 
-// What to do when the insertion settle-loop never saw our draft in the composer.
+// Submit policy (2026-09-17): type, press Enter, let the transcript judge.
 //
-// The distinction that matters is "the composer says our text isn't there"
-// (evidence of failure) versus "we cannot read the composer at all" (no
-// evidence either way). `composerHoldsInput` returns null for the latter — a
-// scrolled output view, an overlay, or simply a TUI shape the border parser
-// doesn't know yet. Treating null as failure is what strands sends whose
-// keystrokes landed perfectly: we clear the box and retype three times, then
-// give up with "message never left the input box after retries".
+// deliver() used to confirm the draft in the composer BEFORE pressing Enter
+// and, on "draft absent", clear the box and retype up to three times. Six
+// weeks of ~/.lfg/sendq.log (2026-08-06 → 09-17) say what that bought: 1,202
+// sends succeeded on the first attempt, ONE succeeded on a retry, and all 54
+// failures were the confirmation itself misreading the pane ("message never
+// left the input box after retries") — the keystrokes had landed every time
+// and the queue wiped them with its own Ctrl-U. Lost keystrokes are not a
+// real failure mode; a misread composer is (four border-parser fixes, and
+// counting). So the composer read is advisory only: it shortens the settle
+// wait when it can see the draft and can prompt one more Enter when it
+// positively still sees the draft after one, but no reading of it blocks the
+// submit or fails the send. The authorities are the transcript (idle: a new
+// user turn = delivered) and reconcileQueued (busy or unreadable: "queued",
+// promoted once the text surfaces, re-driven on sustained idle if it never
+// does, and only THEN failed).
 //
-// So null falls through to Enter *unconfirmed* and lets the post-submit
-// authority (transcript growth, or the composer clearing) decide — the same
-// authority that already handles an unreadable composer after Enter. The one
-// exception is an open selector/overlay, where Enter would pick an option
-// instead of submitting a message; that still retries.
-export type InsertOutcome = "settled" | "retry" | "unconfirmed";
+// What one post-Enter observation means:
+//   transcript grew            → delivered, whatever the composer says.
+//   composer readable & absent → the draft left the box: queued (busy Claude
+//                                took it into its native queue), or delivered
+//                                for a slash command, which never surfaces as
+//                                a user turn (/clear even wipes the transcript).
+//   composer unreadable (null) → same as absent: a selector/overlay opened on
+//                                submit, or the parser can't follow the pane —
+//                                either way no evidence Enter failed.
+//   composer still holds it    → keep watching; after the window, Enter again.
+export type SubmitOutcome = "delivered" | "queued" | "hold";
 
-export function insertionOutcome(
-  lastHeld: boolean | null,
-  selectorIsOpen: boolean,
-): InsertOutcome {
-  if (lastHeld === true) return "settled";
-  if (lastHeld === false) return "retry"; // composer readable, draft absent
-  return selectorIsOpen ? "retry" : "unconfirmed";
+export function submitOutcome(
+  transcriptGrew: boolean,
+  held: boolean | null,
+  isCommand: boolean,
+): SubmitOutcome {
+  if (transcriptGrew) return "delivered";
+  if (held === true) return "hold";
+  return isCommand ? "delivered" : "queued";
 }
+
+// How long to let the TUI take the typed bytes as text before the Enter
+// arrives (an Enter inside the same input burst can be read as a pasted
+// newline). Polls stop early once the composer visibly holds the draft.
+const SETTLE_POLLS = 10;
+const SETTLE_POLL_MS = 150;
 
 // One line per lifecycle event, appended to data/sendq.log and never pruned.
 //
@@ -882,7 +902,7 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<{ userTurnId:
   const transcriptMatchesBefore = await transcriptUserMatches(transcriptPath, needle);
 
   // Clear any session-rating overlay first — it swallows Enter and would
-  // otherwise strand every send with "never left the input box".
+  // otherwise swallow the Enter of every send.
   if (clearFeedbackPrompt(target)) await sleep(300);
 
   // "Chat about this": when a selector (permission / plan / question dialog) is
@@ -901,7 +921,8 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<{ userTurnId:
   // as selected and parsePrompt returns null. Gating dismissal on parsePrompt
   // alone skipped the Escape for those question dialogs, fell through to typing
   // into a composer that isn't reachable, and stranded the send with "message
-  // never left the input box after retries". The footer-based detector fixes it.
+  // never left the input box after retries" (pre-2026-09-17 policy). The
+  // footer-based detector fixes it.
   const selectorOpen = (p: string) => !!parsePrompt(p) || questionSelectorOpen(p);
   for (let attempt = 0; attempt < 2; attempt++) {
     const pane = capturePane(target);
@@ -924,109 +945,67 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<{ userTurnId:
     }
   }
 
-  const MAX_ATTEMPTS = 3;
   // Multi-line messages must be pasted, not typed: send-keys -l transmits each
   // embedded newline as an Enter, so a typed multi-line message submits/fragments
   // at the first newline and the full text never lands as one draft. Bracketed
   // paste makes the TUI take the newlines as newlines.
   const multiline = /[\r\n]/.test(msg.text);
-  while (msg.attempts < MAX_ATTEMPTS) {
-    msg.attempts++;
-    msg.updatedAt = Date.now();
-    persistMsg(sessionId, msg);
+  // Wipe any foreign draft first. The composer may already hold text the user
+  // (or a stranded earlier send) left there; insertion appends, so without this
+  // our message fuses onto it. Ctrl-U on an empty box is a harmless no-op.
+  tmuxClearInput(target);
+  await sleep(120);
+  if (multiline) tmuxPaste(target, msg.text);
+  else tmuxType(target, msg.text);
+  msg.attempts = 1;
+  msg.updatedAt = Date.now();
+  persistMsg(sessionId, msg);
+  for (let i = 0; i < SETTLE_POLLS; i++) {
+    await sleep(SETTLE_POLL_MS);
+    if (composerHoldsInput(target, needle) === true) break;
+  }
 
-    // Only (re)insert when our draft isn't already sitting in the box (a previous
-    // attempt may have inserted it but failed to submit — reinserting doubles it).
-    if (composerHoldsInput(target, needle) !== true) {
-      // Wipe any foreign draft first. The composer may already hold text the
-      // user (or a stranded earlier send) left there; insertion appends, so
-      // without this our message fuses onto it. Ctrl-U on an empty box is a
-      // harmless no-op.
-      tmuxClearInput(target);
-      await sleep(120);
-      if (multiline) tmuxPaste(target, msg.text);
-      else tmuxType(target, msg.text);
-      let settled = false;
-      let lastHeld: boolean | null = null;
-      for (let i = 0; i < 20; i++) {
-        await sleep(150);
-        lastHeld = composerHoldsInput(target, needle);
-        if (lastHeld === true) {
-          settled = true;
-          break;
-        }
-      }
-      if (!settled) {
-        const pane = capturePane(target);
-        const outcome = insertionOutcome(lastHeld, !!pane && selectorOpen(pane));
-        if (outcome === "retry") {
-          // Insertion didn't register (cold TUI, lost keys, dropped paste), or a
-          // selector is sitting where our Enter would go. Clear any partial and
-          // loop to retry from scratch.
-          tmuxClearInput(target);
-          await sleep(200);
-          continue;
-        }
-        // outcome === "unconfirmed": the composer is unreadable, so we have no
-        // evidence either way. Fall through and submit — the transcript probe
-        // below is the authority, and it retries on the next attempt if the
-        // text really never landed.
-      }
+  // See submitOutcome for the policy. Each round is one Enter plus a watch
+  // window; a further round only happens when the composer POSITIVELY still
+  // shows the draft, and an extra Enter on an already-empty box is a no-op, so
+  // a misread here costs a keystroke, never the message.
+  const ENTER_ROUNDS = 3;
+  const isCommand = msg.text.trimStart().startsWith("/");
+  for (let round = 0; round < ENTER_ROUNDS; round++) {
+    if (round > 0) {
+      msg.attempts++;
+      msg.updatedAt = Date.now();
+      persistMsg(sessionId, msg);
     }
-
     // The rating overlay can surface between turns, right as we're about to
     // submit; clear it again so this Enter isn't swallowed.
     if (clearFeedbackPrompt(target)) await sleep(300);
-
-    // Submit, then confirm acceptance. We do NOT require the composer scrape to
-    // re-find our needle: a busy Claude swallows the text straight into its own
-    // queue and clears the composer, and the pane redraws while streaming, so a
-    // needle re-match is unreliable and used to strand the send ("never left the
-    // box") even though it had landed. The authority is instead:
-    //   (a) the text surfacing as a new user turn in the transcript — idle path,
-    //       delivered; or
-    //   (b) the composer clearing — the draft left the box into the agent queue,
-    //       busy path → "queued"; reconcileQueued promotes it once it surfaces.
     tmuxEnter(target);
     for (let i = 0; i < 24; i++) {
       await sleep(150);
-      const held = composerHoldsInput(target, needle);
       const transcriptMatchesNow = await transcriptUserMatches(transcriptPath, needle);
-      if (transcriptMatchesNow.count > transcriptMatchesBefore.count) {
-        msg.status = "delivered";
-        msg.error = undefined;
-        persistMsg(sessionId, msg);
-        // The turn has started; say so now rather than up to a poll tick later.
-        nudgeJournalPump(sessionId);
-        return { userTurnId: transcriptMatchesNow.newestId };
-      }
-      // held === false: composer visible and our draft is gone.
-      // held === null: composer vanished — a selector/overlay opened right after
-      //   Enter (the message triggered a permission prompt, or the rating overlay
-      //   surfaced). Either way the draft is no longer pending in the box, so the
-      //   submit landed. Only held === true (draft still there) means Enter
-      //   didn't take.
-      if (held === false || held === null) {
-        // A slash command (/clear, /compact, …) executes immediately and never
-        // surfaces as a user-text turn — /clear even wipes the transcript — so
-        // the transcript probe would never confirm it. Treat it delivered the
-        // moment it leaves the box. Otherwise it may be queued behind the current
-        // turn (reconcileQueued promotes it once it surfaces).
-        const isCommand = msg.text.trimStart().startsWith("/");
-        msg.status = isCommand ? "delivered" : "queued";
-        msg.error = undefined;
-        persistMsg(sessionId, msg);
-        nudgeJournalPump(sessionId);
-        return { userTurnId: null };
-      }
+      const grew = transcriptMatchesNow.count > transcriptMatchesBefore.count;
+      const outcome = submitOutcome(grew, composerHoldsInput(target, needle), isCommand);
+      if (outcome === "hold") continue;
+      msg.status = outcome;
+      msg.error = undefined;
+      persistMsg(sessionId, msg);
+      // Say so now rather than up to a poll tick later.
+      nudgeJournalPump(sessionId);
+      return { userTurnId: grew ? transcriptMatchesNow.newestId : null };
     }
-    // Still in the box → the Enter didn't submit. Loop: we'll skip re-inserting
-    // (draft present) and press Enter again.
   }
 
-  msg.status = "failed";
-  msg.error = "message never left the input box after retries";
+  // Never surfaced and the composer never read as cleared. That is not proof
+  // of failure — it is exactly the misread this policy stops trusting (a
+  // region spanning the transcript echoes our own text back as "still in the
+  // box"). Park it queued: reconcileQueued promotes it the moment the text
+  // surfaces, and re-drives it — then fails it — only once a provably idle
+  // agent has not picked it up.
+  msg.status = "queued";
+  msg.error = undefined;
   persistMsg(sessionId, msg);
   logDeliverFailure(sessionId, msg, target);
+  nudgeJournalPump(sessionId);
   return { userTurnId: null };
 }
