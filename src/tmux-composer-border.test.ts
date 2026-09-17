@@ -15,7 +15,7 @@
 // reproduced (cy-224353-78784, cy-222138-60277) and one healthy pane
 // (cy-000654-54570) that must keep working.
 import { test, expect } from "bun:test";
-import { inputBoxFromPane, isRuleLine } from "./tmux";
+import { inputBoxFromPane, isRuleLine, ruleAt } from "./tmux";
 
 const RULE_77 = "─".repeat(77);
 
@@ -73,6 +73,36 @@ const NUMBERED_BRANCH_WITH_PROMPT = [
   "",
 ].join("\n");
 
+// The numbered-branch label WRAPS at the pane width so the `(Branch` marker
+// lands on one line and `2) ─` on the next. Live shape from cy-134704-39300
+// (2026-09-17): the single-line branch predicate above rejected the top
+// border, the border scan found no pair, and the trailing Codex `›` fallback
+// then returned a `›` file line from Claude's own SendUserFile output as "the
+// composer". Every send read as "draft absent", was wiped with Ctrl-U and
+// retyped three times, then failed with "message never left the input box
+// after retries" — while the keystrokes had landed fine each time.
+const NUMBERED_BRANCH_WRAPPED_LABEL = [
+  "  › [image] eli-gpt.jpg (164.9KB)",
+  "  › [image] kai-gpt.jpg (202.6KB)",
+  "",
+  "⏺ Six portraits delivered. One housekeeping item left, logging what went",
+  "  sideways this turn, then I'll give you my read.",
+  "",
+  "✻ Churned for 8m 50s · done 1:57 PM",
+  "",
+  "● recap: Building AiTinder's TikTok carousel ads: six scripts are published,",
+  "  reference sheets. (disable recaps in /config)",
+  "                       Update available! Run: brew upgrade claude-code@latest",
+  " restructure the repo to have an ios folder that holds the app project (Branch",
+  "2) ─",
+  "❯ ",
+  "─".repeat(79),
+  "─".repeat(4),
+  "  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents            /rc",
+  "  ⧉  artifact · artifact-scripts",
+  "",
+].join("\n");
+
 test("healthy pane still yields its composer", () => {
   expect(inputBoxFromPane(HEALTHY)).toBe("❯ ");
 });
@@ -115,6 +145,47 @@ test("a multi-line draft between the borders is returned whole", () => {
     "",
   ].join("\n");
   expect(inputBoxFromPane(pane)).toBe("❯ first line\n  second line");
+});
+
+test("numbered branch label wrapped across two lines still bounds the composer", () => {
+  expect(inputBoxFromPane(NUMBERED_BRANCH_WRAPPED_LABEL)).toBe("❯ ");
+  const withDraft = NUMBERED_BRANCH_WRAPPED_LABEL.replace(
+    "❯ ",
+    "❯ They are not dreamy enough can you make them more like those dreamy bad",
+  );
+  expect(inputBoxFromPane(withDraft)).toContain("They are not dreamy enough");
+});
+
+test("a `›` line in Claude transcript output is never returned as the composer", () => {
+  // Borders that cannot be paired must yield null (deliver() then submits
+  // unconfirmed and lets the transcript decide), never a transcript line — a
+  // wrong non-null answer is what drives the wipe-and-retype loop.
+  const unpaired = [
+    "  › [image] kai-gpt.jpg (202.6KB)",
+    "⏺ Some prose",
+    "❯ ",
+    "─".repeat(79),
+    "  ⏵⏵ bypass permissions on (shift+tab to cycle)",
+    "",
+  ].join("\n");
+  expect(inputBoxFromPane(unpaired)).toBeNull();
+});
+
+test("ruleAt sees a branch label split by the wrap; isRuleLine alone does not", () => {
+  const lines = [
+    " restructure the repo to have an ios folder that holds the app project (Branch",
+    "2) ─",
+  ];
+  expect(isRuleLine(lines[1])).toBe(false);
+  expect(ruleAt(lines, 1)).toBe(true);
+  expect(ruleAt(lines, 0)).toBe(false);
+  // Other wrap points of the same label.
+  expect(ruleAt(["… project (Branch 2", ") ─"], 1)).toBe(true);
+  expect(ruleAt(["… project (Bra", "nch 2) ─"], 1)).toBe(true);
+  expect(ruleAt(["… project (Branch 2)", "─"], 1)).toBe(true);
+  // A composer line, or prose that merely precedes a dash, is not a border.
+  expect(ruleAt(["❯ ask about (Branch", "2) ─"], 1)).toBe(false);
+  expect(ruleAt(["some prose", "2) ─"], 1)).toBe(false);
 });
 
 test("Codex single-line composer fallback is unaffected", () => {

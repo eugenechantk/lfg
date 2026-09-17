@@ -1502,6 +1502,32 @@ export function tmuxInterrupt(target: string): boolean {
 // The invariant across all three is: the line ENDS in dashes, carries only a
 // short label besides them, and never holds composer content (`❯`). Requiring
 // two trailing dashes rather than three is what admits `(Branch) ──`.
+// The terminal Claude branch marker. `\s*` rather than `\s+` between the
+// word and the number so it still matches once `ruleAt` has joined two
+// wrapped halves: capture-pane trims the trailing space at the wrap column,
+// so `… (Branch` + `2) ─` joins as `(Branch2) ─`.
+const BRANCH_RULE_TAIL = /\(Branch\s*\d*\)\s*─+\s*$/;
+
+// Is line `i` a composer border, allowing for a numbered-branch label that
+// WRAPPED at the pane width? Claude draws its chrome for a width the attached
+// terminal reports, which can exceed the tmux pane (the bottom border wraps
+// into a dash continuation for the same reason), so a long branch title can
+// break anywhere inside `(Branch 2) ─` — `(Branch` on one line, `2) ─` on the
+// next (cy-134704-39300, 2026-09-17). Neither half passes `isRuleLine` on its
+// own, so the top border went unseen and the scan fell through to a transcript
+// line. Test the two lines JOINED against the branch marker instead. The
+// composer guard still applies: a `❯` line is content, never a border.
+export function ruleAt(lines: string[], i: number): boolean {
+  const line = lines[i] ?? "";
+  if (isRuleLine(line)) return true;
+  if (i <= 0) return false;
+  const s = line.replace(/[ \t]+$/, "");
+  if (!s.endsWith("─") || s.includes("❯")) return false;
+  const prev = lines[i - 1] ?? "";
+  if (prev.includes("❯")) return false;
+  return BRANCH_RULE_TAIL.test(prev.replace(/[ \t]+$/, "") + s);
+}
+
 export function isRuleLine(line: string): boolean {
   const s = line.replace(/[ \t]+$/, "");
   if (!s.endsWith("─")) return false;
@@ -1513,7 +1539,7 @@ export function isRuleLine(line: string): boolean {
   // cannot pass the generic dash-count/short-label guard below. Match the
   // distinctive, terminal Claude branch marker without relaxing that guard
   // for ordinary transcript prose.
-  if (/\(Branch(?:\s+\d+)?\)\s+─+\s*$/.test(s)) return true;
+  if (BRANCH_RULE_TAIL.test(s)) return true;
   const dashes = (s.match(/─/g) ?? []).length;
   if (dashes < 2) return false;
   // Cap the label so a wrapped transcript line that happens to end in a rule
@@ -1561,25 +1587,26 @@ export function inputBoxFromPane(pane: string): string | null {
   // times and failed with "message never left the input box after retries"
   // even though the keys were arriving fine. Collapse each maximal RUN of rule
   // lines into a single border instead.
+  // A numbered-branch label can wrap so that neither half is a rule line on
+  // its own — `ruleAt` joins the halves (see its comment).
   let i = lines.length - 1;
-  while (i >= 0 && !isRuleLine(lines[i])) i--; // into the bottom border
+  while (i >= 0 && !ruleAt(lines, i)) i--; // into the bottom border
   if (i >= 0) {
-    while (i >= 0 && isRuleLine(lines[i])) i--; // skip the whole wrapped run
+    while (i >= 0 && ruleAt(lines, i)) i--; // skip the whole wrapped run
     const contentEnd = i;
-    while (i >= 0 && !isRuleLine(lines[i])) i--; // into the top border
+    while (i >= 0 && !ruleAt(lines, i)) i--; // into the top border
     if (i >= 0) return lines.slice(i + 1, contentEnd + 1).join("\n");
   }
 
-  // Codex renders the composer as a single bottom prompt line:
-  //   › message text
-  // Ignore numbered selector rows (`› 1. ...`) so open prompts don't look like
-  // an editable composer to the send queue.
-  for (let j = lines.length - 1; j >= 0; j--) {
-    const m = lines[j].match(/^\s*›\s*(.*?)\s*$/);
-    if (!m) continue;
-    const text = m[1] ?? "";
-    if (/^\d+\.\s+/.test(text)) return null;
-    return text;
-  }
+  // No pairable borders: say so. There used to be a second Codex `›` scan
+  // here, but `codexComposerIndex` above already covers every pane where a `›`
+  // line can be the composer (it is below the last rule line, or there are no
+  // rule lines at all), so the only thing this fallback ever added was a `›`
+  // line ABOVE a rule — transcript content. On 2026-09-17 that was Claude's
+  // own SendUserFile listing (`› [image] kai-gpt.jpg …`), handed back as "the
+  // composer" whenever the top border went unrecognised; the send queue then
+  // read every draft as absent, wiped it and retyped three times, and failed
+  // with "message never left the input box after retries". Null is the safe
+  // answer: deliver() submits unconfirmed and lets the transcript decide.
   return null;
 }
