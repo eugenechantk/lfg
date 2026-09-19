@@ -52,9 +52,43 @@ final class LiveActivityManager {
             for activity in Activity<LFGFleetAttributes>.activities {
                 self.track(activity)
             }
+            await self.endDuplicateFleetActivities()
             for await activity in Activity<LFGFleetAttributes>.activityUpdates {
                 self.track(activity)
+                // A push-to-start card lands here first — in the background too,
+                // since a start push wakes the app. Collapse to one card the moment
+                // a second one exists, before either side updates the wrong one.
+                await self.endDuplicateFleetActivities()
             }
+        }
+    }
+
+    /// One fleet card per phone. The server and the app both create cards and
+    /// neither can see the other's, so this is the only place the invariant can
+    /// hold. Survivor selection is `FleetActivityDedupe` (LFGCore, tested).
+    @available(iOS 17.2, *)
+    private func endDuplicateFleetActivities() async {
+        let cards = Activity<LFGFleetAttributes>.activities
+            .filter { $0.activityState == .active }
+            .map { FleetActivityDedupe.Card(id: $0.id, updatedAt: $0.content.state.updatedAt) }
+        guard cards.count > 1 else { return }
+        let partition = FleetActivityDedupe.partition(cards)
+        let losers = Set(partition.end)
+        for id in losers {
+            activityTokenTasks[id]?.cancel()
+            activityTokenTasks[id] = nil
+        }
+        await Self.endFleetActivities(ids: losers)
+        log.notice("fleet live activity dedupe: kept \(partition.keep ?? "-", privacy: .public), ended \(losers.count)")
+    }
+
+    // Looked up and consumed in its own scope — binding an `Activity` in the
+    // caller and awaiting on it there trips Swift 6's region isolation ("sending
+    // 'activity' risks causing data races"), as `FleetActivityController` notes.
+    @available(iOS 17.2, *)
+    private static func endFleetActivities(ids: Set<String>) async {
+        for activity in Activity<LFGFleetAttributes>.activities where ids.contains(activity.id) {
+            await activity.end(nil, dismissalPolicy: .immediate)
         }
     }
 
@@ -103,7 +137,11 @@ final class LiveActivityManager {
     func startMockFleetActivityIfRequested() {
         guard let mode = ProcessInfo.processInfo.environment["LFG_LA_MOCK"] else { return }
         guard #available(iOS 17.2, *) else { return }
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        let enabled = ActivityAuthorizationInfo().areActivitiesEnabled
+        // NSLog, not `log`: FlowDeck's log capture shows the bundle-id subsystem
+        // only, and this logger lives under dev.omg.lfg.
+        NSLog("[LFG_LA_MOCK] mode=%@ activitiesEnabled=%d", mode, enabled ? 1 : 0)
+        guard enabled else { return }
 
         let now = Date().timeIntervalSince1970
         func row(_ sid: String, _ title: String, _ state: String, _ minutesAgo: Double) -> LFGFleetAttributes.Row {
@@ -166,9 +204,9 @@ final class LiveActivityManager {
                     content: .init(state: content, staleDate: nil),
                     pushType: nil
                 )
-                print("[LFG_LA_MOCK] started fleet activity mode=\(mode)")
+                NSLog("[LFG_LA_MOCK] started fleet activity mode=%@", mode)
             } catch {
-                print("[LFG_LA_MOCK] FAILED: \(error)")
+                NSLog("[LFG_LA_MOCK] FAILED: %@", String(describing: error))
                 log.error("mock fleet live activity failed: \(error.localizedDescription)")
             }
         }

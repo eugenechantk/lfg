@@ -54,9 +54,12 @@ struct LFGFleetActivityWidget: Widget {
                     .padding(.horizontal, 6)
                 }
             } compactLeading: {
+                // Breathing room off the island's leading edge — the bare 8pt
+                // dot otherwise reads as jammed against the sensor cutout.
                 Circle()
                     .fill(context.state.accent)
                     .frame(width: 8, height: 8)
+                    .padding(.leading, 6)
             } compactTrailing: {
                 Text("\(context.state.activeTotal)")
                     .font(.system(size: 14, weight: .medium))
