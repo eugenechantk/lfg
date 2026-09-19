@@ -67,9 +67,20 @@ struct LFGFleetActivityWidget: Widget {
                     .monospacedDigit()
                     .padding(.trailing, 6) // mirrors the dot's leading inset
             } minimal: {
-                Circle()
-                    .fill(context.state.accent)
-                    .frame(width: 8, height: 8)
+                // Shown when the island is shared with another activity. The count
+                // is what matters at a glance: sessions needing you when any do,
+                // otherwise sessions working — on the same state colour the compact
+                // dot uses. Relevance scores (server + app) keep ours in the island.
+                ZStack {
+                    Circle().fill(context.state.accent)
+                    Text("\(context.state.minimalCount)")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(.black)
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                        .padding(.horizontal, 2)
+                }
             }
             .keylineTint(context.state.accent)
         }
@@ -81,5 +92,11 @@ private extension LFGFleetAttributes.ContentState {
     /// the collapsed island should carry.
     var accent: Color {
         needsInput > 0 ? .lfgStateNeedsInput : .lfgStateWorking
+    }
+
+    /// The one number the shared-island circle can carry: how many sessions need
+    /// you, or — when none do — how many are working.
+    var minimalCount: Int {
+        needsInput > 0 ? needsInput : working
     }
 }

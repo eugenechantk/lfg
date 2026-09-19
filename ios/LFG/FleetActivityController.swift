@@ -19,6 +19,7 @@ final class FleetActivityController {
     private var observationArmed = false
     private var lastSnapshot: LFGCore.LFGFleetAttributes.ContentState?
     private var lastSyncedSnapshot: LFGCore.LFGFleetAttributes.ContentState?
+    private var endGate = FleetEndGate.State()
     private let log = Logger(subsystem: "dev.omg.lfg", category: "fleet-live-activity")
 
     private init() {}
@@ -108,6 +109,20 @@ final class FleetActivityController {
         let activeTotal = snapshot.working + snapshot.needsInput
         let state = appContentState(from: snapshot)
         let exists = Self.currentActivityExists
+        let now = Date().timeIntervalSince1970
+
+        // Ending is irreversible (the token dies; a comeback needs a push-to-start
+        // and a background wake), so it is gated: never on a count the store cannot
+        // vouch for, and only after a sustained zero. A background launch from a
+        // push-to-start has an empty store — that read as zero and killed every
+        // server-started card ~2 s after it appeared.
+        let gate = FleetEndGate.step(
+            activeTotal: activeTotal,
+            countTrustworthy: store?.fleetCountIsTrustworthy ?? false,
+            state: endGate,
+            now: now
+        )
+        endGate = gate.state
 
         do {
             if !exists {
@@ -119,18 +134,25 @@ final class FleetActivityController {
                 // server can keep updating it once the app suspends.
                 _ = try Activity.request(
                     attributes: LFGFleetAttributes(fleetId: Self.fleetId),
-                    content: ActivityContent(state: state, staleDate: nil),
+                    content: Self.content(state),
                     pushType: .token
                 )
                 lastSyncedSnapshot = snapshot
                 return
             }
 
-            if activeTotal == 0 {
+            switch gate.verdict {
+            case .untouched:
+                // Count unknown: leave the card exactly as the server left it.
+                return
+            case .end:
                 await Self.endCurrentActivity(state: state)
                 lastSyncedSnapshot = nil
+                endGate = FleetEndGate.State()
                 await reportActivityEnded()
                 return
+            case .keep:
+                break
             }
 
             // Skip no-op updates: `updatedAt` and the elapsed-time labels change
@@ -195,8 +217,17 @@ final class FleetActivityController {
     private static func updateCurrentActivity(state: LFGFleetAttributes.ContentState) async {
         for activity in Activity<LFGFleetAttributes>.activities
         where activity.attributes.fleetId == fleetId {
-            await activity.update(ActivityContent(state: state, staleDate: nil))
+            await activity.update(content(state))
         }
+    }
+
+    /// Mirrors the server's `relevanceScore` (`src/push/liveactivity.ts`): when
+    /// the Dynamic Island is shared with another app's activity, ours should be
+    /// the one attached to the island, and a fleet waiting on a human outranks
+    /// one that is merely working.
+    @available(iOS 17.2, *)
+    private static func content(_ state: LFGFleetAttributes.ContentState) -> ActivityContent<LFGFleetAttributes.ContentState> {
+        ActivityContent(state: state, staleDate: nil, relevanceScore: state.needsInput > 0 ? 100 : 90)
     }
 
     private static func sameRenderableContent(

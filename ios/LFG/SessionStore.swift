@@ -463,6 +463,22 @@ import LFGCore
     /// sessions to the merged list rather than having them vanish for a poll —
     /// the resilience the single-host path got from the server's `lastGood`.
     private var lastSessionsByHost: [String: [Session]] = [:]
+
+    /// True once any host has answered a LIVE sessions fetch this launch. GRDB
+    /// hydration does not count: it seeds `lastSessionsByHost` too, so the key set
+    /// cannot tell a cold snapshot from a live answer. Read by
+    /// `fleetCountIsTrustworthy`.
+    private(set) var liveSessionsFetchedOnce = false
+
+    /// Whether the fleet Live Activity may trust `filteredSessions`/`busy` as the
+    /// truth about how many sessions are active. False until the first live fetch
+    /// (a background launch from a push-to-start has an EMPTY store, which read as
+    /// "nothing active" and ended the server's card ~2 s after it appeared) and
+    /// while any host is known down (its busy flags are blanked, so the count is
+    /// unknown, not zero). See `FleetEndGate`.
+    var fleetCountIsTrustworthy: Bool {
+        liveSessionsFetchedOnce && settings.hosts.allSatisfy(isNotKnownDown)
+    }
     /// Request start for each host's last successful live-session snapshot.
     /// This orders REST level state against journal deltas without preserving a
     /// stale `busy: true` for the full fallback TTL.
@@ -2506,6 +2522,7 @@ import LFGCore
             signal(f.host.id, .probeSucceeded)
             failuresByHost[f.host.id] = 0
             lastSessionsByHost[f.host.id] = fetchedSessions
+            liveSessionsFetchedOnce = true
             lastSnapshotStartedAtByHost[f.host.id] = f.snapshotStartedAt
         } else {
             // failuresByHost now only feeds the cold-probe back-off. The visible
