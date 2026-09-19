@@ -489,6 +489,42 @@ struct SessionListView: View {
         .listRowInsets(EdgeInsets())
         .listRowSeparator(.hidden)
         .listRowBackground(Tokens.screen)
+        // Mail's gesture: flag "come back to this" without opening the session
+        // (opening marks it read) or digging into the detail's ⋯ menu. The verb
+        // toggles with the row's state so a stray flag has a list-level undo.
+        // Full swipe commits without a tap (Mail again): drag past the threshold
+        // and the single action fires. Explicit so nobody "tidies" it to false.
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            let sid = row.session.sessionId ?? ""
+            let group = store.group(for: row.session)
+            if let action = ManualUnread.listAction(sessionID: sid,
+                                                    isUnread: group == .unread,
+                                                    isClosed: group == .closed) {
+                switch action {
+                case .markUnread:
+                    Button {
+                        store.markUnread(sid)
+                        // Same exit the detail view takes: an unread row is one
+                        // you are not reading, so the split view drops it.
+                        if isSelected(row) { selection = nil }
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    } label: {
+                        Label("Mark Unread", systemImage: "envelope.badge")
+                    }
+                    .tint(.blue)
+                    .accessibilityIdentifier("markUnread-\(row.session.id)")
+                case .markRead:
+                    Button {
+                        store.markRead(sid)
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    } label: {
+                        Label("Mark Read", systemImage: "envelope.open")
+                    }
+                    .tint(.blue)
+                    .accessibilityIdentifier("markRead-\(row.session.id)")
+                }
+            }
+        }
         // Build the mute list from the thing that's annoying you, in one gesture.
         // Typing `/Users/…/.gbrain` into Settings is the same operation, but no
         // one does it — this is where you actually notice the noise.

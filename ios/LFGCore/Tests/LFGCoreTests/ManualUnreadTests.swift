@@ -23,4 +23,19 @@ final class ManualUnreadTests: XCTestCase {
     func testCanMarkUnreadAcceptsServerSessionID() {
         XCTAssertTrue(ManualUnread.canMarkUnread("session-123"))
     }
+
+    func testListActionOffersMarkUnreadForReadRow() {
+        XCTAssertEqual(ManualUnread.listAction(sessionID: "s1", isUnread: false, isClosed: false), .markUnread)
+    }
+
+    func testListActionOffersMarkReadForUnreadRow() {
+        XCTAssertEqual(ManualUnread.listAction(sessionID: "s1", isUnread: true, isClosed: false), .markRead)
+    }
+
+    func testListActionIsNilForPlaceholderAndClosed() {
+        XCTAssertNil(ManualUnread.listAction(sessionID: "local-1", isUnread: false, isClosed: false))
+        XCTAssertNil(ManualUnread.listAction(sessionID: "", isUnread: true, isClosed: false))
+        XCTAssertNil(ManualUnread.listAction(sessionID: "s1", isUnread: false, isClosed: true))
+        XCTAssertNil(ManualUnread.listAction(sessionID: "s1", isUnread: true, isClosed: true))
+    }
 }
