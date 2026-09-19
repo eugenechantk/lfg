@@ -169,6 +169,33 @@ export type LiveActivityAction = {
 export type LiveActivityDecision = {
   action: LiveActivityAction | null;
   nextActive: LiveActivityActive | null;
+  /// Every active sid this tick (working or needs-input), rendered or not. The
+  /// tick keeps the latest one in the fleet box so a client "ended" report can
+  /// record what population the phone ended against.
+  population: string[];
+  /// A `start` was due but refused: every active sid is inside the client-ended
+  /// veto population. See `FleetActivityBox.clientEnded`.
+  vetoed: boolean;
+};
+
+/**
+ * The server's memory of the one fleet card, shared between the tick and the
+ * HTTP handlers (`noteFleetActivityEnded` / `noteFleetActivityStarted`).
+ *
+ * `clientEnded` is the change-gated restart rule. When the phone reports its
+ * card ended, the server used to null `current` and push-to-start a replacement
+ * on the very next tick — while the phone, whose count disagreed, ended that one
+ * too. Each restart is a NEW activity on the phone; 27–102 `client-ended` a day
+ * stacked five stale cards on the Lock Screen. Now "the phone decided this
+ * population needs no card" holds until the population actually changes: a
+ * start is sent only when some active sid was not in the ended population.
+ * Cleared by a delivered start or by the phone registering an update token.
+ * See `.claude/diagnosis-live-activity-duplicate-cards-20260918.md`.
+ */
+export type FleetActivityBox = {
+  current: LiveActivityActive | null;
+  lastPopulation?: string[];
+  clientEnded?: { population: string[] } | null;
 };
 
 /// Which rows the CARD renders. The precedence itself is no longer restated here
@@ -236,6 +263,7 @@ export const MAX_FLEET_ROWS = 3;
 export function reduceFleetLiveActivity(args: {
   observations: Array<{ session: PayloadSessionInput; observed: SessionState }>;
   active: LiveActivityActive | null;
+  clientEnded?: { population: string[] } | null;
   now: number;
 }): LiveActivityDecision {
   const priorSince = args.active?.since ?? {};
@@ -286,13 +314,22 @@ export function reduceFleetLiveActivity(args: {
   };
 
   const total = working + needsInput;
+  const population = Object.keys(since);
+  const done = (d: { action: LiveActivityAction | null; nextActive: LiveActivityActive | null }, vetoed = false) =>
+    ({ ...d, population, vetoed });
 
   if (!args.active) {
-    if (total === 0) return { action: null, nextActive: null };
-    return {
+    if (total === 0) return done({ action: null, nextActive: null });
+    const vetoPopulation = args.clientEnded?.population ?? [];
+    if (vetoPopulation.length > 0 && population.every((sid) => vetoPopulation.includes(sid))) {
+      // The phone ended its card against this very population. Restarting now
+      // would only be ended again, leaving another orphan card behind.
+      return done({ action: null, nextActive: null }, true);
+    }
+    return done({
       action: { event: "start", push: buildStart({ contentState }) },
       nextActive: { startedAt: args.now, contentState, since },
-    };
+    });
   }
 
   if (total === 0) {
@@ -302,29 +339,29 @@ export function reduceFleetLiveActivity(args: {
       // once, then stay quiet until the window expires or work reappears.
       const held: LiveActivityActive = { ...args.active, since, zeroSince };
       if (sameFleetContentState(args.active.contentState, contentState)) {
-        return { action: null, nextActive: held };
+        return done({ action: null, nextActive: held });
       }
-      return {
+      return done({
         action: { event: "update", push: buildUpdate(contentState) },
         nextActive: { ...held, contentState },
-      };
+      });
     }
-    return {
+    return done({
       action: { event: "end", push: buildEnd(contentState, args.now) },
       nextActive: null,
-    };
+    });
   }
 
   if (sameFleetContentState(args.active.contentState, contentState)) {
     // Nothing renderable changed — keep the refreshed `since` map but send
     // nothing. `zeroSince` still resets: activity is activity.
-    return { action: null, nextActive: { ...args.active, since, zeroSince: undefined } };
+    return done({ action: null, nextActive: { ...args.active, since, zeroSince: undefined } });
   }
 
-  return {
+  return done({
     action: { event: "update", push: buildUpdate(contentState) },
     nextActive: { ...args.active, contentState, since, zeroSince: undefined },
-  };
+  });
 }
 
 // Compact session snapshot embedded in the push so the client can render the
@@ -421,7 +458,7 @@ export type TickDeps = {
   liveActivities?: {
     /// The one fleet activity, or null when none is live. A box (not a bare
     /// value) so the tick can swap it and the caller observes the change.
-    active: { current: LiveActivityActive | null };
+    active: FleetActivityBox;
     pushToStartTokens: () => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
     activityUpdateTokens: () => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
     send: (
@@ -586,6 +623,7 @@ async function applyLiveActivityDecision(
   }
 
   deps.active.current = decision.nextActive;
+  if (decision.action.event === "start") deps.active.clientEnded = null;
   await deps.persistActive?.(decision.nextActive);
 }
 
@@ -669,8 +707,15 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
     const decision = reduceFleetLiveActivity({
       observations: liveActivityObservations,
       active: liveActivities.active.current,
+      clientEnded: liveActivities.active.clientEnded,
       now: Math.floor(now() / 1000),
     });
+    liveActivities.active.lastPopulation = decision.population;
+    if (decision.vetoed) {
+      traceLiveActivity("start-vetoed", {
+        population: decision.population.map((sid) => sid.slice(0, 8)),
+      });
+    }
     await applyLiveActivityDecision(
       decision,
       liveActivities,
@@ -689,7 +734,7 @@ type StartPushWatcherDeps = Pick<Partial<TickDeps>, "head" | "hostId" | "hostNam
  * because the CLIENT can end the card and the server has to hear about it — see
  * `noteFleetActivityEnded`.
  */
-const fleetActive: { current: LiveActivityActive | null } = { current: null };
+const fleetActive: FleetActivityBox = { current: null };
 
 /**
  * Set when the client reports the card gone, cleared once that report has been
@@ -717,8 +762,13 @@ let fleetEndedReported = false;
 export async function noteFleetActivityEnded(): Promise<void> {
   // Traced because this is the ONE path that nulls the card with no `decide`
   // line — without it, a start following a quiet stretch reads as inexplicable.
-  traceLiveActivity("client-ended", { hadActive: fleetActive.current !== null });
+  const population = fleetActive.lastPopulation ?? [];
+  traceLiveActivity("client-ended", {
+    hadActive: fleetActive.current !== null,
+    population: population.map((sid) => sid.slice(0, 8)),
+  });
   fleetActive.current = null;
+  fleetActive.clientEnded = { population };
   fleetEndedReported = true;
   await saveFleetActivityActive(null);
 }
@@ -739,6 +789,7 @@ export function noteFleetActivityStarted(now: () => number = Date.now): void {
   if (fleetActive.current) return; // already tracking a card; keep its baselines
   traceLiveActivity("adopted");
   fleetActive.current = { startedAt: Math.floor(now() / 1000) };
+  fleetActive.clientEnded = null;
   fleetEndedReported = false;
 }
 
@@ -747,7 +798,7 @@ export function noteFleetActivityStarted(now: () => number = Date.now): void {
  * HTTP handlers and mutate module state that the watcher's tick reads, so a test
  * needs the same box the server passes into `runPushTick` to observe them.
  */
-export function currentFleetActivity(): { current: LiveActivityActive | null } {
+export function currentFleetActivity(): FleetActivityBox {
   return fleetActive;
 }
 
