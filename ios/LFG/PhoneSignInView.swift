@@ -9,48 +9,9 @@ import LFGCore
     var error: String?
     var loading = false
     var canGoBack = false
-    var hasCookies = false
-    var signInReady = false
-    var userConfirmed = false
-    private var requestedHost: String?
-    private var readinessGeneration = 0
-
-    /// Only inspect control metadata; never read input values or page credentials.
-    func refreshReadiness() async {
-        guard let webView, !loading else { signInReady = false; return }
-        let generation = readinessGeneration
-        let pageURL = webView.url
-        let all = await cookies()
-        let exportable = PhoneSignInPolicy.selectedCookies(all, domains: Set(all.map { PhoneSignInPolicy.domain($0.domain) }))
-        let signals = try? await webView.evaluateJavaScript(#"""
-        (() => {
-            const visible = e => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
-            const roots = [document];
-            for (let i = 0; i < roots.length; i++) {
-                for (const e of roots[i].querySelectorAll('*')) { if (e.shadowRoot) roots.push(e.shadowRoot); }
-            }
-            const query = selector => roots.flatMap(root => [...root.querySelectorAll(selector)]);
-            const login = query('input[type="password"],input[type="email"],input[autocomplete="username"],input[autocomplete="one-time-code"]').some(visible);
-            const account = query('button,a,[role="button"],[role="menuitem"]').filter(visible).some(e =>
-                /\b(sign\s*out|log\s*out|logout|account name menu)\b/i.test([e.textContent,e.getAttribute('aria-label'),e.getAttribute('title'), ...Array.from(e.querySelectorAll('img[alt]'), image => image.alt)].filter(Boolean).join(' ')));
-            // An unreadable sign-in iframe must not create a false automatic success.
-            const frames = query('iframe').some(visible);
-            return { login: login || frames || /(?:^|\/)(?:login|signin|sign-in|authorize|challenge)(?:\/|$)/i.test(location.pathname), account };
-        })()
-        """#) as? [String: Bool]
-        guard self.webView === webView, generation == readinessGeneration, pageURL == webView.url, !loading else { return }
-        hasCookies = !exportable.isEmpty
-        signInReady = PhoneSignInPolicy.canFinish(
-            hasCookies: hasCookies, loading: loading,
-            hasLoginFields: signals?["login"] ?? true,
-            hasAccountControls: signals?["account"] ?? false,
-            onRequestedHost: webView.url?.host?.lowercased() == requestedHost,
-            userConfirmed: userConfirmed)
-    }
 
     func start(_ url: URL) {
         destroy()
-        requestedHost = url.host?.lowercased()
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
         let web = WKWebView(frame: .zero, configuration: config)
@@ -63,9 +24,6 @@ import LFGCore
         web.load(URLRequest(url: url))
     }
     func destroy() {
-        readinessGeneration += 1
-        hasCookies = false; signInReady = false; userConfirmed = false
-        requestedHost = nil
         webView?.stopLoading()
         webView?.navigationDelegate = nil
         webView?.uiDelegate = nil
@@ -80,8 +38,6 @@ import LFGCore
         return values.map(PhoneSignInCookie.init(cookie:))
     }
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        readinessGeneration += 1
-        signInReady = false; userConfirmed = false
         loading = true; error = nil
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -120,7 +76,9 @@ private struct PhoneLoginWebView: UIViewRepresentable {
 
 struct PhoneSignInView: View {
     let sessionID: String
-    var agentRequest: PhoneSignInAgentRequest? = nil
+    /// A waiting agent request to fulfil. Only the id is needed: the view fetches the
+    /// request itself, so callers can open the browser straight from a prompt.
+    var agentRequestID: String? = nil
     @Environment(SessionStore.self) private var store
     @Environment(AppSettings.self) private var settings
     @Environment(\.dismiss) private var dismiss
@@ -150,7 +108,7 @@ struct PhoneSignInView: View {
                 if let error { Text(error).font(.callout).foregroundStyle(.red).padding().accessibilityIdentifier("phone_sign_in_error") }
                 switch phase {
                 case .setup:
-                    if agentRequest != nil { ProgressView("Opening sign-in…").frame(maxWidth: .infinity, maxHeight: .infinity) } else { setup }
+                    if agentRequestID != nil { ProgressView("Opening sign-in…").frame(maxWidth: .infinity, maxHeight: .infinity) } else { setup }
                 case .login: login
                 case .review: review
                 case .result: outcome
@@ -160,17 +118,20 @@ struct PhoneSignInView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(phase == .result ? "Close" : "Cancel") { Task { await closeSignIn() } }
+                    Button { Task { await closeSignIn() } } label: { Image(systemName: "xmark") }
                         .disabled(busy)
+                        .accessibilityLabel(phase == .result ? "Close" : "Cancel")
                         .accessibilityIdentifier("phone_sign_in_close")
                 }
-                if phase == .login && (agentRequest == nil || browser.signInReady || busy) {
+                if phase == .login {
+                    // Done is always available for an agent request: it sends whatever
+                    // cookies the browser holds right now and lets the agent judge.
                     ToolbarItem(placement: .confirmationAction) {
-                        Button(agentRequest == nil ? "Review" : (busy ? "Sending…" : "Done")) { Task {
-                            if agentRequest != nil { await completeRequestedSignIn() } else { await reviewCookies() }
+                        Button(agentRequestID == nil ? "Review" : (busy ? "Sending…" : "Done")) { Task {
+                            if agentRequestID != nil { await completeRequestedSignIn() } else { await reviewCookies() }
                         } }
-                            .disabled(browser.loading || busy)
-                            .accessibilityIdentifier(agentRequest == nil ? "phone_sign_in_review" : "phone_sign_in_done")
+                            .disabled(busy)
+                            .accessibilityIdentifier(agentRequestID == nil ? "phone_sign_in_review" : "phone_sign_in_done")
                     }
                 }
             }
@@ -180,16 +141,16 @@ struct PhoneSignInView: View {
                 }
             }
         }
-        .interactiveDismissDisabled(agentRequest != nil || busy)
+        .interactiveDismissDisabled(agentRequestID != nil || busy)
         .accessibilityIdentifier("phone_sign_in_view")
         .task {
             guard let host = store.host(forSession: sessionID), let resolved = settings.client(for: host) else {
                 error = "The session’s host is unavailable."; return
             }
             client = resolved; hostName = resolved.logLabel
-            if let request = agentRequest {
+            if let requestID = agentRequestID {
                 do {
-                    let current = try await resolved.phoneSignInRequestStatus(request.id)
+                    let current = try await resolved.phoneSignInRequestStatus(requestID)
                     guard current.sessionId == sessionID, current.isWaiting else {
                         requestOutcome = current; phase = .result; return
                     }
@@ -197,13 +158,6 @@ struct PhoneSignInView: View {
                     openLogin()
                 } catch { self.error = "This request is unavailable. Ask the agent to request sign-in again."; phase = .result }
             } else { await refreshTargets() }
-        }
-        .task(id: phase == .login) {
-            guard phase == .login, agentRequest != nil else { return }
-            while !Task.isCancelled {
-                if scenePhase == .active && !busy { await browser.refreshReadiness() }
-                do { try await Task.sleep(for: .seconds(1)) } catch { return }
-            }
         }
         .onDisappear { browser.destroy(); cookies = []; domains = [] }
     }
@@ -253,15 +207,6 @@ struct PhoneSignInView: View {
             if browser.loading { ProgressView().accessibilityIdentifier("phone_sign_in_loading") }
             if let message = browser.error { Text(message).font(.callout).padding().accessibilityIdentifier("phone_sign_in_browser_error") }
             if let webView = browser.webView { PhoneLoginWebView(webView: webView) }
-            if agentRequest != nil && !browser.signInReady && !busy {
-                Button("I’m signed in") {
-                    browser.userConfirmed = true
-                    Task { await browser.refreshReadiness() }
-                }
-                .disabled(!browser.hasCookies || browser.loading)
-                .padding(.vertical, 10)
-                .accessibilityIdentifier("phone_sign_in_confirm_login")
-            }
         }
     }
     private var review: some View {
@@ -293,7 +238,7 @@ struct PhoneSignInView: View {
                 .font(.largeTitle)
             Text(requestOutcome?.message ?? result?.message ?? "Delivery could not be confirmed. Check the destination browser.")
                 .multilineTextAlignment(.center).accessibilityIdentifier("phone_sign_in_result")
-            if agentRequest == nil {
+            if agentRequestID == nil {
                 Button("Start another sign-in") { result = nil; error = nil; phase = .setup; Task { await refreshTargets() } }
                     .accessibilityIdentifier("phone_sign_in_restart")
             }
@@ -301,29 +246,27 @@ struct PhoneSignInView: View {
     }
     private func closeSignIn() async {
         guard !busy else { return }
-        if let request = agentRequest, phase != .result, let client {
+        if let requestID = agentRequestID, phase != .result, let client {
             busy = true
-            try? await client.cancelPhoneSignInRequest(request.id)
+            try? await client.cancelPhoneSignInRequest(requestID)
             busy = false
         }
         dismiss()
     }
     private func completeRequestedSignIn() async {
-        guard let request = agentRequest, let client, !busy else { return }
-        await browser.refreshReadiness()
-        guard browser.signInReady, !busy else { return }
+        guard let requestID = agentRequestID, let client, !busy else { return }
         busy = true; error = nil
         let all = await browser.cookies()
         let cookies = PhoneSignInPolicy.selectedCookies(all, domains: Set(all.map { PhoneSignInPolicy.domain($0.domain) }))
         guard !cookies.isEmpty else { busy = false; error = "Finish signing in before pressing Done."; return }
         defer { busy = false }
         do {
-            let completed = try await client.completePhoneSignInRequest(request.id, cookies: cookies)
+            let completed = try await client.completePhoneSignInRequest(requestID, cookies: cookies)
             requestOutcome = completed; result = completed.result
         } catch {
             // A dropped response does not prove the browser missed the cookies.
             // Read metadata once; never repeat the credential-bearing POST.
-            requestOutcome = try? await client.phoneSignInRequestStatus(request.id)
+            requestOutcome = try? await client.phoneSignInRequestStatus(requestID)
             result = requestOutcome?.result
         }
         browser.destroy()
@@ -481,7 +424,7 @@ struct PhoneSignInRequestsSheet: View {
             case .manual:
                 PhoneSignInView(sessionID: sessionID).presentationDetents([.large])
             case .requested(let request):
-                PhoneSignInView(sessionID: sessionID, agentRequest: request).presentationDetents([.large])
+                PhoneSignInView(sessionID: sessionID, agentRequestID: request.id).presentationDetents([.large])
             }
         }
         .task(id: scenePhase) {

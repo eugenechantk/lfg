@@ -8,14 +8,14 @@ struct SessionDetailView: View {
     private enum PresentedSheet: Identifiable {
         case attachments
         case phoneSignIn(requestID: String?)
-        case requestedSignIn(PhoneSignInAgentRequest)
+        case requestedSignIn(requestID: String)
         case childSessions(selectedID: String?)
         case inversionSpike
 
         var id: String {
             switch self {
             case .phoneSignIn(let requestID): "phone-sign-in-\(requestID ?? "all")"
-            case .requestedSignIn(let request): "sign-in-\(request.id)"
+            case .requestedSignIn(let requestID): "sign-in-\(requestID)"
             case .attachments: "attachments"
             case .childSessions(let selectedID): "child-sessions-\(selectedID ?? "all")"
             case .inversionSpike: "inversion-spike"
@@ -300,8 +300,8 @@ struct SessionDetailView: View {
         }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
-            case .requestedSignIn(let request):
-                PhoneSignInView(sessionID: sid, agentRequest: request)
+            case .requestedSignIn(let requestID):
+                PhoneSignInView(sessionID: sid, agentRequestID: requestID)
                     .presentationDetents([.large])
             case .phoneSignIn(let requestID):
                 PhoneSignInRequestsSheet(sessionID: sid, initialRequestID: requestID)
@@ -417,37 +417,54 @@ struct SessionDetailView: View {
         }
     }
 
-    /// Noto-style top scroll treatment: true Liquid Glass over the status and
-    /// navigation region, then a short alpha fade into the sharp transcript.
-    /// Masking the glass removes the divider-like lower edge of a rectangular
-    /// plane while keeping the inverted scroll view's broken automatic edge
-    /// effect disabled.
+    /// Top scroll treatment: the transcript runs under the status and
+    /// navigation region, darkened and blurred most where the status bar is,
+    /// then easing out just past the nav row — not a slab with a fade edge.
+    /// Two layers give the ramp: dimmed Liquid Glass whose mask thins as it
+    /// descends, and a background-coloured scrim that carries most of the
+    /// darkness at the very top. The buttons float in their own glass
+    /// circles and the title sits bare on the ramp, so the bar itself needs
+    /// no plane of its own.
     @available(iOS 26.0, *)
     private func topChromeFade(chromeHeight: CGFloat) -> some View {
-        let fadeHeight: CGFloat = 34
-        let totalHeight = chromeHeight + fadeHeight
-        let solidStop = totalHeight > 0 ? max((chromeHeight - 12) / totalHeight, 0) : 0
+        let navRow: CGFloat = 44          // the row holding back / title / menu
+        let tail: CGFloat = 36            // how far below the nav row the ramp runs out
+        let total = chromeHeight + tail
+        let statusBottom = total > 0 ? max(chromeHeight - navRow, 0) / total : 0
+        let chromeBottom = total > 0 ? chromeHeight / total : 0
+        let base = Color(.systemBackground)
 
-        // Keep the original regular Liquid Glass blur. Its shape is inset
-        // negatively so the specular perimeter is rendered outside this field;
-        // the existing mask still owns the visible fade and clips that rim away.
-        return Rectangle()
-            .fill(.clear)
-            .frame(height: totalHeight)
-            .glassEffect(.chrome(colorScheme), in: Rectangle().inset(by: -48))
-            .mask {
-                LinearGradient(
-                    stops: [
-                        .init(color: .black, location: 0),
-                        .init(color: .black, location: solidStop),
-                        .init(color: .clear, location: 1)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+        let glassMask = LinearGradient(
+            stops: [
+                .init(color: .black, location: 0),
+                .init(color: .black, location: statusBottom),
+                .init(color: .black.opacity(0.3), location: chromeBottom),
+                .init(color: .clear, location: 1)
+            ],
+            startPoint: .top, endPoint: .bottom
+        )
+        let scrim = LinearGradient(
+            stops: [
+                .init(color: base.opacity(0.9), location: 0),
+                .init(color: base.opacity(0.4), location: statusBottom),
+                .init(color: base.opacity(0.08), location: chromeBottom),
+                .init(color: base.opacity(0), location: 1)
+            ],
+            startPoint: .top, endPoint: .bottom
+        )
+
+        // The glass shape is inset negatively so its specular perimeter is
+        // rendered outside this field; the mask clips that rim away.
+        return ZStack {
+            Rectangle()
+                .fill(.clear)
+                .glassEffect(.chrome(colorScheme), in: Rectangle().inset(by: -48))
+                .mask(glassMask)
+            scrim
+        }
+        .frame(height: total)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private var bottomChrome: some View {
@@ -477,7 +494,7 @@ struct SessionDetailView: View {
             // A waiting request the prompt panel is already showing (the server
             // surfaces it as the session's prompt) gets one entry point, not two.
             ForEach(signInRequests.filter { $0.isWaiting && $0.id != prompt?.signIn?.requestId }) { request in
-                Button { presentedSheet = .requestedSignIn(request) } label: {
+                Button { presentedSheet = .requestedSignIn(requestID: request.id) } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "key.fill")
                             .font(.subheadline)
@@ -610,13 +627,10 @@ struct SessionDetailView: View {
 
                     if let prompt {
                         PromptPanelView(sessionID: sid, prompt: prompt, onSignIn: { signIn in
-                            // The polled request list usually has the row already; fall
-                            // back to the requests sheet, which opens the id it is given.
-                            if let request = signInRequests.first(where: { $0.id == signIn.requestId && $0.isWaiting }) {
-                                presentedSheet = .requestedSignIn(request)
-                            } else {
-                                presentedSheet = .phoneSignIn(requestID: signIn.requestId)
-                            }
+                            // Straight to the browser: the login sheet fetches the
+                            // request by id itself, so it never needs the polled list
+                            // (which lags the prompt by up to 3s) or the history sheet.
+                            presentedSheet = .requestedSignIn(requestID: signIn.requestId)
                         }).flippedRow()
                     }
                     // What the model said just before asking. Held out of the

@@ -68,17 +68,3 @@ import Testing
     }
 }
 
-@Test func phoneSignInReadinessNeedsCookiesAndCompletionEvidence() {
-    func ready(cookies: Bool = true, loading: Bool = false, login: Bool = false, account: Bool = false, sameSite: Bool = true, confirmed: Bool = false) -> Bool {
-        PhoneSignInPolicy.canFinish(hasCookies: cookies, loading: loading, hasLoginFields: login, hasAccountControls: account, onRequestedHost: sameSite, userConfirmed: confirmed)
-    }
-    #expect(!ready()) // Pre-login/analytics cookies alone are insufficient.
-    #expect(ready(account: true))
-    #expect(!ready(cookies: false, account: true))
-    #expect(!ready(loading: true, account: true))
-    #expect(!ready(login: true, account: true))
-    #expect(!ready(account: true, sameSite: false))
-    #expect(ready(confirmed: true))
-    #expect(!ready(cookies: false, confirmed: true))
-    #expect(!ready(loading: true, confirmed: true))
-}

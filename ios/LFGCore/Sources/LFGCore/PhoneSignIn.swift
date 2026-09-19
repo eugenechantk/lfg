@@ -49,13 +49,6 @@ public struct PhoneSignInResult: Decodable, Sendable {
     }
 }
 public enum PhoneSignInPolicy {
-    /// Account controls are a conservative hint, not a universal authentication API.
-    /// Explicit user confirmation supports sites whose UI cannot be recognized.
-    public static func canFinish(hasCookies: Bool, loading: Bool, hasLoginFields: Bool,
-                                 hasAccountControls: Bool, onRequestedHost: Bool, userConfirmed: Bool) -> Bool {
-        hasCookies && !loading && (userConfirmed || (onRequestedHost && !hasLoginFields && hasAccountControls))
-    }
-
     public static func loginURL(_ input:String) throws -> URL {
         var text=input.trimmingCharacters(in:.whitespacesAndNewlines)
         guard !text.isEmpty else {throw LFGError.badURL}
