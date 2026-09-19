@@ -2,6 +2,33 @@ import XCTest
 @testable import LFGCore
 
 final class ModelsTests: XCTestCase {
+    /// A phone sign-in request rides the session's `prompt` (server:
+    /// `phoneSignInPrompt`). The `signIn` block is what tells the panel to render
+    /// a sign-in button instead of numbered answers; a prompt without it decodes
+    /// exactly as before.
+    func testAgentPromptDecodesSignInRequest() throws {
+        let json = Data("""
+        {"sessions":[{"sessionId":"s1","title":"Job","prompt":{
+          "source":"phone-sign-in","question":"Sign in to portal.example.com on your iPhone","header":"Sign in","options":[],
+          "signIn":{"requestId":"11111111-1111-4111-8111-111111111111","url":"https://portal.example.com/login","website":"portal.example.com","targetName":"Chrome — personal","expiresAt":1789553110807}
+        }}]}
+        """.utf8)
+        let prompt = try XCTUnwrap(JSONDecoder().decode(SessionsResponse.self, from: json).sessions[0].prompt)
+        XCTAssertEqual(prompt.question, "Sign in to portal.example.com on your iPhone")
+        XCTAssertEqual(prompt.header, "Sign in")
+        XCTAssertEqual(prompt.options, [])
+        XCTAssertEqual(prompt.signIn, PromptSignIn(
+            requestId: "11111111-1111-4111-8111-111111111111", url: "https://portal.example.com/login",
+            website: "portal.example.com", targetName: "Chrome — personal"))
+        // The ladder does not care which kind of prompt it is.
+        XCTAssertEqual(SessionDisplayState.resolve(promptPresent: true, blocked: false, busy: true), .needsInput)
+
+        let plain = Data("""
+        {"sessions":[{"sessionId":"s1","prompt":{"question":"Which file?","options":[{"index":1,"label":"a.ts"}]}}]}
+        """.utf8)
+        XCTAssertNil(try JSONDecoder().decode(SessionsResponse.self, from: plain).sessions[0].prompt?.signIn)
+    }
+
 
     func testDecodeSessionsResponseLeniently() throws {
         // Mirrors the real /api/sessions payload (extra fields, some null).

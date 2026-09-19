@@ -223,8 +223,10 @@ export function startSupervisedLoop(opts: {
 }
 
 export type PumpDeps = {
-  /** serve.ts's resolveSessionPrompt — structured transcript prompt, else pane scrape. */
-  resolvePrompt: (tp: string | null, pane: string | null) => Promise<unknown>;
+  /** serve.ts's resolveSessionPrompt — structured transcript prompt, else pane
+   *  scrape, else a waiting phone sign-in request for `sid` (see
+   *  `phoneSignInPrompt`). */
+  resolvePrompt: (tp: string | null, pane: string | null, sid: string) => Promise<unknown>;
   browserFrames?: BrowserFrameStore;
 };
 
@@ -254,10 +256,13 @@ export function noteTurnEdge(w: { stitcher: PaneStitcher; wasBusy: boolean }, bu
  */
 export function withStitchedPreamble<T>(prompt: T, w: { stitcher: PaneStitcher }): T {
   if (!prompt || typeof prompt !== "object") return prompt;
-  const p = prompt as { question?: unknown; context?: unknown };
+  const p = prompt as { question?: unknown; context?: unknown; source?: unknown };
   // Only pane-scraped prompts carry `context`; a structured transcript prompt
-  // has its own fields and must not be touched.
-  if (!("question" in p)) return prompt;
+  // has its own fields and must not be touched. A phone sign-in prompt is not on
+  // the pane at all: stitching the (busy, scrolling) pane onto it attached the
+  // agent's own command output as "context" and re-journaled the prompt every
+  // tick as that text changed.
+  if (!("question" in p) || p.source === "phone-sign-in") return prompt;
   const stitched = w.stitcher.preamble();
   if (!stitched) return prompt;
   const current = typeof p.context === "string" ? p.context : "";
@@ -493,7 +498,7 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       // by the time the selector renders the top of the turn is gone — but it
       // WAS on screen a few captures ago. See `pane-history.ts`.
       w.stitcher.consume(styled);
-      const prompt = withStitchedPreamble(await deps.resolvePrompt(w.tp, pane), w);
+      const prompt = withStitchedPreamble(await deps.resolvePrompt(w.tp, pane, w.sid), w);
       if (deltas.promptChanged(w.sid, prompt))
         j.append(w.sid, "prompt", { sid: w.sid, prompt });
       const paneBusy = pane ? isBusy(pane) : false;

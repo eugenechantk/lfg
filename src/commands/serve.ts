@@ -1,4 +1,5 @@
 import { BrowserSignInHub, signInHTTP, allowsSignInAdapter } from "../browser-sign-in.ts";
+import { phoneSignInPrompt, type SignInPrompt } from "../phone-sign-in-requests.ts";
 import { readdir, realpath, stat } from "node:fs/promises";
 import { statSync, mkdirSync, type Dirent, existsSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
@@ -1014,16 +1015,24 @@ async function voiceStatusSnapshot(): Promise<string> {
 async function resolveSessionPrompt(
   tp: string | null,
   pane: string | null,
-): Promise<PanePrompt | PendingPrompt | null> {
+  // A waiting phone sign-in request for this session, already looked up by the
+  // caller (`phoneSignInPrompt`). It is the LAST resort on purpose: if the
+  // agent's waiting `browser-sign-in request` call is itself sitting on a
+  // permission dialog, that dialog is what needs answering first.
+  signIn: SignInPrompt | null = null,
+): Promise<PanePrompt | PendingPrompt | SignInPrompt | null> {
   if (tp) {
     const pending = await pendingToolPrompt(tp);
     if (pending) return pending;
   }
-  if (!pane) return null;
-  // Pass the last user turn so the pane scraper can tell a scrolled-off assistant
-  // preamble apart from the user's own scrolled-off prompt when surfacing context.
-  const lastUser = tp ? await lastUserPromptText(tp).catch(() => null) : null;
-  return parsePrompt(pane, lastUser ?? undefined);
+  if (pane) {
+    // Pass the last user turn so the pane scraper can tell a scrolled-off assistant
+    // preamble apart from the user's own scrolled-off prompt when surfacing context.
+    const lastUser = tp ? await lastUserPromptText(tp).catch(() => null) : null;
+    const scraped = parsePrompt(pane, lastUser ?? undefined);
+    if (scraped) return scraped;
+  }
+  return signIn;
 }
 
 function sseHeaders(): Record<string, string> {
@@ -1096,8 +1105,13 @@ export async function cmdServe() {
   const browserSignIn = new BrowserSignInHub(undefined, {historyPath: join(homedir(), ".lfg", "phone-sign-in-history.json")});
   setSendqJournal(journal);
   setSendqStore(SendqStore.open(journalPath));
+  // A waiting phone sign-in request is a question to the user, so it rides the
+  // same `prompt` primitive as AskUserQuestion: journal delta, REST snapshot,
+  // push watcher, Live Activity row, and the client's needs-input grouping all
+  // follow from this one lookup.
+  const signInPrompt = (sid: string) => phoneSignInPrompt(browserSignIn.requests, sid);
   startJournalPump(journal, {
-    resolvePrompt: (tp, pane) => resolveSessionPrompt(tp, pane),
+    resolvePrompt: (tp, pane, sid) => resolveSessionPrompt(tp, pane, signInPrompt(sid)),
     browserFrames,
   });
   startLeaseHeartbeat();
@@ -1110,6 +1124,7 @@ export async function cmdServe() {
       head: () => journal.head(),
       hostId: () => hostInfo().hostId,
       hostName: () => hostInfo().hostName,
+      signInPrompt,
     });
   };
 
@@ -2599,6 +2614,13 @@ export async function cmdServe() {
           if (!sess) return err(404, "session not found");
           if (!sess.tmuxTarget)
             return err(409, "session is not in a tmux pane — cannot dismiss");
+          // A phone sign-in prompt is not a selector on the pane: Escape there
+          // would interrupt the agent's waiting `browser-sign-in request` call.
+          // Guarded here, at the one choke point, so a client that predates the
+          // sign-in panel (and still offers Dismiss on any prompt) cannot do it.
+          const latest = journal.latestPrompt(m[1]!) as { source?: unknown } | null;
+          if (latest?.source === "phone-sign-in")
+            return err(409, "this prompt is a phone sign-in request — cancel it from the sign-in sheet");
           // Skip the question without answering: Escape cancels the selector.
           const r = await dismissPrompt(sess.tmuxTarget);
           if (!r.ok) return err(502, r.error || "dismiss failed");

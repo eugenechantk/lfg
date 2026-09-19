@@ -74,11 +74,14 @@ const DEDUPE_MS = 10_000;
  * is. Emits at most one event per call.
  *
  * Rules:
- *  - The agent going from busy → idle is a "your turn" moment. If a prompt is
- *    pending it's needs-input; otherwise the turn just finished.
- *  - A prompt newly appearing while already idle (it can land a tick after busy
- *    flips) is needs-input.
- *  - Dedupe: never emit within DEDUPE_MS of the last emit for this session.
+ *  - A prompt newly appearing is needs-input, whether or not the session is
+ *    busy — a parked question keeps the turn in flight, so waiting for idle
+ *    would wait for the answer (or the 15-minute stall demotion).
+ *  - The agent going from busy → idle with nothing pending is "finished". With
+ *    a prompt still pending it announces nothing: that prompt fired when it
+ *    appeared.
+ *  - Dedupe: never emit within DEDUPE_MS of the last emit for this session. A
+ *    needs-input the window swallows is retried on a later tick, not dropped.
  *  - Seeding (first observation of a session) is the caller's job — it records
  *    state without calling this, so a session already idle/prompting at startup
  *    doesn't fire.
@@ -95,21 +98,38 @@ export function reduceTransition(
     lastNotifiedAt: prev.lastNotifiedAt,
   };
 
-  // Still (or again) working — nothing to announce yet.
-  if (next.busy) return { event: null, state: carry };
-
   const stoppedThisTick = prev.busy && !next.busy;
   const promptJustAppeared = !prev.promptPresent && next.promptPresent;
 
   let candidate: PushKind | null = null;
-  if (stoppedThisTick) {
-    candidate = next.promptPresent ? "needs-input" : "finished";
-  } else if (promptJustAppeared) {
+  if (promptJustAppeared) {
+    // A question is the needs-input moment, and it is NOT gated on idle. With
+    // hooks installed a session parked on AskUserQuestion is `busy` the whole
+    // time it waits (the turn is in flight; `Stop` has not fired), and journal
+    // evidence showed every recent question answered before busy ever dropped —
+    // so the old busy-first guard meant no needs-input push fired for any of
+    // them. A phone sign-in request is the same shape: the agent is blocked in
+    // its waiting command, mid-turn, asking the user for something.
     candidate = "needs-input";
+  } else if (next.busy) {
+    // Still (or again) working — nothing to announce yet.
+    return { event: null, state: carry };
+  } else if (stoppedThisTick && !next.promptPresent) {
+    // A prompt still present here was announced when it appeared; only a clean
+    // stop with nothing pending is "finished".
+    candidate = "finished";
   }
 
   if (candidate && now - prev.lastNotifiedAt >= dedupeMs) {
     return { event: candidate, state: { ...carry, lastNotifiedAt: now } };
+  }
+  if (candidate === "needs-input") {
+    // Swallowed by the dedupe window. Recording the prompt as seen here would
+    // bury it for good: it can never "appear" again, and the later busy→idle
+    // deliberately stays silent. Leave it unrecorded so the next tick sees it
+    // appear afresh and retries once the window has passed — a question is the
+    // one state that needs a human, so it is worth a late push, never a lost one.
+    return { event: null, state: { ...carry, promptPresent: false } };
   }
   return { event: null, state: carry };
 }
@@ -410,21 +430,28 @@ export function buildPayload(
 
 // ---- wiring (the impure parts) ----
 
+/** A waiting phone sign-in request for a session, as a prompt (`phoneSignInPrompt`). */
+export type SignInPromptLookup = (sid: string) => { question: string } | null;
+
 // Observe a single session's live state via the same primitives the SSE loop
 // uses. Pane-less sessions never surface pane-scraped prompts (matching the
-// live stream's behavior).
-async function observeSession(s: {
-  sessionId?: string | null;
-  tmuxTarget?: string | null;
-}): Promise<SessionState> {
+// live stream's behavior), but a phone sign-in request is not pane state and
+// counts either way.
+async function observeSession(
+  s: { sessionId?: string | null; tmuxTarget?: string | null },
+  signInPrompt?: SignInPromptLookup,
+): Promise<SessionState> {
   const delegated = s.sessionId ? codexDelegationSessionIds().has(s.sessionId) : false;
+  const signIn = s.sessionId ? (signInPrompt?.(s.sessionId) ?? null) : null;
   if (!s.tmuxTarget) {
-    return { busy: delegated, promptPresent: false };
+    return { busy: delegated, promptPresent: !!signIn, promptQuestion: signIn?.question ?? null };
   }
   const pane = await capturePaneAsync(s.tmuxTarget);
   const tp = s.sessionId ? await resolveTranscript(s.sessionId) : null;
-  let prompt: PendingPrompt | PanePrompt | null = tp ? await pendingToolPrompt(tp) : null;
+  let prompt: PendingPrompt | PanePrompt | { question: string } | null = tp ? await pendingToolPrompt(tp) : null;
   if (!prompt && pane) prompt = parsePrompt(pane);
+  // Same precedence as serve.ts's resolveSessionPrompt: a real dialog first.
+  if (!prompt) prompt = signIn;
   // The SAME derivation the journal pump runs (`journal-pump.ts`), through the
   // same two functions — not a second implementation of the same idea. This used
   // to call `transcriptTurnState` directly, which skipped the hook layer and the
@@ -727,7 +754,9 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
-type StartPushWatcherDeps = Pick<Partial<TickDeps>, "head" | "hostId" | "hostName">;
+type StartPushWatcherDeps = Pick<Partial<TickDeps>, "head" | "hostId" | "hostName"> & {
+  signInPrompt?: SignInPromptLookup;
+};
 
 /**
  * The live fleet activity, at module scope rather than inside `startPushWatcher`,
@@ -860,7 +889,7 @@ export function startPushWatcher(
     });
   const deps: TickDeps = {
     sessions: listSessions,
-    observe: observeSession,
+    observe: (s) => observeSession(s, injected.signInPrompt),
     devices: listDevices,
     cfg,
     send: sendApns,

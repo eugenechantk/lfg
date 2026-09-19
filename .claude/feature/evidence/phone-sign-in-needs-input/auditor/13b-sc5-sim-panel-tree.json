@@ -1,0 +1,99 @@
+[
+ {
+  "id": null,
+  "label": "Bash: {\n  \"command\": \"cd /Users/eugenechan/dev/personal/lfg && python3 - <<'PY'\\np='.claude/feature/phone-sign-in-needs-input.md'; s=open(p).read()\\ns=s.replace(\\\"- [ ] SC1:\\\",\\\"- [x] SC1:\\\").replace(\\\"- [ ] SC2:\\\",\\\"- [x] SC2:\\\").replace(\\\"- [ ] SC3:\\\",\\\"- [x] SC3:\\\").replace(\\\"- [ ] SC4:\\\",\\\"- [x] SC4:\\\").replace(\\\"- [ ] SC5:\\\",\\\"- [x] SC5:\\\").replace(\\\"- [ ] SC6:\\\",\\\"- [x] SC6:\\\")\\ns=s.replace(\\\"\\\"\\\"## Verification Evidence\\n\\n_Filled in during Step 6. One row per criterion: the command/action run, the observed result, and the artifact path (test output, screenshot, auditor report)._\\\"\\\"\\\",\\n\\\"\\\"\\\"## Verification Evidence\\n\\nDeployed to the Pro host 2026-09-16 21:32 local (pid 7055), redeployed 21:34 (pid 10084) after the stitcher fix below. Live probes target this session (c3fb2542) with `https://example.com/login` and the connected `Chrome \u2014 personal` target; every request was cancelled afterwards.\\n\\n| SC | Command / action | Observed | Artifact |\\n| --- | --- | --- | --- |\\n| SC1 | `bun test src/phone-sign-in-requests.test.ts` (new `phoneSignInPrompt` test: waiting \u2192 prompt; cancelled/expired/delivering/other session \u2192 null; no cookie material in the prompt) | 8 pass, 0 fail | test file |\\n| SC1 | `resolveSessionPrompt` order: transcript prompt \u2192 pane prompt \u2192 sign-in fallback (`src/commands/serve.ts`); watcher `observeSession` mirrors it | code + tsc 0 errors | `src/commands/serve.ts`, `src/push/watcher.ts` |\\n| SC2 | `bun src/cli.ts browser-sign-in request --session c3fb2542\u2026 --target <chrome> --url https://example.com/login --no-wait`, then `GET /api/sessions` | `prompt: {\\\"source\\\":\\\"phone-sign-in\\\",\\\"question\\\":\\\"Sign in to example.com on your iPhone\\\",\\\"header\\\":\\\"Sign in\\\",\\\"options\\\":[],\\\"signIn\\\":{requestId,url,website,targetName,expiresAt}}` \u2014 no `context` key after the stitcher fix | probe output in transcript |\\n| SC2 | `GET /api/session-states` | `{\\\"needsInputSessionIds\\\":[\\\"c3fb2542-\u2026\\\"]}` | probe output |\\n| SC2 | `sqlite3 ~/.lfg/journal.db` prompt rows for the session after the request | exactly 1 `prompt` row (seq 1025673) for the second request; the first request had produced 3 rows in 4s because the pane stitcher kept changing `context` \u2014 fixed, see Bugs | journal |\\n| SC2 | iOS list (sim, iPhone 17 Pro, host 127.0.0.1:8766) | session grouped under **Needs you** with the orange dot; header `Needs you, 1` in the accessibility tree | `evidence/phone-sign-in-needs-input/01-detail-sign-in-panel.jpg` (list state in transcript tree dump) |\\n| SC3 | `bun test src/push/watcher.test.ts` \u2014 new `reduceTransition \u2014 prompt while busy` (5 tests) + `runPushTick \u2014 phone sign-in request` | 73 pass in file; sign-in prompt appearing while busy \u2192 one `needs-input` push whose body is the question; retraction emits nothing | test file |\\n| SC3 | Live: `/private/tmp/lfg-serve.log` after `[push] watcher started` | one alert fan-out per request (visible as the 4 `DeviceTokenNotForTopic` failures among 99 registered tokens; successes are not logged) | server log |\\n| SC3 | Live: `~/.lfg/liveactivity.log` | `decide \u2026 \\\"rows\\\":[\\\"c3fb2542:needsInput\\\", \u2026]` at 13:34:23Z (request 1) and 13:36:16Z (request 2) \u2014 the card shows the session as needs-input while the agent is busy | log |\\n| SC4 | `bun src/cli.ts browser-sign-in cancel <id>` then `GET /api/sessions`, journal, `/api/session-states` | prompt `null`, one `prompt: null` journal row, `needsInputSessionIds: []` | probe output |\\n| SC4 | iOS: Cancel in the sign-in sheet | request `cancelled`, prompt panel gone from the tree, `/api/session-states` empty | `03-after-cancel-panel-gone.jpg` |\\n| SC5 | `swift test --package-path ios/LFGCore --filter ModelsTests` | 15 pass incl. `testAgentPromptDecodesSignInRequest` (signIn decoded; plain prompt has nil signIn) | test file |\\n| SC5 | Simulator: open the session while the request waits | panel shows \\\"Needs your input \u00b7 SIGN IN\\\", the question, \\\"The login is sent to Chrome \u2014 personal on your Mac. The agent is waiting.\\\", one **Sign in to example.com** button (`prompt_sign_in_<id>`), no numbered options, no Dismiss; the composer's duplicate \\\"Sign in to example.com\\\" row is hidden | `01-detail-sign-in-panel.jpg` |\\n| SC5 | Tap the button | \\\"Sign in on Phone\\\" sheet opens on example.com with \\\"I'm signed in\\\" | `02-sign-in-sheet-opened-from-panel.jpg` |\\n| SC5 (old client) | `POST /api/sessions/c3fb2542\u2026/dismiss` while the sign-in prompt is live | `409 {\\\"error\\\":\\\"this prompt is a phone sign-in request \u2014 cancel it from the sign-in sheet\\\"}` \u2014 a shipped TestFlight build that still offers Dismiss cannot send Escape into the waiting command | probe output |\\n| SC6 | `NODE_ENV=test bun test src/push src/journal-pump.test.ts src/journal.test.ts src/session-state.test.ts src/session-state-parity.test.ts src/phone-sign-in-requests.test.ts src/browser-sign-in.test.ts src/browser-sign-in.integration.test.ts src/sessions-status.test.ts src/sessions-queue-operation.test.ts src/tmux-prompt.test.ts src/sendq.test.ts src/hook-state.test.ts` | 255 pass, 0 fail, 18 files | scratchpad `bun-test-subset.log` |\\n| SC6 | `bunx tsc --noEmit -p .` | 0 errors | \u2014 |\\n| SC6 | `swift test --package-path ios/LFGCore --filter \\\"ModelsTests|SessionDisplayStateTests|PromptPreambleTests|PhoneSignInTests\\\"` | all pass | \u2014 |\\n| SC6 | `flowdeck build` / `flowdeck run` (iPhone 17 Pro) | BUILD succeeded 13:36:03Z; app launched | `scratchpad/flowdeck-build.log` |\\n| Audit | `verification-auditor` | _pending \u2014 appended below when it reports_ | `evidence/phone-sign-in-needs-input/auditor/` |\\\"\\\"\\\")\\ns=s.replace(\\\"\\\"\\\"## Bugs\\n\\n_None yet._\\\"\\\"\\\",\\n\\\"\\\"\\\"## Bugs\\n\\n- **Fixed \u2014 pane preamble stitched onto the sign-in prompt.** `withStitchedPreamble` (`src/journal-pump.ts`) treated any prompt with a `question` as pane-scraped and attached the reconstructed pane as `context`; for a busy session that text changes every tick, so the first live request journaled three prompt events in four seconds and the REST prompt carried the agent's own command output. Guard now skips `source: \\\"phone-sign-in\\\"`. Verified: second request produced exactly one journal row and no `context` key.\\n- **Found, pre-existing, not fixed here \u2014 needs-input pushes never fired for AskUserQuestion.** With hooks installed a parked question keeps `busy` true, and the reducer returned early on busy; journal evidence (10 most recent transcript prompts) shows each was answered before busy ever dropped. The reducer change in this feature fixes it as a side effect. Logged in the decision log.\\n- **Found, pre-existing, not fixed \u2014 push tick fan-out.** One alert push loops sequentially over 99 registered device tokens; the tick that observed request 2 finished ~70s later. Logged in the improvement log.\\\"\\\"\\\")\\ns=s.replace(\\\"\\\"\\\"- **Deploy requires a server restart**\\\"\\\"\\\",\\n\\\"\\\"\\\"- **`dismiss` refuses a sign-in prompt at the server.** The shipped TestFlight build (1.3.0) renders any prompt with the old panel, whose Dismiss sends Escape to the pane; on a sign-in prompt that would interrupt the agent's waiting command. Rather than wait for a new client build, the one choke point (`POST /api/sessions/:id/dismiss`) returns 409 when the session's latest journaled prompt is `phone-sign-in`.\\n- **The panel's button prefers the polled request row, else the requests sheet.** `SessionDetailView` polls the request list every 3s; the prompt panel arrives via the journal sooner. When the row is present the button opens the sign-in view directly; otherwise it opens the requests sheet with that id, which auto-opens the request (one extra Done tap after cancelling \u2014 existing behaviour of that sheet).\\n- **Deploy requires a server restart**\\\"\\\"\\\")\\nopen(p,'w').write(s); print(\\\"feature doc updated\\\")\\nPY\",\n  \"description\": \"Fill in the feature doc evidence, bugs, and decisions\"\n}",
+  "role": "Button",
+  "frame": {
+   "height": 58,
+   "width": 370,
+   "x": 15,
+   "y": -642
+  },
+  "visible": true
+ },
+ {
+  "id": null,
+  "label": "Bash: {\n  \"command\": \"grep -n \\\"Tell Eugene that the session now has\\\" integrations/phone-sign-in/SKILL.md && python3 - <<'PY'\\np='integrations/phone-sign-in/SKILL.md'; s=open(p).read()\\nold=\\\"Tell Eugene that the session now has a **Sign in to <website>** button, and keep the command alive\\\"\\nnew=\\\"While the request is `waiting` the session itself reads **needs input** in every LFG client, a push notification goes to the phone (the same one an AskUserQuestion sends), and the session shows a **Sign in to <website>** panel \u2014 so a one-line note that you are waiting on the phone sign-in is enough; do not ask Eugene to open anything. Keep the command alive\\\"\\nassert s.count(old)==1; open(p,'w').write(s.replace(old,new)); print(\\\"skill source updated\\\")\\nPY\\nbun scripts/install-phone-sign-in-skill.ts && grep -c \\\"needs input\\\" ~/.claude/skills/request-phone-sign-in/SKILL.md\",\n  \"description\": \"Update the phone sign-in skill text and reinstall it\"\n}",
+  "role": "Button",
+  "frame": {
+   "height": 58,
+   "width": 370,
+   "x": 15,
+   "y": -512
+  },
+  "visible": true
+ },
+ {
+  "id": null,
+  "label": "33:Use the actual login URL for the blocked task. Avoid credentials in URLs. The command prints the request ID and waits up to 16 minutes. Tell Eugene that the session now has a **Sign in to <website>** button, and keep the command alive using your tool's background-session/polling support. A yield or tool timeout does not mean the user declined. If the command is interrupted, reconnect with:\nskill source updated\nInstalled request-phone-sign-in for Claude and Codex.\n1",
+  "role": "Button",
+  "frame": {
+   "height": 58,
+   "width": 370,
+   "x": 15,
+   "y": -444
+  },
+  "visible": true
+ },
+ {
+  "id": null,
+  "label": "Bash: {\n  \"command\": \"python3 - <<'PY'\\np='.claude/CLAUDE.md'; s=open(p).read()\\nanchor=\\\"- **One sessionId can have two live processes\\\"\\nnew=\\\"\\\"\\\"- **A phone sign-in request IS a session prompt, and a prompt is announced the moment it appears \u2014 busy or not.** `phoneSignInPrompt` (`phone-sign-in-requests.ts`) turns a `waiting` request into the session's `prompt` (`source: \\\"phone-sign-in\\\"`, `options: []`, a `signIn` block), so needs-input grouping, the REST snapshot, the Live Activity row and the push all follow from the one primitive instead of a parallel field; `resolveSessionPrompt` and the watcher's `observeSession` both put a real transcript/pane prompt first. Two traps: (1) the push reducer used to return early while `busy`, but with hooks installed a session parked on AskUserQuestion is busy until answered \u2014 journal evidence showed every recent question answered before busy ever dropped, so no needs-input push had been firing; `reduceTransition` now emits on prompt-appearance and stays silent on the later busy\u2192idle. (2) `withStitchedPreamble` must skip the sign-in prompt, and `POST /dismiss` refuses it (409) \u2014 Escape into the agent's waiting `browser-sign-in request` call would interrupt the turn. Restarting the server expires every `waiting` request on the host (the Chrome target reconnects with a new id); check `~/.lfg/phone-sign-in-history.json` for `waiting` rows before a restart. See `.claude/feature/phone-sign-in-needs-input.md`.\\n\\\"\\\"\\\"\\nassert s.count(anchor)==1; open(p,'w').write(s.replace(anchor,new+anchor)); print(\\\"CLAUDE.md updated\\\")\\nPY\\ngit status --short; git diff --stat | tail -3\",\n  \"description\": \"Add the hazard note to the project CLAUDE.md and list the changed files\"\n}",
+  "role": "Button",
+  "frame": {
+   "height": 58,
+   "width": 370,
+   "x": 16,
+   "y": -351
+  },
+  "visible": true
+ },
+ {
+  "id": null,
+  "label": "Needs your input",
+  "role": "StaticText",
+  "frame": {
+   "height": 15,
+   "width": 117,
+   "x": 31,
+   "y": 497
+  },
+  "visible": true
+ },
+ {
+  "id": null,
+  "label": "Sign in to example.com on your iPhone",
+  "role": "StaticText",
+  "frame": {
+   "height": 18,
+   "width": 275,
+   "x": 30,
+   "y": 523
+  },
+  "visible": true
+ },
+ {
+  "id": null,
+  "label": "The login is sent to Chrome \u2014 personal on your Mac. The agent is waiting.",
+  "role": "StaticText",
+  "frame": {
+   "height": 30,
+   "width": 326,
+   "x": 30,
+   "y": 551
+  },
+  "visible": true
+ },
+ {
+  "id": "prompt_sign_in_e0749198-4338-4af1-aa06-b5ac5ace7d4f",
+  "label": "Sign in to example.com",
+  "role": "Button",
+  "frame": {
+   "height": 42,
+   "width": 342,
+   "x": 30,
+   "y": 591
+  },
+  "visible": true
+ }
+]
+total elements 30

@@ -114,3 +114,40 @@ export class PhoneSignInRequests {
     return {...r};
   }
 }
+
+/**
+ * The sign-in request as a session prompt.
+ *
+ * A waiting request is the agent asking the user something — "sign in to this
+ * site on your phone" — and every consumer of "needs input" already keys off the
+ * session's `prompt`: the journal delta, the REST snapshot, the push watcher, the
+ * Live Activity row, and the client's display ladder. Shape-compatible with
+ * `PanePrompt` / `PendingPrompt` (question + options), with `options` empty and
+ * a `signIn` block the client uses to render a sign-in button instead of numbered
+ * answers. `source` lets a consumer tell it apart; a client that ignores `signIn`
+ * still shows the question and grades the session needs-input.
+ *
+ * Newest waiting request wins when a session somehow has more than one. Anything
+ * not `waiting` — delivering, done, cancelled, expired, offline — is not a
+ * question any more, so it returns null and the prompt retracts on the next tick.
+ */
+export type SignInPrompt = {
+  source: "phone-sign-in";
+  question: string;
+  header: string;
+  options: never[];
+  signIn: { requestId: string; url: string; website: string; targetName: string; expiresAt: number };
+};
+export function phoneSignInPrompt(requests: Pick<PhoneSignInRequests, "list">, sessionId: string | null | undefined): SignInPrompt | null {
+  if (!sessionId || !uuid.test(sessionId)) return null;
+  const r = requests.list(sessionId).find(x => x.state === "waiting"); // list() is newest-first
+  if (!r) return null;
+  const website = loginURL(r.url).host;
+  return {
+    source: "phone-sign-in",
+    question: `Sign in to ${website} on your iPhone`,
+    header: "Sign in",
+    options: [],
+    signIn: { requestId: r.id, url: r.url, website, targetName: r.target.name, expiresAt: r.expiresAt },
+  };
+}

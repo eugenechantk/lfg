@@ -87,3 +87,21 @@ test('restart during delivery preserves unconfirmed history and does not resend'
   finish({state:'unknown',installed:0,total:2});await delivery;
  } finally {rmSync(dir,{recursive:true,force:true});}
 });
+
+test('phoneSignInPrompt surfaces only a waiting request as a needs-input prompt, newest first',()=>{
+ const {phoneSignInPrompt}=require('./phone-sign-in-requests.ts');
+ let now=1000;
+ const h=new PhoneSignInRequests({targets:()=>[target],transfer:async()=>({state:'installed',installed:1,total:1})},()=>now,100);
+ expect(phoneSignInPrompt(h,sid)).toBeNull();
+ expect(phoneSignInPrompt(h,'not-a-uuid')).toBeNull();
+ const r=h.create(create);
+ const p=phoneSignInPrompt(h,sid);
+ expect(p).toMatchObject({source:'phone-sign-in',question:'Sign in to portal.example.com on your iPhone',header:'Sign in',options:[],
+  signIn:{requestId:r.id,url:create.url,website:'portal.example.com',targetName:target.name,expiresAt:r.expiresAt}});
+ expect(JSON.stringify(p)).not.toContain('cookie');
+ expect(phoneSignInPrompt(h,'22222222-2222-4222-8222-222222222222')).toBeNull();
+ h.cancel(r.id);expect(phoneSignInPrompt(h,sid)).toBeNull();
+ const b=h.create(create);now=1101;expect(h.get(b.id)?.state).toBe('expired');expect(phoneSignInPrompt(h,sid)).toBeNull();
+ now=1200;const c=h.create(create);const done=h.complete(c.id,cookies);expect(phoneSignInPrompt(h,sid)).toBeNull();
+ return done;
+});

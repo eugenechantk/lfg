@@ -1,0 +1,22 @@
+rows for sid: 1
+{
+ "busy": true,
+ "promptStatedAt": null,
+ "prompt": {
+  "source": "phone-sign-in",
+  "question": "Sign in to example.com on your iPhone",
+  "header": "Sign in",
+  "options": [],
+  "signIn": {
+   "requestId": "e0749198-4338-4af1-aa06-b5ac5ace7d4f",
+   "url": "https://example.com/login",
+   "website": "example.com",
+   "targetName": "Chrome \u2014 personal",
+   "expiresAt": 1789567509779
+  }
+ }
+}
+keys: ['header', 'options', 'question', 'signIn', 'source']
+has context key: False
+signIn keys: ['expiresAt', 'requestId', 'targetName', 'url', 'website']
+options: []

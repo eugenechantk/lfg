@@ -238,6 +238,13 @@ public struct AgentPrompt: Codable, Sendable, Hashable {
     /// this is the only context the user has while the question is live. Nil when
     /// the agent asked with no preamble. Rendered above the question in the panel.
     public var context: String?
+    /// Set when this prompt is a phone sign-in request the agent made
+    /// (`phoneSignInPrompt`, src/phone-sign-in-requests.ts) rather than a
+    /// selector on the pane. The session still grades needs-input through the
+    /// same ladder; the panel renders a sign-in button instead of numbered
+    /// answers, and must NOT offer Dismiss — Escape would interrupt the agent's
+    /// waiting command. Nil for every other prompt.
+    public var signIn: PromptSignIn?
 
     public init(
         question: String,
@@ -245,10 +252,24 @@ public struct AgentPrompt: Codable, Sendable, Hashable {
         detail: String? = nil,
         header: String? = nil,
         multiSelect: Bool? = nil,
-        context: String? = nil
+        context: String? = nil,
+        signIn: PromptSignIn? = nil
     ) {
         self.question = question; self.options = options; self.detail = detail
         self.header = header; self.multiSelect = multiSelect; self.context = context
+        self.signIn = signIn
+    }
+}
+
+/// The request behind a sign-in prompt. Metadata only — never cookies.
+public struct PromptSignIn: Codable, Sendable, Hashable {
+    public var requestId: String
+    public var url: String
+    public var website: String
+    public var targetName: String?
+
+    public init(requestId: String, url: String, website: String, targetName: String? = nil) {
+        self.requestId = requestId; self.url = url; self.website = website; self.targetName = targetName
     }
 }
 

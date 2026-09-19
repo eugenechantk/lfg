@@ -1074,3 +1074,80 @@ describe("duplicate sessionId in one tick (phantom-notification storm)", () => {
     expect(content.working).toBe(0);
   });
 });
+
+// A question that appears while the session is still busy — AskUserQuestion with
+// hooks installed (the turn stays in flight until answered) and a phone sign-in
+// request (the agent is blocked in its waiting command). Journal evidence: every
+// recent question was answered before `busy` dropped, so gating on idle meant no
+// needs-input push at all.
+describe("reduceTransition — prompt while busy", () => {
+  test("a prompt appearing while busy emits 'needs-input' at once", () => {
+    const r = reduceTransition(seed(true, false), obs(true, true, "Sign in to portal.example.com on your iPhone"), 1000);
+    expect(r.event).toBe("needs-input");
+    expect(r.state).toEqual({ busy: true, promptPresent: true, lastNotifiedAt: 1000 });
+  });
+
+  test("busy → idle with a prompt that was already announced stays silent", () => {
+    const a = reduceTransition(seed(true, false), obs(true, true, "Q?"), 1000);
+    expect(a.event).toBe("needs-input");
+    const b = reduceTransition(a.state, obs(false, true, "Q?"), 60_000);
+    expect(b.event).toBeNull();
+  });
+
+  test("a prompt still present while busy does not re-fire on later ticks", () => {
+    const a = reduceTransition(seed(true, false), obs(true, true, "Q?"), 1000);
+    const b = reduceTransition(a.state, obs(true, true, "Q?"), 60_000);
+    expect(b.event).toBeNull();
+  });
+
+  test("the prompt retracting while busy (sign-in done / cancelled) emits nothing", () => {
+    const a = reduceTransition(seed(true, false), obs(true, true, "Q?"), 1000);
+    const b = reduceTransition(a.state, obs(true, false), 60_000);
+    expect(b.event).toBeNull();
+    expect(b.state.promptPresent).toBe(false);
+  });
+
+  test("busy prompt push is deduped against a push moments earlier, then retried", () => {
+    const a = reduceTransition(seed(true, false), obs(false, false), 1000);
+    expect(a.event).toBe("finished");
+    const b = reduceTransition(a.state, obs(true, true, "Q?"), 1000 + 3000);
+    expect(b.event).toBeNull();
+    // The auditor's edge: the swallowed prompt must not be buried. Still busy,
+    // still asking, window elapsed → it fires; a later busy→idle stays silent.
+    const c = reduceTransition(b.state, obs(true, true, "Q?"), 1000 + 11_000);
+    expect(c.event).toBe("needs-input");
+    const d = reduceTransition(c.state, obs(false, true, "Q?"), 1000 + 60_000);
+    expect(d.event).toBeNull();
+  });
+});
+
+describe("runPushTick — phone sign-in request", () => {
+  test("a sign-in prompt appearing mid-turn pushes 'needs-input' carrying its question", async () => {
+    const sent: ApnsPayload[] = [];
+    const prior = new Map<string, PriorState>();
+    let state = obs(true, false);
+    const deps: TickDeps = {
+      sessions: async () => [{ sessionId: "s1", title: "Job", tmuxTarget: "t" }],
+      observe: async () => state,
+      devices: async () => [{ token: "a", env: "sandbox" }],
+      cfg,
+      send: async (_d, p) => {
+        sent.push(p);
+        return { ok: true, status: 200 };
+      },
+      now: () => 1000,
+    };
+    await runPushTick(prior, deps);
+    // The agent is still busy (blocked in `browser-sign-in request`) when the
+    // request lands.
+    state = obs(true, true, "Sign in to portal.example.com on your iPhone");
+    await runPushTick(prior, deps);
+    expect(sent.length).toBe(1);
+    expect(sent[0].kind).toBe("needs-input");
+    expect(sent[0].body).toBe("Sign in to portal.example.com on your iPhone");
+    // Done on the phone: request leaves `waiting`, prompt retracts, agent resumes.
+    state = obs(true, false);
+    await runPushTick(prior, deps);
+    expect(sent.length).toBe(1);
+  });
+});

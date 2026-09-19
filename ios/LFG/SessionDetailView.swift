@@ -473,7 +473,9 @@ struct SessionDetailView: View {
                 }
             }
 
-            ForEach(signInRequests.filter(\.isWaiting)) { request in
+            // A waiting request the prompt panel is already showing (the server
+            // surfaces it as the session's prompt) gets one entry point, not two.
+            ForEach(signInRequests.filter { $0.isWaiting && $0.id != prompt?.signIn?.requestId }) { request in
                 Button { presentedSheet = .requestedSignIn(request) } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "key.fill")
@@ -606,7 +608,15 @@ struct SessionDetailView: View {
                     Color.clear.frame(height: 1).id(Self.newestAnchor).flippedRow()
 
                     if let prompt {
-                        PromptPanelView(sessionID: sid, prompt: prompt).flippedRow()
+                        PromptPanelView(sessionID: sid, prompt: prompt, onSignIn: { signIn in
+                            // The polled request list usually has the row already; fall
+                            // back to the requests sheet, which opens the id it is given.
+                            if let request = signInRequests.first(where: { $0.id == signIn.requestId && $0.isWaiting }) {
+                                presentedSheet = .requestedSignIn(request)
+                            } else {
+                                presentedSheet = .phoneSignIn(requestID: signIn.requestId)
+                            }
+                        }).flippedRow()
                     }
                     // What the model said just before asking. Held out of the
                     // transcript by Claude Code until answered, so it arrives

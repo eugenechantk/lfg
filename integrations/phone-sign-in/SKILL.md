@@ -30,7 +30,7 @@ bun "__LFG_CLI__" browser-sign-in request \
   --url 'https://website.example/login'
 ```
 
-Use the actual login URL for the blocked task. Avoid credentials in URLs. The command prints the request ID and waits up to 16 minutes. Tell Eugene that the session now has a **Sign in to <website>** button, and keep the command alive using your tool's background-session/polling support. A yield or tool timeout does not mean the user declined. If the command is interrupted, reconnect with:
+Use the actual login URL for the blocked task. Avoid credentials in URLs. The command prints the request ID and waits up to 16 minutes. While the request is `waiting` the session itself reads **needs input** in every LFG client, a push notification goes to the phone (the same one an AskUserQuestion sends), and the session shows a **Sign in to <website>** panel — so a one-line note that you are waiting on the phone sign-in is enough; do not ask Eugene to open anything. Keep the command alive using your tool's background-session/polling support. A yield or tool timeout does not mean the user declined. If the command is interrupted, reconnect with:
 
 ```sh
 bun "__LFG_CLI__" browser-sign-in wait '<request ID>'

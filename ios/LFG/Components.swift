@@ -216,10 +216,72 @@ private struct ToolLineView: View {
 struct PromptPanelView: View {
     let sessionID: String
     let prompt: AgentPrompt
+    /// Opens the phone sign-in sheet for a request id. Only used when
+    /// `prompt.signIn` is set; the detail view owns the sheet.
+    var onSignIn: ((PromptSignIn) -> Void)? = nil
     @Environment(SessionStore.self) private var store
     @State private var answering: Int?
 
     var body: some View {
+        if let signIn = prompt.signIn {
+            signInPanel(signIn)
+        } else {
+            questionPanel
+        }
+    }
+
+    /// An agent-requested phone sign-in. Same chrome as a question so the
+    /// session reads "needs input" the same way, but the one action is opening
+    /// the sign-in sheet — there are no numbered answers to type into the pane,
+    /// and no Dismiss: Escape would interrupt the agent's waiting command.
+    /// Cancelling lives in the sheet, which cancels the request server-side.
+    private func signInPanel(_ signIn: PromptSignIn) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Label("Needs your input", systemImage: "key.fill")
+                    .font(.caption.weight(.semibold)).foregroundStyle(.blue)
+                Text((prompt.header ?? "Sign in").uppercased())
+                    .font(.caption2.weight(.bold)).foregroundStyle(.blue)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(.blue.opacity(0.15), in: Capsule())
+            }
+            Text(prompt.question)
+                .font(.subheadline.weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
+            if let target = signIn.targetName, !target.isEmpty {
+                Text("The login is sent to \(target) on your Mac. The agent is waiting.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button {
+                onSignIn?(signIn)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "iphone")
+                        .font(.subheadline)
+                        .frame(width: 22, height: 22)
+                        .background(.blue.opacity(0.15), in: Circle())
+                    Text("Sign in to \(signIn.website)")
+                        .font(.subheadline.weight(.medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("prompt_sign_in_\(signIn.requestId)")
+        }
+        .padding(14)
+        .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(.blue.opacity(0.25)))
+    }
+
+    private var questionPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Label("Needs your input", systemImage: "questionmark.bubble.fill")
