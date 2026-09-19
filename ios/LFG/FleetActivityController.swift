@@ -221,10 +221,10 @@ final class FleetActivityController {
         }
     }
 
-    /// Mirrors the server's `relevanceScore` (`src/push/liveactivity.ts`): when
-    /// the Dynamic Island is shared with another app's activity, ours should be
-    /// the one attached to the island, and a fleet waiting on a human outranks
-    /// one that is merely working.
+    /// Mirrors the server's `relevanceScore` (`src/push/liveactivity.ts`). Ranks
+    /// this app's own activities only — iOS decides on its own which app's card is
+    /// attached to a shared Dynamic Island and which is the detached bubble; no API
+    /// influences that. A fleet waiting on a human outranks one merely working.
     @available(iOS 17.2, *)
     private static func content(_ state: LFGFleetAttributes.ContentState) -> ActivityContent<LFGFleetAttributes.ContentState> {
         ActivityContent(state: state, staleDate: nil, relevanceScore: state.needsInput > 0 ? 100 : 90)

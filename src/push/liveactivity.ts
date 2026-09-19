@@ -55,18 +55,22 @@ export type LiveActivityBody = {
     attributes?: { fleetId: string };
     alert?: { title: string; body: string };
     "dismissal-date"?: number;
-    /// Which Live Activity iOS favours when several share the Dynamic Island.
-    /// Higher wins the attached (leading) minimal slot. See `relevanceScore`.
+    /// Orders this app's own Live Activities (Lock Screen order, island pick).
+    /// Does NOT affect placement against other apps' activities — see `relevanceScore`.
     "relevance-score"?: number;
   };
 };
 
 /**
- * Relevance for the fleet card when the island is shared with another app's
- * activity. Eugene wants ours to be the one in the island whenever there is
- * more than one, so the score is always high; a fleet waiting on a human
- * outranks one that is merely working. The app mirrors this in
- * `FleetActivityController` for cards it updates itself.
+ * Relevance for the fleet card. NOTE (2026-09-20): this ranks Live Activities
+ * of the SAME app only — "the system shows the Live Activity with the highest
+ * relevance score in the Dynamic Island" is about *your* activities. Which app's
+ * card is attached to the island and which is the detached bubble is the
+ * system's choice ("The system chooses a Live Activity from one app to appear
+ * attached … while it presents a Live Activity from another app detached"), and
+ * no API influences it. Kept because it is harmless and correct should the app
+ * ever run two cards; a fleet waiting on a human outranks one merely working.
+ * The app mirrors this in `FleetActivityController`.
  */
 export function relevanceScore(state: Pick<LiveActivityContentState, "needsInput">): number {
   return state.needsInput > 0 ? 100 : 90;

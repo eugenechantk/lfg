@@ -67,10 +67,12 @@ struct LFGFleetActivityWidget: Widget {
                     .monospacedDigit()
                     .padding(.trailing, 6) // mirrors the dot's leading inset
             } minimal: {
-                // Shown when the island is shared with another activity. The count
-                // is what matters at a glance: sessions needing you when any do,
-                // otherwise sessions working — on the same state colour the compact
-                // dot uses. Relevance scores (server + app) keep ours in the island.
+                // Shown when the island is shared with another app's activity —
+                // in EITHER slot: iOS alone decides which app is attached to the
+                // island and which is the detached bubble (no API influences it),
+                // so this view is what lfg looks like in both. The count is what
+                // matters at a glance: sessions needing you when any do, otherwise
+                // sessions working — on the same state colour the compact dot uses.
                 ZStack {
                     Circle().fill(context.state.accent)
                     Text("\(context.state.minimalCount)")
