@@ -124,6 +124,26 @@ struct StatusDot: View {
     }
 }
 
+extension Theme {
+    /// Untinted `.regular` Liquid Glass reads as a bright grey slab over a
+    /// black transcript in dark mode. A translucent black tint sinks the
+    /// chrome back toward the background while keeping the blur and the
+    /// specular rim. Light mode keeps the stock glass: a dark tint there
+    /// looks muddy against a white transcript.
+    static func glassDim(_ scheme: ColorScheme) -> Color? {
+        scheme == .dark ? Color.black.opacity(0.30) : nil
+    }
+}
+
+@available(iOS 26.0, *)
+extension Glass {
+    /// Regular glass for session chrome (top fade, composer), dimmed in dark mode.
+    static func chrome(_ scheme: ColorScheme) -> Glass {
+        if let tint = Theme.glassDim(scheme) { return .regular.tint(tint) }
+        return .regular
+    }
+}
+
 struct GlassChromeContainer<Content: View>: View {
     let spacing: CGFloat
     @ViewBuilder let content: () -> Content

@@ -145,6 +145,7 @@ func dismissKeyboard() {
 /// Liquid Glass panel on iOS 26+, with a material fallback for iOS 17–25.
 struct GlassPanel: ViewModifier {
     let cornerRadius: CGFloat
+    @Environment(\.colorScheme) private var colorScheme
 
     @ViewBuilder
     func body(content: Content) -> some View {
@@ -152,7 +153,7 @@ struct GlassPanel: ViewModifier {
             // Regular glass keeps the transcript perceptible as movement and
             // color without letting sharp text compete with the input itself.
             content.glassEffect(
-                .regular,
+                .chrome(colorScheme),
                 in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             )
         } else {

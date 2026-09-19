@@ -38,6 +38,7 @@ struct SessionDetailView: View {
     @Environment(AppSettings.self) private var settings
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
     @State private var signInRequests: [PhoneSignInAgentRequest] = []
     @State private var draft = ""
     @State private var renaming = false
@@ -433,7 +434,7 @@ struct SessionDetailView: View {
         return Rectangle()
             .fill(.clear)
             .frame(height: totalHeight)
-            .glassEffect(.regular, in: Rectangle().inset(by: -48))
+            .glassEffect(.chrome(colorScheme), in: Rectangle().inset(by: -48))
             .mask {
                 LinearGradient(
                     stops: [
