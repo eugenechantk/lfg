@@ -1,0 +1,12 @@
+ M ios/LFG.xcodeproj/project.pbxproj
+ M ios/LFG/AttachmentsSheet.swift
+ M ios/LFG/Components.swift
+ M ios/LFG/LFGApp.swift
+ M ios/LFG/NewSessionView.swift
+ M ios/LFG/RichContent.swift
+ M ios/LFG/SessionDetailView.swift
+ M ios/LFGCore/Sources/LFGCore/LFGClient.swift
+ M ios/LFGCore/Sources/LFGCore/Models.swift
+ M ios/LFGCore/Tests/LFGCoreTests/ModelsTests.swift
+?? ios/LFGCore/Sources/LFGCore/StreamingRange.swift
+?? ios/LFGCore/Tests/LFGCoreTests/MediaFastPathTests.swift
