@@ -1,0 +1,1323 @@
+diff --git a/.claude/CLAUDE.md b/.claude/CLAUDE.md
+index 808f18a..4b83088 100644
+--- a/.claude/CLAUDE.md
++++ b/.claude/CLAUDE.md
+@@ -9,6 +9,7 @@ lfg runs many concurrent Claude Code agent sessions on a single host, with a Bun
+ - **No `/proc` on macOS.** `listSessions` in `src/sessions.ts` enriches sessions via `/proc/<pid>/cwd`, which is Linux-only. On macOS, CLI/tmux sessions won't enumerate — this is expected, not a bug. Grep source for platform assumptions (`/proc`, `systemd`, `launchd`, `pgrep`) before theorizing about missing state.
+ - **Session state has two owners, and `closed` is the awkward one.** `busy`/`prompt` come from `journal-pump.ts` (pane scrape / aisdk registry / transcript freshness) and `status` from `computeStatus` in `sessions.ts` (`"blocked"` = an upstream **API error** — logged out, out of credits — *not* a user pause). `closed` is computed by the server too (`listResumable` excludes live ids, stamps `closed: true`), but only ever means **"closed on this host"**: `~/.claude/projects` is synced and a server has no peer awareness (hosts are client-side config), so host B enumerates host A's transcripts and would call A's *running* session closed. `MultiHost.reconcileResumable` drops that phantom using live ids from every host — that filter cannot move server-side without giving servers peer awareness. Any consumer deriving state must mirror `SessionStore.group(for:)`'s precedence (`closed` → prompt → `isBlocked` → `busy`), not re-invent it; a parallel ladder in the Live Activity snapshot shipped a bug where ended sessions read "running" forever.
+ - **A live question's prose exists ONLY on the tmux pane — and every journal delta needs a REST baseline.** Claude Code does not flush the assistant turn containing an interactive tool (AskUserQuestion, permission, plan approval) to its transcript until the user answers; while it's live the prose is on disk *nowhere*. `parsePrompt`'s pane-scraped `context` is the only source, and Claude runs in the **alternate screen** (`history_size == 0`), so `capture-pane -S -N` gives you nothing extra — only what currently fits. Hence lfg spawns panes at `PANE_COLS`×`PANE_ROWS` (`paneSizeArgs`) and the pump keeps them there (`ensurePaneRows`): tmux does **not** restore `default-size` after a client detaches, so one Terminal-tab visit silently re-breaks capture forever. Separately, prompt state reached clients only as a journal `prompt` **delta**, and a cursor starts at the head — so a question asked before the client connected never arrived and the panel never appeared. Any pump-owned state a client renders needs BOTH the delta and a snapshot field arbitrated by `JournalFreshness` (`busy`/`busyStatedAt`, `prompt`/`promptStatedAt`); a delta alone is a bug waiting for the next cold launch. **A single capture is not enough and pane size cannot save you:** a long preamble is taller than the pane, so the head is gone by the time the selector renders — `PaneStitcher` (`pane-history.ts`) rebuilds it from the ~1Hz captures the pump already takes, because the head WAS on screen mid-stream. Do not try to fix this by resizing: **Eugene's real sessions come from the `cy`/`cx` shell functions in `~/.zshrc`, which bypass lfg's spawn path entirely and are always ATTACHED**, so both `paneSizeArgs()` and `ensurePaneRows` (which skips attached panes on purpose) miss them. Verify any pane fix against `tmux ls` reality — geometry and attachment of the actual live sessions — never against a session you just created through the API. See `.claude/diagnosis-question-preamble-invisible-20260807.md` and `.claude/diagnosis-question-preamble-round2-20260809.md`.
++- **A phone sign-in request IS a session prompt, and a prompt is announced the moment it appears — busy or not.** `phoneSignInPrompt` (`phone-sign-in-requests.ts`) turns a `waiting` request into the session's `prompt` (`source: "phone-sign-in"`, `options: []`, a `signIn` block), so needs-input grouping, the REST snapshot, the Live Activity row and the push all follow from the one primitive instead of a parallel field; `resolveSessionPrompt` and the watcher's `observeSession` both put a real transcript/pane prompt first. Two traps: (1) the push reducer used to return early while `busy`, but with hooks installed a session parked on AskUserQuestion is busy until answered — journal evidence showed every recent question answered before busy ever dropped, so no needs-input push had been firing; `reduceTransition` now emits on prompt-appearance and stays silent on the later busy→idle. (2) `withStitchedPreamble` must skip the sign-in prompt, and `POST /dismiss` refuses it (409) — Escape into the agent's waiting `browser-sign-in request` call would interrupt the turn. Restarting the server expires every `waiting` request on the host (the Chrome target reconnects with a new id); check `~/.lfg/phone-sign-in-history.json` for `waiting` rows before a restart. See `.claude/feature/phone-sign-in-needs-input.md`.
+ - **One sessionId can have two live processes, and every per-session map assumes it can't.** Two `claude` procs in different panes each write `~/.claude/sessions/<pid>.json` naming the SAME id (an in-TUI `/resume` of a session another live proc is on). Separately, `--resume X --fork-session` forks carry X on the command line while owning a different id, so until each fork's pidfile is readable `listSessions`' `--resume` fallback makes every fork look like its parent. Both shapes produce duplicate rows, and sessionId keys *everything* downstream — the push watcher's `prior` map, journal baselines, unread, leases, sendq. The watcher's two rows overwrite each other every tick, so their differing observations read as a transition: one reelly pane on an AskUserQuestion + one idle at the composer = a "needs input" push every ~12s forever. `resolveSessionOwners` in `sessions.ts` collapses them (authoritative claim beats guessed; newest binding wins among authoritative, OLDEST process wins among guesses — forks are the newcomers), and `runPushTick` skips repeat sids as a backstop. `resolvePaneOwners` does NOT cover this: it groups by pane, and these are different panes.
+ - **Client state is latched — the journal must retract, not just stop.** Clients overwrite `busy`/`prompt` only on a newer event, so a session that vanishes from `listSessions` (pane killed, transferred) strands its last value forever. `appendDisappearanceRetractions` in `journal-pump.ts` emits `busy:false`/`prompt:null` before `deltas.forget(sid)` — order matters, forget clears the baselines the change-checks read. Retract only what was actually asserted (`lastBusyValue`/`hadPrompt`); `busyChanged(sid,false)` alone reports a change against an *absent* baseline and fabricates phantom events. **An offline HOST is the case that retraction structurally cannot cover** — no journal event can be delivered at all, and `lastSessionsByHost` deliberately keeps serving that host's last good snapshot, so `JournalFreshness` re-asserts a frozen `busy: true` on every rebuild once the journal's word ages past the TTL; sessions read "Working" for as long as the host stays down, surviving cold launch via GRDB. The client retracts instead: `rebuildSessions` blanks `busy`/`prompt` for sessions on known-down hosts (`MultiHost.unreachableLiveSessionIds`), gated on `isNotKnownDown` (offline/noNetwork only) so a host inside its grace window doesn't flicker the list.
+ - **A message sent to a busy Claude session is ABSORBED into the running turn, not run next.** Claude Code 2.1.2xx+ folds mid-turn input into the current turn at the next tool boundary and records only a `queue-operation` transcript line (`enqueue`, then `remove` with `reason:"absorbed_mid_turn"`); the text is persisted nowhere else — no user turn, not inside the tool_result. `queueOperationMessage` in `sessions.ts` synthesises the user turn from that line, the pump hands it to `noteSurfacedUserTurn` (`sendq.ts`) so the queued row is acked at once, and `reconcileQueued` only re-drives on **sustained** idle with a transcript window that provably reaches back to the send. Before that, every queued message was re-typed twice and shown as "never picked up" — Eugene resent, Claude got each instruction 3–4 times. **First step for any "queued message failed / never arrived" report: `grep '"queue-operation"' <transcript>` and read the operations and reasons**, then `~/.lfg/sendq.log`. A `dequeue` (popped as the next real turn) is followed by a genuine user line and is not synthesised. See `.claude/diagnosis-queued-messages-absorbed-mid-turn-20260907.md`.
+@@ -23,6 +24,7 @@ lfg runs many concurrent Claude Code agent sessions on a single host, with a Bun
+ - **No bare `setInterval` fan-out over a collection** on the single Bun event loop — a growing collection turns the tick into a spawn storm. Batch or stagger.
+ - **Restarting a port-bound service:** kill by PORT, not by pkill pattern (stale processes silently keep the port), and verify the NEW code answers (probe a changed endpoint) before declaring the deploy done. **The `-sTCP:LISTEN` filter is not optional**: bare `lsof -ti :8766` also returns every *client* holding a connection — the `lfg` CLI, the desktop app, the phone — so it hands you a multi-PID list that either kills Eugene's apps or fails outright. Use `lsof -nP -iTCP:8766 -sTCP:LISTEN -t`. **On the Air, run `bun install --frozen-lockfile` before the kill**: only source and the lockfile sync, not `node_modules`, so a `package.json` change since its last start makes the respawn crash-loop on `Cannot find package` (2026-09-17, `tldts`, ~2 min down; wrapper log is `/private/tmp/lfg-serve.log`).
+ - **`GET /api/file?path=…` is how the iOS client fetches host files for inline rendering** (`src/commands/serve.ts`). It's read-only and traversal-hardened via `realpath` containment against a fixed root set: `REPOS_ROOT`, `SELF_REPO`, `~/` (homedir), and `$TMPDIR/lfg-uploads`. A path resolving outside all of these → 403; missing → 404. Don't narrow these roots without checking what the client references (agents emit absolute paths under home/cwd — see the "Referencing files…" directive in the global `~/.claude/CLAUDE.md`). The endpoint's security posture is "same as the rest of the API" — the server itself is unauthenticated on 127.0.0.1; **client access is Cloudflare tunnel + Access** (`lfg-pro.eugenechantk.me`, config `~/.cloudflared/lfg-pro.yml`; unauthenticated requests 403 at the edge). Tailscale is DEPRECATED for client access (2026-08-22) — a phone/iPad "offline" on the tailnet is expected, and client connectivity problems should be diagnosed on the Cloudflare path (tunnel process, cold-connection timeouts, Access tokens), not the tailnet.
++- **The Pro's tunnel must leave via en0, not the VPN, and the wrapper is what guarantees it.** Surfshark's utun default route puts 360 ms on every tunnel byte and caps the WHOLE tunnel (not per stream — four parallel ranges totalled 45 KB/s, one did 37) at well under 100 KB/s, which is why media "never loads" on the phone. `dev.omg.lfg-cloudflared` runs `~/.cloudflared/lfg-pro-run.sh` (repo copy `scripts/cloudflared-edge-bind-run.sh`): `--edge-bind-address <en0 IP>`, which macOS routes out en0 by source-address scoping — no root, no Surfshark Bypasser (whose kill switch black-holed the 09-10 bundle bypass). First probe for any "slow media / flapping tunnel" report: `netstat -anv -p tcp | grep 7844` — sources must be `192.168.x`, not `10.14.x`. Restart with `launchctl bootout` + `bootstrap` and retry bootstrap once (it can return `5: Input/output error` immediately after bootout; that cost a 40 s outage). See `.claude/diagnosis-media-slow-tunnel-in-vpn-20260917.md`.
+ 
+ ## iOS / Swift gotchas
+ 
+diff --git a/integrations/phone-sign-in/SKILL.md b/integrations/phone-sign-in/SKILL.md
+index dc0573d..fdb0523 100644
+--- a/integrations/phone-sign-in/SKILL.md
++++ b/integrations/phone-sign-in/SKILL.md
+@@ -30,7 +30,7 @@ bun "__LFG_CLI__" browser-sign-in request \
+   --url 'https://website.example/login'
+ ```
+ 
+-Use the actual login URL for the blocked task. Avoid credentials in URLs. The command prints the request ID and waits up to 16 minutes. Tell Eugene that the session now has a **Sign in to <website>** button, and keep the command alive using your tool's background-session/polling support. A yield or tool timeout does not mean the user declined. If the command is interrupted, reconnect with:
++Use the actual login URL for the blocked task. Avoid credentials in URLs. The command prints the request ID and waits up to 16 minutes. While the request is `waiting` the session itself reads **needs input** in every LFG client, a push notification goes to the phone (the same one an AskUserQuestion sends), and the session shows a **Sign in to <website>** panel — so a one-line note that you are waiting on the phone sign-in is enough; do not ask Eugene to open anything. Keep the command alive using your tool's background-session/polling support. A yield or tool timeout does not mean the user declined. If the command is interrupted, reconnect with:
+ 
+ ```sh
+ bun "__LFG_CLI__" browser-sign-in wait '<request ID>'
+diff --git a/ios/LFG.xcodeproj/project.pbxproj b/ios/LFG.xcodeproj/project.pbxproj
+index 65c177b..e24778f 100644
+--- a/ios/LFG.xcodeproj/project.pbxproj
++++ b/ios/LFG.xcodeproj/project.pbxproj
+@@ -296,8 +296,6 @@
+ 			dependencies = (
+ 			);
+ 			name = LFGWidgets;
+-			packageProductDependencies = (
+-			);
+ 			productName = LFGWidgets;
+ 			productReference = D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */;
+ 			productType = "com.apple.product-type.app-extension";
+@@ -357,7 +355,7 @@
+ 			packageReferences = (
+ 				51E8A3A0C2443D478A2B7FA6 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+ 				6ED60432A99F7EC822DF9350 /* XCLocalSwiftPackageReference "LFGCore" */,
+-				4237D469E7BD1A7B7BC8F201 /* XCLocalSwiftPackageReference "Vendor/SwiftTerm" */,
++				4237D469E7BD1A7B7BC8F201 /* XCLocalSwiftPackageReference "SwiftTerm" */,
+ 			);
+ 			preferredProjectObjectVersion = 77;
+ 			productRefGroup = 73237F52945A981B453A84AA /* Products */;
+@@ -525,7 +523,8 @@
+ 			isa = XCBuildConfiguration;
+ 			buildSettings = {
+ 				APPLICATION_EXTENSION_API_ONLY = YES;
+-				CODE_SIGN_STYLE = Automatic;
++				CODE_SIGN_IDENTITY = "Apple Distribution";
++				CODE_SIGN_STYLE = Manual;
+ 				CURRENT_PROJECT_VERSION = 1;
+ 				DEVELOPMENT_TEAM = 39GJBP8V5A;
+ 				INFOPLIST_FILE = LFGWidgets/Info.plist;
+@@ -537,6 +536,7 @@
+ 				);
+ 				MARKETING_VERSION = 1.3.0;
+ 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
++				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
+ 				SDKROOT = iphoneos;
+ 				SUPPORTS_MACCATALYST = NO;
+ 				TARGETED_DEVICE_FAMILY = "1,2";
+@@ -549,8 +549,8 @@
+ 				APS_ENVIRONMENT = production;
+ 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+ 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
+-				CODE_SIGN_IDENTITY = "iPhone Developer";
+-				CODE_SIGN_STYLE = Automatic;
++				CODE_SIGN_IDENTITY = "Apple Distribution";
++				CODE_SIGN_STYLE = Manual;
+ 				CURRENT_PROJECT_VERSION = 1;
+ 				DEVELOPMENT_TEAM = 39GJBP8V5A;
+ 				INFOPLIST_FILE = LFG/Info.plist;
+@@ -561,6 +561,7 @@
+ 				);
+ 				MARKETING_VERSION = 1.3.0;
+ 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
++				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
+ 				SDKROOT = iphoneos;
+ 				SUPPORTS_MACCATALYST = NO;
+ 				TARGETED_DEVICE_FAMILY = "1,2";
+@@ -573,8 +574,8 @@
+ 				APS_ENVIRONMENT = development;
+ 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+ 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
+-				CODE_SIGN_IDENTITY = "iPhone Developer";
+-				CODE_SIGN_STYLE = Automatic;
++				CODE_SIGN_IDENTITY = "Apple Distribution";
++				CODE_SIGN_STYLE = Manual;
+ 				CURRENT_PROJECT_VERSION = 1;
+ 				DEVELOPMENT_TEAM = 39GJBP8V5A;
+ 				INFOPLIST_FILE = LFG/Info.plist;
+@@ -585,6 +586,7 @@
+ 				);
+ 				MARKETING_VERSION = 1.3.0;
+ 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
++				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
+ 				SDKROOT = iphoneos;
+ 				SUPPORTS_MACCATALYST = NO;
+ 				TARGETED_DEVICE_FAMILY = "1,2";
+@@ -595,7 +597,8 @@
+ 			isa = XCBuildConfiguration;
+ 			buildSettings = {
+ 				APPLICATION_EXTENSION_API_ONLY = YES;
+-				CODE_SIGN_STYLE = Automatic;
++				CODE_SIGN_IDENTITY = "Apple Distribution";
++				CODE_SIGN_STYLE = Manual;
+ 				CURRENT_PROJECT_VERSION = 1;
+ 				DEVELOPMENT_TEAM = 39GJBP8V5A;
+ 				INFOPLIST_FILE = LFGWidgets/Info.plist;
+@@ -607,6 +610,7 @@
+ 				);
+ 				MARKETING_VERSION = 1.3.0;
+ 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
++				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
+ 				SDKROOT = iphoneos;
+ 				SUPPORTS_MACCATALYST = NO;
+ 				TARGETED_DEVICE_FAMILY = "1,2";
+@@ -704,7 +708,7 @@
+ /* End XCConfigurationList section */
+ 
+ /* Begin XCLocalSwiftPackageReference section */
+-		4237D469E7BD1A7B7BC8F201 /* XCLocalSwiftPackageReference "Vendor/SwiftTerm" */ = {
++		4237D469E7BD1A7B7BC8F201 /* XCLocalSwiftPackageReference "SwiftTerm" */ = {
+ 			isa = XCLocalSwiftPackageReference;
+ 			relativePath = Vendor/SwiftTerm;
+ 		};
+diff --git a/ios/LFG/AttachmentsSheet.swift b/ios/LFG/AttachmentsSheet.swift
+index 10626a8..c3651b3 100644
+--- a/ios/LFG/AttachmentsSheet.swift
++++ b/ios/LFG/AttachmentsSheet.swift
+@@ -40,7 +40,7 @@ struct AttachmentsSheet: View {
+         .sheet(item: $viewing) { ref in
+             FileViewerSheet(
+                 ref: ref,
+-                url: hostFiles?.resolve(rawPath: ref.raw),
++                url: hostFiles?.viewerURL(for: ref),
+                 client: hostFiles?.client
+             )
+         }
+diff --git a/ios/LFG/Components.swift b/ios/LFG/Components.swift
+index e3c030d..3f275c5 100644
+--- a/ios/LFG/Components.swift
++++ b/ios/LFG/Components.swift
+@@ -216,10 +216,72 @@ private struct ToolLineView: View {
+ struct PromptPanelView: View {
+     let sessionID: String
+     let prompt: AgentPrompt
++    /// Opens the phone sign-in sheet for a request id. Only used when
++    /// `prompt.signIn` is set; the detail view owns the sheet.
++    var onSignIn: ((PromptSignIn) -> Void)? = nil
+     @Environment(SessionStore.self) private var store
+     @State private var answering: Int?
+ 
+     var body: some View {
++        if let signIn = prompt.signIn {
++            signInPanel(signIn)
++        } else {
++            questionPanel
++        }
++    }
++
++    /// An agent-requested phone sign-in. Same chrome as a question so the
++    /// session reads "needs input" the same way, but the one action is opening
++    /// the sign-in sheet — there are no numbered answers to type into the pane,
++    /// and no Dismiss: Escape would interrupt the agent's waiting command.
++    /// Cancelling lives in the sheet, which cancels the request server-side.
++    private func signInPanel(_ signIn: PromptSignIn) -> some View {
++        VStack(alignment: .leading, spacing: 10) {
++            HStack(spacing: 6) {
++                Label("Needs your input", systemImage: "key.fill")
++                    .font(.caption.weight(.semibold)).foregroundStyle(.blue)
++                Text((prompt.header ?? "Sign in").uppercased())
++                    .font(.caption2.weight(.bold)).foregroundStyle(.blue)
++                    .padding(.horizontal, 6).padding(.vertical, 2)
++                    .background(.blue.opacity(0.15), in: Capsule())
++            }
++            Text(prompt.question)
++                .font(.subheadline.weight(.semibold))
++                .fixedSize(horizontal: false, vertical: true)
++            if let target = signIn.targetName, !target.isEmpty {
++                Text("The login is sent to \(target) on your Mac. The agent is waiting.")
++                    .font(.caption).foregroundStyle(.secondary)
++                    .fixedSize(horizontal: false, vertical: true)
++            }
++            Button {
++                onSignIn?(signIn)
++            } label: {
++                HStack(spacing: 10) {
++                    Image(systemName: "iphone")
++                        .font(.subheadline)
++                        .frame(width: 22, height: 22)
++                        .background(.blue.opacity(0.15), in: Circle())
++                    Text("Sign in to \(signIn.website)")
++                        .font(.subheadline.weight(.medium))
++                        .fixedSize(horizontal: false, vertical: true)
++                    Spacer(minLength: 0)
++                    Image(systemName: "chevron.right")
++                        .font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
++                        .accessibilityHidden(true)
++                }
++                .padding(10)
++                .frame(maxWidth: .infinity, alignment: .leading)
++                .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
++            }
++            .buttonStyle(.plain)
++            .accessibilityIdentifier("prompt_sign_in_\(signIn.requestId)")
++        }
++        .padding(14)
++        .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
++        .overlay(RoundedRectangle(cornerRadius: 14).stroke(.blue.opacity(0.25)))
++    }
++
++    private var questionPanel: some View {
+         VStack(alignment: .leading, spacing: 10) {
+             HStack(spacing: 6) {
+                 Label("Needs your input", systemImage: "questionmark.bubble.fill")
+diff --git a/ios/LFG/LFGApp.swift b/ios/LFG/LFGApp.swift
+index 5f7d14a..a68d410 100644
+--- a/ios/LFG/LFGApp.swift
++++ b/ios/LFG/LFGApp.swift
+@@ -8,6 +8,12 @@ struct LFGApp: App {
+     @State private var store: SessionStore
+ 
+     init() {
++        // Before anything touches `URLSession.shared` (which captures
++        // `URLCache.shared` on first use): the stock cache is 512 KB / 10 MB,
++        // too small to hold a transcript's worth of screenshot renditions, so
++        // scrolling back to an image re-fetched it over a path that can be
++        // 50 KB/s. Renditions arrive with `ETag` + `max-age=86400` and fit here.
++        URLCache.shared = URLCache(memoryCapacity: 32 << 20, diskCapacity: 256 << 20)
+         let s = AppSettings()
+         let storeBootstrap = Self.makeStore()
+         let st = SessionStore(
+diff --git a/ios/LFG/MessageComposer.swift b/ios/LFG/MessageComposer.swift
+index 5e14d14..bacf912 100644
+--- a/ios/LFG/MessageComposer.swift
++++ b/ios/LFG/MessageComposer.swift
+@@ -145,6 +145,7 @@ func dismissKeyboard() {
+ /// Liquid Glass panel on iOS 26+, with a material fallback for iOS 17–25.
+ struct GlassPanel: ViewModifier {
+     let cornerRadius: CGFloat
++    @Environment(\.colorScheme) private var colorScheme
+ 
+     @ViewBuilder
+     func body(content: Content) -> some View {
+@@ -152,7 +153,7 @@ struct GlassPanel: ViewModifier {
+             // Regular glass keeps the transcript perceptible as movement and
+             // color without letting sharp text compete with the input itself.
+             content.glassEffect(
+-                .regular,
++                .chrome(colorScheme),
+                 in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+             )
+         } else {
+diff --git a/ios/LFG/NewSessionView.swift b/ios/LFG/NewSessionView.swift
+index 3dfd085..5b45d9a 100644
+--- a/ios/LFG/NewSessionView.swift
++++ b/ios/LFG/NewSessionView.swift
+@@ -241,7 +241,12 @@ struct NewSessionView: View {
+                 recents: recentDirectories,
+                 all: allDirectories,
+                 selectedPath: cwd,
+-                onSelect: { entry in selectDirectory(path: entry.path, label: entry.name) },
++                // A single-choice list: the tap IS the decision, so it closes the
++                // sheet. ✓ stays for dismiss-and-keep, ✕ still reverts.
++                onSelect: { entry in
++                    selectDirectory(path: entry.path, label: entry.name)
++                    closeSheet()
++                },
+                 onAddByPath: { showAddDirectory = true },
+                 onConfirm: closeSheet,
+                 onCancel: revertSheet
+@@ -263,6 +268,7 @@ struct NewSessionView: View {
+                     agent = kind
+                     model = name
+                     modelPickedExplicitly = true
++                    closeSheet()
+                 },
+                 onConfirm: closeSheet,
+                 onCancel: revertSheet
+diff --git a/ios/LFG/RichContent.swift b/ios/LFG/RichContent.swift
+index 7f037a4..80f18f3 100644
+--- a/ios/LFG/RichContent.swift
++++ b/ios/LFG/RichContent.swift
+@@ -18,10 +18,15 @@ struct HostFiles: Sendable {
+     /// outside a session, where only absolute paths can be served.
+     var cwd: String? = nil
+ 
+-    func fileURL(forPath path: String) -> URL? {
+-        var c = URLComponents(url: baseURL.appendingPathComponent("api/file"), resolvingAgainstBaseURL: false)
+-        c?.queryItems = [URLQueryItem(name: "path", value: path)]
+-        return c?.url
++    /// Rendition widths the app asks the server for (`w=`; see
++    /// `file-thumbs.ts`). Inline transcript images are read at phone width;
++    /// the full-screen viewer gets enough pixels for a 3× screen at 2× pinch.
++    /// Both are 5–40× fewer bytes than the PNG the agent wrote.
++    static let inlineImageWidth = 1200
++    static let viewerImageWidth = 2400
++
++    func fileURL(forPath path: String, maxWidth: Int? = nil) -> URL? {
++        client.hostFileURL(forPath: path, maxWidth: maxWidth)
+     }
+ 
+     /// Turn a relative path into an absolute host path by joining the session cwd.
+@@ -32,17 +37,47 @@ struct HostFiles: Sendable {
+     }
+ 
+     /// Resolve a URL parsed out of markdown/text to something loadable.
+-    func resolve(_ url: URL) -> URL? {
++    /// `maxWidth` only affects host files (a rendition request); external URLs
++    /// pass through untouched.
++    func resolve(_ url: URL, maxWidth: Int? = nil) -> URL? {
+         if let s = url.scheme?.lowercased(), s == "http" || s == "https" { return url }
+         let path = url.scheme == "file" ? url.path : url.absoluteString
+         guard let abs = absolutePath(path) else { return nil }
+-        return fileURL(forPath: abs)
++        return fileURL(forPath: abs, maxWidth: maxWidth)
+     }
+ 
+-    func resolve(rawPath: String) -> URL? {
++    func resolve(rawPath: String, maxWidth: Int? = nil) -> URL? {
+         if rawPath.hasPrefix("http://") || rawPath.hasPrefix("https://") { return URL(string: rawPath) }
+         guard let abs = absolutePath(rawPath) else { return nil }
+-        return fileURL(forPath: abs)
++        return fileURL(forPath: abs, maxWidth: maxWidth)
++    }
++
++    /// The URL `FileViewerSheet` opens for an attachment. The ONE place that
++    /// decides an image opens as a 2400 px rendition (the viewer is for
++    /// reading a screenshot, not archiving the PNG) — every card that opens
++    /// the viewer goes through here, so no call site can forget the width.
++    func viewerURL(for ref: MediaRef) -> URL? {
++        resolve(rawPath: ref.raw, maxWidth: ref.kind == .image ? Self.viewerImageWidth : nil)
++    }
++}
++
++/// Decoded inline images, keyed by URL, so a transcript row that leaves and
++/// re-enters the lazy stack doesn't decode (or, past `URLCache`, re-fetch)
++/// the same screenshot. Cost is the bitmap size; the limit is generous
++/// because a 1200 px rendition is ~4 MB decoded.
++@MainActor
++enum InlineImageCache {
++    private static let cache: NSCache<NSString, UIImage> = {
++        let c = NSCache<NSString, UIImage>()
++        c.totalCostLimit = 96 << 20
++        return c
++    }()
++
++    static func image(for url: URL) -> UIImage? { cache.object(forKey: url.absoluteString as NSString) }
++
++    static func store(_ image: UIImage, for url: URL) {
++        let cost = Int(image.size.width * image.size.height * image.scale * image.scale * 4)
++        cache.setObject(image, forKey: url.absoluteString as NSString, cost: cost)
+     }
+ }
+ 
+@@ -240,7 +275,9 @@ private struct HostImageProvider: ImageProvider {
+     let hostFiles: HostFiles?
+     func makeImage(url: URL?) -> some View {
+         Group {
+-            if let url, let resolved = hostFiles?.resolve(url) ?? (url.scheme != nil ? url : nil) {
++            if let url,
++               let resolved = hostFiles?.resolve(url, maxWidth: HostFiles.inlineImageWidth)
++                   ?? (url.scheme != nil ? url : nil) {
+                 AuthenticatedImage(url: resolved, client: hostFiles?.client)
+                 .frame(maxWidth: .infinity)
+                 .clipShape(RoundedRectangle(cornerRadius: 10))
+@@ -271,6 +308,7 @@ private struct AuthenticatedImage: View {
+         }
+         .task(id: url) {
+             failed = false
++            if let cached = InlineImageCache.image(for: url) { image = cached; return }
+             do {
+                 let data: Data
+                 if let client { data = try await client.resourceData(from: url) }
+@@ -279,6 +317,7 @@ private struct AuthenticatedImage: View {
+                     if !Task.isCancelled { failed = true }
+                     return
+                 }
++                InlineImageCache.store(decoded, for: url)
+                 image = decoded
+             } catch is CancellationError {
+                 return
+@@ -310,7 +349,7 @@ struct MediaAttachmentsView: View {
+         .sheet(item: $viewing) { ref in
+             FileViewerSheet(
+                 ref: ref,
+-                url: hostFiles?.resolve(rawPath: ref.raw),
++                url: hostFiles?.viewerURL(for: ref),
+                 client: hostFiles?.client
+             )
+         }
+@@ -354,15 +393,26 @@ struct MediaAttachmentsView: View {
+ ///    transcript re-renders on every SSE delta) no longer builds a fresh
+ ///    `AVPlayer` and restart playback from zero.
+ ///
+-/// Protected videos are downloaded to a temporary file before this view is
+-/// created. AVPlayer has no supported arbitrary-header API, so pointing it at a
+-/// Cloudflare Access URL would silently omit the service credential.
++/// The video is STREAMED, never downloaded first. AVPlayer fetches byte ranges
++/// and starts once it has the header and a few seconds of frames — on the
++/// 200–400 MB sim recordings agents produce, the old download-then-play path
++/// meant minutes of "Preparing video…" (see the 2026-09-17 media diagnosis).
++///
++/// AVPlayer has no supported way to add request headers, and Cloudflare Access
++/// refuses a request without the service-token headers (the `CF_Authorization`
++/// cookie alone is a 403). So for a credentialed host the asset goes through
++/// `StreamingResourceLoader`, which answers AVPlayer's range requests via
++/// `LFGClient.resourceRequest(for:)`; an uncredentialed host (LAN, loopback)
++/// gets the plain URL — `/api/file` already answers `206`.
+ struct HostVideoPlayer: UIViewControllerRepresentable {
+     let url: URL
++    let client: LFGClient?
+ 
+     @MainActor final class Coordinator {
+         let controller = AVPlayerViewController()
+         var url: URL?
++        /// Retained here: `AVAssetResourceLoader` holds its delegate weakly.
++        var loader: StreamingResourceLoader?
+     }
+ 
+     func makeCoordinator() -> Coordinator { Coordinator() }
+@@ -386,12 +436,171 @@ struct HostVideoPlayer: UIViewControllerRepresentable {
+ 
+     static func dismantleUIViewController(_ vc: AVPlayerViewController, coordinator: Coordinator) {
+         vc.player?.pause()
++        coordinator.loader?.invalidate()
+     }
+ 
+     private func load(into coordinator: Coordinator) {
+         guard coordinator.url != url else { return }
+         coordinator.url = url
+-        coordinator.controller.player = AVPlayer(url: url)
++        coordinator.loader?.invalidate()
++        coordinator.loader = nil
++        let asset: AVURLAsset
++        if let client, client.authenticatesRequests(to: url) {
++            let loader = StreamingResourceLoader(origin: url, client: client)
++            coordinator.loader = loader
++            asset = loader.makeAsset()
++        } else {
++            asset = AVURLAsset(url: url)
++        }
++        let item = AVPlayerItem(asset: asset)
++        let player = AVPlayer(playerItem: item)
++        player.automaticallyWaitsToMinimizeStalling = true
++        coordinator.controller.player = player
++        player.play()
++    }
++}
++
++/// Answers `AVAssetResourceLoader`'s byte-range requests for one host video by
++/// forwarding each one through the authenticated transport.
++///
++/// AVPlayer opens the asset with a custom scheme (`lfg-stream://…`) so the
++/// loader is consulted instead of the network. Each loading request becomes
++/// one `URLSessionDataTask` carrying `Range:` plus the Access headers; the
++/// response's `Content-Range` fills in the content information (type, total
++/// length, ranges supported) and every received chunk is handed to the
++/// request as it arrives, so playback starts before the request finishes.
++/// Cancelled loading requests (seeks, dismissal) cancel their task.
++final class StreamingResourceLoader: NSObject, AVAssetResourceLoaderDelegate, URLSessionDataDelegate, @unchecked Sendable {
++    static let scheme = "lfg-stream"
++
++    private let origin: URL
++    private let client: LFGClient
++    private let lock = NSLock()
++    private var requestsByTask: [Int: AVAssetResourceLoadingRequest] = [:]
++    private var tasksByRequest: [ObjectIdentifier: URLSessionDataTask] = [:]
++    private let delegateQueue: OperationQueue = {
++        let q = OperationQueue()
++        q.maxConcurrentOperationCount = 1
++        q.name = "lfg.streaming-resource-loader"
++        return q
++    }()
++    private lazy var session: URLSession = {
++        let config = URLSessionConfiguration.default
++        // Media bytes must not enter URLCache: a 235 MB range set would evict
++        // every screenshot rendition the transcript relies on.
++        config.urlCache = nil
++        config.requestCachePolicy = .reloadIgnoringLocalCacheData
++        // Idle timeout, not total: a slow path (50 KB/s) is fine as long as
++        // bytes keep flowing.
++        config.timeoutIntervalForRequest = 60
++        return URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
++    }()
++
++    init(origin: URL, client: LFGClient) {
++        self.origin = origin
++        self.client = client
++    }
++
++    /// The asset AVPlayer should play. Query string (the `path=`) is preserved
++    /// but irrelevant — every request maps back to `origin`.
++    func makeAsset() -> AVURLAsset {
++        var comps = URLComponents(url: origin, resolvingAgainstBaseURL: false)
++        comps?.scheme = Self.scheme
++        let asset = AVURLAsset(url: comps?.url ?? origin)
++        asset.resourceLoader.setDelegate(self, queue: DispatchQueue(label: "lfg.streaming-resource-loader.avf"))
++        return asset
++    }
++
++    func invalidate() {
++        lock.lock()
++        let tasks = Array(tasksByRequest.values)
++        tasksByRequest.removeAll()
++        requestsByTask.removeAll()
++        lock.unlock()
++        tasks.forEach { $0.cancel() }
++        session.invalidateAndCancel()
++    }
++
++    // MARK: AVAssetResourceLoaderDelegate
++
++    func resourceLoader(_ resourceLoader: AVAssetResourceLoader,
++                        shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest) -> Bool {
++        guard let dataRequest = loadingRequest.dataRequest else { return false }
++        var request = client.resourceRequest(for: origin)
++        request.setValue(
++            StreamingRange.header(offset: dataRequest.requestedOffset,
++                                  length: dataRequest.requestedLength,
++                                  toEnd: dataRequest.requestsAllDataToEndOfResource),
++            forHTTPHeaderField: "Range")
++        let task = session.dataTask(with: request)
++        lock.lock()
++        requestsByTask[task.taskIdentifier] = loadingRequest
++        tasksByRequest[ObjectIdentifier(loadingRequest)] = task
++        lock.unlock()
++        task.resume()
++        return true
++    }
++
++    func resourceLoader(_ resourceLoader: AVAssetResourceLoader,
++                        didCancel loadingRequest: AVAssetResourceLoadingRequest) {
++        lock.lock()
++        let task = tasksByRequest.removeValue(forKey: ObjectIdentifier(loadingRequest))
++        if let task { requestsByTask.removeValue(forKey: task.taskIdentifier) }
++        lock.unlock()
++        task?.cancel()
++    }
++
++    // MARK: URLSessionDataDelegate
++
++    private func loadingRequest(for task: URLSessionTask) -> AVAssetResourceLoadingRequest? {
++        lock.lock(); defer { lock.unlock() }
++        return requestsByTask[task.taskIdentifier]
++    }
++
++    private func forget(_ task: URLSessionTask) -> AVAssetResourceLoadingRequest? {
++        lock.lock(); defer { lock.unlock() }
++        guard let request = requestsByTask.removeValue(forKey: task.taskIdentifier) else { return nil }
++        tasksByRequest.removeValue(forKey: ObjectIdentifier(request))
++        return request
++    }
++
++    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
++                    didReceive response: URLResponse,
++                    completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void) {
++        guard let loadingRequest = loadingRequest(for: dataTask) else { completionHandler(.cancel); return }
++        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
++            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
++            _ = forget(dataTask)
++            loadingRequest.finishLoading(with: URLError(status == 403 ? .userAuthenticationRequired : .badServerResponse))
++            completionHandler(.cancel)
++            return
++        }
++        if let info = loadingRequest.contentInformationRequest {
++            info.contentType = StreamingRange.uniformType(mimeType: http.mimeType,
++                                                          pathExtension: origin.pathExtension)
++            let contentLength = http.expectedContentLength >= 0 ? http.expectedContentLength : nil
++            if let total = StreamingRange.totalLength(
++                contentRange: http.value(forHTTPHeaderField: "Content-Range"),
++                contentLength: contentLength) {
++                info.contentLength = total
++            }
++            info.isByteRangeAccessSupported = http.statusCode == 206
++                || http.value(forHTTPHeaderField: "Accept-Ranges")?.lowercased() == "bytes"
++        }
++        completionHandler(.allow)
++    }
++
++    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
++        loadingRequest(for: dataTask)?.dataRequest?.respond(with: data)
++    }
++
++    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
++        guard let loadingRequest = forget(task) else { return }
++        if let error, (error as? URLError)?.code != .cancelled {
++            loadingRequest.finishLoading(with: error)
++        } else if !loadingRequest.isCancelled {
++            loadingRequest.finishLoading()
++        }
+     }
+ }
+ 
+@@ -405,7 +614,7 @@ struct FileViewerSheet: View {
+     let client: LFGClient?
+     @Environment(\.dismiss) private var dismiss
+ 
+-    enum Phase: Equatable { case loading, failed(String), data(Data), localVideo(URL) }
++    enum Phase: Equatable { case loading, failed(String), data(Data), video(URL) }
+     @State private var phase: Phase = .loading
+ 
+     var body: some View {
+@@ -413,15 +622,17 @@ struct FileViewerSheet: View {
+             Group {
+                 switch phase {
+                 case .loading:
+-                    ProgressView(ref.kind == .video ? "Preparing video…" : "Loading…")
++                    ProgressView("Loading…")
+                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                 case .failed(let message):
+                     ContentUnavailableView("Can't load file", systemImage: "exclamationmark.triangle",
+                                            description: Text(message))
+                 case .data(let data):
+                     rendered(data)
+-                case .localVideo(let url):
+-                    HostVideoPlayer(url: url).ignoresSafeArea(edges: .bottom)
++                case .video(let url):
++                    // Streams from the host; the player shows its own buffering
++                    // state, so there is no app-level "Preparing…" phase.
++                    HostVideoPlayer(url: url, client: client).ignoresSafeArea(edges: .bottom)
+                 }
+             }
+             .navigationTitle(ref.filename)
+@@ -431,9 +642,6 @@ struct FileViewerSheet: View {
+         .task {
+             await load()
+         }
+-        .onDisappear {
+-            if case .localVideo(let url) = phase { try? FileManager.default.removeItem(at: url) }
+-        }
+     }
+ 
+     @ViewBuilder private func rendered(_ data: Data) -> some View {
+@@ -455,25 +663,15 @@ struct FileViewerSheet: View {
+ 
+     private func load() async {
+         guard let url else { phase = .failed("This file isn't available on the host."); return }
++        if ref.kind == .video {
++            phase = .video(url)
++            return
++        }
+         do {
+-            if ref.kind == .video {
+-                let downloaded: URL
+-                if let client { downloaded = try await client.downloadResource(from: url) }
+-                else { downloaded = try await URLSession.shared.download(from: url).0 }
+-                let directory = FileManager.default.temporaryDirectory
+-                    .appendingPathComponent("lfg-viewer", isDirectory: true)
+-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+-                let ext = url.pathExtension.isEmpty ? ref.filename.split(separator: ".").last.map(String.init) ?? "mp4"
+-                                                    : url.pathExtension
+-                let local = directory.appendingPathComponent(UUID().uuidString).appendingPathExtension(ext)
+-                try FileManager.default.moveItem(at: downloaded, to: local)
+-                phase = .localVideo(local)
+-            } else {
+-                let data: Data
+-                if let client { data = try await client.resourceData(from: url) }
+-                else { data = try await URLSession.shared.data(from: url).0 }
+-                phase = .data(data)
+-            }
++            let data: Data
++            if let client { data = try await client.resourceData(from: url) }
++            else { data = try await URLSession.shared.data(from: url).0 }
++            phase = .data(data)
+         } catch {
+             phase = .failed(error.localizedDescription)
+         }
+diff --git a/ios/LFG/SessionDetailView.swift b/ios/LFG/SessionDetailView.swift
+index 7092769..70842f9 100644
+--- a/ios/LFG/SessionDetailView.swift
++++ b/ios/LFG/SessionDetailView.swift
+@@ -38,6 +38,7 @@ struct SessionDetailView: View {
+     @Environment(AppSettings.self) private var settings
+ 
+     @Environment(\.scenePhase) private var scenePhase
++    @Environment(\.colorScheme) private var colorScheme
+     @State private var signInRequests: [PhoneSignInAgentRequest] = []
+     @State private var draft = ""
+     @State private var renaming = false
+@@ -433,7 +434,7 @@ struct SessionDetailView: View {
+         return Rectangle()
+             .fill(.clear)
+             .frame(height: totalHeight)
+-            .glassEffect(.regular, in: Rectangle().inset(by: -48))
++            .glassEffect(.chrome(colorScheme), in: Rectangle().inset(by: -48))
+             .mask {
+                 LinearGradient(
+                     stops: [
+@@ -473,7 +474,9 @@ struct SessionDetailView: View {
+                 }
+             }
+ 
+-            ForEach(signInRequests.filter(\.isWaiting)) { request in
++            // A waiting request the prompt panel is already showing (the server
++            // surfaces it as the session's prompt) gets one entry point, not two.
++            ForEach(signInRequests.filter { $0.isWaiting && $0.id != prompt?.signIn?.requestId }) { request in
+                 Button { presentedSheet = .requestedSignIn(request) } label: {
+                     HStack(spacing: 10) {
+                         Image(systemName: "key.fill")
+@@ -606,7 +609,15 @@ struct SessionDetailView: View {
+                     Color.clear.frame(height: 1).id(Self.newestAnchor).flippedRow()
+ 
+                     if let prompt {
+-                        PromptPanelView(sessionID: sid, prompt: prompt).flippedRow()
++                        PromptPanelView(sessionID: sid, prompt: prompt, onSignIn: { signIn in
++                            // The polled request list usually has the row already; fall
++                            // back to the requests sheet, which opens the id it is given.
++                            if let request = signInRequests.first(where: { $0.id == signIn.requestId && $0.isWaiting }) {
++                                presentedSheet = .requestedSignIn(request)
++                            } else {
++                                presentedSheet = .phoneSignIn(requestID: signIn.requestId)
++                            }
++                        }).flippedRow()
+                     }
+                     // What the model said just before asking. Held out of the
+                     // transcript by Claude Code until answered, so it arrives
+diff --git a/ios/LFG/Theme.swift b/ios/LFG/Theme.swift
+index 5e77440..0536036 100644
+--- a/ios/LFG/Theme.swift
++++ b/ios/LFG/Theme.swift
+@@ -124,6 +124,26 @@ struct StatusDot: View {
+     }
+ }
+ 
++extension Theme {
++    /// Untinted `.regular` Liquid Glass reads as a bright grey slab over a
++    /// black transcript in dark mode. A translucent black tint sinks the
++    /// chrome back toward the background while keeping the blur and the
++    /// specular rim. Light mode keeps the stock glass: a dark tint there
++    /// looks muddy against a white transcript.
++    static func glassDim(_ scheme: ColorScheme) -> Color? {
++        scheme == .dark ? Color.black.opacity(0.30) : nil
++    }
++}
++
++@available(iOS 26.0, *)
++extension Glass {
++    /// Regular glass for session chrome (top fade, composer), dimmed in dark mode.
++    static func chrome(_ scheme: ColorScheme) -> Glass {
++        if let tint = Theme.glassDim(scheme) { return .regular.tint(tint) }
++        return .regular
++    }
++}
++
+ struct GlassChromeContainer<Content: View>: View {
+     let spacing: CGFloat
+     @ViewBuilder let content: () -> Content
+diff --git a/ios/LFGCore/Sources/LFGCore/LFGClient.swift b/ios/LFGCore/Sources/LFGCore/LFGClient.swift
+index a5cb124..b76a6b9 100644
+--- a/ios/LFGCore/Sources/LFGCore/LFGClient.swift
++++ b/ios/LFGCore/Sources/LFGCore/LFGClient.swift
+@@ -160,6 +160,22 @@ public struct LFGClient: Sendable {
+         authenticated(URLRequest(url: resourceURL))
+     }
+ 
++    /// True when a request to `resourceURL` would carry this host's Access
++    /// credential — i.e. a player that can't send headers (AVPlayer) must go
++    /// through the app's own loader instead of fetching the URL directly.
++    public func authenticatesRequests(to resourceURL: URL) -> Bool {
++        accessCredential != nil && Self.sameOrigin(resourceURL, baseURL)
++    }
++
++    /// `GET /api/file?path=…` for a host-side absolute path. `maxWidth` asks the
++    /// server for a downscaled JPEG rendition of a raster image (`w=`), which
++    /// it buckets to 480/1200/2400 and caches; non-images ignore it.
++    public func hostFileURL(forPath path: String, maxWidth: Int? = nil) -> URL? {
++        var query = [URLQueryItem(name: "path", value: path)]
++        if let maxWidth, maxWidth > 0 { query.append(URLQueryItem(name: "w", value: String(maxWidth))) }
++        return url("api/file", query: query)
++    }
++
+     /// Load a host-owned image, document, or browser frame through the same
+     /// authenticated transport as the API. External URLs remain credential-free.
+     public func resourceData(from resourceURL: URL) async throws -> Data {
+diff --git a/ios/LFGCore/Sources/LFGCore/Models.swift b/ios/LFGCore/Sources/LFGCore/Models.swift
+index 83d5ea2..1e21208 100644
+--- a/ios/LFGCore/Sources/LFGCore/Models.swift
++++ b/ios/LFGCore/Sources/LFGCore/Models.swift
+@@ -238,6 +238,13 @@ public struct AgentPrompt: Codable, Sendable, Hashable {
+     /// this is the only context the user has while the question is live. Nil when
+     /// the agent asked with no preamble. Rendered above the question in the panel.
+     public var context: String?
++    /// Set when this prompt is a phone sign-in request the agent made
++    /// (`phoneSignInPrompt`, src/phone-sign-in-requests.ts) rather than a
++    /// selector on the pane. The session still grades needs-input through the
++    /// same ladder; the panel renders a sign-in button instead of numbered
++    /// answers, and must NOT offer Dismiss — Escape would interrupt the agent's
++    /// waiting command. Nil for every other prompt.
++    public var signIn: PromptSignIn?
+ 
+     public init(
+         question: String,
+@@ -245,10 +252,24 @@ public struct AgentPrompt: Codable, Sendable, Hashable {
+         detail: String? = nil,
+         header: String? = nil,
+         multiSelect: Bool? = nil,
+-        context: String? = nil
++        context: String? = nil,
++        signIn: PromptSignIn? = nil
+     ) {
+         self.question = question; self.options = options; self.detail = detail
+         self.header = header; self.multiSelect = multiSelect; self.context = context
++        self.signIn = signIn
++    }
++}
++
++/// The request behind a sign-in prompt. Metadata only — never cookies.
++public struct PromptSignIn: Codable, Sendable, Hashable {
++    public var requestId: String
++    public var url: String
++    public var website: String
++    public var targetName: String?
++
++    public init(requestId: String, url: String, website: String, targetName: String? = nil) {
++        self.requestId = requestId; self.url = url; self.website = website; self.targetName = targetName
+     }
+ }
+ 
+diff --git a/ios/LFGCore/Tests/LFGCoreTests/ModelsTests.swift b/ios/LFGCore/Tests/LFGCoreTests/ModelsTests.swift
+index 5befe26..b90d3f4 100644
+--- a/ios/LFGCore/Tests/LFGCoreTests/ModelsTests.swift
++++ b/ios/LFGCore/Tests/LFGCoreTests/ModelsTests.swift
+@@ -2,6 +2,33 @@ import XCTest
+ @testable import LFGCore
+ 
+ final class ModelsTests: XCTestCase {
++    /// A phone sign-in request rides the session's `prompt` (server:
++    /// `phoneSignInPrompt`). The `signIn` block is what tells the panel to render
++    /// a sign-in button instead of numbered answers; a prompt without it decodes
++    /// exactly as before.
++    func testAgentPromptDecodesSignInRequest() throws {
++        let json = Data("""
++        {"sessions":[{"sessionId":"s1","title":"Job","prompt":{
++          "source":"phone-sign-in","question":"Sign in to portal.example.com on your iPhone","header":"Sign in","options":[],
++          "signIn":{"requestId":"11111111-1111-4111-8111-111111111111","url":"https://portal.example.com/login","website":"portal.example.com","targetName":"Chrome — personal","expiresAt":1789553110807}
++        }}]}
++        """.utf8)
++        let prompt = try XCTUnwrap(JSONDecoder().decode(SessionsResponse.self, from: json).sessions[0].prompt)
++        XCTAssertEqual(prompt.question, "Sign in to portal.example.com on your iPhone")
++        XCTAssertEqual(prompt.header, "Sign in")
++        XCTAssertEqual(prompt.options, [])
++        XCTAssertEqual(prompt.signIn, PromptSignIn(
++            requestId: "11111111-1111-4111-8111-111111111111", url: "https://portal.example.com/login",
++            website: "portal.example.com", targetName: "Chrome — personal"))
++        // The ladder does not care which kind of prompt it is.
++        XCTAssertEqual(SessionDisplayState.resolve(promptPresent: true, blocked: false, busy: true), .needsInput)
++
++        let plain = Data("""
++        {"sessions":[{"sessionId":"s1","prompt":{"question":"Which file?","options":[{"index":1,"label":"a.ts"}]}}]}
++        """.utf8)
++        XCTAssertNil(try JSONDecoder().decode(SessionsResponse.self, from: plain).sessions[0].prompt?.signIn)
++    }
++
+ 
+     func testDecodeSessionsResponseLeniently() throws {
+         // Mirrors the real /api/sessions payload (extra fields, some null).
+diff --git a/src/commands/serve.ts b/src/commands/serve.ts
+index 217d7a9..6471e3f 100644
+--- a/src/commands/serve.ts
++++ b/src/commands/serve.ts
+@@ -1,4 +1,5 @@
+ import { BrowserSignInHub, signInHTTP, allowsSignInAdapter } from "../browser-sign-in.ts";
++import { phoneSignInPrompt, type SignInPrompt } from "../phone-sign-in-requests.ts";
+ import { readdir, realpath, stat } from "node:fs/promises";
+ import { statSync, mkdirSync, type Dirent, existsSync } from "node:fs";
+ import { tmpdir, homedir } from "node:os";
+@@ -81,6 +82,7 @@ import { capturePaneScroll, capturePaneEscaped, paneWidth, ensureFolderTrusted }
+ import { rootDir, inboxDir, setInbox, createDir, expandUserPath } from "../dirs.ts";
+ import { detectUrls } from "../links.ts";
+ import { decodeFilenameHeader, storedUploadName } from "../upload-names.ts";
++import { RENDITION_CACHE_CONTROL, isRenditionCandidate, renditionFor, renditionWidth } from "../file-thumbs.ts";
+ import { listSubagentSessions, resolveSubagentTranscript } from "../subagents.ts";
+ import type { Server, ServerWebSocket } from "bun";
+ 
+@@ -1014,16 +1016,24 @@ async function voiceStatusSnapshot(): Promise<string> {
+ async function resolveSessionPrompt(
+   tp: string | null,
+   pane: string | null,
+-): Promise<PanePrompt | PendingPrompt | null> {
++  // A waiting phone sign-in request for this session, already looked up by the
++  // caller (`phoneSignInPrompt`). It is the LAST resort on purpose: if the
++  // agent's waiting `browser-sign-in request` call is itself sitting on a
++  // permission dialog, that dialog is what needs answering first.
++  signIn: SignInPrompt | null = null,
++): Promise<PanePrompt | PendingPrompt | SignInPrompt | null> {
+   if (tp) {
+     const pending = await pendingToolPrompt(tp);
+     if (pending) return pending;
+   }
+-  if (!pane) return null;
+-  // Pass the last user turn so the pane scraper can tell a scrolled-off assistant
+-  // preamble apart from the user's own scrolled-off prompt when surfacing context.
+-  const lastUser = tp ? await lastUserPromptText(tp).catch(() => null) : null;
+-  return parsePrompt(pane, lastUser ?? undefined);
++  if (pane) {
++    // Pass the last user turn so the pane scraper can tell a scrolled-off assistant
++    // preamble apart from the user's own scrolled-off prompt when surfacing context.
++    const lastUser = tp ? await lastUserPromptText(tp).catch(() => null) : null;
++    const scraped = parsePrompt(pane, lastUser ?? undefined);
++    if (scraped) return scraped;
++  }
++  return signIn;
+ }
+ 
+ function sseHeaders(): Record<string, string> {
+@@ -1096,8 +1106,13 @@ export async function cmdServe() {
+   const browserSignIn = new BrowserSignInHub(undefined, {historyPath: join(homedir(), ".lfg", "phone-sign-in-history.json")});
+   setSendqJournal(journal);
+   setSendqStore(SendqStore.open(journalPath));
++  // A waiting phone sign-in request is a question to the user, so it rides the
++  // same `prompt` primitive as AskUserQuestion: journal delta, REST snapshot,
++  // push watcher, Live Activity row, and the client's needs-input grouping all
++  // follow from this one lookup.
++  const signInPrompt = (sid: string) => phoneSignInPrompt(browserSignIn.requests, sid);
+   startJournalPump(journal, {
+-    resolvePrompt: (tp, pane) => resolveSessionPrompt(tp, pane),
++    resolvePrompt: (tp, pane, sid) => resolveSessionPrompt(tp, pane, signInPrompt(sid)),
+     browserFrames,
+   });
+   startLeaseHeartbeat();
+@@ -1110,6 +1125,7 @@ export async function cmdServe() {
+       head: () => journal.head(),
+       hostId: () => hostInfo().hostId,
+       hostName: () => hostInfo().hostName,
++      signInPrompt,
+     });
+   };
+ 
+@@ -1908,12 +1924,37 @@ export async function cmdServe() {
+         );
+         if (!roots.some((r) => real === r || real.startsWith(r + "/")))
+           return err(403, "path outside allowed roots");
+-        const f = Bun.file(real);
+-        if (!(await f.exists())) return err(404, "file not found");
++        const original = Bun.file(real);
++        if (!(await original.exists())) return err(404, "file not found");
++        // `w=<px>`: serve a cached downscaled JPEG rendition instead of the
++        // original raster (see file-thumbs.ts — the phone path can be 50 KB/s,
++        // and a 9 MB screenshot is 228 KB at 1200 px). Falls back to the
++        // original bytes whenever a rendition can't be made.
++        let f = original;
++        let contentType = original.type || "application/octet-stream";
++        let cacheControl = "private, max-age=60";
++        let etag: string | null = null;
++        const width = renditionWidth(url.searchParams.get("w"));
++        if (width && isRenditionCandidate(real)) {
++          const rendition = await renditionFor(real, width);
++          if (rendition) {
++            if (req.headers.get("if-none-match") === rendition.etag) {
++              return new Response(null, {
++                status: 304,
++                headers: { ETag: rendition.etag, "Cache-Control": RENDITION_CACHE_CONTROL },
++              });
++            }
++            f = Bun.file(rendition.path);
++            contentType = rendition.type;
++            cacheControl = RENDITION_CACHE_CONTROL;
++            etag = rendition.etag;
++          }
++        }
+         const size = f.size;
+         const baseHeaders: Record<string, string> = {
+-          "Content-Type": f.type || "application/octet-stream",
+-          "Cache-Control": "private, max-age=60",
++          "Content-Type": contentType,
++          "Cache-Control": cacheControl,
++          ...(etag ? { ETag: etag } : {}),
+           // iOS AVPlayer streams remote video with Range requests and refuses
+           // to play a source that answers 200-with-the-whole-file. Advertise
+           // range support so it issues a 206-based progressive load.
+@@ -2599,6 +2640,13 @@ export async function cmdServe() {
+           if (!sess) return err(404, "session not found");
+           if (!sess.tmuxTarget)
+             return err(409, "session is not in a tmux pane — cannot dismiss");
++          // A phone sign-in prompt is not a selector on the pane: Escape there
++          // would interrupt the agent's waiting `browser-sign-in request` call.
++          // Guarded here, at the one choke point, so a client that predates the
++          // sign-in panel (and still offers Dismiss on any prompt) cannot do it.
++          const latest = journal.latestPrompt(m[1]!) as { source?: unknown } | null;
++          if (latest?.source === "phone-sign-in")
++            return err(409, "this prompt is a phone sign-in request — cancel it from the sign-in sheet");
+           // Skip the question without answering: Escape cancels the selector.
+           const r = await dismissPrompt(sess.tmuxTarget);
+           if (!r.ok) return err(502, r.error || "dismiss failed");
+diff --git a/src/journal-pump.ts b/src/journal-pump.ts
+index 49924b7..8707062 100644
+--- a/src/journal-pump.ts
++++ b/src/journal-pump.ts
+@@ -223,8 +223,10 @@ export function startSupervisedLoop(opts: {
+ }
+ 
+ export type PumpDeps = {
+-  /** serve.ts's resolveSessionPrompt — structured transcript prompt, else pane scrape. */
+-  resolvePrompt: (tp: string | null, pane: string | null) => Promise<unknown>;
++  /** serve.ts's resolveSessionPrompt — structured transcript prompt, else pane
++   *  scrape, else a waiting phone sign-in request for `sid` (see
++   *  `phoneSignInPrompt`). */
++  resolvePrompt: (tp: string | null, pane: string | null, sid: string) => Promise<unknown>;
+   browserFrames?: BrowserFrameStore;
+ };
+ 
+@@ -254,10 +256,13 @@ export function noteTurnEdge(w: { stitcher: PaneStitcher; wasBusy: boolean }, bu
+  */
+ export function withStitchedPreamble<T>(prompt: T, w: { stitcher: PaneStitcher }): T {
+   if (!prompt || typeof prompt !== "object") return prompt;
+-  const p = prompt as { question?: unknown; context?: unknown };
++  const p = prompt as { question?: unknown; context?: unknown; source?: unknown };
+   // Only pane-scraped prompts carry `context`; a structured transcript prompt
+-  // has its own fields and must not be touched.
+-  if (!("question" in p)) return prompt;
++  // has its own fields and must not be touched. A phone sign-in prompt is not on
++  // the pane at all: stitching the (busy, scrolling) pane onto it attached the
++  // agent's own command output as "context" and re-journaled the prompt every
++  // tick as that text changed.
++  if (!("question" in p) || p.source === "phone-sign-in") return prompt;
+   const stitched = w.stitcher.preamble();
+   if (!stitched) return prompt;
+   const current = typeof p.context === "string" ? p.context : "";
+@@ -493,7 +498,7 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
+       // by the time the selector renders the top of the turn is gone — but it
+       // WAS on screen a few captures ago. See `pane-history.ts`.
+       w.stitcher.consume(styled);
+-      const prompt = withStitchedPreamble(await deps.resolvePrompt(w.tp, pane), w);
++      const prompt = withStitchedPreamble(await deps.resolvePrompt(w.tp, pane, w.sid), w);
+       if (deltas.promptChanged(w.sid, prompt))
+         j.append(w.sid, "prompt", { sid: w.sid, prompt });
+       const paneBusy = pane ? isBusy(pane) : false;
+diff --git a/src/phone-sign-in-requests.test.ts b/src/phone-sign-in-requests.test.ts
+index cc47b43..c9c8bc6 100644
+--- a/src/phone-sign-in-requests.test.ts
++++ b/src/phone-sign-in-requests.test.ts
+@@ -87,3 +87,21 @@ test('restart during delivery preserves unconfirmed history and does not resend'
+   finish({state:'unknown',installed:0,total:2});await delivery;
+  } finally {rmSync(dir,{recursive:true,force:true});}
+ });
++
++test('phoneSignInPrompt surfaces only a waiting request as a needs-input prompt, newest first',()=>{
++ const {phoneSignInPrompt}=require('./phone-sign-in-requests.ts');
++ let now=1000;
++ const h=new PhoneSignInRequests({targets:()=>[target],transfer:async()=>({state:'installed',installed:1,total:1})},()=>now,100);
++ expect(phoneSignInPrompt(h,sid)).toBeNull();
++ expect(phoneSignInPrompt(h,'not-a-uuid')).toBeNull();
++ const r=h.create(create);
++ const p=phoneSignInPrompt(h,sid);
++ expect(p).toMatchObject({source:'phone-sign-in',question:'Sign in to portal.example.com on your iPhone',header:'Sign in',options:[],
++  signIn:{requestId:r.id,url:create.url,website:'portal.example.com',targetName:target.name,expiresAt:r.expiresAt}});
++ expect(JSON.stringify(p)).not.toContain('cookie');
++ expect(phoneSignInPrompt(h,'22222222-2222-4222-8222-222222222222')).toBeNull();
++ h.cancel(r.id);expect(phoneSignInPrompt(h,sid)).toBeNull();
++ const b=h.create(create);now=1101;expect(h.get(b.id)?.state).toBe('expired');expect(phoneSignInPrompt(h,sid)).toBeNull();
++ now=1200;const c=h.create(create);const done=h.complete(c.id,cookies);expect(phoneSignInPrompt(h,sid)).toBeNull();
++ return done;
++});
+diff --git a/src/phone-sign-in-requests.ts b/src/phone-sign-in-requests.ts
+index 4c597e0..ee25eec 100644
+--- a/src/phone-sign-in-requests.ts
++++ b/src/phone-sign-in-requests.ts
+@@ -114,3 +114,40 @@ export class PhoneSignInRequests {
+     return {...r};
+   }
+ }
++
++/**
++ * The sign-in request as a session prompt.
++ *
++ * A waiting request is the agent asking the user something — "sign in to this
++ * site on your phone" — and every consumer of "needs input" already keys off the
++ * session's `prompt`: the journal delta, the REST snapshot, the push watcher, the
++ * Live Activity row, and the client's display ladder. Shape-compatible with
++ * `PanePrompt` / `PendingPrompt` (question + options), with `options` empty and
++ * a `signIn` block the client uses to render a sign-in button instead of numbered
++ * answers. `source` lets a consumer tell it apart; a client that ignores `signIn`
++ * still shows the question and grades the session needs-input.
++ *
++ * Newest waiting request wins when a session somehow has more than one. Anything
++ * not `waiting` — delivering, done, cancelled, expired, offline — is not a
++ * question any more, so it returns null and the prompt retracts on the next tick.
++ */
++export type SignInPrompt = {
++  source: "phone-sign-in";
++  question: string;
++  header: string;
++  options: never[];
++  signIn: { requestId: string; url: string; website: string; targetName: string; expiresAt: number };
++};
++export function phoneSignInPrompt(requests: Pick<PhoneSignInRequests, "list">, sessionId: string | null | undefined): SignInPrompt | null {
++  if (!sessionId || !uuid.test(sessionId)) return null;
++  const r = requests.list(sessionId).find(x => x.state === "waiting"); // list() is newest-first
++  if (!r) return null;
++  const website = loginURL(r.url).host;
++  return {
++    source: "phone-sign-in",
++    question: `Sign in to ${website} on your iPhone`,
++    header: "Sign in",
++    options: [],
++    signIn: { requestId: r.id, url: r.url, website, targetName: r.target.name, expiresAt: r.expiresAt },
++  };
++}
+diff --git a/src/push/watcher.test.ts b/src/push/watcher.test.ts
+index 335fbec..dd8bf85 100644
+--- a/src/push/watcher.test.ts
++++ b/src/push/watcher.test.ts
+@@ -1074,3 +1074,80 @@ describe("duplicate sessionId in one tick (phantom-notification storm)", () => {
+     expect(content.working).toBe(0);
+   });
+ });
++
++// A question that appears while the session is still busy — AskUserQuestion with
++// hooks installed (the turn stays in flight until answered) and a phone sign-in
++// request (the agent is blocked in its waiting command). Journal evidence: every
++// recent question was answered before `busy` dropped, so gating on idle meant no
++// needs-input push at all.
++describe("reduceTransition — prompt while busy", () => {
++  test("a prompt appearing while busy emits 'needs-input' at once", () => {
++    const r = reduceTransition(seed(true, false), obs(true, true, "Sign in to portal.example.com on your iPhone"), 1000);
++    expect(r.event).toBe("needs-input");
++    expect(r.state).toEqual({ busy: true, promptPresent: true, lastNotifiedAt: 1000 });
++  });
++
++  test("busy → idle with a prompt that was already announced stays silent", () => {
++    const a = reduceTransition(seed(true, false), obs(true, true, "Q?"), 1000);
++    expect(a.event).toBe("needs-input");
++    const b = reduceTransition(a.state, obs(false, true, "Q?"), 60_000);
++    expect(b.event).toBeNull();
++  });
++
++  test("a prompt still present while busy does not re-fire on later ticks", () => {
++    const a = reduceTransition(seed(true, false), obs(true, true, "Q?"), 1000);
++    const b = reduceTransition(a.state, obs(true, true, "Q?"), 60_000);
++    expect(b.event).toBeNull();
++  });
++
++  test("the prompt retracting while busy (sign-in done / cancelled) emits nothing", () => {
++    const a = reduceTransition(seed(true, false), obs(true, true, "Q?"), 1000);
++    const b = reduceTransition(a.state, obs(true, false), 60_000);
++    expect(b.event).toBeNull();
++    expect(b.state.promptPresent).toBe(false);
++  });
++
++  test("busy prompt push is deduped against a push moments earlier, then retried", () => {
++    const a = reduceTransition(seed(true, false), obs(false, false), 1000);
++    expect(a.event).toBe("finished");
++    const b = reduceTransition(a.state, obs(true, true, "Q?"), 1000 + 3000);
++    expect(b.event).toBeNull();
++    // The auditor's edge: the swallowed prompt must not be buried. Still busy,
++    // still asking, window elapsed → it fires; a later busy→idle stays silent.
++    const c = reduceTransition(b.state, obs(true, true, "Q?"), 1000 + 11_000);
++    expect(c.event).toBe("needs-input");
++    const d = reduceTransition(c.state, obs(false, true, "Q?"), 1000 + 60_000);
++    expect(d.event).toBeNull();
++  });
++});
++
++describe("runPushTick — phone sign-in request", () => {
++  test("a sign-in prompt appearing mid-turn pushes 'needs-input' carrying its question", async () => {
++    const sent: ApnsPayload[] = [];
++    const prior = new Map<string, PriorState>();
++    let state = obs(true, false);
++    const deps: TickDeps = {
++      sessions: async () => [{ sessionId: "s1", title: "Job", tmuxTarget: "t" }],
++      observe: async () => state,
++      devices: async () => [{ token: "a", env: "sandbox" }],
++      cfg,
++      send: async (_d, p) => {
++        sent.push(p);
++        return { ok: true, status: 200 };
++      },
++      now: () => 1000,
++    };
++    await runPushTick(prior, deps);
++    // The agent is still busy (blocked in `browser-sign-in request`) when the
++    // request lands.
++    state = obs(true, true, "Sign in to portal.example.com on your iPhone");
++    await runPushTick(prior, deps);
++    expect(sent.length).toBe(1);
++    expect(sent[0].kind).toBe("needs-input");
++    expect(sent[0].body).toBe("Sign in to portal.example.com on your iPhone");
++    // Done on the phone: request leaves `waiting`, prompt retracts, agent resumes.
++    state = obs(true, false);
++    await runPushTick(prior, deps);
++    expect(sent.length).toBe(1);
++  });
++});
+diff --git a/src/push/watcher.ts b/src/push/watcher.ts
+index 7bf6286..348a75e 100644
+--- a/src/push/watcher.ts
++++ b/src/push/watcher.ts
+@@ -74,11 +74,14 @@ const DEDUPE_MS = 10_000;
+  * is. Emits at most one event per call.
+  *
+  * Rules:
+- *  - The agent going from busy → idle is a "your turn" moment. If a prompt is
+- *    pending it's needs-input; otherwise the turn just finished.
+- *  - A prompt newly appearing while already idle (it can land a tick after busy
+- *    flips) is needs-input.
+- *  - Dedupe: never emit within DEDUPE_MS of the last emit for this session.
++ *  - A prompt newly appearing is needs-input, whether or not the session is
++ *    busy — a parked question keeps the turn in flight, so waiting for idle
++ *    would wait for the answer (or the 15-minute stall demotion).
++ *  - The agent going from busy → idle with nothing pending is "finished". With
++ *    a prompt still pending it announces nothing: that prompt fired when it
++ *    appeared.
++ *  - Dedupe: never emit within DEDUPE_MS of the last emit for this session. A
++ *    needs-input the window swallows is retried on a later tick, not dropped.
+  *  - Seeding (first observation of a session) is the caller's job — it records
+  *    state without calling this, so a session already idle/prompting at startup
+  *    doesn't fire.
+@@ -95,22 +98,39 @@ export function reduceTransition(
+     lastNotifiedAt: prev.lastNotifiedAt,
+   };
+ 
+-  // Still (or again) working — nothing to announce yet.
+-  if (next.busy) return { event: null, state: carry };
+-
+   const stoppedThisTick = prev.busy && !next.busy;
+   const promptJustAppeared = !prev.promptPresent && next.promptPresent;
+ 
+   let candidate: PushKind | null = null;
+-  if (stoppedThisTick) {
+-    candidate = next.promptPresent ? "needs-input" : "finished";
+-  } else if (promptJustAppeared) {
++  if (promptJustAppeared) {
++    // A question is the needs-input moment, and it is NOT gated on idle. With
++    // hooks installed a session parked on AskUserQuestion is `busy` the whole
++    // time it waits (the turn is in flight; `Stop` has not fired), and journal
++    // evidence showed every recent question answered before busy ever dropped —
++    // so the old busy-first guard meant no needs-input push fired for any of
++    // them. A phone sign-in request is the same shape: the agent is blocked in
++    // its waiting command, mid-turn, asking the user for something.
+     candidate = "needs-input";
++  } else if (next.busy) {
++    // Still (or again) working — nothing to announce yet.
++    return { event: null, state: carry };
++  } else if (stoppedThisTick && !next.promptPresent) {
++    // A prompt still present here was announced when it appeared; only a clean
++    // stop with nothing pending is "finished".
++    candidate = "finished";
+   }
+ 
+   if (candidate && now - prev.lastNotifiedAt >= dedupeMs) {
+     return { event: candidate, state: { ...carry, lastNotifiedAt: now } };
+   }
++  if (candidate === "needs-input") {
++    // Swallowed by the dedupe window. Recording the prompt as seen here would
++    // bury it for good: it can never "appear" again, and the later busy→idle
++    // deliberately stays silent. Leave it unrecorded so the next tick sees it
++    // appear afresh and retries once the window has passed — a question is the
++    // one state that needs a human, so it is worth a late push, never a lost one.
++    return { event: null, state: { ...carry, promptPresent: false } };
++  }
+   return { event: null, state: carry };
+ }
+ 
+@@ -410,21 +430,28 @@ export function buildPayload(
+ 
+ // ---- wiring (the impure parts) ----
+ 
++/** A waiting phone sign-in request for a session, as a prompt (`phoneSignInPrompt`). */
++export type SignInPromptLookup = (sid: string) => { question: string } | null;
++
+ // Observe a single session's live state via the same primitives the SSE loop
+ // uses. Pane-less sessions never surface pane-scraped prompts (matching the
+-// live stream's behavior).
+-async function observeSession(s: {
+-  sessionId?: string | null;
+-  tmuxTarget?: string | null;
+-}): Promise<SessionState> {
++// live stream's behavior), but a phone sign-in request is not pane state and
++// counts either way.
++async function observeSession(
++  s: { sessionId?: string | null; tmuxTarget?: string | null },
++  signInPrompt?: SignInPromptLookup,
++): Promise<SessionState> {
+   const delegated = s.sessionId ? codexDelegationSessionIds().has(s.sessionId) : false;
++  const signIn = s.sessionId ? (signInPrompt?.(s.sessionId) ?? null) : null;
+   if (!s.tmuxTarget) {
+-    return { busy: delegated, promptPresent: false };
++    return { busy: delegated, promptPresent: !!signIn, promptQuestion: signIn?.question ?? null };
+   }
+   const pane = await capturePaneAsync(s.tmuxTarget);
+   const tp = s.sessionId ? await resolveTranscript(s.sessionId) : null;
+-  let prompt: PendingPrompt | PanePrompt | null = tp ? await pendingToolPrompt(tp) : null;
++  let prompt: PendingPrompt | PanePrompt | { question: string } | null = tp ? await pendingToolPrompt(tp) : null;
+   if (!prompt && pane) prompt = parsePrompt(pane);
++  // Same precedence as serve.ts's resolveSessionPrompt: a real dialog first.
++  if (!prompt) prompt = signIn;
+   // The SAME derivation the journal pump runs (`journal-pump.ts`), through the
+   // same two functions — not a second implementation of the same idea. This used
+   // to call `transcriptTurnState` directly, which skipped the hook layer and the
+@@ -727,7 +754,9 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
+ }
+ 
+ let timer: ReturnType<typeof setInterval> | null = null;
+-type StartPushWatcherDeps = Pick<Partial<TickDeps>, "head" | "hostId" | "hostName">;
++type StartPushWatcherDeps = Pick<Partial<TickDeps>, "head" | "hostId" | "hostName"> & {
++  signInPrompt?: SignInPromptLookup;
++};
+ 
+ /**
+  * The live fleet activity, at module scope rather than inside `startPushWatcher`,
+@@ -860,7 +889,7 @@ export function startPushWatcher(
+     });
+   const deps: TickDeps = {
+     sessions: listSessions,
+-    observe: observeSession,
++    observe: (s) => observeSession(s, injected.signInPrompt),
+     devices: listDevices,
+     cfg,
+     send: sendApns,

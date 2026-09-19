@@ -110,6 +110,9 @@ past four stale copies of it.
 | SC5 | `bun test src/push` → 105 pass / 0 fail across 7 files; `bunx tsc --noEmit -p .` → clean; `cd ios/LFGCore && swift test` → 536 tests, 0 failures, 1 skipped | terminal |
 | SC6 | not run — needs the Pro server restarted and a real phone `client-ended` event | pending Eugene's go on the restart (23 tmux sessions live; 0 waiting phone sign-ins; server process from Sep 17 14:38 also carries another session's uncommitted watcher edits, whose tests pass) |
 
+| Deploy | Pro + Air servers restarted by port 2026-09-19 08:56 HKT (Pro pid 32458, Air pid 90884, both health 200; Air source verified to contain the change first, `bun install --frozen-lockfile` clean) | Trace log after restart: routine single-token updates only, no `client-ended` yet — SC6 still unobserved | `~/.lfg/liveactivity.log` |
+| TestFlight | first archive (snapshot 08:58) failed on another session's mid-edit in `SessionDetailView.swift:436`; re-snapshotted 09:03 after that edit moved on; `deploy_testflight` uploaded build **202609190904** at 09:08 | `verify_testflight_build build_number:202609190904` → ipa CFBundleVersion=202609190904 v1.3.0; VALID at 09:11:00 (poll 3/20); **DoD PASS**: train 1.3.0 (highest), internal=IN_BETA_TESTING | `.claude/feature/evidence/testflight-20260919/` (deploy + verify logs, tree diff and status at archive) |
+
 Auditor: skipped. Both changes are internal (a pure reducer and a boundary that only
 acts when ActivityKit reports two cards); the only user-observable effect needs a
 real APNs event on a real phone, which no auditor can drive. SC6 is the live check.
