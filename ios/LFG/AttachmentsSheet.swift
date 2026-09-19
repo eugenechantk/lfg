@@ -40,7 +40,7 @@ struct AttachmentsSheet: View {
         .sheet(item: $viewing) { ref in
             FileViewerSheet(
                 ref: ref,
-                url: hostFiles?.resolve(rawPath: ref.raw),
+                url: hostFiles?.viewerURL(for: ref),
                 client: hostFiles?.client
             )
         }

@@ -18,10 +18,15 @@ struct HostFiles: Sendable {
     /// outside a session, where only absolute paths can be served.
     var cwd: String? = nil
 
-    func fileURL(forPath path: String) -> URL? {
-        var c = URLComponents(url: baseURL.appendingPathComponent("api/file"), resolvingAgainstBaseURL: false)
-        c?.queryItems = [URLQueryItem(name: "path", value: path)]
-        return c?.url
+    /// Rendition widths the app asks the server for (`w=`; see
+    /// `file-thumbs.ts`). Inline transcript images are read at phone width;
+    /// the full-screen viewer gets enough pixels for a 3× screen at 2× pinch.
+    /// Both are 5–40× fewer bytes than the PNG the agent wrote.
+    static let inlineImageWidth = 1200
+    static let viewerImageWidth = 2400
+
+    func fileURL(forPath path: String, maxWidth: Int? = nil) -> URL? {
+        client.hostFileURL(forPath: path, maxWidth: maxWidth)
     }
 
     /// Turn a relative path into an absolute host path by joining the session cwd.
@@ -32,17 +37,47 @@ struct HostFiles: Sendable {
     }
 
     /// Resolve a URL parsed out of markdown/text to something loadable.
-    func resolve(_ url: URL) -> URL? {
+    /// `maxWidth` only affects host files (a rendition request); external URLs
+    /// pass through untouched.
+    func resolve(_ url: URL, maxWidth: Int? = nil) -> URL? {
         if let s = url.scheme?.lowercased(), s == "http" || s == "https" { return url }
         let path = url.scheme == "file" ? url.path : url.absoluteString
         guard let abs = absolutePath(path) else { return nil }
-        return fileURL(forPath: abs)
+        return fileURL(forPath: abs, maxWidth: maxWidth)
     }
 
-    func resolve(rawPath: String) -> URL? {
+    func resolve(rawPath: String, maxWidth: Int? = nil) -> URL? {
         if rawPath.hasPrefix("http://") || rawPath.hasPrefix("https://") { return URL(string: rawPath) }
         guard let abs = absolutePath(rawPath) else { return nil }
-        return fileURL(forPath: abs)
+        return fileURL(forPath: abs, maxWidth: maxWidth)
+    }
+
+    /// The URL `FileViewerSheet` opens for an attachment. The ONE place that
+    /// decides an image opens as a 2400 px rendition (the viewer is for
+    /// reading a screenshot, not archiving the PNG) — every card that opens
+    /// the viewer goes through here, so no call site can forget the width.
+    func viewerURL(for ref: MediaRef) -> URL? {
+        resolve(rawPath: ref.raw, maxWidth: ref.kind == .image ? Self.viewerImageWidth : nil)
+    }
+}
+
+/// Decoded inline images, keyed by URL, so a transcript row that leaves and
+/// re-enters the lazy stack doesn't decode (or, past `URLCache`, re-fetch)
+/// the same screenshot. Cost is the bitmap size; the limit is generous
+/// because a 1200 px rendition is ~4 MB decoded.
+@MainActor
+enum InlineImageCache {
+    private static let cache: NSCache<NSString, UIImage> = {
+        let c = NSCache<NSString, UIImage>()
+        c.totalCostLimit = 96 << 20
+        return c
+    }()
+
+    static func image(for url: URL) -> UIImage? { cache.object(forKey: url.absoluteString as NSString) }
+
+    static func store(_ image: UIImage, for url: URL) {
+        let cost = Int(image.size.width * image.size.height * image.scale * image.scale * 4)
+        cache.setObject(image, forKey: url.absoluteString as NSString, cost: cost)
     }
 }
 
@@ -240,7 +275,9 @@ private struct HostImageProvider: ImageProvider {
     let hostFiles: HostFiles?
     func makeImage(url: URL?) -> some View {
         Group {
-            if let url, let resolved = hostFiles?.resolve(url) ?? (url.scheme != nil ? url : nil) {
+            if let url,
+               let resolved = hostFiles?.resolve(url, maxWidth: HostFiles.inlineImageWidth)
+                   ?? (url.scheme != nil ? url : nil) {
                 AuthenticatedImage(url: resolved, client: hostFiles?.client)
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -271,6 +308,7 @@ private struct AuthenticatedImage: View {
         }
         .task(id: url) {
             failed = false
+            if let cached = InlineImageCache.image(for: url) { image = cached; return }
             do {
                 let data: Data
                 if let client { data = try await client.resourceData(from: url) }
@@ -279,6 +317,7 @@ private struct AuthenticatedImage: View {
                     if !Task.isCancelled { failed = true }
                     return
                 }
+                InlineImageCache.store(decoded, for: url)
                 image = decoded
             } catch is CancellationError {
                 return
@@ -310,7 +349,7 @@ struct MediaAttachmentsView: View {
         .sheet(item: $viewing) { ref in
             FileViewerSheet(
                 ref: ref,
-                url: hostFiles?.resolve(rawPath: ref.raw),
+                url: hostFiles?.viewerURL(for: ref),
                 client: hostFiles?.client
             )
         }
@@ -354,15 +393,26 @@ struct MediaAttachmentsView: View {
 ///    transcript re-renders on every SSE delta) no longer builds a fresh
 ///    `AVPlayer` and restart playback from zero.
 ///
-/// Protected videos are downloaded to a temporary file before this view is
-/// created. AVPlayer has no supported arbitrary-header API, so pointing it at a
-/// Cloudflare Access URL would silently omit the service credential.
+/// The video is STREAMED, never downloaded first. AVPlayer fetches byte ranges
+/// and starts once it has the header and a few seconds of frames — on the
+/// 200–400 MB sim recordings agents produce, the old download-then-play path
+/// meant minutes of "Preparing video…" (see the 2026-09-17 media diagnosis).
+///
+/// AVPlayer has no supported way to add request headers, and Cloudflare Access
+/// refuses a request without the service-token headers (the `CF_Authorization`
+/// cookie alone is a 403). So for a credentialed host the asset goes through
+/// `StreamingResourceLoader`, which answers AVPlayer's range requests via
+/// `LFGClient.resourceRequest(for:)`; an uncredentialed host (LAN, loopback)
+/// gets the plain URL — `/api/file` already answers `206`.
 struct HostVideoPlayer: UIViewControllerRepresentable {
     let url: URL
+    let client: LFGClient?
 
     @MainActor final class Coordinator {
         let controller = AVPlayerViewController()
         var url: URL?
+        /// Retained here: `AVAssetResourceLoader` holds its delegate weakly.
+        var loader: StreamingResourceLoader?
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -386,12 +436,171 @@ struct HostVideoPlayer: UIViewControllerRepresentable {
 
     static func dismantleUIViewController(_ vc: AVPlayerViewController, coordinator: Coordinator) {
         vc.player?.pause()
+        coordinator.loader?.invalidate()
     }
 
     private func load(into coordinator: Coordinator) {
         guard coordinator.url != url else { return }
         coordinator.url = url
-        coordinator.controller.player = AVPlayer(url: url)
+        coordinator.loader?.invalidate()
+        coordinator.loader = nil
+        let asset: AVURLAsset
+        if let client, client.authenticatesRequests(to: url) {
+            let loader = StreamingResourceLoader(origin: url, client: client)
+            coordinator.loader = loader
+            asset = loader.makeAsset()
+        } else {
+            asset = AVURLAsset(url: url)
+        }
+        let item = AVPlayerItem(asset: asset)
+        let player = AVPlayer(playerItem: item)
+        player.automaticallyWaitsToMinimizeStalling = true
+        coordinator.controller.player = player
+        player.play()
+    }
+}
+
+/// Answers `AVAssetResourceLoader`'s byte-range requests for one host video by
+/// forwarding each one through the authenticated transport.
+///
+/// AVPlayer opens the asset with a custom scheme (`lfg-stream://…`) so the
+/// loader is consulted instead of the network. Each loading request becomes
+/// one `URLSessionDataTask` carrying `Range:` plus the Access headers; the
+/// response's `Content-Range` fills in the content information (type, total
+/// length, ranges supported) and every received chunk is handed to the
+/// request as it arrives, so playback starts before the request finishes.
+/// Cancelled loading requests (seeks, dismissal) cancel their task.
+final class StreamingResourceLoader: NSObject, AVAssetResourceLoaderDelegate, URLSessionDataDelegate, @unchecked Sendable {
+    static let scheme = "lfg-stream"
+
+    private let origin: URL
+    private let client: LFGClient
+    private let lock = NSLock()
+    private var requestsByTask: [Int: AVAssetResourceLoadingRequest] = [:]
+    private var tasksByRequest: [ObjectIdentifier: URLSessionDataTask] = [:]
+    private let delegateQueue: OperationQueue = {
+        let q = OperationQueue()
+        q.maxConcurrentOperationCount = 1
+        q.name = "lfg.streaming-resource-loader"
+        return q
+    }()
+    private lazy var session: URLSession = {
+        let config = URLSessionConfiguration.default
+        // Media bytes must not enter URLCache: a 235 MB range set would evict
+        // every screenshot rendition the transcript relies on.
+        config.urlCache = nil
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        // Idle timeout, not total: a slow path (50 KB/s) is fine as long as
+        // bytes keep flowing.
+        config.timeoutIntervalForRequest = 60
+        return URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
+    }()
+
+    init(origin: URL, client: LFGClient) {
+        self.origin = origin
+        self.client = client
+    }
+
+    /// The asset AVPlayer should play. Query string (the `path=`) is preserved
+    /// but irrelevant — every request maps back to `origin`.
+    func makeAsset() -> AVURLAsset {
+        var comps = URLComponents(url: origin, resolvingAgainstBaseURL: false)
+        comps?.scheme = Self.scheme
+        let asset = AVURLAsset(url: comps?.url ?? origin)
+        asset.resourceLoader.setDelegate(self, queue: DispatchQueue(label: "lfg.streaming-resource-loader.avf"))
+        return asset
+    }
+
+    func invalidate() {
+        lock.lock()
+        let tasks = Array(tasksByRequest.values)
+        tasksByRequest.removeAll()
+        requestsByTask.removeAll()
+        lock.unlock()
+        tasks.forEach { $0.cancel() }
+        session.invalidateAndCancel()
+    }
+
+    // MARK: AVAssetResourceLoaderDelegate
+
+    func resourceLoader(_ resourceLoader: AVAssetResourceLoader,
+                        shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest) -> Bool {
+        guard let dataRequest = loadingRequest.dataRequest else { return false }
+        var request = client.resourceRequest(for: origin)
+        request.setValue(
+            StreamingRange.header(offset: dataRequest.requestedOffset,
+                                  length: dataRequest.requestedLength,
+                                  toEnd: dataRequest.requestsAllDataToEndOfResource),
+            forHTTPHeaderField: "Range")
+        let task = session.dataTask(with: request)
+        lock.lock()
+        requestsByTask[task.taskIdentifier] = loadingRequest
+        tasksByRequest[ObjectIdentifier(loadingRequest)] = task
+        lock.unlock()
+        task.resume()
+        return true
+    }
+
+    func resourceLoader(_ resourceLoader: AVAssetResourceLoader,
+                        didCancel loadingRequest: AVAssetResourceLoadingRequest) {
+        lock.lock()
+        let task = tasksByRequest.removeValue(forKey: ObjectIdentifier(loadingRequest))
+        if let task { requestsByTask.removeValue(forKey: task.taskIdentifier) }
+        lock.unlock()
+        task?.cancel()
+    }
+
+    // MARK: URLSessionDataDelegate
+
+    private func loadingRequest(for task: URLSessionTask) -> AVAssetResourceLoadingRequest? {
+        lock.lock(); defer { lock.unlock() }
+        return requestsByTask[task.taskIdentifier]
+    }
+
+    private func forget(_ task: URLSessionTask) -> AVAssetResourceLoadingRequest? {
+        lock.lock(); defer { lock.unlock() }
+        guard let request = requestsByTask.removeValue(forKey: task.taskIdentifier) else { return nil }
+        tasksByRequest.removeValue(forKey: ObjectIdentifier(request))
+        return request
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
+                    didReceive response: URLResponse,
+                    completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void) {
+        guard let loadingRequest = loadingRequest(for: dataTask) else { completionHandler(.cancel); return }
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            _ = forget(dataTask)
+            loadingRequest.finishLoading(with: URLError(status == 403 ? .userAuthenticationRequired : .badServerResponse))
+            completionHandler(.cancel)
+            return
+        }
+        if let info = loadingRequest.contentInformationRequest {
+            info.contentType = StreamingRange.uniformType(mimeType: http.mimeType,
+                                                          pathExtension: origin.pathExtension)
+            let contentLength = http.expectedContentLength >= 0 ? http.expectedContentLength : nil
+            if let total = StreamingRange.totalLength(
+                contentRange: http.value(forHTTPHeaderField: "Content-Range"),
+                contentLength: contentLength) {
+                info.contentLength = total
+            }
+            info.isByteRangeAccessSupported = http.statusCode == 206
+                || http.value(forHTTPHeaderField: "Accept-Ranges")?.lowercased() == "bytes"
+        }
+        completionHandler(.allow)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        loadingRequest(for: dataTask)?.dataRequest?.respond(with: data)
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let loadingRequest = forget(task) else { return }
+        if let error, (error as? URLError)?.code != .cancelled {
+            loadingRequest.finishLoading(with: error)
+        } else if !loadingRequest.isCancelled {
+            loadingRequest.finishLoading()
+        }
     }
 }
 
@@ -405,7 +614,7 @@ struct FileViewerSheet: View {
     let client: LFGClient?
     @Environment(\.dismiss) private var dismiss
 
-    enum Phase: Equatable { case loading, failed(String), data(Data), localVideo(URL) }
+    enum Phase: Equatable { case loading, failed(String), data(Data), video(URL) }
     @State private var phase: Phase = .loading
 
     var body: some View {
@@ -413,15 +622,17 @@ struct FileViewerSheet: View {
             Group {
                 switch phase {
                 case .loading:
-                    ProgressView(ref.kind == .video ? "Preparing video…" : "Loading…")
+                    ProgressView("Loading…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .failed(let message):
                     ContentUnavailableView("Can't load file", systemImage: "exclamationmark.triangle",
                                            description: Text(message))
                 case .data(let data):
                     rendered(data)
-                case .localVideo(let url):
-                    HostVideoPlayer(url: url).ignoresSafeArea(edges: .bottom)
+                case .video(let url):
+                    // Streams from the host; the player shows its own buffering
+                    // state, so there is no app-level "Preparing…" phase.
+                    HostVideoPlayer(url: url, client: client).ignoresSafeArea(edges: .bottom)
                 }
             }
             .navigationTitle(ref.filename)
@@ -430,9 +641,6 @@ struct FileViewerSheet: View {
         }
         .task {
             await load()
-        }
-        .onDisappear {
-            if case .localVideo(let url) = phase { try? FileManager.default.removeItem(at: url) }
         }
     }
 
@@ -455,25 +663,15 @@ struct FileViewerSheet: View {
 
     private func load() async {
         guard let url else { phase = .failed("This file isn't available on the host."); return }
+        if ref.kind == .video {
+            phase = .video(url)
+            return
+        }
         do {
-            if ref.kind == .video {
-                let downloaded: URL
-                if let client { downloaded = try await client.downloadResource(from: url) }
-                else { downloaded = try await URLSession.shared.download(from: url).0 }
-                let directory = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("lfg-viewer", isDirectory: true)
-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                let ext = url.pathExtension.isEmpty ? ref.filename.split(separator: ".").last.map(String.init) ?? "mp4"
-                                                    : url.pathExtension
-                let local = directory.appendingPathComponent(UUID().uuidString).appendingPathExtension(ext)
-                try FileManager.default.moveItem(at: downloaded, to: local)
-                phase = .localVideo(local)
-            } else {
-                let data: Data
-                if let client { data = try await client.resourceData(from: url) }
-                else { data = try await URLSession.shared.data(from: url).0 }
-                phase = .data(data)
-            }
+            let data: Data
+            if let client { data = try await client.resourceData(from: url) }
+            else { data = try await URLSession.shared.data(from: url).0 }
+            phase = .data(data)
         } catch {
             phase = .failed(error.localizedDescription)
         }

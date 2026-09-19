@@ -8,6 +8,12 @@ struct LFGApp: App {
     @State private var store: SessionStore
 
     init() {
+        // Before anything touches `URLSession.shared` (which captures
+        // `URLCache.shared` on first use): the stock cache is 512 KB / 10 MB,
+        // too small to hold a transcript's worth of screenshot renditions, so
+        // scrolling back to an image re-fetched it over a path that can be
+        // 50 KB/s. Renditions arrive with `ETag` + `max-age=86400` and fit here.
+        URLCache.shared = URLCache(memoryCapacity: 32 << 20, diskCapacity: 256 << 20)
         let s = AppSettings()
         let storeBootstrap = Self.makeStore()
         let st = SessionStore(

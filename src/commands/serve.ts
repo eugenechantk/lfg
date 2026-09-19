@@ -82,6 +82,7 @@ import { capturePaneScroll, capturePaneEscaped, paneWidth, ensureFolderTrusted }
 import { rootDir, inboxDir, setInbox, createDir, expandUserPath } from "../dirs.ts";
 import { detectUrls } from "../links.ts";
 import { decodeFilenameHeader, storedUploadName } from "../upload-names.ts";
+import { RENDITION_CACHE_CONTROL, isRenditionCandidate, renditionFor, renditionWidth } from "../file-thumbs.ts";
 import { listSubagentSessions, resolveSubagentTranscript } from "../subagents.ts";
 import type { Server, ServerWebSocket } from "bun";
 
@@ -1923,12 +1924,37 @@ export async function cmdServe() {
         );
         if (!roots.some((r) => real === r || real.startsWith(r + "/")))
           return err(403, "path outside allowed roots");
-        const f = Bun.file(real);
-        if (!(await f.exists())) return err(404, "file not found");
+        const original = Bun.file(real);
+        if (!(await original.exists())) return err(404, "file not found");
+        // `w=<px>`: serve a cached downscaled JPEG rendition instead of the
+        // original raster (see file-thumbs.ts — the phone path can be 50 KB/s,
+        // and a 9 MB screenshot is 228 KB at 1200 px). Falls back to the
+        // original bytes whenever a rendition can't be made.
+        let f = original;
+        let contentType = original.type || "application/octet-stream";
+        let cacheControl = "private, max-age=60";
+        let etag: string | null = null;
+        const width = renditionWidth(url.searchParams.get("w"));
+        if (width && isRenditionCandidate(real)) {
+          const rendition = await renditionFor(real, width);
+          if (rendition) {
+            if (req.headers.get("if-none-match") === rendition.etag) {
+              return new Response(null, {
+                status: 304,
+                headers: { ETag: rendition.etag, "Cache-Control": RENDITION_CACHE_CONTROL },
+              });
+            }
+            f = Bun.file(rendition.path);
+            contentType = rendition.type;
+            cacheControl = RENDITION_CACHE_CONTROL;
+            etag = rendition.etag;
+          }
+        }
         const size = f.size;
         const baseHeaders: Record<string, string> = {
-          "Content-Type": f.type || "application/octet-stream",
-          "Cache-Control": "private, max-age=60",
+          "Content-Type": contentType,
+          "Cache-Control": cacheControl,
+          ...(etag ? { ETag: etag } : {}),
           // iOS AVPlayer streams remote video with Range requests and refuses
           // to play a source that answers 200-with-the-whole-file. Advertise
           // range support so it issues a 206-based progressive load.

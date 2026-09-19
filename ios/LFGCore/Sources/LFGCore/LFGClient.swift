@@ -160,6 +160,22 @@ public struct LFGClient: Sendable {
         authenticated(URLRequest(url: resourceURL))
     }
 
+    /// True when a request to `resourceURL` would carry this host's Access
+    /// credential — i.e. a player that can't send headers (AVPlayer) must go
+    /// through the app's own loader instead of fetching the URL directly.
+    public func authenticatesRequests(to resourceURL: URL) -> Bool {
+        accessCredential != nil && Self.sameOrigin(resourceURL, baseURL)
+    }
+
+    /// `GET /api/file?path=…` for a host-side absolute path. `maxWidth` asks the
+    /// server for a downscaled JPEG rendition of a raster image (`w=`), which
+    /// it buckets to 480/1200/2400 and caches; non-images ignore it.
+    public func hostFileURL(forPath path: String, maxWidth: Int? = nil) -> URL? {
+        var query = [URLQueryItem(name: "path", value: path)]
+        if let maxWidth, maxWidth > 0 { query.append(URLQueryItem(name: "w", value: String(maxWidth))) }
+        return url("api/file", query: query)
+    }
+
     /// Load a host-owned image, document, or browser frame through the same
     /// authenticated transport as the API. External URLs remain credential-free.
     public func resourceData(from resourceURL: URL) async throws -> Data {
