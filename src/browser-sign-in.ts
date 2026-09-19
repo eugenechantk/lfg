@@ -124,8 +124,10 @@ export function validateTransfer(input: unknown): SignInTransfer {
       !["Strict", "Lax", "None"].includes(c.sameSite)
     )
       throw new Error("Invalid SameSite value.");
-    if (c.sameSite === "None" && !c.secure)
-      throw new Error("SameSite=None requires Secure.");
+    // WebKit keeps cookies a site set as SameSite=None without Secure (Apple's
+    // sign-in does this); Chrome refuses that combination. Send them with no
+    // SameSite attribute instead of failing the whole login for one flag.
+    const sameSite = c.sameSite === "None" && !c.secure ? undefined : c.sameSite;
     if (
       c.expires !== undefined &&
       (!Number.isFinite(c.expires) || c.expires <= Date.now() / 1000)
@@ -148,7 +150,7 @@ export function validateTransfer(input: unknown): SignInTransfer {
       path: c.path,
       secure: c.secure,
       httpOnly: c.httpOnly,
-      ...(c.sameSite ? { sameSite: c.sameSite } : {}),
+      ...(sameSite ? { sameSite } : {}),
       ...(c.expires !== undefined ? { expires: c.expires } : {}),
     };
   });

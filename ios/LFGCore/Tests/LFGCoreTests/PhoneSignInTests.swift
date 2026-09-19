@@ -68,3 +68,10 @@ import Testing
     }
 }
 
+
+@Test func phoneSignInDropsSameSiteNoneOnInsecureCookies() throws {
+    let insecure = try #require(HTTPCookie(properties: [.name: "aa", .value: "x", .domain: ".apple.com", .path: "/", .sameSitePolicy: "None"]))
+    #expect(PhoneSignInCookie(cookie: insecure).sameSite == nil)
+    let secure = try #require(HTTPCookie(properties: [.name: "aa", .value: "x", .domain: ".apple.com", .path: "/", .secure: "TRUE", .sameSitePolicy: "Lax"]))
+    #expect(PhoneSignInCookie(cookie: secure).sameSite == "Lax")
+}

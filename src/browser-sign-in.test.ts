@@ -228,3 +228,26 @@ test("partial import is distinct from confirmed delivery", async () => {
   expect(await result).toEqual({ state: "partial", installed: 1, total: 2 });
   hub.dispose();
 });
+
+test("adapter failure reasons reach the result, sanitized", async () => {
+  const hub = new BrowserSignInHub(() => "secret");
+  const a = fake();
+  hub.open(a);
+  hub.message(a, JSON.stringify({ type: "hello", token: "secret", name: "Chrome", kind: "chrome" }));
+  const result = hub.transfer({ ...payload(), targetId: hub.targets()[0]!.id, cookies: [cookie] });
+  hub.message(
+    a,
+    JSON.stringify({ type: "result", id: a.sent.at(-1).id, installed: 0, reason: "set-rejected:myacinfo@.apple.com:\x07Failed to parse\x00" }),
+  );
+  expect(await result).toEqual({ state: "failed", installed: 0, total: 1, reason: "set-rejected:myacinfo@.apple.com: Failed to parse" });
+  expect(signInReason(42)).toBeUndefined();
+  expect(signInReason("x".repeat(500))!.length).toBe(200);
+  hub.dispose();
+});
+
+test("SameSite=None without Secure is sent without a SameSite attribute, not rejected", () => {
+  const out = validateTransfer({ ...payload(), cookies: [{ ...cookie, secure: false, sameSite: "None" }, { ...cookie, name: "lax", sameSite: "Lax" }] });
+  expect(out.cookies[0]!.sameSite).toBeUndefined();
+  expect(out.cookies[0]!.secure).toBe(false);
+  expect(out.cookies[1]!.sameSite).toBe("Lax");
+});

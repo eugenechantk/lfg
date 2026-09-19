@@ -18,10 +18,12 @@ public struct PhoneSignInCookie: Codable, Sendable {
     public var expires: Double?
     public init(cookie: HTTPCookie) {
         let policy = cookie.sameSitePolicy?.rawValue.lowercased()
+        // SameSite=None without Secure is kept by WebKit but refused by Chrome; drop the flag.
+        let sameSite = ["strict": "Strict", "lax": "Lax", "none": "None"][policy ?? ""]
         self.init(name: cookie.name, value: cookie.value, domain: cookie.domain,
                   hostOnly: !cookie.domain.hasPrefix("."), path: cookie.path,
                   secure: cookie.isSecure, httpOnly: cookie.isHTTPOnly,
-                  sameSite: ["strict": "Strict", "lax": "Lax", "none": "None"][policy ?? ""],
+                  sameSite: sameSite == "None" && !cookie.isSecure ? nil : sameSite,
                   expires: cookie.isSessionOnly ? nil : cookie.expiresDate?.timeIntervalSince1970)
     }
     public init(name:String,value:String,domain:String,hostOnly:Bool,path:String,secure:Bool,httpOnly:Bool,sameSite:String?=nil,expires:Double?=nil) {
