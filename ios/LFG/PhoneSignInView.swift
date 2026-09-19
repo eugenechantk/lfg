@@ -200,11 +200,15 @@ struct PhoneSignInView: View {
                     .accessibilityIdentifier("phone_sign_in_back")
                 Text(browser.currentURL?.host ?? "").font(.footnote).lineLimit(1).textSelection(.enabled)
                     .accessibilityIdentifier("phone_sign_in_current_host")
+                // Inline so a page load never adds a row and shifts the web view.
+                ProgressView().controlSize(.small)
+                    .opacity(browser.loading ? 1 : 0)
+                    .accessibilityHidden(!browser.loading)
+                    .accessibilityIdentifier("phone_sign_in_loading")
                 Spacer()
                 Button { browser.webView?.reload() } label: { Image(systemName: "arrow.clockwise") }
                     .accessibilityLabel("Reload").accessibilityIdentifier("phone_sign_in_reload")
             }.padding()
-            if browser.loading { ProgressView().accessibilityIdentifier("phone_sign_in_loading") }
             if let message = browser.error { Text(message).font(.callout).padding().accessibilityIdentifier("phone_sign_in_browser_error") }
             if let webView = browser.webView { PhoneLoginWebView(webView: webView) }
         }
