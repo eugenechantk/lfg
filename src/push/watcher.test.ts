@@ -245,7 +245,8 @@ describe("reduceFleetLiveActivity", () => {
    * the hold the card gets one truthful zeroed update instead.
    * See `.claude/feature/live-activity-delivery-reliability.md`.
    */
-  describe("ending the activity when the fleet empties (debounced)", () => {
+  describe("ending the activity when the fleet empties (with an explicit hold)", () => {
+    const HOLD = 60;
     const active = (): LiveActivityActive => ({
       startedAt: 1_700,
       contentState: {
@@ -261,7 +262,7 @@ describe("reduceFleetLiveActivity", () => {
     const busy = [{ session: { sessionId: "s1", title: "Job" }, observed: obs(true, false) }];
 
     test("first empty tick sends a zeroed update and starts the hold, not an end", () => {
-      const r = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730 });
+      const r = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730, endHoldS: HOLD });
       expect(r.action?.event).toBe("update");
       expect(r.action?.push.body.aps["content-state"]).toMatchObject({
         working: 0, needsInput: 0, rows: [], more: 0,
@@ -270,31 +271,31 @@ describe("reduceFleetLiveActivity", () => {
     });
 
     test("staying empty within the hold sends nothing and keeps the hold's start", () => {
-      const first = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730 });
+      const first = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730, endHoldS: HOLD });
       const again = reduceFleetLiveActivity({
         observations: idle,
         active: first.nextActive,
-        now: 1_730 + 30,
+        now: 1_730 + 30, endHoldS: HOLD,
       });
       expect(again.action).toBeNull();
       expect(again.nextActive?.zeroSince).toBe(1_730);
     });
 
     test("ends once the fleet has been empty for the full debounce window", () => {
-      const first = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730 });
-      const later = 1_730 + FLEET_END_DEBOUNCE_S;
-      const r = reduceFleetLiveActivity({ observations: idle, active: first.nextActive, now: later });
+      const first = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730, endHoldS: HOLD });
+      const later = 1_730 + HOLD;
+      const r = reduceFleetLiveActivity({ observations: idle, active: first.nextActive, now: later, endHoldS: HOLD });
       expect(r.action?.event).toBe("end");
       expect(r.nextActive).toBeNull();
       expect(r.action?.push.body.aps["dismissal-date"]).toBe(later);
     });
 
     test("activity reappearing within the hold cancels the end with no start churn", () => {
-      const first = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730 });
+      const first = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730, endHoldS: HOLD });
       const back = reduceFleetLiveActivity({
         observations: busy,
         active: first.nextActive,
-        now: 1_730 + 20,
+        now: 1_730 + 20, endHoldS: HOLD,
       });
       expect(back.action?.event).toBe("update"); // NOT end, NOT start
       expect(back.nextActive?.zeroSince).toBeUndefined();
@@ -302,7 +303,7 @@ describe("reduceFleetLiveActivity", () => {
       const emptyAgain = reduceFleetLiveActivity({
         observations: idle,
         active: back.nextActive,
-        now: 1_730 + 40,
+        now: 1_730 + 40, endHoldS: HOLD,
       });
       expect(emptyAgain.action?.event).toBe("update");
       expect(emptyAgain.nextActive?.zeroSince).toBe(1_730 + 40);
@@ -314,9 +315,33 @@ describe("reduceFleetLiveActivity", () => {
       // registers a token, and the server ended it within a tick — captured
       // live at 2026-08-23T02:00Z as an end every ~30s, forever.
       const adopted: LiveActivityActive = { startedAt: 1_700 };
-      const r = reduceFleetLiveActivity({ observations: idle, active: adopted, now: 1_730 });
+      const r = reduceFleetLiveActivity({ observations: idle, active: adopted, now: 1_730, endHoldS: HOLD });
       expect(r.action?.event).toBe("update");
       expect(r.nextActive?.zeroSince).toBe(1_730);
+    });
+  });
+
+  describe("ending the activity when the fleet empties (default: immediately)", () => {
+    const active = (): LiveActivityActive => ({
+      startedAt: 1_700,
+      contentState: {
+        working: 1, needsInput: 0,
+        rows: [{ sid: "s1", title: "Job", state: "working", since: 1_700 }],
+        more: 0, updatedAt: 1_700,
+      },
+      since: { s1: { state: "working", at: 1_700 } },
+    });
+    const idle = [{ session: { sessionId: "s1", title: "Job" }, observed: obs(false, false) }];
+
+    test("the default hold is zero", () => {
+      expect(FLEET_END_DEBOUNCE_S).toBe(0);
+    });
+
+    test("the first empty tick ends the card at once — no zeroed update, dismissed now", () => {
+      const r = reduceFleetLiveActivity({ observations: idle, active: active(), now: 1_730 });
+      expect(r.action?.event).toBe("end");
+      expect(r.action?.push.body.aps["dismissal-date"]).toBe(1_730);
+      expect(r.nextActive).toBeNull();
     });
   });
 

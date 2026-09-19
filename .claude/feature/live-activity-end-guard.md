@@ -94,6 +94,25 @@ count), and both server pushes and app-side `ActivityContent` carry a relevance 
 another app's activity shares it. Placement among multiple activities is ultimately
 iOS's call; the score is the only lever the platform gives.
 
+## Revision 2026-09-19 evening — dismiss at zero, no hold
+
+Eugene: "When there is 0 running sessions, the live activity widget should just
+dismiss itself." The log showed the shape he saw: `update 0,0` (zeroed card), 60 s
+of "0 Active", then `end`, then a fresh `start` on his next turn.
+
+Change: `FLEET_END_DEBOUNCE_S = 0` (server) and `FleetEndGate.hold = 0` (client). An
+empty fleet now ends the card on the first tick with `dismissal-date = now` and no
+zeroed update; the client ends a trustworthy zero at once (an untrustworthy zero is
+still untouched). Both holds remain parameters (`endHoldS`, `hold:`) so the
+mechanism stays tested with an explicit 60 s. Cost accepted: each of Eugene's own
+turns can end and re-start the card (push-to-start + background wake); the end
+guard makes that safe where it used to duplicate.
+
+Evidence: `bun test src/push` 107 pass (new: default hold is zero; first empty tick
+ends with dismissal now); `swift test --filter FleetEndGate` 10 pass (new: default
+ends a trustworthy zero at once, never an untrustworthy one); `flowdeck build`
+SUCCESS.
+
 ## Bugs
 
 _None yet._

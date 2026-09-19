@@ -179,7 +179,16 @@ export type LiveActivityActive = {
  * times a day. During the hold the card shows a truthful zeroed update; a
  * session reappearing cancels the end on the plain update path, no churn.
  */
-export const FLEET_END_DEBOUNCE_S = 60;
+export const FLEET_END_DEBOUNCE_S = 0;
+
+/**
+ * Why the debounce is now zero: Eugene wants the card GONE the moment nothing
+ * is running (2026-09-19). The hold above was insurance against end→start
+ * churn while a client end also killed the server's memory of the card; the
+ * client no longer ends on a count it cannot vouch for (`FleetEndGate`) and a
+ * restart is gated on a population change, so an end is just an end. The hold
+ * machinery stays (`endHoldS`) for tests and for the day a hold is wanted back.
+ */
 
 export type LiveActivityAction = {
   event: "start" | "update" | "end";
@@ -288,6 +297,8 @@ export function reduceFleetLiveActivity(args: {
   active: LiveActivityActive | null;
   clientEnded?: { population: string[] } | null;
   now: number;
+  /// Seconds the fleet must stay empty before `end`; default `FLEET_END_DEBOUNCE_S`.
+  endHoldS?: number;
 }): LiveActivityDecision {
   const priorSince = args.active?.since ?? {};
   const since: Record<string, { state: LiveActivityRow["state"]; at: number }> = {};
@@ -357,7 +368,7 @@ export function reduceFleetLiveActivity(args: {
 
   if (total === 0) {
     const zeroSince = args.active.zeroSince ?? args.now;
-    if (args.now - zeroSince < FLEET_END_DEBOUNCE_S) {
+    if (args.now - zeroSince < (args.endHoldS ?? FLEET_END_DEBOUNCE_S)) {
       // Inside the hold: keep the card but tell it the truth (zeroed counters)
       // once, then stay quiet until the window expires or work reappears.
       const held: LiveActivityActive = { ...args.active, since, zeroSince };

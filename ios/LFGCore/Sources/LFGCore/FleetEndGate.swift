@@ -12,10 +12,12 @@ import Foundation
 /// Rules:
 /// - An untrustworthy count (no live fetch yet this launch, or a host known down)
 ///   is *unknown*, not zero: never end, and reset the zero clock.
-/// - A trustworthy zero must hold for `hold` seconds before ending — the same
-///   debounce the server applies (`FLEET_END_DEBOUNCE_S`).
+/// - A trustworthy zero ends the card after `hold` seconds. The default is
+///   **zero**: Eugene wants the card gone the moment nothing is running
+///   (2026-09-19), and the server's `FLEET_END_DEBOUNCE_S` is zero to match.
+///   The hold stays a parameter for tests and for the day a hold is wanted back.
 public enum FleetEndGate {
-    public static let hold: Double = 60
+    public static let hold: Double = 0
 
     public enum Verdict: Equatable, Sendable {
         /// Leave the card alone (count unknown) — no end, no zeroed update.
