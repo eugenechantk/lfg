@@ -66,6 +66,10 @@ Build: `flowdeck build` succeeded 2026-09-19 10:43Z. Package tests: `cd ios/LFGC
 
 Independent audit: **PASS** (SC1–SC4) — `ios_visual_evidence_auditor`, report `.claude/evidence/20260919-184735-ios-visual-audit/evidence.md`, recording `flow-a-mark-read-mark-unread.mov`, screenshots 01–11 + trees. The auditor drove a different Idle row ("Phone sign-in flow fixes and release") for SC1 and confirmed the `markUnread-<id>` / `markRead-<id>` identifiers resolve live.
 
+## Shipped
+
+TestFlight build **202609191931** on train 1.3.0, DoD PASS (VALID, IN_BETA_TESTING) at 19:37 HKT 2026-09-19. Logs: `ios/fastlane/deploy-202609191931.log`, `ios/fastlane/verify-202609191931.log`. Evidence: `.claude/feature/evidence/testflight-20260919d/README.txt`.
+
 ## Residual Risks
 
 - SC3 side effect: a leading swipe on a Closed row has no action, so SwiftUI lets the drag fall through as a tap and opens the session. Stock List behaviour, not a regression; noted by the auditor as a minor rough edge.
