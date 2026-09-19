@@ -241,7 +241,12 @@ struct NewSessionView: View {
                 recents: recentDirectories,
                 all: allDirectories,
                 selectedPath: cwd,
-                onSelect: { entry in selectDirectory(path: entry.path, label: entry.name) },
+                // A single-choice list: the tap IS the decision, so it closes the
+                // sheet. ✓ stays for dismiss-and-keep, ✕ still reverts.
+                onSelect: { entry in
+                    selectDirectory(path: entry.path, label: entry.name)
+                    closeSheet()
+                },
                 onAddByPath: { showAddDirectory = true },
                 onConfirm: closeSheet,
                 onCancel: revertSheet
@@ -263,6 +268,7 @@ struct NewSessionView: View {
                     agent = kind
                     model = name
                     modelPickedExplicitly = true
+                    closeSheet()
                 },
                 onConfirm: closeSheet,
                 onCancel: revertSheet
