@@ -40,6 +40,7 @@ describe("Live Activity payload builders", () => {
         aps: {
           timestamp: 1_701,
           event: "start",
+          "relevance-score": 100,
           "content-state": contentState,
           "attributes-type": "LFGFleetAttributes",
           attributes: { fleetId: "fleet" },
@@ -77,6 +78,7 @@ describe("Live Activity payload builders", () => {
         aps: {
           timestamp: 1_701,
           event: "update",
+          "relevance-score": 100,
           "content-state": contentState,
         },
       },

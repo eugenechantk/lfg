@@ -216,6 +216,9 @@ export type FleetActivityBox = {
   current: LiveActivityActive | null;
   lastPopulation?: string[];
   clientEnded?: { population: string[] } | null;
+  /// The population the last `start-vetoed` trace line was written for, so the
+  /// veto is logged once per population rather than once per tick.
+  lastVetoTraced?: string;
 };
 
 /// Which rows the CARD renders. The precedence itself is no longer restated here
@@ -738,11 +741,13 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
       now: Math.floor(now() / 1000),
     });
     liveActivities.active.lastPopulation = decision.population;
-    if (decision.vetoed) {
+    const vetoKey = decision.vetoed ? decision.population.join(",") : undefined;
+    if (vetoKey !== undefined && vetoKey !== liveActivities.active.lastVetoTraced) {
       traceLiveActivity("start-vetoed", {
         population: decision.population.map((sid) => sid.slice(0, 8)),
       });
     }
+    liveActivities.active.lastVetoTraced = vetoKey;
     await applyLiveActivityDecision(
       decision,
       liveActivities,

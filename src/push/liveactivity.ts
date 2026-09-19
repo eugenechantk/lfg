@@ -55,8 +55,22 @@ export type LiveActivityBody = {
     attributes?: { fleetId: string };
     alert?: { title: string; body: string };
     "dismissal-date"?: number;
+    /// Which Live Activity iOS favours when several share the Dynamic Island.
+    /// Higher wins the attached (leading) minimal slot. See `relevanceScore`.
+    "relevance-score"?: number;
   };
 };
+
+/**
+ * Relevance for the fleet card when the island is shared with another app's
+ * activity. Eugene wants ours to be the one in the island whenever there is
+ * more than one, so the score is always high; a fleet waiting on a human
+ * outranks one that is merely working. The app mirrors this in
+ * `FleetActivityController` for cards it updates itself.
+ */
+export function relevanceScore(state: Pick<LiveActivityContentState, "needsInput">): number {
+  return state.needsInput > 0 ? 100 : 90;
+}
 
 export type LiveActivityPush = {
   headers: LiveActivityHeaders;
@@ -103,6 +117,7 @@ export function buildStart(
         timestamp: state.updatedAt,
         event: "start",
         "content-state": state,
+        "relevance-score": relevanceScore(state),
         "attributes-type": attributesType,
         attributes: { fleetId: fleet.fleetId ?? "fleet" },
         alert: {
@@ -123,6 +138,7 @@ export function buildUpdate(content: LiveActivityContentState): LiveActivityPush
         timestamp: state.updatedAt,
         event: "update",
         "content-state": state,
+        "relevance-score": relevanceScore(state),
       },
     },
   };
