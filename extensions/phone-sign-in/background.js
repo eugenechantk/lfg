@@ -59,7 +59,7 @@ async function connect() {
         }
         if (job.type !== "import") return;
         if (importing) {
-          ws.send(JSON.stringify({ type: "result", id: job.id, installed: 0 }));
+          ws.send(JSON.stringify({ type: "result", id: job.id, installed: 0, reason: "busy" }));
           return;
         }
         importing = true;
@@ -67,7 +67,7 @@ async function connect() {
         try {
           result = await installCookies(chrome, job);
         } catch {
-          result = { installed: 0, uncertain: true };
+          result = { installed: 0, uncertain: true, reason: "invalid-cookie" };
         } finally {
           importing = false;
         }
@@ -76,7 +76,7 @@ async function connect() {
         await status(
           result.installed === job.cookies.length
             ? "Sign-in received. Refresh the destination website."
-            : "Sign-in incomplete. Check website permissions and try again from your phone.",
+            : `Sign-in incomplete (${result.reason || "unknown"}). Fix the cause and try again from your phone.`,
         );
       } catch {
         ws.close();

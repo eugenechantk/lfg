@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, renameSync } from "node:fs";
 import { dirname } from "node:path";
-import { loginURL, type SignInTarget, type SignInResult } from "./browser-sign-in.ts";
+import { loginURL, signInReason, type SignInTarget, type SignInResult } from "./browser-sign-in.ts";
 
 export type PhoneSignInRequest = {
   id: string; sessionId: string; url: string; target: SignInTarget;
@@ -40,6 +40,8 @@ export class PhoneSignInRequests {
     if (input.result && ["installed","partial","failed","unknown"].includes(input.result.state)
       && Number.isInteger(input.result.installed) && Number.isInteger(input.result.total)) {
       row.result = {state: input.result.state, installed: input.result.installed, total: input.result.total};
+      const reason = signInReason(input.result.reason);
+      if (reason) row.result.reason = reason;
     }
     return row;
   }
@@ -107,8 +109,10 @@ export class PhoneSignInRequests {
     try {
       r.result = await this.backend.transfer({targetId:r.target.id, url:r.url, domains, cookies});
       r.state = r.result.state;
-    } catch {
-      r.state = "failed"; r.result = {state:"failed",installed:0,total:cookies.length};
+    } catch (error) {
+      // The transfer never reached the browser (offline, busy, invalid payload); say which.
+      r.state = "failed";
+      r.result = {state:"failed",installed:0,total:cookies.length, reason: signInReason((error as Error)?.message) ?? "transfer-failed"};
     }
     this.persist();
     return {...r};

@@ -60,7 +60,8 @@ export function connectPhoneSignIn(
         }
         if (job.type !== "import") return;
         let installed = 0,
-          uncertain = false;
+          uncertain = false,
+          reason;
         if (
           !busy &&
           Number.isFinite(job.deadline) &&
@@ -76,10 +77,16 @@ export function connectPhoneSignIn(
                 Date.now() >= job.deadline
               ) {
                 uncertain = true;
+                reason = "deadline";
                 break;
               }
               const { hostOnly, ...cookie } = c;
-              await context.addCookies([cookie]);
+              try {
+                await context.addCookies([cookie]);
+              } catch (error) {
+                reason = `set-rejected:${c.name}@${c.domain}:${(error as Error)?.message ?? "unknown"}`;
+                throw error;
+              }
               // Cookie jar readback checks delivery without navigating or touching agent pages.
               const values = await context.cookies();
               if (
@@ -92,12 +99,14 @@ export function connectPhoneSignIn(
                 )
               ) {
                 uncertain = true;
+                reason = `set-mismatch:${c.name}@${c.domain}`;
                 break;
               }
               installed++;
             }
-          } catch {
+          } catch (error) {
             uncertain = true;
+            reason ??= `invalid-transfer:${(error as Error)?.message ?? "unknown"}`;
           } finally {
             busy = false;
           }
@@ -109,6 +118,7 @@ export function connectPhoneSignIn(
               id: job.id,
               installed,
               uncertain,
+              ...(reason ? { reason } : busy ? { reason: "busy" } : {}),
             }),
           );
       } catch {

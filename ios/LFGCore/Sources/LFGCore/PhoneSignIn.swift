@@ -39,12 +39,15 @@ public struct PhoneSignInResult: Decodable, Sendable {
     public var state: String
     public var installed: Int
     public var total: Int
+    /// The browser's stated cause of the first failure (cookie name and domain, never a value).
+    public var reason: String?
     public var message: String {
+        let detail = reason.map { " (\($0))" } ?? ""
         switch state {
         case "installed": return "Sign-in sent. Refresh the website in your browser, then continue with the agent."
-        case "partial": return "Only \(installed) of \(total) cookies were installed. Check the destination before trying again."
-        case "failed": return "No cookies were installed. Check the browser’s website permissions."
-        default: return "Delivery could not be confirmed. Check the destination browser before trying again."
+        case "partial": return "Only \(installed) of \(total) cookies were installed\(detail). Check the destination before trying again."
+        case "failed": return "No cookies were installed\(detail). Check the browser’s website permissions."
+        default: return "Delivery could not be confirmed\(detail). Check the destination browser before trying again."
         }
     }
 }

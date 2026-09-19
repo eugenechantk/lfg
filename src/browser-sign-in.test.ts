@@ -3,8 +3,7 @@ import {
   BrowserSignInHub,
   validateTransfer,
   signInHTTP,
-  allowsSignInAdapter,
-} from "./browser-sign-in.ts";
+  allowsSignInAdapter, signInReason } from "./browser-sign-in.ts";
 const cookie = {
   name: "session",
   value: "test-secret",

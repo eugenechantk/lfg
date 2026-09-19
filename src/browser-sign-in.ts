@@ -43,6 +43,14 @@ export interface SignInResult {
   state: "installed" | "partial" | "failed" | "unknown";
   installed: number;
   total: number;
+  /** Adapter-reported cause of the first failure: cookie name + domain, never a value. */
+  reason?: string;
+}
+/** Adapters and history are untrusted: keep reasons short, printable and optional. */
+export function signInReason(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const text = value.replace(/[\x00-\x1f\x7f]/g, " ").trim().slice(0, 200);
+  return text || undefined;
 }
 export function cookieDomain(value: string): string {
   const domain = value.replace(/^\./, "").toLowerCase();
@@ -229,6 +237,7 @@ export class BrowserSignInHub {
           m.installed > job.total
         )
           throw Error();
+        const reason = signInReason(m.reason);
         this.finish(m.id, {
           state:
             m.uncertain === true
@@ -240,6 +249,7 @@ export class BrowserSignInHub {
                   : "partial",
           installed: m.installed,
           total: job.total,
+          ...(reason ? { reason } : {}),
         });
       } else if (m.type === "ping") socket.send('{"type":"pong"}');
       else throw Error();
@@ -273,7 +283,7 @@ export class BrowserSignInHub {
     return new Promise((resolve) => {
       const total = p.cookies.length;
       const timer = setTimeout(() => {
-        this.finish(id, { state: "unknown", installed: 0, total });
+        this.finish(id, { state: "unknown", installed: 0, total, reason: "timeout" });
         // A timed-out browser may still be processing the old import. Invalidate
         // its destination identity before accepting another transfer.
         this.close(socket);
@@ -290,7 +300,7 @@ export class BrowserSignInHub {
           }),
         );
       } catch {
-        this.finish(id, { state: "unknown", installed: 0, total });
+        this.finish(id, { state: "unknown", installed: 0, total, reason: "send-failed" });
       }
     });
   }
@@ -307,7 +317,7 @@ export class BrowserSignInHub {
     this.peers.delete(socket);
     for (const [id, j] of this.pending)
       if (j.socket === socket)
-        this.finish(id, { state: "unknown", installed: 0, total: j.total });
+        this.finish(id, { state: "unknown", installed: 0, total: j.total, reason: "browser-disconnected" });
   }
   dispose() {
     for (const s of this.peers.keys()) {

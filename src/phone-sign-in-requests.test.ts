@@ -105,3 +105,12 @@ test('phoneSignInPrompt surfaces only a waiting request as a needs-input prompt,
  now=1200;const c=h.create(create);const done=h.complete(c.id,cookies);expect(phoneSignInPrompt(h,sid)).toBeNull();
  return done;
 });
+
+test('a transfer that never reaches the browser reports why', async () => {
+ const h=new PhoneSignInRequests({targets:()=>[target],transfer:async()=>{throw Error('Browser is offline. Reconnect and select it again.')}});
+ const create=h.create({sessionId:sid,targetId:target.id,url:'https://portal.example.com/login'});
+ const done=await h.complete(create.id,cookies);
+ expect(done.state).toBe('failed');
+ expect(done.result).toEqual({state:'failed',installed:0,total:cookies.length,reason:'Browser is offline. Reconnect and select it again.'});
+ expect(h.get(create.id)?.result?.reason).toBe('Browser is offline. Reconnect and select it again.');
+});

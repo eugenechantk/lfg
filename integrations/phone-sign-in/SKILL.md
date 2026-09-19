@@ -44,7 +44,7 @@ Use `status '<request ID>'` to inspect, or `cancel '<request ID>'` when you no l
 - `cancelled` or `expired`: report the result and wait for user direction; do not repeatedly re-prompt.
 - `offline`: the original browser identity is gone. Reconnect that exact adapter and create a new explicit request only if sign-in is still needed. Never silently retarget.
 - `partial` or `unknown`: check the destination before retrying; some cookies may already have arrived.
-- `failed`: no confirmed complete delivery. Check extension permissions and the actual browser, then report the concrete issue.
+- `failed`: no confirmed complete delivery. Read `result.reason` first — `permission-missing:<origin>` means the extension's Allowed websites list lacks that site; `set-rejected:<cookie>@<domain>:<message>` means the browser refused that cookie; `busy`, `timeout`, `browser-disconnected` and `Browser is offline…` mean the transfer never landed. Report that concrete reason; do not guess at permissions when the reason says otherwise.
 - after host restart: waiting requests appear as expired and an interrupted delivery as unknown in the session’s sign-in history. Never replay cookies. A missing request may have aged out of the bounded history.
 
 The system transfers cookies only. Embedded OAuth restrictions, localStorage-only sessions and device-bound credentials may require signing in directly on the Mac. Browser Stream is currently hidden. The agent receives no passwords or cookies in tool output or transcripts.
