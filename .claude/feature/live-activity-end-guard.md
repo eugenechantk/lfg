@@ -85,7 +85,7 @@ do not have to open the app to learn the fleet's state.
 | SC3 | `sync()` now consults `FleetEndGate`; `.untouched` returns before any update/end; `flowdeck build` SUCCESS on first attempt | live confirmation is SC6 |
 | SC4 | `bun test src/push` → 105 pass after pinning `relevance-score` into the payload-shape tests; `bunx tsc --noEmit` clean | the once-per-population trace has no unit test (tick-level); confirmed in the live log after restart (SC6 window) |
 | SC5 | LFGCore 544 tests, 0 failures, 1 skipped; push suite 105/105; app build green | |
-| SC6 | pending: TestFlight build + server restarts | |
+| SC6 | Pro restarted 13:43, Air right after (both health 200); TestFlight build 202609191344 uploaded 13:48, DoD PASS (VALID, highest train, IN_BETA_TESTING); evidence in `.claude/feature/evidence/testflight-20260919c/` | live proof (a server-started card surviving its arrival) still pending a real start after the phone installs the build |
 
 Also in this change (Eugene, mid-turn): the Dynamic Island **minimal** view now draws the
 state-coloured circle with the count inside (needs-input count when any, else working
