@@ -67,22 +67,13 @@ struct LFGFleetActivityWidget: Widget {
                     .monospacedDigit()
                     .padding(.trailing, 6) // mirrors the dot's leading inset
             } minimal: {
-                // Shown when the island is shared with another app's activity —
-                // in EITHER slot: iOS alone decides which app is attached to the
-                // island and which is the detached bubble (no API influences it),
-                // so this view is what lfg looks like in both. The count is what
-                // matters at a glance: sessions needing you when any do, otherwise
-                // sessions working — on the same state colour the compact dot uses.
-                ZStack {
-                    Circle().fill(context.state.accent)
-                    Text("\(context.state.minimalCount)")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(.black)
-                        .monospacedDigit()
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
-                        .padding(.horizontal, 2)
-                }
+                // Shown when the island is shared with another app's activity, in
+                // either slot (iOS alone decides which app is attached). Same dot as
+                // the compact view: Eugene chose no separate style for this case
+                // (2026-09-20).
+                Circle()
+                    .fill(context.state.accent)
+                    .frame(width: 8, height: 8)
             }
             .keylineTint(context.state.accent)
         }
@@ -94,11 +85,5 @@ private extension LFGFleetAttributes.ContentState {
     /// the collapsed island should carry.
     var accent: Color {
         needsInput > 0 ? .lfgStateNeedsInput : .lfgStateWorking
-    }
-
-    /// The one number the shared-island circle can carry: how many sessions need
-    /// you, or — when none do — how many are working.
-    var minimalCount: Int {
-        needsInput > 0 ? needsInput : working
     }
 }
