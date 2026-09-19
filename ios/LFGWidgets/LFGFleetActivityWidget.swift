@@ -65,6 +65,7 @@ struct LFGFleetActivityWidget: Widget {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.lfgLabelPrimary)
                     .monospacedDigit()
+                    .padding(.trailing, 6) // mirrors the dot's leading inset
             } minimal: {
                 Circle()
                     .fill(context.state.accent)
