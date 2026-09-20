@@ -262,7 +262,12 @@ bridge_local="$here/mosh-bridge"
 readyfile="${TMPDIR:-/tmp}/mosh-bridged-ready.$$"
 rm -f "$readyfile"
 log="$HOME/Library/Logs/mosh-bridge.log"
-remote_bridge='exec /usr/bin/python3 "$HOME/.local/bin/mosh-bridge" server '"$rport"
+# Pick a python3 on the far side that actually runs. /usr/bin/python3 is Apple's
+# xcrun shim: after an Xcode update it refuses everything with "You have not
+# agreed to the Xcode license" (exit 69) until someone runs `sudo xcodebuild
+# -license` — which took the Air's bridge down on 2026-09-20. The CLT and
+# Homebrew binaries are real executables and don't go through that shim.
+remote_bridge='for p in /usr/bin/python3 /Library/Developer/CommandLineTools/usr/bin/python3 /opt/homebrew/bin/python3 /usr/local/bin/python3; do [ -x "$p" ] && "$p" -c pass >/dev/null 2>&1 && exec "$p" "$HOME/.local/bin/mosh-bridge" server '"$rport"'; done; echo "mosh-bridge: no working python3 on this host (Xcode licence unaccepted?)" >&2; exit 69'
 if [[ -n "$lan_ssh" ]]; then
   # Try the LAN on every (re)spawn and fall through to the tunnel when it
   # fails, so a session survives walking out of the house: the dropped LAN
