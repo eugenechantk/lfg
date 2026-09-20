@@ -619,7 +619,8 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
       liveActivities: {
         active,
         pushToStartTokens: async () => [{ token: "start", env: "sandbox" }],
-        activityUpdateTokens: async () => [],
+        channels: async () => [{ env: "sandbox" as const, channelId: "chan-sand" }],
+        sendBroadcast: async () => ({ ok: true, status: 200 }),
         send: async (d, push) => {
           sent.push({ token: d.token, push });
           return { ok: true, status: 200 };
@@ -633,7 +634,9 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
     expect(active.current?.contentState?.rows.map((row) => row.sid)).toEqual(["s1"]);
   });
 
-  test("Live Activity updates go to every registered update token", async () => {
+  // Updates no longer fan out over per-card tokens: one publish per channel
+  // reaches every card subscribed to it, awake or not.
+  test("Live Activity updates publish once per broadcast channel", async () => {
     const sent: { token: string; push: LiveActivityPush }[] = [];
     const prior = new Map<string, PriorState>();
     const active: { current: LiveActivityActive | null } = {
@@ -659,19 +662,23 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
       liveActivities: {
         active,
         pushToStartTokens: async () => [],
-        activityUpdateTokens: async () => [
-          { token: "u1", env: "sandbox" },
-          { token: "u2", env: "production" },
+        channels: async () => [
+          { env: "sandbox" as const, channelId: "chan-sand" },
+          { env: "production" as const, channelId: "chan-prod" },
         ],
         send: async (d, push) => {
           sent.push({ token: d.token, push });
+          return { ok: true, status: 200 };
+        },
+        sendBroadcast: async (channel, push) => {
+          sent.push({ token: channel.channelId, push });
           return { ok: true, status: 200 };
         },
       },
       now: () => 1_710_000,
     };
     await runPushTick(prior, deps);
-    expect(sent.map((s) => s.token)).toEqual(["u1", "u2"]);
+    expect(sent.map((s) => s.token)).toEqual(["chan-sand", "chan-prod"]);
     expect(sent[0].push.body.aps.event).toBe("update");
   });
 
@@ -696,7 +703,8 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
       liveActivities: {
         active,
         pushToStartTokens: async () => [{ token: "start", env: "sandbox" }],
-        activityUpdateTokens: async () => [],
+        channels: async () => [{ env: "sandbox" as const, channelId: "chan-sand" }],
+        sendBroadcast: async () => ({ ok: true, status: 200 }),
         send: async (_d, push) => {
           sent.push(push);
           return { ok: true, status: 200 };
@@ -755,13 +763,18 @@ describe("partial Live Activity delivery does not advance state", () => {
       liveActivities: {
         active: args.active,
         pushToStartTokens: async () => [{ token: "start", env: "sandbox" as const }],
-        activityUpdateTokens: async () => [
-          { token: "u-prod", env: "production" as const },
-          { token: "u-sand", env: "sandbox" as const },
+        channels: async () => [
+          { env: "production" as const, channelId: "u-prod" },
+          { env: "sandbox" as const, channelId: "u-sand" },
         ],
         send: async (d, push) => {
           sent.push({ token: d.token, event: push.body.aps.event });
           const queue = args.results[d.token];
+          return queue?.length ? queue.shift()! : { ok: true, status: 200 };
+        },
+        sendBroadcast: async (channel, push) => {
+          sent.push({ token: channel.channelId, event: push.body.aps.event });
+          const queue = args.results[channel.channelId];
           return queue?.length ? queue.shift()! : { ok: true, status: 200 };
         },
       },
@@ -805,24 +818,26 @@ describe("partial Live Activity delivery does not advance state", () => {
     expect(active.current).toBeNull(); // all accepted → done
   });
 
-  test("a permanent DeviceTokenNotForTopic rejection prunes the token instead of livelocking", async () => {
-    // All-accepted advancement re-sends until every token accepts. A 400
-    // DeviceTokenNotForTopic can NEVER succeed, so without pruning the watcher
-    // would re-send the same update every 2s tick forever.
+  test("a permanently rejected channel is pruned instead of livelocking", async () => {
+    // All-accepted advancement re-sends until every target accepts, so a channel
+    // APNs will never honour again would make the watcher re-send the same update
+    // every 2s forever. This is the channel-era successor to the dead-token prune:
+    // unlike a dead Live Activity TOKEN — which answers 200 and so was invisible —
+    // an unknown channel is rejected honestly, so one signal is enough to act on.
     const active = { current: liveCard() };
-    const dead: string[] = [];
+    const dropped: string[] = [];
     const h = harness({
       active,
       sessionsBusy: true,
-      results: { "u-prod": [{ ok: false, status: 400, reason: "DeviceTokenNotForTopic" }] },
+      results: { "u-prod": [{ ok: false, status: 400, reason: "BadChannelId" }] },
       now: 1_710_000,
     });
-    h.deps.liveActivities!.onDeadToken = (t) => {
-      dead.push(t);
+    h.deps.liveActivities!.onInvalidChannel = (env) => {
+      dropped.push(env);
     };
     await runPushTick(new Map(), h.deps);
-    expect(dead).toEqual(["u-prod"]);
-    // Not advanced this tick; the next tick's (now pruned) token list can go green.
+    expect(dropped).toEqual(["production"]);
+    // Not advanced this tick; next tick recreates the channel and can go green.
     expect(active.current?.contentState?.rows[0]?.title).toBe("Old");
   });
 
@@ -841,7 +856,8 @@ describe("partial Live Activity delivery does not advance state", () => {
           { token: "p1", env: "production" as const },
           { token: "p2", env: "sandbox" as const },
         ],
-        activityUpdateTokens: async () => [],
+        channels: async () => [{ env: "sandbox" as const, channelId: "chan-sand" }],
+        sendBroadcast: async () => ({ ok: true, status: 200 }),
         send: async (d, push) => {
           sent.push({ token: d.token, event: push.body.aps.event });
           return d.token === "p1" ? fail0 : { ok: true, status: 200 };
@@ -892,9 +908,13 @@ describe("client-reported card end (SC4)", () => {
       liveActivities: {
         active,
         pushToStartTokens: async () => [{ token: "start", env: "sandbox" }],
-        activityUpdateTokens: async () => [{ token: "update", env: "sandbox" }],
+        channels: async () => [{ env: "sandbox" as const, channelId: "update" }],
         send: async (d, push) => {
           sent.push({ token: d.token, push });
+          return { ok: true, status: 200 };
+        },
+        sendBroadcast: async (channel, push) => {
+          sent.push({ token: channel.channelId, push });
           return { ok: true, status: 200 };
         },
       },
@@ -972,9 +992,13 @@ describe("client-reported card start", () => {
       liveActivities: {
         active: currentFleetActivity(),
         pushToStartTokens: async () => [{ token: "start", env: "sandbox" }],
-        activityUpdateTokens: async () => [{ token: "update", env: "sandbox" }],
+        channels: async () => [{ env: "sandbox" as const, channelId: "update" }],
         send: async (d, push) => {
           sent.push({ token: d.token, push });
+          return { ok: true, status: 200 };
+        },
+        sendBroadcast: async (channel, push) => {
+          sent.push({ token: channel.channelId, push });
           return { ok: true, status: 200 };
         },
       },

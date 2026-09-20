@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -25,119 +25,71 @@ describe("Live Activity token store", () => {
 
   test("upsert persists by token and refreshes the record", async () => {
     const s = await store();
-    const first = await s.upsertLiveActivityToken({
-      token: "tok1",
-      kind: "pushToStart",
-      env: "sandbox",
-    });
+    const first = await s.upsertLiveActivityToken({ token: "tok1", env: "sandbox" });
     await new Promise((resolve) => setTimeout(resolve, 2));
-    const second = await s.upsertLiveActivityToken({
-      token: "tok1",
-      kind: "activityUpdate",
-      env: "production",
-    });
+    const second = await s.upsertLiveActivityToken({ token: "tok1", env: "production" });
 
     const list = await s.listLiveActivityTokens();
     expect(list.length).toBe(1);
     expect(list[0]).toEqual(second);
     expect(second.updatedAt).toBeGreaterThan(first.updatedAt);
-    expect(second.kind).toBe("activityUpdate");
-    expect(second.sessionId).toBeUndefined();
+    expect(second.kind).toBe("pushToStart");
     expect(second.env).toBe("production");
   });
 
-  test("lists push-to-start and per-session update tokens separately", async () => {
+  test("lists only push-to-start tokens", async () => {
     const s = await store();
-    await s.upsertLiveActivityToken({ token: "start", kind: "pushToStart", env: "sandbox" });
-    await s.upsertLiveActivityToken({
-      token: "u1",
-      kind: "activityUpdate",
-      sessionId: "s1",
-      env: "sandbox",
-    });
-    await s.upsertLiveActivityToken({
-      token: "u2",
-      kind: "activityUpdate",
-      sessionId: "s2",
-      env: "production",
-    });
-
+    await s.upsertLiveActivityToken({ token: "start", env: "sandbox" });
     expect((await s.listPushToStartTokens()).map((t) => t.token)).toEqual(["start"]);
-    // Update tokens are device-level now — there is one fleet activity per
-    // device, so every registered update token is a target.
-    expect((await s.listActivityUpdateTokens()).map((t) => t.token)).toEqual(["u1", "u2"]);
   });
 
   /**
-   * The store used to APPEND: every rotation or re-created card left its old
-   * token behind, and the live store reached 8 `activityUpdate` tokens for one
-   * device. That is not merely untidy — a dead Live Activity token still answers
-   * **200** from APNs, so the watcher counted a push to a corpse as delivered and
-   * never re-established an addressable card.
-   * See `.claude/diagnosis-live-activity-background-updates.md`.
+   * `activityUpdate` was the per-card token used to address update/end. It is
+   * gone: obtaining it required iOS to wake the app after a push-to-start, which
+   * on an idle phone routinely never happened, and a dead Live Activity token
+   * answers 200 so the server could not tell. Update/end now go over a broadcast
+   * channel.
+   *
+   * A store written before that change can still hold these rows — the Air's held
+   * **35**, untouched since July — and they must not survive the upgrade: they
+   * address nothing, and the supersede rule that used to bound them is gone with
+   * the kind itself.
    */
-  describe("activityUpdate tokens supersede per env (SC3)", () => {
-    test("a newer update token replaces the previous one for that env", async () => {
+  describe("legacy activityUpdate rows", () => {
+    test("are pruned on read, not merely on the next write", async () => {
+      writeFileSync(
+        process.env.LFG_LIVE_ACTIVITY_STORE!,
+        JSON.stringify([
+          { token: "start", kind: "pushToStart", env: "production", updatedAt: 1 },
+          { token: "u1", kind: "activityUpdate", env: "production", updatedAt: 2 },
+          { token: "u2", kind: "activityUpdate", env: "sandbox", updatedAt: 3 },
+        ]),
+      );
       const s = await store();
-      await s.upsertLiveActivityToken({ token: "old", kind: "activityUpdate", env: "production" });
-      await s.upsertLiveActivityToken({ token: "new", kind: "activityUpdate", env: "production" });
-
-      expect((await s.listActivityUpdateTokens()).map((t) => t.token)).toEqual(["new"]);
-    });
-
-    test("the two APNs environments do not evict each other", async () => {
-      // A debug build (sandbox) and a TestFlight build (production) are different
-      // installs with different cards; one must not knock the other out.
-      const s = await store();
-      await s.upsertLiveActivityToken({ token: "sand", kind: "activityUpdate", env: "sandbox" });
-      await s.upsertLiveActivityToken({ token: "prod", kind: "activityUpdate", env: "production" });
-
-      expect((await s.listActivityUpdateTokens()).map((t) => t.token).sort()).toEqual([
-        "prod",
-        "sand",
-      ]);
-    });
-
-    test("push-to-start tokens are untouched by an update-token registration", async () => {
-      // Push-to-start is a capability of the INSTALL, not of any one card, so it
-      // outlives every activity and must not be swept up by the supersede.
-      const s = await store();
-      await s.upsertLiveActivityToken({ token: "start", kind: "pushToStart", env: "production" });
-      await s.upsertLiveActivityToken({ token: "u1", kind: "activityUpdate", env: "production" });
-      await s.upsertLiveActivityToken({ token: "u2", kind: "activityUpdate", env: "production" });
-
+      expect((await s.listLiveActivityTokens()).map((t) => t.token)).toEqual(["start"]);
       expect((await s.listPushToStartTokens()).map((t) => t.token)).toEqual(["start"]);
-      expect((await s.listActivityUpdateTokens()).map((t) => t.token)).toEqual(["u2"]);
     });
 
-    test("re-registering the SAME token is a refresh, not a churn", async () => {
+    test("do not consume push-to-start cap slots", async () => {
+      // The cap keeps the newest N push-to-start tokens per env. Legacy rows
+      // counting toward it would silently evict a real device's token.
+      writeFileSync(
+        process.env.LFG_LIVE_ACTIVITY_STORE!,
+        JSON.stringify(
+          Array.from({ length: 30 }, (_, i) => ({
+            token: `legacy${i}`,
+            kind: "activityUpdate",
+            env: "production",
+            updatedAt: 1000 + i,
+          })),
+        ),
+      );
       const s = await store();
-      const first = await s.upsertLiveActivityToken({
-        token: "same",
-        kind: "activityUpdate",
-        env: "production",
-      });
-      await new Promise((resolve) => setTimeout(resolve, 2));
-      const again = await s.upsertLiveActivityToken({
-        token: "same",
-        kind: "activityUpdate",
-        env: "production",
-      });
-
-      expect((await s.listActivityUpdateTokens()).map((t) => t.token)).toEqual(["same"]);
-      expect(again.updatedAt).toBeGreaterThan(first.updatedAt);
-    });
-
-    test("promoting a pushToStart token to activityUpdate does not evict itself", async () => {
-      // The same hex can legitimately arrive under both kinds; the supersede must
-      // not delete the record it is in the middle of writing.
-      const s = await store();
-      await s.upsertLiveActivityToken({ token: "dual", kind: "pushToStart", env: "sandbox" });
-      await s.upsertLiveActivityToken({ token: "dual", kind: "activityUpdate", env: "sandbox" });
-
-      expect((await s.listActivityUpdateTokens()).map((t) => t.token)).toEqual(["dual"]);
+      await s.upsertLiveActivityToken({ token: "real", env: "production" });
+      expect((await s.listPushToStartTokens()).map((t) => t.token)).toEqual(["real"]);
     });
   });
+
 
   /**
    * Push-to-start tokens rot: dev/simulator builds each mint one, none ever
@@ -187,15 +139,6 @@ describe("Live Activity token store", () => {
       ]);
     });
 
-    test("activityUpdate tokens are untouched by the cap", async () => {
-      const s = await store();
-      for (const tok of ["p1", "p2", "p3", "p4"]) {
-        await s.upsertLiveActivityToken({ token: tok, kind: "pushToStart", env: "sandbox" });
-        await new Promise((resolve) => setTimeout(resolve, 2));
-      }
-      await s.upsertLiveActivityToken({ token: "u1", kind: "activityUpdate", env: "sandbox" });
-      expect((await s.listActivityUpdateTokens()).map((t) => t.token)).toEqual(["u1"]);
-    });
 
     test("an oversized store on disk is capped at read time, before any new registration", async () => {
       // The live store already holds 11+ sandbox corpses; the cap must apply on

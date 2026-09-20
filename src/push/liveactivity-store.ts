@@ -1,18 +1,23 @@
-// Registry of APNs Live Activity tokens. Both kinds are device-level: there is
-// exactly one (fleet) Live Activity per device, so update tokens need no session
-// keying. `sessionId` is still tolerated on input so an older client that sends
-// it does not fail registration.
+// Registry of APNs **push-to-start** tokens.
+//
+// There used to be a second kind, `activityUpdate` — one token per live card,
+// used to address update/end. It is gone: obtaining it required iOS to wake the
+// app after a push-to-start, which on an idle phone routinely never happened, and
+// a dead Live Activity token answers 200 so the server could not even tell it was
+// shouting into a void. Update and end now go over a broadcast channel
+// (`broadcast.ts`), which needs no wake and no registration.
+//
+// Push-to-start tokens remain, because broadcast cannot START an activity.
 // Persisted as a small JSON file following the device push store conventions.
 import { dirname, join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { PATHS } from "../config.ts";
 
-export type LiveActivityTokenKind = "pushToStart" | "activityUpdate";
+export type LiveActivityTokenKind = "pushToStart";
 
 export type LiveActivityToken = {
   token: string;
   kind: LiveActivityTokenKind;
-  sessionId?: string;
   env: "sandbox" | "production";
   updatedAt: number;
 };
@@ -24,7 +29,14 @@ export async function listLiveActivityTokens(): Promise<LiveActivityToken[]> {
   const f = Bun.file(storePath());
   if (!(await f.exists())) return [];
   try {
-    return JSON.parse(await f.text()) as LiveActivityToken[];
+    const parsed = JSON.parse(await f.text()) as LiveActivityToken[];
+    if (!Array.isArray(parsed)) return [];
+    // Legacy `activityUpdate` rows are dropped on READ, not merely on the next
+    // write. A store written before the broadcast channel can hold dozens of them
+    // (the Air's held 35, untouched since July) and they are pure liability now:
+    // they address nothing, and the old supersede rule that used to bound them is
+    // gone with the kind itself.
+    return parsed.filter((t) => t?.kind === "pushToStart");
   } catch {
     return [];
   }
@@ -37,16 +49,13 @@ async function writeTokens(list: LiveActivityToken[]): Promise<void> {
 
 export async function upsertLiveActivityToken(input: {
   token: string;
-  kind: LiveActivityTokenKind;
-  sessionId?: string;
+  kind?: LiveActivityTokenKind;
   env: "sandbox" | "production";
 }): Promise<LiveActivityToken> {
   const list = await listLiveActivityTokens();
   const record: LiveActivityToken = {
     token: input.token,
-    kind: input.kind,
-    // Recorded for debugging only — nothing selects on it any more.
-    ...(input.kind === "activityUpdate" && input.sessionId ? { sessionId: input.sessionId } : {}),
+    kind: "pushToStart",
     env: input.env,
     updatedAt: Date.now(),
   };
@@ -54,7 +63,7 @@ export async function upsertLiveActivityToken(input: {
   const replaced = existing
     ? list.map((t) => (t.token === input.token ? record : t))
     : [...list, record];
-  await writeTokens(capPushToStart(supersede(replaced, record)));
+  await writeTokens(capPushToStart(replaced));
   return record;
 }
 
@@ -84,37 +93,6 @@ function capPushToStart(list: LiveActivityToken[]): LiveActivityToken[] {
   return list.filter((t) => t.kind !== "pushToStart" || keep.has(t.token));
 }
 
-/**
- * A device has exactly one fleet Live Activity, so it has exactly one live
- * `activityUpdate` token per APNs environment. Registering a new one means the
- * previous card (or the previous rotation of this one) is gone — drop it.
- *
- * WHY THIS IS NOT JUST HOUSEKEEPING. A dead Live Activity token does not answer
- * `410`/`BadDeviceToken`; APNs accepts it and drops the payload. `isDeadApnsToken`
- * in `watcher.ts` therefore never fires for one, nothing prunes it, and — worse —
- * `sendLiveActivityToTokens` counts its **200** as a delivery. One corpse in the
- * list is enough to convince the watcher its update landed, so it advances
- * `active.current`, never re-sends `start`, and the real card silently stops
- * updating until the app is opened. Keeping the list to the one token that can
- * actually be live is what makes that 200 mean something.
- * See `.claude/diagnosis-live-activity-background-updates.md`.
- *
- * Scoped to `env` because a debug (sandbox) and a TestFlight (production) install
- * are different cards. `pushToStart` is deliberately exempt: it is a property of
- * the install, not of any one activity, and outlives every card.
- *
- * KNOWN LIMIT: two devices on the same env would fight over the single slot. The
- * registration payload carries no device identifier, so that cannot be
- * distinguished here today; it needs a device id on the wire.
- */
-function supersede(list: LiveActivityToken[], record: LiveActivityToken): LiveActivityToken[] {
-  if (record.kind !== "activityUpdate") return list;
-  return list.filter(
-    (t) =>
-      t.token === record.token || t.kind !== "activityUpdate" || t.env !== record.env,
-  );
-}
-
 export async function lookupLiveActivityToken(token: string): Promise<LiveActivityToken | null> {
   return (await listLiveActivityTokens()).find((t) => t.token === token) ?? null;
 }
@@ -124,10 +102,6 @@ export async function listPushToStartTokens(): Promise<LiveActivityToken[]> {
   // (or was edited on disk) is bounded on the next server start — not only
   // after the next registration happens to rewrite it.
   return capPushToStart(await listLiveActivityTokens()).filter((t) => t.kind === "pushToStart");
-}
-
-export async function listActivityUpdateTokens(): Promise<LiveActivityToken[]> {
-  return (await listLiveActivityTokens()).filter((t) => t.kind === "activityUpdate");
 }
 
 export async function removeLiveActivityToken(token: string): Promise<void> {

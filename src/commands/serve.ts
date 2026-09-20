@@ -97,6 +97,8 @@ import { assignUser, userRoster } from "../users.ts";
 import { acquireLease, ensureLease, foreignFresh, releaseLease } from "../leases.ts";
 import { registerDevice, unregisterDevice, deviceCount } from "../push/store.ts";
 import { upsertLiveActivityToken } from "../push/liveactivity-store.ts";
+import { ensureBroadcastChannel } from "../push/broadcast.ts";
+import { apnsConfigFromEnv } from "../push/apns.ts";
 import {
   startPushWatcher,
   pushConfigured,
@@ -2088,28 +2090,39 @@ export async function cmdServe() {
         ensurePushWatcher();
         return json({ ok: true, kind: record.kind, env: record.env });
       }
-      if (path === "/api/push/live-activity/update-token" && req.method === "POST") {
-        const body = (await req.json().catch(() => null)) as {
-          token?: string;
-          env?: string;
-          sessionId?: string;
-        } | null;
-        const token = body?.token?.trim();
-        if (!token || !/^[0-9a-fA-F]{8,}$/.test(token)) return err(400, "invalid token");
+      // The channel the app's fleet card must subscribe to. Handed out rather
+      // than registered: this REPLACES update-token registration entirely. A card
+      // that subscribes here is addressable forever after, with no background
+      // wake and nothing for the phone to report back.
+      //
+      // A null channel is a normal answer, not an error: broadcast capability is a
+      // toggle in Apple's developer portal, so until it is enabled the server has
+      // no channel and the app simply does not create a card (the server will
+      // push-to-start one instead).
+      if (path === "/api/push/live-activity/channel" && req.method === "POST") {
+        const body = (await req.json().catch(() => null)) as { env?: string } | null;
         const env = body?.env === "production" ? "production" : "sandbox";
-        const sessionId = body?.sessionId?.trim();
-        const record = await upsertLiveActivityToken({
-          token,
-          env,
-          kind: "activityUpdate",
-          ...(sessionId ? { sessionId } : {}),
-        });
-        // An update token only exists for a LIVE activity, so this is the
-        // client telling us a card is on screen. Adopt it rather than
-        // push-to-starting a second one alongside it.
+        const cfg = apnsConfigFromEnv();
+        if (!cfg) return json({ ok: true, channelId: null, reason: "apns-not-configured" });
+        const channelId = await ensureBroadcastChannel(cfg, env);
+        return json({ ok: true, env, channelId });
+      }
+      // The app created a card itself. Token-free — it carries no payload at all,
+      // because there is no longer any per-card secret to hand over. The server
+      // needs only the FACT, so that it adopts the card instead of push-to-starting
+      // a second one beside it.
+      //
+      // `/update-token` is kept as a deprecated alias so a build still running the
+      // old client keeps announcing its cards during rollover; its body (a token)
+      // is deliberately ignored and nothing is stored.
+      if (
+        (path === "/api/push/live-activity/started" ||
+          path === "/api/push/live-activity/update-token") &&
+        req.method === "POST"
+      ) {
         noteFleetActivityStarted();
         ensurePushWatcher();
-        return json({ ok: true, kind: record.kind, env: record.env });
+        return json({ ok: true });
       }
       // The client ended its fleet card. Only it can know: the app ends the card
       // on ITS active count reaching zero, which need not coincide with the

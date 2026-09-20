@@ -36,6 +36,13 @@ export type LiveActivityStartFleet = {
   fleetId?: string;
   alertTitle?: string;
   alertBody?: string;
+  /**
+   * Base64 channel id. Broadcast CANNOT start an activity, so a start is still
+   * addressed to a per-device push-to-start token — but including this makes the
+   * card it creates subscribe to the channel at birth, which is what removes the
+   * need for it to ever hand back an update token.
+   */
+  inputPushChannel?: string;
 };
 
 export type LiveActivityHeaders = {
@@ -58,6 +65,8 @@ export type LiveActivityBody = {
     /// Orders this app's own Live Activities (Lock Screen order, island pick).
     /// Does NOT affect placement against other apps' activities — see `relevanceScore`.
     "relevance-score"?: number;
+    /// Subscribes the card this push starts to a broadcast channel (iOS 18+).
+    "input-push-channel"?: string;
   };
 };
 
@@ -124,6 +133,12 @@ export function buildStart(
         "relevance-score": relevanceScore(state),
         "attributes-type": attributesType,
         attributes: { fleetId: fleet.fleetId ?? "fleet" },
+        // Omitted rather than sent empty: Apple is explicit that a card started
+        // against an invalid channel id does not start at all, so "no channel yet"
+        // must degrade to a plain (token-updatable) start, not a broken one.
+        ...(fleet.inputPushChannel
+          ? { "input-push-channel": fleet.inputPushChannel }
+          : {}),
         alert: {
           title: fleet.alertTitle ?? "lfg",
           body: fleet.alertBody ?? "LFG sessions are active.",

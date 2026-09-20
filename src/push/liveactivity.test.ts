@@ -129,3 +129,29 @@ describe("sendLiveActivity", () => {
     expect(JSON.parse(calls[0].body)).toEqual(push.body);
   });
 });
+
+describe("broadcast channel on start", () => {
+  const cs = {
+    working: 1,
+    needsInput: 0,
+    rows: [{ sid: "s1", title: "Build", state: "working" as const, since: 1 }],
+    more: 0,
+    updatedAt: 2,
+  };
+
+  test("a start carries input-push-channel when a channel exists", () => {
+    const push = buildStart({ contentState: cs, inputPushChannel: "Y2hhbg==" });
+    expect(push.body.aps["input-push-channel"]).toBe("Y2hhbg==");
+  });
+
+  // A card started against an invalid channel id does not start AT ALL, so the
+  // key must be absent rather than empty when we have no channel yet — otherwise
+  // a server whose capability isn't enabled would stop producing cards entirely.
+  test("a start omits the key entirely when there is no channel", () => {
+    const push = buildStart({ contentState: cs });
+    expect("input-push-channel" in push.body.aps).toBe(false);
+    expect(buildStart({ contentState: cs, inputPushChannel: "" }).body.aps).not.toHaveProperty(
+      "input-push-channel",
+    );
+  });
+});

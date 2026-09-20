@@ -16,11 +16,13 @@ import {
 import { capturePaneAsync, isBusy, parsePrompt, type PanePrompt } from "../tmux.ts";
 import { codexDelegationSessionIds } from "../activity.ts";
 import { listDevices } from "./store.ts";
+import { listPushToStartTokens, removeLiveActivityToken } from "./liveactivity-store.ts";
 import {
-  listActivityUpdateTokens,
-  listPushToStartTokens,
-  removeLiveActivityToken,
-} from "./liveactivity-store.ts";
+  ensureBroadcastChannel,
+  sendBroadcastLiveActivity,
+  type ApnsRequester,
+} from "./broadcast.ts";
+import { removeLiveActivityChannel, type ApnsEnv } from "./channel-store.ts";
 import {
   apnsConfigFromEnv,
   sendApns,
@@ -40,6 +42,7 @@ import {
 } from "./liveactivity.ts";
 import { unregisterDevice } from "./store.ts";
 import { loadFleetActivityActive, saveFleetActivityActive } from "./fleet-active-store.ts";
+import type { ApnsResult } from "./apns.ts";
 import { resolveBusy, sessionDisplayState, sessionTurnState } from "../session-state.ts";
 import { busyWithRunningWork } from "../subagents.ts";
 import { basename, join } from "node:path";
@@ -501,13 +504,33 @@ export type TickDeps = {
     /// value) so the tick can swap it and the caller observes the change.
     active: FleetActivityBox;
     pushToStartTokens: () => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
-    activityUpdateTokens: () => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
+    /**
+     * The broadcast channel per APNs environment, created on first use.
+     *
+     * This REPLACES `activityUpdateTokens`. A per-card update token only ever
+     * reached the server if iOS woke the app after a push-to-start, which on an
+     * idle phone routinely did not happen — and because a dead Live Activity
+     * token still answers 200, the server counted the lost `end` as delivered and
+     * the frozen card stayed on the Lock Screen forever. A channel needs no wake
+     * and no registration, so there is nothing left to miss.
+     */
+    channels: () => Promise<Array<{ env: ApnsEnv; channelId: string }>>;
+    /// Start only — broadcast cannot start an activity, so this still goes to a
+    /// per-device push-to-start token.
     send: (
       device: { token: string; env: "sandbox" | "production" },
       push: LiveActivityPush,
       cfg: ApnsConfig,
     ) => Promise<{ ok: boolean; status: number; reason?: string }>;
+    /// Update and end — one publish reaches every card on the channel.
+    sendBroadcast: (
+      channel: { env: ApnsEnv; channelId: string },
+      push: LiveActivityPush,
+      cfg: ApnsConfig,
+    ) => Promise<{ ok: boolean; status: number; reason?: string }>;
     onDeadToken?: (token: string) => Promise<void> | void;
+    /// A channel APNs no longer recognises is dropped so the next tick recreates it.
+    onInvalidChannel?: (env: ApnsEnv) => Promise<void> | void;
     persistActive?: (active: LiveActivityActive | null) => Promise<void> | void;
   };
   now?: () => number;
@@ -540,6 +563,25 @@ function isDeadApnsToken(r: { ok: boolean; status: number; reason?: string }): b
 }
 
 /**
+ * A channel APNs will never accept again, as opposed to a transient failure.
+ *
+ * The analogue of `isDeadApnsToken`, and it exists for the same reason: without
+ * pruning, a stale channel id makes every update fail forever and the card
+ * silently stops moving. Unlike a dead device token this one is honest — APNs
+ * rejects an unknown channel rather than 200-ing it — so a single signal is
+ * enough to act on.
+ */
+function isInvalidChannel(r: { ok: boolean; status: number; reason?: string }): boolean {
+  return (
+    !r.ok &&
+    (r.reason === "BadChannelId" ||
+      r.reason === "ChannelNotFound" ||
+      r.reason === "InvalidPushType" ||
+      r.status === 404)
+  );
+}
+
+/**
  * One JSON line per Live Activity decision and per token send, appended to
  * `~/.lfg/liveactivity.log` and never pruned. Same bargain as `sendq.log`.
  *
@@ -568,13 +610,14 @@ function traceLiveActivity(event: string, extra: Record<string, unknown> = {}): 
 
 async function sendLiveActivityToTokens(
   tokens: Array<{ token: string; env: "sandbox" | "production" }>,
-  push: LiveActivityPush,
+  pushFor: (env: "sandbox" | "production") => LiveActivityPush,
   deps: NonNullable<TickDeps["liveActivities"]>,
   cfg: ApnsConfig,
   log?: (line: string) => void,
 ): Promise<{ accepted: number; attempted: number }> {
   let accepted = 0;
   for (const token of tokens) {
+    const push = pushFor(token.env);
     const r = await deps.send(token, push, cfg);
     // Logged on SUCCESS too: a 200 here does not mean the card updated (a dead
     // Live Activity token answers 200), so the useful signal is which token got
@@ -597,11 +640,49 @@ async function sendLiveActivityToTokens(
   return { accepted, attempted: tokens.length };
 }
 
+/**
+ * Publish one update/end to every channel we hold.
+ *
+ * Every environment is addressed, not just the one we guess the card is on: the
+ * server cannot know whether the live card came from a TestFlight (production)
+ * or a debug (sandbox) build, a broadcast to a channel with no subscribers is
+ * harmless, and there are at most two.
+ */
+async function broadcastLiveActivity(
+  channels: Array<{ env: ApnsEnv; channelId: string }>,
+  push: LiveActivityPush,
+  deps: NonNullable<TickDeps["liveActivities"]>,
+  cfg: ApnsConfig,
+  log?: (line: string) => void,
+): Promise<{ accepted: number; attempted: number }> {
+  let accepted = 0;
+  for (const channel of channels) {
+    const r = await deps.sendBroadcast(channel, push, cfg);
+    traceLiveActivity("broadcast", {
+      apnsEvent: push.body.aps.event,
+      env: channel.env,
+      channel: channel.channelId.slice(0, 8),
+      status: r.status,
+      ...(r.reason ? { reason: r.reason } : {}),
+    });
+    if (r.ok) {
+      accepted++;
+    } else if (isInvalidChannel(r)) {
+      traceLiveActivity("channel-invalid", { env: channel.env });
+      await deps.onInvalidChannel?.(channel.env);
+    } else {
+      log?.(`[liveactivity] broadcast ${channel.env} ${r.status} ${r.reason ?? ""}`.trim());
+    }
+  }
+  return { accepted, attempted: channels.length };
+}
+
 async function applyLiveActivityDecision(
   decision: LiveActivityDecision,
   deps: NonNullable<TickDeps["liveActivities"]>,
   cfg: ApnsConfig,
   startTokens: Array<{ token: string; env: "sandbox" | "production" }>,
+  channels: Array<{ env: ApnsEnv; channelId: string }>,
   log?: (line: string) => void,
 ): Promise<void> {
   if (!decision.action) {
@@ -611,60 +692,75 @@ async function applyLiveActivityDecision(
     return;
   }
 
-  const tokens = decision.action.event === "start"
-    ? startTokens
-    : await deps.activityUpdateTokens();
-
   const content = decision.action.push.body.aps["content-state"];
+  const isStart = decision.action.event === "start";
   traceLiveActivity("decide", {
     apnsEvent: decision.action.event,
-    tokens: tokens.length,
+    tokens: isStart ? startTokens.length : channels.length,
+    via: isStart ? "push-to-start" : "broadcast",
     working: content?.working,
     needsInput: content?.needsInput,
     rows: content?.rows.map((r) => `${r.sid.slice(0, 8)}:${r.state}`),
     more: content?.more,
   });
 
-  // No token = no way to address the card. Worth a line of its own: it is
-  // otherwise indistinguishable from "nothing to say", and it is exactly the
-  // state a suspended app leaves behind when its token rotates.
-  if (!tokens.length) {
-    traceLiveActivity("no-tokens", { apnsEvent: decision.action.event });
-    return;
+  let accepted = 0;
+  let attempted = 0;
+
+  if (isStart) {
+    if (!startTokens.length) {
+      traceLiveActivity("no-tokens", { apnsEvent: "start" });
+      return;
+    }
+    // Rebuilt PER TOKEN because `input-push-channel` is environment-specific: a
+    // sandbox card must subscribe to the sandbox channel. A card started against
+    // the wrong environment's channel does not start at all.
+    const byEnv = new Map(channels.map((c) => [c.env, c.channelId]));
+    ({ accepted, attempted } = await sendLiveActivityToTokens(
+      startTokens,
+      (env) =>
+        content
+          ? buildStart({ contentState: content, inputPushChannel: byEnv.get(env) })
+          : decision.action!.push,
+      deps,
+      cfg,
+      log,
+    ));
+  } else {
+    if (!channels.length) {
+      // No channel = no way to address the card. Distinct from "nothing to say",
+      // and it is exactly the state a server sits in before broadcast capability
+      // is enabled on the identifier.
+      traceLiveActivity("no-channel", { apnsEvent: decision.action.event });
+      return;
+    }
+    ({ accepted, attempted } = await broadcastLiveActivity(
+      channels,
+      decision.action.push,
+      deps,
+      cfg,
+      log,
+    ));
   }
 
-  const { accepted, attempted } = await sendLiveActivityToTokens(
-    tokens,
-    decision.action.push,
-    deps,
-    cfg,
-    log,
-  );
-
-  // How much delivery counts as delivered differs by event, and the difference
-  // is the 2026-08-23 zombie-card bug. Update/end target one token per APNs
-  // env, and one env is routinely a corpse that 200s — so "any accepted" was
-  // routinely "only the corpse accepted": the real device's send failed
-  // (status 0), state advanced anyway, and the card froze/never dismissed.
-  // Those two events now require EVERY targeted token to accept; a shortfall
-  // leaves `active.current` alone so the next tick re-sends (re-updating or
-  // re-ending an already-correct card is harmless, and 410s prune tokens so
-  // the requirement converges). `start` keeps "any accepted": re-blasting
-  // starts until every stale push-to-start token accepts could stack duplicate
-  // cards on the real device, and an under-delivered start self-heals through
-  // token registration (`noteFleetActivityStarted`).
-  const required = decision.action.event === "start" ? 1 : attempted;
+  // `start` keeps "any accepted": re-blasting starts until every stale
+  // push-to-start token accepts could stack duplicate cards on the real device,
+  // and an under-delivered start self-heals through the client's "started" ping.
+  // Update/end require every channel to accept — but unlike the old token
+  // fan-out, that is now an honest requirement: a channel that fails says so
+  // rather than 200-ing a corpse, and an invalid one is pruned on the spot.
+  const required = isStart ? 1 : attempted;
   if (accepted < required) {
     traceLiveActivity(accepted === 0 ? "none-accepted" : "partial", {
       apnsEvent: decision.action.event,
-      tokens: attempted,
+      targets: attempted,
       accepted,
     });
     return;
   }
 
   deps.active.current = decision.nextActive;
-  if (decision.action.event === "start") deps.active.clientEnded = null;
+  if (isStart) deps.active.clientEnded = null;
   await deps.persistActive?.(decision.nextActive);
 }
 
@@ -679,6 +775,10 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
   const devices = await deps.devices();
   const liveActivities = deps.liveActivities;
   const liveStartTokens = liveActivities ? await liveActivities.pushToStartTokens() : [];
+  // Fetched once per tick alongside the start tokens: `channels()` creates on
+  // first use, so calling it per send would retry channel creation on every
+  // delivery while broadcast capability is still disabled.
+  const liveChannels = liveActivities ? await liveActivities.channels() : [];
   if (!devices.length && !liveActivities) {
     // Nobody listening — keep state seeded so we don't fire a backlog when a
     // device registers mid-flight, but skip the work of observing.
@@ -764,6 +864,7 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
       liveActivities,
       deps.cfg,
       liveStartTokens,
+      liveChannels,
       deps.log,
     );
   }
@@ -819,9 +920,11 @@ export async function noteFleetActivityEnded(): Promise<void> {
 }
 
 /**
- * A client registered an `activityUpdate` token, which is proof that a card
- * exists on that device right now — ActivityKit only issues one for a live
- * activity.
+ * A client reported that it created a fleet card (`POST /live-activity/started`).
+ *
+ * This used to be inferred from an `activityUpdate` token registration. There is
+ * no such token any more — the card listens on a broadcast channel — so the app
+ * now states the fact directly, with no payload.
  *
  * Adopt it instead of leaving `current` null, or the next tick would take the
  * `!args.active` branch and **push-to-start a second card** next to the one the
@@ -878,6 +981,28 @@ export function pushWatcherEnabled(port: number, env = process.env): boolean {
 }
 
 /**
+ * The broadcast channels this server should publish on, creating them on first use.
+ *
+ * Environments are derived from the push-to-start tokens actually registered, so a
+ * host that only ever talks to a TestFlight build never creates (or pays for) a
+ * sandbox channel. `ensureBroadcastChannel` returns null rather than throwing when
+ * APNs refuses — broadcast capability is a developer-portal toggle, so "not enabled
+ * yet" is a normal state the watcher must survive.
+ */
+async function resolveBroadcastChannels(
+  cfg: ApnsConfig,
+  log?: (line: string) => void,
+): Promise<Array<{ env: ApnsEnv; channelId: string }>> {
+  const envs = new Set<ApnsEnv>((await listPushToStartTokens()).map((t) => t.env));
+  const out: Array<{ env: ApnsEnv; channelId: string }> = [];
+  for (const env of envs) {
+    const channelId = await ensureBroadcastChannel(cfg, env, { log });
+    if (channelId) out.push({ env, channelId });
+  }
+  return out;
+}
+
+/**
  * Start the background watcher. No-op (and self-stopping) when APNs isn't
  * configured, so an install without push credentials pays nothing. Safe to call
  * repeatedly — only one interval runs.
@@ -919,9 +1044,11 @@ export function startPushWatcher(
     deps.liveActivities = {
       active,
       pushToStartTokens: listPushToStartTokens,
-      activityUpdateTokens: listActivityUpdateTokens,
+      channels: () => resolveBroadcastChannels(cfg, log),
       send: sendLiveActivity,
+      sendBroadcast: (channel, push, c) => sendBroadcastLiveActivity(channel, push, c),
       onDeadToken: removeLiveActivityToken,
+      onInvalidChannel: removeLiveActivityChannel,
       persistActive: saveFleetActivityActive,
     };
   }
