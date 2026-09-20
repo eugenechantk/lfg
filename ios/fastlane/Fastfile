@@ -91,6 +91,46 @@ def regenerate_project
   sh("cd .. && xcodegen generate") if uses_xcodegen?
 end
 
+# --- Bundled Cloudflare Access (private builds) ---
+# `ios/PrivateResources/BundledCloudflareAccess.private.json` is gitignored and
+# copied into the app as a folder reference; on launch the app seeds every host
+# in it plus the Service Auth token into the Keychain, so a fresh install needs
+# no setup form. A clean worktree has no such file, and build 202609192001
+# (2026-09-19) shipped with only the README in PrivateResources — the phone
+# fell back to manual setup. Generate it when missing and refuse to archive
+# without it, unless ALLOW_UNBUNDLED_CLOUDFLARE_ACCESS=true says a public
+# build is intended.
+BUNDLED_ACCESS_RELATIVE = "PrivateResources/BundledCloudflareAccess.private.json"
+
+def bundled_access_path = File.expand_path("../#{BUNDLED_ACCESS_RELATIVE}", __dir__)
+
+def parse_bundled_access!(json, where:)
+  require "json"
+  payload = JSON.parse(json) rescue nil
+  UI.user_error!("#{where}: #{BUNDLED_ACCESS_RELATIVE} is not valid JSON") if payload.nil?
+  hosts = Array(payload["hostURLs"].nil? ? payload["hostURL"] : payload["hostURLs"]).map(&:to_s).map(&:strip).reject(&:empty?)
+  UI.user_error!("#{where}: #{BUNDLED_ACCESS_RELATIVE} lists no hostURLs") if hosts.empty?
+  %w[clientID clientSecret].each do |k|
+    UI.user_error!("#{where}: #{BUNDLED_ACCESS_RELATIVE} has an empty #{k}") if payload[k].to_s.strip.empty?
+  end
+  hosts
+end
+
+def ensure_bundled_cloudflare_access!
+  if boolean_env("ALLOW_UNBUNDLED_CLOUDFLARE_ACCESS", false)
+    UI.important("ALLOW_UNBUNDLED_CLOUDFLARE_ACCESS=true — archiving WITHOUT a bundled Cloudflare Access payload; the install will need manual setup")
+    return
+  end
+  path = bundled_access_path
+  unless File.exist?(path)
+    UI.important("#{BUNDLED_ACCESS_RELATIVE} missing (clean worktree?) — generating it from this Mac's Keychain / ~/.cloudflared fallback")
+    sh("cd .. && ./scripts/generate-bundled-cloudflare-access")
+  end
+  UI.user_error!("#{BUNDLED_ACCESS_RELATIVE} still missing after generation — the archive would ship without hosts. Fix the Keychain item or set ALLOW_UNBUNDLED_CLOUDFLARE_ACCESS=true on purpose.") unless File.exist?(path)
+  hosts = parse_bundled_access!(File.read(path), where: "local payload")
+  UI.success("Bundled Cloudflare Access payload present — hosts: #{hosts.join(', ')}")
+end
+
 # TestFlight groups builds by marketing-version train and sorts trains by semver.
 # A build whose MARKETING_VERSION is LOWER than the highest existing train uploads
 # fine, processes VALID, and even reports IN_BETA_TESTING — but never surfaces on
@@ -186,6 +226,7 @@ platform :ios do
 
     regenerate_project
     assert_marketing_version_not_a_downgrade!
+    ensure_bundled_cloudflare_access!
     sync_appstore_signing(readonly: true)
 
     profile_name = "match AppStore #{app_identifier}"
@@ -239,6 +280,23 @@ platform :ios do
     upload_to_testflight(**upload_opts)
   end
 
+  desc "Re-upload an already-built build/fastlane/<target>.ipa (upload failed after a good archive)"
+  lane :upload_existing_ipa do
+    api_key = app_store_connect_key
+    ipa = File.expand_path("../build/fastlane/#{target_name}.ipa", __dir__)
+    UI.user_error!("No ipa at #{ipa} — run deploy_testflight") unless File.exist?(ipa)
+    # 2026-09-20: 1584 × "WILL RETRY PART 1. Checksums do not match" when the route to
+    # Apple's upload host went through a VPN utun. Surface the route before uploading.
+    route = `route -n get 17.156.106.13 2>/dev/null | awk '/interface/ {print $2}'`.strip
+    UI.important("Upload route interface: #{route.empty? ? 'unknown' : route}#{route.start_with?('utun') ? ' — a VPN tunnel; previous uploads through one corrupted every part' : ''}")
+    upload_to_testflight(
+      api_key:                    api_key,
+      ipa:                        "build/fastlane/#{target_name}.ipa",
+      uses_non_exempt_encryption: false,
+      skip_waiting_for_build_processing: true
+    )
+  end
+
   desc "Check the project's MARKETING_VERSION against existing TestFlight version trains"
   lane :verify_version_train do
     app_store_connect_key
@@ -263,6 +321,19 @@ platform :ios do
       actual = info["CFBundleVersion"].to_s
       UI.user_error!("ipa carries CFBundleVersion=#{actual}, expected #{build_number} — the xcargs build number never reached the binary") if actual != build_number
       UI.success("ipa ground truth OK: CFBundleVersion=#{actual}, v#{info['CFBundleShortVersionString']}")
+
+      # DoD 1b — the private Cloudflare Access payload actually rode along, with
+      # the hosts we meant to bundle (a clean-worktree archive silently drops it).
+      unless boolean_env("ALLOW_UNBUNDLED_CLOUDFLARE_ACCESS", false)
+        shipped = `unzip -p #{ipa.shellescape} 'Payload/*.app/#{BUNDLED_ACCESS_RELATIVE}' 2>/dev/null`
+        UI.user_error!("ipa has no #{BUNDLED_ACCESS_RELATIVE} — the install will need manual host setup") if shipped.strip.empty?
+        shipped_hosts = parse_bundled_access!(shipped, where: "ipa")
+        if File.exist?(bundled_access_path)
+          expected = parse_bundled_access!(File.read(bundled_access_path), where: "local payload")
+          UI.user_error!("ipa bundles hosts #{shipped_hosts.inspect}, local payload has #{expected.inspect}") if shipped_hosts.sort != expected.sort
+        end
+        UI.success("ipa bundles Cloudflare Access for: #{shipped_hosts.join(', ')}")
+      end
     else
       UI.important("No local ipa at #{ipa} — skipping ground-truth check (fine when verifying an old upload)")
     end

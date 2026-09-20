@@ -7,12 +7,21 @@ host_urls_json='["https://lfg-pro.eugenechantk.me","https://lfg-air.eugenechantk
 script_dir="${0:A:h}"
 output_path="$script_dir/../PrivateResources/BundledCloudflareAccess.private.json"
 
+# Source of truth is the macOS Keychain pilot item. The desktop app's private
+# fallback file (same JSON shape, present on every Mac that runs lfg) covers a
+# build host whose Keychain never received the item — the Air, as of 2026-09-20.
+fallback_file="$HOME/.cloudflared/lfg-access-service-token.private.json"
 credential_json=$(security find-generic-password \
   -s "$service" \
   -a "$host_url" \
   -w 2>/dev/null) || {
-    print -u2 "No pilot credential found in macOS Keychain for $host_url."
-    exit 1
+    if [[ -r "$fallback_file" ]]; then
+      print -u2 "No pilot credential in macOS Keychain for $host_url; using $fallback_file."
+      credential_json=$(cat "$fallback_file")
+    else
+      print -u2 "No pilot credential found in macOS Keychain for $host_url, and no $fallback_file."
+      exit 1
+    fi
   }
 
 mkdir -p "${output_path:h}"
