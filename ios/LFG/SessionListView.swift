@@ -682,127 +682,123 @@ struct SessionListView: View {
 
     var body: some View {
         @Bindable var settings = settings
-        VStack(spacing: 0) {
-            customHeader(groupMode: $settings.groupMode, sortMode: $settings.sortMode)
-
-            List(selection: $selection) {
-                // The banner only appears when the AGGREGATE is unhealthy — i.e.
-                // every configured host is down. A single host being offline
-                // leaves the aggregate `.ok` (some host still answers), so this
-                // stays hidden and the app keeps working; the top-bar per-host
-                // chips carry the partial-outage story instead.
-                // …and never while a launch/foreground reconnect burst is still
-                // running: a probe that hasn't been retried yet is not an outage,
-                // and a banner that appears for a second on every cold launch
-                // trains you to ignore it.
-                if store.connectionStatus == .offline {
-                    Section {
-                        // Name only the hosts that are actually down. When the
-                        // aggregate is unhealthy that is every host — but deriving
-                        // it rather than assuming it keeps the banner honest if the
-                        // guard above ever loosens.
-                        ConnectionBanner(state: store.fleetState,
-                                         offlineHosts: settings.hosts.count > 1
-                                            ? settings.hosts.filter { store.hostStateByHost[$0.id]?.isLive != true }.map(\.label)
-                                            : [])
-                            .listRowInsets(EdgeInsets())
-                            .listRowBackground(Tokens.screen)
-                    }
+        List(selection: $selection) {
+            // The banner only appears when the AGGREGATE is unhealthy — i.e.
+            // every configured host is down. A single host being offline
+            // leaves the aggregate `.ok` (some host still answers), so this
+            // stays hidden and the app keeps working; the top-bar per-host
+            // chips carry the partial-outage story instead.
+            // …and never while a launch/foreground reconnect burst is still
+            // running: a probe that hasn't been retried yet is not an outage,
+            // and a banner that appears for a second on every cold launch
+            // trains you to ignore it.
+            if store.connectionStatus == .offline {
+                Section {
+                    // Name only the hosts that are actually down. When the
+                    // aggregate is unhealthy that is every host — but deriving
+                    // it rather than assuming it keeps the banner honest if the
+                    // guard above ever loosens.
+                    ConnectionBanner(state: store.fleetState,
+                                     offlineHosts: settings.hosts.count > 1
+                                        ? settings.hosts.filter { store.hostStateByHost[$0.id]?.isLive != true }.map(\.label)
+                                        : [])
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Tokens.screen)
                 }
+            }
 
-                let sections = visibleSections
-                if sections.isEmpty, isSearching, store.isSearchLoading {
-                    // The host is still walking its transcripts. "No sessions"
-                    // here would be a lie — the answer just hasn't landed.
-                    Section {
-                        HStack(spacing: 10) {
-                            ProgressView().controlSize(.small)
-                            Text("Searching all sessions…")
-                                .foregroundStyle(Tokens.meta)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 24)
-                        .accessibilityIdentifier("searchInFlight")
+            let sections = visibleSections
+            if sections.isEmpty, isSearching, store.isSearchLoading {
+                // The host is still walking its transcripts. "No sessions"
+                // here would be a lie — the answer just hasn't landed.
+                Section {
+                    HStack(spacing: 10) {
+                        ProgressView().controlSize(.small)
+                        Text("Searching all sessions…")
+                            .foregroundStyle(Tokens.meta)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 24)
+                    .accessibilityIdentifier("searchInFlight")
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Tokens.screen)
+                }
+            } else if sections.isEmpty, isSearching {
+                Section {
+                    VStack(spacing: 6) {
+                        Text("No matching sessions")
+                            .font(.headline)
+                            .foregroundStyle(Tokens.label)
+                        Text("Searched every session on your hosts.")
+                            .font(.subheadline)
+                            .foregroundStyle(Tokens.meta)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                    .accessibilityIdentifier("searchNoResults")
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Tokens.screen)
+                }
+            } else if sections.isEmpty {
+                Section {
+                    EmptyListState(connected: store.isConnected) {
+                        openNewSession(focusComposer: false)
+                    }
                         .listRowInsets(EdgeInsets())
-                        .listRowSeparator(.hidden)
                         .listRowBackground(Tokens.screen)
-                    }
-                } else if sections.isEmpty, isSearching {
-                    Section {
-                        VStack(spacing: 6) {
-                            Text("No matching sessions")
-                                .font(.headline)
-                                .foregroundStyle(Tokens.label)
-                            Text("Searched every session on your hosts.")
-                                .font(.subheadline)
-                                .foregroundStyle(Tokens.meta)
+                }
+            } else {
+                ForEach(sections) { section in
+                    if isCollapsed(section) {
+                        Section {
+                            collapsedSectionRow(section)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 40)
-                        .accessibilityIdentifier("searchNoResults")
-                        .listRowInsets(EdgeInsets())
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Tokens.screen)
-                    }
-                } else if sections.isEmpty {
-                    Section {
-                        EmptyListState(connected: store.isConnected) {
-                            openNewSession(focusComposer: false)
-                        }
-                            .listRowInsets(EdgeInsets())
-                            .listRowBackground(Tokens.screen)
-                    }
-                } else {
-                    ForEach(sections) { section in
-                        if isCollapsed(section) {
-                            Section {
-                                collapsedSectionRow(section)
+                    } else {
+                        Section {
+                            // The group header is a normal ROW, not a
+                            // `Section(header:)`. A plain List pins section
+                            // headers, and these headers are transparent —
+                            // so rows scrolled underneath drew straight
+                            // through the header text. The design shows
+                            // groups scrolling away as a unit, so making it
+                            // a row fixes the collision and the header's
+                            // extra built-in top padding at the same time.
+                            expandedSectionHeader(section)
+                            ForEach(renderedRows(for: section)) { row in
+                                sessionRow(row)
                             }
-                        } else {
-                            Section {
-                                // The group header is a normal ROW, not a
-                                // `Section(header:)`. A plain List pins section
-                                // headers, and these headers are transparent —
-                                // so rows scrolled underneath drew straight
-                                // through the header text. The design shows
-                                // groups scrolling away as a unit, so making it
-                                // a row fixes the collision and the header's
-                                // extra built-in top padding at the same time.
-                                expandedSectionHeader(section)
-                                ForEach(renderedRows(for: section)) { row in
-                                    sessionRow(row)
-                                }
-                                // Search has its OWN pagination — the host is
-                                // walking every transcript it has, not the list's
-                                // loaded pages — so while searching this footer
-                                // pulls the next page of MATCHES, not the next
-                                // page of closed sessions.
-                                if section.group == .closed {
-                                    if isSearching {
-                                        if store.canLoadMoreSearch {
-                                            loadMoreRow(title: "Load more results",
-                                                        loading: store.isLoadingMoreSearch,
-                                                        identifier: "loadMoreSearchButton") {
-                                                await store.loadMoreSearchResults()
-                                            }
+                            // Search has its OWN pagination — the host is
+                            // walking every transcript it has, not the list's
+                            // loaded pages — so while searching this footer
+                            // pulls the next page of MATCHES, not the next
+                            // page of closed sessions.
+                            if section.group == .closed {
+                                if isSearching {
+                                    if store.canLoadMoreSearch {
+                                        loadMoreRow(title: "Load more results",
+                                                    loading: store.isLoadingMoreSearch,
+                                                    identifier: "loadMoreSearchButton") {
+                                            await store.loadMoreSearchResults()
                                         }
-                                    } else if store.canLoadMoreClosed {
-                                        // Infinite scroll: this row only exists
-                                        // at the bottom of the closed section,
-                                        // so its creation means the user is at
-                                        // the end of what's loaded — fetch the
-                                        // next page without requiring the tap.
-                                        // The button stays as the retry path
-                                        // for a page that failed mid-flight.
-                                        loadMoreRow(title: "Load more",
-                                                    loading: store.isLoadingMoreClosed,
-                                                    identifier: "loadMoreClosedButton") {
-                                            await store.loadMoreClosed()
-                                        }
-                                        .onAppear {
-                                            Task { await store.loadMoreClosed() }
-                                        }
+                                    }
+                                } else if store.canLoadMoreClosed {
+                                    // Infinite scroll: this row only exists
+                                    // at the bottom of the closed section,
+                                    // so its creation means the user is at
+                                    // the end of what's loaded — fetch the
+                                    // next page without requiring the tap.
+                                    // The button stays as the retry path
+                                    // for a page that failed mid-flight.
+                                    loadMoreRow(title: "Load more",
+                                                loading: store.isLoadingMoreClosed,
+                                                identifier: "loadMoreClosedButton") {
+                                        await store.loadMoreClosed()
+                                    }
+                                    .onAppear {
+                                        Task { await store.loadMoreClosed() }
                                     }
                                 }
                             }
@@ -810,12 +806,20 @@ struct SessionListView: View {
                     }
                 }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(Tokens.screen)
-            .refreshable { await store.refresh() }
-            .listSectionSpacing(0)
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Tokens.screen)
+        .refreshable { await store.refresh() }
+        .listSectionSpacing(0)
+        // The header rides over the list as a top inset rather than sitting
+        // above it in a stack, so rows scroll under it through the same
+        // translucent ramp the session view uses.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            customHeader(groupMode: $settings.groupMode, sortMode: $settings.sortMode)
+                .background(alignment: .top) { headerBackdrop }
+        }
+        .topScrollEdgeEffectHidden()
         .background(Tokens.screen.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         // The bottom chrome is now the system search field + a plus button, not
@@ -882,6 +886,27 @@ struct SessionListView: View {
         .padding(.top, 6)
         .padding(.horizontal, 16)
         .padding(.bottom, 2)
+    }
+
+    /// What the header floats on. On iOS 26 that is the session view's glass
+    /// ramp, pinned to the screen top so it also covers the status bar; older
+    /// OSes have no glass and take the system bar material instead.
+    @ViewBuilder
+    private var headerBackdrop: some View {
+        if #available(iOS 26.0, *) {
+            GeometryReader { proxy in
+                let frame = proxy.frame(in: .global)
+                // Full strength down to the header's midline, not just to the
+                // status bar: an iPad sidebar panel starts BELOW the status
+                // bar, so a ramp that begins easing at the header's top leaves
+                // the whole header in its weak half, and row titles run
+                // legibly through the host status line.
+                TopChromeFade(chromeHeight: max(frame.maxY, 0), barRow: frame.height / 2)
+                    .offset(y: -frame.minY)
+            }
+        } else {
+            Rectangle().fill(.bar).ignoresSafeArea(edges: .top)
+        }
     }
 
     private func headerButton(
@@ -1121,6 +1146,17 @@ private struct BottomSearchBar: View {
 }
 
 private extension View {
+    /// The list draws its own top fade (`TopChromeFade`); the system's edge
+    /// blur on top of it would double the treatment.
+    @ViewBuilder
+    func topScrollEdgeEffectHidden() -> some View {
+        if #available(iOS 26.0, *) {
+            self.scrollEdgeEffectHidden(true, for: .top)
+        } else {
+            self
+        }
+    }
+
     /// The bottom chrome for the session list: a search field plus a "new
     /// session" button.
     ///

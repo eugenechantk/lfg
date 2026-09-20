@@ -38,7 +38,6 @@ struct SessionDetailView: View {
     @Environment(AppSettings.self) private var settings
 
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.colorScheme) private var colorScheme
     @State private var signInRequests: [PhoneSignInAgentRequest] = []
     @State private var draft = ""
     @State private var renaming = false
@@ -399,7 +398,7 @@ struct SessionDetailView: View {
                         // viewport instead of confining it to a bar boundary.
                         .scrollEdgeEffectHidden(true, for: [.top, .bottom])
                         .overlay(alignment: .top) {
-                            topChromeFade(chromeHeight: topChromeHeight)
+                            TopChromeFade(chromeHeight: topChromeHeight)
                                 .offset(y: -topChromeHeight)
                         }
 
@@ -415,56 +414,6 @@ struct SessionDetailView: View {
                     bottomChrome
                 }
         }
-    }
-
-    /// Top scroll treatment: the transcript runs under the status and
-    /// navigation region, darkened and blurred most where the status bar is,
-    /// then easing out just past the nav row — not a slab with a fade edge.
-    /// Two layers give the ramp: dimmed Liquid Glass whose mask thins as it
-    /// descends, and a background-coloured scrim that carries most of the
-    /// darkness at the very top. The buttons float in their own glass
-    /// circles and the title sits bare on the ramp, so the bar itself needs
-    /// no plane of its own.
-    @available(iOS 26.0, *)
-    private func topChromeFade(chromeHeight: CGFloat) -> some View {
-        let navRow: CGFloat = 44          // the row holding back / title / menu
-        let tail: CGFloat = 36            // how far below the nav row the ramp runs out
-        let total = chromeHeight + tail
-        let statusBottom = total > 0 ? max(chromeHeight - navRow, 0) / total : 0
-        let chromeBottom = total > 0 ? chromeHeight / total : 0
-        let base = Color(.systemBackground)
-
-        let glassMask = LinearGradient(
-            stops: [
-                .init(color: .black, location: 0),
-                .init(color: .black, location: statusBottom),
-                .init(color: .black.opacity(0.3), location: chromeBottom),
-                .init(color: .clear, location: 1)
-            ],
-            startPoint: .top, endPoint: .bottom
-        )
-        let scrim = LinearGradient(
-            stops: [
-                .init(color: base.opacity(0.9), location: 0),
-                .init(color: base.opacity(0.4), location: statusBottom),
-                .init(color: base.opacity(0.08), location: chromeBottom),
-                .init(color: base.opacity(0), location: 1)
-            ],
-            startPoint: .top, endPoint: .bottom
-        )
-
-        // The glass shape is inset negatively so its specular perimeter is
-        // rendered outside this field; the mask clips that rim away.
-        return ZStack {
-            Rectangle()
-                .fill(.clear)
-                .glassEffect(.chrome(colorScheme), in: Rectangle().inset(by: -48))
-                .mask(glassMask)
-            scrim
-        }
-        .frame(height: total)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 
     private var bottomChrome: some View {

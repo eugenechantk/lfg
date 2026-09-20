@@ -144,6 +144,65 @@ extension Glass {
     }
 }
 
+/// Top scroll treatment shared by the session view and the session list:
+/// content runs under the status and top-bar region, darkened and blurred
+/// most where the status bar is, then easing out just past the bar's row —
+/// not a slab with a fade edge. Two layers give the ramp: dimmed Liquid Glass
+/// whose mask thins as it descends, and a background-coloured scrim that
+/// carries most of the darkness at the very top. The buttons float in their
+/// own glass circles and the title sits bare on the ramp, so the bar itself
+/// needs no plane of its own.
+///
+/// `chromeHeight` is the screen-top-to-bar-bottom distance; the caller places
+/// this view's top at the screen top.
+@available(iOS 26.0, *)
+struct TopChromeFade: View {
+    let chromeHeight: CGFloat
+    /// Height of the row holding the bar's controls (back / title / menu).
+    var barRow: CGFloat = 44
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let tail: CGFloat = 36            // how far below the bar row the ramp runs out
+        let total = chromeHeight + tail
+        let statusBottom = total > 0 ? max(chromeHeight - barRow, 0) / total : 0
+        let chromeBottom = total > 0 ? chromeHeight / total : 0
+        let base = Color(.systemBackground)
+
+        let glassMask = LinearGradient(
+            stops: [
+                .init(color: .black, location: 0),
+                .init(color: .black, location: statusBottom),
+                .init(color: .black.opacity(0.3), location: chromeBottom),
+                .init(color: .clear, location: 1)
+            ],
+            startPoint: .top, endPoint: .bottom
+        )
+        let scrim = LinearGradient(
+            stops: [
+                .init(color: base.opacity(0.9), location: 0),
+                .init(color: base.opacity(0.4), location: statusBottom),
+                .init(color: base.opacity(0.08), location: chromeBottom),
+                .init(color: base.opacity(0), location: 1)
+            ],
+            startPoint: .top, endPoint: .bottom
+        )
+
+        // The glass shape is inset negatively so its specular perimeter is
+        // rendered outside this field; the mask clips that rim away.
+        ZStack {
+            Rectangle()
+                .fill(.clear)
+                .glassEffect(.chrome(colorScheme), in: Rectangle().inset(by: -48))
+                .mask(glassMask)
+            scrim
+        }
+        .frame(height: total)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 struct GlassChromeContainer<Content: View>: View {
     let spacing: CGFloat
     @ViewBuilder let content: () -> Content
