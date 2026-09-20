@@ -60,35 +60,47 @@ final class LFGClientLiveActivityTests: XCTestCase {
         ])
     }
 
-    func testRegisterLiveActivityUpdateTokenOmitsSessionIdForTheFleetActivity() async throws {
-        let client = makeClient()
+    // Update-token registration is gone: the card is addressed by broadcast
+    // channel now, so there is nothing per-card for the phone to hand back — which
+    // is what made an idle phone's card freeze. The app only ASKS for the channel.
+    func testLiveActivityChannelIsFetchedForTheGivenEnvironment() async throws {
+        let client = makeClient(body: #"{"ok":true,"env":"production","channelId":"Y2hhbg=="}"#)
 
-        try await client.registerLiveActivityUpdateToken("ff09", env: "prod")
+        let channelId = try await client.liveActivityChannel(env: "production")
 
         let request = try XCTUnwrap(RequestCapturingURLProtocol.capturedRequest)
-        XCTAssertEqual(request.url?.path, "/api/push/live-activity/update-token")
+        XCTAssertEqual(request.url?.path, "/api/push/live-activity/channel")
         XCTAssertEqual(request.httpMethod, "POST")
-        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
-        XCTAssertEqual(try requestBody(request), [
-            "token": "ff09",
-            "env": "prod",
-        ])
+        XCTAssertEqual(try requestBody(request), ["env": "production"])
+        XCTAssertEqual(channelId, "Y2hhbg==")
     }
 
-    func testRegisterLiveActivityUpdateTokenStillSendsSessionIdWhenGiven() async throws {
+    // A server whose broadcast capability is not enabled yet answers with a null
+    // channel. That is a normal state the app must tolerate — not an error — and
+    // it must surface as nil so the app declines to create an unstartable card.
+    func testLiveActivityChannelDecodesNullAsNoChannel() async throws {
+        let client = makeClient(body: #"{"ok":true,"channelId":null}"#)
+
+        let channelId = try await client.liveActivityChannel(env: "sandbox")
+
+        XCTAssertNil(channelId)
+    }
+
+    func testReportLiveActivityStartedCarriesNoPayload() async throws {
         let client = makeClient()
 
-        try await client.registerLiveActivityUpdateToken("ff09", env: "prod", sessionId: "session-1")
+        try await client.reportLiveActivityStarted()
 
         let request = try XCTUnwrap(RequestCapturingURLProtocol.capturedRequest)
-        XCTAssertEqual(try requestBody(request), [
-            "token": "ff09",
-            "env": "prod",
-            "sessionId": "session-1",
-        ])
+        XCTAssertEqual(request.url?.path, "/api/push/live-activity/started")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(try requestBody(request), [:])
     }
 
-    private func makeClient() -> LFGClient {
+    /// `body` is the JSON the stub server answers with; the default (nil) keeps
+    /// the original empty 204 used by the fire-and-forget registration calls.
+    private func makeClient(body: String? = nil) -> LFGClient {
+        RequestCapturingURLProtocol.responseBody = body
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [RequestCapturingURLProtocol.self]
         return LFGClient(baseURL: URL(string: "https://example.test")!, session: URLSession(configuration: config))
@@ -121,11 +133,13 @@ final class LFGClientLiveActivityTests: XCTestCase {
 
 private final class RequestCapturingURLProtocol: URLProtocol {
     nonisolated(unsafe) private static var requestStore: URLRequest?
+    nonisolated(unsafe) static var responseBody: String?
 
     static var capturedRequest: URLRequest? { requestStore }
 
     static func reset() {
         requestStore = nil
+        responseBody = nil
     }
 
     override class func canInit(with request: URLRequest) -> Bool {
@@ -138,14 +152,15 @@ private final class RequestCapturingURLProtocol: URLProtocol {
 
     override func startLoading() {
         Self.requestStore = request
+        let payload = Self.responseBody.map { Data($0.utf8) }
         let response = HTTPURLResponse(
             url: request.url!,
-            statusCode: 204,
+            statusCode: payload == nil ? 204 : 200,
             httpVersion: nil,
-            headerFields: nil
+            headerFields: payload == nil ? nil : ["Content-Type": "application/json"]
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data())
+        client?.urlProtocol(self, didLoad: payload ?? Data())
         client?.urlProtocolDidFinishLoading(self)
     }
 

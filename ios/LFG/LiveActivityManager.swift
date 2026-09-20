@@ -3,9 +3,20 @@ import Foundation
 import LFGCore
 import os
 
-/// Owns ActivityKit token registration. Live Activity token updates are separate
-/// from normal APNs device-token registration and are delivered through
-/// ActivityKit async sequences.
+/// Owns the push-to-start token and the broadcast channel the fleet card listens
+/// on.
+///
+/// There used to be a second token here — one per live card, obtained from
+/// `activity.pushTokenUpdates` and uploaded so the server could address that card.
+/// It is gone. Getting it required iOS to wake the app in the background after a
+/// push-to-start, which on an idle phone routinely never happened (9 of 14 starts
+/// on 2026-09-19 got no token back), and because a dead Live Activity token still
+/// answers 200 the server could not tell it was shouting into a void — the card
+/// froze on the Lock Screen and nothing ever corrected it.
+///
+/// A broadcast channel is addressed by id rather than by card, so there is nothing
+/// left to register and nothing left to miss. Push-to-start tokens remain, because
+/// broadcast cannot START an activity.
 @MainActor
 final class LiveActivityManager {
     static let shared = LiveActivityManager()
@@ -13,8 +24,15 @@ final class LiveActivityManager {
     private weak var settings: AppSettings?
     private var pushToStartTask: Task<Void, Never>?
     private var activityUpdatesTask: Task<Void, Never>?
-    private var activityTokenTasks: [String: Task<Void, Never>] = [:]
     private let log = Logger(subsystem: "dev.omg.lfg", category: "live-activity")
+
+    /// Cached so a card can still be created when the host is briefly unreachable.
+    /// A card cannot be started against an invalid channel id — Apple: "If the
+    /// channel ID isn't a valid channel, the Live Activity fails to start" — so a
+    /// stale-but-real id is worth far more than no id at all.
+    private static let channelDefaultsKey = "lfg.liveActivity.channelId"
+
+    private(set) var channelId: String? = UserDefaults.standard.string(forKey: channelDefaultsKey)
 
     private init() {}
 
@@ -49,17 +67,45 @@ final class LiveActivityManager {
 
         activityUpdatesTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            for activity in Activity<LFGFleetAttributes>.activities {
-                self.track(activity)
-            }
+            await self.refreshChannelId()
             await self.endDuplicateFleetActivities()
-            for await activity in Activity<LFGFleetAttributes>.activityUpdates {
-                self.track(activity)
+            for await _ in Activity<LFGFleetAttributes>.activityUpdates {
                 // A push-to-start card lands here first — in the background too,
                 // since a start push wakes the app. Collapse to one card the moment
                 // a second one exists, before either side updates the wrong one.
+                //
+                // Nothing is registered for the card any more: it already listens
+                // on the channel, chosen when it was started.
                 await self.endDuplicateFleetActivities()
             }
+        }
+    }
+
+    /// Fetch (and cache) the broadcast channel id from the default host.
+    ///
+    /// Failure is quiet and non-fatal: any previously cached id stays in force, and
+    /// if there has never been one the app simply does not create cards itself —
+    /// the server push-to-starts them instead.
+    func refreshChannelId() async {
+        guard let settings, let host = settings.defaultHost, let client = settings.client(for: host) else { return }
+        do {
+            guard let fetched = try await client.liveActivityChannel(env: liveActivityEnv) else { return }
+            guard fetched != channelId else { return }
+            channelId = fetched
+            UserDefaults.standard.set(fetched, forKey: Self.channelDefaultsKey)
+            log.notice("fleet live activity channel: \(fetched.prefix(8), privacy: .public)…")
+        } catch {
+            log.error("fetching live activity channel from \(host.label) failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Tell the server a card exists so it adopts ours instead of starting a second.
+    func reportActivityStarted() async {
+        guard let settings, let host = settings.defaultHost, let client = settings.client(for: host) else { return }
+        do {
+            try await client.reportLiveActivityStarted()
+        } catch {
+            log.error("reporting fleet live activity start on \(host.label) failed: \(error.localizedDescription)")
         }
     }
 
@@ -74,10 +120,6 @@ final class LiveActivityManager {
         guard cards.count > 1 else { return }
         let partition = FleetActivityDedupe.partition(cards)
         let losers = Set(partition.end)
-        for id in losers {
-            activityTokenTasks[id]?.cancel()
-            activityTokenTasks[id] = nil
-        }
         await Self.endFleetActivities(ids: losers)
         log.notice("fleet live activity dedupe: kept \(partition.keep ?? "-", privacy: .public), ended \(losers.count)")
     }
@@ -92,16 +134,6 @@ final class LiveActivityManager {
         }
     }
 
-    @available(iOS 17.2, *)
-    private func track(_ activity: Activity<LFGFleetAttributes>) {
-        guard activityTokenTasks[activity.id] == nil else { return }
-        activityTokenTasks[activity.id] = Task { @MainActor [weak self] in
-            for await token in activity.pushTokenUpdates {
-                await self?.sendUpdateToken(apnsTokenHex(token))
-            }
-        }
-    }
-
     // Register with ONLY the default host, not every host. Registering with all
     // hosts made each host's server push-to-start its own fleet activity → two cards.
     private func sendStartToken(_ token: String) async {
@@ -110,15 +142,6 @@ final class LiveActivityManager {
             try await client.registerLiveActivityStartToken(token, env: liveActivityEnv)
         } catch {
             log.error("live activity start-token register on \(host.label) failed: \(error.localizedDescription)")
-        }
-    }
-
-    private func sendUpdateToken(_ token: String) async {
-        guard let settings, let host = settings.defaultHost, let client = settings.client(for: host) else { return }
-        do {
-            try await client.registerLiveActivityUpdateToken(token, env: liveActivityEnv)
-        } catch {
-            log.error("live activity update-token register on \(host.label) failed: \(error.localizedDescription)")
         }
     }
 

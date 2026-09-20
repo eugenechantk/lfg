@@ -719,17 +719,29 @@ public struct LFGClient: Sendable {
         ])
     }
 
-    /// There is exactly one (fleet) Live Activity per device, so the update token
-    /// needs no session targeting. `sessionId` remains accepted so an older
-    /// server that still keys tokens per session does not reject the call.
-    public func registerLiveActivityUpdateToken(
-        _ hex: String,
-        env: String,
-        sessionId: String? = nil
-    ) async throws {
-        var body = ["token": hex, "env": env]
-        if let sessionId { body["sessionId"] = sessionId }
-        _ = try await send("POST", "api/push/live-activity/update-token", json: body)
+    /// The broadcast channel this device's fleet card must subscribe to.
+    ///
+    /// Replaces update-token registration entirely. A card started with this
+    /// channel id is addressable by the server forever after — no background wake,
+    /// nothing to hand back. `nil` is a normal answer, not an error: broadcast
+    /// capability is a toggle in Apple's developer portal, so a server that has no
+    /// channel yet says so and the app simply lets the server start the card.
+    public func liveActivityChannel(env: String) async throws -> String? {
+        struct Response: Decodable { let channelId: String? }
+        // POST with the env in the body, not GET with a query string: `send`
+        // builds its URL by appending a PATH component, so a "?" would be
+        // percent-escaped into the path and the server would never see the query.
+        let data = try await send("POST", "api/push/live-activity/channel", json: ["env": env])
+        return try JSONDecoder().decode(Response.self, from: data).channelId
+    }
+
+    /// Tell the server this app just created a fleet card.
+    ///
+    /// Carries no payload: with the channel there is no longer any per-card secret
+    /// to hand over, and the server needs only the FACT so it adopts the card
+    /// rather than push-to-starting a second one beside it.
+    public func reportLiveActivityStarted() async throws {
+        _ = try await send("POST", "api/push/live-activity/started", json: [:])
     }
 
     /// Tell the server the fleet Live Activity is gone.

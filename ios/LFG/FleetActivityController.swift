@@ -130,14 +130,28 @@ final class FleetActivityController {
                     lastSyncedSnapshot = nil
                     return
                 }
-                // `.token` (not nil): the activity must be push-capable so the
-                // server can keep updating it once the app suspends.
+                // Subscribe the new card to the broadcast channel, so the server
+                // can keep it current once this app suspends — with no token to
+                // hand back and no background wake to depend on.
+                //
+                // No channel means no card: Apple is explicit that "if the channel
+                // ID isn't a valid channel, the Live Activity fails to start", and
+                // starting with `.token` instead would resurrect the very failure
+                // this replaced (a token the server may never receive). The server
+                // push-to-starts a card in that case, which does work while
+                // suspended.
+                guard let channelId = LiveActivityManager.shared.channelId else {
+                    log.notice("no broadcast channel yet — leaving the card to the server")
+                    lastSyncedSnapshot = nil
+                    return
+                }
                 _ = try Activity.request(
                     attributes: LFGFleetAttributes(fleetId: Self.fleetId),
                     content: Self.content(state),
-                    pushType: .token
+                    pushType: .channel(channelId)
                 )
                 lastSyncedSnapshot = snapshot
+                await LiveActivityManager.shared.reportActivityStarted()
                 return
             }
 
