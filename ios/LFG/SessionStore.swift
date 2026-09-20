@@ -133,6 +133,14 @@ import LFGCore
     /// `.active` handler, a notification tap) coalesce onto one instead of racing to
     /// assign `sessions`.
     private var refreshTask: Task<Void, Never>?
+    private var writeThroughTask: Task<Void, Never>?
+    private var transferSnapshotFence = SessionTransfer.SnapshotFence()
+    private var transferringSessionIds: Set<String> = []
+    private var preparingTransferSessionIds: Set<String> = []
+    /// Presentation-only source identity while close/resume is in flight. A
+    /// refresh can remove the source row before the destination accepts it.
+    private var movingHostSources: [String: Host] = [:]
+    private var deferredSourceCloseTasks: [String: Task<Void, Never>] = [:]
     /// The in-flight "a host came back — resend what failed while it was down" sweep.
     /// Held so only one runs at a time: the sweep calls `refresh()` (via retry), and a
     /// second sweep starting underneath it would resend the same bubble twice.
@@ -378,9 +386,9 @@ import LFGCore
     private var bannerRecheck: [String: Task<Void, Never>] = [:]
 
     /// Source-side closes a transfer skipped because that host was unreachable
-    /// (see `transfer` and `SessionTransfer`). Replayed once when the host next
-    /// comes back live; persisted so an app relaunch in between doesn't leak the
-    /// orphaned pane.
+    /// (see `transfer` and `SessionTransfer`). Replayed on recovery and after a
+    /// transfer; retained until close is confirmed so relaunch cannot restore
+    /// an orphaned source copy as the owner.
     private static let deferredSourceClosesKey = "lfg.deferredSourceCloses"
     private var deferredSourceCloses = DeferredSourceCloses.decode(
         UserDefaults.standard.data(forKey: SessionStore.deferredSourceClosesKey)) {
@@ -644,6 +652,16 @@ import LFGCore
     func navID(_ sid: String) -> String { navAliasByRealID[sid] ?? sid }
     func clearRequestedSelection() { requestedSelection = nil }
 
+    func isMovingHost(_ id: String) -> Bool {
+        let navigationID = navID(id)
+        return transferringSessionIds.union(preparingTransferSessionIds)
+            .contains { navID($0) == navigationID }
+    }
+
+    func movingHostSource(_ id: String) -> Host? {
+        movingHostSources.first { navID($0.key) == navID(id) }?.value
+    }
+
     /// Route a tapped push notification to its session. A tap frequently
     /// cold-launches the app (or wakes it from suspension) with no live session
     /// list yet — the old path just set the selection and the detail view flashed
@@ -816,7 +834,11 @@ import LFGCore
 
     private func writeThrough(_ operation: @escaping @Sendable (LFGStore) async throws -> Void) {
         guard let store = localStore else { return }
-        Task.detached(priority: .utility) {
+        // Preserve enqueue order: an older source snapshot must not land after
+        // the ownership write from a successful transfer.
+        let previous = writeThroughTask
+        writeThroughTask = Task.detached(priority: .utility) {
+            await previous?.value
             do { try await operation(store) }
             catch {
                 // Never blocks or breaks the UI, but a silently rotting local
@@ -1894,18 +1916,49 @@ import LFGCore
         recomputeFleetState()
     }
 
-    /// A host that was unreachable when one of its sessions was moved away is
-    /// back: close the orphaned source copies now. One-shot and best effort —
-    /// the conversation continued on the target under a new id, so this only
-    /// stops an idle pane; its transcript is untouched.
+    /// Close only the original host's copy. Keep its suppression until the
+    /// host confirms disappearance, including across an app restart.
     private func replayDeferredSourceCloses(forHost hostId: String) async {
-        let owed = deferredSourceCloses.take(host: hostId)
+        // Serialize sweeps rather than dropping a request behind an older one:
+        // that sweep may have skipped a session whose move was still in flight.
+        while let task = deferredSourceCloseTasks[hostId] {
+            await task.value
+            if deferredSourceCloseTasks[hostId] == task { deferredSourceCloseTasks[hostId] = nil }
+        }
+        guard (deferredSourceCloses.byHost[hostId] ?? []).contains(where: {
+            !transferringSessionIds.contains($0)
+        }) else { return }
+        let task = Task { await self.performDeferredSourceCloses(forHost: hostId) }
+        deferredSourceCloseTasks[hostId] = task
+        await task.value
+        if deferredSourceCloseTasks[hostId] == task { deferredSourceCloseTasks[hostId] = nil }
+    }
+
+    private func performDeferredSourceCloses(forHost hostId: String) async {
+        let owed = deferredSourceCloses.byHost[hostId] ?? []
         guard !owed.isEmpty,
               let host = settings.hosts.first(where: { $0.id == hostId }),
               let client = settings.client(for: host) else { return }
         for sid in owed {
+            // A move back to this host must finish before cleanup can touch it.
+            guard !transferringSessionIds.contains(sid),
+                  deferredSourceCloses.byHost[hostId]?.contains(sid) == true else { continue }
             do {
                 try await client.close(sid)
+                var gone = false
+                for _ in 0..<8 {
+                    try await Task.sleep(for: .milliseconds(400))
+                    if !(try await client.sessions()).contains(where: { $0.sessionId == sid }) {
+                        gone = true
+                        break
+                    }
+                }
+                guard gone else { continue }
+                transferSnapshotFence.record(hosts: [hostId], at: Date())
+                lastSessionsByHost[hostId]?.removeAll { $0.sessionId == sid }
+                let rows = lastSessionsByHost[hostId] ?? []
+                writeThrough { try await $0.replaceSessions(rows, hostId: hostId) }
+                deferredSourceCloses.remove(host: hostId, session: sid)
                 ConnectionLog.shared.log(.state, "closed orphaned source copy \(sid.prefix(8)) after transfer",
                                          host: host.label)
             } catch {
@@ -2507,8 +2560,9 @@ import LFGCore
     /// transient-blip debounce (`failureThreshold`) keeps a single blip from flipping a
     /// healthy host to "Offline"; the cached snapshot keeps its sessions on screen.
     private func applyHostFetch(_ f: HostFetch) {
+        guard transferSnapshotFence.accepts(host: f.host.id, startedAt: f.snapshotStartedAt) else { return }
         if f.reach == .ok {
-            let fetchedSessions = f.sessions ?? []
+            let fetchedSessions = deferredSourceCloses.keepingActive(f.sessions ?? [], on: f.host.id)
             writeThrough { store in
                 try await store.upsertHosts([f.host])
                 // Replace, not merge: `fetchedSessions` IS this host's complete
@@ -2542,9 +2596,11 @@ import LFGCore
     /// Rebuild the merged session list + routing table from each host's last-known
     /// snapshot. Cheap and idempotent, so it can run once per arriving host result.
     private func rebuildSessions() {
-        // Merge each host's last-known live sessions (configured order → stable
-        // list + deterministic first-wins), building the session→host routing map.
-        let perHostLive = settings.hosts.map { (host: $0, sessions: lastSessionsByHost[$0.id] ?? []) }
+        // Merge last-known snapshots, suppressing moved-away source copies.
+        // Reachable duplicates win over offline snapshots without reordering rows.
+        let perHostLive = settings.hosts.map {
+            (host: $0, sessions: deferredSourceCloses.keepingActive(lastSessionsByHost[$0.id] ?? [], on: $0.id))
+        }
         // Live merge, optimistic keep-alive, and closed fallback are computed in
         // ONE pass against THIS merge's live ids. Splitting them across passes
         // (closedCache built against a previous rebuild's liveIds) let a session
@@ -2562,7 +2618,8 @@ import LFGCore
             perHostLive: perHostLive,
             closedPerHost: closedPages(for: okHosts),
             optimisticSessions: optimisticSessions,
-            resumedIds: resumedIds)
+            resumedIds: resumedIds,
+            unreachableHostIds: Set(settings.hosts.filter { !isNotKnownDown($0) }.map(\.id)))
         let fresh = reconciled.live.sessions
         hostBySession = reconciled.live.hostBySession
         liveIds = reconciled.liveIds
@@ -4227,10 +4284,10 @@ import LFGCore
     /// placeholder session so only the real one remains.
     /// Move every piece of per-session state from `old` to `new`.
     ///
-    /// `aliasNavigation` is for the create flow only: the detail is already open
+    /// `aliasNavigation` is for create and host moves: the detail is already open
     /// on `old`, so `old` stays this session's navigation id (`navID`) and the
-    /// swap becomes invisible to the navigation stack. Transfer/resume pass false
-    /// — those deliberately re-point navigation at the new id.
+    /// swap becomes invisible to the navigation stack. Explicit resume can still
+    /// re-point navigation at the new id.
     private func remap(from old: String, to new: String, aliasNavigation: Bool = false) {
         guard old != new else { return }
         if aliasNavigation { navAliasByRealID[new] = navID(old) }
@@ -4242,7 +4299,7 @@ import LFGCore
         // placeholder for one update after the remap, and `session(_:)` returning
         // nil in that window is what put "Opening session…" over a detail view that
         // already had its optimistic bubble. A redirect makes the swap invisible.
-        remappedIds[old] = new
+        remappedIds = SessionTransfer.redirectedSessionIDs(remappedIds, from: old, to: new)
         // Host-wide SSE can deliver real-id events while `/api/sessions/new` is
         // still waiting for the agent's first transcript write. Preserve that
         // destination state instead of replacing it with placeholder/resume state.
@@ -4334,6 +4391,8 @@ import LFGCore
     /// "unknown" (proceed as before), not "missing"; any other failure means the
     /// target can't be reached, which would sink the move anyway.
     func transferPreflight(_ id: String, to target: Host) async -> SessionTransfer.Preflight {
+        preparingTransferSessionIds.insert(id)
+        defer { preparingTransferSessionIds.remove(id) }
         guard let client = settings.client(for: target) else { return .targetUnreachable("invalid host") }
         do {
             let status = try await client.transcriptStatus(id)
@@ -4377,6 +4436,21 @@ import LFGCore
               let targetClient = settings.client(for: target) else {
             lastError = "Transfer: invalid host"; return nil
         }
+        guard transferringSessionIds.insert(id).inserted else { return nil }
+        movingHostSources[id] = source
+        defer {
+            transferringSessionIds.remove(id)
+            movingHostSources[id] = nil
+            // The source may have recovered while resume was pending, after its
+            // recovery callback checked an empty queue. Replay it now too.
+            for hostId in deferredSourceCloses.byHost.keys where hostStateByHost[hostId]?.isLive == true {
+                Task { await self.replayDeferredSourceCloses(forHost: hostId) }
+            }
+        }
+        // A prior cleanup already sent to the destination must settle before a
+        // move back resumes that same ID there. New cleanup skips in-flight moves.
+        if let cleanup = deferredSourceCloseTasks[target.id] { await cleanup.value }
+        let original = session(id)
         let check: SessionTransfer.Preflight
         if let preflight { check = preflight } else { check = await transferPreflight(id, to: target) }
         switch check {
@@ -4396,73 +4470,59 @@ import LFGCore
         case .unknown, .ready:
             break
         }
-        var plan = SessionTransfer.plan(sourceKnownDown: !isNotKnownDown(source))
-        if plan.closeSource {
-            // 1) Stop the live pane on the source. The transcript survives (synced).
-            do { try await sourceClient.close(id) }
-            catch where SessionTransfer.closeFailureIsUnreachable(error) {
-                // The host went away between the state machine's last word and
-                // now. Same situation as known-down: move on without it.
-                ConnectionLog.shared.log(.state,
-                    "transfer of \(id.prefix(8)): close unreachable (\(error.localizedDescription)) — moving without it",
-                    host: source.label)
-                plan = .sourceUnreachable
-            }
-            catch {
-                lastError = "Transfer: closing on \(source.label) failed: \(error.localizedDescription)"
-                return nil
-            }
-        }
-        if plan.closeSource {
-            // 1b) Give the source a moment to reap the pane before resuming.
-            for _ in 0..<8 {
-                try? await Task.sleep(for: .milliseconds(400))
-                let stillLive = (try? await sourceClient.sessions())?.contains { $0.sessionId == id } ?? false
-                if !stillLive { break }
-            }
-        } else {
-            ConnectionLog.shared.log(.state,
-                "transfer of \(id.prefix(8)) to \(target.label): source unreachable, skipping close (deferred)",
-                host: source.label)
-        }
-        // 2) Resume on the target. The server's resume dedupes against live
-        //    sessions ("already running → don't double-spawn"); right after the
-        //    close, the target can still observe the just-closed process while it
-        //    finishes dying, so resume comes back `alreadyLive` WITHOUT spawning —
-        //    and the session would end up dead, not transferred. Retry until the
-        //    source is fully gone and resume actually revives a pane. Claude
-        //    resumes off the copied history; re-point routing + selection at it.
-        //    Marked as restarting only from here, not from the close above: during
-        //    1b the session is still live on the source, and saying "Restarting"
-        //    while a host still reports it live would fight `confirmLive`.
-        restarts.mark(id, at: Date())
-        let request = ResumeRequest(sessionId: id, force: plan.force ? true : nil)
         do {
-            var resp = try await targetClient.resume(request)
-            var attempts = 0
-            while resp.alreadyLive == true && attempts < 10 {
-                try? await Task.sleep(for: .milliseconds(700))
-                resp = try await targetClient.resume(request)
-                attempts += 1
-            }
-            if resp.alreadyLive == true {
-                restarts.clear(id)
-                lastError = "Transfer: \(target.label) couldn't take over — source still busy. Try again."
-                return nil
-            }
-            let newId = resp.sessionId ?? id
+            // An idle session moves without its source host: resume here, re-point
+            // the view, close the original whenever that host is reachable
+            // (`movesWithoutSource`). Only a turn in flight makes the source go first.
+            let completion = try await SessionTransfer.perform(
+                id,
+                sourceKnownDown: SessionTransfer.movesWithoutSource(
+                    sourceKnownDown: !isNotKnownDown(source),
+                    busy: busy[id] == true,
+                    promptPending: prompts[id] != nil),
+                source: sourceClient, target: targetClient,
+                onResuming: { self.restarts.mark(id, at: Date()) })
+            let resp = completion.response
+            let plan = completion.plan
+            let newId = resp.sessionId.flatMap { $0.isEmpty ? nil : $0 } ?? id
+            transferSnapshotFence.record(hosts: [source.id, target.id], at: Date())
+            deferredSourceCloses.remove(host: target.id, session: newId)
+            signal(target.id, .probeSucceeded)
+            failuresByHost[target.id] = 0
             // Only once the target has actually taken over: a failed forced
             // resume must not leave a close queued against a session that is
             // still the user's only live copy.
             if plan.deferSourceClose { deferredSourceCloses.add(host: source.id, session: id) }
-            if newId != id { remap(from: id, to: newId) }
+            if let original {
+                lastSessionsByHost = SessionTransfer.completedSnapshots(
+                    lastSessionsByHost, session: original, sourceHost: source.id,
+                    targetHost: target.id, response: resp)
+                let sourceRows = lastSessionsByHost[source.id] ?? []
+                let targetRows = lastSessionsByHost[target.id] ?? []
+                writeThrough { store in
+                    try await store.replaceSessions(targetRows, hostId: target.id)
+                    try await store.replaceSessions(sourceRows, hostId: source.id)
+                }
+            }
+            if newId != id { remap(from: id, to: newId, aliasNavigation: true) }
             hostBySession[newId] = target.id
+            movingHostSources[id] = nil
+            rebuildSessions()
+            // A coalesced refresh may have started before the move. Drain it,
+            // then start a new one whose snapshots pass the transfer fence.
+            if let inFlight = refreshTask {
+                await inFlight.value
+                if refreshTask == inFlight { refreshTask = nil }
+            }
             await refresh()
-            requestSelection(newId)
+            // Keep the current detail and its draft mounted. A changed server
+            // ID redirects through the existing row/navigation alias above.
             return newId
         } catch {
             restarts.clear(id)
-            if case LFGError.http(let status, _) = error, status == 409 {
+            if case SessionTransfer.Failure.sourceClose(let cause) = error {
+                lastError = "Transfer: closing on \(source.label) failed: \(cause.localizedDescription)"
+            } else if case LFGError.http(let status, _) = error, status == 409 {
                 // The target's lease veto (server predating `force`, or a source
                 // we did not know was down): the source's synced lease is still
                 // fresh. It goes stale ~90s after the source's last heartbeat.

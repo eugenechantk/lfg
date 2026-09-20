@@ -35,15 +35,25 @@ public struct SessionListReconciliation: Sendable, Equatable {
 /// UIKit — `swift test` verifies the merge/dedupe rules deterministically.
 public enum MultiHost {
     /// Merge each host's live sessions into one list, recording which host owns
-    /// each session. A session id seen from more than one host keeps the FIRST
-    /// host's copy (a session is live on exactly one machine at a time; the tie
-    /// only happens transiently during a transfer, and first-wins is stable).
-    public static func mergeSessions(_ perHost: [(host: Host, sessions: [Session])]) -> MergedSessions {
+    /// each session. Prefer a reachable host's live copy over an offline host's
+    /// cached copy. Otherwise the first host wins, preserving configured order.
+    /// Replace duplicates in place so a reachability change does not reorder rows.
+    public static func mergeSessions(_ perHost: [(host: Host, sessions: [Session])],
+                                     unreachableHostIds: Set<String> = []) -> MergedSessions {
         var out: [Session] = []
         var owner: [String: String] = [:]
+        var index: [String: Int] = [:]
         for (host, sessions) in perHost {
             for s in sessions {
-                if owner[s.id] != nil { continue } // first host wins
+                if let previous = owner[s.id] {
+                    if unreachableHostIds.contains(previous), !unreachableHostIds.contains(host.id),
+                       let i = index[s.id] {
+                        out[i] = s
+                        owner[s.id] = host.id
+                    }
+                    continue
+                }
+                index[s.id] = out.count
                 owner[s.id] = host.id
                 out.append(s)
             }
@@ -82,9 +92,10 @@ public enum MultiHost {
         perHostLive: [(host: Host, sessions: [Session])],
         closedPerHost: [[ResumableSession]],
         optimisticSessions: [Session] = [],
-        resumedIds: Set<String> = []
+        resumedIds: Set<String> = [],
+        unreachableHostIds: Set<String> = []
     ) -> SessionListReconciliation {
-        let live = mergeSessions(perHostLive)
+        let live = mergeSessions(perHostLive, unreachableHostIds: unreachableHostIds)
         let liveIds = Set(live.sessions.compactMap(\.sessionId))
         let optimistic = optimisticSessions.filter { o in
             guard let id = o.sessionId else { return true }

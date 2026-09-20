@@ -138,7 +138,6 @@ struct SessionDetailView: View {
     private var windowStart: Int {
         TranscriptWindow.startIndex(total: messages.count, window: window)
     }
-    private var windowedMessages: ArraySlice<SessionMessage> { messages[windowStart...] }
     private var hasOlderHistory: Bool {
         TranscriptWindow.hasOlder(total: messages.count, window: window)
     }
@@ -151,13 +150,14 @@ struct SessionDetailView: View {
     private var prompt: AgentPrompt? { store.prompts[sid] }
     private var pending: [SessionStore.PendingSend] { store.pendingSends[sid] ?? [] }
     private var isBusy: Bool { store.busy[sid] == true }
+    private var isMovingHost: Bool { store.isMovingHost(sid) }
     private var childAgents: [ChildAgentSession] { store.childAgentsBySession[sid] ?? [] }
 
     /// Owning host's short label, shown as a pill in the title area in multi-host
     /// setups (a single-host client has nothing to disambiguate).
     private var hostLabel: String? {
         guard settings.hosts.count > 1 else { return nil }
-        return store.host(forSession: session.id)?.label
+        return (store.movingHostSource(sid) ?? store.host(forSession: sid))?.label
     }
 
     /// Optimistic "sent" bubbles whose real user turn hasn't landed in the
@@ -530,7 +530,7 @@ struct SessionDetailView: View {
 
             MessageComposer(
                 text: $draft,
-                sending: false,
+                sending: isMovingHost,
                 onFocusChange: { isFocused in
                     composerFocused = isFocused
                     applyKeyboardTransition(
@@ -605,7 +605,13 @@ struct SessionDetailView: View {
     // MARK: Transcript
 
     private var transcript: some View {
-      GeometryReader { geo in
+      // Lazy rows can render after a host move remaps and removes the old
+      // transcript key. Capture rows and indices from the SAME value instead
+      // of subscripting the store again with an index from an earlier render.
+      let renderedMessages = messages
+      let renderedStart = TranscriptWindow.startIndex(total: renderedMessages.count, window: window)
+      let renderedWindow = renderedMessages[renderedStart...]
+      return GeometryReader { geo in
         ScrollViewReader { proxy in
             // INVERTED LIST. The stack and every row are flipped 180°, so the
             // array's FIRST element renders at the visual BOTTOM.
@@ -661,12 +667,12 @@ struct SessionDetailView: View {
                         // Newest first. `idx` still indexes `messages`, so the
                         // back-to-back user-turn rule reads the message ABOVE
                         // this one exactly as before.
-                        ForEach(Array(windowedMessages.indices.reversed()), id: \.self) { idx in
+                        ForEach(Array(renderedWindow.indices.reversed()), id: \.self) { idx in
                             TranscriptMessageView(
-                                message: messages[idx],
-                                followsUserBubble: idx > 0 && messages[idx - 1].rendersAsUserBubble
+                                message: renderedMessages[idx],
+                                followsUserBubble: idx > 0 && renderedMessages[idx - 1].rendersAsUserBubble
                             )
-                            .id(messages[idx].stableID)
+                            .id(renderedMessages[idx].stableID)
                             .flippedRow()
                         }
                         // Visually the TOP of the transcript; structurally the
@@ -1023,12 +1029,14 @@ struct SessionDetailView: View {
                             .background(Color(.tertiarySystemFill), in: Capsule())
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                            .accessibilityIdentifier("sessionHostPill")
                     }
-                    if isBusy {
+                    if isMovingHost || isBusy {
                         ProgressView().controlSize(.mini)
-                        Text("Running")
+                        Text(isMovingHost ? "Moving host…" : "Running")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("sessionActivityStatus")
                     } else if let path = headerPath {
                         // No status text while idle — surface the working path there
                         // instead so it's clear which directory this session drives.
@@ -1041,6 +1049,7 @@ struct SessionDetailView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: isBusy)
+            .animation(.easeInOut(duration: 0.2), value: isMovingHost)
         }
 
         ToolbarItem(placement: .topBarTrailing) {

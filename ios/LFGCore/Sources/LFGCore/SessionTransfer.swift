@@ -16,10 +16,22 @@ import Foundation
 ///   treatment — the host just went away and the state machine has not caught
 ///   up yet. An HTTP-level failure is a real refusal and still aborts.
 ///
-/// The target's resume mints a NEW session id, so the orphaned copy on the source
-/// and the live copy on the target never share an id; closing the orphan later is
-/// cleanup (its transcript survives a pane close), not data loss.
+/// Codex resumes retain their id; Claude may return a new one. Source cleanup is
+/// always addressed to the original host, never to the destination's live pane.
 public enum SessionTransfer {
+    /// Keep every open navigation alias pointing directly at the newest ID.
+    /// Resuming repeatedly (or moving back to an earlier ID) must not strand an
+    /// existing detail view behind a stale intermediate redirect or a cycle.
+    public static func redirectedSessionIDs(
+        _ redirects: [String: String], from old: String, to new: String
+    ) -> [String: String] {
+        guard old != new else { return redirects }
+        var result = redirects.mapValues { $0 == old ? new : $0 }
+        result[old] = new
+        result.removeValue(forKey: new)
+        return result
+    }
+
     public struct Plan: Equatable, Sendable {
         /// Attempt `close` on the source (and wait for it to disappear) first.
         public var closeSource: Bool
@@ -44,8 +56,99 @@ public enum SessionTransfer {
         guard let e = error as? LFGError else { return false }
         switch e {
         case .notReachable, .transport, .streamStalled: return true
-        case .badURL, .http, .decoding: return false
+        // A dead host behind the Cloudflare tunnel answers HTTP 530/502 with the
+        // edge's HTML page, never a transport error — see `isEdgeOriginDown`.
+        case .http(let status, let body): return isEdgeOriginDown(status: status, body: body)
+        case .badURL, .decoding: return false
         }
+    }
+
+    public enum Failure: Error {
+        case sourceClose(Error)
+    }
+
+    public struct Completion: Sendable {
+        public var response: NewSessionResponse
+        public var plan: Plan
+    }
+
+    /// Reject GETs started before a successful transfer or source cleanup. Their
+    /// responses can arrive later and otherwise undo the newer ownership.
+    public struct SnapshotFence: Sendable {
+        private var completedAt: [String: Date] = [:]
+        public init() {}
+        public mutating func record(hosts: [String], at date: Date) {
+            for host in hosts { completedAt[host] = max(completedAt[host] ?? .distantPast, date) }
+        }
+        public func accepts(host: String, startedAt: Date) -> Bool {
+            startedAt >= (completedAt[host] ?? .distantPast)
+        }
+    }
+
+    /// Replace the source's last-good row only after the destination accepts the
+    /// move. Persist these snapshots too: otherwise a cold launch resurrects the
+    /// offline source as owner. An existing target row carries fresher live state.
+    public static func completedSnapshots(
+        _ snapshots: [String: [Session]], session: Session,
+        sourceHost: String, targetHost: String, response: NewSessionResponse
+    ) -> [String: [Session]] {
+        guard let old = session.sessionId, sourceHost != targetHost else { return snapshots }
+        let new = response.sessionId.flatMap { $0.isEmpty ? nil : $0 } ?? old
+        var result = snapshots
+        result[sourceHost] = (result[sourceHost] ?? []).filter { $0.sessionId != old }
+        if !(result[targetHost] ?? []).contains(where: { $0.sessionId == new }) {
+            var carried = session
+            carried.sessionId = new
+            carried.closed = false
+            carried.tmuxName = response.tmuxName
+            carried.tmuxTarget = nil
+            carried.cwd = response.cwd ?? carried.cwd
+            carried.agent = response.agent ?? carried.agent
+            carried.busy = nil
+            carried.prompt = nil
+            carried.status = nil
+            carried.statusReason = nil
+            carried.statusDetail = nil
+            carried.runningChildAgentCount = 0
+            carried.childAgents = []
+            carried.runningBackgroundProcessCount = 0
+            result[targetHost, default: []].append(carried)
+        }
+        return result
+    }
+
+    /// The transport sequence shared by the app and integration tests. Preflight
+    /// and its stale-copy confirmation must complete before calling this.
+    @MainActor
+    public static func perform(
+        _ id: String,
+        sourceKnownDown: Bool,
+        source: LFGClient,
+        target: LFGClient,
+        onResuming: () -> Void = {},
+        sleep: (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+    ) async throws -> Completion {
+        var plan = plan(sourceKnownDown: sourceKnownDown)
+        if plan.closeSource {
+            do { try await source.close(id) }
+            catch where closeFailureIsUnreachable(error) { plan = .sourceUnreachable }
+            catch { throw Failure.sourceClose(error) }
+        }
+        if plan.closeSource {
+            for _ in 0..<8 {
+                try await sleep(.milliseconds(400))
+                let stillLive = (try? await source.sessions())?.contains { $0.sessionId == id } ?? false
+                if !stillLive { break }
+            }
+        }
+        try Task.checkCancellation()
+        onResuming()
+        let request = ResumeRequest(sessionId: id, force: plan.force ? true : nil)
+        // `alreadyLive` is LOCAL to the destination. It is a successful,
+        // idempotent takeover (including retry after a lost response), not
+        // evidence that the source is busy. Foreign ownership is HTTP 409.
+        let response = try await target.resume(request)
+        return Completion(response: response, plan: plan)
     }
 
     // MARK: Pre-flight — ask the TARGET before touching the source
@@ -129,6 +232,19 @@ public struct DeferredSourceCloses: Codable, Equatable, Sendable {
     /// against a pane the user may since have reused.
     public mutating func take(host hostId: String) -> [String] {
         byHost.removeValue(forKey: hostId) ?? []
+    }
+
+    /// Acknowledge one cleanup only after it finishes, or cancel cleanup for a
+    /// destination the user has explicitly moved back to.
+    public mutating func remove(host hostId: String, session sessionId: String) {
+        let kept = (byHost[hostId] ?? []).filter { $0 != sessionId }
+        if kept.isEmpty { byHost.removeValue(forKey: hostId) } else { byHost[hostId] = kept }
+    }
+
+    /// Orphaned source copies must not reclaim routing while cleanup is pending.
+    public func keepingActive(_ sessions: [Session], on hostId: String) -> [Session] {
+        let pending = Set(byHost[hostId] ?? [])
+        return sessions.filter { !pending.contains($0.sessionId ?? "") }
     }
 
     /// A session the user ends up closing or transferring themselves is no
