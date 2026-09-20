@@ -194,16 +194,9 @@ final class FleetActivityController {
     /// own card and put two on the Lock Screen.
     /// See `.claude/diagnosis-live-activity-background-updates.md`.
     private func reportActivityEnded() async {
-        guard let settings,
-              let host = settings.defaultHost,
-              let client = settings.client(for: host) else { return }
-        do {
-            try await client.reportLiveActivityEnded()
-        } catch {
-            // Best-effort: the next update-token registration also re-anchors the
-            // server, so a missed report self-heals rather than wedging the card.
-            log.error("reporting fleet live activity end failed: \(error.localizedDescription)")
-        }
+        // Routed through `LiveActivityManager`, which knows whether the publisher
+        // is the fleet aggregator or (older deployments) the default host.
+        await LiveActivityManager.shared.reportActivityEnded()
     }
 
     // Each helper looks the activity up in its own scope and consumes it

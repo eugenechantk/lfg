@@ -735,6 +735,14 @@ public struct LFGClient: Sendable {
         return try JSONDecoder().decode(Response.self, from: data).channelId
     }
 
+    /// Where the fleet Live Activity is published from, if this deployment has an
+    /// aggregator (`workers/fleet-aggregator`). `nil` means "talk to hosts as
+    /// before"; a server that predates the route throws (404) and callers treat
+    /// that the same way.
+    public func liveActivityAggregator() async throws -> FleetAggregatorConfig? {
+        FleetAggregatorConfig.fromHostResponse(try await send("GET", "api/push/live-activity/aggregator"))
+    }
+
     /// Tell the server this app just created a fleet card.
     ///
     /// Carries no payload: with the channel there is no longer any per-card secret

@@ -1,6 +1,7 @@
 import ActivityKit
 import Foundation
 import LFGCore
+import UIKit
 import os
 
 /// Owns the push-to-start token and the broadcast channel the fleet card listens
@@ -33,6 +34,22 @@ final class LiveActivityManager {
     private static let channelDefaultsKey = "lfg.liveActivity.channelId"
 
     private(set) var channelId: String? = UserDefaults.standard.string(forKey: channelDefaultsKey)
+
+    /// The fleet aggregator (a Cloudflare Worker): the ONE publisher of the card,
+    /// merging every host's sessions. The phone registers its push-to-start token,
+    /// fetches the channel and reports card starts/ends there directly, so none of
+    /// it depends on a particular Mac being awake. Any reachable host hands out the
+    /// address and key once; cached so later launches need no host at all.
+    private static let aggregatorDefaultsKey = "lfg.liveActivity.aggregator"
+    private(set) var aggregator = FleetAggregatorConfig.decode(
+        UserDefaults.standard.data(forKey: aggregatorDefaultsKey))
+    private var lastStartToken: String?
+
+    private var aggregatorClient: FleetAggregatorClient? {
+        aggregator.map { FleetAggregatorClient(config: $0) }
+    }
+
+    private var deviceId: String? { UIDevice.current.identifierForVendor?.uuidString }
 
     private init() {}
 
@@ -67,6 +84,7 @@ final class LiveActivityManager {
 
         activityUpdatesTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            await self.refreshAggregator()
             await self.refreshChannelId()
             await self.endDuplicateFleetActivities()
             for await _ in Activity<LFGFleetAttributes>.activityUpdates {
@@ -81,12 +99,41 @@ final class LiveActivityManager {
         }
     }
 
-    /// Fetch (and cache) the broadcast channel id from the default host.
+    /// Ask ANY reachable host where the aggregator is — not only the default one,
+    /// which is exactly the host that may be down. A host with no aggregator (or an
+    /// older server) answers nothing useful and the next host is tried; a cached
+    /// config survives every failure.
+    func refreshAggregator() async {
+        guard let settings else { return }
+        for host in settings.hosts {
+            guard let client = settings.client(for: host),
+                  let fetched = try? await client.liveActivityAggregator() else { continue }
+            if fetched != aggregator {
+                aggregator = fetched
+                UserDefaults.standard.set(fetched.encoded(), forKey: Self.aggregatorDefaultsKey)
+                log.notice("fleet live activity aggregator: \(fetched.url.host ?? "?", privacy: .public)")
+                // A token that arrived before we knew where to send it.
+                if let token = lastStartToken { await sendStartToken(token) }
+            }
+            return
+        }
+    }
+
+    /// Fetch (and cache) the broadcast channel id — from the aggregator when there
+    /// is one (every host must hand out the same id), else from the default host.
     ///
     /// Failure is quiet and non-fatal: any previously cached id stays in force, and
     /// if there has never been one the app simply does not create cards itself —
     /// the server push-to-starts them instead.
     func refreshChannelId() async {
+        if let agg = aggregatorClient, let fetched = try? await agg.channel(env: liveActivityEnv) {
+            if fetched != channelId {
+                channelId = fetched
+                UserDefaults.standard.set(fetched, forKey: Self.channelDefaultsKey)
+                log.notice("fleet live activity channel (aggregator): \(fetched.prefix(8), privacy: .public)…")
+            }
+            return
+        }
         guard let settings, let host = settings.defaultHost, let client = settings.client(for: host) else { return }
         do {
             guard let fetched = try await client.liveActivityChannel(env: liveActivityEnv) else { return }
@@ -101,11 +148,25 @@ final class LiveActivityManager {
 
     /// Tell the server a card exists so it adopts ours instead of starting a second.
     func reportActivityStarted() async {
+        if let agg = aggregatorClient, (try? await agg.reportStarted()) != nil { return }
         guard let settings, let host = settings.defaultHost, let client = settings.client(for: host) else { return }
         do {
             try await client.reportLiveActivityStarted()
         } catch {
             log.error("reporting fleet live activity start on \(host.label) failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Tell the publisher the card is gone (see `FleetActivityController`).
+    func reportActivityEnded() async {
+        if let agg = aggregatorClient, (try? await agg.reportEnded()) != nil { return }
+        guard let settings, let host = settings.defaultHost, let client = settings.client(for: host) else { return }
+        do {
+            try await client.reportLiveActivityEnded()
+        } catch {
+            // Best-effort: a missed report self-heals — the publisher re-evaluates
+            // on the next slice and the app dedupes any second card.
+            log.error("reporting fleet live activity end on \(host.label) failed: \(error.localizedDescription)")
         }
     }
 
@@ -137,6 +198,17 @@ final class LiveActivityManager {
     // Register with ONLY the default host, not every host. Registering with all
     // hosts made each host's server push-to-start its own fleet activity → two cards.
     private func sendStartToken(_ token: String) async {
+        lastStartToken = token
+        if aggregator == nil { await refreshAggregator() }
+        if let agg = aggregatorClient {
+            do {
+                try await agg.registerStartToken(token, env: liveActivityEnv, deviceId: deviceId)
+                return
+            } catch {
+                log.error("start-token register on the aggregator failed: \(error.localizedDescription)")
+                // Fall through: a host forwards it to the aggregator.
+            }
+        }
         guard let settings, let host = settings.defaultHost, let client = settings.client(for: host) else { return }
         do {
             try await client.registerLiveActivityStartToken(token, env: liveActivityEnv)
