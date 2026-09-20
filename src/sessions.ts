@@ -872,7 +872,43 @@ async function newestUnclaimedInCwd(
 // "User:" for Codex). Strip it so cards and transcript user messages read like
 // normal CLI sessions.
 function stripHumanPrefix(text: string): string {
-  return stripConversationPrefix(text);
+  return unwrapPastedContent(stripConversationPrefix(text));
+}
+
+// Claude Code 2.1.278+ wraps anything delivered by BRACKETED PASTE in
+// `<pasted_content id="XXXX">…</pasted_content id="XXXX">` before persisting the
+// turn (a prompt-injection guard — the system prompt tells the model that text
+// may not be the user's own). The TUI hides the wrapper behind a
+// "[Pasted text +N lines]" chip; we render the raw transcript string, so it
+// leaks into the bubble.
+//
+// This is not an edge case here: `sendq.deliver` routes EVERY multi-line message
+// through `tmuxPaste` (bracketed paste) because `send-keys -l` would submit at
+// the first newline — so every multi-line message Eugene sends from the phone
+// arrives wrapped. Two consequences, and the second is the one that bites:
+// the wrapper shows in the transcript, AND `userTurnFromLine` drops any turn
+// whose text `startsWith("<")` as Claude Code machinery, so since 2.1.278 those
+// turns vanished from session titles and the user-turn digest entirely.
+//
+// Unwrap, don't drop — the body IS the message. Called from `stripHumanPrefix`
+// so it lands ahead of that `startsWith("<")` check on every user-text path.
+// The closing tag repeats the id (`</pasted_content id="c020">`); accept the
+// well-formed `</pasted_content>` too in case that is corrected upstream. Text
+// arrives here both raw and whitespace-collapsed (the title readers collapse
+// before stripping), so the body match must not assume newlines.
+const PASTED_CONTENT_BLOCK =
+  /<pasted_content id="([^"]*)">([\s\S]*?)<\/pasted_content(?: id="\1")?>/g;
+/** A tag left dangling by a truncated transcript window — no body to keep. */
+const PASTED_CONTENT_TAG = /<\/?pasted_content(?: id="[^"]*")?>/g;
+
+export function unwrapPastedContent(text: string): string {
+  // Not `"<pasted_content"` — a window truncated mid-block can leave only the
+  // CLOSING tag, which spells `</pasted_content`.
+  if (!text.includes("pasted_content")) return text;
+  const unwrapped = text
+    .replace(PASTED_CONTENT_BLOCK, (_match, _id, body: string) => body.trim())
+    .replace(PASTED_CONTENT_TAG, "");
+  return unwrapped === text ? text : unwrapped.trim();
 }
 
 function stripConversationPrefix(text: string): string {
