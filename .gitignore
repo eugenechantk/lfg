@@ -38,6 +38,9 @@ ios/fastlane/*.bak
 
 # Transient verification evidence + tool state
 .codex/evidence/
+# …and the same under any subproject (ios/.codex/evidence is 16MB of frame PNGs).
+**/.codex/evidence/
+**/.codex/build/
 # Screen recordings are evidence too, but they are 3-8MB each and the repo keeps
 # every one forever. Commit the extracted stills (the house pattern) and leave the
 # source recordings on the machine that captured them.
