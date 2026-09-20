@@ -68,12 +68,19 @@ struct LFGFleetActivityWidget: Widget {
                     .padding(.trailing, 6) // mirrors the dot's leading inset
             } minimal: {
                 // Shown when the island is shared with another app's activity, in
-                // either slot (iOS alone decides which app is attached). Same dot as
-                // the compact view: Eugene chose no separate style for this case
-                // (2026-09-20).
-                Circle()
-                    .fill(context.state.accent)
-                    .frame(width: 8, height: 8)
+                // either slot (iOS alone decides which app is attached). There is
+                // no room for the compact view's dot + count pair, so they merge:
+                // the same state-coloured dot, grown to carry the same count.
+                ZStack {
+                    Circle().fill(context.state.accent)
+                    Text("\(context.state.activeTotal)")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(.black)
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                        .padding(.horizontal, 2)
+                }
             }
             .keylineTint(context.state.accent)
         }
