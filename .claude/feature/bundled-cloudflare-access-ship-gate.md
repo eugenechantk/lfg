@@ -1,6 +1,6 @@
 # Bundled Cloudflare Access: make every TestFlight build carry Pro + Air
 
-**Date:** 2026-09-20 · **Tier:** product · **Status:** deploying (evidence below)
+**Date:** 2026-09-20 · **Tier:** product · **Status:** shipped — TestFlight 202609201301 (2026-09-20 13:07 HKT, DoD PASS)
 
 ## Ask
 
@@ -42,9 +42,9 @@ Desktop app: not affected. It reads the token from the Mac Keychain or the
 
 ## Success criteria
 
-- [ ] Deploy from a clean worktree (README-only PrivateResources) generates the payload and archives.
-- [ ] Shipped IPA contains `PrivateResources/BundledCloudflareAccess.private.json` listing both hosts.
-- [ ] `verify_testflight_build build_number:<n>` passes including DoD 1b.
+- [x] Deploy from a clean worktree (README-only PrivateResources) generates the payload and archives.
+- [x] Shipped IPA contains `PrivateResources/BundledCloudflareAccess.private.json` listing both hosts.
+- [x] `verify_testflight_build build_number:<n>` passes including DoD 1b.
 - [ ] Generator fallback path produces the same two-host payload (verified: bogus Keychain service → fallback file → identical hosts/id).
 
 ## Behaviour on existing installs
@@ -67,3 +67,26 @@ update is enough.
   "Process crashed", exit -1. Route to 17.156.106.13 (Apple upload) was via utun4 (26.26.26.1, a VPN tunnel) while
   the default route was the en0 hotspot; previous uploads over en0 took 75–90 s. Killed at 12:52. Re-upload pending
   with the VPN off/bypassed: `bundle exec fastlane ios upload_only` is not a lane yet — use `pilot upload` on the existing IPA.
+
+### 2026-09-20 13:01 deploy from the Air (worktree `~/build/lfg-testflight` at origin/main fb23f0d)
+
+Eugene cannot drop LetsVPN (no Apple reachability without it, no bypass list), so the upload moved
+to the Air, whose route to Apple is Surfshark WireGuard (utun23, integrity-protected).
+
+- First attempt over raw ssh: gate passed (generator used the `~/.cloudflared` fallback — no Keychain
+  pilot item on the Air), archive failed at `CodeSign LFGWidgets.appex: errSecInternalComponent` —
+  the login keychain refuses non-interactive signing from an ssh session.
+- Second attempt inside the Air's GUI-session tmux server (`/opt/homebrew/bin/tmux new-session -d`):
+  archive + export OK 13:03, **upload OK in 76 s** (13:03:06 → 13:04:22). Build **202609201301**, v1.3.0.
+- `verify_testflight_build build_number:202609201301` on the Air: DoD 1 ground truth OK, **DoD 1b OK —
+  "ipa bundles Cloudflare Access for: lfg-pro, lfg-air"**. ASC processing poll: see below.
+- Pro-built IPA 202609201237 (identical content, never uploaded) kept at
+  `~/build/lfg-testflight/ios/build/fastlane/LFG-pro-202609201237.ipa` on the Air; can be deleted.
+- ASC processing: VALID at 13:07:06 (3rd poll), train 1.3.0 (highest), internalBuildState IN_BETA_TESTING —
+  `DoD PASS: 202609201301`. Worktrees removed on both Macs afterwards.
+
+## What to expect on the phone
+
+Update to 202609201301 from TestFlight. On first launch the app seeds the Access token for both origins into
+the Keychain and adds `lfg-pro` / `lfg-air` to the host list if missing; existing manual hosts are kept.
+No setup form. Every future `deploy_testflight` refuses to archive without this payload.
