@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<style>html{-webkit-text-size-adjust:100%}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>The Fleet Card Lifecycle</title>
+</head>
+<body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+  :root {
+    --ground:      #EDEEEA;
+    --surface:     #F7F8F5;
+    --surface-2:   #E4E6E0;
+    --ink:         #17190F;
+    --ink-2:       #4B4E42;
+    --muted:       #6C6F62;
+    --rule:        #D3D6CB;
+    --rule-strong: #B9BDB0;
+    --push:        #1B6280;
+    --push-soft:   #D9E7ED;
+    --working:     #1B7F3C;
+    --needs:       #A45A00;
+    --danger:      #A32B20;
+    --card-ink:    #141210;
+
+    --fig-bg:      #FFFFFF;
+    --shadow:      0 1px 2px rgba(23,25,15,.06), 0 6px 18px rgba(23,25,15,.05);
+
+    --body: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+    --disp: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    --bar-h: 46px;
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) { :root { scroll-behavior: auto; } }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #121310;
+      --surface:     #1A1C18;
+      --surface-2:   #242720;
+      --ink:         #EAEBE3;
+      --ink-2:       #BFC2B6;
+      --muted:       #8E9285;
+      --rule:        #2C2F27;
+      --rule-strong: #43473C;
+      --push:        #74C2E2;
+      --push-soft:   #16303C;
+      --working:     #4FD07A;
+      --needs:       #F0A63B;
+      --danger:      #E4796C;
+      --fig-bg:      #17190F;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.28);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:      #121310;
+    --surface:     #1A1C18;
+    --surface-2:   #242720;
+    --ink:         #EAEBE3;
+    --ink-2:       #BFC2B6;
+    --muted:       #8E9285;
+    --rule:        #2C2F27;
+    --rule-strong: #43473C;
+    --push:        #74C2E2;
+    --push-soft:   #16303C;
+    --working:     #4FD07A;
+    --needs:       #F0A63B;
+    --danger:      #E4796C;
+    --fig-bg:      #17190F;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.28);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding-inline: 20px; }
+  .prose { max-width: 68ch; }
+
+  h1, h2, h3, h4 { font-family: var(--disp); line-height: 1.16; text-wrap: balance; margin: 0; }
+  h2 { font-size: clamp(25px, 4.2vw, 33px); font-weight: 700; letter-spacing: -.012em; }
+  h3 { font-size: 19px; font-weight: 600; letter-spacing: -.004em; margin-top: 34px; }
+  h4 { font-size: 15px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); }
+  p { margin: 0 0 16px; }
+  a { color: inherit; }
+  code, .mono { font-family: var(--mono); font-size: .855em; }
+  p code, li code, td code, dd code {
+    background: var(--surface-2); padding: .1em .34em; border-radius: 3px;
+    word-break: break-word;
+  }
+  strong { font-weight: 600; }
+
+  /* ---------- masthead ---------- */
+  .mast { padding-block: clamp(48px, 9vw, 84px) clamp(30px, 5vw, 44px); border-bottom: 1px solid var(--rule); }
+  .eyebrow {
+    font-family: var(--disp); font-size: 12px; font-weight: 600;
+    letter-spacing: .13em; text-transform: uppercase; color: var(--muted); margin-bottom: 18px;
+  }
+  .mast h1 { font-size: clamp(34px, 7.4vw, 62px); font-weight: 700; letter-spacing: -.028em; }
+  .mast .dek { font-size: clamp(17px, 2.4vw, 20px); color: var(--ink-2); margin-top: 18px; max-width: 60ch; }
+  .mast .meta {
+    margin-top: 26px; display: flex; flex-wrap: wrap; gap: 8px 10px;
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+  }
+  .mast .meta span { border: 1px solid var(--rule); border-radius: 100px; padding: 3px 11px; }
+
+  /* ---------- sticky toc ---------- */
+  nav.toc {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 50;
+    background: color-mix(in srgb, var(--ground) 92%, transparent);
+    backdrop-filter: saturate(150%) blur(10px);
+    -webkit-backdrop-filter: saturate(150%) blur(10px);
+    border-bottom: 1px solid var(--rule);
+  }
+  .toc-scroll { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+  .toc-scroll::-webkit-scrollbar { display: none; }
+  nav.toc a {
+    flex: 0 0 auto; text-decoration: none; white-space: nowrap;
+    font-family: var(--disp); font-size: 12.5px; font-weight: 600; letter-spacing: .012em;
+    color: var(--muted); padding: 14px 11px 12px; border-bottom: 2px solid transparent;
+  }
+  nav.toc a:hover { color: var(--ink); }
+  nav.toc a[aria-current="true"] { color: var(--ink); border-bottom-color: var(--push); }
+  nav.toc a:focus-visible { outline: 2px solid var(--push); outline-offset: -3px; border-radius: 3px; }
+
+  /* ---------- sections ---------- */
+  section { padding-block: clamp(42px, 7vw, 66px); border-bottom: 1px solid var(--rule); scroll-margin-top: calc(var(--bar-h) + 12px); }
+  section:last-of-type { border-bottom: 0; }
+  .num {
+    font-family: var(--mono); font-size: 12px; color: var(--push);
+    letter-spacing: .06em; display: block; margin-bottom: 10px;
+  }
+  .lede { font-size: 19px; color: var(--ink-2); max-width: 62ch; margin-top: 16px; }
+
+  /* ---------- figures ---------- */
+  figure { margin: 30px 0; }
+  .figbox {
+    background: var(--fig-bg); border: 1px solid var(--rule);
+    border-radius: 6px; padding: 20px 16px; overflow-x: auto; box-shadow: var(--shadow);
+  }
+  figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; color: var(--ink); }
+  figcaption { font-size: 14.5px; color: var(--muted); margin-top: 12px; max-width: 66ch; line-height: 1.5; }
+
+  /* ---------- tables ---------- */
+  .tablewrap { overflow-x: auto; margin: 26px 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 15px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+  thead th {
+    font-family: var(--disp); font-size: 11.5px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); background: var(--surface-2); border-bottom: 1px solid var(--rule-strong);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.mono, th.mono { font-family: var(--mono); font-size: 13px; }
+
+  /* ---------- pills / callouts ---------- */
+  .pill {
+    font-family: var(--disp); font-size: 11px; font-weight: 600; letter-spacing: .05em;
+    text-transform: uppercase; padding: 2px 8px; border-radius: 100px; white-space: nowrap;
+    border: 1px solid currentColor; display: inline-block;
+  }
+  .pill.app { color: var(--ink-2); }
+  .pill.srv { color: var(--push); }
+  .pill.both { color: var(--needs); }
+
+  .note {
+    border-left: 3px solid var(--rule-strong); padding: 2px 0 2px 18px;
+    margin: 24px 0; color: var(--ink-2); max-width: 64ch;
+  }
+  .note.warn { border-left-color: var(--danger); }
+  .note.warn .note-h { color: var(--danger); }
+  .note.push { border-left-color: var(--push); }
+  .note.push .note-h { color: var(--push); }
+  .note-h {
+    font-family: var(--disp); font-size: 11.5px; font-weight: 700; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 6px;
+  }
+  .note p:last-child { margin-bottom: 0; }
+
+  /* ---------- steps ---------- */
+  ol.steps { counter-reset: s; list-style: none; padding: 0; margin: 24px 0; max-width: 66ch; }
+  ol.steps > li {
+    counter-increment: s; position: relative; padding-left: 40px; margin-bottom: 18px;
+  }
+  ol.steps > li::before {
+    content: counter(s); position: absolute; left: 0; top: 2px;
+    width: 25px; height: 25px; border-radius: 50%;
+    background: var(--surface-2); color: var(--ink-2);
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    display: grid; place-items: center;
+  }
+  ol.steps > li.fail::before { background: color-mix(in srgb, var(--danger) 18%, var(--surface-2)); color: var(--danger); }
+
+  ul.plain { padding-left: 20px; max-width: 66ch; }
+  ul.plain li { margin-bottom: 10px; }
+
+  dl.defs { margin: 24px 0; max-width: 68ch; }
+  dl.defs dt { font-family: var(--mono); font-size: 13.5px; font-weight: 600; color: var(--push); margin-top: 16px; }
+  dl.defs dd { margin: 4px 0 0; color: var(--ink-2); font-size: 16px; }
+
+  /* ---------- the card replica ---------- */
+  .replica {
+    background: var(--card-ink); border-radius: 22px; padding: 13px 16px 14px;
+    max-width: 360px; color: #fff; font-family: -apple-system, "SF Pro Text", "Archivo", sans-serif;
+    box-shadow: var(--shadow); margin: 0;
+  }
+  .replica .rhead { display: flex; align-items: baseline; gap: 7px; }
+  .replica .rhead .big { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .replica .rhead .lbl { font-size: 15px; color: rgba(235,235,245,.70); }
+  .replica .rhead .sp { flex: 1; }
+  .replica .ctr { display: flex; align-items: center; gap: 4px; font-size: 13px; color: rgba(235,235,245,.60); font-variant-numeric: tabular-nums; }
+  .replica .rows { margin-top: 9px; display: flex; flex-direction: column; gap: 7px; }
+  .replica .row { display: flex; align-items: center; gap: 9px; font-size: 15px; }
+  .replica .row .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .replica .row .sp { flex: 1; }
+  .replica .row .el { color: rgba(235,235,245,.60); font-variant-numeric: tabular-nums; }
+  .replica .more { font-size: 15px; color: rgba(235,235,245,.45); padding-left: 16px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
+  .dot.w { background: #30D158; }
+  .dot.n { background: #FF9F0A; }
+  .dot.sm { width: 6px; height: 6px; }
+
+  .sbs { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 22px; margin: 28px 0; align-items: start; }
+
+  .filemap { font-family: var(--mono); font-size: 13px; line-height: 1.85; color: var(--ink-2); margin: 20px 0; }
+  .filemap b { color: var(--ink); font-weight: 600; }
+
+  footer.end { padding-block: 44px 64px; color: var(--muted); font-size: 14px; }
+</style>
+
+<header class="mast">
+  <div class="wrap">
+    <div class="eyebrow">lfg · iOS client + Bun host</div>
+    <h1>The Fleet Card Lifecycle</h1>
+    <p class="dek">One Live Activity, two independent writers that cannot see each other, and every guard that exists because one of them got it wrong. How the card is born, updated, and killed.</p>
+    <div class="meta">
+      <span>LFGFleetAttributes</span>
+      <span>iOS 17.2+</span>
+      <span>ActivityKit + APNs</span>
+      <span>verified against main @ 419f22c</span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections">
+  <div class="wrap">
+    <div class="toc-scroll" id="tocScroll">
+      <a href="#shape">Shape</a>
+      <a href="#model">Data model</a>
+      <a href="#tokens">Tokens</a>
+      <a href="#render">What renders</a>
+      <a href="#birth">Birth</a>
+      <a href="#update">Update</a>
+      <a href="#death">Death</a>
+      <a href="#scenarios">Scenarios</a>
+      <a href="#guards">Guards</a>
+      <a href="#gaps">Known gaps</a>
+      <a href="#observe">Observability</a>
+    </div>
+  </div>
+</nav>
+
+<main class="wrap">
+
+<!-- ================================================== 01 -->
+<section id="shape">
+  <span class="num">01</span>
+  <h2>One card, two writers, no shared memory</h2>
+  <p class="lede">There is exactly <strong>one</strong> Live Activity per phone — the fleet card — aggregating every session that is working or needs input. Both the app and the host server can create it, update it, and end it. Neither can observe the other's activities. Almost every bug in this subsystem is a consequence of that one fact.</p>
+
+  <p>The retired design was one activity per session. ActivityKit caps an app at five concurrent activities, so past five active sessions it had to truncate and drop sessions entirely. The aggregate card has no ceiling: extra sessions fold into a <code>N More</code> line.</p>
+
+  <p>The split of responsibility is about <em>liveness</em>, not about data:</p>
+
+  <ul class="plain">
+    <li><span class="pill app">App</span> &nbsp;<strong>Instant and precise, but only while alive.</strong> <code>FleetActivityController</code> watches <code>SessionStore</code> directly and calls ActivityKit in-process. Zero latency, no APNs. Dead the moment iOS suspends the app.</li>
+    <li><span class="pill srv">Server</span> &nbsp;<strong>Always awake, but can only shout through APNs.</strong> The push watcher in <code>src/push/watcher.ts</code> ticks every 2 s, computes the same content state from its own view of the sessions, and sends <code>start</code> / <code>update</code> / <code>end</code> pushes. It is the only path that works while the app is suspended.</li>
+  </ul>
+
+  <p>The two compute the same shape deliberately: <code>FleetActivitySnapshot</code> (Swift, in LFGCore) and <code>reduceFleetLiveActivity</code> (TypeScript) are mirrors, and both derive their per-session verdict from the single shared precedence ladder — <code>SessionDisplayState.resolve</code> on the client, <code>sessionDisplayState</code> on the server. So there is no fidelity seam: whichever writer last touched the card, it says the same thing.</p>
+
+  <figure>
+    <div class="figbox">
+      <svg viewBox="0 0 880 400" role="img" aria-label="The app and the server both write to one Live Activity on the phone. The app writes in-process via ActivityKit; the server writes via APNs using tokens the app registered. The two writers coordinate only through three HTTP endpoints.">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+          </marker>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--push)"/>
+          </marker>
+        </defs>
+
+        <!-- phone column -->
+        <rect x="316" y="24" width="248" height="352" rx="10" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
+        <text x="440" y="46" text-anchor="middle" font-family="Archivo, sans-serif" font-size="11" font-weight="600" letter-spacing="1.4" fill="currentColor" opacity=".55">IPHONE</text>
+
+        <!-- the card -->
+        <rect x="336" y="60" width="208" height="70" rx="12" fill="var(--push-soft)" stroke="var(--push)" stroke-width="1.5"/>
+        <text x="440" y="88" text-anchor="middle" font-family="Archivo, sans-serif" font-size="14" font-weight="700" fill="currentColor">The fleet card</text>
+        <text x="440" y="108" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10.5" fill="currentColor" opacity=".7">fleetId = "fleet"  ·  exactly one</text>
+
+        <!-- app box -->
+        <rect x="336" y="176" width="208" height="86" rx="7" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="440" y="200" text-anchor="middle" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="currentColor">LFG app</text>
+        <text x="440" y="219" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity=".72">FleetActivityController</text>
+        <text x="440" y="235" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity=".72">LiveActivityManager</text>
+        <text x="440" y="252" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10.5" fill="currentColor" opacity=".55">alive only in foreground</text>
+
+        <!-- store -->
+        <rect x="336" y="300" width="208" height="54" rx="7" fill="var(--surface-2)" stroke="currentColor" stroke-width="1" opacity=".9"/>
+        <text x="440" y="322" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="currentColor">SessionStore</text>
+        <text x="440" y="340" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10.5" fill="currentColor" opacity=".6">sessions · busy · prompts</text>
+
+        <line x1="440" y1="300" x2="440" y2="266" stroke="currentColor" stroke-width="1.4" marker-end="url(#a1)"/>
+        <text x="450" y="286" font-family="Archivo, sans-serif" font-size="10.5" fill="currentColor" opacity=".7">observes</text>
+
+        <line x1="440" y1="176" x2="440" y2="136" stroke="currentColor" stroke-width="1.8" marker-end="url(#a1)"/>
+        <text x="450" y="160" font-family="Archivo, sans-serif" font-size="10.5" fill="currentColor" opacity=".8">request / update / end</text>
+
+        <!-- server box -->
+        <rect x="620" y="176" width="232" height="86" rx="7" fill="none" stroke="var(--push)" stroke-width="1.4"/>
+        <text x="736" y="200" text-anchor="middle" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="var(--push)">lfg host (Bun)</text>
+        <text x="736" y="219" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--push)" opacity=".85">push/watcher.ts · 2 s tick</text>
+        <text x="736" y="235" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--push)" opacity=".85">reduceFleetLiveActivity</text>
+        <text x="736" y="252" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10.5" fill="var(--push)" opacity=".7">always awake</text>
+
+        <!-- apns -->
+        <rect x="620" y="60" width="232" height="70" rx="7" fill="none" stroke="var(--push)" stroke-width="1.4" stroke-dasharray="5 3"/>
+        <text x="736" y="88" text-anchor="middle" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="var(--push)">APNs</text>
+        <text x="736" y="108" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--push)" opacity=".8">push-type: liveactivity</text>
+
+        <line x1="736" y1="176" x2="736" y2="136" stroke="var(--push)" stroke-width="1.8" marker-end="url(#a2)"/>
+        <path d="M 620 95 L 552 95" stroke="var(--push)" stroke-width="1.8" fill="none" marker-end="url(#a2)"/>
+        <text x="586" y="86" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10.5" fill="var(--push)">delivers</text>
+
+        <!-- token / report channel -->
+        <path d="M 544 218 L 620 218" stroke="var(--push)" stroke-width="1.4" fill="none" marker-end="url(#a2)" stroke-dasharray="4 3"/>
+        <text x="582" y="210" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10" fill="var(--push)">tokens</text>
+        <text x="582" y="238" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10" fill="var(--push)">"ended"</text>
+
+        <!-- left: sessions -->
+        <rect x="28" y="176" width="200" height="86" rx="7" fill="none" stroke="currentColor" stroke-width="1" opacity=".65"/>
+        <text x="128" y="205" text-anchor="middle" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="currentColor">tmux panes</text>
+        <text x="128" y="226" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10.5" fill="currentColor" opacity=".65">claude / codex sessions</text>
+        <text x="128" y="245" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity=".6">hooks · transcript · pane</text>
+
+        <path d="M 228 202 L 300 202 L 300 320 L 336 320" stroke="currentColor" stroke-width="1.2" fill="none" marker-end="url(#a1)" opacity=".7"/>
+        <text x="266" y="194" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10" fill="currentColor" opacity=".7">REST + journal</text>
+
+        <path d="M 228 236 L 268 236 L 268 380 L 736 380 L 736 266" stroke="var(--push)" stroke-width="1.2" fill="none" marker-end="url(#a2)" opacity=".85"/>
+        <text x="500" y="374" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10" fill="var(--push)" opacity=".9">listSessions + observeSession, every 2 s</text>
+      </svg>
+    </div>
+    <figcaption>Both writers read the same underlying session state and write the same card, but by different routes. The only coordination between them is the dashed channel: three HTTP endpoints carrying APNs tokens one way and an "I ended it" report the other.</figcaption>
+  </figure>
+
+  <div class="note push">
+    <span class="note-h">Feature flag</span>
+    <p>The server half is off unless <code>LFG_LIVE_ACTIVITIES=1</code> is in the host's <code>.env</code> (it is, on the Pro). It is additionally gated by <code>pushWatcherEnabled</code>, which only pushes from the canonical port <code>8766</code> — so a scratch <code>lfg serve</code> an agent starts on a spare port reads the same token store but stays silent, instead of fighting the primary over one card.</p>
+  </div>
+</section>
+
+<!-- ================================================== 02 -->
+<section id="model">
+  <span class="num">02</span>
+  <h2>What actually travels</h2>
+  <p class="lede">The attributes are fixed at creation and never change. Everything the card shows lives in <code>ContentState</code>, which is what both writers replace wholesale on every update.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Field</th><th class="mono">Type</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">fleetId</td><td class="mono">String</td><td><em>Attributes</em>, not state. Always <code>"fleet"</code>. It exists so the app can find "its" card among <code>Activity.activities</code>.</td></tr>
+        <tr><td class="mono">working</td><td class="mono">Int</td><td>Sessions mid-turn. Counts <strong>all</strong> of them, not just the rendered rows.</td></tr>
+        <tr><td class="mono">needsInput</td><td class="mono">Int</td><td>Sessions parked on a question, permission prompt, plan approval — or a phone sign-in request, which is modelled as an ordinary prompt.</td></tr>
+        <tr><td class="mono">rows</td><td class="mono">[Row]</td><td>At most 3. Needs-input first, then oldest-first within a state.</td></tr>
+        <tr><td class="mono">more</td><td class="mono">Int</td><td>Active sessions beyond <code>rows</code>. Rendered as <code>N More</code>.</td></tr>
+        <tr><td class="mono">updatedAt</td><td class="mono">Double</td><td>Unix seconds. Deliberately <strong>excluded</strong> from every change comparison — it moves every tick and would make every tick a push.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>A <code>Row</code> is <code>{ sid, title, state, since }</code>. Two details matter:</p>
+
+  <p><strong><code>state</code> is only ever <code>"working"</code> or <code>"needsInput"</code>.</strong> Not <code>"blocked"</code> — on the client that word means <em>paused</em> and carries a different colour, and a blocked session is neither making progress nor asking anything, so it is not a card row at all. Idle sessions aren't rows either, which is why the card has no unread count: unread is a property of idle sessions, so by definition it is never active.</p>
+
+  <p><strong><code>since</code> is a sticky baseline, keyed by session <em>and</em> state.</strong> Both writers carry a <code>since</code> map across ticks and reuse the prior timestamp when the session is still in the same state. Change state and the timer restarts; scroll out of the visible three rows and back, and the elapsed time survives — the server tracks <code>since</code> for every active session, not just the rendered ones.</p>
+
+  <div class="note">
+    <span class="note-h">Why the card ticks without pushes</span>
+    <p>The elapsed labels are not pushed. <code>ElapsedTimeText</code> wraps a <code>TimelineView(.periodic(by: 60))</code> that recomputes <code>2m → 3m</code> locally from <code>since</code>. A card nobody is updating still counts up correctly for as long as its rows are accurate — which is exactly why a frozen card is so easy to mistake for a live one.</p>
+  </div>
+
+  <p>Every <code>Codable</code> conformance in <code>LFGFleetAttributes.swift</code> is hand-written with <code>decodeIfPresent</code> and a default. That is not style: an in-flight activity started by an older build gets decoded by the newer widget, and a strict decode would throw rather than render.</p>
+</section>
+
+<!-- ================================================== 03 -->
+<section id="tokens">
+  <span class="num">03</span>
+  <h2>Two tokens, two very different lifetimes</h2>
+  <p class="lede">The server cannot address a card it was not handed a token for. There are two kinds and confusing them is the root of the most persistent failure in this subsystem.</p>
+
+  <div class="sbs">
+    <div>
+      <h4>pushToStart</h4>
+      <p>A property of the <strong>install</strong>, not of any card. Issued by <code>Activity&lt;LFGFleetAttributes&gt;.pushToStartTokenUpdates</code>, re-minted on essentially every app launch. It is the only way to create a card on a phone whose app is asleep. Outlives every card.</p>
+      <p>Capped at <strong>3 per APNs environment</strong>, newest first. The live store once reached nineteen — every dev build mints one and they rot rather than die, so a <code>start</code> decision was blasting all nineteen.</p>
+    </div>
+    <div>
+      <h4>activityUpdate</h4>
+      <p>A property of <strong>one specific live card</strong>. Issued by <code>activity.pushTokenUpdates</code>, and it only exists while that card exists. It is the only way to <code>update</code> or <code>end</code>.</p>
+      <p>Kept at <strong>exactly one per environment</strong>: registering a new one supersedes the old, because a device only has one card, so the previous token must be a corpse.</p>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="note-h">The reason superseding is not housekeeping</span>
+    <p>A dead Live Activity token does not answer <code>410</code>. APNs accepts it, returns <strong>200</strong>, and silently drops the payload. So <code>isDeadApnsToken</code> never fires for one, nothing prunes it — and worse, the watcher <em>counts that 200 as a delivery</em>, advances its state, never re-sends <code>start</code>, and the real card stops updating until the app is opened. One corpse in the list is enough. Keeping the list to the single token that can actually be live is what makes a 200 mean something.</p>
+  </div>
+
+  <p>Registration goes to <strong>the default host only</strong>, in both <code>LiveActivityManager</code> and <code>FleetActivityController</code>. Registering with every configured host made each host's watcher push-to-start its own card — two hosts, two cards on the lock screen.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Endpoint</th><th>Sent when</th><th>Server effect</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="mono">POST /api/push/live-activity/start-token</td>
+          <td>ActivityKit issues a push-to-start token (roughly, every launch)</td>
+          <td><code>upsertLiveActivityToken</code>, cap to newest 3 per env</td>
+        </tr>
+        <tr>
+          <td class="mono">POST /api/push/live-activity/update-token</td>
+          <td>A card exists and ActivityKit issued its token</td>
+          <td>Supersedes the previous update token <em>and</em> calls <code>noteFleetActivityStarted()</code> — proof a card is on screen, so the server adopts it instead of push-starting a second one beside it</td>
+        </tr>
+        <tr>
+          <td class="mono">POST /api/push/live-activity/ended</td>
+          <td>The app ended the card itself</td>
+          <td><code>noteFleetActivityEnded()</code> — nulls the server's memory and records the veto population</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <span class="note-h">Known limit</span>
+    <p>The registration payload carries no device identifier, so two phones on the same APNs environment fight over the single <code>activityUpdate</code> slot. Distinguishing them needs a device id on the wire.</p>
+  </div>
+</section>
+
+<!-- ================================================== 04 -->
+<section id="render">
+  <span class="num">04</span>
+  <h2>Four surfaces, three row budgets</h2>
+  <p class="lede">One <code>ActivityConfiguration</code> renders the card in four contexts, and the row cap is a hard physical constraint, not a taste call.</p>
+
+  <div class="sbs">
+    <div>
+      <h4>Lock screen — 3 rows</h4>
+      <figure class="replica" aria-label="Replica of the lock screen card">
+        <div class="rhead">
+          <span class="big">5</span><span class="lbl">Active</span><span class="sp"></span>
+          <span class="ctr"><i class="dot w sm"></i>4</span>
+          <span class="ctr"><i class="dot n sm"></i>1</span>
+        </div>
+        <div class="rows">
+          <div class="row"><i class="dot n"></i><span class="t">Does codex work for lfg?</span><span class="sp"></span><span class="el">1m</span></div>
+          <div class="row"><i class="dot w"></i><span class="t">Read SessionListView.swift</span><span class="sp"></span><span class="el">2m</span></div>
+          <div class="row"><i class="dot w"></i><span class="t">In the iOS client, can you add…</span><span class="sp"></span><span class="el">4m</span></div>
+          <div class="more">2 More</div>
+        </div>
+      </figure>
+      <p style="font-size:15px;color:var(--ink-2);margin-top:14px;">The lock screen gives an activity a fixed ~160 pt frame and <strong>centre-clips</strong> anything taller — which silently drops the header, the most informative line on the card. <code>maxRows = 3</code> is a height budget, enforced identically in <code>FleetActivitySnapshot.maxRows</code> and <code>MAX_FLEET_ROWS</code>.</p>
+    </div>
+    <div>
+      <h4>Dynamic Island</h4>
+      <ul class="plain" style="margin-top:10px;">
+        <li><strong>Expanded</strong> — a tighter budget than the lock screen: <strong>2 rows</strong>, with the third folded into the overflow count (<code>more + max(0, rows.count - 2)</code>).</li>
+        <li><strong>Compact</strong> — an 8 pt accent dot leading, the active total trailing, each padded 6 pt off the sensor cutout.</li>
+        <li><strong>Minimal</strong> — shown when the island is shared with another app. The same 8 pt dot; Eugene chose no separate treatment (2026-09-20).</li>
+      </ul>
+      <h4 style="margin-top:26px;">Accent</h4>
+      <p style="font-size:15px;color:var(--ink-2);">Needs-input dominates. If anything is waiting on a human the dot and keyline go amber <code>#FF9F0A</code>; otherwise green <code>#30D158</code>.</p>
+    </div>
+  </div>
+
+  <div class="note">
+    <span class="note-h">relevanceScore is narrower than it sounds</span>
+    <p>Both writers stamp <code>100</code> when <code>needsInput &gt; 0</code>, else <code>90</code>. This ranks <strong>this app's own</strong> activities only. Which app is attached to a shared Dynamic Island and which becomes the detached bubble is iOS's choice, and no API influences it (confirmed against Apple's docs, 2026-09-20). It is kept because it is correct should the app ever run two cards.</p>
+  </div>
+</section>
+
+<!-- ================================================== 05 -->
+<section id="birth">
+  <span class="num">05</span>
+  <h2>Birth — two ways a card appears</h2>
+
+  <h3>Path A · The app creates it <span class="pill app">App</span></h3>
+  <p>Requires the app to be running. <code>FleetActivityController.sync()</code> finds no existing fleet activity, computes a snapshot with <code>activeTotal &gt; 0</code>, and calls:</p>
+  <p style="font-family:var(--mono);font-size:13.5px;background:var(--surface-2);padding:12px 14px;border-radius:5px;overflow-x:auto;">Activity.request(attributes: LFGFleetAttributes(fleetId: "fleet"),<br>&nbsp;&nbsp;content: content(state), pushType: <strong>.token</strong>)</p>
+  <p><code>pushType: .token</code> — not <code>nil</code> — is load-bearing. It is what makes the freshly created card push-capable, so ActivityKit will mint an update token, <code>LiveActivityManager</code> will register it, and the server can keep the card alive after the app suspends. A card created with <code>pushType: nil</code> freezes the instant the app goes away.</p>
+
+  <h3>Path B · The server push-starts it <span class="pill srv">Server</span></h3>
+  <p>The only path that works on a sleeping phone. On a tick where <code>reduceFleetLiveActivity</code> sees active sessions and <code>active.current == null</code>, it emits a <code>start</code> action addressed to the push-to-start tokens.</p>
+
+  <figure>
+    <div class="figbox">
+      <svg viewBox="0 0 860 310" role="img" aria-label="Sequence: the server detects an active session, sends a push-to-start through APNs, iOS creates the card and wakes the app in the background, the app registers the new card's update token, and only then can the server send updates.">
+        <defs>
+          <marker id="b1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--push)"/>
+          </marker>
+          <marker id="b2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <!-- lanes -->
+        <text x="70"  y="22" text-anchor="middle" font-family="Archivo, sans-serif" font-size="11.5" font-weight="700" letter-spacing=".8" fill="var(--push)">SERVER</text>
+        <text x="300" y="22" text-anchor="middle" font-family="Archivo, sans-serif" font-size="11.5" font-weight="700" letter-spacing=".8" fill="var(--push)">APNs</text>
+        <text x="540" y="22" text-anchor="middle" font-family="Archivo, sans-serif" font-size="11.5" font-weight="700" letter-spacing=".8" fill="currentColor">iOS / ActivityKit</text>
+        <text x="790" y="22" text-anchor="middle" font-family="Archivo, sans-serif" font-size="11.5" font-weight="700" letter-spacing=".8" fill="currentColor">LFG app</text>
+
+        <line x1="70"  y1="34" x2="70"  y2="290" stroke="var(--push)" stroke-width="1" opacity=".4"/>
+        <line x1="300" y1="34" x2="300" y2="290" stroke="var(--push)" stroke-width="1" opacity=".4"/>
+        <line x1="540" y1="34" x2="540" y2="290" stroke="currentColor" stroke-width="1" opacity=".3"/>
+        <line x1="790" y1="34" x2="790" y2="290" stroke="currentColor" stroke-width="1" opacity=".3"/>
+
+        <!-- 1 -->
+        <text x="70" y="62" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10.5" fill="var(--push)">tick: 1 working, no card</text>
+        <line x1="70" y1="82" x2="290" y2="82" stroke="var(--push)" stroke-width="1.6" marker-end="url(#b1)"/>
+        <text x="180" y="76" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--push)">event: "start" → pushToStart tokens</text>
+
+        <line x1="310" y1="82" x2="530" y2="82" stroke="var(--push)" stroke-width="1.6" marker-end="url(#b1)"/>
+        <text x="420" y="76" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--push)">200</text>
+
+        <!-- 2 card appears -->
+        <rect x="452" y="100" width="176" height="30" rx="5" fill="var(--push-soft)" stroke="var(--push)" stroke-width="1.2"/>
+        <text x="540" y="120" text-anchor="middle" font-family="Archivo, sans-serif" font-size="11" font-weight="600" fill="currentColor">card on Lock Screen</text>
+
+        <!-- 3 background wake -->
+        <line x1="550" y1="156" x2="780" y2="156" stroke="currentColor" stroke-width="1.6" marker-end="url(#b2)" stroke-dasharray="5 3"/>
+        <text x="665" y="150" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10.5" fill="currentColor">background launch (not guaranteed)</text>
+
+        <!-- 4 token back -->
+        <line x1="780" y1="196" x2="82" y2="196" stroke="currentColor" stroke-width="1.6" marker-end="url(#b2)"/>
+        <text x="430" y="190" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor">POST /live-activity/update-token   →  server adopts the card</text>
+
+        <!-- 5 updates -->
+        <line x1="70" y1="238" x2="530" y2="238" stroke="var(--push)" stroke-width="1.6" marker-end="url(#b1)"/>
+        <text x="300" y="232" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--push)">event: "update" → activityUpdate token</text>
+
+        <rect x="452" y="256" width="176" height="30" rx="5" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="540" y="276" text-anchor="middle" font-family="Archivo, sans-serif" font-size="11" fill="currentColor">card stays current</text>
+
+        <!-- failure annotation -->
+        <path d="M 790 166 L 790 186" stroke="var(--push)" stroke-width="0" />
+      </svg>
+    </div>
+    <figcaption>The push-to-start chain. Step 3 — the background launch — is the weak link: Apple documents the wake but does not guarantee it, and on an idle phone the update-token registration frequently never arrives. Without it, every subsequent <code>update</code> goes to the previous card's dead token, which answers 200.</figcaption>
+  </figure>
+
+  <div class="note warn">
+    <span class="note-h">The start veto</span>
+    <p>A <code>start</code> is refused when every currently-active session id is inside the population the phone last reported it ended against (<code>FleetActivityBox.clientEnded</code>). Without this, "phone ends card → server push-starts a replacement → phone ends that one too" ran 27–102 times a day, and because <em>each restart is a new activity</em>, it stacked five stale cards on the lock screen. The veto holds until the population actually changes — some active sid that wasn't in the ended set. It is cleared by a delivered <code>start</code>, or by the phone registering an update token. Logged once per population as <code>start-vetoed</code>, not once per tick.</p>
+  </div>
+
+  <div class="note">
+    <span class="note-h">Delivery threshold, for start only</span>
+    <p><code>start</code> requires just <strong>one</strong> token to accept. Re-blasting starts until all three stale push-to-start tokens accept could stack duplicates on the real device, and an under-delivered start self-heals through token registration anyway. <code>update</code> and <code>end</code> use the opposite rule — see §07.</p>
+  </div>
+</section>
+
+<!-- ================================================== 06 -->
+<section id="update">
+  <span class="num">06</span>
+  <h2>Update — what wakes each writer</h2>
+
+  <h3>The app <span class="pill app">App</span></h3>
+  <p><code>FleetActivityController.sync()</code> runs on four triggers:</p>
+  <ul class="plain">
+    <li><strong>Launch</strong> — <code>configure(settings:store:)</code> from <code>LFGApp.init</code>, which arms observation and syncs immediately.</li>
+    <li><strong>Any observed state change</strong> — a re-arming <code>withObservationTracking</code> over <code>store.sessions</code>, <code>store.busy</code>, <code>store.prompts</code> and <code>settings.hiddenDirs</code>. The handler must re-arm itself; <code>onChange</code> fires exactly once.</li>
+    <li><strong>Every completed refresh</strong> — the tail of <code>SessionStore.refresh()</code>.</li>
+    <li><strong>Foregrounding</strong> — <code>scenePhase == .active</code> in <code>RootView</code>.</li>
+  </ul>
+  <p><code>hiddenDirs</code> is in the tracked set on purpose, and the snapshot reads <code>store.filteredSessions</code>, not <code>store.sessions</code>: a card counting sessions the list refuses to show is the same two-surfaces-two-answers bug class the rest of the codebase keeps tripping over.</p>
+  <p>The app then skips no-op updates with <code>sameRenderableContent</code>, which compares counts, <code>more</code>, and each row's <code>sid</code> / <code>title</code> / <code>state</code> / <code>since</code> — and nothing else. The elapsed labels move every minute on their own; re-pushing for them would be pure churn.</p>
+
+  <h3>The server <span class="pill srv">Server</span></h3>
+  <p>One tick every 2 s (skipped if the previous tick is still running). It observes every session, builds the content state, and compares it with <code>sameFleetContentState</code> — the identical field set, <code>updatedAt</code> pointedly excluded. Unchanged → no push, but the refreshed <code>since</code> map is kept in memory and <code>zeroSince</code> is cleared, because activity is activity.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Server has a card?</th><th>Active total</th><th>Content changed?</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td>no</td><td>0</td><td>—</td><td>nothing</td></tr>
+        <tr><td>no</td><td>&gt; 0</td><td>—</td><td><code>start</code> — unless vetoed by <code>clientEnded</code></td></tr>
+        <tr><td>yes</td><td>&gt; 0</td><td>no</td><td>nothing; refresh <code>since</code>, clear <code>zeroSince</code></td></tr>
+        <tr><td>yes</td><td>&gt; 0</td><td>yes</td><td><code>update</code></td></tr>
+        <tr><td>yes</td><td>0</td><td>—</td><td><code>end</code> (debounce is <code>0</code>)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>One quiet safeguard inside the reducer: a <code>sid</code> already seen this tick is skipped. Duplicate session rows are a real shape in lfg — an in-TUI <code>/resume</code> of a session another live process is on, or a <code>--fork-session</code> fork before its pidfile is readable. A duplicate would render the same session twice in conflicting states, double-count it in the tallies, and burn two of the three row slots on one session.</p>
+</section>
+
+<!-- ================================================== 07 -->
+<section id="death">
+  <span class="num">07</span>
+  <h2>Death — four ways a card goes away</h2>
+  <p class="lede">Ending is the only irreversible move in the whole subsystem. The update token dies with the card, and resurrection needs a push-to-start plus a background wake — the exact chain that misfires. Every end path is therefore gated.</p>
+
+  <figure>
+    <div class="figbox">
+      <svg viewBox="0 0 800 300" role="img" aria-label="State machine: no card, live card, and the gate that governs the transition to ended. An untrustworthy count leaves the card untouched; a trustworthy zero ends it.">
+        <defs>
+          <marker id="c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+          </marker>
+          <marker id="c2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--danger)"/>
+          </marker>
+        </defs>
+
+        <!-- no card -->
+        <rect x="30" y="118" width="150" height="62" rx="31" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <text x="105" y="146" text-anchor="middle" font-family="Archivo, sans-serif" font-size="14" font-weight="600" fill="currentColor">no card</text>
+        <text x="105" y="164" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9.5" fill="currentColor" opacity=".6">active.current = null</text>
+
+        <!-- live -->
+        <rect x="325" y="110" width="170" height="78" rx="9" fill="var(--push-soft)" stroke="var(--push)" stroke-width="1.8"/>
+        <text x="410" y="140" text-anchor="middle" font-family="Archivo, sans-serif" font-size="14" font-weight="700" fill="currentColor">card live</text>
+        <text x="410" y="160" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10.5" fill="currentColor" opacity=".7">updates on content change</text>
+        <text x="410" y="176" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10.5" fill="currentColor" opacity=".7">elapsed ticks locally</text>
+
+        <!-- ended -->
+        <rect x="640" y="118" width="140" height="62" rx="31" fill="none" stroke="var(--danger)" stroke-width="1.6"/>
+        <text x="710" y="146" text-anchor="middle" font-family="Archivo, sans-serif" font-size="14" font-weight="600" fill="var(--danger)">ended</text>
+        <text x="710" y="164" text-anchor="middle" font-family="Archivo, sans-serif" font-size="9.5" fill="var(--danger)" opacity=".8">token dead</text>
+
+        <!-- start -->
+        <path d="M 180 138 L 315 138" stroke="currentColor" stroke-width="1.8" fill="none" marker-end="url(#c1)"/>
+        <text x="248" y="128" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10.5" fill="currentColor">active &gt; 0</text>
+        <text x="248" y="156" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9.5" fill="currentColor" opacity=".65">request / push-to-start</text>
+
+        <!-- veto loop -->
+        <path d="M 105 118 C 105 60, 230 60, 230 96" stroke="currentColor" stroke-width="1.3" fill="none" stroke-dasharray="4 3" marker-end="url(#c1)" opacity=".75"/>
+        <text x="168" y="52" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10" fill="currentColor" opacity=".8">vetoed: same population the phone ended against</text>
+
+        <!-- end -->
+        <path d="M 495 138 L 630 138" stroke="var(--danger)" stroke-width="1.8" fill="none" marker-end="url(#c2)"/>
+        <text x="562" y="128" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10.5" fill="var(--danger)">active = 0</text>
+        <text x="562" y="156" text-anchor="middle" font-family="Archivo, sans-serif" font-size="9.5" fill="var(--danger)" opacity=".85">AND count trustworthy</text>
+
+        <!-- untouched loop -->
+        <path d="M 455 188 C 455 244, 365 244, 365 192" stroke="currentColor" stroke-width="1.3" fill="none" stroke-dasharray="4 3" marker-end="url(#c1)" opacity=".8"/>
+        <text x="410" y="264" text-anchor="middle" font-family="Archivo, sans-serif" font-size="10.5" fill="currentColor" opacity=".85">count UNKNOWN → untouched</text>
+        <text x="410" y="282" text-anchor="middle" font-family="Archivo, sans-serif" font-size="9.5" fill="currentColor" opacity=".6">no live fetch yet this launch, or a host is down</text>
+
+        <!-- ended back to no card -->
+        <path d="M 710 180 C 710 226, 105 226, 105 182" stroke="currentColor" stroke-width="1.2" fill="none" marker-end="url(#c1)" opacity=".55"/>
+      </svg>
+    </div>
+    <figcaption>The app's end gate, <code>FleetEndGate.step</code>. The critical distinction is between <em>zero</em> and <em>unknown</em>: an unknown count must never end a card, because a background launch from a push-to-start has an empty store and reads exactly like zero.</figcaption>
+  </figure>
+
+  <h3>1 · The app ends it, deliberately <span class="pill app">App</span></h3>
+  <p>The dominant path when the app is in use. <code>sync()</code> asks <code>FleetEndGate.step</code> for a verdict:</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Condition</th><th class="mono">Verdict</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>countTrustworthy == false</code></td><td class="mono">untouched</td><td>Leave the card exactly as the server left it. No end, and no zeroed update either.</td></tr>
+        <tr><td>trustworthy, <code>activeTotal &gt; 0</code></td><td class="mono">keep</td><td>Update if renderable content differs.</td></tr>
+        <tr><td>trustworthy, zero, held ≥ <code>hold</code></td><td class="mono">end</td><td><code>activity.end(.immediate)</code>, then <code>POST /ended</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><code>fleetCountIsTrustworthy</code> is <code>liveSessionsFetchedOnce &amp;&amp; hosts.allSatisfy(isNotKnownDown)</code>. GRDB hydration deliberately does <em>not</em> count as a live fetch — it seeds the same storage, so the key set alone cannot tell a cold snapshot from a real answer.</p>
+  <p><code>hold</code> is <strong>0</strong>. It was 60 s as insurance against end→start churn; Eugene's call on 2026-09-19 was that the card should be gone the moment nothing is running, and the server's <code>FLEET_END_DEBOUNCE_S</code> is 0 to match. The hold machinery survives as a parameter for tests and for the day it is wanted back.</p>
+
+  <h3>2 · The server ends it <span class="pill srv">Server</span></h3>
+  <p>A tick with a live card and <code>total == 0</code> sends <code>event: "end"</code> carrying the zeroed content state and a <code>dismissal-date</code>, then nulls and unlinks its persisted state.</p>
+
+  <div class="note warn">
+    <span class="note-h">Delivery threshold for update and end: every token must accept</span>
+    <p>This is the 2026-08-23 zombie-card fix. Update and end target one token per environment, and one environment is routinely a corpse that answers 200 — so "any accepted" was routinely "only the corpse accepted": the real device's send failed, state advanced anyway, and the card froze or refused to dismiss. A shortfall now leaves <code>active.current</code> untouched so the next tick re-sends. Re-updating or re-ending an already-correct card is harmless, and genuine 410s prune tokens, so the requirement converges.</p>
+  </div>
+
+  <h3>3 · Dedupe ends the losers <span class="pill both">Both</span></h3>
+  <p>The app and the server both create cards and neither can see the other's, so <code>LiveActivityManager</code> is the only place the one-card invariant can be enforced. It runs on every <code>activityUpdates</code> arrival — including in the background, since a start push wakes the app — and whenever more than one active fleet activity exists it asks <code>FleetActivityDedupe.partition</code> for the survivor and ends the rest, cancelling their token tasks first.</p>
+  <p>Survivor is the card with the newest <code>updatedAt</code>: the one both writers most recently addressed. ActivityKit exposes no creation time. Ties break on the larger <code>id</code>, because the order of <code>Activity.activities</code> is not stable.</p>
+
+  <h3>4 · The tombstone sweep <span class="pill app">App</span></h3>
+  <p>Once, at launch, <code>endRetiredPerSessionActivities()</code> enumerates and ends every <code>LFGSessionAttributes</code> activity. A device upgrading from the per-session build can carry up to five of them, and an activity whose attributes type the app no longer declares <strong>cannot be enumerated, so it cannot be ended</strong>. Keeping the dead type declared in <code>RetiredSessionActivity.swift</code> — with a deliberately empty, leniently-decoding <code>ContentState</code> — is the only way to reach them. It is deletable once no installed build is old enough to have started one.</p>
+</section>
+
+<!-- ================================================== 08 -->
+<section id="scenarios">
+  <span class="num">08</span>
+  <h2>The lifecycle, end to end</h2>
+  <p class="lede">The same machinery, walked through the situations it actually meets.</p>
+
+  <h3>A · You start a session with the app open</h3>
+  <ol class="steps">
+    <li>The journal delta flips <code>store.busy[sid]</code>. Observation fires; <code>sync()</code> runs within a frame.</li>
+    <li>No card exists, <code>activeTotal == 1</code> → <code>Activity.request(pushType: .token)</code>. The card appears instantly, with no APNs round trip.</li>
+    <li><code>activityUpdates</code> yields the new activity. <code>track()</code> subscribes to its <code>pushTokenUpdates</code>; the first token posts to <code>/update-token</code>.</li>
+    <li>The server's handler calls <code>noteFleetActivityStarted()</code> and <strong>adopts</strong> the card with no <code>contentState</code>. Because <code>sameFleetContentState(undefined, …)</code> is false, the very next tick pushes current content to the freshly registered token rather than waiting for something to change.</li>
+    <li>Both writers are now addressing the same card, agreeing on its contents, and pushing only on renderable change.</li>
+  </ol>
+
+  <h3>B · You lock the phone; a session finishes</h3>
+  <p>The app suspends. Its observation stops. The server's tick sees <code>busy</code> drop, recomputes, finds the row set changed, and sends <code>update</code> to the one live <code>activityUpdate</code> token. The card is correct on the lock screen without the app ever running. <strong>This is the path the whole server half exists for</strong>, and it works — provided step 4 above happened while the app was awake.</p>
+
+  <h3>C · The phone is idle and the server push-starts a card</h3>
+  <ol class="steps">
+    <li>Server sees an active session, has no card → push-to-start. The card appears.</li>
+    <li>iOS is supposed to launch the app in the background so it can register the new card's token.</li>
+    <li class="fail">On an idle phone this frequently does not happen — 9 of 14 starts on 2026-09-19 got no token back within 90 s.</li>
+    <li class="fail">Every subsequent <code>update</code> goes to the <em>previous</em> card's dead token. APNs answers 200. The visible card freezes at its birth state, counting up its elapsed labels convincingly.</li>
+  </ol>
+  <p>If the app <em>is</em> woken, the second hazard used to fire: <code>configure()</code> → <code>syncNow()</code> runs immediately at launch, when <code>SessionStore.sessions</code> is still <code>[]</code>. That empty store read as "nothing active" and ended the server's card about two seconds after it appeared — 32 <code>client-ended</code> events in one hour. <code>FleetEndGate</code>'s trustworthiness rule is the fix.</p>
+
+  <h3>D · Everything finishes</h3>
+  <p>If the app is alive it ends the card locally and posts <code>/ended</code>; the server nulls <code>current</code>, records the veto population, and unlinks <code>fleet-activity-state.json</code>. If the app is asleep the server sends <code>end</code> to the update token and does the same bookkeeping. Either way the card dismisses immediately — debounce is zero on both sides.</p>
+
+  <h3>E · A host goes offline</h3>
+  <p>The card is not ended and not zeroed. <code>fleetCountIsTrustworthy</code> goes false the moment any host is known down, so the gate returns <code>untouched</code> — the count is <em>unknown</em>, not zero. This mirrors what the session list does: <code>rebuildSessions</code> blanks <code>busy</code> and <code>prompt</code> for sessions on down hosts rather than letting a frozen <code>busy: true</code> read as "Working" forever.</p>
+
+  <h3>F · The server restarts</h3>
+  <p><code>fleet-activity-state.json</code> is loaded at watcher start, so a restart does not push a duplicate <code>start</code> for a card the device already has, and every row keeps its elapsed baseline. A subtle race is handled explicitly: a client <code>/ended</code> report arriving while the load is still in flight would otherwise be overwritten a moment later by the on-disk snapshot, resurrecting a card the client just told us is dead. The <code>fleetEndedReported</code> flag makes the newer report win.</p>
+
+  <h3>G · Two cards somehow exist</h3>
+  <p>The moment the second one arrives through <code>activityUpdates</code>, dedupe ends the older one and cancels its token task. This runs in the background too, before either writer can address the wrong card.</p>
+</section>
+
+<!-- ================================================== 09 -->
+<section id="guards">
+  <span class="num">09</span>
+  <h2>Every guard, and the bug it exists for</h2>
+  <p class="lede">None of these are defensive programming in the abstract. Each one is a shipped failure.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Guard</th><th>Where</th><th>Without it</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">FleetEndGate<br>trustworthiness</td><td>client</td><td>A background launch from a push-to-start has an empty store; that reads as zero and kills the server's card ~2 s after it appears. "I have to open the app" became literally true — the app was the only thing that could put a card back, because the app was what kept removing it.</td></tr>
+        <tr><td class="mono">clientEnded<br>start veto</td><td>server</td><td>Phone ends card → server push-starts a replacement → phone ends that too. Each restart is a <em>new</em> activity: 27–102 a day, stacking five stale cards on the lock screen.</td></tr>
+        <tr><td class="mono">supersede()</td><td>server</td><td>A dead Live Activity token 200s forever, so nothing prunes it and its 200 is counted as a delivery. The card silently stops updating until the app is opened.</td></tr>
+        <tr><td class="mono">accepted == attempted<br>for update / end</td><td>server</td><td>"Any accepted" meant "the corpse accepted" — the real device's send failed, state advanced anyway, card froze or refused to dismiss.</td></tr>
+        <tr><td class="mono">MAX_PUSH_TO_START<br>_PER_ENV = 3</td><td>server</td><td>The live store reached nineteen tokens; every start blasted all of them. Per-env so churning sandbox dev builds cannot evict the TestFlight token.</td></tr>
+        <tr><td class="mono">FleetActivityDedupe</td><td>client</td><td>Two cards on the lock screen, only the newest addressable — so the visible one is the stale one.</td></tr>
+        <tr><td class="mono">noteFleetActivityStarted<br>on token registration</td><td>server</td><td>The server push-to-starts a second card next to the one the app just made.</td></tr>
+        <tr><td class="mono">seen.has(sid)</td><td>server</td><td>One session rendered twice in conflicting states, double-counted, burning two of three row slots.</td></tr>
+        <tr><td class="mono">updatedAt excluded<br>from comparison</td><td>both</td><td>Every 2 s tick becomes a push.</td></tr>
+        <tr><td class="mono">default host only</td><td>client</td><td>Each configured host push-starts its own card. Two hosts, two cards.</td></tr>
+        <tr><td class="mono">pushWatcherEnabled<br>(port 8766)</td><td>server</td><td>A scratch <code>lfg serve</code> an agent started on a spare port reads the same token store and pushes to the real phone, with its own idea of <code>active.current</code>. One was caught doing exactly that mid-investigation.</td></tr>
+        <tr><td class="mono">maxRows = 3</td><td>both</td><td>Overheight content is centre-clipped on the lock screen, silently dropping the header.</td></tr>
+        <tr><td class="mono">fleetEndedReported</td><td>server</td><td>An <code>/ended</code> landing mid-load is overwritten by the on-disk snapshot, resurrecting a dead card.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================================================== 10 -->
+<section id="gaps">
+  <span class="num">10</span>
+  <h2>What is still open</h2>
+
+  <h3>The idle phone <span class="pill srv">unfixed</span></h3>
+  <p>The remaining structural hole. The server can only update a card whose update token the phone has handed it, and an idle phone hands over nothing. Whether the app is never launched at all (Apple documents the wake but gives no guarantee; force-quit and power state are undocumented) or is launched and its registration through the Cloudflare tunnel fails inside the short background window, the server cannot tell — and neither is under its control.</p>
+
+  <div class="note push">
+    <span class="note-h">Apple's answer: broadcast channels (iOS 18+)</span>
+    <p><strong>Not implemented.</strong> With a channel there is no per-card token at all: the server publishes fleet state to one channel per APNs environment and every fleet card — push-started or app-started, on every device — receives it, awake or not.</p>
+    <p>Shape: create the channel once via <code>POST /1/apps/&lt;bundleId&gt;/channels</code> on <code>api-manage-broadcast.push.apple.com:2196</code> with <code>message-storage-policy: 1</code> (stores the most recent message for 8 h, so a card that comes online late still gets current state); publish with <code>POST /4/broadcasts/apps/&lt;bundleId&gt;</code> plus an <code>apns-channel-id</code> header and the same <code>aps</code> body we send today. Start pushes carry <code>input-push-channel</code>; app-started activities use <code>pushType: .channel(id)</code>. Prerequisite is a developer-portal toggle — "Enable Broadcast Capability" on the identifier — not an entitlement change. Sandbox and production channels are separate.</p>
+  </div>
+
+  <h3>Two devices, one slot</h3>
+  <p>The registration payload carries no device identifier, so two phones on the same APNs environment overwrite each other's <code>activityUpdate</code> token. Needs a device id on the wire.</p>
+
+  <h3>The tombstone</h3>
+  <p><code>RetiredSessionActivity.swift</code> is scheduled for deletion once no installed build is old enough to have started a per-session activity. They self-expire well within a day, so this is a calendar question, not a technical one.</p>
+</section>
+
+<!-- ================================================== 11 -->
+<section id="observe">
+  <span class="num">11</span>
+  <h2>Reading the evidence</h2>
+  <p class="lede">The failure mode here produces no errors — a dead token answers 200 — so the log deliberately records successes. Three separate "the card is stale" investigations had to be re-derived by live repro because nothing recorded what the server sent, to how many tokens, or what came back.</p>
+
+  <h4>Files</h4>
+  <div class="filemap">
+    <b>~/.lfg/liveactivity.log</b> &nbsp;— one JSON line per decision and per token send. Never pruned.<br>
+    <b>~/.lfg/live-activity-tokens.json</b> &nbsp;— the token registry, both kinds.<br>
+    <b>~/.lfg/fleet-activity-state.json</b> &nbsp;— the server's memory of the live card. <em>Unlinked on end</em>, so the after-the-fact artifact is destroyed exactly when you want it.
+  </div>
+
+  <h4>Log events</h4>
+  <dl class="defs">
+    <dt>decide</dt><dd>The reducer chose an action. Carries the event, token count, counts, and the row set as <code>sid:state</code> pairs.</dd>
+    <dt>send</dt><dd>One token, one APNs response. Logged on success too — a 200 does not mean the card updated.</dd>
+    <dt>no-tokens</dt><dd>An action was due but there was no way to address the card. Otherwise indistinguishable from "nothing to say", and it is exactly the state a suspended app leaves behind when its token rotates.</dd>
+    <dt>none-accepted / partial</dt><dd>The delivery threshold was not met; state was left alone so the next tick re-sends.</dd>
+    <dt>client-ended</dt><dd>The phone reported its card gone. The one path that nulls the card with no <code>decide</code> line — without it, a later <code>start</code> reads as inexplicable.</dd>
+    <dt>adopted</dt><dd>An update-token registration proved a card exists; the server took ownership instead of starting a second one.</dd>
+    <dt>start-vetoed</dt><dd>A start was due but refused. Written once per population, not once per tick.</dd>
+  </dl>
+
+  <div class="note">
+    <span class="note-h">Diagnosing a stale card</span>
+    <p>The question that separates the two failure families: <strong>for each <code>decide start</code>, did an <code>adopted</code> follow within ~90 s?</strong> If yes and the card is still stale, the problem is delivery or content. If no — the phone never told the server how to reach the new card, and you are looking at the idle-phone gap, not a bug.</p>
+  </div>
+
+  <h4>Source map</h4>
+  <div class="filemap">
+    <b>ios/Shared/LFGFleetAttributes.swift</b> — the wire type, shared by app and widget<br>
+    <b>ios/LFGWidgets/LFGFleetActivityWidget.swift</b> — the four surfaces<br>
+    <b>ios/LFGWidgets/FleetActivityViews.swift</b> — card atoms, tokens, elapsed clock<br>
+    <b>ios/LFG/FleetActivityController.swift</b> — the app-side writer<br>
+    <b>ios/LFG/LiveActivityManager.swift</b> — tokens + dedupe<br>
+    <b>ios/LFG/RetiredSessionActivity.swift</b> — the tombstone<br>
+    <b>ios/LFGCore/…/FleetActivitySnapshot.swift</b> — pure client reducer<br>
+    <b>ios/LFGCore/…/FleetEndGate.swift</b> — when ending is allowed<br>
+    <b>ios/LFGCore/…/FleetActivityDedupe.swift</b> — survivor selection<br>
+    <b>src/push/watcher.ts</b> — tick, reducer, delivery, the fleet box<br>
+    <b>src/push/liveactivity.ts</b> — APNs payload builders<br>
+    <b>src/push/liveactivity-store.ts</b> — token registry, cap, supersede<br>
+    <b>src/push/fleet-active-store.ts</b> — restart persistence<br>
+    <b>src/commands/serve.ts</b> — the three endpoints
+  </div>
+
+  <h4>Diagnosis history</h4>
+  <div class="filemap">
+    <b>.claude/diagnosis-live-activity-background-updates.md</b><br>
+    <b>.claude/diagnosis-live-activity-duplicate-cards-20260906.md</b><br>
+    <b>.claude/diagnosis-live-activity-duplicate-cards-20260918.md</b><br>
+    <b>.claude/diagnosis-live-activity-stale-when-backgrounded-20260919.md</b><br>
+    <b>.claude/diagnosis-live-activity-idle-updates-need-broadcast-channel-20260919.md</b><br>
+    <b>.claude/fleet-live-activity/plan.md</b>
+  </div>
+</section>
+
+</main>
+
+<footer class="end">
+  <div class="wrap">Read against <code class="mono">main</code> at 419f22c, 2026-09-20. Every claim here is traceable to the source files listed above.</div>
+</footer>
+
+<script>
+(function () {
+  var bar = document.querySelector('nav.toc');
+  var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+  var scroller = document.getElementById('tocScroll');
+  var sections = links.map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); });
+  var ticking = false, currentIdx = -1;
+
+  function barHeight() { return bar ? bar.getBoundingClientRect().height : 46; }
+
+  function update() {
+    ticking = false;
+    var h = barHeight() + 4;
+    var idx = 0;
+    for (var i = 0; i < sections.length; i++) {
+      var s = sections[i];
+      if (!s) continue;
+      if (s.getBoundingClientRect().top - h <= 0) idx = i;
+    }
+    // At the very bottom, the last section wins even if it is short.
+    if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 2) idx = sections.length - 1;
+    if (idx === currentIdx) return;
+    currentIdx = idx;
+    for (var j = 0; j < links.length; j++) {
+      if (j === idx) links[j].setAttribute('aria-current', 'true');
+      else links[j].removeAttribute('aria-current');
+    }
+    var el = links[idx];
+    if (el && scroller) {
+      var er = el.getBoundingClientRect(), sr = scroller.getBoundingClientRect();
+      if (er.left < sr.left + 8) scroller.scrollBy({ left: er.left - sr.left - 16, behavior: 'smooth' });
+      else if (er.right > sr.right - 8) scroller.scrollBy({ left: er.right - sr.right + 16, behavior: 'smooth' });
+    }
+  }
+
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(update);
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', onScroll, { passive: true });
+
+  function setBarVar() {
+    document.documentElement.style.setProperty('--bar-h', barHeight() + 'px');
+  }
+  setBarVar();
+  window.addEventListener('resize', setBarVar);
+  update();
+})();
+</script>
+
+</body>
+</html>
