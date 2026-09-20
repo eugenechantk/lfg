@@ -315,7 +315,7 @@ export function reduceFleetLiveActivity(args: {
 /**
  * Every active session on THIS host as a card row, with its state clock carried
  * over from `priorSince`. Shared by the local reducer and by the slice publisher
- * (aggregator mode), so "what counts as active, and since when" has one answer.
+ * (slice mode), so "what counts as active, and since when" has one answer.
  */
 export function collectFleetRows(
   observations: Array<{ session: PayloadSessionInput; observed: SessionState }>,
@@ -513,7 +513,7 @@ async function observeSession(
 }
 
 export type TickDeps = {
-  /// Aggregator mode (`LFG_FLEET_AGGREGATOR_URL`): publish this host's rows to the
+  /// Slice mode (`LFG_FLEET_AGGREGATOR_URL`): publish this host's rows to the
   /// fleet aggregator Worker and make NO Live Activity decision locally — see
   /// `fleet-slice.ts`. When set, `liveActivities` is ignored.
   slice?: FleetSlicePublisher;
@@ -1090,7 +1090,7 @@ export function startPushWatcher(
       undefined,
       traceLiveActivity,
     );
-    log(`[push] fleet Live Activity: aggregator mode → ${aggregator.url}`);
+    log(`[push] fleet Live Activity: slice mode → ${aggregator.url}`);
   } else if (liveActivitiesEnabled()) {
     deps.liveActivities = {
       active,

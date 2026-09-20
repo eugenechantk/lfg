@@ -2108,7 +2108,7 @@ export async function cmdServe() {
       if (path === "/api/push/live-activity/channel" && req.method === "POST") {
         const body = (await req.json().catch(() => null)) as { env?: string } | null;
         const env = body?.env === "production" ? "production" : "sandbox";
-        // Aggregator mode: the channel belongs to the Worker (it is the publisher),
+        // Slice mode: the channel belongs to the Worker (it is the publisher),
         // and every host must hand out the SAME id or cards created through
         // different hosts would listen on different channels.
         const agg = aggregatorConfig();

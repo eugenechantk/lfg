@@ -4,7 +4,7 @@
 // senders, so with sessions on more than one host no single host can publish a
 // correct card — and a host that sees zero of ITS sessions would end a card the
 // other host still needs (2026-09-20: the Pro ended the app's card every few
-// seconds while both running sessions were on the Air). In aggregator mode a host
+// seconds while both running sessions were on the Air). In slice mode a host
 // therefore publishes only its own rows here, and the Worker — the one publisher —
 // merges every host's slice and talks to APNs.
 //

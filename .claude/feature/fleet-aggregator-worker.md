@@ -47,7 +47,7 @@ when either Mac is asleep.
   **Verify by:** `workers/fleet-aggregator/src/reduce.test.ts`.
 - [x] SC3: Worker payloads equal the server's builders — **Verify by:** same file
   (imports `buildStart`/`buildUpdate`).
-- [x] SC4: a host in aggregator mode publishes its slice and sends nothing to APNs
+- [x] SC4: a host in slice mode publishes its slice and sends nothing to APNs
   itself; unchanged slices wait for the heartbeat; failures retry next tick —
   **Verify by:** `src/push/fleet-slice.test.ts`.
 - [x] SC5: the app's Worker requests (token+deviceId, channel GET, started, ended,
@@ -70,7 +70,7 @@ when either Mac is asleep.
   `APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `CHANNEL_PRODUCTION`.
 - `src/push/fleet-slice.ts` — `aggregatorConfig`, `FleetSlicePublisher`,
   `aggregatorRequest`. `watcher.ts`: `collectFleetRows` extracted and shared;
-  `TickDeps.slice`; aggregator mode when `LFG_FLEET_AGGREGATOR_URL` +
+  `TickDeps.slice`; slice mode when `LFG_FLEET_AGGREGATOR_URL` +
   `LFG_FLEET_AGGREGATOR_SECRET` are set (both in the synced `.env`).
 - `serve.ts` — forwards legacy registrations; `/channel` answers from the Worker;
   new `GET /api/push/live-activity/aggregator`.
@@ -79,6 +79,9 @@ when either Mac is asleep.
   channel, started, ended through it with host fallback.
 
 ## Decision Log
+
+- **The host-side mode is called "slice mode"** (renamed 2026-09-20 at Eugene's request). A host in this
+  mode publishes only its own slice and aggregates nothing; "aggregator" names the Worker alone.
 
 - **The Worker decides AND sends.** The probe proved Workers reach APNs over HTTP/2,
   so there is no need for "Worker decides, a host sends".
@@ -104,10 +107,11 @@ when either Mac is asleep.
 | SC4 | `bun test src/push/fleet-slice.test.ts` | 9 pass. The tick-level test first FAILED and exposed a real bug: `runPushTick` returned early when a host had no alert devices, so it would never have published. Fixed. |
 | SC5 | `swift test --filter FleetAggregatorClient` | 6 pass |
 | SC6 | `bun test src/push workers/fleet-aggregator` → 152 pass; `bunx tsc --noEmit` clean; LFGCore 567 tests, 0 failures | |
-| SC7 (Air half) | Air restarted 21:07 HKT, log: `fleet Live Activity: aggregator mode → …workers.dev`; `GET /v1/state` | Air slice present with 3 working rows; Worker decided `start`, then `no-tokens` — it has no push-to-start token yet |
-| SC7 (Pro half) | not done | **The Pro is unreachable on every route** (Cloudflare ssh "websocket: bad handshake", LAN times out). Its old process, when it wakes, still runs the legacy reducer and WILL broadcast `end` against the app's card until it is restarted into aggregator mode. |
-| SC8 | not run | needs the phone's token in the Worker (a new build, or the Pro forwarding) |
+| SC7 (Air half) | Air restarted 21:07 HKT, log (as it read at the time): `fleet Live Activity: aggregator mode → …workers.dev`; `GET /v1/state` | Air slice present with 3 working rows; Worker decided `start`, then `no-tokens` — it has no push-to-start token yet |
+| SC7 (Pro half) | not done | **The Pro is unreachable on every route** (Cloudflare ssh "websocket: bad handshake", LAN times out). Its old process, when it wakes, still runs the legacy reducer and WILL broadcast `end` against the app's card until it is restarted into slice mode. |
+| TestFlight | archived on the Air from a worktree at `c703a27` inside the GUI tmux server; `verify_testflight_build build_number:202609202115` | uploaded 21:22 HKT; DoD PASS 21:25 (VALID, train 1.3.0 highest, IN_BETA_TESTING). Also the app-target compile check for the iOS change. Logs in `.claude/feature/evidence/testflight-20260920-aggregator/`. |
+| SC8 | not run | needs the phone to install 202609202115 and launch once (its token then reaches the Worker), and the Pro restarted into slice mode |
 
 ## Bugs
 
-- Fixed: aggregator-mode early return with zero alert devices (see SC4).
+- Fixed: slice-mode early return with zero alert devices (see SC4).

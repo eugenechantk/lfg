@@ -89,7 +89,7 @@ describe("collectFleetRows", () => {
   });
 });
 
-describe("runPushTick in aggregator mode", () => {
+describe("runPushTick in slice mode", () => {
   test("publishes the slice and makes NO local Live Activity decision or send", async () => {
     const r = recorder();
     const localSends: string[] = [];
@@ -102,7 +102,7 @@ describe("runPushTick in aggregator mode", () => {
       send: async () => ({ ok: true, status: 200 }),
       now: () => 50_000,
       slice: new FleetSlicePublisher(cfg, host, r.fetchImpl),
-      // Present but must be ignored: an aggregator-mode host owns no card.
+      // Present but must be ignored: a slice-mode host owns no card.
       liveActivities: {
         active: { current: null },
         pushToStartTokens: async () => [{ token: "aa", env: "production" }],

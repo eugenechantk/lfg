@@ -70,11 +70,19 @@ export class FleetAggregator {
 
     if (d.action) {
       const summary = { working: d.content.working, needsInput: d.content.needsInput, more: d.content.more, rows: d.content.rows.map((r) => `${r.sid.slice(0, 8)}:${r.state}`) };
-      await this.trace("decide", { apnsEvent: d.action.event, priority: d.action.priority, ...summary });
-      const delivered = d.action.event === "start" ? await this.sendStart(d.content) : await this.broadcast(d.action.event, d.content, d.action.priority, now);
+      // An undelivered decision is re-made on every evaluation (each slice, each
+      // alarm). Trace it once per distinct decision, not once per attempt — a
+      // tokenless Worker otherwise fills its 150-line trace with one event.
+      const key = `${d.action.event}|${d.population.join(",")}|${d.content.needsInput}`;
+      const repeat = (await this.state.storage.get<string>("lastUndelivered")) === key;
+      if (!repeat) await this.trace("decide", { apnsEvent: d.action.event, priority: d.action.priority, ...summary });
+      const delivered = d.action.event === "start" ? await this.sendStart(d.content, repeat) : await this.broadcast(d.action.event, d.content, d.action.priority, now);
       if (delivered) {
         await this.state.storage.put("card", d.nextCard);
+        await this.state.storage.delete("lastUndelivered");
         if (d.action.event === "start") await this.state.storage.delete("veto");
+      } else {
+        await this.state.storage.put("lastUndelivered", key);
       }
     } else if (d.nextCard !== card) {
       await this.state.storage.put("card", d.nextCard);
@@ -82,9 +90,9 @@ export class FleetAggregator {
     await this.armAlarm(slices.length > 0 || d.nextCard !== null);
   }
 
-  private async sendStart(content: Parameters<typeof startBody>[0]): Promise<boolean> {
+  private async sendStart(content: Parameters<typeof startBody>[0], quiet = false): Promise<boolean> {
     const tokens = (await this.state.storage.get<StartToken[]>("tokens")) ?? [];
-    if (!tokens.length) { await this.trace("no-tokens", { apnsEvent: "start" }); return false; }
+    if (!tokens.length) { if (!quiet) await this.trace("no-tokens", { apnsEvent: "start" }); return false; }
     let accepted = 0;
     const dead: string[] = [];
     for (const t of tokens) {
