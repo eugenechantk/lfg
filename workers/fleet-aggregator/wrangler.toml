@@ -1,0 +1,23 @@
+# lfg fleet aggregator — the single publisher of the fleet Live Activity.
+# Each lfg host PUTs only its own sessions; this Worker merges the slices and is
+# the only thing that talks to APNs (start via push-to-start token, update/end via
+# the broadcast channel). See .claude/feature/fleet-aggregator-worker.md.
+name = "lfg-fleet-aggregator"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "FLEET"
+class_name = "FleetAggregator"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["FleetAggregator"]
+
+[vars]
+APNS_TOPIC = "com.eugenechan.lfg"
+ATTRIBUTES_TYPE = "LFGFleetAttributes"
+
+# Secrets (wrangler secret put): AGG_SECRET, APNS_KEY_P8, APNS_KEY_ID,
+# APNS_TEAM_ID, CHANNEL_PRODUCTION, CHANNEL_SANDBOX (optional)

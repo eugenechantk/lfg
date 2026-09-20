@@ -95,6 +95,7 @@ import { closeAll, defaultCloseDeps, interruptAndConfirm, markClosed } from "../
 import { logOp } from "../ops-log.ts";
 import { assignUser, userRoster } from "../users.ts";
 import { acquireLease, ensureLease, foreignFresh, releaseLease } from "../leases.ts";
+import { aggregatorConfig, aggregatorRequest } from "../push/fleet-slice.ts";
 import { registerDevice, unregisterDevice, deviceCount } from "../push/store.ts";
 import { upsertLiveActivityToken } from "../push/liveactivity-store.ts";
 import { ensureBroadcastChannel } from "../push/broadcast.ts";
@@ -2087,6 +2088,11 @@ export async function cmdServe() {
         if (!token || !/^[0-9a-fA-F]{8,}$/.test(token)) return err(400, "invalid token");
         const env = body?.env === "production" ? "production" : "sandbox";
         const record = await upsertLiveActivityToken({ token, env, kind: "pushToStart" });
+        // Builds that predate the aggregator still register here; pass it on so
+        // the one publisher can start a card for them. New builds go straight to
+        // the Worker and never call this.
+        const agg = aggregatorConfig();
+        if (agg) void aggregatorRequest(agg, "POST", "/v1/start-token", { token, env });
         ensurePushWatcher();
         return json({ ok: true, kind: record.kind, env: record.env });
       }
@@ -2102,6 +2108,15 @@ export async function cmdServe() {
       if (path === "/api/push/live-activity/channel" && req.method === "POST") {
         const body = (await req.json().catch(() => null)) as { env?: string } | null;
         const env = body?.env === "production" ? "production" : "sandbox";
+        // Aggregator mode: the channel belongs to the Worker (it is the publisher),
+        // and every host must hand out the SAME id or cards created through
+        // different hosts would listen on different channels.
+        const agg = aggregatorConfig();
+        if (agg) {
+          const r = await aggregatorRequest(agg, "GET", `/v1/channel?env=${env}`);
+          const channelId = (r.data as { channelId?: string | null } | undefined)?.channelId;
+          if (r.ok && channelId) return json({ ok: true, env, channelId });
+        }
         const cfg = apnsConfigFromEnv();
         if (!cfg) return json({ ok: true, channelId: null, reason: "apns-not-configured" });
         const channelId = await ensureBroadcastChannel(cfg, env);
@@ -2121,8 +2136,19 @@ export async function cmdServe() {
         req.method === "POST"
       ) {
         noteFleetActivityStarted();
+        const agg = aggregatorConfig();
+        if (agg) void aggregatorRequest(agg, "POST", "/v1/started", {});
         ensurePushWatcher();
         return json({ ok: true });
+      }
+      // Where the app should register its push-to-start token and report card
+      // starts/ends. Handed out by a host (the app is already authenticated here
+      // through Cloudflare Access) and cached by the app, so after the first fetch
+      // the phone needs NO lfg host awake to keep its card alive. `url: null`
+      // means this deployment has no aggregator and the app talks to hosts.
+      if (path === "/api/push/live-activity/aggregator" && req.method === "GET") {
+        const agg = aggregatorConfig();
+        return json(agg ? { ok: true, url: agg.url, secret: agg.secret } : { ok: true, url: null });
       }
       // The client ended its fleet card. Only it can know: the app ends the card
       // on ITS active count reaching zero, which need not coincide with the
@@ -2132,6 +2158,8 @@ export async function cmdServe() {
       // See `.claude/diagnosis-live-activity-background-updates.md`.
       if (path === "/api/push/live-activity/ended" && req.method === "POST") {
         await noteFleetActivityEnded();
+        const agg = aggregatorConfig();
+        if (agg) void aggregatorRequest(agg, "POST", "/v1/ended", {});
         ensurePushWatcher();
         return json({ ok: true });
       }

@@ -7,6 +7,7 @@
 // The interesting logic — deciding *when* a transition warrants a push and
 // classifying it done-vs-needs-input — lives in the pure `reduceTransition`
 // reducer below, which is unit-tested in isolation (no tmux, no network).
+import { FleetSlicePublisher, aggregatorConfig } from "./fleet-slice.ts";
 import {
   listSessions,
   resolveTranscript,
@@ -303,7 +304,29 @@ export function reduceFleetLiveActivity(args: {
   /// Seconds the fleet must stay empty before `end`; default `FLEET_END_DEBOUNCE_S`.
   endHoldS?: number;
 }): LiveActivityDecision {
-  const priorSince = args.active?.since ?? {};
+  const { rows, since, working, needsInput } = collectFleetRows(
+    args.observations,
+    args.active?.since ?? {},
+    args.now,
+  );
+  return decideFleetLiveActivity(args, rows, since, working, needsInput);
+}
+
+/**
+ * Every active session on THIS host as a card row, with its state clock carried
+ * over from `priorSince`. Shared by the local reducer and by the slice publisher
+ * (aggregator mode), so "what counts as active, and since when" has one answer.
+ */
+export function collectFleetRows(
+  observations: Array<{ session: PayloadSessionInput; observed: SessionState }>,
+  priorSince: Record<string, { state: LiveActivityRow["state"]; at: number }>,
+  now: number,
+): {
+  rows: LiveActivityRow[];
+  since: Record<string, { state: LiveActivityRow["state"]; at: number }>;
+  working: number;
+  needsInput: number;
+} {
   const since: Record<string, { state: LiveActivityRow["state"]; at: number }> = {};
 
   let working = 0;
@@ -311,7 +334,7 @@ export function reduceFleetLiveActivity(args: {
   const rows: LiveActivityRow[] = [];
   const seen = new Set<string>();
 
-  for (const { session, observed } of args.observations) {
+  for (const { session, observed } of observations) {
     const sid = session.sessionId ?? "";
     if (!sid) continue;
     // One row per session. A duplicate sid would otherwise render the same
@@ -330,7 +353,7 @@ export function reduceFleetLiveActivity(args: {
     // A session changing state restarts its timer rather than inheriting the
     // elapsed time of its previous one.
     const prior = priorSince[sid];
-    const at = prior && prior.state === state ? prior.at : args.now;
+    const at = prior && prior.state === state ? prior.at : now;
     since[sid] = { state, at };
 
     rows.push({
@@ -341,6 +364,16 @@ export function reduceFleetLiveActivity(args: {
     });
   }
 
+  return { rows, since, working, needsInput };
+}
+
+function decideFleetLiveActivity(
+  args: Parameters<typeof reduceFleetLiveActivity>[0],
+  rows: LiveActivityRow[],
+  since: Record<string, { state: LiveActivityRow["state"]; at: number }>,
+  working: number,
+  needsInput: number,
+): LiveActivityDecision {
   const ordered = orderFleetRows(rows);
   const contentState: LiveActivityContentState = {
     working,
@@ -480,6 +513,10 @@ async function observeSession(
 }
 
 export type TickDeps = {
+  /// Aggregator mode (`LFG_FLEET_AGGREGATOR_URL`): publish this host's rows to the
+  /// fleet aggregator Worker and make NO Live Activity decision locally — see
+  /// `fleet-slice.ts`. When set, `liveActivities` is ignored.
+  slice?: FleetSlicePublisher;
   sessions: () => Promise<
     Array<
       PayloadSessionInput & {
@@ -773,13 +810,13 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
   const now = deps.now ?? Date.now;
   const sessions = await deps.sessions();
   const devices = await deps.devices();
-  const liveActivities = deps.liveActivities;
+  const liveActivities = deps.slice ? undefined : deps.liveActivities;
   const liveStartTokens = liveActivities ? await liveActivities.pushToStartTokens() : [];
   // Fetched once per tick alongside the start tokens: `channels()` creates on
   // first use, so calling it per send would retry channel creation on every
   // delivery while broadcast capability is still disabled.
   const liveChannels = liveActivities ? await liveActivities.channels() : [];
-  if (!devices.length && !liveActivities) {
+  if (!devices.length && !liveActivities && !deps.slice) {
     // Nobody listening — keep state seeded so we don't fire a backlog when a
     // device registers mid-flight, but skip the work of observing.
     return;
@@ -818,7 +855,7 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
     }
     const observedAt = now();
     const prev = prior.get(sid);
-    if (liveActivities) liveActivityObservations.push({ session: s, observed: state, previous: prev });
+    if (liveActivities || deps.slice) liveActivityObservations.push({ session: s, observed: state, previous: prev });
     if (!prev) {
       // First sighting — seed without emitting. -Infinity marks "never notified"
       // so the first genuine transition isn't swallowed by the dedupe window.
@@ -844,6 +881,11 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
   }
   // Drop memory for sessions that no longer exist.
   for (const k of [...prior.keys()]) if (!seen.has(k)) prior.delete(k);
+  if (deps.slice) {
+    const collected = collectFleetRows(liveActivityObservations, deps.slice.since, Math.floor(now() / 1000));
+    deps.slice.since = collected.since;
+    await deps.slice.publish(collected.rows, now());
+  }
   if (liveActivities) {
     const decision = reduceFleetLiveActivity({
       observations: liveActivityObservations,
@@ -1040,7 +1082,16 @@ export function startPushWatcher(
     hostName: injected.hostName,
     log,
   };
-  if (liveActivitiesEnabled()) {
+  const aggregator = liveActivitiesEnabled() ? aggregatorConfig() : null;
+  if (aggregator) {
+    deps.slice = new FleetSlicePublisher(
+      aggregator,
+      { id: () => injected.hostId?.() ?? "unknown-host", name: () => injected.hostName?.() ?? "" },
+      undefined,
+      traceLiveActivity,
+    );
+    log(`[push] fleet Live Activity: aggregator mode → ${aggregator.url}`);
+  } else if (liveActivitiesEnabled()) {
     deps.liveActivities = {
       active,
       pushToStartTokens: listPushToStartTokens,
