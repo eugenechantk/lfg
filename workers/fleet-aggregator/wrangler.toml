@@ -7,6 +7,12 @@ main = "src/index.ts"
 compatibility_date = "2026-09-01"
 workers_dev = true
 
+# Served on the custom domain because *.workers.dev is DNS-poisoned on some
+# networks the hosts and phone sit on (2026-09-20: the Pro resolved it to a
+# non-Cloudflare address and every slice publish timed out). eugenechantk.me
+# resolves and routes correctly there.
+routes = [{ pattern = "lfg-fleet.eugenechantk.me", custom_domain = true }]
+
 [[durable_objects.bindings]]
 name = "FLEET"
 class_name = "FleetAggregator"

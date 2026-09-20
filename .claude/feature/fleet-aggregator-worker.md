@@ -54,7 +54,7 @@ when either Mac is asleep.
   config parsing, https-only) — **Verify by:** `FleetAggregatorClientTests`.
 - [x] SC6: suites green — `bun test src/push workers/fleet-aggregator`, `tsc`,
   LFGCore `swift test`.
-- [ ] SC7: live, server half: both hosts' slices visible in `GET /v1/state`.
+- [x] SC7: live, server half: both hosts' slices visible in `GET /v1/state`.
 - [ ] SC8: live, end to end: with the app closed and sessions on the Air only, a card
   starts on the phone, updates as sessions finish, and ends at zero — **Verify by:**
   Worker trace (`decide` → `send start 200` → `broadcast update 200` → `broadcast end
@@ -113,6 +113,16 @@ when either Mac is asleep.
 | SC8 | not run | needs the phone to install 202609202115 and launch once (its token then reaches the Worker), and the Pro restarted into slice mode |
 
 ## Bugs
+
+- Fixed 2026-09-20 22:40: **the Pro could not reach the Worker.** On the Pro's network
+  `*.workers.dev` resolves to 185.60.216.36 — not Cloudflare, a poisoned DNS answer — so every
+  slice publish timed out (`slice-failed status 0` every tick) while `eugenechantk.me` answered
+  in ~1.5 s. The Worker is now also served at `https://lfg-fleet.eugenechantk.me` (custom
+  domain, 200 from both Macs) and `LFG_FLEET_AGGREGATOR_URL` points there. The app re-fetches
+  the address from a host at every launch, so the phone follows.
+- Live evidence 22:29–22:41 HKT: the phone (new build, device id `36DB9EEA`) registered its
+  production start token WITH THE WORKER directly; `send start 40a533a9 production 200`;
+  both hosts' slices present in `/v1/state` after the restarts.
 
 - Fixed 2026-09-20 21:33: **updates arrived late, then not at all.** Eugene: "There is a delay
   in the update." Two causes in the Worker's trace. (a) Routine updates went at APNs priority 5,
