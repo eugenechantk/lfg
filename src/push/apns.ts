@@ -37,8 +37,42 @@ export type ApnsPayload = {
   seq?: number;
 };
 
-export type ApnsResult = { ok: boolean; status: number; reason?: string };
+/**
+ * `headers` carries the APNs RESPONSE headers, and only the channel-management
+ * calls need them: channel creation returns the new id in `apns-channel-id`
+ * rather than in the (empty) body. Device sends leave it undefined.
+ */
+export type ApnsResult = {
+  ok: boolean;
+  status: number;
+  reason?: string;
+  headers?: Record<string, string>;
+  body?: string;
+};
 export type ApnsPushType = "alert" | "liveactivity";
+
+/**
+ * A raw HTTP/2 request to one of Apple's APNs endpoints.
+ *
+ * The device path (`/3/device/<token>`) is no longer the only shape we speak:
+ * broadcast publishes to `/4/broadcasts/apps/<bundleId>` on the normal gateway,
+ * and channel management speaks to `api-manage-broadcast[.sandbox].push.apple.com`
+ * on a NON-443 port (2195 sandbox, 2196 production) with GET and DELETE as well
+ * as POST. Rather than duplicate the connection pooling, timeout and eviction
+ * rules that the device path learned the hard way, every shape goes through one
+ * request function.
+ */
+export type ApnsHttpRequest = {
+  host: string;
+  /// Defaults to 443. Channel management uses 2195/2196.
+  port?: number;
+  method: "POST" | "GET" | "DELETE";
+  path: string;
+  /// Everything beyond `:method`, `:path` and `authorization`.
+  headers?: Record<string, string | number>;
+  jwt: string;
+  body?: string;
+};
 
 export type ApnsWireRequest = {
   topic: string;
@@ -132,19 +166,22 @@ function host(env: "sandbox" | "production"): string {
  */
 const apnsSessions = new Map<string, http2.ClientHttp2Session>();
 
-function apnsSession(host: string): http2.ClientHttp2Session {
-  const existing = apnsSessions.get(host);
+// Keyed by host AND port: channel management shares no connection with the push
+// gateway, and `api-manage-broadcast…:2195` and `:2196` are different servers.
+function apnsSession(host: string, port = 443): http2.ClientHttp2Session {
+  const key = `${host}:${port}`;
+  const existing = apnsSessions.get(key);
   if (existing && !existing.closed && !existing.destroyed) return existing;
-  const session = http2.connect(`https://${host}`);
+  const session = http2.connect(`https://${host}:${port}`);
   const drop = () => {
-    if (apnsSessions.get(host) === session) apnsSessions.delete(host);
+    if (apnsSessions.get(key) === session) apnsSessions.delete(key);
   };
   // 'error' needs a listener even when idle or Node crashes the process; the
   // in-flight request observes the same failure through its own 'error' event.
   session.on("error", drop);
   session.on("close", drop);
   session.on("goaway", () => session.close());
-  apnsSessions.set(host, session);
+  apnsSessions.set(key, session);
   return session;
 }
 
@@ -153,15 +190,23 @@ function apnsSession(host: string): http2.ClientHttp2Session {
 // ALL pushes. Generous bound — APNs answers in well under a second.
 const APNS_REQUEST_TIMEOUT_MS = 10_000;
 
-function apnsAttempt({
+/**
+ * One HTTP/2 request to APNs, over the pooled session.
+ *
+ * `ok` is true for any 2xx, not only 200: channel creation answers **201**, and
+ * channel deletion answers **204**, so pinning success to 200 would report every
+ * successful management call as a failure.
+ */
+function apnsHttpAttempt({
   host,
-  token,
-  topic,
-  pushType,
-  priority,
+  port = 443,
+  method,
+  path,
+  headers: extra,
   jwt,
   body,
-}: Parameters<ApnsTransport>[0]): Promise<ApnsResult> {
+}: ApnsHttpRequest): Promise<ApnsResult> {
+  const key = `${host}:${port}`;
   return new Promise<ApnsResult>((resolve) => {
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -174,23 +219,21 @@ function apnsAttempt({
     let session: http2.ClientHttp2Session | undefined;
     let req: http2.ClientHttp2Stream;
     const evict = () => {
-      if (session && apnsSessions.get(host) === session) apnsSessions.delete(host);
+      if (session && apnsSessions.get(key) === session) apnsSessions.delete(key);
       try {
         session?.destroy();
       } catch {}
     };
     try {
-      session = apnsSession(host);
-      const headers: http2.OutgoingHttpHeaders = {
-        ":method": "POST",
-        ":path": `/3/device/${token}`,
+      session = apnsSession(host, port);
+      const h: http2.OutgoingHttpHeaders = {
+        ":method": method,
+        ":path": path,
         authorization: `bearer ${jwt}`,
-        "apns-topic": topic,
-        "apns-push-type": pushType,
-        "content-type": "application/json",
+        ...(body !== undefined ? { "content-type": "application/json" } : {}),
+        ...(extra ?? {}),
       };
-      if (typeof priority === "number") headers["apns-priority"] = priority;
-      req = session.request(headers);
+      req = session.request(h);
     } catch (e) {
       // The session refused to even open a stream — it is not coming back.
       evict();
@@ -205,25 +248,62 @@ function apnsAttempt({
       done({ ok: false, status: 0, reason: "request timeout" });
     }, APNS_REQUEST_TIMEOUT_MS);
     let status = 0;
+    let responseHeaders: Record<string, string> = {};
     let data = "";
-    req.on("response", (headers) => {
-      status = Number(headers[":status"]) || 0;
+    req.on("response", (h) => {
+      status = Number(h[":status"]) || 0;
+      responseHeaders = Object.fromEntries(
+        Object.entries(h)
+          .filter(([k]) => !k.startsWith(":"))
+          .map(([k, v]) => [k, Array.isArray(v) ? (v[0] ?? "") : String(v ?? "")]),
+      );
     });
     req.setEncoding("utf8");
     req.on("data", (chunk) => {
       data += chunk;
     });
     req.on("end", () => {
-      if (status === 200) return done({ ok: true, status });
+      if (status >= 200 && status < 300) {
+        return done({ ok: true, status, headers: responseHeaders, body: data });
+      }
       let reason: string | undefined;
       try {
         reason = (JSON.parse(data) as { reason?: string }).reason;
       } catch {}
-      done({ ok: false, status, reason });
+      done({ ok: false, status, reason, headers: responseHeaders, body: data });
     });
     req.on("error", (e) => done({ ok: false, status: 0, reason: (e as Error).message }));
-    req.end(body);
+    if (body !== undefined) req.end(body);
+    else req.end();
   });
+}
+
+function apnsAttempt({
+  host,
+  token,
+  topic,
+  pushType,
+  priority,
+  jwt,
+  body,
+}: Parameters<ApnsTransport>[0]): Promise<ApnsResult> {
+  return apnsHttpAttempt({
+    host,
+    method: "POST",
+    path: `/3/device/${token}`,
+    headers: {
+      "apns-topic": topic,
+      "apns-push-type": pushType,
+      ...(typeof priority === "number" ? { "apns-priority": priority } : {}),
+    },
+    jwt,
+    body,
+  });
+}
+
+/** Issue an arbitrary APNs request with the same transient-failure retry as sends. */
+export function apnsHttpRequest(request: ApnsHttpRequest): Promise<ApnsResult> {
+  return sendWithTransientRetry(() => apnsHttpAttempt(request));
 }
 
 /**
