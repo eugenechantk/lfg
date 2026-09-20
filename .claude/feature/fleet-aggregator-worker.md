@@ -30,8 +30,8 @@ when either Mac is asleep.
 2. The Worker keeps one slice per host (90 s TTL), merges them, and decides
    start / update / end over the union with the same rules the server used.
 3. `start` goes to the phone's push-to-start token (with `input-push-channel`);
-   `update` / `end` go to the broadcast channel. Priority 10 for start, end, first
-   fill and a new question; 5 for routine count changes.
+   `update` / `end` go to the broadcast channel on every change of content, whether
+   or not the Worker believes a card exists. Everything at priority 10.
 4. The phone registers its push-to-start token **with the Worker**, keyed by device id
    so a rotation replaces rather than adds; fetches the channel id from the Worker;
    reports card start/end to the Worker. It learns the Worker's address and key once
@@ -113,6 +113,17 @@ when either Mac is asleep.
 | SC8 | not run | needs the phone to install 202609202115 and launch once (its token then reaches the Worker), and the Pro restarted into slice mode |
 
 ## Bugs
+
+- Fixed 2026-09-20 21:33: **updates arrived late, then not at all.** Eugene: "There is a delay
+  in the update." Two causes in the Worker's trace. (a) Routine updates went at APNs priority 5,
+  which Apple delivers "based on power considerations"; host → Worker → APNs itself took ~300 ms
+  (slice 13:27:05.777, decide .907, broadcast 200 at 13:27:06.013). (b) After the per-environment
+  fix the Worker sent the production card NOTHING: it broadcast only once it believed a card
+  existed, and the installed build reports `started` to the default host, which was offline. A
+  broadcast to a channel nobody listens on is a no-op, so the channel is now kept current on
+  every content change whether or not a card is known (`broadcastFor`); the known-card belief
+  gates only `start`, the one non-idempotent push. Everything goes at priority 10. Live after
+  redeploy: `decide update via=channel` → `broadcast production 200` with no card known.
 
 - Fixed 2026-09-20 21:30: **one card for every APNs environment.** A Debug build somewhere
   registered a sandbox push-to-start token at 21:26; the Worker's `start` to it returned 200,

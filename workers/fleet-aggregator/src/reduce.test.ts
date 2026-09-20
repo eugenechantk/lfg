@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildStart, buildUpdate } from "../../../src/push/liveactivity";
-import { SLICE_TTL_S, contentFor, decide, endBody, startBody, unionRows, updateBody, type Row, type Slice } from "./reduce";
+import { SLICE_TTL_S, broadcastFor, contentFor, decide, endBody, startBody, unionRows, updateBody, type Row, type Slice } from "./reduce";
 
 const row = (sid: string, state: Row["state"] = "working", since = 1_000): Row => ({ sid, title: sid, state, since });
 const slice = (hostId: string, rows: Row[], receivedAt = 2_000): Slice => ({ hostId, rows, receivedAt });
@@ -82,12 +82,10 @@ describe("decide", () => {
     expect(d.action).toEqual({ event: "update", priority: 10 });
   });
 
-  test("routine count changes ride at priority 5; a new question at 10", () => {
+  test("every update goes at priority 10 — priority 5 arrived visibly late", () => {
     const first = decide({ slices: [slice("air", [row("b")])], card: null, now: 2_010 });
     const more = decide({ slices: [slice("air", [row("b"), row("c")], 2_020)], card: first.nextCard, now: 2_021 });
-    expect(more.action).toEqual({ event: "update", priority: 5 });
-    const asks = decide({ slices: [slice("air", [row("b"), row("c", "needsInput")], 2_030)], card: more.nextCard, now: 2_031 });
-    expect(asks.action).toEqual({ event: "update", priority: 10 });
+    expect(more.action).toEqual({ event: "update", priority: 10 });
   });
 
   test("client-ended veto: same population → no restart; a new sid lifts it; empty veto blocks nothing", () => {
@@ -98,6 +96,32 @@ describe("decide", () => {
     expect(lifted.action?.event).toBe("start");
     const empty = decide({ slices: [slice("air", [row("b")])], card: null, clientEnded: { population: [] }, now: 2_010 });
     expect(empty.action?.event).toBe("start");
+  });
+});
+
+describe("broadcastFor — the channel is kept current whether or not a card is known", () => {
+  const c = (rows: Row[], now = 3_000) => contentFor(rows, now);
+
+  test("first content with work → update, even with no known card", () => {
+    expect(broadcastFor(undefined, c([row("a")]))).toBe("update");
+  });
+
+  test("unchanged content → nothing (updatedAt alone is not a change)", () => {
+    expect(broadcastFor(c([row("a")], 3_000), c([row("a")], 3_050))).toBeNull();
+  });
+
+  test("any visible change → update", () => {
+    expect(broadcastFor(c([row("a")]), c([row("a"), row("b")]))).toBe("update");
+    expect(broadcastFor(c([row("a")]), c([row("a", "needsInput")]))).toBe("update");
+  });
+
+  test("work → nothing running → end, exactly once", () => {
+    expect(broadcastFor(c([row("a")]), c([]))).toBe("end");
+    expect(broadcastFor(c([]), c([], 3_100))).toBeNull();
+  });
+
+  test("an idle fleet that was never busy says nothing", () => {
+    expect(broadcastFor(undefined, c([]))).toBeNull();
   });
 });
 

@@ -1,5 +1,5 @@
 import { sendToChannel, sendToToken, type ApnsEnv, type ApnsResult, type ApnsSecrets } from "./apns";
-import { decide, endBody, startBody, unionRows, updateBody, type Card, type Row, type Slice, type Veto } from "./reduce";
+import { broadcastFor, decide, endBody, startBody, unionRows, updateBody, type Card, type ContentState, type Row, type Slice, type Veto } from "./reduce";
 
 type Env = ApnsSecrets & {
   AGG_SECRET: string;
@@ -88,26 +88,34 @@ export class FleetAggregator {
       await this.state.storage.delete(k("lastVetoTraced"));
     }
 
-    if (d.action) {
-      const summary = { working: d.content.working, needsInput: d.content.needsInput, more: d.content.more, rows: d.content.rows.map((r) => `${r.sid.slice(0, 8)}:${r.state}`) };
-      // An undelivered decision is re-made on every evaluation (each slice, each
-      // alarm). Trace it once per distinct decision, not once per attempt — a
-      // tokenless Worker otherwise fills its 150-line trace with one event.
-      const key = `${d.action.event}|${d.population.join(",")}|${d.content.needsInput}`;
+    const summary = { working: d.content.working, needsInput: d.content.needsInput, more: d.content.more, rows: d.content.rows.map((r) => `${r.sid.slice(0, 8)}:${r.state}`) };
+
+    // 1. START — the only push that is not idempotent, so the only one gated on
+    //    whether a card is believed to exist.
+    let nextCard: Card | null = d.nextCard;
+    if (d.action?.event === "start") {
+      const key = `start|${d.population.join(",")}`;
       const repeat = (await this.state.storage.get<string>(k("lastUndelivered"))) === key;
-      if (!repeat) await this.trace("decide", { env, apnsEvent: d.action.event, priority: d.action.priority, ...summary });
-      const delivered = d.action.event === "start" ? await this.sendStart(env, d.content, repeat) : await this.broadcast(env, d.action.event, d.content, d.action.priority, now);
-      if (delivered) {
-        await this.state.storage.put(k("card"), d.nextCard);
-        await this.state.storage.delete(k("lastUndelivered"));
-        if (d.action.event === "start") await this.state.storage.delete(k("veto"));
-        return d.nextCard !== null;
+      if (!repeat) await this.trace("decide", { env, apnsEvent: "start", priority: 10, ...summary });
+      if (await this.sendStart(env, d.content, repeat)) {
+        await this.state.storage.delete([k("lastUndelivered"), k("veto")]);
+      } else {
+        await this.state.storage.put(k("lastUndelivered"), key);
+        nextCard = null; // not delivered: still no card
       }
-      await this.state.storage.put(k("lastUndelivered"), key);
-      return card !== null;
     }
-    if (d.nextCard !== card) await this.state.storage.put(k("card"), d.nextCard);
-    return d.nextCard !== null;
+    if (nextCard !== card) await this.state.storage.put(k("card"), nextCard);
+
+    // 2. CHANNEL — kept current on every change of content, card known or not
+    //    (see `broadcastFor`). A failed broadcast is not recorded, so the next
+    //    evaluation retries it.
+    const last = await this.state.storage.get<ContentState>(k("lastBroadcast"));
+    const event = broadcastFor(last, d.content);
+    if (event) {
+      await this.trace("decide", { env, apnsEvent: event, priority: 10, via: "channel", ...summary });
+      if (await this.broadcast(env, event, d.content, 10, now)) await this.state.storage.put(k("lastBroadcast"), d.content);
+    }
+    return nextCard !== null;
   }
 
   private async sendStart(env: ApnsEnv, content: Parameters<typeof startBody>[0], quiet = false): Promise<boolean> {

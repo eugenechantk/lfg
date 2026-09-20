@@ -95,11 +95,26 @@ export function decide(args: { slices: Slice[]; card: Card | null; clientEnded?:
 
   if (sameContent(args.card.contentState, content)) return done(null, args.card);
 
-  // Apple budgets priority-10 Live Activity pushes per hour. Spend them on the
-  // moments that need a human; routine count changes ride at 5.
-  const prevNeeds = args.card.contentState?.needsInput ?? 0;
-  const priority: 5 | 10 = content.needsInput > prevNeeds || !args.card.contentState ? 10 : 5;
-  return done({ event: "update", priority }, { ...args.card, contentState: content });
+  // Always 10. Priority 5 is delivered "based on power considerations" and showed
+  // up on the phone as a visible lag (Eugene, 2026-09-20); a fleet changes tens of
+  // times an hour, well inside the frequent-updates budget.
+  return done({ event: "update", priority: 10 }, { ...args.card, contentState: content });
+}
+
+/**
+ * What the CHANNEL should be told, independent of whether the Worker believes a
+ * card exists. A broadcast to a channel nobody listens on is a no-op, while a card
+ * the Worker does not know about — created by the app, reported to a host that was
+ * asleep — is exactly the card that must not go stale. So the channel is kept
+ * current on every change of content; "a card exists" gates only `start`, the one
+ * push that is not idempotent.
+ */
+export function broadcastFor(last: ContentState | undefined, content: ContentState): "update" | "end" | null {
+  if (sameContent(last, content)) return null;
+  const total = content.working + content.needsInput;
+  if (total > 0) return "update";
+  const lastTotal = last ? last.working + last.needsInput : 0;
+  return lastTotal > 0 ? "end" : null;
 }
 
 // ---- wire payloads (pinned to src/push/liveactivity.ts) ----
