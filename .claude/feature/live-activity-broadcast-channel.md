@@ -38,9 +38,9 @@ that doc gives one management host/port. There are **two, and they differ in bot
 | Sandbox | `api-manage-broadcast.sandbox.push.apple.com:2195` | `api.sandbox.push.apple.com:443` * |
 | Production | `api-manage-broadcast.push.apple.com:2196` | `api.push.apple.com:443` * |
 
-\* **Unresolved ambiguity:** the broadcast page's prose says `api.sandbox.push.apple.com:443`,
-but every worked example in the same page uses `host = api-broadcast.sandbox.push.apple.com`.
-Must be settled empirically in Phase 2 — try prose host first, fall back to the example host.
+\* **RESOLVED 2026-09-20:** the prose host is correct. A real broadcast to
+`api.push.apple.com` returned **200**; the `api-broadcast.*` host from the page's worked
+examples is not needed. `LFG_APNS_BROADCAST_HOST` remains as an override.
 
 **Channel management** — `POST|GET|DELETE /1/apps/<bundleId>/channels`, plus
 `GET /1/apps/<bundleId>/all-channels`. Create body:
@@ -86,7 +86,7 @@ through Xcode."* Disabling it later **deletes every channel irreversibly**.
 
 ## Success Criteria
 
-- [ ] SC1: The server creates (or reuses) exactly one channel per APNs env and persists the id across restarts — **Verify by:** unit tests on the channel store + a live `POST /1/apps/dev.omg.lfg/channels` against sandbox returning 201 with an `apns-channel-id`, then `GET /all-channels` listing it.
+- [x] SC1: The server creates (or reuses) exactly one channel per APNs env and persists the id across restarts — **Verify by:** unit tests on the channel store + a live `POST /1/apps/dev.omg.lfg/channels` against sandbox returning 201 with an `apns-channel-id`, then `GET /all-channels` listing it.
 - [x] SC2: `POST /api/push/live-activity/channel` returns the channel id for the caller's env — **Verify by:** `curl` against a local `lfg serve` on a non-canonical port, asserting the JSON body. **DONE.**
 - [ ] SC3: A broadcast `update` reaches a live card with no update token registered — **Verify by:** on a real device, start a card, confirm no `activityUpdate` token exists in the store, publish a broadcast, observe the card change. Screenshot before/after.
 - [ ] SC4: **The bug.** Phone locked and idle, one running session, session finishes → the card updates and dismisses without the app being opened — **Verify by:** device test with the phone locked ≥10 min; `~/.lfg/liveactivity.log` shows `decide end` + a 200 broadcast; photo/screen recording of the lock screen before and after.
@@ -166,7 +166,9 @@ through Xcode."* Disabling it later **deletes every channel irreversibly**.
 
 | Criterion | Command / action | Result |
 |---|---|---|
-| SC1 (partial) | `bun test src/push/channel-store.test.ts`, `…/broadcast.test.ts` | 7/7 and 14/14 pass. Management host/port per env, create body, 201 + `apns-channel-id` header, get-or-create, failure→null all pinned. **Live sandbox round trip still blocked on the capability flag.** |
+| SC1 ✅ | Standalone probe on BOTH hosts, sandbox: `POST /1/apps/com.eugenechan.lfg/channels` | `CREATE -> 201 channel-id=X3bmp7TnEfEAAGIAC0Rr1A==`, `LIST -> 200 contains-new=true`, `READ -> 200 {"push-type":"LiveActivity","message-storage-policy":1}`, `DELETE -> 204`. Probe channels cleaned up. Plus 7/7 store and 14/14 broadcast unit tests. |
+| SC1b ✅ | Live server, `POST /api/push/live-activity/channel` after restart | Created and persisted a real **production** channel `wa+dtLTnEfEAAJbr7mJivQ==` to `~/.lfg/live-activity-channels.json`. |
+| SC3 (publish half) ✅ | `sendBroadcastLiveActivity` through the deployed code on the Pro | `UPDATE -> ok=true status=200` at priority **5**; `END -> ok=true status=200`. Confirms path, headers, `apns-expiration` against a policy-1 channel, and the priority split. **Resolves the host ambiguity: `api.push.apple.com` is correct.** Card-on-device half still outstanding. |
 | SC2 ✅ | `lfg serve` on port 8793, `POST /api/push/live-activity/channel -d '{"env":"production"}'` | `{"ok":true,"channelId":null,"reason":"apns-not-configured"}` — correct degradation on a host without APNs creds, and it exercises the "null is a normal answer" contract. `POST …/started` → `{"ok":true}`; legacy `…/update-token` alias → `{"ok":true}`. |
 | SC3 | — | **Blocked**: needs a real device + the capability flag. |
 | SC4 | — | **Blocked**: needs a real device + the capability flag. |
@@ -174,10 +176,32 @@ through Xcode."* Disabling it later **deletes every channel irreversibly**.
 | SC6 ✅ | `xcodegen generate` + `flowdeck build -S "iPhone 17 Pro"` | **Build Completed.** 6 × `IPHONEOS_DEPLOYMENT_TARGET = 18.0` in the regenerated pbxproj. |
 | SC7 (partial) | `swift test` in `ios/LFGCore`; `bun test src/` | 561 XCTest + 162 Swift Testing, 0 failures. 126/126 push tests; 894/896 full server suite — the 2 failures are pre-existing Playwright/MV3 browser tests, confirmed by re-running with these changes stashed. Visual auditor not yet run (Phase 4). |
 
-### Blocked on you
+### Deployment state (2026-09-20)
 
-1. **Enable Broadcast Capability** — developer.apple.com → Certificates, IDs & Profiles → Identifiers → `dev.omg.lfg` → Push Notifications → Broadcast Capability. Cannot be done in Xcode or by me. *Disabling it later deletes every channel irreversibly.*
-2. Then Phase 4: device verification of SC1 (live round trip), SC3 and SC4.
+- Broadcast Capability **enabled** on `com.eugenechan.lfg` — confirmed empirically by a 201.
+- Pro server **restarted** at 19:38 local onto the branch's server files (pid 31801); the new
+  `/channel` endpoint answers and the production channel is persisted.
+- The Air now also holds `~/.lfg/AuthKey_39853G64CJ.p8` (mode 600) and can talk to APNs.
+- Only `src/` was deployed to the Pro. Its `ios/` tree is untouched and still carries another
+  session's in-flight session-transfer work.
+
+### Still outstanding
+
+1. **SC4 / the card half of SC3** — needs a real active session so the server push-to-starts a
+   card, then goes idle so it ends. The *currently installed* build can do this: `input-push-channel`
+   is honoured by iOS, not by app code, so a server-started card subscribes to the channel even
+   without the new build. Only cards the APP starts itself need the TestFlight build.
+2. **TestFlight** — blocked on the `main` divergence (local `419f22c` bundles a 71-line Fastfile
+   change; origin has a separate archive-gate commit `fb23f0d`) and on whether three other
+   sessions' in-flight work should ship in the same build.
+
+### Follow-up found during deployment
+
+`DEFAULT_APNS_TOPIC` in `src/push/liveactivity.ts` is **`dev.omg.lfg`**, but the real bundle id is
+**`com.eugenechan.lfg`** (`ios/project.yml`; widget `com.eugenechan.lfg.LFGWidgets`). It is harmless
+today because every host sets `LFG_APNS_TOPIC` and `sendLiveActivity` overrides with `cfg.topic` —
+but a host that ever misses that env var would build push topics for an identifier that is not the
+app, and the stale constant already caused one wrong instruction this session. Worth correcting.
 
 ## Bugs
 
