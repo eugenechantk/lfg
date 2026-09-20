@@ -74,8 +74,11 @@ public struct FleetAggregatorClient: Sendable {
         request("GET", "v1/channel", query: [URLQueryItem(name: "env", value: env)])
     }
 
-    public func startedRequest() -> URLRequest { request("POST", "v1/started", json: [:]) }
-    public func endedRequest() -> URLRequest { request("POST", "v1/ended", json: [:]) }
+    /// The Worker keeps one card PER APNs environment, so a report must say which:
+    /// a Debug build's card is not the TestFlight phone's card. (A report with no
+    /// `env` is read as production, which is what builds before this one were.)
+    public func startedRequest(env: String) -> URLRequest { request("POST", "v1/started", json: ["env": env]) }
+    public func endedRequest(env: String) -> URLRequest { request("POST", "v1/ended", json: ["env": env]) }
 
     // MARK: Calls
 
@@ -106,6 +109,6 @@ public struct FleetAggregatorClient: Sendable {
         return try? JSONDecoder().decode(Response.self, from: data).channelId
     }
 
-    public func reportStarted() async throws { try await perform(startedRequest()) }
-    public func reportEnded() async throws { try await perform(endedRequest()) }
+    public func reportStarted(env: String) async throws { try await perform(startedRequest(env: env)) }
+    public func reportEnded(env: String) async throws { try await perform(endedRequest(env: env)) }
 }

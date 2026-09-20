@@ -114,4 +114,15 @@ when either Mac is asleep.
 
 ## Bugs
 
+- Fixed 2026-09-20 21:30: **one card for every APNs environment.** A Debug build somewhere
+  registered a sandbox push-to-start token at 21:26; the Worker's `start` to it returned 200,
+  the single "a card exists" flag flipped, and the Worker moved on to broadcasting updates on
+  the production channel — to a production phone it had never started a card on, and never
+  would have. Found by reading `/v1/state` when Eugene asked "and it is verified, right?".
+  Cards, vetoes and delivery bookkeeping are now per environment; an environment without a
+  broadcast channel is skipped; `started`/`ended` reports carry `env` (absent → production,
+  which is what every pre-existing build is). After the redeploy the trace reads
+  `decide {env: production, start}` → `no-tokens {env: production}`: correctly waiting for the
+  phone.
+
 - Fixed: slice-mode early return with zero alert devices (see SC4).

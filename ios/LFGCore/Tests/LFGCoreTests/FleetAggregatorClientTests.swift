@@ -31,11 +31,15 @@ final class FleetAggregatorClientTests: XCTestCase {
         XCTAssertNil(req.httpBody)
     }
 
-    func testStartedAndEndedReports() {
-        XCTAssertEqual(client.startedRequest().url?.path, "/v1/started")
-        XCTAssertEqual(client.startedRequest().httpMethod, "POST")
-        XCTAssertEqual(client.endedRequest().url?.path, "/v1/ended")
-        XCTAssertEqual(client.endedRequest().value(forHTTPHeaderField: "Authorization"), "Bearer k3y")
+    func testStartedAndEndedReportsCarryTheEnvironment() throws {
+        let started = client.startedRequest(env: "sandbox")
+        XCTAssertEqual(started.url?.path, "/v1/started")
+        XCTAssertEqual(started.httpMethod, "POST")
+        XCTAssertEqual(try body(started), ["env": "sandbox"])
+        let ended = client.endedRequest(env: "production")
+        XCTAssertEqual(ended.url?.path, "/v1/ended")
+        XCTAssertEqual(ended.value(forHTTPHeaderField: "Authorization"), "Bearer k3y")
+        XCTAssertEqual(try body(ended), ["env": "production"])
     }
 
     func testConfigRoundTripsThroughItsCache() {

@@ -51,21 +51,41 @@ export class FleetAggregator {
     return run;
   }
 
+  /**
+   * One card PER APNs ENVIRONMENT. Production (TestFlight / App Store) and sandbox
+   * (a Debug build from Xcode) are different phones-worth of state: on 2026-09-20 a
+   * Debug build's sandbox token accepted the `start`, the single shared "a card
+   * exists" flag flipped, and the production phone could never be started. An
+   * environment with no broadcast channel is skipped entirely — a card started
+   * there could never be updated.
+   */
   private async evaluateNow(): Promise<void> {
     const now = Math.floor(Date.now() / 1000);
     const slices = Object.values((await this.state.storage.get<Record<string, Slice>>("slices")) ?? {});
-    const card = (await this.state.storage.get<Card | null>("card")) ?? null;
-    const veto = (await this.state.storage.get<Veto>("veto")) ?? null;
+    // The pre-per-env global keys; whatever they said, it was not per environment.
+    await this.state.storage.delete(["card", "veto", "lastVetoTraced", "lastUndelivered"]);
+    let anyCard = false;
+    for (const env of ENVS) {
+      if (!this.channel(env)) continue;
+      anyCard = (await this.evaluateEnv(env, slices, now)) || anyCard;
+    }
+    await this.armAlarm(slices.length > 0 || anyCard);
+  }
+
+  private async evaluateEnv(env: ApnsEnv, slices: Slice[], now: number): Promise<boolean> {
+    const k = (name: string) => `${name}:${env}`;
+    const card = (await this.state.storage.get<Card | null>(k("card"))) ?? null;
+    const veto = (await this.state.storage.get<Veto>(k("veto"))) ?? null;
     const d = decide({ slices, card, clientEnded: veto, now });
 
     if (d.vetoed) {
       const key = d.population.join(",");
-      if ((await this.state.storage.get<string>("lastVetoTraced")) !== key) {
-        await this.trace("start-vetoed", { population: d.population.map((s) => s.slice(0, 8)) });
-        await this.state.storage.put("lastVetoTraced", key);
+      if ((await this.state.storage.get<string>(k("lastVetoTraced"))) !== key) {
+        await this.trace("start-vetoed", { env, population: d.population.map((s) => s.slice(0, 8)) });
+        await this.state.storage.put(k("lastVetoTraced"), key);
       }
     } else {
-      await this.state.storage.delete("lastVetoTraced");
+      await this.state.storage.delete(k("lastVetoTraced"));
     }
 
     if (d.action) {
@@ -74,25 +94,26 @@ export class FleetAggregator {
       // alarm). Trace it once per distinct decision, not once per attempt — a
       // tokenless Worker otherwise fills its 150-line trace with one event.
       const key = `${d.action.event}|${d.population.join(",")}|${d.content.needsInput}`;
-      const repeat = (await this.state.storage.get<string>("lastUndelivered")) === key;
-      if (!repeat) await this.trace("decide", { apnsEvent: d.action.event, priority: d.action.priority, ...summary });
-      const delivered = d.action.event === "start" ? await this.sendStart(d.content, repeat) : await this.broadcast(d.action.event, d.content, d.action.priority, now);
+      const repeat = (await this.state.storage.get<string>(k("lastUndelivered"))) === key;
+      if (!repeat) await this.trace("decide", { env, apnsEvent: d.action.event, priority: d.action.priority, ...summary });
+      const delivered = d.action.event === "start" ? await this.sendStart(env, d.content, repeat) : await this.broadcast(env, d.action.event, d.content, d.action.priority, now);
       if (delivered) {
-        await this.state.storage.put("card", d.nextCard);
-        await this.state.storage.delete("lastUndelivered");
-        if (d.action.event === "start") await this.state.storage.delete("veto");
-      } else {
-        await this.state.storage.put("lastUndelivered", key);
+        await this.state.storage.put(k("card"), d.nextCard);
+        await this.state.storage.delete(k("lastUndelivered"));
+        if (d.action.event === "start") await this.state.storage.delete(k("veto"));
+        return d.nextCard !== null;
       }
-    } else if (d.nextCard !== card) {
-      await this.state.storage.put("card", d.nextCard);
+      await this.state.storage.put(k("lastUndelivered"), key);
+      return card !== null;
     }
-    await this.armAlarm(slices.length > 0 || d.nextCard !== null);
+    if (d.nextCard !== card) await this.state.storage.put(k("card"), d.nextCard);
+    return d.nextCard !== null;
   }
 
-  private async sendStart(content: Parameters<typeof startBody>[0], quiet = false): Promise<boolean> {
-    const tokens = (await this.state.storage.get<StartToken[]>("tokens")) ?? [];
-    if (!tokens.length) { if (!quiet) await this.trace("no-tokens", { apnsEvent: "start" }); return false; }
+  private async sendStart(env: ApnsEnv, content: Parameters<typeof startBody>[0], quiet = false): Promise<boolean> {
+    const all = (await this.state.storage.get<StartToken[]>("tokens")) ?? [];
+    const tokens = all.filter((t) => t.env === env);
+    if (!tokens.length) { if (!quiet) await this.trace("no-tokens", { env, apnsEvent: "start" }); return false; }
     let accepted = 0;
     const dead: string[] = [];
     for (const t of tokens) {
@@ -101,22 +122,14 @@ export class FleetAggregator {
       if (r.ok) accepted++;
       else if (isDeadToken(r)) dead.push(t.token);
     }
-    if (dead.length) await this.state.storage.put("tokens", tokens.filter((t) => !dead.includes(t.token)));
+    if (dead.length) await this.state.storage.put("tokens", all.filter((t) => !dead.includes(t.token)));
     return accepted > 0;
   }
 
-  private async broadcast(event: "update" | "end", content: Parameters<typeof updateBody>[0], priority: 5 | 10, now: number): Promise<boolean> {
-    const targets = ENVS.filter((e) => this.channel(e));
-    if (!targets.length) { await this.trace("no-channel", { apnsEvent: event }); return false; }
-    let accepted = 0;
-    for (const e of targets) {
-      const r = await sendToChannel(this.env, e, this.channel(e)!, event === "end" ? endBody(content, now) : updateBody(content), priority);
-      await this.trace("broadcast", { apnsEvent: event, env: e, status: r.status, ...(r.reason ? { reason: r.reason } : {}) });
-      if (r.ok) accepted++;
-    }
-    // Production is the phone that matters (TestFlight). A sandbox channel that
-    // refuses must not freeze the production card's state.
-    return accepted > 0;
+  private async broadcast(env: ApnsEnv, event: "update" | "end", content: Parameters<typeof updateBody>[0], priority: 5 | 10, now: number): Promise<boolean> {
+    const r = await sendToChannel(this.env, env, this.channel(env)!, event === "end" ? endBody(content, now) : updateBody(content), priority);
+    await this.trace("broadcast", { apnsEvent: event, env, status: r.status, ...(r.reason ? { reason: r.reason } : {}) });
+    return r.ok;
   }
 
   private async armAlarm(needed: boolean): Promise<void> {
@@ -175,12 +188,16 @@ export class FleetAggregator {
       return json({ env, channelId: this.channel(env) ?? null });
     }
 
+    // Reports without an `env` come from builds (and host forwards) that predate
+    // per-environment cards; those are TestFlight builds, i.e. production.
+    const reportEnv: ApnsEnv = body.env === "sandbox" ? "sandbox" : "production";
+
     if (path === "/v1/started" && req.method === "POST") {
       // The app created a card itself. Adopt it rather than push-to-start a second;
       // with no content recorded the next evaluation fills it in.
-      if (!(await this.state.storage.get<Card | null>("card"))) await this.state.storage.put("card", { startedAt: now });
-      await this.state.storage.delete("veto");
-      await this.trace("adopted");
+      if (!(await this.state.storage.get<Card | null>(`card:${reportEnv}`))) await this.state.storage.put(`card:${reportEnv}`, { startedAt: now });
+      await this.state.storage.delete(`veto:${reportEnv}`);
+      await this.trace("adopted", { env: reportEnv });
       await this.evaluate();
       return json({ ok: true });
     }
@@ -188,9 +205,9 @@ export class FleetAggregator {
     if (path === "/v1/ended" && req.method === "POST") {
       const slices = Object.values((await this.state.storage.get<Record<string, Slice>>("slices")) ?? {});
       const population = unionRows(slices, now).map((r) => r.sid);
-      await this.state.storage.put("card", null);
-      await this.state.storage.put("veto", { population });
-      await this.trace("client-ended", { population: population.map((s) => s.slice(0, 8)) });
+      await this.state.storage.put(`card:${reportEnv}`, null);
+      await this.state.storage.put(`veto:${reportEnv}`, { population });
+      await this.trace("client-ended", { env: reportEnv, population: population.map((s) => s.slice(0, 8)) });
       return json({ ok: true });
     }
 
@@ -199,8 +216,8 @@ export class FleetAggregator {
       return json({
         now,
         slices: Object.values(slices).map((s) => ({ hostId: s.hostId, hostName: s.hostName, ageS: now - s.receivedAt, rows: s.rows.map((r) => `${r.sid.slice(0, 8)}:${r.state}`) })),
-        card: (await this.state.storage.get("card")) ?? null,
-        veto: (await this.state.storage.get("veto")) ?? null,
+        cards: Object.fromEntries(await Promise.all(ENVS.map(async (e) => [e, (await this.state.storage.get(`card:${e}`)) ?? null]))),
+        vetoes: Object.fromEntries(await Promise.all(ENVS.map(async (e) => [e, (await this.state.storage.get(`veto:${e}`)) ?? null]))),
         tokens: ((await this.state.storage.get<StartToken[]>("tokens")) ?? []).map((t) => ({ token: t.token.slice(0, 8), env: t.env, device: t.deviceId?.slice(0, 8), updatedAt: new Date(t.updatedAt).toISOString() })),
         channels: Object.fromEntries(ENVS.map((e) => [e, this.channel(e)?.slice(0, 8) ?? null])),
         trace: ((await this.state.storage.get<TraceEvent[]>("trace")) ?? []).slice(-Number(url.searchParams.get("n") ?? 40)),

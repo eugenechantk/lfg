@@ -148,7 +148,7 @@ final class LiveActivityManager {
 
     /// Tell the server a card exists so it adopts ours instead of starting a second.
     func reportActivityStarted() async {
-        if let agg = aggregatorClient, (try? await agg.reportStarted()) != nil { return }
+        if let agg = aggregatorClient, (try? await agg.reportStarted(env: liveActivityEnv)) != nil { return }
         guard let settings, let host = settings.defaultHost, let client = settings.client(for: host) else { return }
         do {
             try await client.reportLiveActivityStarted()
@@ -159,7 +159,7 @@ final class LiveActivityManager {
 
     /// Tell the publisher the card is gone (see `FleetActivityController`).
     func reportActivityEnded() async {
-        if let agg = aggregatorClient, (try? await agg.reportEnded()) != nil { return }
+        if let agg = aggregatorClient, (try? await agg.reportEnded(env: liveActivityEnv)) != nil { return }
         guard let settings, let host = settings.defaultHost, let client = settings.client(for: host) else { return }
         do {
             try await client.reportLiveActivityEnded()
