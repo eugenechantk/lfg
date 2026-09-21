@@ -1,0 +1,592 @@
+{
+  "accessibility" : {
+    "element_count" : 32,
+    "frame_space" : "points",
+    "orientation" : "portrait",
+    "screen_hash" : "cec22957e6a50c09",
+    "tree" : [
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 437
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 874,
+          "width" : 402,
+          "x" : 0,
+          "y" : 0
+        },
+        "label" : "lfg",
+        "ref" : "e0",
+        "role" : "Application",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 149,
+          "y" : 77
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 20,
+          "width" : 265,
+          "x" : 16,
+          "y" : 66
+        },
+        "id" : "sessionTitle",
+        "label" : "Send follows latest user message",
+        "ref" : "e1",
+        "role" : "StaticText",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 125,
+          "y" : 95
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 14,
+          "width" : 14,
+          "x" : 117,
+          "y" : 87
+        },
+        "ref" : "e2",
+        "role" : "GenericElement",
+        "value" : "1",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 158,
+          "y" : 95
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 13,
+          "width" : 43,
+          "x" : 136,
+          "y" : 88
+        },
+        "id" : "sessionActivityStatus",
+        "label" : "Running",
+        "ref" : "e3",
+        "role" : "StaticText",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 360,
+          "y" : 84
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 25,
+          "width" : 26,
+          "x" : 347,
+          "y" : 71
+        },
+        "id" : "sessionOptionsMenu",
+        "label" : "More",
+        "ref" : "e4",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 33,
+          "y" : 698
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 14,
+          "width" : 14,
+          "x" : 26,
+          "y" : 691
+        },
+        "id" : "pendingStripRow",
+        "ref" : "e5",
+        "role" : "GenericElement",
+        "value" : "1",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 129,
+          "y" : 698
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 14,
+          "width" : 161,
+          "x" : 48,
+          "y" : 690
+        },
+        "id" : "pendingStripRow",
+        "label" : "Please also check the queue",
+        "ref" : "e6",
+        "role" : "StaticText",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 369,
+          "y" : 698
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 12,
+          "width" : 12,
+          "x" : 363,
+          "y" : 691
+        },
+        "id" : "pendingStripRow",
+        "label" : "More",
+        "ref" : "e7",
+        "role" : "Image",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 741
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 22,
+          "width" : 354,
+          "x" : 24,
+          "y" : 730
+        },
+        "id" : "composer.message",
+        "ref" : "e8",
+        "role" : "TextField",
+        "value" : "Message",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 46,
+          "y" : 782
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 44,
+          "width" : 44,
+          "x" : 24,
+          "y" : 760
+        },
+        "id" : "composer.attach",
+        "label" : "Attach",
+        "ref" : "e9",
+        "role" : "PopUpButton",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 362,
+          "y" : 782
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 32,
+          "width" : 32,
+          "x" : 346,
+          "y" : 766
+        },
+        "id" : "composer.send",
+        "label" : "Up",
+        "ref" : "e10",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 286,
+          "y" : -708
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 173,
+          "x" : 198,
+          "y" : -717
+        },
+        "ref" : "e11",
+        "role" : "StaticText",
+        "value" : "Earlier user message 27",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 193,
+          "y" : -637
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 65,
+          "width" : 354,
+          "x" : 15,
+          "y" : -669
+        },
+        "ref" : "e12",
+        "role" : "StaticText",
+        "value" : "Earlier assistant response 27. This fixture is intentionally long enough to scroll away from the newest turn.",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 285,
+          "y" : -566
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 174,
+          "x" : 197,
+          "y" : -575
+        },
+        "ref" : "e13",
+        "role" : "StaticText",
+        "value" : "Earlier user message 28",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 193,
+          "y" : -495
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 65,
+          "width" : 354,
+          "x" : 15,
+          "y" : -527
+        },
+        "ref" : "e14",
+        "role" : "StaticText",
+        "value" : "Earlier assistant response 28. This fixture is intentionally long enough to scroll away from the newest turn.",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 285,
+          "y" : -424
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 174,
+          "x" : 197,
+          "y" : -433
+        },
+        "ref" : "e15",
+        "role" : "StaticText",
+        "value" : "Earlier user message 29",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 193,
+          "y" : -353
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 65,
+          "width" : 354,
+          "x" : 15,
+          "y" : -385
+        },
+        "ref" : "e16",
+        "role" : "StaticText",
+        "value" : "Earlier assistant response 29. This fixture is intentionally long enough to scroll away from the newest turn.",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 285,
+          "y" : -282
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 174,
+          "x" : 197,
+          "y" : -291
+        },
+        "ref" : "e17",
+        "role" : "StaticText",
+        "value" : "Earlier user message 30",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 193,
+          "y" : -211
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 65,
+          "width" : 354,
+          "x" : 15,
+          "y" : -243
+        },
+        "ref" : "e18",
+        "role" : "StaticText",
+        "value" : "Earlier assistant response 30. This fixture is intentionally long enough to scroll away from the newest turn.",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 287,
+          "y" : -140
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 171,
+          "x" : 200,
+          "y" : -149
+        },
+        "ref" : "e19",
+        "role" : "StaticText",
+        "value" : "Earlier user message 31",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 193,
+          "y" : -69
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 65,
+          "width" : 354,
+          "x" : 15,
+          "y" : -101
+        },
+        "ref" : "e20",
+        "role" : "StaticText",
+        "value" : "Earlier assistant response 31. This fixture is intentionally long enough to scroll away from the newest turn.",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 285,
+          "y" : 2
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 174,
+          "x" : 197,
+          "y" : -7
+        },
+        "ref" : "e21",
+        "role" : "StaticText",
+        "value" : "Earlier user message 32",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 193,
+          "y" : 73
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 65,
+          "width" : 354,
+          "x" : 15,
+          "y" : 40
+        },
+        "ref" : "e22",
+        "role" : "StaticText",
+        "value" : "Earlier assistant response 32. This fixture is intentionally long enough to scroll away from the newest turn.",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 285,
+          "y" : 144
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 174,
+          "x" : 197,
+          "y" : 134
+        },
+        "ref" : "e23",
+        "role" : "StaticText",
+        "value" : "Earlier user message 33",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 193,
+          "y" : 215
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 65,
+          "width" : 354,
+          "x" : 16,
+          "y" : 182
+        },
+        "ref" : "e24",
+        "role" : "StaticText",
+        "value" : "Earlier assistant response 33. This fixture is intentionally long enough to scroll away from the newest turn.",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 285,
+          "y" : 286
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 174,
+          "x" : 197,
+          "y" : 276
+        },
+        "ref" : "e25",
+        "role" : "StaticText",
+        "value" : "Earlier user message 34",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 193,
+          "y" : 357
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 65,
+          "width" : 354,
+          "x" : 16,
+          "y" : 324
+        },
+        "ref" : "e26",
+        "role" : "StaticText",
+        "value" : "Earlier assistant response 34. This fixture is intentionally long enough to scroll away from the newest turn.",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 285,
+          "y" : 428
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 174,
+          "x" : 198,
+          "y" : 418
+        },
+        "ref" : "e27",
+        "role" : "StaticText",
+        "value" : "Earlier user message 35",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 193,
+          "y" : 499
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 65,
+          "width" : 354,
+          "x" : 16,
+          "y" : 466
+        },
+        "ref" : "e28",
+        "role" : "StaticText",
+        "value" : "Earlier assistant response 35. This fixture is intentionally long enough to scroll away from the newest turn.",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 285,
+          "y" : 570
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 174,
+          "x" : 198,
+          "y" : 560
+        },
+        "ref" : "e29",
+        "role" : "StaticText",
+        "value" : "Earlier user message 36",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 193,
+          "y" : 641
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 65,
+          "width" : 354,
+          "x" : 16,
+          "y" : 608
+        },
+        "ref" : "e30",
+        "role" : "StaticText",
+        "value" : "Earlier assistant response 36. This fixture is intentionally long enough to scroll away from the newest turn.",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 380,
+          "y" : 437
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 874,
+          "width" : 44,
+          "x" : 358,
+          "y" : 0
+        },
+        "id" : "userMessageScrubber",
+        "label" : "User message index",
+        "ref" : "e31",
+        "role" : "Slider",
+        "value" : "nan",
+        "visible" : true
+      }
+    ],
+    "tree_mode" : "full"
+  },
+  "next_steps" : [
+    "1 text field(s) — fill in a batch: {\"action\":\"tap\",\"ref\":\"e8\"},{\"action\":\"type\",\"text\":\"…\"}"
+  ],
+  "schema" : "flowdeck.ui",
+  "schemaVersion" : "1.0.0",
+  "screenshot" : {
+    "captured" : true,
+    "height" : 874,
+    "optimized" : false,
+    "path" : "\/Users\/eugenechan\/dev\/personal\/lfg\/.claude\/evidence\/composer-not-cleared-20260921\/02-after-queued-send.png",
+    "pixel_height" : 874,
+    "pixel_width" : 402,
+    "point_height" : 874,
+    "point_width" : 402,
+    "size_bytes" : 133928,
+    "unit" : "points",
+    "width" : 402
+  },
+  "simulator" : {
+    "name" : "Simulator",
+    "runtime" : "iOS",
+    "udid" : "B37A0A3A-C0EC-4756-A998-8A7FCB2ABCF6"
+  },
+  "success" : true,
+  "timestamp" : "2026-09-21T10:48:18Z",
+  "type" : "ui_snapshot"
+}

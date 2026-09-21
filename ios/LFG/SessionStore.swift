@@ -3842,19 +3842,24 @@ import LFGCore
         guard !trimmed.isEmpty else { return }
         let pendingID = "fixture-pending-\(UUID().uuidString)"
         let timestamp = Date().timeIntervalSince1970 * 1_000
+        // `LFG_SEND_FOLLOW_FIXTURE_QUEUED=1` sends the way a mid-turn message
+        // does: into the pending strip above the composer instead of a bubble,
+        // which grows the bottom chrome in the same transaction as the send.
+        let queued = ProcessInfo.processInfo.environment["LFG_SEND_FOLLOW_FIXTURE_QUEUED"] == "1"
         pendingSends[id, default: []].append(PendingSend(
             id: pendingID,
             clientId: pendingID,
             displayText: trimmed,
             matchText: trimmed,
             ts: timestamp,
-            showSent: true,
+            showSent: !queued,
+            queuedBehindTurn: queued,
             confirmed: true
         ))
         busy[id] = true
 
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(700))
+            try? await Task.sleep(for: .milliseconds(queued ? 4_000 : 700))
             guard let self else { return }
             self.transcripts[id, default: []].append(SessionMessage(
                 id: "fixture-landed-\(pendingID)",

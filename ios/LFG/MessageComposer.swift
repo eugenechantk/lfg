@@ -126,6 +126,77 @@ struct MessageComposer: View {
         text = ""
         tray.clear()
         onSend(trimmed, items)
+        #if DEBUG
+        // `LFG_COMPOSER_FORCE_WRITEBACK=1` re-creates the device failure on demand —
+        // the sent text landing back in the binding after the clear — so the probe
+        // below can be exercised in a simulator that never shows it naturally.
+        if ProcessInfo.processInfo.environment["LFG_COMPOSER_FORCE_WRITEBACK"] == "1" {
+            let binding = $text
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(100))
+                binding.wrappedValue = trimmed
+            }
+        }
+        #endif
+        ComposerClearProbe.verify(sent: trimmed, binding: $text)
+    }
+}
+
+/// Checks, shortly after a send, that the field really is empty — and says so in
+/// the connection log when it is not.
+///
+/// The composer still keeps a sent message on screen "a lot of the time" on
+/// device (2026-09-21), and it does not reproduce in a simulator driven without
+/// the software keyboard. Two different failures look identical to the eye: the
+/// binding is empty and the UITextView behind `TextField(axis: .vertical)` never
+/// repainted, or something (a pending autocorrection, marked text from swipe or
+/// dictation) wrote the message back into the binding after the clear. The probe
+/// reads all three — binding, the text view's own text, marked text — so the
+/// next occurrence names its mechanism instead of being guessed at. It also
+/// repairs the field, but only when what is left is exactly the message that was
+/// just sent: anything else is the user already typing the next one.
+///
+/// Lengths only; message text never goes in the log.
+@MainActor
+enum ComposerClearProbe {
+    static func verify(sent: String, binding: Binding<String>) {
+        guard !sent.isEmpty else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            let view = firstResponderTextView()
+            let bound = binding.wrappedValue
+            let shown = view?.text ?? ""
+            let boundIsSent = bound.trimmingCharacters(in: .whitespacesAndNewlines) == sent
+            let shownIsSent = shown.trimmingCharacters(in: .whitespacesAndNewlines) == sent
+            guard boundIsSent || shownIsSent else { return }
+            ConnectionLog.shared.log(
+                .send,
+                "composer not cleared: sent=\(sent.count) binding=\(bound.count) view=\(view == nil ? "none" : String(shown.count)) marked=\(view?.markedTextRange != nil)"
+            )
+            if boundIsSent { binding.wrappedValue = "" }
+            if shownIsSent, let view {
+                view.unmarkText()
+                view.text = ""
+            }
+        }
+    }
+
+    private static func firstResponderTextView() -> UITextView? {
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+        for window in windows where window.isKeyWindow {
+            if let found = firstResponder(in: window) { return found }
+        }
+        return nil
+    }
+
+    private static func firstResponder(in view: UIView) -> UITextView? {
+        if let textView = view as? UITextView, textView.isFirstResponder { return textView }
+        for sub in view.subviews {
+            if let found = firstResponder(in: sub) { return found }
+        }
+        return nil
     }
 }
 
