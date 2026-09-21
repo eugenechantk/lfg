@@ -10,8 +10,9 @@ import Foundation
 /// it appeared. See `.claude/diagnosis-live-activity-stale-when-backgrounded-20260919.md`.
 ///
 /// Rules:
-/// - An untrustworthy count (no live fetch yet this launch, or a host known down)
-///   is *unknown*, not zero: never end, and reset the zero clock.
+/// - An untrustworthy count (see `FleetCountTrust`: a reachable host has not
+///   answered a live fetch yet this launch, or every host is known down) is
+///   *unknown*, not zero: never end, and reset the zero clock.
 /// - A trustworthy zero ends the card after `hold` seconds. The default is
 ///   **zero**: Eugene wants the card gone the moment nothing is running
 ///   (2026-09-19), and the server's `FLEET_END_DEBOUNCE_S` is zero to match.

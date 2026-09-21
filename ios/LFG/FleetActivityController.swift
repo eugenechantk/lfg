@@ -76,6 +76,11 @@ final class FleetActivityController {
             // its inputs — untracked, muting a directory wouldn't reach the card
             // until some unrelated session state happened to change.
             _ = settings?.hiddenDirs
+            // Trust is an input to both creating and ending the card, and it can
+            // flip with no session change at all (the last up host answers, a
+            // host goes known-down) — untracked, a card waiting on trust would
+            // wait for some unrelated state change.
+            _ = store.fleetCountIsTrustworthy
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -116,9 +121,10 @@ final class FleetActivityController {
         // vouch for, and only after a sustained zero. A background launch from a
         // push-to-start has an empty store — that read as zero and killed every
         // server-started card ~2 s after it appeared.
+        let countTrustworthy = store?.fleetCountIsTrustworthy ?? false
         let gate = FleetEndGate.step(
             activeTotal: activeTotal,
-            countTrustworthy: store?.fleetCountIsTrustworthy ?? false,
+            countTrustworthy: countTrustworthy,
             state: endGate,
             now: now
         )
@@ -127,6 +133,16 @@ final class FleetActivityController {
         do {
             if !exists {
                 guard activeTotal > 0 else {
+                    lastSyncedSnapshot = nil
+                    return
+                }
+                // Creating is gated like ending. At launch the store holds a GRDB
+                // cold snapshot, and on 2026-09-21 that put up a card for a session
+                // that had finished nine minutes earlier. An untrustworthy count
+                // creates nothing: the Worker push-to-starts cards on its own, from
+                // the hosts' own word.
+                guard countTrustworthy else {
+                    log.notice("count not trustworthy yet — leaving card creation to the server")
                     lastSyncedSnapshot = nil
                     return
                 }

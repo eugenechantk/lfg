@@ -113,6 +113,36 @@ ends with dismissal now); `swift test --filter FleetEndGate` 10 pass (new: defau
 ends a trustworthy zero at once, never an untrustworthy one); `flowdeck build`
 SUCCESS.
 
+## Revision 2026-09-21 — a sleeping host must not freeze the card; creation is gated too
+
+What happened: the app created a card at launch from a stale view (a session that
+had finished nine minutes earlier) and could not correct it for two hours. The Pro
+was asleep, and "any host known down" made the count untrustworthy, which leaves the
+card untouched. The Worker side was fixed separately (it re-asserts the truth on
+every "started" report, `e4bd14c`).
+
+Change 1 — trust rule, now `FleetCountTrust.isTrustworthy` (LFGCore, pure): every
+host that is NOT known down has answered a live sessions fetch this launch, and at
+least one such host exists. A known-down host is excluded rather than a veto (its
+busy flags are already blanked; the Worker drops a silent host after 90 s). Every
+host down → not trustworthy. `SessionStore.liveSessionsFetchedOnce` became
+`liveFetchedHostIds`, inserted at the same successful-live-fetch spot in
+`applyHostFetch`; GRDB hydration still does not count. This supersedes the first
+Decision Log entry above. It is also stricter in one direction: one host answering no
+longer vouches for a reachable host that has not.
+
+Change 2 — `sync()` no longer calls `Activity.request` on an untrustworthy count; it
+logs and leaves creation to the Worker's push-to-start.
+
+Also: the controller's observation now tracks `fleetCountIsTrustworthy`, because
+trust can flip with no session change (the last up host answers; a host goes
+known-down) and a card waiting on trust would otherwise wait for unrelated state.
+
+Evidence: `cd ios/LFGCore && swift test` — `FleetCountTrustTests` 9 tests, 0
+failures; full suite green. App target: compile-checked by the TestFlight archive
+(no simulator build possible on the Air). Live proof pending on the phone: with one
+host asleep, a stale card is corrected/ended once the other host answers.
+
 ## Bugs
 
 _None yet._

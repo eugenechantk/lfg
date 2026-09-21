@@ -472,20 +472,24 @@ import LFGCore
     /// the resilience the single-host path got from the server's `lastGood`.
     private var lastSessionsByHost: [String: [Session]] = [:]
 
-    /// True once any host has answered a LIVE sessions fetch this launch. GRDB
-    /// hydration does not count: it seeds `lastSessionsByHost` too, so the key set
-    /// cannot tell a cold snapshot from a live answer. Read by
+    /// Host ids that have answered a LIVE sessions fetch this launch. GRDB
+    /// hydration does not count: it seeds `lastSessionsByHost` too, so that key
+    /// set cannot tell a cold snapshot from a live answer. Read by
     /// `fleetCountIsTrustworthy`.
-    private(set) var liveSessionsFetchedOnce = false
+    private(set) var liveFetchedHostIds: Set<String> = []
 
     /// Whether the fleet Live Activity may trust `filteredSessions`/`busy` as the
-    /// truth about how many sessions are active. False until the first live fetch
-    /// (a background launch from a push-to-start has an EMPTY store, which read as
-    /// "nothing active" and ended the server's card ~2 s after it appeared) and
-    /// while any host is known down (its busy flags are blanked, so the count is
-    /// unknown, not zero). See `FleetEndGate`.
+    /// truth about how many sessions are active: every host that is not known
+    /// down has answered a live fetch this launch, and at least one such host
+    /// exists. A background launch from a push-to-start has an EMPTY store, which
+    /// read as "nothing active" and ended the server's card ~2 s after it
+    /// appeared. A known-down host is excluded rather than a veto — its busy
+    /// flags are already blanked and the Worker drops it after 90 s — so a
+    /// sleeping host no longer freezes the card. See `FleetCountTrust`.
     var fleetCountIsTrustworthy: Bool {
-        liveSessionsFetchedOnce && settings.hosts.allSatisfy(isNotKnownDown)
+        FleetCountTrust.isTrustworthy(
+            hosts: settings.hosts.map { .init(id: $0.id, knownDown: !isNotKnownDown($0)) },
+            liveFetchedHostIds: liveFetchedHostIds)
     }
     /// Request start for each host's last successful live-session snapshot.
     /// This orders REST level state against journal deltas without preserving a
@@ -2576,7 +2580,7 @@ import LFGCore
             signal(f.host.id, .probeSucceeded)
             failuresByHost[f.host.id] = 0
             lastSessionsByHost[f.host.id] = fetchedSessions
-            liveSessionsFetchedOnce = true
+            liveFetchedHostIds.insert(f.host.id)
             lastSnapshotStartedAtByHost[f.host.id] = f.snapshotStartedAt
         } else {
             // failuresByHost now only feeds the cold-probe back-off. The visible
