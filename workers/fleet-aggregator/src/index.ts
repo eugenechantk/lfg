@@ -110,10 +110,24 @@ export class FleetAggregator {
     //    (see `broadcastFor`). A failed broadcast is not recorded, so the next
     //    evaluation retries it.
     const last = await this.state.storage.get<ContentState>(k("lastBroadcast"));
-    const event = broadcastFor(last, d.content);
+    // `assert` is set when the app reports a card it created itself. That card was
+    // drawn from the APP's view, which can be stale (2026-09-21: created at launch
+    // showing a session that had finished nine minutes earlier, then frozen for two
+    // hours — the Worker's truth was "nothing running", identical to its last
+    // broadcast, so it said nothing). A new card must be told the truth even when
+    // the truth has not changed: update if anything runs, END if nothing does.
+    const asserting = (await this.state.storage.get<boolean>(k("assert"))) === true;
+    const total = d.content.working + d.content.needsInput;
+    const event = broadcastFor(last, d.content) ?? (asserting ? (total > 0 ? "update" : "end") : null);
     if (event) {
-      await this.trace("decide", { env, apnsEvent: event, priority: 10, via: "channel", ...summary });
-      if (await this.broadcast(env, event, d.content, 10, now)) await this.state.storage.put(k("lastBroadcast"), d.content);
+      await this.trace("decide", { env, apnsEvent: event, priority: 10, via: asserting ? "channel-assert" : "channel", ...summary });
+      if (await this.broadcast(env, event, d.content, 10, now)) {
+        await this.state.storage.put(k("lastBroadcast"), d.content);
+        await this.state.storage.delete(k("assert"));
+        // An asserted END means the app's card is gone: forget it, or the Worker
+        // would believe a card exists and never push-to-start the next one.
+        if (event === "end") { await this.state.storage.put(k("card"), null); return false; }
+      }
     }
     return nextCard !== null;
   }
@@ -205,6 +219,7 @@ export class FleetAggregator {
       // with no content recorded the next evaluation fills it in.
       if (!(await this.state.storage.get<Card | null>(`card:${reportEnv}`))) await this.state.storage.put(`card:${reportEnv}`, { startedAt: now });
       await this.state.storage.delete(`veto:${reportEnv}`);
+      await this.state.storage.put(`assert:${reportEnv}`, true);
       await this.trace("adopted", { env: reportEnv });
       await this.evaluate();
       return json({ ok: true });
