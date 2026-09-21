@@ -28,6 +28,7 @@ const {
 // suite another test file's `LFG_DATA` may already have won. Reading the live
 // value keeps this file correct regardless of load order.
 const { PATHS } = await import("./config.ts");
+const { SEARCH_INDEX_VERSION } = await import("./session-index.ts");
 const sessionTitlesPath = PATHS.sessionTitles;
 
 describe("closed-session lease refresh guard", () => {
@@ -77,6 +78,38 @@ function writeTranscript(
     lines.push(JSON.stringify({ cwd, type: "user", message: { content: opts.lastUserText } }));
   }
   writeFileSync(path, `${lines.join("\n")}\n`);
+  const when = new Date(mtime);
+  utimesSync(path, when, when);
+  return path;
+}
+
+/** A claude transcript from explicit JSONL rows, for shapes `writeTranscript` can't express. */
+function writeRows(project: string, id: string, mtime: number, rows: unknown[]) {
+  const dir = join(projects, project);
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, `${id}.jsonl`);
+  writeFileSync(path, `${rows.map((r) => JSON.stringify(r)).join("\n")}\n`);
+  const when = new Date(mtime);
+  utimesSync(path, when, when);
+  return path;
+}
+
+const user = (text: string) => ({ cwd: "/tmp/p", type: "user", message: { content: text } });
+const assistant = (text: string) => ({ cwd: "/tmp/p", type: "assistant", message: { content: text } });
+
+/** A codex rollout whose user turns are `messages`, in order. */
+function writeCodexRollout(id: string, mtime: number, messages: string[]) {
+  const dir = join(codexSessions, "2026", "09", "20");
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, `rollout-2026-09-20T00-00-00-${id}.jsonl`);
+  const rows: unknown[] = [
+    { type: "session_meta", payload: { id, cwd: "/tmp/codex", timestamp: "2026-09-20T00:00:00Z" } },
+  ];
+  for (const m of messages) {
+    rows.push({ type: "event_msg", payload: { type: "user_message", message: m } });
+    rows.push({ type: "event_msg", payload: { type: "agent_message", message: "ok" } });
+  }
+  writeFileSync(path, `${rows.map((r) => JSON.stringify(r)).join("\n")}\n`);
   const when = new Date(mtime);
   utimesSync(path, when, when);
   return path;
@@ -212,7 +245,7 @@ describe("searchResumable", () => {
     await searchResumable({ q: "preamble" });
 
     const raw = (await Bun.file(indexPath).json()) as { version: number; entries: unknown[] };
-    expect(raw.version).toBe(1);
+    expect(raw.version).toBe(SEARCH_INDEX_VERSION);
     expect(raw.entries).toHaveLength(1);
 
     // Simulate a restart: in-process cache gone, index file still on disk.
@@ -250,5 +283,139 @@ describe("searchResumable", () => {
 
     expect((await searchResumable({ q: "rewritten" })).sessions).toHaveLength(0);
     expect((await searchResumable({ q: "original" })).sessions).toHaveLength(1);
+  });
+
+  // ---- user-turn matching (2026-09-20: "I can't search for my dictate keyboard session") ----
+
+  test("matches a term that appears only in a middle user turn", async () => {
+    // The real shape of the miss: the title is the first prompt, the preview
+    // is the last prompt, and the word the user remembers is in neither.
+    writeRows("inbox", id(300), 3_000, [
+      user("Is there a way to use the action button on iPhone 17 pro to transcribe what I said"),
+      assistant("yes"),
+      user("I want to use the action button to kickstart the dictation, without me switch keyboards"),
+      assistant("sure"),
+      user("And let's use openrouter's models to test it"),
+    ]);
+    writeTranscript("noise", id(301), 4_000, "unrelated newer work");
+
+    const page = await searchResumable({ q: "dictation" });
+    expect(page.sessions.map((s) => s.sessionId)).toEqual([id(300)]);
+    expect(page.sessions[0].title).toContain("action button");
+    // Terms are substrings, so the stem finds it too.
+    expect((await searchResumable({ q: "dictat keyboard" })).sessions.map((s) => s.sessionId)).toEqual([
+      id(300),
+    ]);
+  });
+
+  test("a user-turn match is previewed by the turn that matched, so shipped clients keep the row", async () => {
+    // iOS and desktop re-filter every server row on title/project/cwd/
+    // lastUserText/sessionId. A row matched only through its turns must carry
+    // the hit in one of those fields or those builds drop it as noise.
+    writeRows("inbox", id(310), 3_000, [
+      user("first prompt about the keyboard"),
+      user("I want to kickstart the dictation without switching keyboards"),
+      user("final message about openrouter"),
+    ]);
+
+    const [row] = (await searchResumable({ q: "dictation" })).sessions;
+    expect(row.lastUserText).toContain("kickstart the dictation");
+    expect(row.lastUserText).not.toContain("openrouter");
+  });
+
+  test("a title or last-message match keeps the real last user text", async () => {
+    writeRows("inbox", id(320), 3_000, [
+      user("first prompt about the keyboard"),
+      user("middle turn mentioning dictation"),
+      user("final message about openrouter"),
+    ]);
+
+    expect((await searchResumable({ q: "keyboard" })).sessions[0].lastUserText).toBe(
+      "final message about openrouter",
+    );
+    expect((await searchResumable({ q: "openrouter" })).sessions[0].lastUserText).toBe(
+      "final message about openrouter",
+    );
+  });
+
+  test("matches a middle user turn of a codex rollout", async () => {
+    writeCodexRollout(id(330), 3_000, [
+      "start the web app",
+      "now add the marmalade importer",
+      "ship it",
+    ]);
+
+    const page = await searchResumable({ q: "marmalade" });
+    expect(page.sessions.map((s) => s.sessionId)).toEqual([id(330)]);
+    expect(page.sessions[0].agent).toBe("codex");
+    expect(page.sessions[0].lastUserText).toContain("marmalade importer");
+  });
+
+  test("matches a message that was absorbed mid-turn (queue-operation), which exists nowhere else", async () => {
+    writeRows("lfg", id(340), 3_000, [
+      user("start the refactor"),
+      {
+        type: "queue-operation",
+        operation: "enqueue",
+        content: "also rename the marmalade module",
+        timestamp: "2026-09-20T00:00:01Z",
+      },
+      {
+        type: "queue-operation",
+        operation: "remove",
+        reason: "absorbed_mid_turn",
+        content: "also rename the marmalade module",
+        timestamp: "2026-09-20T00:00:02Z",
+      },
+      assistant("done"),
+    ]);
+
+    const page = await searchResumable({ q: "marmalade" });
+    expect(page.sessions.map((s) => s.sessionId)).toEqual([id(340)]);
+    expect(page.sessions[0].lastUserText).toContain("marmalade module");
+  });
+
+  test("does not index meta, wrapper or tool-result user lines", async () => {
+    // Genuine prompts bracket the noise so the title (first prompt) and the
+    // preview (last prompt) — read by the existing head/tail scanners, not
+    // under test here — are both genuine, and "marmalade" can only come from
+    // the index.
+    writeRows("lfg", id(350), 3_000, [
+      user("a genuine opening prompt"),
+      { ...user("the whole SKILL.md body mentions marmalade"), isMeta: true },
+      user("<command-name>/marmalade</command-name>"),
+      user("<local-command-stdout>marmalade</local-command-stdout>"),
+      {
+        cwd: "/tmp/p",
+        type: "user",
+        toolUseResult: { stdout: "marmalade" },
+        message: { content: [{ type: "tool_result", content: "marmalade" }, { type: "text", text: "marmalade" }] },
+      },
+      user("a genuine closing prompt"),
+    ]);
+
+    expect((await searchResumable({ q: "marmalade" })).sessions).toEqual([]);
+    expect((await searchResumable({ q: "genuine" })).sessions.map((s) => s.sessionId)).toEqual([id(350)]);
+  });
+
+  test("an interrupt marker is not a user turn and does not match", async () => {
+    writeRows("lfg", id(355), 3_000, [
+      user("start the refactor"),
+      user("[Request interrupted by user]"),
+      user("carry on"),
+    ]);
+    expect((await searchResumable({ q: "interrupted" })).sessions).toEqual([]);
+  });
+
+  test("indexed user text is capped, so a very long conversation is bounded", async () => {
+    // 60 turns of 200 chars is 12 KB of user text; the cap keeps the head.
+    const filler = Array.from({ length: 60 }, (_, i) => user(`turn ${i} ${"lorem ipsum ".repeat(16)}`));
+    writeRows("lfg", id(360), 3_000, [user("opening marmalade request"), ...filler, user("closing quince remark")]);
+
+    expect((await searchResumable({ q: "marmalade" })).sessions.map((s) => s.sessionId)).toEqual([id(360)]);
+    // The last turn is the preview (classic field), so it still matches by that route…
+    expect((await searchResumable({ q: "quince" })).sessions).toHaveLength(1);
+    // …but a term buried past the cap in the middle does not.
+    expect((await searchResumable({ q: "turn 59" })).sessions).toEqual([]);
   });
 });

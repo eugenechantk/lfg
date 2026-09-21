@@ -16,8 +16,11 @@ import {
   matchingEntries,
   parseIndexFile,
   planRefresh,
+  capUserText,
   queryTerms,
+  searchPreview,
   serializeIndex,
+  USER_TEXT_MAX_CHARS,
   type IndexEntry,
 } from "./session-index";
 import { anyFreshAt, ensureLease } from "./leases";
@@ -2298,10 +2301,12 @@ function normalizeLineUnsafe(line: string, codexState: CodexNormalizationState):
  * 511 MB. One `listResumable` poll over that corpus peaked at 1.2 GB, and the
  * supervisor kills `lfg serve` at 4 GB, taking every /api/events stream with it.
  *
- * 32 MB clears every Claude transcript in the corpus outright and covers the
- * recent tail of the huge Codex ones. Past it the row shows no preview line,
- * which is a cosmetic loss on a handful of sessions; the alternative was a host
- * that reads as "disconnected" on the phone every few minutes.
+ * 32 MB covers all but a handful of Claude transcripts (2026-09-20: ten of
+ * ~10.9k are 35–51 MB) and the recent tail of the huge Codex ones. Past it the
+ * row shows no preview line, which is a cosmetic loss on a handful of sessions;
+ * the alternative was a host that reads as "disconnected" on the phone every
+ * few minutes. Any reader that stops SHORT of EOF must leave the stream by
+ * counting bytes, not by trusting the slice to end — see `allUserTurns`.
  */
 const LAST_USER_TEXT_SCAN_BYTES = 32 * 1024 * 1024;
 
@@ -2383,17 +2388,23 @@ function collectUserTurns(lines: string[], n: number, maxChars: number): string[
   return out.reverse();
 }
 
+const INTERRUPT_MARKER = /^\[Request interrupted by user/i;
+
 /** Parse one JSONL row into the genuine user text shared by both title readers. */
 function userTurnFromLine(line: string, maxChars: number): string | null {
   // Tool-heavy transcripts can contain multi-megabyte assistant/output rows.
   // Avoid materialising those through JSON.parse when neither transcript format
   // can possibly classify the row as a user message.
-  if (!/"(?:type|role)"\s*:\s*"(?:user|user_message)"/.test(line)) return null;
+  if (!/"(?:type|role)"\s*:\s*"(?:user|user_message|queue-operation)"/.test(line)) return null;
   let x: {
     type?: string;
     isMeta?: boolean;
     toolUseResult?: unknown;
     message?: { content?: unknown };
+    operation?: string;
+    reason?: string;
+    content?: unknown;
+    timestamp?: string;
     payload?: {
       type?: string; role?: string; message?: string; content?: unknown;
       internal_chat_message_metadata_passthrough?: unknown;
@@ -2405,7 +2416,12 @@ function userTurnFromLine(line: string, maxChars: number): string | null {
     return null;
   }
   let text: string | null = null;
-  if (x.type === "event_msg" && x.payload?.type === "user_message") {
+  if (x.type === "queue-operation") {
+    // A message absorbed mid-turn is persisted NOWHERE but this line (see
+    // `queueOperationMessage`); it is as much the human's turn as any other.
+    const [absorbed] = queueOperationMessage(x);
+    text = absorbed ? absorbed.text.trim().replace(/\s+/g, " ") : null;
+  } else if (x.type === "event_msg" && x.payload?.type === "user_message") {
     text = x.payload.message
       ? codexHumanText(stripConversationPrefix(x.payload.message))
       : null;
@@ -2425,7 +2441,10 @@ function userTurnFromLine(line: string, maxChars: number): string | null {
   // "<" opens the command/caveat wrappers Claude Code injects as user turns
   // (`<command-name>`, `<local-command-stdout>`); they are machinery, not the
   // human, and they'd otherwise dominate the digest of an active session.
-  if (!text || text.startsWith("<")) return null;
+  // "[Request interrupted by user…]" is the marker Claude Code writes when the
+  // human hits Escape — also machinery. Indexed, it made `interrupted` match 82
+  // sessions previewed by the marker (self-audit 2026-09-20).
+  if (!text || text.startsWith("<") || INTERRUPT_MARKER.test(text)) return null;
   return text.length > maxChars ? text.slice(0, maxChars - 1) + "…" : text;
 }
 
@@ -2451,18 +2470,30 @@ export async function allUserTurns(
   {
     maxChars = 240,
     startByte = 0,
-  }: { maxChars?: number; startByte?: number } = {},
+    maxBytes = Infinity,
+    maxTotalChars = Infinity,
+  }: {
+    maxChars?: number;
+    startByte?: number;
+    /** Read at most this many bytes from `startByte`; a row cut by the budget is skipped. */
+    maxBytes?: number;
+    /** Stop reading once the turns in hand total this many characters. */
+    maxTotalChars?: number;
+  } = {},
 ): Promise<AllUserTurnsResult> {
   const file = Bun.file(path);
   if (!(await file.exists())) return { turns: [], nextByte: 0 };
 
-  const size = file.size;
-  const from = Number.isFinite(startByte) && startByte >= 0 && startByte <= size
+  const fileSize = file.size;
+  const from = Number.isFinite(startByte) && startByte >= 0 && startByte <= fileSize
     ? Math.floor(startByte)
     : 0;
-  if (from === size) return { turns: [], nextByte: from };
+  if (from === fileSize) return { turns: [], nextByte: from };
+  const size = Math.min(fileSize, from + Math.max(0, maxBytes));
 
   const turns: string[] = [];
+  let totalChars = 0;
+  let stopped = false;
   const decoder = new TextDecoder();
   let lineParts: Uint8Array[] = [];
   let lineBytes = 0;
@@ -2482,35 +2513,58 @@ export async function allUserTurns(
 
   const consumeCompleteLine = (newlineBytes: number): void => {
     const turn = userTurnFromLine(lineText(), maxChars);
-    if (turn) turns.push(turn);
+    if (turn) {
+      turns.push(turn);
+      totalChars += turn.length;
+      if (totalChars >= maxTotalChars) stopped = true;
+    }
     nextByte += lineBytes + newlineBytes;
     lineParts = [];
     lineBytes = 0;
   };
 
-  for await (const chunk of file.slice(from, size).stream()) {
+  // `indexOf` is native; a per-byte JS loop over a multi-GB corpus was the
+  // difference between a cold search-index build that yields and one that
+  // pins the event loop.
+  //
+  // The byte budget is enforced by COUNTING, not by trusting the slice to end:
+  // on Bun 1.3.14 a `file.slice(0, n).stream()` whose `n` is short of EOF
+  // delivers exactly n bytes and then never closes (measured 2026-09-20: every
+  // one of 10 hung reads out of 217 was a transcript larger than the cap).
+  // Breaking out of the loop, by contrast, returns at once.
+  const budget = size - from;
+  let consumed = 0;
+  scan: for await (const chunk of file.slice(from, size).stream()) {
+    consumed += chunk.byteLength;
     let segmentStart = 0;
-    for (let i = 0; i < chunk.byteLength; i++) {
-      if (chunk[i] !== 0x0a) continue;
-      if (i > segmentStart) {
-        const part = chunk.subarray(segmentStart, i);
+    let nl = chunk.indexOf(0x0a, segmentStart);
+    while (nl >= 0) {
+      if (nl > segmentStart) {
+        const part = chunk.subarray(segmentStart, nl);
         lineParts.push(part);
         lineBytes += part.byteLength;
       }
       consumeCompleteLine(1);
-      segmentStart = i + 1;
+      if (stopped) break scan;
+      segmentStart = nl + 1;
+      nl = chunk.indexOf(0x0a, segmentStart);
     }
     if (segmentStart < chunk.byteLength) {
-      const part = chunk.subarray(segmentStart);
-      lineParts.push(part);
-      lineBytes += part.byteLength;
+      // Copy before retaining: a stream may hand back a reused buffer.
+      const rest = chunk.subarray(segmentStart);
+      const kept = new Uint8Array(rest.byteLength);
+      kept.set(rest);
+      lineParts.push(kept);
+      lineBytes += kept.byteLength;
     }
+    if (consumed >= budget) break;
   }
 
   // Closed transcripts are allowed to omit the final newline. Advance only if
   // that final row is valid JSON; an active transcript caught mid-write remains
   // uncheckpointed and will be retried from the start of the partial row.
-  if (lineBytes > 0) {
+  // (A read that stopped early has no final row to consider.)
+  if (!stopped && lineBytes > 0) {
     const finalLine = lineText();
     try {
       JSON.parse(finalLine);
@@ -2521,6 +2575,28 @@ export async function allUserTurns(
   }
 
   return { turns, nextByte };
+}
+
+/** Per-turn cut for the search index: long enough that a prompt's subject is in it. */
+const INDEX_USER_TURN_MAX_CHARS = 1024;
+
+/**
+ * The user's turns as the search index stores them (`IndexEntry.userText`).
+ *
+ * Bounded three ways, all for the 511 MB Codex rollouts that the tail readers
+ * already guard against: at most `LAST_USER_TEXT_SCAN_BYTES` of the head is
+ * read, the read stops as soon as `USER_TEXT_MAX_CHARS` of turns are in hand,
+ * and the joined text is cut there. Most transcripts hit the char cap long
+ * before the byte budget, so a cold index build over the corpus is not a read
+ * of the corpus.
+ */
+async function indexedUserText(path: string): Promise<string> {
+  const { turns } = await allUserTurns(path, {
+    maxChars: INDEX_USER_TURN_MAX_CHARS,
+    maxBytes: LAST_USER_TEXT_SCAN_BYTES,
+    maxTotalChars: USER_TEXT_MAX_CHARS,
+  });
+  return capUserText(turns);
 }
 
 // The full (untruncated) text of the last genuine user turn, whitespace-collapsed.
@@ -3237,6 +3313,12 @@ export type ResumableSession = {
   project: string;
   title: string;
   lastActivityAt: number | null;
+  /**
+   * The row's preview line. On the plain resumable page, the last genuine user
+   * turn. On a SEARCH page, the turn the hit was found in when the match came
+   * from the user's turns rather than the title/preview — clients match on
+   * this field, and the user gets to see why the row is there.
+   */
   lastUserText: string | null;
   /**
    * The model this conversation last ran on, read off its transcript in the same
@@ -3593,6 +3675,7 @@ async function refreshSearchIndex(): Promise<IndexEntry[]> {
               project: s.project,
               title: s.title,
               lastUserText: s.lastUserText,
+              userText: await indexedUserText(candidate.path).catch(() => ""),
             });
           } catch {
             // A transcript that vanished mid-refresh (Syncthing churn) simply
@@ -3657,7 +3740,10 @@ export async function searchResumable(
       project: m.project,
       title: m.title,
       lastActivityAt: m.mtime,
-      lastUserText: m.lastUserText,
+      // On a search page this is the PREVIEW for the hit: the real last turn
+      // when the row matched on a field it carries, else the turn the match
+      // was found in. See `searchPreview`.
+      lastUserText: searchPreview(m, terms),
       closed: true,
     })),
     nextBefore,

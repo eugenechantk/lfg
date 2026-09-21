@@ -1,0 +1,9 @@
+{
+ "file": "~/.claude/projects/-Users-eugenechan-dev-personal-lfg/774820bd-a5fc-42a1-a02a-d4d46608a7a0.jsonl",
+ "sessionId": "774820bd-a5fc-42a1-a02a-d4d46608a7a0",
+ "userTurns": 5,
+ "first": "does lfg only work with tmux?\n\ncan it work without attaching every agent session",
+ "last": "you con continue",
+ "midWord": "interrupted",
+ "assistantOnlyWord": "abortcontroller"
+}

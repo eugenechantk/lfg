@@ -1,0 +1,17 @@
+## q=interrupted (expect 774820bd among hits, matched via a middle turn)
+total hits 82 nextBefore None
+774820bd present: True
+ preview: [Request interrupted by user]
+
+## q=abortcontroller (assistant-only word; expect no row whose USER turns lack it)
+hits 0
+774820bd present: False
+
+## q=zzqqxxnotaword (control)
+{"sessions":[],"nextBefore":null}
+## q=dictate raw
+{"sessions":[{"agent":"claude","sessionId":"93f676c1-b1ac-408e-83cd-890ec21be8df","cwd":"/Users/eugenechan/dev/inbox","project":"Users-eugenechan-dev-inbox","title":"Custom transcription keyboard","lastActivityAt":1789846211187.0327,"lastUserText":"Can we implement swipe typing on dictate?","closed":true}],"nextBefore":null}
+## q=keyboard raw (limit 1)
+{"sessions":[{"agent":"claude","sessionId":"93f676c1-b1ac-408e-83cd-890ec21be8df","cwd":"/Users/eugenechan/dev/inbox","project":"Users-eugenechan-dev-inbox","title":"Custom transcription keyboard","lastActivityAt":1789846211187.0327,"lastUserText":"And let’s use openrouter’s models to test it","closed":true}],"nextBefore":1789846211187.0327}
+## index
+version 2 entries 11638 bytes 19431045

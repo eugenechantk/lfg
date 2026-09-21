@@ -51,6 +51,15 @@ describe("recentUserTurns", () => {
     expect(await recentUserTurns(p, 6)).toEqual(["real one"]);
   });
 
+  test("excludes the interrupt marker Claude Code writes as a user turn", async () => {
+    const p = transcript([
+      user("real one"),
+      user("[Request interrupted by user]"),
+      user("[Request interrupted by user for tool use]"),
+    ]);
+    expect(await recentUserTurns(p, 6)).toEqual(["real one"]);
+  });
+
   test("excludes meta turns", async () => {
     const p = transcript([{ ...user("meta noise"), isMeta: true }, user("real one")]);
     expect(await recentUserTurns(p, 6)).toEqual(["real one"]);
@@ -160,5 +169,39 @@ describe("allUserTurns", () => {
       "real message",
       "x".repeat(19) + "…",
     ]);
+  });
+});
+
+describe("allUserTurns bounds", () => {
+  test("maxBytes stops the scan at the byte budget", async () => {
+    const p = transcript([user("first"), user("second"), user("third")]);
+    const firstRowBytes = Buffer.byteLength(JSON.stringify(user("first"))) + 1;
+    const bounded = await allUserTurns(p, { maxBytes: firstRowBytes + 4 });
+    // The row cut by the budget is an incomplete JSON line and is skipped.
+    expect(bounded.turns).toEqual(["first"]);
+    expect(bounded.nextByte).toBe(firstRowBytes);
+    expect((await allUserTurns(p)).turns).toEqual(["first", "second", "third"]);
+  });
+
+  test("a byte budget short of EOF on a multi-chunk file still terminates", async () => {
+    // Bun 1.3.14: a sliced file stream that stops short of EOF delivers its
+    // bytes and then never ends. The reader must leave by counting, not wait.
+    const rows = Array.from({ length: 2_000 }, (_, i) => user(`row ${i} ${"x".repeat(200)}`));
+    const p = transcript(rows);
+    const size = statSync(p).size;
+    expect(size).toBeGreaterThan(256 * 1024);
+    const started = performance.now();
+    const { turns, nextByte } = await allUserTurns(p, { maxBytes: Math.floor(size / 2) });
+    expect(performance.now() - started).toBeLessThan(5_000);
+    expect(turns.length).toBeGreaterThan(500);
+    expect(turns.length).toBeLessThan(2_000);
+    expect(nextByte).toBeLessThanOrEqual(Math.floor(size / 2));
+  }, 10_000);
+
+  test("maxTotalChars stops reading once enough user text is in hand", async () => {
+    const p = transcript([user("aaaa"), user("bbbb"), user("cccc"), user("dddd")]);
+    const { turns, nextByte } = await allUserTurns(p, { maxTotalChars: 7 });
+    expect(turns).toEqual(["aaaa", "bbbb"]);
+    expect(nextByte).toBeLessThan(statSync(p).size);
   });
 });

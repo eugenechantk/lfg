@@ -3,8 +3,8 @@
 // loaded.
 //
 // Why an index at all: the searchable fields (title, project, cwd, last user
-// text) are not on disk as metadata — each one costs a head read plus a
-// tail scan of the transcript. `listResumable` can afford that because it only
+// text, the user's own turns) are not on disk as metadata — each one costs a
+// head read plus a tail scan of the transcript. `listResumable` can afford that because it only
 // enriches the newest `limit` rows; a search cannot, because the match may be
 // the 4,000th-newest conversation. Measured on the Pro (2026-08-11): 5,318
 // transcripts, 1.4 GB, full enrichment 431 ms warm — cheap enough to build once
@@ -17,7 +17,25 @@
 // the interesting logic be unit-tested without a transcript corpus.
 
 /** Bump when the entry shape changes; a mismatched file is discarded, not migrated. */
-export const SEARCH_INDEX_VERSION = 1;
+// 2 (2026-09-20): `userText` — the user's own turns. Before it, a query could
+// only hit the first prompt (title) or the last one (preview); the word the user
+// remembers a session by is usually in neither.
+// 3: interrupt markers ("[Request interrupted by user]") no longer count as turns.
+export const SEARCH_INDEX_VERSION = 3;
+
+/**
+ * Bound on the user text indexed per transcript, in characters.
+ *
+ * Search needs the ORIGINAL text, not a word set, because a hit found only in
+ * the turns is previewed by the turn it landed in (see `searchPreview`). At this
+ * cap the index stays tens of MB for a ~12k-session corpus. Turns past it are
+ * simply not searchable through this field — the title and the last turn still
+ * are, since they are indexed on their own.
+ */
+export const USER_TEXT_MAX_CHARS = 4096;
+
+/** Width of the preview excerpt cut around a user-turn hit. Matches the card's `lastUserText` budget. */
+const PREVIEW_CHARS = 140;
 
 /** One indexed session: the searchable metadata plus what invalidates it. */
 export type IndexEntry = {
@@ -30,6 +48,12 @@ export type IndexEntry = {
   project: string;
   title: string;
   lastUserText: string | null;
+  /**
+   * The user's genuine turns, oldest first, newline-joined, capped at
+   * `USER_TEXT_MAX_CHARS`. Empty when the transcript has none (or none within
+   * the reader's byte budget).
+   */
+  userText: string;
 };
 
 /** What an enumeration pass knows before paying for enrichment. */
@@ -73,6 +97,7 @@ export function parseIndexFile(raw: unknown): IndexEntry[] {
       title: typeof (e as IndexEntry).title === "string" ? (e as IndexEntry).title : "—",
       lastUserText:
         typeof (e as IndexEntry).lastUserText === "string" ? (e as IndexEntry).lastUserText : null,
+      userText: typeof (e as IndexEntry).userText === "string" ? (e as IndexEntry).userText : "",
     });
   }
   return out;
@@ -133,12 +158,81 @@ export function queryTerms(q: string): string[] {
     .filter(Boolean);
 }
 
-/** Everything a query is matched against, lowercased and joined. */
-export function entryHaystack(e: IndexEntry): string {
+/**
+ * Join user turns into the indexed field: oldest first, one per line, cut at
+ * the cap. The head is kept over the tail because the last turn is already
+ * indexed on its own as `lastUserText`.
+ */
+export function capUserText(turns: string[], maxChars = USER_TEXT_MAX_CHARS): string {
+  const joined = turns.join("\n");
+  return joined.length > maxChars ? joined.slice(0, maxChars) : joined;
+}
+
+/**
+ * The fields every CLIENT also matches on (`SessionSearch` in `ios/LFGCore`
+ * and `desktop/`): what a row carries over the wire. `userText` is deliberately
+ * not among them — it never leaves the server.
+ */
+function classicHaystack(e: IndexEntry): string {
   return [e.title, e.project, e.cwd, e.lastUserText, e.sessionId]
     .filter((v): v is string => typeof v === "string" && v.length > 0)
     .join("\n")
     .toLowerCase();
+}
+
+/** Everything a query is matched against, lowercased and joined. */
+export function entryHaystack(e: IndexEntry): string {
+  const classic = classicHaystack(e);
+  return e.userText ? `${classic}\n${e.userText.toLowerCase()}` : classic;
+}
+
+/**
+ * The preview line for a search hit.
+ *
+ * A row that matches on the fields it carries over the wire keeps its real last
+ * user text. A row that matches ONLY through its user turns is previewed by an
+ * excerpt of the turn the hit landed in — for two reasons that both matter:
+ * the user sees WHY the row matched, and the shipped iOS/desktop builds
+ * re-filter every server row on title/project/cwd/lastUserText/sessionId
+ * ("`?q=` is a request, not a guarantee"), so a hit they cannot see in one of
+ * those fields is dropped as noise from a host that ignored the query.
+ */
+export function searchPreview(e: IndexEntry, terms: string[]): string | null {
+  if (terms.length === 0 || !e.userText) return e.lastUserText;
+  const classic = classicHaystack(e);
+  const missing = terms.filter((t) => !classic.includes(t));
+  if (missing.length === 0) return e.lastUserText;
+  const lower = e.userText.toLowerCase();
+  let at = -1;
+  let hit = "";
+  for (const t of missing) {
+    const i = lower.indexOf(t);
+    if (i >= 0 && (at < 0 || i < at)) {
+      at = i;
+      hit = t;
+    }
+  }
+  if (at < 0) return e.lastUserText;
+  return excerptAround(e.userText, at, hit.length);
+}
+
+/** A one-line window of `PREVIEW_CHARS` around `[at, at+len)`, ellipsised where cut. */
+function excerptAround(text: string, at: number, len: number): string {
+  // Keep to the turn the hit is in: a preview that runs into the next prompt
+  // reads as one sentence that was never said.
+  const lineStart = text.lastIndexOf("\n", at) + 1;
+  const lineEndRaw = text.indexOf("\n", at);
+  const lineEnd = lineEndRaw < 0 ? text.length : lineEndRaw;
+  const line = text.slice(lineStart, lineEnd);
+  const hitAt = at - lineStart;
+  if (line.length <= PREVIEW_CHARS) return line;
+  const budget = PREVIEW_CHARS - 2; // room for the ellipses
+  let start = Math.max(0, hitAt - Math.floor((budget - len) / 2));
+  let end = Math.min(line.length, start + budget);
+  if (end - start < budget) start = Math.max(0, end - budget);
+  const head = start > 0 ? "…" : "";
+  const tail = end < line.length ? "…" : "";
+  return `${head}${line.slice(start, end).trim()}${tail}`;
 }
 
 export function matchesTerms(e: IndexEntry, terms: string[]): boolean {

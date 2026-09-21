@@ -7,6 +7,7 @@ import {
   parseIndexFile,
   planRefresh,
   queryTerms,
+  searchPreview,
   serializeIndex,
   type IndexCandidate,
   type IndexEntry,
@@ -20,6 +21,7 @@ function entry(over: Partial<IndexEntry> & { sessionId: string; mtime: number })
     project: "tmp-proj",
     title: "a title",
     lastUserText: null,
+    userText: "",
     ...over,
   };
 }
@@ -189,6 +191,18 @@ describe("index file round-trip", () => {
     expect(parseIndexFile({ version: SEARCH_INDEX_VERSION + 1, entries: [entry({ sessionId: "a", mtime: 1 })] })).toEqual([]);
   });
 
+  test("a version-1 index file (no user text) is discarded, not served with empty bodies", () => {
+    // Serving v1 rows would make every user-turn search miss until each
+    // transcript happened to be rewritten; a rebuild is the correct price.
+    const { userText: _, ...v1 } = entry({ sessionId: "a", mtime: 1 });
+    expect(parseIndexFile({ version: 1, entries: [v1] })).toEqual([]);
+  });
+
+  test("a row missing user text parses as empty user text", () => {
+    const { userText: _, ...row } = entry({ sessionId: "a", mtime: 1 });
+    expect(parseIndexFile({ version: SEARCH_INDEX_VERSION, entries: [row] })[0].userText).toBe("");
+  });
+
   test("survives garbage without throwing", () => {
     expect(parseIndexFile(null)).toEqual([]);
     expect(parseIndexFile("nope")).toEqual([]);
@@ -212,5 +226,70 @@ describe("applyTitleOverrides", () => {
   test("is a no-op when there are no overrides", () => {
     const entries = [entry({ sessionId: "a", mtime: 1 })];
     expect(applyTitleOverrides(entries, {})).toBe(entries);
+  });
+});
+
+describe("user-turn matching", () => {
+  test("a term that appears only in the indexed user turns matches", () => {
+    const e = entry({
+      sessionId: "a",
+      mtime: 1,
+      title: "Custom transcription keyboard",
+      lastUserText: "And let's use openrouter's models to test it",
+      userText: "Is there a way to transcribe what I said\nI want the action button to kickstart the dictation, without switching keyboards",
+    });
+    expect(matchesTerms(e, queryTerms("dictate"))).toBe(false);
+    expect(matchesTerms(e, queryTerms("dictation"))).toBe(true);
+    expect(matchesTerms(e, queryTerms("dictation keyboard"))).toBe(true);
+  });
+});
+
+describe("searchPreview", () => {
+  const e = entry({
+    sessionId: "a",
+    mtime: 1,
+    title: "Custom transcription keyboard",
+    lastUserText: "And let's use openrouter's models to test it",
+    userText:
+      "Is there a way to use the action button on iPhone 17 pro to transcribe what I said into text\n" +
+      "I want to use the action button to kickstart the dictation, without me switch keyboards, or an app launch\n" +
+      "Can we implement swipe typing on dictate?",
+  });
+
+  test("a match on the classic fields keeps the real last user text", () => {
+    expect(searchPreview(e, queryTerms("keyboard"))).toBe(e.lastUserText);
+    expect(searchPreview(e, queryTerms("openrouter"))).toBe(e.lastUserText);
+    expect(searchPreview(e, [])).toBe(e.lastUserText);
+  });
+
+  test("a match found only in the user turns is previewed by the turn that matched", () => {
+    const preview = searchPreview(e, queryTerms("dictation"));
+    expect(preview).toContain("kickstart the dictation");
+    expect(preview).not.toContain("\n");
+    expect(preview!.length).toBeLessThanOrEqual(140);
+  });
+
+  test("the excerpt is a window around the hit, marked where it was cut", () => {
+    const long = entry({
+      sessionId: "b",
+      mtime: 1,
+      title: "t",
+      lastUserText: null,
+      userText: `${"x".repeat(300)} marmalade ${"y".repeat(300)}`,
+    });
+    const preview = searchPreview(long, queryTerms("marmalade"))!;
+    expect(preview.startsWith("…")).toBe(true);
+    expect(preview.endsWith("…")).toBe(true);
+    expect(preview).toContain("marmalade");
+    expect(preview.length).toBeLessThanOrEqual(140);
+  });
+
+  test("with several terms, the excerpt is around the first one the classic fields lack", () => {
+    // "keyboard" is in the title; "swipe" is only in the last turn.
+    expect(searchPreview(e, queryTerms("keyboard swipe"))).toContain("swipe typing");
+  });
+
+  test("a case-insensitive hit keeps the transcript's own casing in the excerpt", () => {
+    expect(searchPreview(e, queryTerms("IPHONE"))).toContain("iPhone 17 pro");
   });
 });

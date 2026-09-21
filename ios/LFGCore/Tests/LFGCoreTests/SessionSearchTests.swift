@@ -71,6 +71,25 @@ extension SessionSearchTests {
         XCTAssertEqual(out.map(\.sessionId), ["shared"])
     }
 
+    func testKeepsARowTheHostMatchedThroughItsUserTurns() {
+        // Server contract (src/session-index.ts `searchPreview`, 2026-09-20): a
+        // row that matched only in the user's mid-conversation turns arrives
+        // with the matching turn in `lastUserText`. Nothing else on the row
+        // carries the term, so this is the field the client's re-filter must
+        // honour — otherwise the fix for "can't find my dictate keyboard
+        // session" is dropped as noise from a host that ignored the query.
+        let row = ResumableSession(
+            sessionId: "93f676c1", title: "Custom transcription keyboard",
+            project: "Users-eugenechan-dev-inbox", cwd: "/Users/eugenechan/dev/inbox", mtime: 1,
+            lastUserText: "I want to use the action button to kickstart the dictation, without me switch keyboards")
+
+        let out = SessionSearch.reconcile(perHost: [[row]],
+                                          terms: SessionSearch.terms("dictation"),
+                                          liveIds: [])
+
+        XCTAssertEqual(out.map(\.sessionId), ["93f676c1"])
+    }
+
     func testDropsASessionLiveOnAnyHost() {
         let out = SessionSearch.reconcile(
             perHost: [[closed("live", title: "preamble running"),
