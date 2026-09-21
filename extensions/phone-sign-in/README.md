@@ -47,11 +47,23 @@ bridge.close(); // Does not close the context or browser.
 
 The bridge reads the local token file automatically. `baseURL` can override the default `http://127.0.0.1:8766` for a separate test host; remote adapter connections are rejected.
 
+### Headless browser with sign-in built in (preferred for agents)
+
+```sh
+scripts/browser-sign-in-headless.sh start "Research browser"   # prints {id, cdp, targetId, dir}
+scripts/browser-sign-in-headless.sh list
+scripts/browser-sign-in-headless.sh stop <id> | --all           # kills it and deletes its profile
+```
+
+One command gives an agent a headless Chromium (loopback CDP, private 0700 profile under `~/.lfg/headless/<id>/`) that is already registered as a sign-in target, so **every headless browser has the Sign in on iPhone option from the start**. Drive it from Node with `chromium.connectOverCDP(cdp)`; driver files placed in `dir` resolve `playwright-core` through a symlink. `stop` is mandatory when the task ends — the profile holds live sessions.
+
 For an automation browser already exposing a **local CDP endpoint**, attach without changing its context:
 
 ```sh
 bun scripts/browser-sign-in-playwright.ts http://127.0.0.1:9222 'Research browser'
 ```
+
+**Known issue (2026-09-21):** that command hangs under Bun — `playwright-core` 1.63's `connectOverCDP` never resolves there, while Node connects in ~45 ms. Node cannot run the `.ts` directly (parameter properties in `src/browser-sign-in.ts`), so bundle first: `bun build scripts/browser-sign-in-playwright.ts --target=node --format=esm --external playwright-core --outfile bridge.mjs`, then `node bridge.mjs <cdp> <name>` from a directory whose `node_modules` contains `playwright-core`. The launcher above does exactly this.
 
 With multiple contexts, supply the intended index as the fourth argument after the LFG URL. This command does not launch Chrome or enable a debug port. Do not use it to attach your default personal Chrome; use the extension there. A browser that exposes neither a context nor CDP needs integration in its owning process; the bridge does not discover arbitrary Playwright processes automatically.
 
