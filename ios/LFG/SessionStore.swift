@@ -191,6 +191,10 @@ import LFGCore
     /// client connected; a journal event that is still fresh must out-vote it.
     private var promptStatedAt: [String: Date] = [:]
     private(set) var queues: [String: [QueueItem]] = [:]
+    /// The browser preview is hidden while it gets more work. Every surface
+    /// (the detail overlay, the "Show Browser Preview" menu item) renders off
+    /// `browserFrames`, so keeping that empty here hides all of them at once.
+    static let browserPreviewEnabled = false
     /// Latest browser screenshot metadata per session. Bytes remain on the
     /// owning host and are fetched only while its detail view is visible.
     private(set) var browserFrames: [String: BrowserFrame] = [:]
@@ -562,6 +566,7 @@ import LFGCore
     }
 
     func loadBrowserFrame(_ sessionId: String) async {
+        guard Self.browserPreviewEnabled else { return }
         guard let client = client(forSession: sessionId),
               let frame = try? await client.browserFrameMetadata(sessionId: sessionId) else { return }
         browserFrames[sessionId] = frame
@@ -3014,6 +3019,7 @@ import LFGCore
         case .queueAck(let sid, let ack):
             applyQueueAck(sid: sid, ack: ack)
         case .browserFrame(let frame):
+            guard Self.browserPreviewEnabled else { break }
             browserFrames[frame.sessionId] = frame
         case .heartbeat:
             break
