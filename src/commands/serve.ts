@@ -1900,9 +1900,14 @@ export async function cmdServe() {
       if (path === "/api/file") {
         const raw = url.searchParams.get("path");
         if (!raw) return err(400, "path query param required");
+        // Agents write `~/dev/…` in their handoff prose as often as an absolute
+        // path. Only the host knows what `~` is, so expand it here — a client
+        // that tried would either guess or (worse) treat it as relative and
+        // join it to the session cwd, which is a path that cannot exist.
+        const requested = raw.startsWith("~") ? expandUserPath(raw) : raw;
         let real: string;
         try {
-          real = await realpath(raw);
+          real = await realpath(requested);
         } catch {
           return err(404, "file not found");
         }

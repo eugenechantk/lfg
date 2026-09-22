@@ -119,3 +119,30 @@ describe("SendUserFile renders as content", () => {
     );
   });
 });
+
+describe("paths containing spaces", () => {
+  // A working directory like `~/dev/inbox/AI girl game` is ordinary. `(/a/b c.png)`
+  // is not a link destination to a spec-following markdown parser, and a bare
+  // `)` would end the destination early, so those paths go in angle brackets.
+  const spaced = "/Users/e/dev/inbox/AI girl game/creative/storyboard-v3.png";
+
+  test("a path with a space is wrapped in CommonMark angle brackets", () => {
+    expect(sendUserFileText({ files: [spaced] })).toBe(`![storyboard-v3.png](<${spaced}>)`);
+  });
+
+  test("a path with a paren is wrapped too", () => {
+    const p = "/Users/e/out/clip (final).mp4";
+    expect(sendUserFileText({ files: [p] })).toBe(`[clip (final).mp4](<${p}>)`);
+  });
+
+  test("an ordinary path keeps the bare form older clients already parse", () => {
+    expect(sendUserFileText({ files: ["/Users/e/out/chart.png"] })).toBe(
+      "![chart.png](/Users/e/out/chart.png)",
+    );
+  });
+
+  test("a path already containing angle brackets stays bare rather than corrupt", () => {
+    const p = "/Users/e/out/a<b>c.png";
+    expect(sendUserFileText({ files: [p] })).toBe(`![a<b>c.png](${p})`);
+  });
+});

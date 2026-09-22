@@ -1424,7 +1424,13 @@ export function sendUserFileText(input: unknown): string | null {
     const path = file.trim();
     const name = basename(path) || path;
     const isImage = /\.(png|jpe?g|gif|webp|heic|bmp|tiff)$/i.test(path);
-    parts.push(`${isImage ? "!" : ""}[${name}](${path})`);
+    // A path containing a space or a paren is only unambiguous inside
+    // CommonMark's angle form — `(/a/b c.png)` is not a link destination to a
+    // spec-following renderer, and a bare `)` ends the destination early. Agents
+    // hand over files from directories with spaces in the name routinely.
+    const angle = /[\s()]/.test(path) && !/[<>]/.test(path);
+    const dest = angle ? `<${path}>` : path;
+    parts.push(`${isImage ? "!" : ""}[${name}](${dest})`);
   }
   return parts.join("\n\n");
 }
