@@ -37,6 +37,16 @@ const CACHE_MAX = 256;
 // signal from latching busy more often than the pane bug it replaces.
 const INTERRUPT_RE = /^\[Request interrupted/;
 
+// A LOCAL slash command (/login, /model, /chrome …) executes inside the TUI and
+// never reaches the model. Claude Code still records it as user rows — the
+// command, then its stdout/stderr — and marks only the preceding caveat row
+// `isMeta`. Nothing follows: no assistant row, no `turn_duration`. Read as "a
+// user record means mid-turn", the newest such row pinned a session that had
+// only run `/login` as Working until STALL_MS demoted it 15 minutes later
+// (cy-122914-44677, 2026-09-22). Not decisive either way — a local command can
+// also run while a turn is in flight, so `idle` here would close a live turn.
+const LOCAL_COMMAND_RE = /^<(command-name|local-command-(stdout|stderr|caveat))>/;
+
 type Line = {
   type?: unknown;
   subtype?: unknown;
@@ -89,6 +99,7 @@ export function classifyTurnLine(line: string): TurnState | null {
           : null;
     if (text != null && INTERRUPT_RE.test(text.trim())) return "idle";
     if (x.isMeta === true) return null; // injected context, not a turn signal
+    if (text != null && LOCAL_COMMAND_RE.test(text.trimStart())) return null;
     if (c == null || (Array.isArray(c) && c.length === 0)) return null;
     return "running"; // typed prompt or tool_result — either way, mid-turn
   }
