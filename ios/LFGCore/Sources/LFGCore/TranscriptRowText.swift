@@ -54,8 +54,13 @@ public struct TranscriptRowText: Equatable, Sendable {
     ) -> String {
         let escaped = NSRegularExpression.escapedPattern(for: raw)
         let prefix = imageOnly ? "!" : "!?"
+        // Mirrors what `MediaScanner` accepts as a destination: the path may be
+        // wrapped in CommonMark angle brackets (how a path containing spaces is
+        // written) and may carry a link title. Missing either leaves the raw
+        // `![…](…)` in the prose under the card that now renders it.
         guard let re = try? NSRegularExpression(
-            pattern: prefix + "\\[[^\\]]*\\]\\(\\s*" + escaped + "\\s*\\)"
+            pattern: prefix + "\\[[^\\]]*\\]\\(\\s*<?" + escaped
+                + ">?\\s*(?:\"[^\"\\n]*\"|'[^'\\n]*')?\\s*\\)"
         ) else { return text }
         return re.stringByReplacingMatches(
             in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "")

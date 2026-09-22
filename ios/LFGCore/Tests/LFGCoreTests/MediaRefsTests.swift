@@ -213,3 +213,74 @@ struct TranscriptRowTextTests {
         #expect(r.media.isEmpty)
     }
 }
+
+/// A working directory with a space in its name — `~/dev/inbox/AI girl game` —
+/// is ordinary, and every attachment handed over from one was unopenable: the
+/// markdown destination stopped at the first space, so the link matched nothing,
+/// and the bare-path pass then claimed the tail after the space as a relative
+/// path that resolved against the cwd to a file that cannot exist (404).
+@Suite("Paths containing spaces")
+struct SpacedPathTests {
+    private static let spaced = "/Users/e/dev/inbox/AI girl game/creative/storyboard-v3.png"
+
+    @Test("a markdown image whose path has spaces is found whole")
+    func imageWithSpaces() {
+        let refs = MediaScanner.scan("![storyboard-v3.png](\(Self.spaced))", includeInlineImages: true)
+        #expect(refs.map(\.raw) == [Self.spaced])
+        #expect(refs.first?.kind == .image)
+    }
+
+    @Test("a markdown link whose path has spaces is found whole")
+    func linkWithSpaces() {
+        let clip = "/Users/e/dev/inbox/AI girl game/video-drafts/h3max-480p.mp4"
+        let refs = MediaScanner.scan("[h3max-480p.mp4](\(clip))")
+        #expect(refs.map(\.raw) == [clip])
+        #expect(refs.first?.kind == .video)
+    }
+
+    @Test("the tail after a space is not also offered as a relative path")
+    func noPhantomRelativeTail() {
+        // This was the actual 404: `game/creative/storyboard-v3.png` joined to
+        // the session cwd. One card, not two.
+        let refs = MediaScanner.scan("![v3](\(Self.spaced))", includeInlineImages: true)
+        #expect(refs.count == 1)
+    }
+
+    @Test("CommonMark's angle form is accepted and unwrapped")
+    func angleForm() {
+        // What the server now emits for a path with spaces, so spec-following
+        // markdown renderers see a destination too.
+        let refs = MediaScanner.scan("![v3](<\(Self.spaced)>)", includeInlineImages: true)
+        #expect(refs.map(\.raw) == [Self.spaced])
+    }
+
+    @Test("a link title is not part of the path")
+    func titleIsNotPath() {
+        let refs = MediaScanner.scan("[shot](/tmp/a.png \"The shot\")")
+        #expect(refs.map(\.raw) == ["/tmp/a.png"])
+    }
+
+    @Test("image markdown with spaces is stripped from prose once it is a card")
+    func proseStripsSpacedImage() {
+        for text in ["before ![v3](\(Self.spaced)) after",
+                     "before ![v3](<\(Self.spaced)>) after"] {
+            let r = TranscriptRowText.derive(from: text)
+            #expect(r.media.map(\.raw) == [Self.spaced])
+            #expect(!r.prose.contains("!["))
+            #expect(r.prose == "before  after" || r.prose == "before after")
+        }
+    }
+
+    @Test("a spaced destination that is not a path is not a file")
+    func spacedNonPathIsNotAFile() {
+        // Accepting spaces must not turn citation-shaped prose into a `.2020` card.
+        #expect(MediaScanner.scan("as shown in [ref](Smith et al. 2020)").isEmpty)
+        #expect(MediaScanner.scan("[label](just some words)").isEmpty)
+    }
+
+    @Test("prose that merely mentions a parenthesised phrase is not a file")
+    func noFalsePositiveFromProse() {
+        #expect(MediaScanner.scan("the plan (see the notes) is fine").isEmpty)
+        #expect(MediaScanner.scan("[not a link] (also not one.png)").isEmpty)
+    }
+}

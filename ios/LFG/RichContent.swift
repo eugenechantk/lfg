@@ -30,8 +30,12 @@ struct HostFiles: Sendable {
     }
 
     /// Turn a relative path into an absolute host path by joining the session cwd.
+    /// A `~`-rooted path is passed through untouched: only the host knows its own
+    /// home directory, and `/api/file` expands it. Joining it to the cwd instead
+    /// (which is what "not absolute" used to mean here) produced a path that
+    /// could never exist, so every `~/…` file an agent handed over 404'd.
     private func absolutePath(_ path: String) -> String? {
-        if path.hasPrefix("/") { return path }
+        if path.hasPrefix("/") || path == "~" || path.hasPrefix("~/") { return path }
         guard let cwd, !cwd.isEmpty else { return nil }
         return (cwd.hasSuffix("/") ? cwd : cwd + "/") + path
     }

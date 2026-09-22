@@ -35,10 +35,41 @@ public struct MediaRef: Identifiable, Equatable, Hashable, Sendable {
 }
 
 public enum MediaScanner {
-    // Markdown image: ![label](url)
-    private static let imageMarkdown = try! NSRegularExpression(pattern: #"!\[([^\]]*)\]\(([^)\s]+)\)"#)
-    // Markdown link: [label](url)
-    private static let linkMarkdown = try! NSRegularExpression(pattern: #"(?<!\!)\[([^\]]*)\]\(([^)\s]+)\)"#)
+    // Markdown image: ![label](destination) — and markdown link: [label](destination).
+    //
+    // The destination MAY CONTAIN SPACES. A working directory like
+    // `~/dev/inbox/AI girl game` is ordinary, and the old `([^)\s]+)` destination
+    // simply failed to match such a link at all: the card never appeared, and the
+    // bare-path pass below then matched the tail after the space
+    // (`game/creative/…/clip.mp4`) as a *relative* path, which joined to the cwd
+    // and 404'd. Every attachment an agent handed over from that directory was
+    // unopenable.
+    //
+    // Two destination shapes are accepted: CommonMark's angle form
+    // `(<path with spaces.png>)`, which may also contain `)`, and the bare form,
+    // which runs to the closing paren. An optional link title (`"…"` / `'…'`)
+    // is stripped in `normalizeDestination`.
+    private static let imageMarkdown = try! NSRegularExpression(
+        pattern: #"!\[([^\]]*)\]\("# + destinationPattern + #"\)"#)
+    private static let linkMarkdown = try! NSRegularExpression(
+        pattern: #"(?<!\!)\[([^\]]*)\]\("# + destinationPattern + #"\)"#)
+    private static let destinationPattern = #"\s*(<[^>\n]*>|[^)\n]*)\s*"#
+    // A trailing CommonMark link title, which is not part of the path.
+    private static let markdownTitle = try! NSRegularExpression(pattern: #"\s+(?:"[^"]*"|'[^']*')$"#)
+
+    /// The path a markdown destination actually names: angle wrapper removed,
+    /// link title dropped, surrounding whitespace trimmed.
+    static func normalizeDestination(_ raw: String) -> String {
+        let dest = raw.trimmingCharacters(in: .whitespaces)
+        if dest.count >= 2, dest.hasPrefix("<"), dest.hasSuffix(">") {
+            return String(dest.dropFirst().dropLast()).trimmingCharacters(in: .whitespaces)
+        }
+        let ns = dest as NSString
+        if let m = markdownTitle.firstMatch(in: dest, range: NSRange(location: 0, length: ns.length)) {
+            return ns.substring(to: m.range.location).trimmingCharacters(in: .whitespaces)
+        }
+        return dest
+    }
     // Bare file references ending in an extension: http(s) URL, absolute host
     // path, or a multi-segment relative path (resolved against the session cwd).
     // A boundary lookbehind keeps a relative path like `improvement-log/foo.md`
@@ -80,10 +111,16 @@ public enum MediaScanner {
         }
         var candidates: [Candidate] = []
         var inlineImageURLs = Set<String>()
+        // Spans already explained by markdown syntax. The bare pass must not look
+        // inside them: a destination with a space would otherwise contribute a
+        // second, phantom candidate — the tail after the space, read as a
+        // relative path — alongside the real one.
+        var claimed: [NSRange] = []
 
         for m in imageMarkdown.matches(in: text, range: full) where m.numberOfRanges > 2 {
             let label = ns.substring(with: m.range(at: 1))
-            let url = ns.substring(with: m.range(at: 2))
+            let url = normalizeDestination(ns.substring(with: m.range(at: 2)))
+            claimed.append(m.range)
             if includeInlineImages {
                 candidates.append(Candidate(location: m.range.location, raw: url, label: label, allowAny: true))
             } else {
@@ -91,14 +128,16 @@ public enum MediaScanner {
             }
         }
         for m in linkMarkdown.matches(in: text, range: full) where m.numberOfRanges > 2 {
+            claimed.append(m.range)
             candidates.append(Candidate(location: m.range.location,
-                                        raw: ns.substring(with: m.range(at: 2)),
+                                        raw: normalizeDestination(ns.substring(with: m.range(at: 2))),
                                         label: ns.substring(with: m.range(at: 1)),
                                         allowAny: true))
         }
         for m in bareRef.matches(in: text, range: full) {
             let raw = ns.substring(with: m.range(at: 0))
             guard !inlineImageURLs.contains(raw) else { continue }
+            guard !claimed.contains(where: { NSIntersectionRange($0, m.range).length > 0 }) else { continue }
             candidates.append(Candidate(location: m.range.location,
                                         raw: raw,
                                         label: nil,
@@ -116,6 +155,11 @@ public enum MediaScanner {
             var trimmed = candidate.raw
             while let last = trimmed.last, ".,);'\"".contains(last) { trimmed.removeLast() }
             guard !trimmed.isEmpty, !seen.contains(trimmed) else { continue }
+            // A destination containing a space is a file only if it also looks
+            // like a path. Markdown destinations accept spaces so that
+            // `/Users/e/AI girl game/clip.mp4` resolves; without this,
+            // `[ref](Smith et al. 2020)` would resolve to a `.2020` file.
+            if trimmed.contains(" "), !trimmed.contains("/") { continue }
             let ext = (trimmed as NSString).pathExtension
             let kind: MediaKind
             if let known = MediaKind.from(ext: ext) { kind = known }
