@@ -170,10 +170,32 @@ public struct LFGClient: Sendable {
     /// `GET /api/file?path=…` for a host-side absolute path. `maxWidth` asks the
     /// server for a downscaled JPEG rendition of a raster image (`w=`), which
     /// it buckets to 480/1200/2400 and caches; non-images ignore it.
+    ///
+    /// The path is escaped with `escapedForQueryValue` rather than handed to
+    /// `URLQueryItem`: `+` is legal in a query, so `URLComponents` leaves it
+    /// alone, and the server reads the value through `URLSearchParams`, which
+    /// applies form decoding and turns it into a space. Screenshot names carry
+    /// `+` routinely (`…-t+3.5s.jpg`) and every one of them 404'd.
     public func hostFileURL(forPath path: String, maxWidth: Int? = nil) -> URL? {
         var query = [URLQueryItem(name: "path", value: path)]
         if let maxWidth, maxWidth > 0 { query.append(URLQueryItem(name: "w", value: String(maxWidth))) }
-        return url("api/file", query: query)
+        guard let base = url("api/file", query: query) as URL?,
+              var comps = URLComponents(url: base, resolvingAgainstBaseURL: false)
+        else { return url("api/file", query: query) }
+        comps.percentEncodedQuery = query
+            .map { "\($0.name)=\(Self.escapedForQueryValue($0.value ?? ""))" }
+            .joined(separator: "&")
+        return comps.url ?? base
+    }
+
+    /// Percent-encode a query VALUE so no byte of it can be reinterpreted by the
+    /// receiver — including the characters `URLComponents` considers legal in a
+    /// query and therefore passes through (`+`, `?`, `;`) but a form decoder or
+    /// a naive parser may not.
+    static func escapedForQueryValue(_ value: String) -> String {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "+?;&=#")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 
     /// Load a host-owned image, document, or browser frame through the same

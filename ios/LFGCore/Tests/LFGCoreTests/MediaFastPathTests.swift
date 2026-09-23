@@ -72,3 +72,36 @@ final class MediaFastPathTests: XCTestCase {
         XCTAssertEqual(StreamingRange.uniformType(mimeType: nil, pathExtension: ""), "public.mpeg-4")
     }
 }
+
+/// `+` is legal in a URL query, so `URLComponents` passes it through — and the
+/// server reads the value with `URLSearchParams`, which form-decodes it into a
+/// space. Screenshot filenames carry `+` routinely (`…-t+3.5s.jpg`), and every
+/// one of them resolved to a path that does not exist.
+final class HostFileURLEscapingTests: XCTestCase {
+    private let client = LFGClient(baseURL: URL(string: "https://h.example.com")!)
+
+    func testPlusIsPercentEncoded() throws {
+        let url = try XCTUnwrap(client.hostFileURL(forPath: "/e/shot-t+3.5s.jpg"))
+        XCTAssertTrue(url.absoluteString.contains("%2B"), url.absoluteString)
+        XCTAssertFalse(url.absoluteString.contains("t+3.5s"), url.absoluteString)
+        // And it must survive the round trip the server performs.
+        let comps = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(comps.queryItems?.first { $0.name == "path" }?.value, "/e/shot-t+3.5s.jpg")
+    }
+
+    func testSpacesAndOtherCharactersStillRoundTrip() throws {
+        for path in ["/e/AI girl game/clip.mp4", "/e/a&b.png", "/e/a=b.png", "/e/a?b.png",
+                     "/e/a;b.png", "/e/a#b.png", "/e/a%b.png", "/e/plain.png"] {
+            let url = try XCTUnwrap(client.hostFileURL(forPath: path))
+            let comps = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+            XCTAssertEqual(comps.queryItems?.first { $0.name == "path" }?.value, path, path)
+        }
+    }
+
+    func testWidthIsStillCarried() throws {
+        let url = try XCTUnwrap(client.hostFileURL(forPath: "/e/a+b.png", maxWidth: 2400))
+        let comps = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(comps.queryItems?.first { $0.name == "w" }?.value, "2400")
+        XCTAssertEqual(comps.path, "/api/file")
+    }
+}

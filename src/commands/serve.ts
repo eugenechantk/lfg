@@ -775,6 +775,34 @@ function backwardPageMaxBytes(url: URL): number | null {
     : null;
 }
 
+// The readings of `?path=` worth trying, best first.
+//
+// `URLSearchParams` decodes a query value the `application/x-www-form-urlencoded`
+// way, where a bare `+` means a space. A file path is not form data, and `+` is
+// legal in a query, so Foundation's `URLComponents` hands it over unescaped —
+// which silently renamed `…-t+3.5s.jpg` to `…-t 3.5s.jpg` and 404'd it. Decode
+// the raw query value the URI way (`decodeURIComponent`, which leaves `+`
+// alone) and prefer that, keeping the form reading as a fallback so a client
+// that really did mean a space still resolves.
+export function filePathCandidates(url: URL): string[] {
+  const form = url.searchParams.get("path");
+  if (form == null) return [];
+  const out = [form];
+  const rawQuery = url.search.startsWith("?") ? url.search.slice(1) : url.search;
+  for (const pair of rawQuery.split("&")) {
+    const eq = pair.indexOf("=");
+    if (eq < 0 || pair.slice(0, eq) !== "path") continue;
+    try {
+      const literal = decodeURIComponent(pair.slice(eq + 1));
+      if (literal !== form) out.unshift(literal);
+    } catch {
+      // A malformed escape sequence — the form reading is all we have.
+    }
+    break;
+  }
+  return out;
+}
+
 export async function messagesResponseForSession(sid: string, url: URL): Promise<Response> {
   let tp = await resolveTranscript(sid);
   let forkPending = false;
@@ -1906,19 +1934,14 @@ export async function cmdServe(options: {
       // unauthenticated-behind-Tailscale posture as the rest of the API (the
       // terminal already grants full shell, so this adds no new exposure).
       if (path === "/api/file") {
-        const raw = url.searchParams.get("path");
-        if (!raw) return err(400, "path query param required");
-        // Agents write `~/dev/…` in their handoff prose as often as an absolute
-        // path. Only the host knows what `~` is, so expand it here — a client
-        // that tried would either guess or (worse) treat it as relative and
-        // join it to the session cwd, which is a path that cannot exist.
-        const requested = raw.startsWith("~") ? expandUserPath(raw) : raw;
-        let real: string;
-        try {
-          real = await realpath(requested);
-        } catch {
-          return err(404, "file not found");
-        }
+        // `URLSearchParams` applies FORM decoding, so a literal `+` in a
+        // filename arrives here as a space — and `+` is legal in a query, so
+        // Foundation's URLComponents never escaped it. Screenshot names carry
+        // `+` routinely (`…-t+3.5s.jpg`) and every one 404'd. Read the raw
+        // query too and try the literal reading first; the form reading stays
+        // as a fallback so a client that really does mean a space still works.
+        const candidates = filePathCandidates(url);
+        if (!candidates.length) return err(400, "path query param required");
         // Roots the client may fetch from. homedir() already covers ~everything
         // under the user's home; the temp dirs are added because codex (unlike
         // Claude Code, which is instructed to write into cwd/home) saves
@@ -1938,10 +1961,34 @@ export async function cmdServe(options: {
             try { return await realpath(r); } catch { return r; }
           }),
         );
-        if (!roots.some((r) => real === r || real.startsWith(r + "/")))
-          return err(403, "path outside allowed roots");
+        // Resolve each reading of the query in turn and serve the first that is
+        // both inside a root and actually on disk. Containment is re-checked per
+        // candidate, so the fallback can never widen what is reachable.
+        let real: string | null = null;
+        let outsideRoots = false;
+        for (const candidate of candidates) {
+          // Agents write `~/dev/…` in their handoff prose as often as an
+          // absolute path. Only the host knows what `~` is, so expand it here —
+          // a client that tried would either guess or (worse) treat it as
+          // relative and join it to the session cwd, a path that cannot exist.
+          const requested = candidate.startsWith("~") ? expandUserPath(candidate) : candidate;
+          let resolved: string;
+          try {
+            resolved = await realpath(requested);
+          } catch {
+            continue;
+          }
+          if (!roots.some((r) => resolved === r || resolved.startsWith(r + "/"))) {
+            outsideRoots = true;
+            continue;
+          }
+          if (!(await Bun.file(resolved).exists())) continue;
+          real = resolved;
+          break;
+        }
+        if (real == null)
+          return outsideRoots ? err(403, "path outside allowed roots") : err(404, "file not found");
         const original = Bun.file(real);
-        if (!(await original.exists())) return err(404, "file not found");
         // `w=<px>`: serve a cached downscaled JPEG rendition instead of the
         // original raster (see file-thumbs.ts — the phone path can be 50 KB/s,
         // and a 9 MB screenshot is 228 KB at 1200 px). Falls back to the
