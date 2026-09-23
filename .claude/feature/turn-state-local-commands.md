@@ -85,7 +85,9 @@ followed by a `<local-command-stdout>` row and never by an assistant row.
 | SC4 | `bun -e` `sessionTurnState({sessionId:"3402b3b2…", transcriptPath: …})` on the live file | before: `{state:"running",source:"transcript"}`; after: `null` (pane fallback → empty composer → idle) | — |
 | SC5 | Air: `bun install --frozen-lockfile`; `kill $(lsof -nP -iTCP:8766 -sTCP:LISTEN -t)` (pid 71553, started Sep 20 22:38); wrapper respawned pid 64710 at 12:41:07; `curl /api/sessions` | `{"tmuxName":"cy-122914-44677","busy":false,"prompt":null,"status":"ok"}`; queue for the session empty (nothing was sent to it) | — |
 
-Deploy state: fix is **uncommitted** on the Air working tree and live on the Air server only. The Pro runs the old classifier until this is committed, pushed and its server restarted.
+| Deploy | Air: commit `fc951d4`, pushed to origin/main. Pro (`ssh pro`): `git fetch` + `git reset --mixed origin/main` (HEAD 5b3ffae → fc951d4, working tree untouched; `git status` afterwards shows only the pre-existing pbxproj residue), `bun install --frozen-lockfile` (no changes), killed listener pid 99091 (started Sep 20 23:42), wrapper respawned pid 90347 at 12:58:57 under `serve-forever.sh` | new process answers `/api/sessions`; 3 rows = 3 tmux sessions, 0 null `tmuxTarget`; source on disk has the fix (mtime 12:40, older than the process) | — |
+
+Deploy state: **live on both hosts** as of 2026-09-22 12:59 (Air pid 64710, Pro pid 90347), commit `fc951d4` on `main`.
 
 ## Bugs
 
