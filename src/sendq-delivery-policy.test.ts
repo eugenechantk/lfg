@@ -7,6 +7,7 @@ import {
   getMessage,
   pendingDeliveryDisposition,
   removeMessage,
+  sendNowPlan,
 } from "./sendq.ts";
 
 describe("pending delivery policy", () => {
@@ -18,6 +19,32 @@ describe("pending delivery policy", () => {
   test("Codex follow-ups wait in LFG until the active turn ends", () => {
     expect(pendingDeliveryDisposition("codex", true)).toBe("hold");
     expect(pendingDeliveryDisposition("codex", false)).toBe("deliver");
+  });
+
+  test("only an explicit send-now lets a busy Codex row reach its native queue", () => {
+    expect(pendingDeliveryDisposition("codex", true, true)).toBe("deliver");
+  });
+});
+
+describe("send-now sequencing policy", () => {
+  test("busy Codex queues the replacement before Escape", () => {
+    expect(sendNowPlan("codex", true, "pending")).toBe("deliver-then-interrupt");
+  });
+
+  test("busy Claude keeps its existing interrupt-before-delivery path", () => {
+    expect(sendNowPlan("claude", true, "pending")).toBe("interrupt-then-deliver");
+  });
+
+  test("an already-native-queued message only needs the interrupt", () => {
+    expect(sendNowPlan("codex", true, "queued")).toBe("interrupt-only");
+    expect(sendNowPlan("claude", true, "queued")).toBe("interrupt-only");
+  });
+
+  test("a session that became idle is delivered without a stray Escape", () => {
+    expect(sendNowPlan("codex", false, "pending")).toBe("deliver-only");
+    expect(sendNowPlan("codex", false, "queued")).toBe("deliver-only");
+    expect(sendNowPlan("claude", false, "pending")).toBe("deliver-only");
+    expect(sendNowPlan("claude", false, "queued")).toBe("deliver-only");
   });
 });
 

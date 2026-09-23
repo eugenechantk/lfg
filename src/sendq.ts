@@ -76,6 +76,10 @@ type SessionQueue = { msgs: QueuedMsg[]; running: boolean };
 const heldTraced = new WeakSet<QueuedMsg>();
 
 const queues = new Map<string, SessionQueue>();
+// Message ids explicitly promoted by "Send now (interrupt)". Normal Codex
+// follow-ups stay held outside the TUI while a turn is active; only the row the
+// user selected may bypass that hold long enough to enter Codex's native queue.
+const sendNowDeliveries = new Set<string>();
 let store: SendqStore | null = null;
 let recovered = false;
 let journal: Journal | null = null;
@@ -175,6 +179,7 @@ export function setSendqJournal(next: Journal | null): void {
 export function __resetSendqForTests(): void {
   stopQueuePump();
   queues.clear();
+  sendNowDeliveries.clear();
   store = null;
   recovered = false;
   journal = null;
@@ -336,8 +341,32 @@ export type PendingDeliveryDisposition = "deliver" | "hold";
 export function pendingDeliveryDisposition(
   agent: Session["agent"] | null,
   agentBusy: boolean,
+  sendNow = false,
 ): PendingDeliveryDisposition {
-  return agent === "codex" && agentBusy ? "hold" : "deliver";
+  return agent === "codex" && agentBusy && !sendNow ? "hold" : "deliver";
+}
+
+export type SendNowPlan =
+  | "deliver-only"
+  | "interrupt-only"
+  | "interrupt-then-deliver"
+  | "deliver-then-interrupt";
+
+/**
+ * Codex and Claude expose different native busy-send semantics. Claude already
+ * owns a real next-turn queue, so interrupting first lets that queue drain.
+ * Codex's normal busy send steers the current turn, so LFG normally holds it;
+ * for an explicit send-now, however, Codex's own UI supports the inverse:
+ * queue the selected message, then Escape to "interrupt and send immediately".
+ */
+export function sendNowPlan(
+  agent: Session["agent"] | null,
+  agentBusy: boolean,
+  status: "pending" | "queued",
+): SendNowPlan {
+  if (!agentBusy) return "deliver-only";
+  if (status === "queued") return "interrupt-only";
+  return agent === "codex" ? "deliver-then-interrupt" : "interrupt-then-deliver";
 }
 
 function kick(sessionId: string) {
@@ -353,7 +382,8 @@ function kick(sessionId: string) {
         const next = s.msgs.find((m) => m.status === "pending");
         if (!next) break;
         const context = await deliveryContext(sessionId);
-        if (pendingDeliveryDisposition(context.agent, context.busy) === "hold") {
+        const isSendNow = sendNowDeliveries.has(next.id);
+        if (pendingDeliveryDisposition(context.agent, context.busy, isSendNow) === "hold") {
           if (!heldTraced.has(next)) {
             heldTraced.add(next);
             traceQueue(sessionId, next, "hold", {
@@ -367,6 +397,7 @@ function kick(sessionId: string) {
         next.status = "sending";
         next.updatedAt = Date.now();
         persistMsg(sessionId, next);
+        sendNowDeliveries.delete(next.id);
         traceQueue(sessionId, next, "deliver-start");
         let deliveredUserTurnId: string | null = null;
         try {
@@ -435,10 +466,10 @@ export function removeMessage(sessionId: string, id: string): boolean {
   return true;
 }
 
-// "Send now + interrupt": stop the current turn and run this message next. Move
-// it to the head of the queue, interrupt the agent (so it idles), and kick — the
-// pump/kick delivers it the moment the Escape lands. A message that already
-// reached the agent's native queue (status "queued") is run by the interrupt directly.
+// "Send now + interrupt": move the selected message to the head and choose the
+// agent-specific safe sequence below. Claude interrupts before LFG delivery;
+// busy Codex must enter its native queue first and then receive Escape. If the
+// session became idle meanwhile, never Escape the idle composer.
 export async function sendNow(sessionId: string, id: string): Promise<boolean> {
   ensureRecovered();
   const s = queues.get(sessionId);
@@ -448,10 +479,85 @@ export async function sendNow(sessionId: string, id: string): Promise<boolean> {
   // promote to the front of the pending order
   s.msgs = s.msgs.filter((x) => x.id !== id);
   s.msgs.unshift(m);
-  const target = await sessionTarget(sessionId);
-  if (target) tmuxInterrupt(target); // stop the current turn so the agent idles
+  const context = await deliveryContext(sessionId);
+  const plan = sendNowPlan(context.agent, context.busy, m.status);
+  const started = Date.now();
+
+  if (plan === "deliver-only") {
+    if (m.status === "pending") kick(sessionId);
+    else await reconcileQueued(sessionId);
+    traceQueue(sessionId, m, "send-now-idle", {
+      agent: context.agent,
+      status: m.status,
+    });
+    return true;
+  }
+
+  if (plan === "interrupt-only" || plan === "interrupt-then-deliver") {
+    const target = await sessionTarget(sessionId);
+    const interrupted = target ? tmuxInterrupt(target) : false;
+    traceQueue(sessionId, m, "send-now-interrupt", {
+      agent: context.agent,
+      plan,
+      interrupted,
+      elapsedMs: Date.now() - started,
+    });
+    if (!interrupted) return false;
+    if (plan === "interrupt-then-deliver") kick(sessionId);
+    return true;
+  }
+
+  // Busy Codex: deliberately put this ONE selected row into its native queue
+  // before Escape. Its TUI then performs the atomic behavior it advertises:
+  // "interrupt and send immediately." Interrupting first left the row pending
+  // behind stale structured busy state until the one-second pump noticed idle.
+  sendNowDeliveries.add(m.id);
   kick(sessionId);
-  return true;
+
+  // deliver() usually settles a native Codex queue insertion in <1s. Wait for
+  // that receipt before Escape so the key cannot race ahead of the message.
+  // The generous cap covers a transient in-flight queue row without allowing
+  // an HTTP request to hang forever.
+  const deadline = Date.now() + 15_000;
+  const currentStatus = (): QueuedMsg["status"] => m.status;
+  while (
+    (currentStatus() === "pending" || currentStatus() === "sending")
+    && Date.now() < deadline
+  ) {
+    await sleep(25);
+  }
+  sendNowDeliveries.delete(m.id);
+  const settledStatus = currentStatus();
+  if (settledStatus === "pending" || settledStatus === "sending" || settledStatus === "failed") {
+    traceQueue(sessionId, m, "send-now-delivery-failed", {
+      agent: context.agent,
+      status: settledStatus,
+      elapsedMs: Date.now() - started,
+    });
+    return false;
+  }
+
+  // If the message already surfaced as its own user turn, Codex beat us to the
+  // transition and is now processing the replacement; Escape would cancel the
+  // very turn the user asked to start. Only the native-queued state still needs
+  // the interrupt.
+  if (settledStatus === "delivered") {
+    traceQueue(sessionId, m, "send-now-already-started", {
+      agent: context.agent,
+      elapsedMs: Date.now() - started,
+    });
+    return true;
+  }
+
+  const target = await sessionTarget(sessionId);
+  const interrupted = target ? tmuxInterrupt(target) : false;
+  traceQueue(sessionId, m, "send-now-interrupt", {
+    agent: context.agent,
+    plan,
+    interrupted,
+    elapsedMs: Date.now() - started,
+  });
+  return interrupted;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
