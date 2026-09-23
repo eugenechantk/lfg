@@ -31,6 +31,13 @@ app with push notifications:
 - **Start / resume sessions** — pick an agent, model, and working directory, then
   your first message kicks off a new session. Resumable (closed) sessions can be
   revived.
+- **Switch model** — the session's ••• menu groups current-tool models first
+  and other-tool models second. Choosing the current tool switches in place
+  (or resumes a closed session); choosing the other tool opens a new session
+  with that model and the saved history. Cross-tool switches preserve the source
+  session and directory and wait for your next instruction after reading context.
+  Closed sessions use the freshest reachable advertised copy. Unsaved active-turn
+  output is excluded. The host must support `/api/sessions/handoff`.
 - **Push notifications** — get a push when one of your sessions finishes a turn
   or needs your input; tapping it deep-links straight to that session.
 

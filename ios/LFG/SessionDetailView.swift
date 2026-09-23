@@ -1363,11 +1363,24 @@ private struct SessionOptionsMenu: View {
         primary.append(action("Spike: inverted transcript", systemImage: "arrow.up.arrow.down",
                               handler: onShowInversionSpike))
 
-        let models = modelOptions.map { model in
-            action(model) { Task { await store.setModel(sid, model) } }
+        let switching = store.switchingModelSessionIds.contains(sid)
+        let models = SessionHandoff.modelSections(current: AgentKind(rawValue: agent) ?? .claude, closed: closed).map { section in
+            let target = section.agent
+            return UIMenu(title: section.title, options: .displayInline,
+                children: section.models.map { model in
+                    action(model, identifier: "switch_model_\(target.rawValue)_\(model)",
+                        attributes: switching || sid.hasPrefix("local-") ? .disabled : [],
+                        state: agent == target.rawValue && store.session(sid)?.model == model ? .on : .off) {
+                        Task {
+                            if let id = await store.switchModel(sid, to: AgentModelSelection(agent: target, model: model)) {
+                                store.requestSelection(id)
+                            }
+                        }
+                    }
+                })
         }
         primary.append(UIMenu(
-            title: "Switch model",
+            title: switching ? "Switching model…" : "Switch model",
             image: UIImage(systemName: "cpu"),
             children: models
         ))
@@ -1459,20 +1472,20 @@ private struct SessionOptionsMenu: View {
     private func action(
         _ title: String,
         systemImage: String? = nil,
+        identifier: String? = nil,
         attributes: UIMenuElement.Attributes = [],
+        state: UIMenuElement.State = .off,
         handler: @escaping @MainActor () -> Void
     ) -> UIAction {
         UIAction(
             title: title,
             image: systemImage.flatMap(UIImage.init(systemName:)),
-            attributes: attributes
+            identifier: identifier.map(UIAction.Identifier.init(rawValue:)),
+            attributes: attributes,
+            state: state
         ) { _ in
             MainActor.assumeIsolated { handler() }
         }
-    }
-
-    private var modelOptions: [String] {
-        AgentKind(rawValue: agent)?.models ?? AgentKind.claude.models
     }
 
     private var canFork: Bool {

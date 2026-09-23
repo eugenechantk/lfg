@@ -6,7 +6,8 @@ import { resolveBusy, sessionTurnState } from "./session-state.ts";
 import { statSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, basename, relative } from "node:path";
 import { tmpdir } from "node:os";
-import { tmuxTargetForPid, paneTtyForTarget } from "./tmux";
+import { tmuxTargetForPid, paneTtyForTarget, capturePaneAsync } from "./tmux";
+import { codexModelFromPane } from "./codex-model-state.ts";
 import { listManaged, patchManaged, type ManagedSession } from "./managed";
 import { isClosing } from "./closing";
 import { userAssignments } from "./users";
@@ -62,6 +63,7 @@ const HOME = process.env.HOME ?? homedir();
 const PROJECTS_DIR = join(HOME, ".claude", "projects");
 const TITLE_MAX = 72;
 const CODEX_PROMPT_READ_BYTES = 1024 * 1024;
+const COMPACTING_CONVERSATION_TEXT = "Compacting conversation";
 
 function claudeProjectsDir(): string {
   return process.env.LFG_CLAUDE_PROJECTS_DIR ?? PROJECTS_DIR;
@@ -78,7 +80,7 @@ export type SessionMsg = {
   // whole chunk again.
   id: string | null;
   role: string;
-  kind: "text" | "thinking" | "tool_use" | "tool_result";
+  kind: "text" | "thinking" | "tool_use" | "tool_result" | "system_notice";
   text: string;
   ts: number | null;
   // True only for a genuine upstream API-error turn (Claude Code stamps the
@@ -443,7 +445,12 @@ async function firstPromptTitle(path: string): Promise<string | null> {
     const text = await Bun.file(path).slice(0, 256 * 1024).text();
     for (const line of text.split("\n")) {
       if (!line.trim()) continue;
-      let x: { type?: string; isMeta?: boolean; message?: { content?: unknown } };
+      let x: {
+        type?: string;
+        isMeta?: boolean;
+        isCompactSummary?: boolean;
+        message?: { content?: unknown };
+      };
       try {
         x = JSON.parse(line);
       } catch {
@@ -459,7 +466,7 @@ async function firstPromptTitle(path: string): Promise<string | null> {
         if (t && !t.startsWith("<"))
           return t.length > TITLE_MAX ? t.slice(0, TITLE_MAX - 1) + "…" : t;
       }
-      if (x.type !== "user" || x.isMeta) continue;
+      if (x.type !== "user" || x.isMeta || x.isCompactSummary) continue;
       const c = x.message?.content;
       let t: string | null = null;
       if (typeof c === "string") t = c;
@@ -1472,33 +1479,36 @@ function codexMessage(
   return { id: suffix && id ? `${id}#${suffix}` : id, role, kind, text, ts };
 }
 
-type CodexUserTextSegment =
+type UserTextSegment =
   | { kind: "human"; text: string }
-  | { kind: "local-command-stdout"; text: string };
+  | { kind: "system-notice"; text: string };
 
 /**
- * Split Codex's reserved local-command wrapper out of the next human turn.
+ * Split reserved local-command wrappers out of a provider's user-role row.
  *
- * Model changes and similar local UI commands are persisted inside the next
- * user response item, even though the wrapped text is status output rather than
- * something the human said. Keep source order so clients can render the status
- * exactly where Codex placed it. An incomplete wrapper is left untouched: an
- * active rollout may have been read between writes, and dropping that text
- * would be worse than briefly showing the envelope.
+ * Claude writes the command and its output as separate user rows. Codex can
+ * embed local-command output inside the next human response item. Neither is a
+ * prompt sent to the model. Keep source order so clients can render the system
+ * activity exactly where the provider placed it. An incomplete wrapper is left
+ * untouched: an active rollout may have been read between writes, and dropping
+ * that text would be worse than briefly showing the envelope.
  */
-function codexUserTextSegments(text: string): CodexUserTextSegment[] {
-  const pattern = /<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/gi;
+function userTextSegments(text: string): UserTextSegment[] {
+  const pattern = /<command-name>([\s\S]*?)<\/command-name>(?:\s*<command-message>[\s\S]*?<\/command-message>)?(?:\s*<command-args>([\s\S]*?)<\/command-args>)?|<local-command-(?:stdout|stderr)>([\s\S]*?)<\/local-command-(?:stdout|stderr)>/gi;
   const matches = Array.from(text.matchAll(pattern));
   if (matches.length === 0) return [{ kind: "human", text }];
 
-  const segments: CodexUserTextSegment[] = [];
+  const segments: UserTextSegment[] = [];
   let offset = 0;
   for (const match of matches) {
     const index = match.index ?? offset;
     const human = text.slice(offset, index).trim();
-    const output = (match[1] ?? "").trim();
     if (human) segments.push({ kind: "human", text: human });
-    if (output) segments.push({ kind: "local-command-stdout", text: output });
+    const command = (match[1] ?? "").trim();
+    const args = (match[2] ?? "").trim();
+    const output = (match[3] ?? "").trim();
+    const notice = command ? [command, args].filter(Boolean).join(" ") : output;
+    if (notice) segments.push({ kind: "system-notice", text: notice });
     offset = index + match[0].length;
   }
   const trailing = text.slice(offset).trim();
@@ -1507,8 +1517,8 @@ function codexUserTextSegments(text: string): CodexUserTextSegment[] {
 }
 
 function codexHumanText(text: string): string | null {
-  const human = codexUserTextSegments(text)
-    .filter((segment): segment is Extract<CodexUserTextSegment, { kind: "human" }> =>
+  const human = userTextSegments(text)
+    .filter((segment): segment is Extract<UserTextSegment, { kind: "human" }> =>
       segment.kind === "human")
     .map((segment) => segment.text)
     .join("\n\n")
@@ -1521,11 +1531,11 @@ function codexUserMessages(
   text: string,
   ts: number | null,
 ): SessionMsg[] {
-  return codexUserTextSegments(text).map((segment, index) =>
+  return userTextSegments(text).map((segment, index) =>
     codexMessage(
       x,
       segment.kind === "human" ? "user" : "system",
-      segment.kind === "human" ? "text" : "tool_result",
+      segment.kind === "human" ? "text" : "system_notice",
       segment.text,
       ts,
       index,
@@ -2128,6 +2138,7 @@ function normalizeLineUnsafe(line: string, codexState: CodexNormalizationState):
     error?: string;
     apiErrorStatus?: number;
     isMeta?: boolean;
+    isCompactSummary?: boolean;
     toolUseResult?: unknown;
     message?: { role?: string; content?: unknown };
     // `queue-operation` lines only.
@@ -2159,9 +2170,28 @@ function normalizeLineUnsafe(line: string, codexState: CodexNormalizationState):
   const apiError = x.isApiErrorMessage === true ? true : undefined;
   const errorCode = typeof x.error === "string" && x.error ? x.error : undefined;
   const apiErrorStatus = typeof x.apiErrorStatus === "number" ? x.apiErrorStatus : undefined;
+  // Claude Code persists its context-compaction handoff as a transcript-only
+  // `user` row containing the entire private summary. It is provider machinery,
+  // not a message the human sent. Preserve the timeline beat without leaking
+  // the summary into a user bubble.
+  if (x.type === "user" && x.isCompactSummary === true) {
+    return [{ id, role, kind: "thinking", text: COMPACTING_CONVERSATION_TEXT, ts }];
+  }
   if (typeof m.content === "string") {
     if (!m.content.trim()) return [];
     const text = role === "user" ? stripHumanPrefix(m.content) : m.content;
+    if (role === "user") {
+      return userTextSegments(text).map((segment, index) => ({
+        id: blockId(id, index),
+        role: segment.kind === "human" ? "user" : "system",
+        kind: segment.kind === "human" ? "text" : "system_notice",
+        text: segment.text,
+        ts,
+        apiError,
+        errorCode,
+        apiErrorStatus,
+      }));
+    }
     return [{ id, role, kind: "text", text, ts, apiError, errorCode, apiErrorStatus }];
   }
   if (Array.isArray(m.content)) {
@@ -2320,7 +2350,12 @@ const LAST_USER_TEXT_SCAN_BYTES = 32 * 1024 * 1024;
 // command/caveat wrappers (lines starting with "<"). Truncated for the card.
 async function lastUserText(path: string): Promise<string | null> {
   return scanBack(path, (line) => {
-    let x: { type?: string; isMeta?: boolean; message?: { content?: unknown } };
+    let x: {
+      type?: string;
+      isMeta?: boolean;
+      isCompactSummary?: boolean;
+      message?: { content?: unknown };
+    };
     try {
       x = JSON.parse(line);
     } catch {
@@ -2335,7 +2370,7 @@ async function lastUserText(path: string): Promise<string | null> {
       const t = stripConversationPrefix(codexHuman).trim().replace(/\s+/g, " ");
       if (t && !t.startsWith("<")) return t.length > 140 ? t.slice(0, 139) + "…" : t;
     }
-    if (x.type !== "user" || x.isMeta) return null;
+    if (x.type !== "user" || x.isMeta || x.isCompactSummary) return null;
     let t = extractText(x.message?.content);
     if (!t) return null;
     t = stripHumanPrefix(t.trim().replace(/\s+/g, " "));
@@ -2343,6 +2378,8 @@ async function lastUserText(path: string): Promise<string | null> {
     return t.length > 140 ? t.slice(0, 139) + "…" : t;
   }, { maxScanBytes: LAST_USER_TEXT_SCAN_BYTES });
 }
+
+export const lastUserTextForTest = (path: string) => lastUserText(path);
 
 /**
  * The last `n` genuine user turns, oldest-first, each truncated to `maxChars`.
@@ -2405,6 +2442,7 @@ function userTurnFromLine(line: string, maxChars: number): string | null {
   let x: {
     type?: string;
     isMeta?: boolean;
+    isCompactSummary?: boolean;
     toolUseResult?: unknown;
     message?: { content?: unknown };
     operation?: string;
@@ -2435,7 +2473,7 @@ function userTurnFromLine(line: string, maxChars: number): string | null {
   } else if (x.type === "response_item" && x.payload?.type === "message" && x.payload.role === "user") {
     const raw = codexResponseUserText(x.payload);
     text = raw ? codexHumanText(raw)?.replace(/\s+/g, " ") ?? null : null;
-  } else if (x.type === "user" && !x.isMeta) {
+  } else if (x.type === "user" && !x.isMeta && !x.isCompactSummary) {
     // A tool result is recorded as a `user` turn. `extractText` drops the
     // `tool_result` blocks themselves, but a record can carry a stray text
     // block alongside — so exclude the record outright rather than trusting
@@ -2612,7 +2650,12 @@ async function indexedUserText(path: string): Promise<string> {
 // tells them apart. Returns null when there's no user turn to compare.
 export async function lastUserPromptText(path: string): Promise<string | null> {
   return scanBack(path, (line) => {
-    let x: { type?: string; isMeta?: boolean; message?: { content?: unknown } };
+    let x: {
+      type?: string;
+      isMeta?: boolean;
+      isCompactSummary?: boolean;
+      message?: { content?: unknown };
+    };
     try {
       x = JSON.parse(line);
     } catch {
@@ -2627,7 +2670,7 @@ export async function lastUserPromptText(path: string): Promise<string | null> {
       const t = stripConversationPrefix(codexHuman).trim().replace(/\s+/g, " ");
       if (t && !t.startsWith("<")) return t;
     }
-    if (x.type !== "user" || x.isMeta) return null;
+    if (x.type !== "user" || x.isMeta || x.isCompactSummary) return null;
     let t = extractText(x.message?.content);
     if (!t) return null;
     t = stripHumanPrefix(t.trim().replace(/\s+/g, " "));
@@ -2675,13 +2718,10 @@ async function lastAssistantModel(path: string): Promise<string | null> {
   });
 }
 
-// The model a codex rollout is running on. Codex writes no per-message model
-// (unlike Claude's `message.model`) — it stamps one `turn_context` row per turn
-// carrying the model that turn used, so the newest one is the live model even
-// after a mid-session `/model` switch. A TUI codex launched with no `--model`
-// arg (the common case: `codex --yolo`) has NOTHING else to read it from, which
-// is why the list row showed no model at all for codex sessions. Returns null
-// before the first turn — the launch arg is the caller's fallback.
+// The model of the newest persisted Codex turn. Codex stamps a turn_context
+// record instead of a per-message model. A native picker change does not update
+// this record until another turn starts, so live lists prefer the terminal
+// footer and use this as their fallback. Closed sessions use the saved model.
 export async function lastCodexModel(path: string): Promise<string | null> {
   return scanBack(path, (line) => {
     let x: { type?: string; payload?: { model?: string } };
@@ -2760,6 +2800,20 @@ let listCache: ListCacheEntry | null = null;
 // list view from flashing a 500 during a transient storm; the next poll, a few
 // hundred ms later, almost always succeeds.
 let lastGood: Session[] | null = null;
+
+/** Apply an acknowledged native change to the coalesced scan before replying.
+ * Await the existing scan rather than invalidating it and spawning a duplicate
+ * process scan. Subsequent scans read the live footer normally. */
+export async function noteConfirmedSessionModel(sessionId: string, pid: number, model: string): Promise<void> {
+  const update = (sessions: Session[] | null) => {
+    for (const session of sessions ?? []) {
+      if (session.sessionId === sessionId && session.pid === pid) session.model = model;
+    }
+  };
+  if (listCache) update(await listCache.promise);
+  update(lastGood);
+}
+
 export function listSessions(): Promise<Session[]> {
   const now = Date.now();
   if (listCache) {
@@ -3097,11 +3151,11 @@ async function listSessionsUncached(
       tmuxName,
       ...managedFieldsForTmuxName(tmuxName, managedByName),
       assignedUser: tmuxName ? (assigns[tmuxName] ?? null) : null,
-      // Prefer the rollout's live model (`turn_context`), fall back to the
-      // launch arg — a TUI codex is usually started bare (`codex --yolo`), so
-      // the arg alone left the row with no model at all. Names are surfaced
-      // verbatim: codex slugs are catalog-driven, not the Claude aliases.
-      model: liveModel ?? p.cmd.match(/--model\s+(\S+)/)?.[1] ?? null,
+      // The native picker updates its footer immediately, but turn_context
+      // retains the previous model until the next user turn. Prefer the live
+      // footer so model menus do not revert their checkmark after a switch.
+      model: (tmuxTarget ? codexModelFromPane(await capturePaneAsync(tmuxTarget)) : null)
+        ?? liveModel ?? p.cmd.match(/--model\s+(\S+)/)?.[1] ?? null,
       ...computeStatus(lastAssistant, null),
     });
   }

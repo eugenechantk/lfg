@@ -877,6 +877,7 @@ final class SessionStore: ObservableObject {
     @Published var movingIds: Set<String> = []
     @Published var closingIds: Set<String> = []
     @Published var creatingSession = false
+    @Published var handingOffIds: Set<String> = []
 
     // MARK: Search across every session on every host
     //
@@ -994,6 +995,20 @@ final class SessionStore: ObservableObject {
             if let state = resolvedState(for: entry), state.error == nil { return entry.url }
         }
         return configuredHosts.first?.url ?? hosts.first?.url
+    }
+
+    func switchTool(_ item: SessionItem, agent: String) async -> String? {
+        guard let id = item.session.sessionId,
+              !handingOffIds.contains(id) else { return nil }
+        guard let host = creationHost(for: item.hostURL) else { return "The source host is no longer configured." }
+        handingOffIds.insert(id)
+        defer { handingOffIds.remove(id) }
+        do {
+            let created = try await DesktopSessionCreator.switchTool(item: item, host: host, agent: agent)
+            let error = await Task.detached { Opener.open(created) }.value
+            await refresh()
+            return error
+        } catch { return "Switch tool failed: \(error.localizedDescription)" }
     }
 
     private func creationHost(for url: String) -> HostState? {
@@ -1788,6 +1803,7 @@ enum MoveTestCLI {
         let args = CommandLine.arguments
         guard args.count > 1 else { return }
         if args[1] == "--rename-test" { runRenameTest(args) }
+        if args[1] == "--switch-tool-test" { runHandoffTest(args) }
         guard args[1] == "--move-test" else { return }
         guard args.count == 5 else {
             writeResult(ok: false, error: "usage: lfg --move-test <sessionId> <sourceURL> <targetURL>")
@@ -1801,6 +1817,36 @@ enum MoveTestCLI {
         Task.detached {
             let ok = await run(sessionId: sessionId, sourceURL: sourceURL, targetURL: targetURL)
             Darwin.exit(ok ? 0 : 1)
+        }
+        dispatchMain()
+    }
+
+    /// Exercise the real desktop transport without opening or focusing iTerm.
+    private static func runHandoffTest(_ args: [String]) -> Never {
+        guard args.count == 5 else {
+            writeResult(ok: false, error: "usage: lfg --switch-tool-test <sessionId> <hostURL> <agent>")
+            Darwin.exit(1)
+        }
+        Task.detached {
+            do {
+                let host = HostState(url: args[3], sshTarget: nil, isLocal: true)
+                let sourceSession = await fetchSourceSession(sessionId: args[2], sourceURL: args[3]) ?? fallbackSession(sessionId: args[2])
+                let source = SessionItem(session: sourceSession,
+                    hostURL: args[3], hostId: "source", hostLabel: "Source",
+                    hostIsLocal: true, hostSSHTarget: nil)
+                let created = try await DesktopSessionCreator.switchTool(item: source, host: host, agent: args[4])
+                let data = try JSONSerialization.data(withJSONObject: [
+                    "ok": true, "sessionId": created.session.sessionId ?? "",
+                    "tmuxName": created.session.tmuxName ?? "", "agent": created.session.agent,
+                    "cwd": created.session.cwd ?? "", "canOpen": created.canOpen,
+                ])
+                print(String(decoding: data, as: UTF8.self))
+                fflush(stdout)
+                Darwin.exit(0)
+            } catch {
+                writeResult(ok: false, error: error.localizedDescription)
+                Darwin.exit(1)
+            }
         }
         dispatchMain()
     }
@@ -2641,6 +2687,13 @@ enum DesktopFeatureTestCLI {
                    "create response retains the returned tmux and session identifiers")
         try expect(created.hostSSHTarget == "pro" && created.hostRemoteTransport == .moshBridged,
                    "created row retains host transport metadata for the existing iTerm opener")
+        let handoff = try DesktopSessionCreator.handoffRequest(hostURL: "https://source.test", sessionId: "claude-source", agent: "codex")
+        try expect(handoff.httpMethod == "POST" && handoff.url?.absoluteString == "https://source.test/api/sessions/handoff",
+                   "handoff uses the explicit endpoint on the source host")
+        let handoffBody = try require(handoff.httpBody, "handoff has a request body")
+        let handoffPayload = try JSONSerialization.jsonObject(with: handoffBody) as? [String: String]
+        try expect(handoffPayload == ["sessionId": "claude-source", "agent": "codex"], "handoff sends source identity without overriding its directory")
+        try expect(handoff.timeoutInterval == 90, "handoff allows transcript export and Codex binding time")
     }
 
     /// Search spans every session on every host, so the rules that keep that
@@ -2967,6 +3020,31 @@ enum DesktopSessionCreator {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !inbox.isEmpty else { throw CreationError.message("host returned an empty Inbox") }
         return inbox
+    }
+
+    static func handoffRequest(hostURL: String, sessionId: String, agent: String) throws -> URLRequest {
+        guard let url = endpoint(hostURL, path: "/api/sessions/handoff") else { throw CreationError.message("bad host URL") }
+        var request = DesktopAPI.request(url, method: "POST")
+        request.timeoutInterval = 90
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Deliberately omit model: desktop follows the target CLI's own default.
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["sessionId": sessionId, "agent": agent])
+        return request
+    }
+
+    static func switchTool(item: SessionItem, host: HostState, agent: String) async throws -> SessionItem {
+        guard let sourceId = item.session.sessionId else { throw CreationError.message("source session has no id") }
+        let request = try handoffRequest(hostURL: item.hostURL, sessionId: sourceId, agent: agent)
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+        let created = try JSONDecoder().decode(DesktopNewSessionResponse.self, from: data)
+        guard created.ok != false, created.agent == agent,
+              let id = created.sessionId, !id.isEmpty, id != sourceId else {
+            throw CreationError.message("host did not return the selected tool's session")
+        }
+        return try createdItem(response: created, plan: DesktopNewSessionPlan(
+            hostURL: item.hostURL, cwd: item.session.cwd ?? "", agent: agent, model: ""
+        ), host: host)
     }
 
     static func create(plan: DesktopNewSessionPlan, host: HostState) async throws -> SessionItem {
@@ -4614,6 +4692,16 @@ struct ContentView: View {
                         renameText = item.session.title
                         pendingRename = item
                     }
+                }
+                if ["claude", "codex"].contains(item.session.agent), let id = item.session.sessionId {
+                    let target = item.session.agent == "claude" ? "codex" : "claude"
+                    Button(store.handingOffIds.contains(id) ? "Switching tool…" : "Switch to \(target == "claude" ? "Claude Code" : "Codex")") {
+                        Task {
+                            if let error = await store.switchTool(item, agent: target) { alertMessage = error }
+                        }
+                    }
+                    .disabled(store.handingOffIds.contains(id))
+                    .accessibilityIdentifier("switch_tool_\(target)")
                 }
                 if !item.hostIsLocal, item.session.sessionId != nil {
                     Button("Resume locally") {

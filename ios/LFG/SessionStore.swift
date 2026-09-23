@@ -4401,6 +4401,57 @@ import LFGCore
         } catch { lastError = "Fork failed: \(error.localizedDescription)"; return nil }
     }
 
+    private(set) var switchingModelSessionIds: Set<String> = []
+
+    func switchModel(_ sourceID: String, to selection: AgentModelSelection) async -> String? {
+        guard !switchingModelSessionIds.contains(sourceID),
+              let source = session(sourceID), let sourceAgent = AgentKind(rawValue: source.agent) else { return nil }
+        let host = SessionHandoff.sourceHost(
+            sessionId: sourceID, liveOwner: host(forSession: sourceID),
+            copies: settings.hosts.map { host in
+                (host, (closedFirstPageByHost[host.id] ?? [])
+                    + (closedExtraPagesByHost[host.id] ?? [])
+                    + (searchPagesByHost[host.id] ?? []))
+            }, isReachable: isReachable)
+        guard let host, let client = settings.client(for: host) else {
+            lastError = "No reachable host has this session's transcript."
+            return nil
+        }
+        switchingModelSessionIds.insert(sourceID)
+        defer { switchingModelSessionIds.remove(sourceID) }
+        do {
+            let route = SessionHandoff.modelSwitchRoute(from: sourceAgent, to: selection.agent, closed: source.closed)
+            if route == .inPlace {
+                try await client.setModel(sourceID, model: selection.model)
+                await refresh()
+                return nil
+            }
+            if route == .resume {
+                let response = try await client.resume(ResumeRequest(sessionId: sourceID, model: selection.model, user: settings.defaultOwner))
+                carryForwardResume(from: sourceID, to: response.sessionId, on: host.id)
+                if selection.agent == .codex {
+                    try await client.setModel(response.sessionId ?? sourceID, model: selection.model)
+                }
+                await refresh()
+                return response.sessionId ?? sourceID
+            }
+            let response = try await client.handoff(sessionId: sourceID, to: selection, user: settings.defaultOwner)
+            guard let id = response.sessionId else { return nil }
+            hostBySession[id] = host.id
+            let created = Session(sessionId: id, title: "Switching model", agent: selection.agent.rawValue, model: selection.model,
+                cwd: response.cwd, tmuxName: response.tmuxName, managed: true)
+            optimisticSessions.append(created)
+            sessions.append(created)
+            deepLinkSession = created
+            // The source's transcript, draft and pending sends retain their own id.
+            await refresh()
+            return id
+        } catch {
+            lastError = "Switch model failed: \(error.localizedDescription)"
+            return nil
+        }
+    }
+
     /// Ask a prospective transfer target about its copy of the transcript. Never
     /// touches the source. A 404 is an older server without the route and means
     /// "unknown" (proceed as before), not "missing"; any other failure means the

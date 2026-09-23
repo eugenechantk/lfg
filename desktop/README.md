@@ -19,6 +19,13 @@ are stretched to the full visible height of the display they open on.
 
 ## UI
 
+- **Switch tools** — right-click a Claude Code or Codex session and choose
+  **Switch to Codex** or **Switch to Claude Code**. The source host saves a
+  transcript snapshot, starts the other CLI in the same directory using its
+  configured default model, and opens its terminal. The destination reads the
+  saved history and waits for your next instruction. The original stays intact.
+  Only persisted output is included. Requires a host with
+  `/api/sessions/handoff` support.
 - **Menu-bar quick access** — the status item opens a compact window with
   de-duplicated Needs Input, Running, and Recent sections. Needs Input comes
   from the server's live prompt state (not the separate Paused/error state).

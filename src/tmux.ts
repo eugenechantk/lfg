@@ -619,6 +619,7 @@ export function managedSessionArgv(opts: {
   cwd: string;
   prompt?: string;
   model?: string;
+  useConfiguredModelDefault?: boolean;
   resume?: string;
   fork?: boolean;
 }): string[] {
@@ -631,13 +632,14 @@ export function managedSessionArgv(opts: {
     // Branch instead of revive: fork mints a new id from the resumed history.
     if (opts.fork) argv.push("--fork-session");
   }
-  // ALWAYS pin a model. A bare `claude` inherits Claude Code's saved global
+  // Normally pin a model. A bare `claude` inherits Claude Code's saved global
   // default, which can silently rot — when Anthropic retires/disables that
   // model (e.g. the Fable off-switch), every inheriting session boots straight
   // into "model unavailable" and freezes, replaying the error on every turn.
   // An explicit --model is the only thing that overrides it. DEFAULT_MODEL is a
   // known-good fallback when the caller didn't pick one.
-  argv.push("--model", opts.model || DEFAULT_MODEL);
+  // Desktop tool switching explicitly requests the CLI's configured default.
+  if (opts.model || !opts.useConfiguredModelDefault) argv.push("--model", opts.model || DEFAULT_MODEL);
   // `--` terminates option parsing so the variadic --add-dir can't swallow the
   // positional prompt as a second directory (which strands the new session at
   // an empty composer — the first message never gets submitted).
@@ -650,6 +652,7 @@ export function spawnManagedSession(opts: {
   cwd: string;
   prompt?: string;
   model?: string;
+  useConfiguredModelDefault?: boolean;
   // When set, resume the on-disk transcript with this sessionId (`claude
   // --resume <id>`) instead of starting a fresh conversation — the way lfg
   // brings a closed/dead session back after the box (and its tmux server +

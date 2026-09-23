@@ -256,10 +256,10 @@ public struct LFGClient: Sendable {
     }
 
     @discardableResult
-    private func send(_ method: String, _ path: String, json body: [String: Any?]? = nil) async throws -> Data {
+    private func send(_ method: String, _ path: String, json body: [String: Any?]? = nil, timeout: TimeInterval = 20) async throws -> Data {
         var req = URLRequest(url: url(path))
         req.httpMethod = method
-        req.timeoutInterval = 20
+        req.timeoutInterval = timeout
         if let body {
             var clean: [String: Any] = [:]
             for (k, v) in body { clean[k] = (v ?? NSNull()) }
@@ -576,6 +576,19 @@ public struct LFGClient: Sendable {
             "sessionId": r.sessionId, "model": r.model, "user": r.user,
         ])
         return try JSONDecoder().decode(NewSessionResponse.self, from: data)
+    }
+
+    /// Switch tools using an immutable snapshot and the explicitly selected model.
+    public func handoff(sessionId: String, to selection: AgentModelSelection, user: String? = nil) async throws -> NewSessionResponse {
+        let data = try await send("POST", "api/sessions/handoff", json: [
+            "sessionId": sessionId, "agent": selection.agent.rawValue, "model": selection.model, "user": user,
+        ], timeout: 90)
+        let response = try JSONDecoder().decode(NewSessionResponse.self, from: data)
+        guard response.ok != false, response.agent == selection.agent.rawValue,
+              let id = response.sessionId, !id.isEmpty, id != sessionId else {
+            throw LFGError.decoding("Host did not return a new \(selection.agent.displayName) session")
+        }
+        return response
     }
 
     // MARK: Steering

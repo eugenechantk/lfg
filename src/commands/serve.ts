@@ -6,6 +6,8 @@ import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { PATHS } from "../config.ts";
+import { prepareHandoff } from "../handoff.ts";
+import { switchCodexModel } from "../codex-model-switch.ts";
 import { hostInfo } from "../hostinfo.ts";
 import { Journal } from "../journal.ts";
 import { startJournalPump } from "../journal-pump.ts";
@@ -38,6 +40,7 @@ import { startAutoScheduler } from "../auto/scheduler.ts";
 import { startAutopilot } from "../autopilot/tick.ts";
 import {
   listSessions,
+  noteConfirmedSessionModel,
   resolveTranscript,
   previewLast,
   recentMessages,
@@ -1097,7 +1100,12 @@ function startLeaseHeartbeat(): () => void {
   };
 }
 
-export async function cmdServe() {
+export async function cmdServe(options: {
+  /** Isolated acceptance servers expose the real routes without fleet workers. */
+  backgroundTasks?: boolean;
+  browserSignInHistoryPath?: string;
+} = {}) {
+  const backgroundTasks = options.backgroundTasks !== false;
   // Event journal + the one global session pump: the single live-delivery path.
   // The per-connection pumps behind /api/live/stream and /api/sessions/:id/stream
   // are gone along with the web client that was their last consumer, so live
@@ -1106,7 +1114,7 @@ export async function cmdServe() {
   const journalPath = join(PATHS.data, "journal.db");
   const journal = Journal.open(journalPath);
   const browserFrames = new BrowserFrameStore();
-  const browserSignIn = new BrowserSignInHub(undefined, {historyPath: join(homedir(), ".lfg", "phone-sign-in-history.json")});
+  const browserSignIn = new BrowserSignInHub(undefined, {historyPath: options.browserSignInHistoryPath ?? join(homedir(), ".lfg", "phone-sign-in-history.json")});
   setSendqJournal(journal);
   setSendqStore(SendqStore.open(journalPath));
   // A waiting phone sign-in request is a question to the user, so it rides the
@@ -1114,16 +1122,16 @@ export async function cmdServe() {
   // push watcher, Live Activity row, and the client's needs-input grouping all
   // follow from this one lookup.
   const signInPrompt = (sid: string) => phoneSignInPrompt(browserSignIn.requests, sid);
-  startJournalPump(journal, {
+  if (backgroundTasks) startJournalPump(journal, {
     resolvePrompt: (tp, pane, sid) => resolveSessionPrompt(tp, pane, signInPrompt(sid)),
     browserFrames,
   });
-  startLeaseHeartbeat();
+  if (backgroundTasks) startLeaseHeartbeat();
   // A scratch server on a spare port shares this host's `~/.lfg` token store, so
   // letting it run a watcher means real pushes to a real phone from a throwaway
   // process — and two watchers fighting over one Live Activity.
   const ensurePushWatcher = () => {
-    if (!pushWatcherEnabled(PORT)) return;
+    if (!backgroundTasks || !pushWatcherEnabled(PORT)) return;
     startPushWatcher((l) => console.log(l), {
       head: () => journal.head(),
       hostId: () => hostInfo().hostId,
@@ -2273,7 +2281,7 @@ export async function cmdServe() {
         return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId: out.newId, forkedFrom: sessionId, agent: out.agent });
       }
 
-      if (path === "/api/sessions/new" && req.method === "POST") {
+      if ((path === "/api/sessions/new" || path === "/api/sessions/handoff") && req.method === "POST") {
         const body = (await req.json().catch(() => null)) as {
           cwd?: string;
           prompt?: string;
@@ -2282,16 +2290,41 @@ export async function cmdServe() {
           model?: string;
           agent?: "claude" | "codex";
           parentSessionId?: unknown;
+          sessionId?: string;
         } | null;
+        const isHandoff = path === "/api/sessions/handoff";
+        if (isHandoff && body?.agent !== "codex" && body?.agent !== "claude")
+          return err(400, "handoff requires a target agent (claude or codex)");
         const agent = body?.agent === "codex" ? "codex" : "claude";
+        if (isHandoff && body?.model != null && typeof body.model !== "string")
+          return err(400, "model must be a string");
+        const model = typeof body?.model === "string" ? body.model.trim() || undefined : undefined;
+        const modelError = validateModelForAgent(agent, model);
+        if (modelError) return err(400, modelError);
+        let handoff: Awaited<ReturnType<typeof prepareHandoff>> | undefined;
+        if (isHandoff) {
+          const sourceId = typeof body?.sessionId === "string" ? body.sessionId.trim() : "";
+          if (!sourceId) return err(400, "sessionId required");
+          const transcript = await resolveTranscript(sourceId);
+          if (!transcript) return err(404, "no transcript found for that session");
+          const sourceAgent = transcriptFamily(transcript);
+          if (!sourceAgent) return err(400, "handoff requires a Claude Code or Codex source session");
+          if (sourceAgent === agent) return err(400, "Use the model switch endpoint for the current tool");
+          const liveOn = await foreignFresh(sourceId);
+          if (liveOn) return err(409, "Open the session on its active host to carry over the latest transcript", { liveOn });
+          try {
+            handoff = await prepareHandoff({
+              sessionId: sourceId, transcript, sourceAgent, targetAgent: agent,
+              cwd: (await cwdForTranscript(transcript)) ?? "",
+              outputRoot: join(PATHS.data, "handoffs"),
+            });
+          } catch (error) {
+            return err(400, error instanceof Error ? error.message : "Could not prepare transcript handoff");
+          }
+        }
         // Allowlist Claude models — they land on a shell argv. Unknown value =
         // hard 400, never a silent fallback to some other model. Codex model
         // names are provider/catalog driven, so validate shape instead.
-        const model = body?.model?.trim() || undefined;
-        if (agent === "claude" && model && !CLAUDE_MODELS.includes(model))
-          return err(400, `unknown model "${model}" (expected one of ${CLAUDE_MODELS.join(", ")})`);
-        if (agent === "codex" && model && !CODEX_MODEL_RE.test(model))
-          return err(400, "invalid codex model name");
         // Always spawn in a trusted folder — claude shows a blocking "trust this
         // folder?" dialog for any untrusted cwd, which hangs session startup. The
         // lfg-sessions skill is installed user-level (~/.claude/skills) so the
@@ -2300,7 +2333,7 @@ export async function cmdServe() {
         // in the client's "Add directory by path…" field, and nothing between
         // that TextField and `statSync` is a shell, so an unexpanded `~/dev/foo`
         // 400s as "directory not found" for a directory that plainly exists.
-        const requestedCwd = expandUserPath(body?.cwd ?? "") || SELF_REPO;
+        const requestedCwd = handoff?.cwd ?? (expandUserPath(body?.cwd ?? "") || SELF_REPO);
         // Accept a scanned repo, the root/inbox fallbacks, or any existing
         // directory (so newly-created dirs work). Pre-trust it so claude's
         // folder-trust dialog doesn't hang startup.
@@ -2319,8 +2352,8 @@ export async function cmdServe() {
         // For the voice orchestrator, append a live snapshot of every OTHER
         // session (built before this one spawns, so it's not in the list) so its
         // first spoken reply can be a proactive blockers-first status briefing.
-        let prompt = body?.prompt;
-        if (body?.voice) {
+        let prompt = handoff?.prompt ?? body?.prompt;
+        if (body?.voice && !isHandoff) {
           const snap = await voiceStatusSnapshot();
           prompt = `${prompt ?? ""}\n\n=== SESSION SNAPSHOT (live, at session start) ===\n${snap}\n=== END SNAPSHOT ===`;
         }
@@ -2328,7 +2361,8 @@ export async function cmdServe() {
         const r =
           agent === "codex"
             ? spawnManagedCodexSession({ name: tmuxName, cwd, prompt, model })
-            : spawnManagedSession({ name: tmuxName, cwd, prompt, model });
+            : spawnManagedSession({ name: tmuxName, cwd, prompt, model,
+                useConfiguredModelDefault: isHandoff && !model });
         if (!r.ok) return err(502, r.error || "failed to start session");
         addManaged({
           tmuxName,
@@ -2346,7 +2380,7 @@ export async function cmdServe() {
         // dismiss automatically.
         let sessionId: string | null = null;
         const bindPolls =
-          agent === "codex" ? CODEX_CREATE_SESSION_BIND_POLLS : DEFAULT_CREATE_SESSION_BIND_POLLS;
+          (agent === "codex" || isHandoff) ? CODEX_CREATE_SESSION_BIND_POLLS : DEFAULT_CREATE_SESSION_BIND_POLLS;
         for (let i = 0; i < bindPolls && !sessionId; i++) {
           await new Promise((res) => setTimeout(res, CREATE_SESSION_BIND_POLL_MS));
           if (agent === "codex") {
@@ -2377,20 +2411,22 @@ export async function cmdServe() {
               })?.id ?? null;
           }
         }
-        if (agent === "codex" && !sessionId) {
+        if ((agent === "codex" || isHandoff) && !sessionId) {
           // HTTP 200 + sessionId:null leaves iOS with nothing it can open while
           // the blank pane remains managed forever. Creation is atomic from the
           // client's perspective: either bind a real Codex rollout id, or clean
           // up the exact tmux session this request just spawned and fail.
           tmuxKillSession(tmuxName);
           removeManaged(tmuxName);
-          return err(504, "Codex started but did not produce a session ID");
+          return err(504, `${agent === "codex" ? "Codex" : "Claude Code"} started but did not produce a session ID`);
         }
         if (sessionId) {
           const leasePid = panePidForSession(tmuxName);
           if (leasePid) await acquireLease(sessionId, leasePid);
         }
-        return json({ ok: true, tmuxName, cwd, sessionId, agent });
+        return json({ ok: true, tmuxName, cwd, sessionId, agent,
+          ...(handoff ? { handoffFrom: body?.sessionId, contextPath: handoff.contextPath } : {}),
+        });
       }
 
       {
@@ -2501,22 +2537,22 @@ export async function cmdServe() {
       // delivered the instant it leaves the composer). If Claude raises a
       // "re-read history?" confirmation, it surfaces in the normal prompt panel
       // for the user to confirm. (Inline /model also nudges the global default,
-      // but that's inert here: lfg always launches new sessions with an
-      // explicit --model.)
+      // so ordinary LFG creation pins --model; desktop tool switching deliberately
+      // inherits that CLI default.) Codex uses its native picker below.
       {
         const m = path.match(/^\/api\/sessions\/([0-9a-fA-F-]{36})\/model$/);
         if (m && req.method === "POST") {
           const body = (await req.json().catch(() => null)) as {
             model?: string;
           } | null;
-          const model = body?.model?.trim();
+          const model = typeof body?.model === "string" ? body.model.trim() : "";
           if (!model) return err(400, "expected { model }");
           const sess = (await listSessions()).find((s) => s.sessionId === m[1]);
           if (!sess) return err(404, "session not found");
-          if (sess.agent !== "claude")
-            return err(409, "mid-session model change is only supported for Claude sessions");
-          if (!CLAUDE_MODELS.includes(model))
-            return err(400, `unknown model "${model}" (expected one of ${CLAUDE_MODELS.join(", ")})`);
+          if (sess.agent !== "claude" && sess.agent !== "codex")
+            return err(409, "model change requires a Claude Code or Codex session");
+          const modelError = validateModelForAgent(sess.agent, model);
+          if (modelError) return err(400, modelError);
           if (!sess.tmuxTarget)
             return err(409, "session is not in a tmux pane — cannot change model");
           // If the session is FROZEN on an unavailable model, an injected
@@ -2525,7 +2561,7 @@ export async function cmdServe() {
           // the new model instead (resumes the transcript, so the build
           // continues). For a healthy session the in-place `/model` is gentler
           // (no process restart), so keep that path for the normal case.
-          if (sess.statusReason === "model_unavailable") {
+          if (sess.agent === "claude" && sess.statusReason === "model_unavailable") {
             if (!sess.sessionId || !sess.cwd)
               return err(409, "cannot relaunch: session id or cwd unknown");
             const r = relaunchSessionWithModel({
@@ -2536,6 +2572,16 @@ export async function cmdServe() {
             });
             if (!r.ok) return err(500, r.error || "relaunch failed");
             return json({ ok: true, relaunched: true, model });
+          }
+          if (sess.agent === "codex") {
+            if (listQueue(m[1]).some(message => message.status === "pending" || message.status === "sending" || message.status === "queued")) {
+              return err(409, "Wait for queued messages to finish before switching models.");
+            }
+            if (sess.busy) return err(409, "Wait for Codex to finish its current turn before switching models.");
+            const switched = await switchCodexModel(sess.tmuxTarget, model);
+            if (!switched.ok) return err(409, switched.error || "Codex model switch failed");
+            await noteConfirmedSessionModel(m[1], sess.pid, model);
+            return json({ ok: true, model });
           }
           const msg = enqueueMessage(m[1], `/model ${model}`);
           return json({ ok: true, msg });
@@ -2820,17 +2866,18 @@ export async function cmdServe() {
       return err(404, "not found");
   }
 
-  startAutoScheduler((l) => console.log(l));
+  if (backgroundTasks) startAutoScheduler((l) => console.log(l));
   // Periodic maintenance over lfg's own state (session retitling today). Runs
   // here rather than as a separate daemon because this process already owns the
   // files those tasks mutate. LFG_AUTOPILOT=0 disables it.
-  startAutopilot((l) => console.log(l));
+  if (backgroundTasks) startAutopilot((l) => console.log(l));
   // Background push watcher — no-op unless APNs is configured (LFG_APNS_*).
   ensurePushWatcher();
   // Client-independent queue pump: starts recovered/pending deliveries and
   // reconciles native agent queues even when the app is closed.
-  startQueuePump();
+  if (backgroundTasks) startQueuePump();
 
   console.log(`lfg web → http://${server.hostname}:${server.port}`);
   console.log(`  agents dir: ${AGENTS_DIR}`);
+  return server;
 }

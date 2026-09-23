@@ -16,6 +16,8 @@ struct TranscriptMessageView: View {
             ToolLineView(message: message)
         case "thinking":
             ThinkingView(text: message.text)
+        case "system_notice":
+            SystemNoticeView(text: message.text)
         default:
             TextBubble(message: message, followsUserBubble: followsUserBubble)
         }
@@ -144,22 +146,24 @@ private struct TextBubble: View {
 struct ThinkingView: View {
     let text: String
     @State private var expanded = false
+    private var presentation: TranscriptThinkingPresentation {
+        .resolve(text: text)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Button { withAnimation(.easeInOut(duration: 0.15)) { expanded.toggle() } } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "brain")
-                    Text("Thinking")
-                    Image(systemName: expanded ? "chevron.down" : "chevron.right").font(.system(size: 9))
+            if presentation.isDisclosure {
+                Button { withAnimation(.easeInOut(duration: 0.15)) { expanded.toggle() } } label: {
+                    header(showsDisclosure: true)
                 }
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
+            } else {
+                header(showsDisclosure: false)
+                    .accessibilityIdentifier("compactingConversationIndicator")
             }
-            .buttonStyle(.plain)
 
-            if expanded {
-                Text(text)
+            if expanded, let detail = presentation.detail {
+                Text(detail)
                     .font(.callout.italic())
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -167,6 +171,41 @@ struct ThinkingView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func header(showsDisclosure: Bool) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: "brain")
+            Text(presentation.title)
+            if showsDisclosure {
+                Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 9))
+            }
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(.secondary)
+    }
+}
+
+/// Provider-owned transcript activity such as a local slash command or model
+/// switch. It shares the quiet, full-width visual language of `ThinkingView`
+/// so it reads as session state rather than something the human sent.
+private struct SystemNoticeView: View {
+    let text: String
+    private var presentation: TranscriptSystemNoticePresentation {
+        .resolve(text: text)
+    }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "terminal")
+            Text(presentation.text)
+                .lineLimit(nil)
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("systemTranscriptNotice")
     }
 }
 

@@ -13,10 +13,16 @@ struct LocalCommandOutputFixture: View {
             text: "When I switch model, this message shows"
         ),
         SessionMessage(
+            id: "fixture-model-command",
+            role: "system",
+            kind: "system_notice",
+            text: "/model opus"
+        ),
+        SessionMessage(
             id: "fixture-model-notice",
             role: "system",
-            kind: "tool_result",
-            text: "Set model to `Fable 5.1` and saved as your default for new sessions"
+            kind: "system_notice",
+            text: "Set model to `Opus 5.5` and saved as your default for new sessions"
         ),
         SessionMessage(
             id: "fixture-user-after",
@@ -32,7 +38,7 @@ struct LocalCommandOutputFixture: View {
                 ForEach(messages) { message in
                     TranscriptMessageView(message: message)
                         .accessibilityIdentifier(
-                            message.id == "fixture-model-notice"
+                            message.kind == "system_notice"
                                 ? "localCommandOutputNotice"
                                 : "localCommandOutputFixtureUserMessage"
                         )
