@@ -1,0 +1,19 @@
+test_default_and_existing_options (test_build_guard.OptionsTests) ... ok
+test_invalid_modes_and_ambiguous_options_rejected (test_build_guard.OptionsTests) ... ok
+test_metadata_commands_unchanged (test_build_guard.OptionsTests) ... ok
+test_opt_in_and_explicit_override (test_build_guard.OptionsTests) ... ok
+test_option_order_and_values_do_not_bypass_guard (test_build_guard.OptionsTests) ... ok
+test_cancelled_waiter_does_not_stop_active_job (test_build_guard.RuntimeTests) ... ok
+test_child_memory_limit_cleanup_survivor_and_circuit (test_build_guard.RuntimeTests) ... ok
+test_diagnostic_preflight_and_growth (test_build_guard.RuntimeTests) ... ok
+test_exit_code_and_streams_preserved (test_build_guard.RuntimeTests) ... ok
+test_explicit_reset_clears_breaker (test_build_guard.RuntimeTests) ... ok
+test_native_footprint_and_identity (test_build_guard.RuntimeTests) ... ok
+test_observed_detached_child_cleaned_after_parent_exit (test_build_guard.RuntimeTests) ... ok
+test_serialization_and_cancel_release (test_build_guard.RuntimeTests) ... ok
+test_vendor_arguments_and_default_guarded_limits (test_build_guard.RuntimeTests) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 3.348s
+
+OK

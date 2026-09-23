@@ -1,0 +1,6 @@
+{
+  "flowdeck": "/Users/eugenechan/.local/bin/flowdeck",
+  "vendor": "/Users/eugenechan/.local/share/flowdeck/flowdeck",
+  "guard": "/Users/eugenechan/.local/lib/lfg-build-guard/build_guard.py",
+  "originalEntrypoint": "/Users/eugenechan/.local/lib/lfg-build-guard/flowdeck.original-link.json"
+}

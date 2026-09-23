@@ -1,0 +1,20 @@
+{
+  "sourceMatchesInstalled": true,
+  "globalDebugLogging": "0",
+  "flowdeckVersion": "1.11.1 (397)",
+  "entrypoint": "#!/bin/sh\n# LFG build guard shim v1\nexec /usr/bin/python3 /Users/eugenechan/.local/lib/lfg-build-guard/build_guard.py flowdeck --vendor /Users/eugenechan/.local/share/flowdeck/flowdeck -- \"$@\"\n",
+  "archiveManifest": {
+    "source": "/Users/eugenechan/Library/Logs/CoreSimulator/CoreSimulator.prev.log",
+    "archive": "/Users/eugenechan/Library/Logs/LFG-DiagnosticArchive/20260924-CoreSimulator.prev.log",
+    "bytes": 20209646258,
+    "inode": 325162067,
+    "device": 16777234,
+    "preservedSameInodeAndSize": true,
+    "time": 1790182585.264859
+  },
+  "skillLinks": {
+    "/Users/eugenechan/.codex/skills/flowdeck/resources/debug-logging.md": true,
+    "/Users/eugenechan/.codex/skills/ios-dev-testing/../flowdeck/resources/debug-logging.md": true,
+    "/Users/eugenechan/.codex/skills/ios-performance-profiling/../flowdeck/resources/debug-logging.md": true
+  }
+}

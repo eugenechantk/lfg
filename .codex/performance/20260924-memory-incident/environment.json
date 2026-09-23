@@ -1,0 +1,12 @@
+{
+  "capturedAt": "2026-09-24T00:32:45.444102+08:00",
+  "physicalMemoryBytes": 38654705664,
+  "coreSimulatorPreferencesSource": "/Users/eugenechan/Library/Preferences/com.apple.CoreSimulator.plist",
+  "DebugLogging": true,
+  "xcodeVersion": "26.3",
+  "xcodeBuild": "17C529",
+  "macOS": "26.6.2 (25G83)",
+  "currentHostPID": 1097,
+  "currentHostFootprintObservedMB": 834,
+  "incidentScope": "Investigation and proposals only"
+}

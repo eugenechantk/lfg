@@ -1,0 +1,147 @@
+{
+  "source": "/Users/eugenechan/Library/Logs/CoreSimulator/CoreSimulator.prev.log",
+  "size": 20209646258,
+  "resultPrefixMatches": true,
+  "samples": [
+    {
+      "offset": 0,
+      "firstLine": "Sep 20 12:21:39 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Loaded simdiskimaged job successfully.",
+      "lastLine": "\t    DADeviceModel = \"APPLE SSD AP1024Z\";",
+      "lineCount": 3308,
+      "top": [
+        [
+          "",
+          174
+        ],
+        [
+          " =     {",
+          59
+        ],
+        [
+          "ajor = 1;",
+          58
+        ],
+        [
+          "kSize = 4096;",
+          58
+        ],
+        [
+          "ent = \"<UUID>\";",
+          58
+        ]
+      ]
+    },
+    {
+      "offset": 5052411564,
+      "firstLine": "\t    \"device_type\" = \"com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro\";",
+      "lastLine": "Sep 23 12:57:45 Eugenes-MacBook-Pro com.apple.CoreSimulator.simctl[96786] <Debug>: Client side deviceSet /Users/eugenechan/Library/Developer/CoreSimulator/Devices is handling device added notification: {",
+      "lineCount": 1690,
+      "top": [
+        [
+          "",
+          114
+        ],
+        [
+          "n = \"device_added\";",
+          30
+        ],
+        [
+          "com.apple.CoreSimulator.SimRuntime.iOS-26-3\";",
+          30
+        ],
+        [
+          "licy\" = 0;",
+          30
+        ],
+        [
+          "= \"/Users/eugenechan/Library/Developer/CoreSimulator/Devices\";",
+          30
+        ]
+      ]
+    },
+    {
+      "offset": 10104823129,
+      "firstLine": "\t    DAAppearanceTime = \"811570884.251086\";",
+      "lastLine": "Sep 23 15:39:24 Eugenes-MacBook-Pro com.apple.CoreSimulator.simctl[94945] <Debug>: Client side deviceSet /Users/eugenechan/Library/Developer/CoreSimulator/Devices is handling device added notification: {",
+      "lineCount": 1042,
+      "top": [
+        [
+          "",
+          80
+        ],
+        [
+          "Eugenes-MacBook-Pro com.apple.CoreSimulator.simctl[PID] <Debug>: Client side deviceSet /Users/eugenechan/Library/Developer/CoreSimulator/Devices is handling device added notification: {",
+          27
+        ],
+        [
+          "e\" = \"com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro\";",
+          26
+        ],
+        [
+          "n = \"device_added\";",
+          26
+        ],
+        [
+          "com.apple.CoreSimulator.SimRuntime.iOS-26-3\";",
+          26
+        ]
+      ]
+    },
+    {
+      "offset": 15157234693,
+      "firstLine": "\t    \"device_type\" = \"com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro\";",
+      "lastLine": "Sep 23 18:47:17 Eugenes-MacBook-Pro com.apple.CoreSimulator.simctl[11176] <Debug>: Client side deviceSet /Users/eugenechan/Library/Developer/CoreSimulator/Devices is handling device added notification: {",
+      "lineCount": 1401,
+      "top": [
+        [
+          "",
+          110
+        ],
+        [
+          "n = \"device_added\";",
+          37
+        ],
+        [
+          "com.apple.CoreSimulator.SimRuntime.iOS-26-3\";",
+          37
+        ],
+        [
+          "licy\" = 0;",
+          37
+        ],
+        [
+          "= \"/Users/eugenechan/Library/Developer/CoreSimulator/Devices\";",
+          37
+        ]
+      ]
+    },
+    {
+      "offset": 20007549795,
+      "firstLine": "\t    \"device_type\" = \"com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro\";",
+      "lastLine": "Sep 23 23:43:42 Eugenes-MacBook-Pro com.apple.CoreSimulator.simctl[84966] <Debug>: Client side deviceSet /Users/eugenechan/Library/Developer/CoreSimulator/Devices is handling device added notification: {",
+      "lineCount": 1528,
+      "top": [
+        [
+          "",
+          128
+        ],
+        [
+          "n = \"device_added\";",
+          46
+        ],
+        [
+          "com.apple.CoreSimulator.SimRuntime.iOS-26-3\";",
+          46
+        ],
+        [
+          "licy\" = 0;",
+          46
+        ],
+        [
+          "= \"/Users/eugenechan/Library/Developer/CoreSimulator/Devices\";",
+          46
+        ]
+      ]
+    }
+  ]
+}

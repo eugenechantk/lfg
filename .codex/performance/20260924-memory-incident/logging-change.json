@@ -1,0 +1,57 @@
+{
+  "changedAt": "2026-09-24T00:42:37.011533+08:00",
+  "domain": "com.apple.CoreSimulator",
+  "key": "DebugLogging",
+  "before": true,
+  "after": false,
+  "verification": "defaults read returned 0",
+  "runtimeRestarted": false,
+  "logSizeAtCheck": 34660843,
+  "skillValidation": [
+    {
+      "skill": "/Users/eugenechan/.claude/skills/flowdeck/SKILL.md",
+      "reference": "/Users/eugenechan/.claude/skills/flowdeck/resources/debug-logging.md",
+      "frontmatterParsed": true,
+      "quickValidatorPass": false,
+      "quickValidatorMessage": "Unexpected key(s) in SKILL.md frontmatter: version. Allowed properties are: allowed-tools, description, license, metadata, name"
+    },
+    {
+      "skill": "/Users/eugenechan/.claude/skills/ios-dev-testing/SKILL.md",
+      "reference": "/Users/eugenechan/.claude/skills/flowdeck/resources/debug-logging.md",
+      "frontmatterParsed": true,
+      "quickValidatorPass": true,
+      "quickValidatorMessage": "Skill is valid!"
+    },
+    {
+      "skill": "/Users/eugenechan/.claude/skills/ios-performance-profiling/SKILL.md",
+      "reference": "/Users/eugenechan/.claude/skills/flowdeck/resources/debug-logging.md",
+      "frontmatterParsed": true,
+      "quickValidatorPass": false,
+      "quickValidatorMessage": "Unexpected key(s) in SKILL.md frontmatter: user_invocable, version. Allowed properties are: allowed-tools, description, license, metadata, name"
+    },
+    {
+      "skill": "/Users/eugenechan/.codex/skills/flowdeck/SKILL.md",
+      "reference": "/Users/eugenechan/.claude/skills/flowdeck/resources/debug-logging.md",
+      "frontmatterParsed": true,
+      "quickValidatorPass": false,
+      "quickValidatorMessage": "Unexpected key(s) in SKILL.md frontmatter: version. Allowed properties are: allowed-tools, description, license, metadata, name"
+    },
+    {
+      "skill": "/Users/eugenechan/.codex/skills/ios-dev-testing/SKILL.md",
+      "reference": "/Users/eugenechan/.claude/skills/flowdeck/resources/debug-logging.md",
+      "frontmatterParsed": true,
+      "quickValidatorPass": true,
+      "quickValidatorMessage": "Skill is valid!"
+    },
+    {
+      "skill": "/Users/eugenechan/.codex/skills/ios-performance-profiling/SKILL.md",
+      "reference": "/Users/eugenechan/.claude/skills/flowdeck/resources/debug-logging.md",
+      "frontmatterParsed": true,
+      "quickValidatorPass": false,
+      "quickValidatorMessage": "Unexpected key(s) in SKILL.md frontmatter: user_invocable, version. Allowed properties are: allowed-tools, description, license, metadata, name"
+    }
+  ],
+  "postChangeLogSampleBytes": 3113,
+  "postChangeDebugEntriesInSample": 0,
+  "finalPreferenceReadback": "0"
+}
