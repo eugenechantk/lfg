@@ -70,6 +70,10 @@ struct LFGApp: App {
                 NavigationStack {
                     LocalCommandOutputFixture()
                 }
+            } else if ProcessInfo.processInfo.environment["LFG_MEMORY_CITATION_FIXTURE"] == "1" {
+                NavigationStack {
+                    MemoryCitationFixture()
+                }
             } else {
                 RootView()
                     .environment(settings)

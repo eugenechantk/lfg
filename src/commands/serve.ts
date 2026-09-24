@@ -40,6 +40,8 @@ import { startAutoScheduler } from "../auto/scheduler.ts";
 import { startAutopilot } from "../autopilot/tick.ts";
 import {
   listSessions,
+  codexSubagentsForParent,
+  resolveCodexSubagentTranscript,
   noteConfirmedSessionModel,
   resolveTranscript,
   previewLast,
@@ -864,6 +866,14 @@ export async function subagentsResponseForSession(
 ): Promise<Response> {
   const parentTranscript = await resolve(sid);
   if (!parentTranscript) return err(404, "session transcript not found");
+  if (transcriptFamily(parentTranscript) === "codex") {
+    // Reuse the coalesced live-session scan when possible: it has already read
+    // Codex rollout lineage and lifecycle for the list row. Closed parents fall
+    // back to a direct lineage scan so their child history remains inspectable.
+    const live = (await listSessions()).find((session) => session.sessionId === sid);
+    const agents = live?.childAgents ?? await codexSubagentsForParent(sid);
+    return json({ id: sid, agents });
+  }
   return json({ id: sid, agents: await listSubagentSessions(parentTranscript) });
 }
 
@@ -875,7 +885,9 @@ export async function subagentMessagesResponseForSession(
 ): Promise<Response> {
   const parentTranscript = await resolve(sid);
   if (!parentTranscript) return err(404, "session transcript not found");
-  const childTranscript = resolveSubagentTranscript(parentTranscript, agentId);
+  const childTranscript = transcriptFamily(parentTranscript) === "codex"
+    ? await resolveCodexSubagentTranscript(sid, agentId)
+    : resolveSubagentTranscript(parentTranscript, agentId);
   if (!childTranscript) return err(404, "child agent transcript not found");
 
   if (url.searchParams.get("page") === "backward") {

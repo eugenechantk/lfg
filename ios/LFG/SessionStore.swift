@@ -3063,7 +3063,11 @@ import LFGCore
         switch SessionDisplayState.resolve(
             promptPresent: sid.map { prompts[$0] != nil } ?? false,
             blocked: s.isBlocked,
-            busy: sid.map { busy[$0] == true } ?? false
+            busy: ChildAgentActivity.parentIsRunning(
+                parentBusy: sid.map { busy[$0] == true } ?? false,
+                agents: sid.flatMap { childAgentsBySession[$0] } ?? [],
+                reportedRunningCount: s.runningChildAgentCount
+            )
         ) {
         case .needsInput: return .needsInput
         case .blocked: return .blocked

@@ -117,6 +117,25 @@ public struct ChildAgentCollectionPresentation: Sendable, Equatable {
     }
 }
 
+/// One client-side definition of the parent's effective running state.
+///
+/// The server already folds native Claude and Codex child activity into
+/// `Session.busy`. The detail sheet also polls child summaries directly, though,
+/// and can observe a newly-running child before the next session-list snapshot.
+/// Keeping that fresher signal in the same OR-only rule prevents the parent from
+/// briefly reading Idle while delegated work is visibly running.
+public enum ChildAgentActivity {
+    public static func parentIsRunning(
+        parentBusy: Bool,
+        agents: [ChildAgentSession],
+        reportedRunningCount: Int = 0
+    ) -> Bool {
+        parentBusy
+            || reportedRunningCount > 0
+            || agents.contains(where: { $0.status.isActive })
+    }
+}
+
 /// Whether the child-sessions bar above the composer should be on screen.
 ///
 /// The bar used to show whenever a session had *ever* spawned a child agent, so

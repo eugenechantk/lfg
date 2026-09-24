@@ -279,6 +279,24 @@ public struct TranscriptResources: Equatable, Sendable {
     }
 }
 
+/// The ordered, file-only model for the full-screen preview pager.
+///
+/// Keeping this separate from `TranscriptResources` makes it impossible for a
+/// web link to enter the pager accidentally. The caller supplies files in the
+/// exact order shown by its list; this value preserves that order and resolves
+/// the row that should be selected when the preview opens.
+public struct FilePreviewSequence: Equatable, Sendable {
+    public let files: [MediaRef]
+    public let initialID: String?
+
+    public init(files: [MediaRef], selected: MediaRef) {
+        self.files = files
+        initialID = files.contains(where: { $0.id == selected.id })
+            ? selected.id
+            : files.first?.id
+    }
+}
+
 public enum TranscriptResourceIndex {
     /// Everything the client can open, gathered from a whole transcript.
     ///

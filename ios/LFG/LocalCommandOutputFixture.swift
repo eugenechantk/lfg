@@ -51,4 +51,42 @@ struct LocalCommandOutputFixture: View {
         .accessibilityIdentifier("localCommandOutputFixture")
     }
 }
+
+/// Network-free visual harness for Codex memory citation rendering.
+/// Launch with `LFG_MEMORY_CITATION_FIXTURE=1`.
+struct MemoryCitationFixture: View {
+    private let messages = [
+        SessionMessage(
+            id: "fixture-answer",
+            role: "assistant",
+            kind: "text",
+            text: "The iOS transcript now preserves the answer and renders its memory provenance separately."
+        ),
+        SessionMessage(
+            id: "fixture-memory-citation",
+            role: "assistant",
+            kind: "memory_citation",
+            text: """
+            Memory sources
+            MEMORY.md:265-268\tLFG iOS session and transcript architecture scope
+            MEMORY.md:328-333\tLFG transcript normalization and client verification guidance
+            Prior sessions: 2
+            """
+        ),
+    ]
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 10) {
+                ForEach(messages) { message in
+                    TranscriptMessageView(message: message)
+                }
+            }
+            .padding()
+        }
+        .navigationTitle("Transcript")
+        .navigationBarTitleDisplayMode(.inline)
+        .accessibilityIdentifier("memoryCitationFixture")
+    }
+}
 #endif

@@ -40,8 +40,8 @@ struct AttachmentsSheet: View {
         .sheet(item: $viewing) { ref in
             FileViewerSheet(
                 ref: ref,
-                url: hostFiles?.viewerURL(for: ref),
-                client: hostFiles?.client
+                files: resources?.files.map(\.ref) ?? [ref],
+                hostFiles: hostFiles
             )
         }
     }
@@ -68,6 +68,7 @@ struct AttachmentsSheet: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("fileListRow_\(item.ref.id)")
                     }
                 }
             }

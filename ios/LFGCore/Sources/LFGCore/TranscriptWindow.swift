@@ -130,35 +130,56 @@ public enum TranscriptWindow {
         isOpening || isAtBottom
     }
 
-    /// Sending while already pinned needs no imperative scroll only when the
-    /// newest content is actually visible. The iOS 26 transcript deliberately
-    /// keeps its full-height viewport behind a focused composer/keyboard, so
-    /// offset zero can be newest while the outgoing user row is obscured.
+    /// Whether a send needs an imperative follow after the outgoing row lands.
+    /// Reader intent wins: a send from history must leave the viewport exactly
+    /// where it is, even when the composer is focused. At the newest edge the
+    /// inverted transcript follows naturally unless the focused composer and
+    /// keyboard obscure the outgoing row.
     public static func shouldJumpAfterSend(
         isAtBottom: Bool,
         composerFocused: Bool
     ) -> Bool {
-        !isAtBottom || composerFocused
+        isAtBottom && composerFocused
     }
 
     /// A focused software keyboard occludes the full-height transcript even
     /// though the composer itself moves above it. Reserve exactly that covered
-    /// height. Follow the newest edge only when the reader was already there;
-    /// focusing or dismissing the composer while reading history must preserve
-    /// that position. Keeping this as one transition avoids feeding animated
-    /// safe-area measurements back into transcript state on every frame.
+    /// height only while the reader is at the newest edge. Changing the inverted
+    /// scroll view's bottom content margin while the reader is in history moves
+    /// its coordinate space, so history freezes the existing margin until the
+    /// reader deliberately returns to newest. Keeping this as one transition
+    /// avoids feeding animated safe-area measurements back into transcript state
+    /// on every frame.
     public static func keyboardTransition(
         occlusionHeight: Double,
         composerFocused: Bool,
         previousBottomClearance: Double,
         readerAtNewest: Bool
     ) -> KeyboardTransition {
+        guard readerAtNewest else {
+            return KeyboardTransition(
+                bottomClearance: previousBottomClearance,
+                shouldFollowNewest: false
+            )
+        }
         let clearance = composerFocused ? max(occlusionHeight, 0) : 0
         return KeyboardTransition(
             bottomClearance: clearance,
-            shouldFollowNewest: readerAtNewest
-                && (clearance > 0 || previousBottomClearance > 0)
+            shouldFollowNewest: clearance > 0 || previousBottomClearance > 0
         )
+    }
+
+    /// The inverted transcript's rendered plane loses the home-indicator region
+    /// when the software keyboard takes ownership of that safe area, even though
+    /// the underlying scroll offset is unchanged. Counter that fixed visual move
+    /// only for a history reader; newest-edge layout continues to follow chrome.
+    public static func historyKeyboardViewportOffset(
+        isAtBottom: Bool,
+        keyboardOcclusionHeight: Double,
+        bottomSafeAreaInset: Double
+    ) -> Double {
+        guard !isAtBottom, keyboardOcclusionHeight > 0 else { return 0 }
+        return max(bottomSafeAreaInset, 0)
     }
 
     /// Visual boundary reserved below the transcript's newest row. This belongs
@@ -179,6 +200,16 @@ public enum TranscriptWindow {
         }
         return max(bottomChromeHeight, 0)
             + max(bottomTranscriptClearance, 0)
+    }
+
+    /// A reader in history keeps the effective newest-edge margin that existed
+    /// when they left the bottom. Composer growth/shrink and conditional bottom
+    /// chrome must not change their scroll coordinate space.
+    public static func effectiveBottomContentMargin(
+        calculated: Double,
+        frozen: Double?
+    ) -> Double {
+        frozen ?? calculated
     }
 
     /// The opening pin exists only to establish the newest visible tail. Older

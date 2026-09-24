@@ -153,14 +153,21 @@ final class TranscriptWindowTests: XCTestCase {
         ))
     }
 
-    func testSendingFromHistoryExplicitlyReturnsToNewest() {
-        XCTAssertTrue(TranscriptWindow.shouldJumpAfterSend(
+    func testSendingFromHistoryPreservesReaderPosition() {
+        XCTAssertFalse(TranscriptWindow.shouldJumpAfterSend(
             isAtBottom: false,
             composerFocused: false
         ))
     }
 
-    func testSendingWithFocusedComposerRevealsMessageAboveKeyboard() {
+    func testSendingFromHistoryWithFocusedComposerPreservesReaderPosition() {
+        XCTAssertFalse(TranscriptWindow.shouldJumpAfterSend(
+            isAtBottom: false,
+            composerFocused: true
+        ))
+    }
+
+    func testSendingAtNewestWithFocusedComposerRevealsMessageAboveKeyboard() {
         XCTAssertTrue(TranscriptWindow.shouldJumpAfterSend(
             isAtBottom: true,
             composerFocused: true
@@ -215,6 +222,39 @@ final class TranscriptWindowTests: XCTestCase {
         )
     }
 
+    func testHistoryKeyboardCompensatesForTheHomeIndicatorRegion() {
+        XCTAssertEqual(
+            TranscriptWindow.historyKeyboardViewportOffset(
+                isAtBottom: false,
+                keyboardOcclusionHeight: 335,
+                bottomSafeAreaInset: 34
+            ),
+            34
+        )
+    }
+
+    func testNewestEdgeDoesNotApplyHistoryKeyboardCompensation() {
+        XCTAssertEqual(
+            TranscriptWindow.historyKeyboardViewportOffset(
+                isAtBottom: true,
+                keyboardOcclusionHeight: 335,
+                bottomSafeAreaInset: 34
+            ),
+            0
+        )
+    }
+
+    func testHiddenKeyboardDoesNotApplyHistoryKeyboardCompensation() {
+        XCTAssertEqual(
+            TranscriptWindow.historyKeyboardViewportOffset(
+                isAtBottom: false,
+                keyboardOcclusionHeight: 0,
+                bottomSafeAreaInset: 34
+            ),
+            0
+        )
+    }
+
     func testHidingKeyboardReturnsFollowingTranscriptToOrdinaryNewestEdge() {
         XCTAssertEqual(
             TranscriptWindow.keyboardTransition(
@@ -235,7 +275,7 @@ final class TranscriptWindowTests: XCTestCase {
                 previousBottomClearance: 0,
                 readerAtNewest: false
             ),
-            .init(bottomClearance: 291, shouldFollowNewest: false)
+            .init(bottomClearance: 0, shouldFollowNewest: false)
         )
     }
 
@@ -247,7 +287,7 @@ final class TranscriptWindowTests: XCTestCase {
                 previousBottomClearance: 291,
                 readerAtNewest: false
             ),
-            .init(bottomClearance: 0, shouldFollowNewest: false)
+            .init(bottomClearance: 291, shouldFollowNewest: false)
         )
     }
 
@@ -260,6 +300,26 @@ final class TranscriptWindowTests: XCTestCase {
                 bottomTranscriptClearance: 16
             ),
             138
+        )
+    }
+
+    func testHistoryKeepsItsCapturedBottomMarginWhenComposerHeightChanges() {
+        XCTAssertEqual(
+            TranscriptWindow.effectiveBottomContentMargin(
+                calculated: 104,
+                frozen: 178
+            ),
+            178
+        )
+    }
+
+    func testNewestUsesTheCurrentCalculatedBottomMargin() {
+        XCTAssertEqual(
+            TranscriptWindow.effectiveBottomContentMargin(
+                calculated: 104,
+                frozen: nil
+            ),
+            104
         )
     }
 

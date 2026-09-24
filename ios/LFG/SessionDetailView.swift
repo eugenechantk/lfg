@@ -83,16 +83,30 @@ struct SessionDetailView: View {
     /// visual bottom, keeping the newest row above every floating control while
     /// older rows can pass behind the stack.
     @State private var bottomChromeHeight: CGFloat = 0
+    @State private var frozenTranscriptBottomContentMargin: CGFloat?
 
     /// Structural top is the visual bottom because the transcript is inverted.
     /// A scroll-content margin keeps this boundary outside the transcript's
     /// scrollable rows while placing the newest row above the floating chrome.
-    private var transcriptBottomContentMargin: CGFloat {
+    private var calculatedTranscriptBottomContentMargin: CGFloat {
         CGFloat(TranscriptWindow.bottomContentMargin(
             keyboardOcclusionHeight: Double(keyboardBottomClearance),
             bottomChromeHeight: Double(bottomChromeHeight),
             bottomSafeAreaInset: Double(windowBottomSafeAreaInset),
             bottomTranscriptClearance: Double(Self.bottomTranscriptClearance)
+        ))
+    }
+    private var transcriptBottomContentMargin: CGFloat {
+        CGFloat(TranscriptWindow.effectiveBottomContentMargin(
+            calculated: Double(calculatedTranscriptBottomContentMargin),
+            frozen: frozenTranscriptBottomContentMargin.map(Double.init)
+        ))
+    }
+    private var historyKeyboardViewportOffset: CGFloat {
+        CGFloat(TranscriptWindow.historyKeyboardViewportOffset(
+            isAtBottom: isAtBottom,
+            keyboardOcclusionHeight: Double(keyboardOcclusionHeight),
+            bottomSafeAreaInset: Double(windowBottomSafeAreaInset)
         ))
     }
     /// PHASE-1 INSTRUMENTATION — remove before shipping. Every code path that
@@ -148,7 +162,13 @@ struct SessionDetailView: View {
     }
     private var prompt: AgentPrompt? { store.prompts[sid] }
     private var pending: [SessionStore.PendingSend] { store.pendingSends[sid] ?? [] }
-    private var isBusy: Bool { store.busy[sid] == true }
+    private var isBusy: Bool {
+        ChildAgentActivity.parentIsRunning(
+            parentBusy: store.busy[sid] == true,
+            agents: childAgents,
+            reportedRunningCount: session.runningChildAgentCount
+        )
+    }
     private var isMovingHost: Bool { store.isMovingHost(sid) }
     private var childAgents: [ChildAgentSession] { store.childAgentsBySession[sid] ?? [] }
 
@@ -257,6 +277,7 @@ struct SessionDetailView: View {
             newestUserTurnID = messages.last(where: \.rendersAsUserBubble)?.stableID
             followSendUntilLanded = false
             keyboardBottomClearance = 0
+            frozenTranscriptBottomContentMargin = nil
             #if DEBUG
             if draft.isEmpty { draft = debugInitialDraft }
             #endif
@@ -391,6 +412,7 @@ struct SessionDetailView: View {
                 // the composer alone follows the keyboard-safe-area boundary.
                 ZStack(alignment: .bottom) {
                     transcript
+                        .offset(y: historyKeyboardViewportOffset)
                         .ignoresSafeArea(.container, edges: [.top, .bottom])
                         .ignoresSafeArea(.keyboard, edges: .bottom)
                         // The 180-degree transcript transform confuses SwiftUI's
@@ -493,19 +515,12 @@ struct SessionDetailView: View {
                     isAtBottom: wasAtBottom,
                     composerFocused: composerFocused
                 )
-                // Arm this before dispatch: the optimistic bubble is inserted
-                // asynchronously and its appearance is the first reliable point
-                // at which SwiftUI can resolve that row as a scroll target.
+                // Capture reader intent before dispatch mutates the transcript.
+                // A reader at newest may need an explicit keyboard-aware follow;
+                // a reader in history must remain there through both optimistic
+                // insertion and reconciliation.
                 followSendUntilLanded = shouldJump
                 store.dispatchSend(sid, text: text, attachments: atts)
-                // Sending is an explicit "follow me to the latest" intent,
-                // even if the user had scrolled up to read history.
-                isAtBottom = true
-                // A reader in history first returns to the newest edge. A reader
-                // already at offset zero does not take this redundant jump; when
-                // its focused composer covers the tail, the pending-row observer
-                // below follows the keyboard-aware transcript boundary instead.
-                if !wasAtBottom { scheduleJumpToNewest() }
             }
         }
     }
@@ -674,7 +689,23 @@ struct SessionDetailView: View {
             .modifier(NewestEndTracker { atNewest in
                 guard isAtBottom != atNewest else { return }
                 vp("tracker.atNewest", "-> \(atNewest)")
+                if !atNewest {
+                    frozenTranscriptBottomContentMargin = transcriptBottomContentMargin
+                }
                 isAtBottom = atNewest
+                guard atNewest else { return }
+                // Keyboard clearance is frozen while reading history. Sync it
+                // only after the reader deliberately returns to newest.
+                Task { @MainActor in
+                    await Task.yield()
+                    guard isAtBottom else { return }
+                    frozenTranscriptBottomContentMargin = nil
+                    applyKeyboardTransition(
+                        occlusionHeight: keyboardOcclusionHeight,
+                        animation: .easeOut(duration: 0.25)
+                    )
+                    scheduleJumpToNewest()
+                }
             })
             .onChange(of: store.transcriptVersion[sid] ?? 0) { _, _ in
                 let old = lastMessageIDs
@@ -804,8 +835,8 @@ struct SessionDetailView: View {
         "pending-user-\(id)"
     }
 
-    /// The one remaining programmatic scroll, and only on an explicit user
-    /// action (double-tap the lower band, or sending a message).
+    /// An explicit jump to the newest edge, used by the lower-band gesture and
+    /// by layout transitions only when the reader was already following newest.
     private func jumpToNewest() {
         guard let scrollProxy else { return }
         vp("jumpToNewest")
@@ -857,13 +888,15 @@ struct SessionDetailView: View {
 
         let frame = window.convert(screenFrame, from: nil)
         let occlusionHeight = max(window.bounds.maxY - frame.minY, 0)
-        keyboardOcclusionHeight = occlusionHeight
-
         let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey]
             as? Double ?? 0.25
+        let animation = Animation.easeOut(duration: duration)
+        withAnimation(animation) {
+            keyboardOcclusionHeight = occlusionHeight
+        }
         applyKeyboardTransition(
             occlusionHeight: occlusionHeight,
-            animation: .easeOut(duration: duration)
+            animation: animation
         )
     }
 
@@ -1785,6 +1818,7 @@ private struct ChildAgentSessionsSheet: View {
                         systemImage: "person.2",
                         description: Text("This session has not spawned a child agent.")
                     )
+                    .accessibilityIdentifier("childSessionsSheet")
                 } else {
                     List(agents) { child in
                         NavigationLink(value: child.id) {
@@ -1793,6 +1827,7 @@ private struct ChildAgentSessionsSheet: View {
                         .accessibilityIdentifier("childSessionRow_\(child.id)")
                     }
                     .listStyle(.insetGrouped)
+                    .accessibilityIdentifier("childSessionsSheet")
                 }
             }
             .navigationTitle("Child sessions")
@@ -1812,7 +1847,6 @@ private struct ChildAgentSessionsSheet: View {
             }
         }
         .task { await store.refreshChildAgents(parentSessionID) }
-        .accessibilityIdentifier("childSessionsSheet")
     }
 }
 
@@ -1858,18 +1892,21 @@ private struct ChildAgentTranscriptView: View {
             if loading && messages.isEmpty {
                 ProgressView("Loading transcript…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityIdentifier("childSessionTranscript")
             } else if let errorMessage, messages.isEmpty {
                 ContentUnavailableView(
                     "Transcript unavailable",
                     systemImage: "exclamationmark.bubble",
                     description: Text(errorMessage)
                 )
+                .accessibilityIdentifier("childSessionTranscript")
             } else if messages.isEmpty {
                 ContentUnavailableView(
                     "No transcript yet",
                     systemImage: "text.bubble",
                     description: Text("This child session has not produced visible output.")
                 )
+                .accessibilityIdentifier("childSessionTranscript")
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
@@ -1878,13 +1915,15 @@ private struct ChildAgentTranscriptView: View {
                         }
                     }
                     .padding()
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("childSessionTranscript")
+                    .accessibilityLabel("Child session transcript")
                 }
             }
         }
         .navigationTitle(child.description)
         .navigationBarTitleDisplayMode(.inline)
         .task(id: child.id) { await loadTranscriptUntilTerminal() }
-        .accessibilityIdentifier("childSessionTranscript")
     }
 
     private func loadTranscriptUntilTerminal() async {

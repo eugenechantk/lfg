@@ -18,6 +18,8 @@ struct TranscriptMessageView: View {
             ThinkingView(text: message.text)
         case "system_notice":
             SystemNoticeView(text: message.text)
+        case "memory_citation":
+            MemoryCitationView(text: message.text)
         default:
             TextBubble(message: message, followsUserBubble: followsUserBubble)
         }
@@ -206,6 +208,62 @@ private struct SystemNoticeView: View {
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityIdentifier("systemTranscriptNotice")
+    }
+}
+
+private struct MemoryCitationView: View {
+    let text: String
+    @State private var expanded = false
+    private var presentation: TranscriptMemoryCitationPresentation {
+        .resolve(text: text)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "books.vertical")
+                    Text(presentation.title)
+                    Text("· \(presentation.summary)")
+                        .foregroundStyle(.tertiary)
+                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9))
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("memoryCitationDisclosure")
+
+            if expanded {
+                VStack(alignment: .leading, spacing: 9) {
+                    ForEach(Array(presentation.citations.enumerated()), id: \.offset) { _, citation in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(citation.note)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if !citation.location.isEmpty {
+                                Text(citation.location)
+                                    .font(.caption2.monospaced())
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                    if presentation.priorSessionCount > 0 {
+                        Text("\(presentation.priorSessionCount) prior sessions")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(.leading, 18)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+                .accessibilityIdentifier("memoryCitationDetails")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("memoryCitationNotice")
     }
 }
 

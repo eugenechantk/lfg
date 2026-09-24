@@ -112,6 +112,41 @@ struct TranscriptResourceIndexTests {
     }
 }
 
+@Suite("File preview sequence")
+struct FilePreviewSequenceTests {
+    private let first = MediaRef(raw: "/out/newest.png", kind: .image)
+    private let middle = MediaRef(raw: "/out/report.pdf", kind: .pdf)
+    private let last = MediaRef(raw: "/out/oldest.mp4", kind: .video)
+
+    @Test("preserves Files list order and opens on the tapped file")
+    func preservesOrderAndSelection() {
+        let sequence = FilePreviewSequence(
+            files: [first, middle, last],
+            selected: middle
+        )
+
+        #expect(sequence.files == [first, middle, last])
+        #expect(sequence.initialID == middle.id)
+    }
+
+    @Test("falls back to the first file when selection is absent")
+    func missingSelectionFallsBackToFirst() {
+        let missing = MediaRef(raw: "/out/missing.md", kind: .markdown)
+        let sequence = FilePreviewSequence(files: [first, middle], selected: missing)
+
+        #expect(sequence.files == [first, middle])
+        #expect(sequence.initialID == first.id)
+    }
+
+    @Test("an empty sequence has no initial selection")
+    func emptySequence() {
+        let sequence = FilePreviewSequence(files: [], selected: first)
+
+        #expect(sequence.files.isEmpty)
+        #expect(sequence.initialID == nil)
+    }
+}
+
 @Suite("Web links")
 struct LinkScannerTests {
     @Test("bare and markdown links are both found, labels preserved")

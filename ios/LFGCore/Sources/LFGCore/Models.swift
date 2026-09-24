@@ -165,7 +165,7 @@ public struct SessionsResponse: Codable, Sendable {
 public struct SessionMessage: Codable, Sendable, Identifiable, Hashable {
     public var id: String?            // transcript uuid; may be null
     public var role: String           // user | assistant | tool | system
-    public var kind: String           // text | thinking | tool_use | tool_result | system_notice
+    public var kind: String           // text | thinking | tool_use | tool_result | system_notice | memory_citation
     public var text: String
     public var ts: Double?
     public var apiError: Bool?

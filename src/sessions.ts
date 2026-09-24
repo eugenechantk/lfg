@@ -48,6 +48,11 @@ import {
   type SubagentSession,
 } from "./subagents.ts";
 import {
+  codexSubagentTranscriptFor,
+  listCodexSubagentSessions,
+  type CodexSubagentThread,
+} from "./codex-subagents.ts";
+import {
   listProcs,
   cwdOf,
   openCodexRolloutPaths,
@@ -80,7 +85,7 @@ export type SessionMsg = {
   // whole chunk again.
   id: string | null;
   role: string;
-  kind: "text" | "thinking" | "tool_use" | "tool_result" | "system_notice";
+  kind: "text" | "thinking" | "tool_use" | "tool_result" | "system_notice" | "memory_citation";
   text: string;
   ts: number | null;
   // True only for a genuine upstream API-error turn (Claude Code stamps the
@@ -118,9 +123,10 @@ export type Session = {
   // freshness is only the fallback. Background Codex delegations are folded in
   // here too so every surface shares the same busy boolean.
   busy: boolean;
-  // Number of Claude child agents currently active. Added after the parent row
+  // Number of native child agents currently active. Added after the parent row
   // is deduplicated; active children also promote `busy` so every consumer sees
-  // the parent as working even while its own pane is idle.
+  // the parent as working even while its own pane is idle. Claude children come
+  // from transcript sidecars; Codex children come from rollout parent lineage.
   runningChildAgentCount?: number;
   // The child agents behind `runningChildAgentCount` (all statuses), present
   // only when there are any. Lets the client seed its detail view from the
@@ -566,7 +572,26 @@ export type CodexThread = {
   lastRecordAt?: number | null;
   firstUserText: string | null;
   forkedFromId: string | null;
+  parentThreadId?: string | null;
+  agentPath?: string | null;
+  agentNickname?: string | null;
+  agentRole?: string | null;
+  spawnDepth?: number | null;
 };
+
+function codexSubagentThread(thread: CodexThread): CodexSubagentThread {
+  return {
+    id: thread.id,
+    path: thread.path,
+    parentThreadId: thread.parentThreadId ?? null,
+    agentPath: thread.agentPath ?? null,
+    agentNickname: thread.agentNickname ?? null,
+    agentRole: thread.agentRole ?? null,
+    spawnDepth: thread.spawnDepth ?? null,
+    createdAt: thread.createdAt,
+    updatedAt: thread.updatedAt,
+  };
+}
 
 async function lastCodexRecordAt(path: string): Promise<number | null> {
   return scanBack(path, (line) => {
@@ -592,7 +617,22 @@ async function codexThreads(
       const row = JSON.parse(first) as {
         type?: string;
         forked_from_id?: string;
-        payload?: { id?: string; cwd?: string; timestamp?: string; forked_from_id?: string };
+        payload?: {
+          id?: string;
+          cwd?: string;
+          timestamp?: string;
+          forked_from_id?: string;
+          parent_thread_id?: string;
+          thread_source?: string;
+          agent_path?: string;
+          agent_nickname?: string;
+          agent_role?: string;
+          source?: {
+            subagent?: {
+              thread_spawn?: { parent_thread_id?: string; depth?: number };
+            };
+          };
+        };
       };
       const id = row.payload?.id ?? path.match(UUID)?.[0] ?? null;
       if (row.type !== "session_meta" || !id) continue;
@@ -622,10 +662,31 @@ async function codexThreads(
         lastRecordAt: liveOpenPaths.has(path) ? await lastCodexRecordAt(path) : null,
         firstUserText: await firstUserTextFromTop(path),
         forkedFromId: row.payload?.forked_from_id ?? row.forked_from_id ?? null,
+        parentThreadId:
+          row.payload?.parent_thread_id
+          ?? row.payload?.source?.subagent?.thread_spawn?.parent_thread_id
+          ?? null,
+        agentPath: row.payload?.agent_path ?? null,
+        agentNickname: row.payload?.agent_nickname ?? null,
+        agentRole: row.payload?.agent_role ?? null,
+        spawnDepth: row.payload?.source?.subagent?.thread_spawn?.depth ?? null,
       });
     } catch {}
   }
   return out;
+}
+
+export async function codexSubagentsForParent(parentId: string): Promise<SubagentSession[]> {
+  const threads = (await codexThreads()).map(codexSubagentThread);
+  return listCodexSubagentSessions(parentId, threads);
+}
+
+export async function resolveCodexSubagentTranscript(
+  parentId: string,
+  childId: string,
+): Promise<string | null> {
+  const threads = (await codexThreads()).map(codexSubagentThread);
+  return codexSubagentTranscriptFor(parentId, childId, threads);
 }
 
 function isInjectedCodexUserContext(text: string): boolean {
@@ -1483,6 +1544,60 @@ type UserTextSegment =
   | { kind: "human"; text: string }
   | { kind: "system-notice"; text: string };
 
+type AssistantTextSegment =
+  | { kind: "assistant"; text: string }
+  | { kind: "memory-citation"; text: string };
+
+function memoryCitationNotice(block: string): string | null {
+  const entriesMatch = block.match(/<citation_entries>\s*([\s\S]*?)\s*<\/citation_entries>/i);
+  const rolloutsMatch = block.match(/<rollout_ids>\s*([\s\S]*?)\s*<\/rollout_ids>/i);
+  if (!entriesMatch || !rolloutsMatch) return null;
+
+  const entries = entriesMatch[1]
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.match(/^(.+:\d+-\d+)\|note=\[([\s\S]*)\]$/));
+  if (entries.length === 0 || entries.some((entry) => !entry)) return null;
+
+  const rolloutCount = rolloutsMatch[1]
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean).length;
+  return [
+    "Memory sources",
+    ...entries.map((entry) => `${entry![1]}\t${entry![2]}`),
+    `Prior sessions: ${rolloutCount}`,
+  ].join("\n");
+}
+
+/**
+ * Separate Codex's trailing memory provenance envelope from visible answer
+ * prose. The envelope is not Markdown; giving it a semantic kind lets native
+ * clients keep the useful citations without printing provider transport tags.
+ */
+function assistantTextSegments(text: string): AssistantTextSegment[] {
+  const pattern = /<oai-mem-citation>[\s\S]*?<\/oai-mem-citation>/gi;
+  const matches = Array.from(text.matchAll(pattern));
+  if (matches.length === 0) return [{ kind: "assistant", text }];
+
+  const segments: AssistantTextSegment[] = [];
+  let offset = 0;
+  for (const match of matches) {
+    const notice = memoryCitationNotice(match[0]);
+    if (!notice) continue;
+    const index = match.index ?? offset;
+    const prose = text.slice(offset, index).trim();
+    if (prose) segments.push({ kind: "assistant", text: prose });
+    segments.push({ kind: "memory-citation", text: notice });
+    offset = index + match[0].length;
+  }
+  if (segments.length === 0) return [{ kind: "assistant", text }];
+  const trailing = text.slice(offset).trim();
+  if (trailing) segments.push({ kind: "assistant", text: trailing });
+  return segments;
+}
+
 /**
  * Split reserved local-command wrappers out of a provider's user-role row.
  *
@@ -1536,6 +1651,23 @@ function codexUserMessages(
       x,
       segment.kind === "human" ? "user" : "system",
       segment.kind === "human" ? "text" : "system_notice",
+      segment.text,
+      ts,
+      index,
+    ));
+}
+
+function codexAssistantMessages(
+  x: { timestamp?: string; type?: string; payload?: { type?: string; call_id?: string } },
+  role: string,
+  text: string,
+  ts: number | null,
+): SessionMsg[] {
+  return assistantTextSegments(text).map((segment, index) =>
+    codexMessage(
+      x,
+      role,
+      segment.kind === "assistant" ? "text" : "memory_citation",
       segment.text,
       ts,
       index,
@@ -1940,7 +2072,7 @@ function normalizeCodexLine(
       return text ? codexUserMessages(x, text, ts) : [];
     }
     const text = codexContentText(p.content).trim();
-    return text ? [codexMessage(x, role, "text", text, ts)] : [];
+    return text ? codexAssistantMessages(x, role, text, ts) : [];
   }
   if (p.type === "reasoning") {
     const text = (p.summary ?? [])
@@ -3177,11 +3309,12 @@ async function listSessionsUncached(
     resolvePaneOwners(deduped);
     return deduped;
   }
-  // Claude-transcript work only: codex rollouts can never contain an Agent
-  // launch or a `backgroundTaskId`, and streaming one through the event filter
-  // is not free — a large live rollout measured 858ms per scan on this event
-  // loop, enough to starve the pump. Codex background terminals arrive via the
-  // pane scrape (`lastPaneBackgroundProcessCount`) below instead.
+  // Claude-transcript work only: codex rollouts can never contain a Claude
+  // `Agent` launch or a `backgroundTaskId`, and streaming one through that event
+  // filter is not free — a large live rollout measured 858ms per scan on this
+  // event loop, enough to starve the pump. Native Codex child agents are read
+  // separately from rollout lineage below. Codex background terminals arrive
+  // via the pane scrape (`lastPaneBackgroundProcessCount`) instead.
   const scansClaudeTranscript = (session: { agent?: string | null }): boolean =>
     !session.agent?.startsWith("codex");
   const transcriptBackgroundCounts = await claudeBackgroundProcessCounts(
@@ -3189,10 +3322,16 @@ async function listSessionsUncached(
       session.transcriptPath && scansClaudeTranscript(session) ? [session.transcriptPath] : [],
     ),
   );
+  const codexSubagentThreads = codex.map(codexSubagentThread);
   const workEnriched = await Promise.all(deduped.map(async (session) => {
     const agents = session.transcriptPath && scansClaudeTranscript(session)
       ? await listSubagentSessions(session.transcriptPath)
-      : [];
+      : session.agent === "codex" && session.sessionId
+        ? await listCodexSubagentSessions(
+            session.sessionId,
+            codexSubagentThreads,
+          )
+        : [];
     const transcriptBackgroundCount = session.transcriptPath
       ? transcriptBackgroundCounts.get(session.transcriptPath) ?? 0
       : 0;

@@ -353,8 +353,8 @@ struct MediaAttachmentsView: View {
         .sheet(item: $viewing) { ref in
             FileViewerSheet(
                 ref: ref,
-                url: hostFiles?.viewerURL(for: ref),
-                client: hostFiles?.client
+                files: [ref],
+                hostFiles: hostFiles
             )
         }
     }
@@ -613,46 +613,130 @@ final class StreamingResourceLoader: NSObject, AVAssetResourceLoaderDelegate, UR
 /// Downloads the file from the host (it lives on the computer, not the phone)
 /// with explicit loading/error states — no infinite spinner — then renders it.
 struct FileViewerSheet: View {
+    private let sequence: FilePreviewSequence
+    private let hostFiles: HostFiles?
+    @State private var selectedID: String
+    @State private var imageIsZoomed = false
+    @State private var pagingForward = true
+
+    @Environment(\.dismiss) private var dismiss
+
+    init(ref: MediaRef, files: [MediaRef], hostFiles: HostFiles?) {
+        let sequence = FilePreviewSequence(files: files, selected: ref)
+        self.sequence = sequence
+        self.hostFiles = hostFiles
+        _selectedID = State(initialValue: sequence.initialID ?? ref.id)
+    }
+
+    private var selectedRef: MediaRef? {
+        sequence.files.first(where: { $0.id == selectedID })
+    }
+
+    private var selectedIndex: Int? {
+        sequence.files.firstIndex(where: { $0.id == selectedID })
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                if let ref = selectedRef {
+                    FileViewerPage(
+                        ref: ref,
+                        url: hostFiles?.viewerURL(for: ref),
+                        client: hostFiles?.client,
+                        onImageZoomChanged: { imageIsZoomed = $0 }
+                    )
+                    .id(ref.id)
+                    .accessibilityIdentifier("filePreviewPage_\(ref.id)")
+                    .transition(pageTransition)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .simultaneousGesture(pagingGesture)
+            .accessibilityIdentifier("filePreviewPager")
+            .navigationTitle(selectedRef?.filename ?? "File")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .accessibilityIdentifier("filePreviewDoneButton")
+                }
+            }
+        }
+    }
+
+    private var pageTransition: AnyTransition {
+        .asymmetric(
+            insertion: .move(edge: pagingForward ? .trailing : .leading),
+            removal: .move(edge: pagingForward ? .leading : .trailing)
+        )
+    }
+
+    private var pagingGesture: some Gesture {
+        DragGesture(minimumDistance: 30)
+            .onEnded { value in
+                guard !imageIsZoomed else { return }
+                let translation = value.translation
+                guard abs(translation.width) > abs(translation.height),
+                      abs(translation.width) >= 60 else { return }
+                moveSelection(by: translation.width < 0 ? 1 : -1)
+            }
+    }
+
+    private func moveSelection(by offset: Int) {
+        guard let selectedIndex else { return }
+        let destination = selectedIndex + offset
+        guard sequence.files.indices.contains(destination) else { return }
+        pagingForward = offset > 0
+        imageIsZoomed = false
+        withAnimation(.snappy(duration: 0.28)) {
+            selectedID = sequence.files[destination].id
+        }
+    }
+}
+
+/// One page in the file preview. The pager only constructs its current page,
+/// so hidden videos cannot start playing beside the one the user is watching.
+private struct FileViewerPage: View {
     let ref: MediaRef
     let url: URL?
     let client: LFGClient?
-    @Environment(\.dismiss) private var dismiss
+    let onImageZoomChanged: (Bool) -> Void
 
     enum Phase: Equatable { case loading, failed(String), data(Data), video(URL) }
     @State private var phase: Phase = .loading
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch phase {
-                case .loading:
-                    ProgressView("Loading…")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                case .failed(let message):
-                    ContentUnavailableView("Can't load file", systemImage: "exclamationmark.triangle",
-                                           description: Text(message))
-                case .data(let data):
-                    rendered(data)
-                case .video(let url):
-                    // Streams from the host; the player shows its own buffering
-                    // state, so there is no app-level "Preparing…" phase.
-                    HostVideoPlayer(url: url, client: client).ignoresSafeArea(edges: .bottom)
-                }
+        Group {
+            switch phase {
+            case .loading:
+                ProgressView("Loading…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .failed(let message):
+                ContentUnavailableView("Can't load file", systemImage: "exclamationmark.triangle",
+                                       description: Text(message))
+            case .data(let data):
+                rendered(data)
+            case .video(let url):
+                // Streams from the host; the player shows its own buffering
+                // state, so there is no app-level "Preparing…" phase.
+                HostVideoPlayer(url: url, client: client).ignoresSafeArea(edges: .bottom)
             }
-            .navigationTitle(ref.filename)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task {
             await load()
         }
+        .onDisappear { onImageZoomChanged(false) }
     }
 
     @ViewBuilder private func rendered(_ data: Data) -> some View {
         switch ref.kind {
         case .image:
             if let img = UIImage(data: data) {
-                ZoomableImageView(image: img).ignoresSafeArea(edges: .bottom)
+                ZoomableImageView(image: img, onZoomChanged: onImageZoomChanged)
+                    .ignoresSafeArea(edges: .bottom)
             } else {
                 ContentUnavailableView("Not an image", systemImage: "photo")
             }
@@ -675,7 +759,10 @@ struct FileViewerSheet: View {
             let data: Data
             if let client { data = try await client.resourceData(from: url) }
             else { data = try await URLSession.shared.data(from: url).0 }
+            guard !Task.isCancelled else { return }
             phase = .data(data)
+        } catch is CancellationError {
+            return
         } catch {
             phase = .failed(error.localizedDescription)
         }
@@ -698,6 +785,7 @@ struct PDFDataView: UIViewRepresentable {
 /// toggles between fit-to-width and a 2.5x detail zoom centered on the tap.
 struct ZoomableImageView: UIViewRepresentable {
     let image: UIImage
+    var onZoomChanged: (Bool) -> Void = { _ in }
 
     func makeUIView(context: Context) -> ZoomableScrollView {
         let scrollView = ZoomableScrollView()
@@ -724,17 +812,28 @@ struct ZoomableImageView: UIViewRepresentable {
 
     func updateUIView(_ uiView: ZoomableScrollView, context: Context) {}
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator { Coordinator(onZoomChanged: onZoomChanged) }
 
     final class Coordinator: NSObject, UIScrollViewDelegate {
         weak var scrollView: ZoomableScrollView?
+        private let onZoomChanged: (Bool) -> Void
+        private var reportedZoomed = false
+
+        init(onZoomChanged: @escaping (Bool) -> Void) {
+            self.onZoomChanged = onZoomChanged
+        }
 
         func viewForZooming(in scrollView: UIScrollView) -> UIView? {
             (scrollView as? ZoomableScrollView)?.imageView
         }
 
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
-            (scrollView as? ZoomableScrollView)?.centerImage()
+            guard let scrollView = scrollView as? ZoomableScrollView else { return }
+            scrollView.centerImage()
+            let zoomed = scrollView.zoomScale > scrollView.fitWidthScale * 1.01
+            guard zoomed != reportedZoomed else { return }
+            reportedZoomed = zoomed
+            DispatchQueue.main.async { [onZoomChanged] in onZoomChanged(zoomed) }
         }
 
         @objc func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
@@ -767,6 +866,21 @@ final class ZoomableScrollView: UIScrollView {
         super.layoutSubviews()
         configureIfNeeded()
         centerImage()
+    }
+
+    /// At fit width (or farther out), a horizontal drag means “next/previous
+    /// file”, not “pan an image that has no horizontal overflow”. Returning
+    /// false lets the containing page view own that gesture. Once zoomed in,
+    /// the image keeps the drag so the user can inspect details normally.
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer === panGestureRecognizer,
+           zoomScale <= fitWidthScale * 1.01 {
+            let velocity = panGestureRecognizer.velocity(in: self)
+            if abs(velocity.x) > abs(velocity.y) {
+                return false
+            }
+        }
+        return super.gestureRecognizerShouldBegin(gestureRecognizer)
     }
 
     private func configureIfNeeded() {

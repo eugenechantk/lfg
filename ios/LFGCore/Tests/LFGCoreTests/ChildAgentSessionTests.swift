@@ -80,6 +80,36 @@ final class ChildAgentSessionTests: XCTestCase {
         XCTAssertFalse(ChildAgentStatus.completed.isActive)
     }
 
+    func testRunningChildKeepsParentRunningWhenParentTurnIsIdle() {
+        XCTAssertTrue(ChildAgentActivity.parentIsRunning(
+            parentBusy: false,
+            agents: [ChildAgentSession(id: "codex-child", status: .running)]
+        ))
+    }
+
+    func testTerminalChildrenDoNotKeepIdleParentRunning() {
+        XCTAssertFalse(ChildAgentActivity.parentIsRunning(
+            parentBusy: false,
+            agents: [
+                ChildAgentSession(id: "done", status: .completed),
+                ChildAgentSession(id: "failed", status: .failed),
+            ]
+        ))
+    }
+
+    func testServerRunningCountBridgesBeforeChildSummariesArrive() {
+        XCTAssertTrue(ChildAgentActivity.parentIsRunning(
+            parentBusy: false,
+            agents: [],
+            reportedRunningCount: 1
+        ))
+        XCTAssertTrue(ChildAgentActivity.parentIsRunning(
+            parentBusy: true,
+            agents: [],
+            reportedRunningCount: 0
+        ))
+    }
+
     func testSessionWorkCountersHaveAccessibleZeroSingularAndPluralCopy() {
         XCTAssertNil(SessionWorkListPresentation.childAgentLabel(count: 0))
         XCTAssertEqual(
