@@ -16,6 +16,32 @@ import Foundation
 /// change when the conversation does, and comparing ids (rather than the device
 /// clock against the host clock) sidesteps clock skew entirely.
 public enum ReadState {
+    /// Choose the message that opening a session should acknowledge.
+    ///
+    /// The session row and the locally loaded transcript advance independently:
+    /// history may still be one page behind the row that the user tapped, while a
+    /// streamed transcript may be one message ahead of the next list poll. Prefer
+    /// the later real message timestamp when both are available. When ordering is
+    /// unavailable or tied, prefer the session row because that is the message
+    /// whose identity made the visible row unread.
+    public static func messageIDToMarkSeen(
+        sessionLatest: SessionMessage?,
+        loadedTranscriptLatest: SessionMessage?
+    ) -> String? {
+        let sessionID = sessionLatest?.id.flatMap { $0.isEmpty ? nil : $0 }
+        let transcriptID = loadedTranscriptLatest?.id.flatMap { $0.isEmpty ? nil : $0 }
+
+        guard let sessionID else { return transcriptID }
+        guard let transcriptID else { return sessionID }
+
+        if let sessionTimestamp = sessionLatest?.ts,
+           let transcriptTimestamp = loadedTranscriptLatest?.ts,
+           transcriptTimestamp > sessionTimestamp {
+            return transcriptID
+        }
+        return sessionID
+    }
+
     /// A session is *unread* when its newest message isn't the newest message this
     /// viewer has seen. A session that was never opened but has a message counts as
     /// unread (there is output the viewer hasn't seen); a session with no messages

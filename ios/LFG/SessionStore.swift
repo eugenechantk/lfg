@@ -2909,12 +2909,16 @@ import LFGCore
     /// session is opened and as it streams while on screen, so it clears from the
     /// "Unread" group. No-op for local placeholder ids (not real sessions yet).
     ///
-    /// The newest known message is the tail of the loaded transcript if we have one
-    /// (the live stream runs ahead of the 3s list poll), else the list's `last`.
+    /// The list preview and loaded transcript can each be fresher than the other:
+    /// history may lag the row the user just tapped, while the live stream may run
+    /// ahead of the next list poll. `ReadState` orders their actual messages by
+    /// timestamp and uses the list row as the conservative tie/fallback.
     private func markOpened(_ id: String) {
         guard !id.hasPrefix("local-") else { return }
-        let newest = transcripts[id]?.last?.id
-            ?? sessions.first { $0.sessionId == id }?.last?.id
+        let newest = ReadState.messageIDToMarkSeen(
+            sessionLatest: session(id)?.last,
+            loadedTranscriptLatest: transcripts[id]?.last
+        )
         markSeen(id, messageID: newest)
     }
 
@@ -3013,7 +3017,12 @@ import LFGCore
             // Keep the session on screen marked read as its output streams in, so
             // a turn that completes while you're watching doesn't resurface it as
             // unread when you leave the detail view.
-            if SessionFocus.isFocused(sid, focusedID: focusedID) { markOpened(sid) }
+            if SessionFocus.isFocused(sid, focusedID: focusedID) {
+                // The event itself is authoritative and may be ahead of both the
+                // REST row and a history page merge. Mark it directly so the next
+                // lagging list poll cannot resurrect it as unread.
+                markSeen(sid, messageID: m.id)
+            }
             // A real user turn just landed — drop any optimistic bubble it fulfils.
             if m.role == "user" { reconcilePending(sid) }
         case .reset(let sid):

@@ -40,6 +40,40 @@ final class ReadStateTests: XCTestCase {
         XCTAssertTrue(ReadState.isUnread(lastMessageID: "newer", lastSeenMessageID: "older"))
     }
 
+    /// Opening from the session list must acknowledge the message that made the
+    /// row unread, even when an already-loaded transcript is one turn behind.
+    /// Otherwise focus temporarily suppresses the unread group, but navigating
+    /// away exposes the stale seen id and resurrects the row as unread.
+    func testOpeningPrefersSessionLatestOverStaleLoadedTranscript() {
+        let seen = ReadState.messageIDToMarkSeen(
+            sessionLatest: SessionMessage(id: "message-2", ts: 2),
+            loadedTranscriptLatest: SessionMessage(id: "message-1", ts: 1)
+        )
+
+        XCTAssertEqual(seen, "message-2")
+        XCTAssertFalse(ReadState.isUnread(lastMessageID: "message-2", lastSeenMessageID: seen))
+    }
+
+    func testOpeningFallsBackToLoadedTranscriptWhenSessionRowHasNoPreview() {
+        XCTAssertEqual(
+            ReadState.messageIDToMarkSeen(
+                sessionLatest: nil,
+                loadedTranscriptLatest: SessionMessage(id: "message-1", ts: 1)
+            ),
+            "message-1"
+        )
+    }
+
+    func testOpeningUsesStreamedTranscriptWhenItIsAheadOfSessionPoll() {
+        XCTAssertEqual(
+            ReadState.messageIDToMarkSeen(
+                sessionLatest: SessionMessage(id: "message-1", ts: 1),
+                loadedTranscriptLatest: SessionMessage(id: "message-2", ts: 2)
+            ),
+            "message-2"
+        )
+    }
+
     // MARK: Migration predicate (one-shot, message timestamps only)
 
     func testMigrationNeverOpenedButHasMessageIsUnread() {
