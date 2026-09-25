@@ -10,6 +10,7 @@ import { prepareHandoff } from "../handoff.ts";
 import { switchCodexModel } from "../codex-model-switch.ts";
 import { hostInfo } from "../hostinfo.ts";
 import { currentModelCatalog, isSafeModelId } from "../model-catalog.ts";
+import { claudeModelSwitchBlocker } from "../claude-model-switch.ts";
 import { Journal } from "../journal.ts";
 import { startJournalPump } from "../journal-pump.ts";
 import { codexDelegationSessionIds, notePaneBusy } from "../activity.ts";
@@ -2584,15 +2585,11 @@ export async function cmdServe(options: {
         }
       }
 
-      // Change the model of a running session mid-flight. Claude Code's own
-      // `/model <alias>` slash command switches the active model for the rest of
-      // the session and takes effect on the next turn — so we just inject it
-      // through the confirmed-delivery queue (which treats a slash command as
-      // delivered the instant it leaves the composer). If Claude raises a
-      // "re-read history?" confirmation, it surfaces in the normal prompt panel
-      // for the user to confirm. (Inline /model also nudges the global default,
-      // so ordinary LFG creation pins --model; desktop tool switching deliberately
-      // inherits that CLI default.) Codex uses its native picker below.
+      // Change the model of a running session. Managed Claude sessions launch
+      // with an explicit --model pin; recent Claude Code builds can accept an
+      // injected `/model` command yet keep that pinned model. Relaunch the pane
+      // with the requested model so a successful response means it really took.
+      // Codex uses its native picker below.
       {
         const m = path.match(/^\/api\/sessions\/([0-9a-fA-F-]{36})\/model$/);
         if (m && req.method === "POST") {
@@ -2609,13 +2606,14 @@ export async function cmdServe(options: {
           if (modelError) return err(400, modelError);
           if (!sess.tmuxTarget)
             return err(409, "session is not in a tmux pane — cannot change model");
-          // If the session is FROZEN on an unavailable model, an injected
-          // `/model` no-ops — Claude Code rejects the turn before handling the
-          // slash command ("Kept model as <dead model>"). Relaunch the pane on
-          // the new model instead (resumes the transcript, so the build
-          // continues). For a healthy session the in-place `/model` is gentler
-          // (no process restart), so keep that path for the normal case.
-          if (sess.agent === "claude" && sess.statusReason === "model_unavailable") {
+          if (sess.agent === "claude") {
+            const switchError = claudeModelSwitchBlocker({
+              busy: sess.busy === true,
+              queued: listQueue(m[1]).some(message =>
+                message.status === "pending" || message.status === "sending" || message.status === "queued"),
+              prompting: journal.promptPresent(m[1]),
+            });
+            if (switchError) return err(409, switchError);
             if (!sess.sessionId || !sess.cwd)
               return err(409, "cannot relaunch: session id or cwd unknown");
             const r = relaunchSessionWithModel({
@@ -2637,8 +2635,6 @@ export async function cmdServe(options: {
             await noteConfirmedSessionModel(m[1], sess.pid, model);
             return json({ ok: true, model });
           }
-          const msg = enqueueMessage(m[1], `/model ${model}`);
-          return json({ ok: true, msg });
         }
       }
 

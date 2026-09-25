@@ -20,26 +20,17 @@ export const BUNDLED_MODEL_CATALOG: ModelCatalogResponse = {
   agents: {
     claude: {
       version: null,
-      defaultModel: "claude-opus-5-5",
-      models: [
-        "claude-opus-5-5",
-        "claude-fable-5-1",
-        "claude-sonnet-5",
-        "claude-haiku-4-5-20251001",
-      ],
+      // Claude Code resolves these aliases against its installed catalog, so
+      // they stay usable on hosts that predate GET /api/models.
+      defaultModel: "opus",
+      models: ["opus", "fable", "sonnet", "haiku"],
     },
     codex: {
       version: null,
-      defaultModel: "gpt-6-astra",
-      models: [
-        "gpt-6-astra",
-        "gpt-6-sol",
-        "gpt-6-luna",
-        "gpt-5.6-sol",
-        "gpt-5.6-terra",
-        "gpt-5.6-luna",
-        "gpt-5.5",
-      ],
+      // Compatibility IDs accepted by the previous host generation. A current
+      // host replaces these with its live CLI-discovered catalog.
+      defaultModel: "gpt-5.6-sol",
+      models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
     },
   },
 };

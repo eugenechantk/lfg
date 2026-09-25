@@ -675,15 +675,12 @@ export function spawnManagedSession(opts: {
 }
 
 // Switch a running Claude session's model by RELAUNCHING its pane on the new
-// model, resuming the same transcript (`--resume <id>`). This is the heavy
-// hammer for a session whose model became invalid mid-flight: when the launch
-// model is unavailable, Claude Code rejects every turn *before* it processes an
-// injected `/model` slash command, so the in-place switch (see serve's /model
-// endpoint) silently no-ops ("Kept model as <dead model>"). A fresh process
-// with an explicit --model is the only thing that takes. `--resume` preserves
-// the full conversation, so the build picks up where it froze. respawn-pane
-// keeps the same tmux pane/name, so the managed registry and live view stay
-// bound. No prompt is re-submitted — it lands at the composer, ready to go.
+// model, resuming the same transcript (`--resume <id>`). Managed sessions pin
+// --model at launch, and recent Claude Code builds can accept an injected
+// `/model` command yet report "Kept model as <launch model>". A fresh process
+// with the requested --model is the reliable boundary. `--resume` preserves the
+// full conversation; respawn-pane keeps the tmux pane/name and managed binding.
+// No prompt is re-submitted — it lands at the composer, ready to go.
 export function relaunchSessionWithModel(opts: {
   tmuxTarget: string;
   cwd: string;

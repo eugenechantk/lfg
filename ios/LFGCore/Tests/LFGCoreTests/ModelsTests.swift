@@ -178,12 +178,13 @@ final class ModelsTests: XCTestCase {
     }
 
     func testAgentKindModels() {
-        XCTAssertEqual(AgentKind.claude.defaultModel, "claude-opus-5-5")
-        XCTAssertEqual(AgentKind.codex.defaultModel, "gpt-6-astra")
-        XCTAssertTrue(AgentKind.claude.models.contains("claude-fable-5-1"))
+        XCTAssertEqual(AgentKind.claude.defaultModel, "opus")
+        XCTAssertEqual(AgentKind.codex.defaultModel, "gpt-5.6-sol")
+        XCTAssertTrue(AgentKind.claude.models.contains("claude-fable-5"))
         XCTAssertTrue(AgentKind.claude.models.contains("opus"))
-        XCTAssertFalse(AgentKind.claude.pickerModels.contains("opus"))
-        XCTAssertTrue(AgentKind.codex.models.contains("gpt-6-sol"))
+        XCTAssertTrue(AgentKind.claude.pickerModels.contains("opus"))
+        XCTAssertFalse(AgentKind.claude.pickerModels.contains("claude-opus-5-5"))
+        XCTAssertFalse(AgentKind.codex.models.contains("gpt-6-astra"))
         XCTAssertTrue(AgentKind.codex.models.contains("gpt-5.6-sol"))
         XCTAssertEqual(AgentKind.allCases.count, 2)
     }
@@ -226,7 +227,7 @@ final class ModelsTests: XCTestCase {
 
         XCTAssertEqual(selection, .default)
         XCTAssertEqual(selection.agent, .claude)
-        XCTAssertEqual(selection.model, "claude-opus-5-5")
+        XCTAssertEqual(selection.model, "opus")
     }
 
     func testAgentModelSelectionReplacesStaleModelWithAgentsCurrentDefault() {
@@ -237,6 +238,19 @@ final class ModelsTests: XCTestCase {
 
         XCTAssertEqual(selection.agent, .codex)
         XCTAssertEqual(selection.model, AgentKind.codex.defaultModel)
+    }
+
+    func testFallbackCatalogReconcilesUnsupportedFutureModelsBeforeSubmission() {
+        XCTAssertEqual(
+            AgentModelSelection(agent: .claude, model: "claude-opus-5-5")
+                .reconciled(with: .fallback),
+            AgentModelSelection(agent: .claude, model: "opus")
+        )
+        XCTAssertEqual(
+            AgentModelSelection(agent: .codex, model: "gpt-6-astra")
+                .reconciled(with: .fallback),
+            AgentModelSelection(agent: .codex, model: "gpt-5.6-sol")
+        )
     }
 
     func testAgentModelSelectionReplacesRetiredAisdkAgentWithGlobalDefault() {

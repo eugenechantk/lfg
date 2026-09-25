@@ -629,18 +629,22 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable {
     public var pickerModels: [String] {
         switch self {
         case .claude:
-            return ["claude-opus-5-5", "claude-fable-5-1", "claude-sonnet-5",
-                    "claude-haiku-4-5-20251001"]
+            // Claude Code resolves these aliases against its installed catalog,
+            // so they remain valid when the host predates GET /api/models.
+            return ["opus", "fable", "sonnet", "haiku"]
         case .codex:
-            return ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol",
-                    "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"]
+            // Compatibility IDs accepted by the previous host generation. A
+            // current host replaces these with its live CLI-discovered catalog.
+            return ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]
         }
     }
 
-    /// Accepted persisted/transcript-derived values. Legacy Claude aliases stay
-    /// valid without consuming limited UIMenu action slots in the picker.
+    /// Accepted persisted/transcript-derived values. Older exact Claude IDs
+    /// remain readable even though aliases are the compatibility picker choices.
     public var models: [String] {
-        self == .claude ? pickerModels + ["opus", "fable", "sonnet", "haiku"] : pickerModels
+        self == .claude
+            ? pickerModels + ["claude-opus-5", "claude-fable-5", "claude-sonnet-5", "claude-haiku-4-5"]
+            : pickerModels
     }
 
     public var defaultModel: String { pickerModels.first ?? "sonnet" }

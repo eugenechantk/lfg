@@ -67,6 +67,18 @@ describe("automatic CLI model catalog", () => {
 
   it("falls back per agent when discovery is absent or malformed", () => {
     expect(mergeWithBundledFallbacks({ claude: null, codex: null })).toEqual(BUNDLED_MODEL_CATALOG);
+    expect(BUNDLED_MODEL_CATALOG.agents.claude).toEqual({
+      version: null,
+      defaultModel: "opus",
+      models: ["opus", "fable", "sonnet", "haiku"],
+    });
+    expect(BUNDLED_MODEL_CATALOG.agents.codex).toEqual({
+      version: null,
+      defaultModel: "gpt-5.6-sol",
+      models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
+    });
+    expect(BUNDLED_MODEL_CATALOG.agents.claude.models).not.toContain("claude-opus-5-5");
+    expect(BUNDLED_MODEL_CATALOG.agents.codex.models).not.toContain("gpt-6-astra");
     expect(mergeWithBundledFallbacks({
       claude: { version: "2.1.280", defaultModel: "claude-opus-5-5", models: ["claude-opus-5-5"] },
       codex: null,

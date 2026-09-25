@@ -361,8 +361,15 @@ struct NewSessionView: View {
             return
         }
 
-        let req = NewSessionRequest(cwd: dir, prompt: text, agent: agent.rawValue,
-                                    model: model, user: settings.defaultOwner)
+        // A persisted selection can outlive the host that advertised it. Re-run
+        // reconciliation at the request boundary so starting without reopening
+        // the model sheet cannot submit an ID this host does not advertise.
+        let selection = AgentModelSelection(agent: agent, model: model)
+            .reconciled(with: store.modelCatalog(for: selectedHost))
+        agent = selection.agent
+        model = selection.model
+        let req = NewSessionRequest(cwd: dir, prompt: text, agent: selection.agent.rawValue,
+                                    model: selection.model, user: settings.defaultOwner)
         // Preserve the load-bearing optimistic path and its navigation order.
         // Promote this cwd in the MRU list so it surfaces under RECENT next time.
         settings.noteRecentDir(dir)
