@@ -770,39 +770,30 @@ struct SessionListView: View {
                             ForEach(renderedRows(for: section)) { row in
                                 sessionRow(row)
                             }
-                            // Search has its OWN pagination — the host is
-                            // walking every transcript it has, not the list's
-                            // loaded pages — so while searching this footer
-                            // pulls the next page of MATCHES, not the next
-                            // page of closed sessions.
-                            if section.group == .closed {
-                                if isSearching {
-                                    if store.canLoadMoreSearch {
-                                        loadMoreRow(title: "Load more results",
-                                                    loading: store.isLoadingMoreSearch,
-                                                    identifier: "loadMoreSearchButton") {
-                                            await store.loadMoreSearchResults()
-                                        }
-                                    }
-                                } else if store.canLoadMoreClosed {
-                                    // Infinite scroll: this row only exists
-                                    // at the bottom of the closed section,
-                                    // so its creation means the user is at
-                                    // the end of what's loaded — fetch the
-                                    // next page without requiring the tap.
-                                    // The button stays as the retry path
-                                    // for a page that failed mid-flight.
-                                    loadMoreRow(title: "Load more",
-                                                loading: store.isLoadingMoreClosed,
-                                                identifier: "loadMoreClosedButton") {
-                                        await store.loadMoreClosed()
-                                    }
-                                    .onAppear {
-                                        Task { await store.loadMoreClosed() }
-                                    }
-                                }
-                            }
                         }
+                    }
+                }
+                // Both cursors belong to the WHOLE rendered list rather than a
+                // status section. Directory/host grouping does not mark any
+                // section `.closed`, so nesting either footer inside that
+                // section silently disabled paging in those modes.
+                if !isSearching, store.canLoadMoreClosed {
+                    loadMoreRow(title: "Load more",
+                                loading: store.isLoadingMoreClosed,
+                                identifier: "loadMoreClosedButton") {
+                        await store.loadMoreClosed()
+                    }
+                    .onAppear {
+                        Task { await store.loadMoreClosed() }
+                    }
+                } else if isSearching, store.canLoadMoreSearch {
+                    loadMoreRow(title: "Load more results",
+                                loading: store.isLoadingMoreSearch,
+                                identifier: "loadMoreSearchButton") {
+                        await store.loadMoreSearchResults()
+                    }
+                    .onAppear {
+                        Task { await store.loadMoreSearchResults() }
                     }
                 }
             }

@@ -5052,7 +5052,8 @@ struct ContentView: View {
                 .onAppear { Task { await store.loadMoreClosed() } }
             }
             // Search pages independently of the list, so this pulls the next
-            // page of MATCHES — never the next page of the closed list.
+            // page of MATCHES — never the next page of the closed list. It is a
+            // list-level sentinel so status/directory grouping cannot hide it.
             if isSearching, store.canLoadMoreSearch {
                 Button {
                     Task { await store.loadMoreSearch() }
@@ -5071,6 +5072,7 @@ struct ContentView: View {
                 .foregroundStyle(.tint)
                 .disabled(store.searchLoadingMore)
                 .accessibilityIdentifier("load_more_search")
+                .onAppear { Task { await store.loadMoreSearch() } }
             }
             if !store.unreachableHosts.isEmpty {
                 Text("Unreachable: \(store.unreachableHosts.joined(separator: ", "))")
