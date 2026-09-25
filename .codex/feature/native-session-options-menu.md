@@ -1,5 +1,11 @@
 # Feature: Native Session Options Menu
 
+## Status: Superseded 2026-09-26
+
+The native `UIButton` + `UIMenu` implementation was retired after iOS 26.3 independent audits showed that UIKit hides the toolbar source for up to 1.186 seconds after an action dismisses the menu. The current implementation uses an app-owned, scrollable popover with internal option pages so transcript streaming cannot reset its offset and context-menu source-preview dismissal cannot blank the More control.
+
+Current requirements, implementation, and passing independent evidence are tracked in `.codex/feature/session-more-button-stability.md`. The success criteria and evidence below are retained as the historical rationale for the superseded native implementation.
+
 ## User Story
 
 As an LFG iOS user, I want the session toolbar's More button to present Apple's native action menu so it looks and behaves like the rest of iOS, including when the action list is taller than the available screen.
