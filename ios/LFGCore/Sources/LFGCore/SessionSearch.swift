@@ -40,7 +40,8 @@ public enum SessionSearch {
     }
 
     public static func matches(terms: [String], session: ResumableSession) -> Bool {
-        matches(terms: terms,
+        if session.searchMatched == true { return true }
+        return matches(terms: terms,
                 fields: [session.title, session.project, session.cwd,
                          session.lastUserText, session.sessionId])
     }

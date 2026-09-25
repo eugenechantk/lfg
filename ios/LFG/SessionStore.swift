@@ -2137,6 +2137,13 @@ import LFGCore
         let nextBefore: Double?
     }
 
+    private struct HostSearchFetch: Sendable {
+        let host: Host
+        let sessions: [ResumableSession]
+        let nextCursor: String?
+        let reset: Bool
+    }
+
     /// Fan out `GET /api/sessions` to the given hosts in parallel, invoking `onResult`
     /// with each host's result **the moment it lands** rather than collecting them all.
     ///
@@ -2221,6 +2228,30 @@ import LFGCore
         return results.sorted { $0.0 < $1.0 }.compactMap(\.1)
     }
 
+    private func fetchSearchPages(_ hosts: [Host],
+                                  cursorByHost: [String: String] = [:],
+                                  q: String) async -> [HostSearchFetch] {
+        let exclude = settings.hiddenDirs.paths
+        return await withTaskGroup(of: HostSearchFetch?.self) { group in
+            for host in hosts {
+                let client = settings.client(for: host)
+                let cursor = cursorByHost[host.id]
+                group.addTask {
+                    guard let client,
+                          let page = try? await client.searchSessions(q, limit: 60,
+                                                                      cursor: cursor, exclude: exclude)
+                    else { return nil }
+                    return HostSearchFetch(host: host, sessions: page.sessions,
+                                           nextCursor: page.nextCursor,
+                                           reset: page.reset == true)
+                }
+            }
+            var pages: [HostSearchFetch] = []
+            for await page in group { if let page { pages.append(page) } }
+            return pages
+        }
+    }
+
     private func rebuildClosedCache(for hosts: [Host]) {
         let perHost = closedPages(for: hosts)
         let reconciled = MultiHost.reconcileResumable(perHost: perHost, liveIds: liveIds)
@@ -2278,12 +2309,13 @@ import LFGCore
     private(set) var isLoadingMoreSearch = false
     private var searchTask: Task<Void, Never>?
     private var searchPagesByHost: [String: [ResumableSession]] = [:]
-    private var searchNextBeforeByHost: [String: Double] = [:]
+    private var searchNextCursorByHost: [String: String] = [:]
+    private(set) var searchRankByID: [String: Double] = [:]
 
     var canLoadMoreSearch: Bool {
         !searchQuery.isEmpty
             && settings.hosts.contains {
-                hostStateByHost[$0.id]?.isLive == true && searchNextBeforeByHost[$0.id] != nil
+                hostStateByHost[$0.id]?.isLive == true && searchNextCursorByHost[$0.id] != nil
             }
     }
 
@@ -2296,7 +2328,8 @@ import LFGCore
         searchQuery = q
         searchTask?.cancel()
         searchPagesByHost = [:]
-        searchNextBeforeByHost = [:]
+        searchNextCursorByHost = [:]
+        searchRankByID = [:]
         guard !q.isEmpty else {
             searchResults = []
             isSearchLoading = false
@@ -2325,14 +2358,14 @@ import LFGCore
             isSearchLoading = false
             return
         }
-        let pages = await fetchResumablePages(hosts, q: q)
+        let pages = await fetchSearchPages(hosts, q: q)
         // A query that changed while this fan-out was in flight owns the state
         // now; dropping the stale answer keeps the list from flashing results
         // for a word the user already finished typing past.
         guard q == searchQuery, !Task.isCancelled else { return }
         for page in pages {
             searchPagesByHost[page.host.id] = page.sessions
-            searchNextBeforeByHost[page.host.id] = page.nextBefore
+            searchNextCursorByHost[page.host.id] = page.nextCursor
         }
         isSearchLoading = false
         rebuildSearchResults()
@@ -2342,20 +2375,24 @@ import LFGCore
         guard !isLoadingMoreSearch, !searchQuery.isEmpty else { return }
         let q = searchQuery
         let hosts = settings.hosts.filter {
-            hostStateByHost[$0.id]?.isLive == true && searchNextBeforeByHost[$0.id] != nil
+            hostStateByHost[$0.id]?.isLive == true && searchNextCursorByHost[$0.id] != nil
         }
         guard !hosts.isEmpty else { return }
         isLoadingMoreSearch = true
         defer { isLoadingMoreSearch = false }
 
-        let beforeByHost = Dictionary(uniqueKeysWithValues: hosts.compactMap { host in
-            searchNextBeforeByHost[host.id].map { (host.id, Optional($0)) }
+        let cursorByHost = Dictionary(uniqueKeysWithValues: hosts.compactMap { host in
+            searchNextCursorByHost[host.id].map { (host.id, $0) }
         })
-        let pages = await fetchResumablePages(hosts, beforeByHost: beforeByHost, q: q)
+        let pages = await fetchSearchPages(hosts, cursorByHost: cursorByHost, q: q)
         guard q == searchQuery else { return }
         for page in pages {
-            searchPagesByHost[page.host.id, default: []].append(contentsOf: page.sessions)
-            searchNextBeforeByHost[page.host.id] = page.nextBefore
+            if page.reset {
+                searchPagesByHost[page.host.id] = page.sessions
+            } else {
+                searchPagesByHost[page.host.id, default: []].append(contentsOf: page.sessions)
+            }
+            searchNextCursorByHost[page.host.id] = page.nextCursor
         }
         rebuildSearchResults()
     }
@@ -2373,10 +2410,14 @@ import LFGCore
     /// half-deployed fleet degrade to "that host contributes less" instead of
     /// "that host contributes garbage".
     private func rebuildSearchResults() {
-        searchResults = SessionSearch.reconcile(
+        let reconciled = SessionSearch.reconcile(
             perHost: settings.hosts.map { searchPagesByHost[$0.id] ?? [] },
             terms: SessionSearch.terms(searchQuery),
             liveIds: liveIds)
+            .sorted { ($0.rank ?? 0, $0.mtime ?? 0) > ($1.rank ?? 0, $1.mtime ?? 0) }
+        searchRankByID = Dictionary(reconciled.map { ($0.sessionId, $0.rank ?? 0) },
+                                    uniquingKeysWith: max)
+        searchResults = reconciled
             .filter { !resumedIds.contains($0.sessionId) }
             .map(Self.closedSession(from:))
             // Search spans EVERY transcript on every host, so without this a muted

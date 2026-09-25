@@ -103,6 +103,7 @@ struct SessionListView: View {
     private var matchingSessions: [Session] {
         let terms = SessionSearch.terms(searchText)
         let local = store.filteredSessions.filter { s in
+            if !terms.isEmpty && s.closed { return false }
             // Host filter (multi-host): keep the selected host's live sessions;
             // closed sessions are host-agnostic, so they always pass.
             if let hf = settings.hostFilter, !s.closed, store.hostBySession[s.id] != hf {
@@ -157,7 +158,13 @@ struct SessionListView: View {
                                    items: sorted, running: running, idle: idle)
             }
             // Most-recently-active directory first, so where the action is floats up.
-            .sorted { ($0.items.first?.lastActivityAt ?? 0) > ($1.items.first?.lastActivityAt ?? 0) }
+            .sorted {
+                if isSearching && settings.sortMode == .recentActivity {
+                    return (store.searchRankByID[$0.items.first?.id ?? ""] ?? 0)
+                        > (store.searchRankByID[$1.items.first?.id ?? ""] ?? 0)
+                }
+                return ($0.items.first?.lastActivityAt ?? 0) > ($1.items.first?.lastActivityAt ?? 0)
+            }
         case .host:
             let byHost = Dictionary(grouping: base) { session in
                 store.host(forSession: session.id)?.id ?? "unknown"
@@ -188,6 +195,13 @@ struct SessionListView: View {
     }
 
     private func sortedSessions(_ sessions: [Session]) -> [Session] {
+        if isSearching && settings.sortMode == .recentActivity {
+            return sessions.sorted {
+                let lhs = store.searchRankByID[$0.id] ?? 0
+                let rhs = store.searchRankByID[$1.id] ?? 0
+                return lhs == rhs ? ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) : lhs > rhs
+            }
+        }
         switch settings.sortMode {
         case .recentActivity:
             return sessions.sorted {

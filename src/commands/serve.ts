@@ -58,6 +58,9 @@ import {
   lastUserPromptText,
   listResumable,
   searchResumable,
+  rankedSearchResumable,
+  startTranscriptSearchSync,
+  transcriptSearchSyncing,
   cwdForTranscript,
   modelAliasForTranscript,
   type Session,
@@ -2295,6 +2298,19 @@ export async function cmdServe(options: {
         return json(page);
       }
 
+      if (path === "/api/sessions/search" && req.method === "GET") {
+        const q = (url.searchParams.get("q") ?? "").trim();
+        if (!q) return err(400, "q is required");
+        if (transcriptSearchSyncing()) return err(503, "session search index is warming; retry shortly");
+        const page = await rankedSearchResumable({
+          q,
+          limit: Number(url.searchParams.get("limit")) || 30,
+          cursor: url.searchParams.get("cursor"),
+          exclude: url.searchParams.getAll("exclude"),
+        });
+        return page ? json(page) : err(409, "search cursor expired; restart the query");
+      }
+
       // Resume a closed claude session: relaunch `claude --resume <id>` in the
       // transcript's original cwd as a fresh managed tmux session, preserving the
       // full conversation. Claude continues into a NEW sessionId, which we resolve
@@ -2927,6 +2943,7 @@ export async function cmdServe(options: {
   // Client-independent queue pump: starts recovered/pending deliveries and
   // reconciles native agent queues even when the app is closed.
   if (backgroundTasks) startQueuePump();
+  if (backgroundTasks) startTranscriptSearchSync();
 
   console.log(`lfg web → http://${server.hostname}:${server.port}`);
   console.log(`  agents dir: ${AGENTS_DIR}`);

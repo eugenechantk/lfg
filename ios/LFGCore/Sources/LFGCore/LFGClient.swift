@@ -492,6 +492,41 @@ public struct LFGClient: Sendable {
                              as: ResumableResponse.self)
     }
 
+    public func searchSessions(_ q: String, limit: Int = 60,
+                               cursor: String? = nil, exclude: [String] = [],
+                               timeout: TimeInterval = 45) async throws -> RankedSearchResponse {
+        if cursor?.hasPrefix("legacy:") == true {
+            let before = Double(String(cursor!.dropFirst("legacy:".count)))
+            let page = try await resumable(limit: limit, before: before, q: q,
+                                           exclude: exclude, timeout: timeout)
+            return RankedSearchResponse(sessions: page.sessions,
+                                        nextCursor: page.nextBefore.map { "legacy:\($0)" })
+        }
+        var query = [URLQueryItem(name: "q", value: q),
+                     URLQueryItem(name: "limit", value: String(limit))]
+        if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+        for path in exclude { query.append(URLQueryItem(name: "exclude", value: path)) }
+        for attempt in 0..<40 {
+            do {
+                return try await get("api/sessions/search", query: query, timeout: timeout,
+                                     as: RankedSearchResponse.self)
+            } catch LFGError.http(let status, _) where status == 503 && attempt < 39 {
+                try await Task.sleep(for: .seconds(3))
+            } catch LFGError.http(let status, _) where status == 409 && cursor != nil {
+                var restarted = try await searchSessions(q, limit: limit, cursor: nil,
+                                                         exclude: exclude, timeout: timeout)
+                restarted.reset = true
+                return restarted
+            } catch LFGError.http(let status, _) where status == 404 {
+                let page = try await resumable(limit: limit, q: q, exclude: exclude,
+                                               timeout: timeout)
+                return RankedSearchResponse(sessions: page.sessions,
+                                            nextCursor: page.nextBefore.map { "legacy:\($0)" })
+            }
+        }
+        throw LFGError.http(status: 503, body: "session search index is still warming")
+    }
+
     public func messages(_ id: String, limit: Int = 40, full: Bool = false) async throws -> [SessionMessage] {
         var q = [URLQueryItem(name: "limit", value: String(limit))]
         if full { q.append(URLQueryItem(name: "full", value: "1")) }

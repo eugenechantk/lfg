@@ -5,6 +5,8 @@ import { scanBack, tail } from "./transcript.ts";
 import { resolveBusy, sessionTurnState } from "./session-state.ts";
 import { statSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, basename, relative } from "node:path";
+import { SessionContentIndex, watchTranscriptRoots } from "./session-content-index";
+import { rankSessions, RankedSearchPager } from "./ranked-session-search";
 import { tmpdir } from "node:os";
 import { tmuxTargetForPid, paneTtyForTarget, capturePaneAsync } from "./tmux";
 import { codexModelFromPane } from "./codex-model-state.ts";
@@ -3803,6 +3805,100 @@ export async function listResumable(
 // imported, so a test that recomputes this path from its own env can disagree
 // with the module under test depending on file load order.
 export const SEARCH_INDEX_PATH = join(PATHS.data, "session-search-index.json");
+export const CONTENT_INDEX_PATH = join(PATHS.data, "session-content.sqlite");
+let contentIndex: SessionContentIndex | null = null;
+let contentRefreshInFlight: Promise<void> | null = null;
+let contentFreshUntil = 0;
+let stopContentWatcher: (() => void) | null = null;
+let transcriptSearchSyncInFlight: Promise<void> | null = null;
+const rankedPager = new RankedSearchPager();
+
+function contentStore(): SessionContentIndex {
+  return contentIndex ??= new SessionContentIndex(CONTENT_INDEX_PATH);
+}
+
+export function searchProse(line: string, state: unknown) {
+  // A Claude tool result may include a stray text block alongside its
+  // `tool_result` block. The whole row is machinery, even if normalized as text.
+  if (line.includes('"toolUseResult"')) return [];
+  return normalizeLineMessages(line, state as CodexNormalizationState)
+    .filter((message) =>
+      (message.role === "user" || message.role === "assistant") &&
+      message.kind === "text" && !message.apiError &&
+      !!message.text.trim() &&
+      !(message.role === "user" &&
+        (message.text.trimStart().startsWith("<") || INTERRUPT_MARKER.test(message.text.trim()))) &&
+      !/^!\[[^\]]*\]\([^)]*\)$/.test(message.text.trim()))
+    .map((message) => ({ role: message.role as "user" | "assistant", text: message.text, ts: message.ts }));
+}
+
+async function reconcileContentIndex(entries: IndexEntry[], forcedPaths: ReadonlySet<string> = new Set()): Promise<void> {
+  if (forcedPaths.size === 0 && Date.now() < contentFreshUntil) return;
+  if (contentRefreshInFlight) {
+    await contentRefreshInFlight;
+    if (forcedPaths.size > 0) {
+      contentFreshUntil = 0;
+      return reconcileContentIndex(entries, forcedPaths);
+    }
+    return;
+  }
+  const run = contentStore().reconcile(entries.map((entry) => ({
+    sessionId: entry.sessionId, path: entry.path, mtime: entry.mtime,
+  })), searchProse, createCodexNormalizationState, forcedPaths).then(() => {
+    contentFreshUntil = Date.now() + searchIndexTtlMs;
+  });
+  contentRefreshInFlight = run;
+  try { await run; }
+  finally { if (contentRefreshInFlight === run) contentRefreshInFlight = null; }
+}
+
+/** Watch for fresh transcripts, and periodically repair missed filesystem events. */
+export function startTranscriptSearchSync(): () => void {
+  if (stopContentWatcher) return stopContentWatcher;
+  stopContentWatcher = watchTranscriptRoots(
+    [claudeProjectsDir(), codexSessionsDir()],
+    async (changedPaths) => {
+      const run = (async () => {
+        searchIndexFreshUntil = 0;
+        contentFreshUntil = 0;
+        await reconcileContentIndex(await refreshSearchIndex(), changedPaths);
+      })();
+      transcriptSearchSyncInFlight = run;
+      try { await run; }
+      finally { if (transcriptSearchSyncInFlight === run) transcriptSearchSyncInFlight = null; }
+    },
+  );
+  return () => { stopContentWatcher?.(); stopContentWatcher = null; };
+}
+
+export function transcriptSearchSyncing(): boolean {
+  return transcriptSearchSyncInFlight != null;
+}
+
+/** Fresh ranked search, or a stable continuation of its first-page snapshot. */
+export async function rankedSearchResumable(opts: {
+  q: string; limit?: number; cursor?: string | null; exclude?: string[];
+}): Promise<{ sessions: ReturnType<typeof rankSessions>; nextCursor: string | null } | null> {
+  const q = opts.q.trim();
+  const limit = Math.max(1, Math.min(100, opts.limit ?? 30));
+  const exclude = normalizeExcludes(opts.exclude);
+  const excludeKey = JSON.stringify(exclude);
+  if (opts.cursor) return rankedPager.next(opts.cursor, q, excludeKey, limit);
+  if (!q) return { sessions: [], nextCursor: null };
+  await refreshLeasesForLiveSessions();
+  const overrides = await readTitleOverrides();
+  const entries = applyTitleOverrides(await refreshSearchIndex(), overrides);
+  await reconcileContentIndex(entries);
+  const hits = contentStore().hits(queryTerms(q));
+  const ranked = rankSessions(entries, hits, q, (cwd) => hidesCwd(cwd, exclude));
+  const pathById = new Map(entries.map((entry) => [entry.sessionId, entry.path]));
+  const closed: typeof ranked = [];
+  for (const row of ranked) {
+    const path = pathById.get(row.sessionId);
+    if (path && !(await anyFreshAt(row.sessionId, path))) closed.push(row);
+  }
+  return rankedPager.first(q, excludeKey, closed, limit);
+}
 /** How many transcripts to enrich at once. Bounded so a cold build yields. */
 const SEARCH_ENRICH_CONCURRENCY = 24;
 
@@ -3969,6 +4065,13 @@ export function resetSearchIndexCacheForTests(): void {
   searchIndexCache = null;
   searchIndexFreshUntil = 0;
   searchRefreshInFlight = null;
+}
+
+export function resetContentIndexForTests(): void {
+  contentIndex?.close();
+  contentIndex = null;
+  contentFreshUntil = 0;
+  contentRefreshInFlight = null;
 }
 
 /** Test seam: exercise the burst-coalescing window, which is 0 under `bun test`. */
