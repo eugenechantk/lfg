@@ -1,0 +1,906 @@
+Sep 20 12:21:39 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Notice>: com.apple.CoreSimulator.CoreSimulatorService 1051.17.8 starting.
+Sep 20 12:21:39 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Loaded simdiskimaged job successfully.
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Connecting to com.apple.CoreSimulator.SimLaunchHost-arm64
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Sending load request for liblaunch at file:///Library/Developer/CoreSimulator/Volumes/iOS_23D8133/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS%2026.3.simruntime/Contents/Resources/RuntimeRoot/usr/lib/system/host/liblaunch_sim.dylib
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Attempting to add runtime: com.apple.CoreSimulator.SimRuntime.iOS-26-3 - /Library/Developer/CoreSimulator/Volumes/iOS_23D8133/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.3.simruntime
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Runtime bundle found. Adding to supported runtimes. com.apple.CoreSimulator.SimRuntime.iOS-26-3 : /Library/Developer/CoreSimulator/Volumes/iOS_23D8133/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.3.simruntime
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Regenerating runtime dictionaries because of adding profiles for volume path `/Library/Developer/CoreSimulator/Volumes/iOS_23D8133` (1 supported runtimes)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Requesting creation of dyld shared cache (isForcedRebuild = NO, runtime = iOS 26.3 (26.3.1 - 23D8133) - com.apple.CoreSimulator.SimRuntime.iOS-26-3)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Attempting to prepare dyld shared cache for runtime /Library/Developer/CoreSimulator/Volumes/iOS_23D8133/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.3.simruntime (forced = NO)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Cache rebuild for iOS 26.3 (26.3.1 - 23D8133) - com.apple.CoreSimulator.SimRuntime.iOS-26-3 complete. path=/Library/Developer/CoreSimulator/Caches/dyld/25G83/com.apple.CoreSimulator.SimRuntime.iOS-26-3.23D8133, error=(null)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Sending load request for liblaunch at file:///Library/Developer/CoreSimulator/Volumes/iOS_22E238/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS%2018.4.simruntime/Contents/Resources/RuntimeRoot/usr/lib/system/host/liblaunch_sim.dylib
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Attempting to add runtime: com.apple.CoreSimulator.SimRuntime.iOS-18-4 - /Library/Developer/CoreSimulator/Volumes/iOS_22E238/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 18.4.simruntime
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Runtime bundle found. Adding to supported runtimes. com.apple.CoreSimulator.SimRuntime.iOS-18-4 : /Library/Developer/CoreSimulator/Volumes/iOS_22E238/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 18.4.simruntime
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Regenerating runtime dictionaries because of adding profiles for volume path `/Library/Developer/CoreSimulator/Volumes/iOS_22E238` (2 supported runtimes)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Requesting creation of dyld shared cache (isForcedRebuild = NO, runtime = iOS 18.4 (18.4 - 22E238) - com.apple.CoreSimulator.SimRuntime.iOS-18-4)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Attempting to prepare dyld shared cache for runtime /Library/Developer/CoreSimulator/Volumes/iOS_22E238/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 18.4.simruntime (forced = NO)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Cache rebuild for iOS 18.4 (18.4 - 22E238) - com.apple.CoreSimulator.SimRuntime.iOS-18-4 complete. path=/Library/Developer/CoreSimulator/Caches/dyld/25G83/com.apple.CoreSimulator.SimRuntime.iOS-18-4.22E238, error=(null)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Sending load request for liblaunch at file:///Library/Developer/CoreSimulator/Volumes/iOS_22F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS%2018.5.simruntime/Contents/Resources/RuntimeRoot/usr/lib/system/host/liblaunch_sim.dylib
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Attempting to add runtime: com.apple.CoreSimulator.SimRuntime.iOS-18-5 - /Library/Developer/CoreSimulator/Volumes/iOS_22F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 18.5.simruntime
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Runtime bundle found. Adding to supported runtimes. com.apple.CoreSimulator.SimRuntime.iOS-18-5 : /Library/Developer/CoreSimulator/Volumes/iOS_22F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 18.5.simruntime
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Regenerating runtime dictionaries because of adding profiles for volume path `/Library/Developer/CoreSimulator/Volumes/iOS_22F77` (3 supported runtimes)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Requesting creation of dyld shared cache (isForcedRebuild = NO, runtime = iOS 18.5 (18.5 - 22F77) - com.apple.CoreSimulator.SimRuntime.iOS-18-5)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Attempting to prepare dyld shared cache for runtime /Library/Developer/CoreSimulator/Volumes/iOS_22F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 18.5.simruntime (forced = NO)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Disk Appeared <DADisk 0x82903ed30 [0x1f512d308]>{id = /dev/disk13s1}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Ignoring outer cryptex volume (file:///Library/Developer/CoreSimulator/Cryptex/Images/bundle/SimRuntimeBundle-09D02C0F-61FE-4192-9DA5-01AD44F2AB42/)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570900.444476";
+	    DABusName = "device-tree";
+	    DABusPath = "IODeviceTree:/";
+	    DADeviceModel = "Disk Image";
+	    DADevicePath = "IOService:/IOResources/AppleDiskImagesController/AppleDiskImageDevice@3";
+	    DADeviceProtocol = "Virtual Interface";
+	    DADeviceRevision = "524.160.11";
+	    DADeviceUnit = 3;
+	    DADeviceVendor = Apple;
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 36;
+	    DAMediaBSDName = disk11s1;
+	    DAMediaBSDUnit = 11;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 1;
+	    DAMediaEncrypted = 0;
+	    DAMediaEncryptionDetail = 0;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Removable.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = "iOS 18.4 Simulator Bundle";
+	    DAMediaPath = "IOService:/IOResources/AppleDiskImagesController/AppleDiskImageDevice@3/IOBlockStorageDriver/Apple Disk Image Media/IOGUIDPartitionScheme/Untitled 1@1/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/iOS 18.4 Simulator Bundle@1";
+	    DAMediaRemovable = 1;
+	    DAMediaSize = 9116319744;
+	    DAMediaUUID = "<CFUUID 0x828c31e20> 1E636626-73D7-484B-835A-A24FBF7D2C5C";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 0;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = "iOS 18.4 Simulator Bundle";
+	    DAVolumeNetwork = 0;
+	    DAVolumePath = "file:///Library/Developer/CoreSimulator/Cryptex/Images/bundle/SimRuntimeBundle-09D02C0F-61FE-4192-9DA5-01AD44F2AB42/";
+	    DAVolumeType = APFS;
+	    DAVolumeUUID = "<CFUUID 0x828c31e20> 1E636626-73D7-484B-835A-A24FBF7D2C5C";
+	}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Cache rebuild for iOS 18.5 (18.5 - 22F77) - com.apple.CoreSimulator.SimRuntime.iOS-18-5 complete. path=/Library/Developer/CoreSimulator/Caches/dyld/25G83/com.apple.CoreSimulator.SimRuntime.iOS-18-5.22F77, error=(null)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Disk Appeared <DADisk 0x82903fba0 [0x1f512d308]>{id = /dev/disk9s1}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Ignoring outer cryptex volume (file:///Library/Developer/CoreSimulator/Cryptex/Images/bundle/SimRuntimeBundle-8787785E-1C24-4398-ADA8-B98EEA3E6EF5/)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570899.976563";
+	    DABusName = "device-tree";
+	    DABusPath = "IODeviceTree:/";
+	    DADeviceModel = "Disk Image";
+	    DADevicePath = "IOService:/IOResources/AppleDiskImagesController/AppleDiskImageDevice@1";
+	    DADeviceProtocol = "Virtual Interface";
+	    DADeviceRevision = "524.160.11";
+	    DADeviceUnit = 1;
+	    DADeviceVendor = Apple;
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 28;
+	    DAMediaBSDName = disk7s1;
+	    DAMediaBSDUnit = 7;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 1;
+	    DAMediaEncrypted = 0;
+	    DAMediaEncryptionDetail = 0;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Removable.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = "iOS 18.5 Simulator Bundle";
+	    DAMediaPath = "IOService:/IOResources/AppleDiskImagesController/AppleDiskImageDevice@1/IOBlockStorageDriver/Apple Disk Image Media/IOGUIDPartitionScheme/Untitled 1@1/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/iOS 18.5 Simulator Bundle@1";
+	    DAMediaRemovable = 1;
+	    DAMediaSize = 9128902656;
+	    DAMediaUUID = "<CFUUID 0x828c30220> 37AF619B-BB0F-4D5E-AD7C-29E34BAB7389";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 0;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = "iOS 18.5 Simulator Bundle";
+	    DAVolumeNetwork = 0;
+	    DAVolumePath = "file:///Library/Developer/CoreSimulator/Cryptex/Images/bundle/SimRuntimeBundle-8787785E-1C24-4398-ADA8-B98EEA3E6EF5/";
+	    DAVolumeType = APFS;
+	    DAVolumeUUID = "<CFUUID 0x828c30220> 37AF619B-BB0F-4D5E-AD7C-29E34BAB7389";
+	}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Disk Appeared <DADisk 0x82903ee50 [0x1f512d308]>{id = /dev/disk5s1}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Disk Appeared <DADisk 0x82903ed60 [0x1f512d308]>{id = /dev/disk1s1}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Disk Appeared <DADisk 0x82903ee50 [0x1f512d308]>{id = /dev/disk1s2}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Disk Appeared <DADisk 0x82903ed90 [0x1f512d308]>{id = /dev/disk1s3}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Ignoring disk due to missing volume path.
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570884.2537659";
+	    DABusName = AppleANS3CGv2Controller;
+	    DABusPath = "IODeviceTree:/arm-io@10F00000/ans@49400000/iop-ans-nub/AppleANS3CGv2Controller";
+	    DADeviceInternal = 1;
+	    DADeviceModel = "APPLE SSD AP1024Z";
+	    DADevicePath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1";
+	    DADeviceProtocol = "Apple Fabric";
+	    DADeviceRevision = "561.100.";
+	    DADeviceUnit = 1;
+	    DADeviceVendor = "";
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 5;
+	    DAMediaBSDName = disk1s4;
+	    DAMediaBSDUnit = 1;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 0;
+	    DAMediaEncrypted = 0;
+	    DAMediaEncryptionDetail = 0;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Internal.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = Recovery;
+	    DAMediaPath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1/IOBlockStorageDriver/APPLE SSD AP1024Z Media/IOGUIDPartitionScheme/iBootSystemContainer@1/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/Recovery@4";
+	    DAMediaRemovable = 0;
+	    DAMediaSize = 524288000;
+	    DAMediaUUID = "<CFUUID 0x828c31e20> DCC1D3D2-C752-4072-B882-0F1E8BE5A3D1";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 1;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = Recovery;
+	    DAVolumeNetwork = 0;
+	    DAVolumeType = APFS;
+	    DAVolumeUUID = "<CFUUID 0x828c31e20> DCC1D3D2-C752-4072-B882-0F1E8BE5A3D1";
+	}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Ignoring disk due to missing volume path.
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570884.253408";
+	    DABusName = AppleANS3CGv2Controller;
+	    DABusPath = "IODeviceTree:/arm-io@10F00000/ans@49400000/iop-ans-nub/AppleANS3CGv2Controller";
+	    DADeviceInternal = 1;
+	    DADeviceModel = "APPLE SSD AP1024Z";
+	    DADevicePath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1";
+	    DADeviceProtocol = "Apple Fabric";
+	    DADeviceRevision = "561.100.";
+	    DADeviceUnit = 1;
+	    DADeviceVendor = "";
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 10;
+	    DAMediaBSDName = disk2s2;
+	    DAMediaBSDUnit = 2;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 0;
+	    DAMediaEncrypted = 0;
+	    DAMediaEncryptionDetail = 0;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Internal.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = Update;
+	    DAMediaPath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1/IOBlockStorageDriver/APPLE SSD AP1024Z Media/IOGUIDPartitionScheme/RecoveryOSContainer@3/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/Update@2";
+	    DAMediaRemovable = 0;
+	    DAMediaSize = 5368664064;
+	    DAMediaUUID = "<CFUUID 0x828c31e20> 98C04676-74D9-47B3-8F10-5F30DADC7EEF";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 1;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = Update;
+	    DAVolumeNetwork = 0;
+	    DAVolumeType = APFS;
+	    DAVolumeUUID = "<CFUUID 0x828c31e20> 98C04676-74D9-47B3-8F10-5F30DADC7EEF";
+	}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Ignoring disk due to missing volume path.
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Notice>: Device iPhone 17 Pro (E0DC8228-3248-4630-8929-FBC5DFC6AE6D, iOS 26.3, Booted) encountered in unexpected state at launch: Booted.  Shutting down.
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: New device (E0DC8228-3248-4630-8929-FBC5DFC6AE6D) in set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: On devices queue adding device (E0DC8228-3248-4630-8929-FBC5DFC6AE6D) in set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Adding device iPhone 17 Pro (E0DC8228-3248-4630-8929-FBC5DFC6AE6D, iOS 26.3, Shutdown) to _devicesByUDID for set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570884.2530431";
+	    DABusName = AppleANS3CGv2Controller;
+	    DABusPath = "IODeviceTree:/arm-io@10F00000/ans@49400000/iop-ans-nub/AppleANS3CGv2Controller";
+	    DADeviceInternal = 1;
+	    DADeviceModel = "APPLE SSD AP1024Z";
+	    DADevicePath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1";
+	    DADeviceProtocol = "Apple Fabric";
+	    DADeviceRevision = "561.100.";
+	    DADeviceUnit = 1;
+	    DADeviceVendor = "";
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 11;
+	    DAMediaBSDName = disk2s1;
+	    DAMediaBSDUnit = 2;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 0;
+	    DAMediaEncrypted = 0;
+	    DAMediaEncryptionDetail = 0;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Internal.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = Recovery;
+	    DAMediaPath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1/IOBlockStorageDriver/APPLE SSD AP1024Z Media/IOGUIDPartitionScheme/RecoveryOSContainer@3/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/Recovery@1";
+	    DAMediaRemovable = 0;
+	    DAMediaSize = 5368664064;
+	    DAMediaUUID = "<CFUUID 0x828c30240> D6E8A962-5686-4147-9E26-E93AAAF59E69";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 1;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = Recovery;
+	    DAVolumeNetwork = 0;
+	    DAVolumeType = APFS;
+	    DAVolumeUUID = "<CFUUID 0x828c30240> D6E8A962-5686-4147-9E26-E93AAAF59E69";
+	}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Ignoring disk due to missing volume path.
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570884.2526751";
+	    DABusName = AppleANS3CGv2Controller;
+	    DABusPath = "IODeviceTree:/arm-io@10F00000/ans@49400000/iop-ans-nub/AppleANS3CGv2Controller";
+	    DADeviceInternal = 1;
+	    DADeviceModel = "APPLE SSD AP1024Z";
+	    DADevicePath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1";
+	    DADeviceProtocol = "Apple Fabric";
+	    DADeviceRevision = "561.100.";
+	    DADeviceUnit = 1;
+	    DADeviceVendor = "";
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 13;
+	    DAMediaBSDName = disk3s1;
+	    DAMediaBSDUnit = 3;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 0;
+	    DAMediaEncrypted = 0;
+	    DAMediaEncryptionDetail = 0;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Internal.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = "Macintosh HD";
+	    DAMediaPath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1/IOBlockStorageDriver/APPLE SSD AP1024Z Media/IOGUIDPartitionScheme/Container@2/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/Macintosh HD@1";
+	    DAMediaRemovable = 0;
+	    DAMediaSize = 994662584320;
+	    DAMediaUUID = "<CFUUID 0x828c30240> 0054A88B-6906-4D1F-8CFB-F7C3439EB793";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 1;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = "Macintosh HD";
+	    DAVolumeNetwork = 0;
+	    DAVolumeType = APFS;
+	    DAVolumeUUID = "<CFUUID 0x828c30240> 0054A88B-6906-4D1F-8CFB-F7C3439EB793";
+	}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Disk Appeared <DADisk 0x82958cbd0 [0x1f512d308]>{id = /dev/disk3s2}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Notice>: Device cc-012emy8m (B5B4FC33-FC58-4393-829C-62940C8378A3, iOS 26.3, Booted) encountered in unexpected state at launch: Booted.  Shutting down.
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: New device (B5B4FC33-FC58-4393-829C-62940C8378A3) in set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: On devices queue adding device (B5B4FC33-FC58-4393-829C-62940C8378A3) in set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Adding device cc-012emy8m (B5B4FC33-FC58-4393-829C-62940C8378A3, iOS 26.3, Shutdown) to _devicesByUDID for set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Ignoring disk due to missing volume path.
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570884.25192";
+	    DABusName = AppleANS3CGv2Controller;
+	    DABusPath = "IODeviceTree:/arm-io@10F00000/ans@49400000/iop-ans-nub/AppleANS3CGv2Controller";
+	    DADeviceInternal = 1;
+	    DADeviceModel = "APPLE SSD AP1024Z";
+	    DADevicePath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1";
+	    DADeviceProtocol = "Apple Fabric";
+	    DADeviceRevision = "561.100.";
+	    DADeviceUnit = 1;
+	    DADeviceVendor = "";
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 18;
+	    DAMediaBSDName = disk3s3;
+	    DAMediaBSDUnit = 3;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 0;
+	    DAMediaEncrypted = 0;
+	    DAMediaEncryptionDetail = 0;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Internal.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = Recovery;
+	    DAMediaPath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1/IOBlockStorageDriver/APPLE SSD AP1024Z Media/IOGUIDPartitionScheme/Container@2/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/Recovery@3";
+	    DAMediaRemovable = 0;
+	    DAMediaSize = 994662584320;
+	    DAMediaUUID = "<CFUUID 0x828c30240> 005E02A6-FC32-437D-84EF-DA3405F7A1B3";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 1;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = Recovery;
+	    DAVolumeNetwork = 0;
+	    DAVolumeType = APFS;
+	    DAVolumeUUID = "<CFUUID 0x828c30240> 005E02A6-FC32-437D-84EF-DA3405F7A1B3";
+	}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Disk Appeared <DADisk 0x829c451a0 [0x1f512d308]>{id = /dev/disk3s4}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Notice>: Device cc-40ddfa48 (62FBAD54-AC9A-47E3-8867-6E48DA096A7A, iOS 26.3, Booted) encountered in unexpected state at launch: Booted.  Shutting down.
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: New device (62FBAD54-AC9A-47E3-8867-6E48DA096A7A) in set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: On devices queue adding device (62FBAD54-AC9A-47E3-8867-6E48DA096A7A) in set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Adding device cc-40ddfa48 (62FBAD54-AC9A-47E3-8867-6E48DA096A7A, iOS 26.3, Shutdown) to _devicesByUDID for set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Ignoring root volume (file:///System/Volumes/Data/)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570884.251086";
+	    DABusName = AppleANS3CGv2Controller;
+	    DABusPath = "IODeviceTree:/arm-io@10F00000/ans@49400000/iop-ans-nub/AppleANS3CGv2Controller";
+	    DADeviceInternal = 1;
+	    DADeviceModel = "APPLE SSD AP1024Z";
+	    DADevicePath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1";
+	    DADeviceProtocol = "Apple Fabric";
+	    DADeviceRevision = "561.100.";
+	    DADeviceUnit = 1;
+	    DADeviceVendor = "";
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 17;
+	    DAMediaBSDName = disk3s5;
+	    DAMediaBSDUnit = 3;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 0;
+	    DAMediaEncrypted = 1;
+	    DAMediaEncryptionDetail = 2;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Internal.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = Data;
+	    DAMediaPath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1/IOBlockStorageDriver/APPLE SSD AP1024Z Media/IOGUIDPartitionScheme/Container@2/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/Data@5";
+	    DAMediaRemovable = 0;
+	    DAMediaSize = 994662584320;
+	    DAMediaUUID = "<CFUUID 0x828c30240> 32C19573-CD66-49B8-8BBA-A3C493E71E14";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 1;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = Data;
+	    DAVolumeNetwork = 0;
+	    DAVolumePath = "file:///System/Volumes/Data/";
+	    DAVolumeType = "APFS (Encrypted)";
+	    DAVolumeUUID = "<CFUUID 0x828c30240> 32C19573-CD66-49B8-8BBA-A3C493E71E14";
+	}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Disk Appeared <DADisk 0x829c45230 [0x1f512d308]>{id = /dev/disk3s6}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: New device (86E8AC8B-FEA0-4AFB-A461-02D0C298492A) in set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: On devices queue adding device (86E8AC8B-FEA0-4AFB-A461-02D0C298492A) in set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Adding device iPhone 16e (86E8AC8B-FEA0-4AFB-A461-02D0C298492A, iOS 26.3, Shutdown) to _devicesByUDID for set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Disk Appeared <DADisk 0x829c45fe0 [0x1f512d308]>{id = /dev/disk3s7}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Ignoring root volume (file:///)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570884.249596";
+	    DABusName = AppleANS3CGv2Controller;
+	    DABusPath = "IODeviceTree:/arm-io@10F00000/ans@49400000/iop-ans-nub/AppleANS3CGv2Controller";
+	    DADeviceInternal = 1;
+	    DADeviceModel = "APPLE SSD AP1024Z";
+	    DADevicePath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1";
+	    DADeviceProtocol = "Apple Fabric";
+	    DADeviceRevision = "561.100.";
+	    DADeviceUnit = 1;
+	    DADeviceVendor = "";
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 20;
+	    DAMediaBSDName = disk3s1s1;
+	    DAMediaBSDUnit = 3;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 0;
+	    DAMediaEncrypted = 0;
+	    DAMediaEncryptionDetail = 0;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Internal.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = "com.apple.os.update-60587424F5399FC05D957DF05B4D2F65543462495C77AEF520F790FBB57CB212";
+	    DAMediaPath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1/IOBlockStorageDriver/APPLE SSD AP1024Z Media/IOGUIDPartitionScheme/Container@2/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/Macintosh HD@1/com.apple.os.update-60587424F5399FC05D957DF05B4D2F65543462495C77AEF520F790FBB57CB212@1";
+	    DAMediaRemovable = 0;
+	    DAMediaSize = 994662584320;
+	    DAMediaUUID = "<CFUUID 0x828c30240> 68E00BAA-700B-433B-8C49-42A1A8402E75";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 0;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = "Macintosh HD";
+	    DAVolumeNetwork = 0;
+	    DAVolumePath = "file:///";
+	    DAVolumeUUID = "<CFUUID 0x828c30240> 68E00BAA-700B-433B-8C49-42A1A8402E75";
+	}
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: VolumeManager: SVMDiskIdleTrampoline <SimVolumeManager: 0x1039193a0>
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: New device (E3F24489-84BB-4BF5-A438-1D234164C97E) in set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: On devices queue adding device (E3F24489-84BB-4BF5-A438-1D234164C97E) in set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Adding device iPhone 17 Pro - AiTinder Media (E3F24489-84BB-4BF5-A438-1D234164C97E, iOS 26.3, Shutdown) to _devicesByUDID for set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: New device (D69C6DC8-241A-4DAA-A148-8A969CA25A55) in set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: On devices queue adding device (D69C6DC8-241A-4DAA-A148-8A969CA25A55) in set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Adding device iPhone 17 (D69C6DC8-241A-4DAA-A148-8A969CA25A55, iOS 26.3, Shutdown) to _devicesByUDID for set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Supported runtimes: (
+	    "iOS 18.4 (18.4 - 22E238) - com.apple.CoreSimulator.SimRuntime.iOS-18-4",
+	    "iOS 18.5 (18.5 - 22F77) - com.apple.CoreSimulator.SimRuntime.iOS-18-5",
+	    "iOS 26.3 (26.3.1 - 23D8133) - com.apple.CoreSimulator.SimRuntime.iOS-26-3"
+	)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Supported device types: (
+	    "iPhone 17 Pro (com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro)",
+	    "iPhone 17 Pro Max (com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max)",
+	    "iPhone Air (com.apple.CoreSimulator.SimDeviceType.iPhone-Air)",
+	    "iPhone 17 (com.apple.CoreSimulator.SimDeviceType.iPhone-17)",
+	    "iPhone 16 Pro (com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro)",
+	    "iPhone 16 Pro Max (com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro-Max)",
+	    "iPhone 16e (com.apple.CoreSimulator.SimDeviceType.iPhone-16e)",
+	    "iPhone 16 (com.apple.CoreSimulator.SimDeviceType.iPhone-16)",
+	    "iPhone 16 Plus (com.apple.CoreSimulator.SimDeviceType.iPhone-16-Plus)",
+	    "iPhone 15 Pro (com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro)",
+	    "iPhone 15 Pro Max (com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro-Max)",
+	    "iPhone 15 (com.apple.CoreSimulator.SimDeviceType.iPhone-15)",
+	    "iPhone 15 Plus (com.apple.CoreSimulator.SimDeviceType.iPhone-15-Plus)",
+	    "iPhone 14 Pro (com.apple.CoreSimulator.SimDeviceType.iPhone-14-Pro)",
+	    "iPhone 14 Pro Max (com.apple.CoreSimulator.SimDeviceType.iPhone-14-Pro-Max)",
+	    "iPhone 14 (com.apple.CoreSimulator.SimDeviceType.iPhone-14)",
+	    "iPhone 14 Plus (com.apple.CoreSimulator.SimDeviceType.iPhone-14-Plus)",
+	    "iPhone SE (3rd generation) (com.apple.CoreSimulator.SimDeviceType.iPhone-SE-3rd-generation)",
+	    "iPhone 13 Pro (com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro)",
+	    "iPhone 13 Pro Max (com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro-Max)",
+	    "iPhone 13 (com.apple.CoreSimulator.SimDeviceType.iPhone-13)",
+	    "iPhone 13 mini (com.apple.CoreSimulator.SimDeviceType.iPhone-13-mini)",
+	    "iPhone 12 Pro (com.apple.CoreSimulator.SimDeviceType.iPhone-12-Pro)",
+	    "iPhone 12 Pro Max (com.apple.CoreSimulator.SimDeviceType.iPhone-12-Pro-Max)",
+	    "iPhone 12 (com.apple.CoreSimulator.SimDeviceType.iPhone-12)",
+	    "iPhone 12 mini (com.apple.CoreSimulator.SimDeviceType.iPhone-12-mini)",
+	    "iPhone SE (2nd generation) (com.apple.CoreSimulator.SimDeviceType.iPhone-SE--2nd-generation-)",
+	    "iPhone 11 Pro (com.apple.CoreSimulator.SimDeviceType.iPhone-11-Pro)",
+	    "iPhone 11 Pro Max (com.apple.CoreSimulator.SimDeviceType.iPhone-11-Pro-Max)",
+	    "iPhone 11 (com.apple.CoreSimulator.SimDeviceType.iPhone-11)",
+	    "iPhone X\U0280 (com.apple.CoreSimulator.SimDeviceType.iPhone-XR)",
+	    "iPhone Xs (com.apple.CoreSimulator.SimDeviceType.iPhone-XS)",
+	    "iPhone Xs Max (com.apple.CoreSimulator.SimDeviceType.iPhone-XS-Max)",
+	    "iPhone X (com.apple.CoreSimulator.SimDeviceType.iPhone-X)",
+	    "iPhone 8 (com.apple.CoreSimulator.SimDeviceType.iPhone-8)",
+	    "iPhone 8 Plus (com.apple.CoreSimulator.SimDeviceType.iPhone-8-Plus)",
+	    "iPhone 7 (com.apple.CoreSimulator.SimDeviceType.iPhone-7)",
+	    "iPhone 7 Plus (com.apple.CoreSimulator.SimDeviceType.iPhone-7-Plus)",
+	    "iPhone SE (1st generation) (com.apple.CoreSimulator.SimDeviceType.iPhone-SE)",
+	    "iPhone 6s (com.apple.CoreSimulator.SimDeviceType.iPhone-6s)",
+	    "iPhone 6s Plus (com.apple.CoreSimulator.SimDeviceType.iPhone-6s-Plus)",
+	    "iPad Pro 13-inch (M5) (16GB) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-16GB)",
+	    "iPad Pro 13-inch (M5) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB)",
+	    "iPad Pro 11-inch (M5) (16GB) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-16GB)",
+	    "iPad Pro 11-inch (M5) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB)",
+	    "iPad Pro 11-inch (M4) (16GB) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M4-16GB)",
+	    "iPad Pro 11-inch (M4) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M4-8GB)",
+	    "iPad Pro 13-inch (M4) (16GB) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M4-16GB)",
+	    "iPad Pro 13-inch (M4) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M4-8GB)",
+	    "iPad (A16) (com.apple.CoreSimulator.SimDeviceType.iPad-A16)",
+	    "iPad Air 13-inch (M3) (com.apple.CoreSimulator.SimDeviceType.iPad-Air-13-inch-M3)",
+	    "iPad Air 11-inch (M3) (com.apple.CoreSimulator.SimDeviceType.iPad-Air-11-inch-M3)",
+	    "iPad Air 11-inch (M2) (com.apple.CoreSimulator.SimDeviceType.iPad-Air-11-inch-M2)",
+	    "iPad Air 13-inch (M2) (com.apple.CoreSimulator.SimDeviceType.iPad-Air-13-inch-M2)",
+	    "iPad mini (A17 Pro) (com.apple.CoreSimulator.SimDeviceType.iPad-mini-A17-Pro)",
+	    "iPad Pro (11-inch) (4th generation) (16GB) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-4th-generation-16GB)",
+	    "iPad Pro (11-inch) (4th generation) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-4th-generation-8GB)",
+	    "iPad Pro (12.9-inch) (6th generation) (16GB) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro-12-9-inch-6th-generation-16GB)",
+	    "iPad Pro (12.9-inch) (6th generation) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro-12-9-inch-6th-generation-8GB)",
+	    "iPad (10th generation) (com.apple.CoreSimulator.SimDeviceType.iPad-10th-generation)",
+	    "iPad Air (5th generation) (com.apple.CoreSimulator.SimDeviceType.iPad-Air-5th-generation)",
+	    "iPad mini (6th generation) (com.apple.CoreSimulator.SimDeviceType.iPad-mini-6th-generation)",
+	    "iPad Pro (11-inch) (3rd generation) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-3rd-generation)",
+	    "iPad Pro (12.9-inch) (5th generation) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro-12-9-inch-5th-generation)",
+	    "iPad (9th generation) (com.apple.CoreSimulator.SimDeviceType.iPad-9th-generation)",
+	    "iPad Air (4th generation) (com.apple.CoreSimulator.SimDeviceType.iPad-Air--4th-generation-)",
+	    "iPad (8th generation) (com.apple.CoreSimulator.SimDeviceType.iPad--8th-generation-)",
+	    "iPad Air (3rd generation) (com.apple.CoreSimulator.SimDeviceType.iPad-Air--3rd-generation-)",
+	    "iPad mini (5th generation) (com.apple.CoreSimulator.SimDeviceType.iPad-mini--5th-generation-)",
+	    "iPad Pro (11-inch) (2nd generation) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro--11-inch---2nd-generation-)",
+	    "iPad Pro (12.9-inch) (4th generation) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro--12-9-inch---4th-generation-)",
+	    "iPad Pro (11-inch) (1st generation) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro--11-inch-)",
+	    "iPad Pro (12.9-inch) (3rd generation) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro--12-9-inch---3rd-generation-)",
+	    "iPad (7th generation) (com.apple.CoreSimulator.SimDeviceType.iPad--7th-generation-)",
+	    "iPad Pro (10.5-inch) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro--10-5-inch-)",
+	    "iPad Pro (12.9-inch) (2nd generation) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro--12-9-inch---2nd-generation-)",
+	    "iPad (6th generation) (com.apple.CoreSimulator.SimDeviceType.iPad--6th-generation-)",
+	    "iPad Pro (9.7-inch) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro--9-7-inch-)",
+	    "iPad Pro (12.9-inch) (1st generation) (com.apple.CoreSimulator.SimDeviceType.iPad-Pro)",
+	    "iPad (5th generation) (com.apple.CoreSimulator.SimDeviceType.iPad--5th-generation-)",
+	    "iPad Air 2 (com.apple.CoreSimulator.SimDeviceType.iPad-Air-2)",
+	    "iPad mini 4 (com.apple.CoreSimulator.SimDeviceType.iPad-mini-4)",
+	    "Apple TV 4K (3rd generation) (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-4K)",
+	    "Apple TV 4K (3rd generation) (at 1080p) (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p)",
+	    "Apple TV 4K (2nd generation) (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-2nd-generation-4K)",
+	    "Apple TV 4K (2nd generation) (at 1080p) (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-2nd-generation-1080p)",
+	    "Apple TV 4K (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-4K)",
+	    "Apple TV 4K (at 1080p) (com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-1080p)",
+	    "Apple TV (com.apple.CoreSimulator.SimDeviceType.Apple-TV-1080p)",
+	    "Apple Watch Series 11 (46mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-11-46mm)",
+	    "Apple Watch Series 11 (42mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-11-42mm)",
+	    "Apple Watch Series 10 (46mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-10-46mm)",
+	    "Apple Watch Series 10 (42mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-10-42mm)",
+	    "Apple Watch Series 9 (45mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-9-45mm)",
+	    "Apple Watch Series 9 (41mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-9-41mm)",
+	    "Apple Watch Ultra 3 (49mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Ultra-3-49mm)",
+	    "Apple Watch Ultra 2 (49mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Ultra-2-49mm)",
+	    "Apple Watch SE 3 (44mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-SE-3-44mm)",
+	    "Apple Watch SE 3 (40mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-SE-3-40mm)",
+	    "Apple Watch Series 8 (45mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-8-45mm)",
+	    "Apple Watch Series 8 (41mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-8-41mm)",
+	    "Apple Watch Ultra (49mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Ultra-49mm)",
+	    "Apple Watch SE (44mm) (2nd generation) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-SE-44mm-2nd-generation)",
+	    "Apple Watch SE (40mm) (2nd generation) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-SE-40mm-2nd-generation)",
+	    "Apple Watch Series 7 (45mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-7-45mm)",
+	    "Apple Watch Series 7 (41mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-7-41mm)",
+	    "Apple Watch Series 6 (44mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-6-44mm)",
+	    "Apple Watch Series 6 (40mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-6-40mm)",
+	    "Apple Watch SE (44mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-SE-44mm)",
+	    "Apple Watch SE (40mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-SE-40mm)",
+	    "Apple Watch Series 5 (44mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-5-44mm)",
+	    "Apple Watch Series 5 (40mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-5-40mm)",
+	    "Apple Watch Series 4 (44mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-4-44mm)",
+	    "Apple Watch Series 4 (40mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-4-40mm)",
+	    "Apple Watch Series 3 (42mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-3-42mm)",
+	    "Apple Watch Series 3 (38mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-3-38mm)",
+	    "Apple Watch Series 2 (42mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-2-42mm)",
+	    "Apple Watch Series 2 (38mm) (com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-2-38mm)",
+	    "Apple Vision Pro (com.apple.CoreSimulator.SimDeviceType.Apple-Vision-Pro-4K)",
+	    "Apple Vision Pro (at 2732x2048) (com.apple.CoreSimulator.SimDeviceType.Apple-Vision-Pro)",
+	    "iPod touch (7th generation) (com.apple.CoreSimulator.SimDeviceType.iPod-touch--7th-generation-)"
+	)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Info>: Devices in the default set: (
+	    "cc-012emy8m (B5B4FC33-FC58-4393-829C-62940C8378A3, iOS 26.3, Shutdown)",
+	    "cc-40ddfa48 (62FBAD54-AC9A-47E3-8867-6E48DA096A7A, iOS 26.3, Shutdown)",
+	    "iPhone 17 Pro (E0DC8228-3248-4630-8929-FBC5DFC6AE6D, iOS 26.3, Shutdown)",
+	    "iPhone 17 Pro - AiTinder Media (E3F24489-84BB-4BF5-A438-1D234164C97E, iOS 26.3, Shutdown)",
+	    "iPhone 17 (D69C6DC8-241A-4DAA-A148-8A969CA25A55, iOS 26.3, Shutdown)",
+	    "iPhone 16e (86E8AC8B-FEA0-4AFB-A461-02D0C298492A, iOS 26.3, Shutdown)"
+	)
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: [NearbyInteraction] Ignoring addDevice iPhone 16e (86E8AC8B-FEA0-4AFB-A461-02D0C298492A, iOS 26.3, Shutdown): alreadyKnown = 0, supportsNearbyInteraction = 0, available = 1
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Client connected: Simulator[729]
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Client connected: Simulator[729]
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Client connected: Simulator[729]
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Developer directory for new connection: /Applications/Xcode.app/Contents/Developer
+Sep 20 12:21:40 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Warning>: Unable to discover any Simulator runtimes. Developer Directory is /Applications/Xcode.app/Contents/Developer.
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Client disconnected: Simulator[729]
+Sep 20 12:21:40 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Notification subscription cancellation for set: all sets
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Info>: Connecting to com.apple.CoreSimulator.SimLaunchHost-arm64
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: Sending load request for liblaunch at file:///Library/Developer/CoreSimulator/Volumes/iOS_23D8133/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS%2026.3.simruntime/Contents/Resources/RuntimeRoot/usr/lib/system/host/liblaunch_sim.dylib
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Info>: Attempting to add runtime: com.apple.CoreSimulator.SimRuntime.iOS-26-3 - /Library/Developer/CoreSimulator/Volumes/iOS_23D8133/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.3.simruntime
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Info>: Runtime bundle found. Adding to supported runtimes. com.apple.CoreSimulator.SimRuntime.iOS-26-3 : /Library/Developer/CoreSimulator/Volumes/iOS_23D8133/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.3.simruntime
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Info>: Regenerating runtime dictionaries because of adding profiles for volume path `/Library/Developer/CoreSimulator/Volumes/iOS_23D8133` (1 supported runtimes)
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: Sending load request for liblaunch at file:///Library/Developer/CoreSimulator/Volumes/iOS_22E238/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS%2018.4.simruntime/Contents/Resources/RuntimeRoot/usr/lib/system/host/liblaunch_sim.dylib
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Info>: Attempting to add runtime: com.apple.CoreSimulator.SimRuntime.iOS-18-4 - /Library/Developer/CoreSimulator/Volumes/iOS_22E238/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 18.4.simruntime
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Info>: Regenerating runtime dictionaries because of adding profiles for volume path `/Library/Developer/CoreSimulator/Volumes/iOS_22E238` (2 supported runtimes)
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Info>: Runtime bundle found. Adding to supported runtimes. com.apple.CoreSimulator.SimRuntime.iOS-18-4 : /Library/Developer/CoreSimulator/Volumes/iOS_22E238/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 18.4.simruntime
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: Sending load request for liblaunch at file:///Library/Developer/CoreSimulator/Volumes/iOS_22F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS%2018.5.simruntime/Contents/Resources/RuntimeRoot/usr/lib/system/host/liblaunch_sim.dylib
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Info>: Attempting to add runtime: com.apple.CoreSimulator.SimRuntime.iOS-18-5 - /Library/Developer/CoreSimulator/Volumes/iOS_22F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 18.5.simruntime
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Info>: Runtime bundle found. Adding to supported runtimes. com.apple.CoreSimulator.SimRuntime.iOS-18-5 : /Library/Developer/CoreSimulator/Volumes/iOS_22F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 18.5.simruntime
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Info>: Regenerating runtime dictionaries because of adding profiles for volume path `/Library/Developer/CoreSimulator/Volumes/iOS_22F77` (3 supported runtimes)
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Disk Appeared <DADisk 0xa2a80dbf0 [0x1f512d308]>{id = /dev/disk13s1}
+Sep 20 12:21:41 Eugenes-MacBook-Pro CoreSimulatorService[1072] <Debug>: Notification subscription for set: /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Ignoring outer cryptex volume (file:///Library/Developer/CoreSimulator/Cryptex/Images/bundle/SimRuntimeBundle-09D02C0F-61FE-4192-9DA5-01AD44F2AB42/)
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570900.444476";
+	    DABusName = "device-tree";
+	    DABusPath = "IODeviceTree:/";
+	    DADeviceModel = "Disk Image";
+	    DADevicePath = "IOService:/IOResources/AppleDiskImagesController/AppleDiskImageDevice@3";
+	    DADeviceProtocol = "Virtual Interface";
+	    DADeviceRevision = "524.160.11";
+	    DADeviceUnit = 3;
+	    DADeviceVendor = Apple;
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 36;
+	    DAMediaBSDName = disk11s1;
+	    DAMediaBSDUnit = 11;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 1;
+	    DAMediaEncrypted = 0;
+	    DAMediaEncryptionDetail = 0;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Removable.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = "iOS 18.4 Simulator Bundle";
+	    DAMediaPath = "IOService:/IOResources/AppleDiskImagesController/AppleDiskImageDevice@3/IOBlockStorageDriver/Apple Disk Image Media/IOGUIDPartitionScheme/Untitled 1@1/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/iOS 18.4 Simulator Bundle@1";
+	    DAMediaRemovable = 1;
+	    DAMediaSize = 9116319744;
+	    DAMediaUUID = "<CFUUID 0xa2c054060> 1E636626-73D7-484B-835A-A24FBF7D2C5C";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 0;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = "iOS 18.4 Simulator Bundle";
+	    DAVolumeNetwork = 0;
+	    DAVolumePath = "file:///Library/Developer/CoreSimulator/Cryptex/Images/bundle/SimRuntimeBundle-09D02C0F-61FE-4192-9DA5-01AD44F2AB42/";
+	    DAVolumeType = APFS;
+	    DAVolumeUUID = "<CFUUID 0xa2c054060> 1E636626-73D7-484B-835A-A24FBF7D2C5C";
+	}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Disk Appeared <DADisk 0xa2a5b6820 [0x1f512d308]>{id = /dev/disk9s1}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Ignoring outer cryptex volume (file:///Library/Developer/CoreSimulator/Cryptex/Images/bundle/SimRuntimeBundle-8787785E-1C24-4398-ADA8-B98EEA3E6EF5/)
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570899.976563";
+	    DABusName = "device-tree";
+	    DABusPath = "IODeviceTree:/";
+	    DADeviceModel = "Disk Image";
+	    DADevicePath = "IOService:/IOResources/AppleDiskImagesController/AppleDiskImageDevice@1";
+	    DADeviceProtocol = "Virtual Interface";
+	    DADeviceRevision = "524.160.11";
+	    DADeviceUnit = 1;
+	    DADeviceVendor = Apple;
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 28;
+	    DAMediaBSDName = disk7s1;
+	    DAMediaBSDUnit = 7;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 1;
+	    DAMediaEncrypted = 0;
+	    DAMediaEncryptionDetail = 0;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Removable.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = "iOS 18.5 Simulator Bundle";
+	    DAMediaPath = "IOService:/IOResources/AppleDiskImagesController/AppleDiskImageDevice@1/IOBlockStorageDriver/Apple Disk Image Media/IOGUIDPartitionScheme/Untitled 1@1/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/iOS 18.5 Simulator Bundle@1";
+	    DAMediaRemovable = 1;
+	    DAMediaSize = 9128902656;
+	    DAMediaUUID = "<CFUUID 0xa2c058b80> 37AF619B-BB0F-4D5E-AD7C-29E34BAB7389";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 0;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = "iOS 18.5 Simulator Bundle";
+	    DAVolumeNetwork = 0;
+	    DAVolumePath = "file:///Library/Developer/CoreSimulator/Cryptex/Images/bundle/SimRuntimeBundle-8787785E-1C24-4398-ADA8-B98EEA3E6EF5/";
+	    DAVolumeType = APFS;
+	    DAVolumeUUID = "<CFUUID 0xa2c058b80> 37AF619B-BB0F-4D5E-AD7C-29E34BAB7389";
+	}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Disk Appeared <DADisk 0xa2a80e220 [0x1f512d308]>{id = /dev/disk5s1}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: Client side deviceSet /Users/eugenechan/Library/Developer/CoreSimulator/Devices is handling device added notification: {
+	    "device_type" = "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro";
+	    "last_booted_at" = "2026-09-19 00:56:43 +0000";
+	    name = "cc-012emy8m";
+	    notification = "device_added";
+	    runtime = "com.apple.CoreSimulator.SimRuntime.iOS-26-3";
+	    "runtime_policy" = 0;
+	    "set_path" = "/Users/eugenechan/Library/Developer/CoreSimulator/Devices";
+	    state = 1;
+	    udid = "B5B4FC33-FC58-4393-829C-62940C8378A3";
+	}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: New device (B5B4FC33-FC58-4393-829C-62940C8378A3) in set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: On devices queue adding device (B5B4FC33-FC58-4393-829C-62940C8378A3) in set /Users/eugenechan/Library/Developer/CoreSimulator/Devices
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: Client side deviceSet /Users/eugenechan/Library/Developer/CoreSimulator/Devices is handling device added notification: {
+	    "device_type" = "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro";
+	    "last_booted_at" = "2026-09-19 01:17:45 +0000";
+	    name = "cc-40ddfa48";
+	    notification = "device_added";
+	    runtime = "com.apple.CoreSimulator.SimRuntime.iOS-26-3";
+	    "runtime_policy" = 0;
+	    "set_path" = "/Users/eugenechan/Library/Developer/CoreSimulator/Devices";
+	    state = 1;
+	    udid = "62FBAD54-AC9A-47E3-8867-6E48DA096A7A";
+	}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Disk Appeared <DADisk 0xa2a80e1c0 [0x1f512d308]>{id = /dev/disk1s1}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Disk Appeared <DADisk 0xa2a5b6ee0 [0x1f512d308]>{id = /dev/disk1s2}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Disk Appeared <DADisk 0xa2a5b6e50 [0x1f512d308]>{id = /dev/disk1s3}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Ignoring disk due to missing volume path.
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: Platform does not have FamilyPlatforms so skipping: /Applications/Xcode.app/Contents/Developer/Platforms/DriverKit.platform
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Ignoring disk due to missing volume path.
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570884.2537659";
+	    DABusName = AppleANS3CGv2Controller;
+	    DABusPath = "IODeviceTree:/arm-io@10F00000/ans@49400000/iop-ans-nub/AppleANS3CGv2Controller";
+	    DADeviceInternal = 1;
+	    DADeviceModel = "APPLE SSD AP1024Z";
+	    DADevicePath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1";
+	    DADeviceProtocol = "Apple Fabric";
+	    DADeviceRevision = "561.100.";
+	    DADeviceUnit = 1;
+	    DADeviceVendor = "";
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 5;
+	    DAMediaBSDName = disk1s4;
+	    DAMediaBSDUnit = 1;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 0;
+	    DAMediaEncrypted = 0;
+	    DAMediaEncryptionDetail = 0;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Internal.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = Recovery;
+	    DAMediaPath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1/IOBlockStorageDriver/APPLE SSD AP1024Z Media/IOGUIDPartitionScheme/iBootSystemContainer@1/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/Recovery@4";
+	    DAMediaRemovable = 0;
+	    DAMediaSize = 524288000;
+	    DAMediaUUID = "<CFUUID 0xa2c058d40> DCC1D3D2-C752-4072-B882-0F1E8BE5A3D1";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 1;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = Recovery;
+	    DAVolumeNetwork = 0;
+	    DAVolumeType = APFS;
+	    DAVolumeUUID = "<CFUUID 0xa2c058d40> DCC1D3D2-C752-4072-B882-0F1E8BE5A3D1";
+	}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570884.253408";
+	    DABusName = AppleANS3CGv2Controller;
+	    DABusPath = "IODeviceTree:/arm-io@10F00000/ans@49400000/iop-ans-nub/AppleANS3CGv2Controller";
+	    DADeviceInternal = 1;
+	    DADeviceModel = "APPLE SSD AP1024Z";
+	    DADevicePath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1";
+	    DADeviceProtocol = "Apple Fabric";
+	    DADeviceRevision = "561.100.";
+	    DADeviceUnit = 1;
+	    DADeviceVendor = "";
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 10;
+	    DAMediaBSDName = disk2s2;
+	    DAMediaBSDUnit = 2;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 0;
+	    DAMediaEncrypted = 0;
+	    DAMediaEncryptionDetail = 0;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Internal.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = Update;
+	    DAMediaPath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1/IOBlockStorageDriver/APPLE SSD AP1024Z Media/IOGUIDPartitionScheme/RecoveryOSContainer@3/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/Update@2";
+	    DAMediaRemovable = 0;
+	    DAMediaSize = 5368664064;
+	    DAMediaUUID = "<CFUUID 0xa2c054000> 98C04676-74D9-47B3-8F10-5F30DADC7EEF";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 1;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = Update;
+	    DAVolumeNetwork = 0;
+	    DAVolumeType = APFS;
+	    DAVolumeUUID = "<CFUUID 0xa2c054000> 98C04676-74D9-47B3-8F10-5F30DADC7EEF";
+	}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Ignoring disk due to missing volume path.
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570884.2530431";
+	    DABusName = AppleANS3CGv2Controller;
+	    DABusPath = "IODeviceTree:/arm-io@10F00000/ans@49400000/iop-ans-nub/AppleANS3CGv2Controller";
+	    DADeviceInternal = 1;
+	    DADeviceModel = "APPLE SSD AP1024Z";
+	    DADevicePath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1";
+	    DADeviceProtocol = "Apple Fabric";
+	    DADeviceRevision = "561.100.";
+	    DADeviceUnit = 1;
+	    DADeviceVendor = "";
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 11;
+	    DAMediaBSDName = disk2s1;
+	    DAMediaBSDUnit = 2;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 0;
+	    DAMediaEncrypted = 0;
+	    DAMediaEncryptionDetail = 0;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Internal.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = Recovery;
+	    DAMediaPath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1/IOBlockStorageDriver/APPLE SSD AP1024Z Media/IOGUIDPartitionScheme/RecoveryOSContainer@3/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/Recovery@1";
+	    DAMediaRemovable = 0;
+	    DAMediaSize = 5368664064;
+	    DAMediaUUID = "<CFUUID 0xa2c058b80> D6E8A962-5686-4147-9E26-E93AAAF59E69";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 1;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = Recovery;
+	    DAVolumeNetwork = 0;
+	    DAVolumeType = APFS;
+	    DAVolumeUUID = "<CFUUID 0xa2c058b80> D6E8A962-5686-4147-9E26-E93AAAF59E69";
+	}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Ignoring disk due to missing volume path.
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570884.2526751";
+	    DABusName = AppleANS3CGv2Controller;
+	    DABusPath = "IODeviceTree:/arm-io@10F00000/ans@49400000/iop-ans-nub/AppleANS3CGv2Controller";
+	    DADeviceInternal = 1;
+	    DADeviceModel = "APPLE SSD AP1024Z";
+	    DADevicePath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1";
+	    DADeviceProtocol = "Apple Fabric";
+	    DADeviceRevision = "561.100.";
+	    DADeviceUnit = 1;
+	    DADeviceVendor = "";
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 13;
+	    DAMediaBSDName = disk3s1;
+	    DAMediaBSDUnit = 3;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 0;
+	    DAMediaEncrypted = 0;
+	    DAMediaEncryptionDetail = 0;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Internal.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = "Macintosh HD";
+	    DAMediaPath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1/IOBlockStorageDriver/APPLE SSD AP1024Z Media/IOGUIDPartitionScheme/Container@2/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/Macintosh HD@1";
+	    DAMediaRemovable = 0;
+	    DAMediaSize = 994662584320;
+	    DAMediaUUID = "<CFUUID 0xa2c054000> 0054A88B-6906-4D1F-8CFB-F7C3439EB793";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 1;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = "Macintosh HD";
+	    DAVolumeNetwork = 0;
+	    DAVolumeType = APFS;
+	    DAVolumeUUID = "<CFUUID 0xa2c054000> 0054A88B-6906-4D1F-8CFB-F7C3439EB793";
+	}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Disk Appeared <DADisk 0xa2a80dc80 [0x1f512d308]>{id = /dev/disk3s2}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Ignoring disk due to missing volume path.
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Appeared: Ignoring {
+	    DAAppearanceTime = "811570884.25192";
+	    DABusName = AppleANS3CGv2Controller;
+	    DABusPath = "IODeviceTree:/arm-io@10F00000/ans@49400000/iop-ans-nub/AppleANS3CGv2Controller";
+	    DADeviceInternal = 1;
+	    DADeviceModel = "APPLE SSD AP1024Z";
+	    DADevicePath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1";
+	    DADeviceProtocol = "Apple Fabric";
+	    DADeviceRevision = "561.100.";
+	    DADeviceUnit = 1;
+	    DADeviceVendor = "";
+	    DAMediaBSDMajor = 1;
+	    DAMediaBSDMinor = 18;
+	    DAMediaBSDName = disk3s3;
+	    DAMediaBSDUnit = 3;
+	    DAMediaBlockSize = 4096;
+	    DAMediaContent = "41504653-0000-11AA-AA11-00306543ECAC";
+	    DAMediaEjectable = 0;
+	    DAMediaEncrypted = 0;
+	    DAMediaEncryptionDetail = 0;
+	    DAMediaIcon =     {
+	        CFBundleIdentifier = "com.apple.iokit.IOStorageFamily";
+	        IOBundleResourceFile = "Internal.icns";
+	    };
+	    DAMediaKind = IOMedia;
+	    DAMediaLeaf = 1;
+	    DAMediaName = Recovery;
+	    DAMediaPath = "IOService:/AppleARMPE/arm-io@10F00000/AppleH15IO/ans@49400000/AppleASCWrapV6/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3CGv2Controller/NS_01@1/IOBlockStorageDriver/APPLE SSD AP1024Z Media/IOGUIDPartitionScheme/Container@2/AppleAPFSContainerScheme/AppleAPFSMedia/AppleAPFSContainer/Recovery@3";
+	    DAMediaRemovable = 0;
+	    DAMediaSize = 994662584320;
+	    DAMediaUUID = "<CFUUID 0xa2c058b80> 005E02A6-FC32-437D-84EF-DA3405F7A1B3";
+	    DAMediaWhole = 0;
+	    DAMediaWritable = 1;
+	    DAVolumeKind = apfs;
+	    DAVolumeMountable = 1;
+	    DAVolumeName = Recovery;
+	    DAVolumeNetwork = 0;
+	    DAVolumeType = APFS;
+	    DAVolumeUUID = "<CFUUID 0xa2c058b80> 005E02A6-FC32-437D-84EF-DA3405F7A1B3";
+	}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Disk Appeared <DADisk 0xa2a4a5f20 [0x1f512d308]>{id = /dev/disk3s4}
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <Debug>: VolumeManager: Ignoring root volume (file:///System/Volumes/Data/)
+Sep 20 12:21:41 Eugenes-MacBook-Pro com.apple.iphonesimulator[729] <De

@@ -1,0 +1,248 @@
+Date/Time:        2026-09-24 00:17:17.141 +0800
+End time:         2026-09-24 00:17:18.143 +0800
+OS Version:       macOS 26.6.2 (Build 25G83)
+Architecture:     arm64e
+Report Version:   72
+
+Data Source:      Stackshots
+Shared Cache:     F2E86C53-6052-388B-BA71-5A0C9B569413 slid base address 0x186b5c000, slide 0x6b5c000 (System Primary)
+Shared Cache:     782F9475-E902-368D-8FAF-811BFE4C2832 slid base address 0x18e6cc000, slide 0xe6cc000 (DriverKit)
+Shared Cache:     7BD04242-D730-3164-8EB8-8650F163CA21 slid base address 0x7ff80f944000, slide 0xf944000 (Rosetta)
+
+Event:            shutdown stall
+Duration:         1.00s (sampling started after 2 seconds)
+Steps:            101 (10ms sampling interval)
+
+Hardware model:   Mac15,10
+Active cpus:      14
+Memory size:      36 GB
+HW page size:     16384
+VM page size:     16384
+Shared cache residency: 18.71% (1038.66 MB / 5551.31 MB)
+
+Time Since Boot:  302339s
+Time Awake Since Boot: 166288s
+Time Since Wake:  130095s
+
+Fan speed:        4914 rpm
+Total CPU Time:   13.938s (45.5G cycles, 70.8G instructions, 0.64c/i, 3.27GHz avg)
+Vnodes Available: 60.22% (158491/263168)
+Models:           none
+
+Preferred User Language: en-001
+Country Code:     001
+OS Cryptex File Extents: 8226
+
+------------------------------------------------------------
+Heavy format: stacks are sorted by count
+Use -i and -timeline to re-report with chronological sorting
+------------------------------------------------------------
+
+
+--- Source lines 26355-26433 ---
+Process:          flowdeck [84973] [unique pid 4238815]
+UUID:             C8C2AB30-E763-3181-93DA-D1C049D2B4BF
+Path:             /Users/eugenechan/.local/share/flowdeck/flowdeck
+Shared Cache:     F2E86C53-6052-388B-BA71-5A0C9B569413 slid base address 0x186b5c000, slide 0x6b5c000 (System Primary)
+Architecture:     arm64
+Parent:           zsh [33931] [unique pid 4188057]
+UID:              501
+Memory Limit:     0MB
+Jetsam Priority:  180
+Footprint:        7680 KB
+Time Since Fork:  39s
+Num samples:      101 (1-101)
+CPU Time:         0.006s (16.6M cycles, 8.3M instructions, 2.00c/i, 3.00GHz avg)
+Num threads:      5
+Note:             4 idle work queue threads omitted
+
+  Thread 0xc5f764    DispatchQueue "com.apple.main-thread"(1)    101 samples (1-101)    priority 31 (base 31)    last ran 1.929s ago
+  101  start + 6992 (dyld + 132324) [0x186c904e4]
+    101  flowdeck_cli_main + 84 (flowdeck + 10961416) [0x104b58208]
+      101  swift_task_asyncMainDrainQueue + 92 (libswift_Concurrency.dylib + 49880) [0x28c7772d8]
+        101  swift_task_asyncMainDrainQueueImpl + 140 (libswift_Concurrency.dylib + 398132) [0x28c7cc334]
+          101  protocol witness for RunLoopExecutor.run() in conformance DispatchMainExecutor + 40 (libswift_Concurrency.dylib + 396552) [0x28c7cbd08]
+            101  CFMainExecutor.run() + 48 (libswift_Concurrency.dylib + 396036) [0x28c7cbb04]
+              101  CFRunLoopRun + 64 (CoreFoundation + 994084) [0x18718db24]
+                101  _CFRunLoopRunSpecificWithOptions + 532 (CoreFoundation + 1372772) [0x1871ea264]
+                  101  __CFRunLoopRun + 1188 (CoreFoundation + 510452) [0x1871179f4]
+                    101  __CFRunLoopServiceMachPort + 160 (CoreFoundation + 516360) [0x187119108]
+                      101  mach_msg + 24 (libsystem_kernel.dylib + 4032) [0x187017fc0]
+                        101  mach_msg_overwrite + 480 (libsystem_kernel.dylib + 39360) [0x1870209c0]
+                          101  mach_msg2_trap + 8 (libsystem_kernel.dylib + 3124) [0x187017c34]
+                           *101  ??? (kernel.release.t6031 + 203784) [0xfffffe000b7c1c08]
+
+  Thread 0xc5f765    Swift Task UNKNOWN    DispatchQueue "com.apple.root.default-qos.cooperative"(15)    1 sample (100)    priority 31 (base 31)    cpu time <0.001s (833.3K cycles, 233.9K instructions, 3.56c/i, 2.48GHz avg)
+  1  completeTaskAndRelease(swift::AsyncContext*, swift::SwiftError*) + 1 (libswift_Concurrency.dylib + 53061) [0x28c777f45]
+    1  specialized thunk for @escaping @convention(thin) @async () -> () + 1 (flowdeck + 10961533) [0x104b5827d]
+      1  specialized static FlowDeck.main() + 1 (flowdeck + 10975561) [0x104b5b949]
+        1  protocol witness for AsyncParsableCommand.run() in conformance Test + 1 (flowdeck + 10359293) [0x104ac51fd]
+          1  Test.run() + 1 (flowdeck + 10318645) [0x104abb335]
+            1  protocol witness for TestRunning.runSpecificTests(workspace:scheme:configuration:targetUdid:isMacOS:derivedDataPath:testCases:skipTests:passthrough:outputMode:emitter:interactiveMode:dryRun:) in conformance TestRunner + 1 (flowdeck + 1041413) [0x1041e2405]
+              1  TestRunner.runTests(workspace:scheme:configuration:targetUdid:isMacOS:derivedDataPath:testTargets:skipTests:passthrough:outputMode:emitter:interactiveMode:dryRun:) + 1 (flowdeck + 966081) [0x1041cfdc1]
+                1  specialized TestRunner.executeWithStreaming(config:displayMode:emitter:interactiveMode:skipBuildPhases:) + 1 (flowdeck + 1009401) [0x1041da6f9]
+                  1  static Task<>.sleep(nanoseconds:) + 336 (libswift_Concurrency.dylib + 392288) [0x28c7cac60]
+                    1  specialized static Task<>.currentSchedulingExecutor.getter + 100 (libswift_Concurrency.dylib + 408504) [0x28c7cebb8]
+                      1  Executor.asSchedulingExecutor.getter + 48 (libswift_Concurrency.dylib + 344988) [0x28c7bf39c]
+                        1  swift_conformsToProtocol2 + 124 (libswiftCore.dylib + 758876) [0x19a86445c]
+                          1  swift_conformsToProtocolMaybeInstantiateSuperclasses(swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptor<swift::InProcess> const*, bool) + 972 (libswiftCore.dylib + 768316) [0x19a86693c]
+                            1  dyld4::APIs::_dyld_find_protocol_conformance(void const*, void const*, void const*) const + 164 (dyld + 65140) [0x186c7fe74]
+                              1  <deduplicated_symbol> + 24 (dyld + 111352) [0x186c8b2f8]
+                                1  <deduplicated_symbol> + 164 (dyld + 111584) [0x186c8b3e0] (running)
+
+  Thread 0xc5f769    2 samples (27-100)    priority 31 (base 31)    cpu time <0.001s (798.5K cycles, 254.8K instructions, 3.13c/i, 2.48GHz avg)
+  2  start_wqthread + 8 (libsystem_pthread.dylib + 7184) [0x187056c10]
+    2  __workq_kernreturn + 8 (libsystem_kernel.dylib + 10736) [0x1870199f0]
+     *1  ??? (kernel.release.t6031 + 5848532) [0xfffffe000bd23dd4] (runnable)
+     *1  ??? (kernel.release.t6031 + 22908) [0xfffffe000b79597c]
+       *1  ??? (kernel.release.t6031 + 1925736) [0xfffffe000b966268]
+         *1  ??? (kernel.release.t6031 + 7742520) [0xfffffe000bef2438]
+           *1  ??? (kernel.release.t6031 + 5868248) [0xfffffe000bd28ad8]
+             *1  ??? (kernel.release.t6031 + 5852316) [0xfffffe000bd24c9c]
+               *1  ??? (kernel.release.t6031 + 5849768) [0xfffffe000bd242a8]
+                 *1  ??? (kernel.release.t6031 + 770016) [0xfffffe000b84bfe0]
+                   *1  ??? (kernel.release.t6031 + 1004112) [0xfffffe000b885250] (running)
+
+  Thread 0xc5f765    3 samples (16-79)    priority 31 (base 31)    cpu time <0.001s (245.6K cycles, 83.9K instructions, 2.93c/i, 2.59GHz avg)
+  3  start_wqthread + 8 (libsystem_pthread.dylib + 7184) [0x187056c10]
+    3  __workq_kernreturn + 8 (libsystem_kernel.dylib + 10736) [0x1870199f0]
+     *3  ??? (kernel.release.t6031 + 5848532) [0xfffffe000bd23dd4] (runnable)
+
+  Binary Images:
+           0x1040e4000 -        0x104f03fff  flowdeck (0)                            <C8C2AB30-E763-3181-93DA-D1C049D2B4BF>             /Users/eugenechan/.local/share/flowdeck/flowdeck
+           0x186c70000 -        0x186d234ff  dyld (1387)                             <74E52480-C2BD-3C8D-812D-95FE2B74A096>             /usr/lib/dyld
+           0x187017000 -        0x1870542e7  libsystem_kernel.dylib (12377.161.14)   <C6A4A4CB-92E6-3BAF-AAE0-E8306259209A>             /usr/lib/system/libsystem_kernel.dylib
+           0x187055000 -        0x187061b3b  libsystem_pthread.dylib (539.100.4)     <A373F0B0-9880-326A-88B4-DD8BE4E33072>             /usr/lib/system/libsystem_pthread.dylib
+           0x18709b000 -        0x1875f95bf  CoreFoundation (5026.6.7)               <9B672762-7B1F-30BC-96DE-F176B372D66D>             /System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation
+           0x19a7ab000 -        0x19ad4d7ff  libswiftCore.dylib (6.3.2.1.11)         <83794FB3-DE9B-3D23-AB5E-2C1D5D30F134>             /usr/lib/swift/libswiftCore.dylib
+           0x28c76b000 -        0x28c7f6095  libswift_Concurrency.dylib (6.3.2.1.11) <8E168857-47F4-349F-A718-A18DB144FCB0>             /usr/lib/swift/libswift_Concurrency.dylib
+   *0xfffffe000b790000 - 0xfffffe000c0f7fff  kernel.release.t6031 (25.6.0)           <F954660C-2DB9-3F8C-9383-072AC34EFA7C>__TEXT_EXEC  /System/Library/Kernels/kernel.release.t6031
+
+
+
+--- Source lines 47562-47686 ---
+Process:          xcodebuild [85384] [unique pid 4239222]
+UUID:             5DA05E3E-1342-321C-8E2A-C1E7246A7879
+Path:             /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild
+Shared Cache:     F2E86C53-6052-388B-BA71-5A0C9B569413 slid base address 0x186b5c000, slide 0x6b5c000 (System Primary)
+Architecture:     arm64
+Parent:           flowdeck [84973] [unique pid 4238815]
+UID:              501
+Memory Limit:     0MB
+Jetsam Priority:  180
+Footprint:        147.47 MB
+Time Since Fork:  31s
+Num samples:      101 (1-101)
+CPU Time:         <0.001s (822.1K cycles, 350.5K instructions, 2.35c/i, 3.05GHz avg)
+Num threads:      15
+Note:             9 idle work queue threads omitted
+
+  Thread 0xc5fad1    DispatchQueue "com.apple.main-thread"(1)    101 samples (1-101)    priority 31 (base 31)    last ran 1.150s ago
+  101  start + 6992 (dyld + 132324) [0x186c904e4]
+    101  main + 512 (xcodebuild + 4384) [0x1000ad120]
+      101  -[XcodebuildPreIDEHandler runWithArguments:] + 372 (xcodebuild + 5728) [0x1000ad660]
+        101  -[XcodebuildPreIDEHandler loadXcode3ProjectSupportAndRunXcode3CommandLineBuildToolWithArguments:] + 164 (xcodebuild + 12668) [0x1000af17c]
+          101  XcodeBuildMain + 644 (libxcodebuildLoader.dylib + 3196) [0x100214c7c]
+            101  -[Xcode3CommandLineBuildTool run] + 4956 (Xcode3Core + 183268) [0x10717cbe4]
+              101  -[Xcode3CommandLineBuildTool _buildWithTimingSection:] + 660 (Xcode3Core + 137348) [0x107171884]
+                101  -[Xcode3CommandLineBuildTool doBuildForBuildAction:timingSection:colorize:colorizeFailure:error:] + 1184 (Xcode3Core + 133808) [0x107170ab0]
+                  101  -[Xcode3CommandLineBuildTool waitForBuildWithBuildLog:buildActionTimingSection:executionEnvironment:title:operationToEnqueue:error:] + 616 (Xcode3Core + 131472) [0x107170190]
+                    101  CFRunLoopRun + 64 (CoreFoundation + 994084) [0x18718db24]
+                      101  _CFRunLoopRunSpecificWithOptions + 532 (CoreFoundation + 1372772) [0x1871ea264]
+                        101  __CFRunLoopRun + 1188 (CoreFoundation + 510452) [0x1871179f4]
+                          101  __CFRunLoopServiceMachPort + 160 (CoreFoundation + 516360) [0x187119108]
+                            101  mach_msg + 24 (libsystem_kernel.dylib + 4032) [0x187017fc0]
+                              101  mach_msg_overwrite + 480 (libsystem_kernel.dylib + 39360) [0x1870209c0]
+                                101  mach_msg2_trap + 8 (libsystem_kernel.dylib + 3124) [0x187017c34]
+                                 *101  ??? (kernel.release.t6031 + 203784) [0xfffffe000b7c1c08]
+
+  Thread 0xc5fadc    DispatchQueue 132    101 samples (1-101)    priority 31 (base 31)    cpu time <0.001s (622.5K cycles, 232.8K instructions, 2.67c/i, 3.17GHz avg)    last ran 0.134s ago
+  101  start_wqthread + 8 (libsystem_pthread.dylib + 7184) [0x187056c10]
+    101  _pthread_wqthread + 292 (libsystem_pthread.dylib + 11968) [0x187057ec0]
+      101  _dispatch_workloop_worker_thread + 720 (libdispatch.dylib + 83764) [0x186eb2734]
+        101  _dispatch_root_queue_drain_deferred_wlh + 284 (libdispatch.dylib + 85556) [0x186eb2e34]
+          101  _dispatch_lane_invoke + 448 (libdispatch.dylib + 43876) [0x186ea8b64]
+            101  _dispatch_lane_serial_drain + 332 (libdispatch.dylib + 40600) [0x186ea7e98]
+              101  _dispatch_mach_invoke + 472 (libdispatch.dylib + 125932) [0x186ebcbec]
+                101  _dispatch_lane_serial_drain + 332 (libdispatch.dylib + 40600) [0x186ea7e98]
+                  101  _dispatch_mach_msg_invoke + 480 (libdispatch.dylib + 122516) [0x186ebbe94]
+                    101  _dispatch_client_callout4 + 16 (libdispatch.dylib + 111864) [0x186eb94f8]
+                      101  _xpc_connection_mach_event + 1416 (libxpc.dylib + 52372) [0x186d34c94]
+                        101  _xpc_connection_pass2mig + 168 (libxpc.dylib + 83892) [0x186d3c7b4]
+                          101  notify_server + 96 (libxpc.dylib + 84108) [0x186d3c88c]
+                            101  _Xmach_notify_port_destroyed + 84 (libxpc.dylib + 84240) [0x186d3c910]
+                              101  do_mach_notify_port_destroyed + 276 (libxpc.dylib + 84568) [0x186d3ca58]
+                                101  _xpc_connection_call_event_handler + 112 (libxpc.dylib + 58508) [0x186d3648c]
+                                  101  -[SimServiceContext handleXPCEvent:] + 528 (CoreSimulator + 165996) [0x1108e886c]
+                                    101  loadValidCoreSimulatorService + 188 (CoreSimulator + 141140) [0x1108e2754]
+                                      101  _dispatch_lane_barrier_sync_invoke_and_complete + 56 (libdispatch.dylib + 70496) [0x186eaf360]
+                                        101  _dispatch_client_callout + 16 (libdispatch.dylib + 111792) [0x186eb94b0]
+                                          101  __loadValidCoreSimulatorService_block_invoke_2 + 756 (CoreSimulator + 175596) [0x1108eadec]
+                                            101  usleep + 68 (libsystem_c.dylib + 56280) [0x186ef6bd8]
+                                              101  __semwait_signal + 8 (libsystem_kernel.dylib + 17160) [0x18701b308]
+                                               *101  ??? (kernel.release.t6031 + 664496) [0xfffffe000b8323b0]
+
+  Thread 0xc60cf2    DispatchQueue "com.apple.root.default-qos"(13)    101 samples (1-101)    priority 31 (base 31)    last ran 1.907s ago
+  101  start_wqthread + 8 (libsystem_pthread.dylib + 7184) [0x187056c10]
+    101  _pthread_wqthread + 232 (libsystem_pthread.dylib + 11908) [0x187057e84]
+      101  _dispatch_worker_thread2 + 184 (libdispatch.dylib + 82208) [0x186eb2120]
+        101  _dispatch_root_queue_drain + 708 (libdispatch.dylib + 80604) [0x186eb1adc]
+          101  <deduplicated_symbol> + 28 (libdispatch.dylib + 232812) [0x186ed6d6c]
+            101  _dispatch_client_callout + 16 (libdispatch.dylib + 111792) [0x186eb94b0]
+              101  _dispatch_call_block_and_release + 32 (libdispatch.dylib + 6696) [0x186e9fa28]
+                101  __50-[SimServiceContext handleReconnectionBookkeeping]_block_invoke + 184 (CoreSimulator + 165308) [0x1108e85bc]
+                  101  -[SimDeviceSet subscribeToNotificationsWithError:] + 232 (CoreSimulator + 370792) [0x11091a868]
+                    101  -[SimServiceContext sendRequest:reply:error:] + 120 (CoreSimulator + 166712) [0x1108e8b38]
+                      101  simservice_send_request_sync + 132 (CoreSimulatorUtilities + 45828) [0x110a27304]
+                        101  xpc_connection_send_message_with_reply_sync + 284 (libxpc.dylib + 48816) [0x186d33eb0]
+                          101  dispatch_mach_send_with_result_and_wait_for_reply + 60 (libdispatch.dylib + 118788) [0x186ebb004]
+                            101  _dispatch_mach_send_and_wait_for_reply + 548 (libdispatch.dylib + 117860) [0x186ebac64]
+                              101  mach_msg + 24 (libsystem_kernel.dylib + 4032) [0x187017fc0]
+                                101  mach_msg_overwrite + 480 (libsystem_kernel.dylib + 39360) [0x1870209c0]
+                                  101  mach_msg2_trap + 8 (libsystem_kernel.dylib + 3124) [0x187017c34]
+                                   *101  ??? (kernel.release.t6031 + 203784) [0xfffffe000b7c1c08] (blocked by turnstile waiting for this process)
+
+  Thread 0xc5fade    Thread name "com.apple.CFSocket.private"    101 samples (1-101)    priority 31 (base 31)    last ran 1.626s ago
+  101  thread_start + 8 (libsystem_pthread.dylib + 7196) [0x187056c1c]
+    101  _pthread_start + 136 (libsystem_pthread.dylib + 27736) [0x18705bc58]
+      101  __select + 8 (libsystem_kernel.dylib + 48768) [0x187022e80]
+       *101  ??? (kernel.release.t6031 + 6334588) [0xfffffe000bd9a87c]
+
+  Thread 0xc5fb0c    101 samples (1-101)    priority 31 (base 31)    last ran 29.481s ago
+  101  thread_start + 8 (libsystem_pthread.dylib + 7196) [0x187056c1c]
+    101  _pthread_start + 136 (libsystem_pthread.dylib + 27736) [0x18705bc58]
+      101  __NSThread__start__ + 732 (Foundation + 342908) [0x18895db7c]
+        101  @objc ThreadImpl.main() + 44 (SwiftPM + 7827616) [0x11a40f0a0]
+          101  <deduplicated_symbol> + 28 (SwiftPM + 844676) [0x119d66384]
+            101  closure #1 in Thread.init(task:) + 108 (SwiftPM + 7827256) [0x11a40ef38]
+              101  closure #1 in FSEventStream.start() + 224 (SwiftPM + 8010284) [0x11a43ba2c]
+                101  CFRunLoopRun + 64 (CoreFoundation + 994084) [0x18718db24]
+                  101  _CFRunLoopRunSpecificWithOptions + 532 (CoreFoundation + 1372772) [0x1871ea264]
+                    101  __CFRunLoopRun + 1188 (CoreFoundation + 510452) [0x1871179f4]
+                      101  __CFRunLoopServiceMachPort + 160 (CoreFoundation + 516360) [0x187119108]
+                        101  mach_msg + 24 (libsystem_kernel.dylib + 4032) [0x187017fc0]
+                          101  mach_msg_overwrite + 480 (libsystem_kernel.dylib + 39360) [0x1870209c0]
+                            101  mach_msg2_trap + 8 (libsystem_kernel.dylib + 3124) [0x187017c34]
+                             *101  ??? (kernel.release.t6031 + 203784) [0xfffffe000b7c1c08]
+
+  Thread 0xc5fb24    Thread name "NIO-ELT-0-#0"    101 samples (1-101)    priority 31 (base 31)    last ran 29.337s ago
+  101  thread_start + 8 (libsystem_pthread.dylib + 7196) [0x187056c1c]
+    101  _pthread_start + 136 (libsystem_pthread.dylib + 27736) [0x18705bc58]
+      101  closure #1 in static ThreadOpsPosix.run(handle:args:detachThread:) + 228 (XCResultKit + 2153780) [0x1095bdd34]
+        101  <deduplicated_symbol> + 24 (XCResultKit + 1733896) [0x109557508]
+          101  partial apply for closure #1 in static MultiThreadedEventLoopGroup.setupThreadAndEventLoop(name:parentGroup:selectorFactory:initializer:) + 36 (XCResultKit + 1724852) [0x1095551b4]
+            101  closure #1 in static MultiThreadedEventLoopGroup.setupThreadAndEventLoop(name:parentGroup:selectorFactory:initializer:) + 272 (XCResultKit + 1711636) [0x109551e14]
+              101  SelectableEventLoop.run() + 532 (XCResultKit + 1974040) [0x109591f18]
+                101  specialized Selector.whenReady0(strategy:onLoopBegin:_:) + 424 (XCResultKit + 1993704) [0x109596be8]
+                  101  kevent + 8 (libsystem_kernel.dylib + 28612) [0x18701dfc4]
+                   *101  ??? (kernel.release.t6031 + 6065364) [0xfffffe000bd58cd4]
+
+  Binary Images:
+           0x1000ac000 -        0x1000bbfff  xcodebuild (24505)                    <5DA05E3E-1342-321C-8E2A-C1E7246A7879>             /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild
+           0x100214000 -        0x10021ffff  libxcodebuildLoader.dylib (24505)     <811F0D89-FAFA-3287-A079-F77DC8C59743>             /Applications/Xcode.app/Contents/Frameworks/libxcodebuildLoader.dylib
+           0x107150000 -        0x107223fff  Xcode3Core (24518)                    <58E930B6-4B63-3E00-A4C6-35D40E2B6607>             /Applications/Xcode.app/Contents/Frameworks/Xcode3Core.framework/Versions/A/Xcode3Core
+           0x1093b0000 -        0x109b2ffff  XCResultKit (24514)                   <7F9078D5-6EB4-39BC-8B1E-EB43A87633F0>             /Applications/Xcode.app/Contents/SharedFrameworks/XCResultKit.framework/Versions/A/XCResultKit
+           0x1108c0000 -        0x1109b3fff  CoreSimulator (1051.17.8)             <1DA8F5F7-083A-38CA-A1AF-050951DC08AC>             /Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/CoreSimulator
+           0x110a1c000 -        0x110a87fff  CoreSimulatorUtilities (1051.17.8)    <8A42D7B1-DD2D-3AEE-813B-8243BFE2AA95>             /Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/Frameworks/CoreSimulatorUtilities.framework/Versions/A/CoreSimulatorUtilities
+           0x119c98000 -        0x11a98bfff  SwiftPM (24511)                       <8670DF15-0B88-33D0-B8A4-0558E9E6914B>             /Applications/Xcode.app/Contents/SharedFrameworks/SwiftPM.framework/Versions/A/SwiftPM
+           0x186c70000 -        0x186d234ff  dyld (1387)                           <74E52480-C2BD-3C8D-812D-95FE2B74A096>             /usr/lib/dyld
