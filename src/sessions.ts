@@ -1542,7 +1542,8 @@ function codexMessage(
 
 type UserTextSegment =
   | { kind: "human"; text: string }
-  | { kind: "system-notice"; text: string };
+  | { kind: "system-notice"; text: string }
+  | { kind: "thinking"; text: string };
 
 type AssistantTextSegment =
   | { kind: "assistant"; text: string }
@@ -1599,17 +1600,18 @@ function assistantTextSegments(text: string): AssistantTextSegment[] {
 }
 
 /**
- * Split reserved local-command wrappers out of a provider's user-role row.
+ * Split reserved provider-owned wrappers out of a provider's user-role row.
  *
  * Claude writes the command and its output as separate user rows. Codex can
- * embed local-command output inside the next human response item. Neither is a
- * prompt sent to the model. Keep source order so clients can render the system
- * activity exactly where the provider placed it. An incomplete wrapper is left
- * untouched: an active rollout may have been read between writes, and dropping
- * that text would be worse than briefly showing the envelope.
+ * embed local-command output inside the next human response item. Claude also
+ * writes background lifecycle updates as `<task-notification>` user rows.
+ * None is a prompt sent by the human. Keep source order so clients can render
+ * the activity exactly where the provider placed it. An incomplete wrapper is
+ * left untouched: an active rollout may have been read between writes, and
+ * dropping that text would be worse than briefly showing the envelope.
  */
 function userTextSegments(text: string): UserTextSegment[] {
-  const pattern = /<command-name>([\s\S]*?)<\/command-name>(?:\s*<command-message>[\s\S]*?<\/command-message>)?(?:\s*<command-args>([\s\S]*?)<\/command-args>)?|<local-command-(?:stdout|stderr)>([\s\S]*?)<\/local-command-(?:stdout|stderr)>/gi;
+  const pattern = /<command-name>([\s\S]*?)<\/command-name>(?:\s*<command-message>[\s\S]*?<\/command-message>)?(?:\s*<command-args>([\s\S]*?)<\/command-args>)?|<local-command-(?:stdout|stderr)>([\s\S]*?)<\/local-command-(?:stdout|stderr)>|<task-notification>([\s\S]*?)<\/task-notification>/gi;
   const matches = Array.from(text.matchAll(pattern));
   if (matches.length === 0) return [{ kind: "human", text }];
 
@@ -1622,6 +1624,11 @@ function userTextSegments(text: string): UserTextSegment[] {
     const command = (match[1] ?? "").trim();
     const args = (match[2] ?? "").trim();
     const output = (match[3] ?? "").trim();
+    if (match[4] != null) {
+      segments.push({ kind: "thinking", text: match[0].trim() });
+      offset = index + match[0].length;
+      continue;
+    }
     const notice = command ? [command, args].filter(Boolean).join(" ") : output;
     if (notice) segments.push({ kind: "system-notice", text: notice });
     offset = index + match[0].length;
@@ -1650,7 +1657,11 @@ function codexUserMessages(
     codexMessage(
       x,
       segment.kind === "human" ? "user" : "system",
-      segment.kind === "human" ? "text" : "system_notice",
+      segment.kind === "human"
+        ? "text"
+        : segment.kind === "thinking"
+          ? "thinking"
+          : "system_notice",
       segment.text,
       ts,
       index,
@@ -2316,7 +2327,11 @@ function normalizeLineUnsafe(line: string, codexState: CodexNormalizationState):
       return userTextSegments(text).map((segment, index) => ({
         id: blockId(id, index),
         role: segment.kind === "human" ? "user" : "system",
-        kind: segment.kind === "human" ? "text" : "system_notice",
+        kind: segment.kind === "human"
+          ? "text"
+          : segment.kind === "thinking"
+            ? "thinking"
+            : "system_notice",
         text: segment.text,
         ts,
         apiError,

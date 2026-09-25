@@ -89,4 +89,50 @@ struct MemoryCitationFixture: View {
         .accessibilityIdentifier("memoryCitationFixture")
     }
 }
+
+/// Network-free visual harness for provider task-notification normalization.
+/// Launch with `LFG_TASK_NOTIFICATION_FIXTURE=1`.
+struct TaskNotificationFixture: View {
+    private let messages = [
+        SessionMessage(
+            id: "fixture-user-before-task",
+            role: "user",
+            kind: "text",
+            text: "Please audit the transcript rendering."
+        ),
+        SessionMessage(
+            id: "fixture-task-notification",
+            role: "system",
+            kind: "thinking",
+            text: """
+            <task-notification>
+            <task-id>agent-audit</task-id>
+            <status>completed</status>
+            <summary>Agent "Audit transcript rendering" finished</summary>
+            <result>PASS: task notification rows use thinking presentation.</result>
+            </task-notification>
+            """
+        ),
+        SessionMessage(
+            id: "fixture-assistant-after-task",
+            role: "assistant",
+            kind: "text",
+            text: "The background audit finished successfully."
+        ),
+    ]
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 10) {
+                ForEach(messages) { message in
+                    TranscriptMessageView(message: message)
+                }
+            }
+            .padding()
+        }
+        .navigationTitle("Transcript")
+        .navigationBarTitleDisplayMode(.inline)
+        .accessibilityIdentifier("taskNotificationFixture")
+    }
+}
 #endif

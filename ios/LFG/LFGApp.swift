@@ -74,6 +74,10 @@ struct LFGApp: App {
                 NavigationStack {
                     MemoryCitationFixture()
                 }
+            } else if ProcessInfo.processInfo.environment["LFG_TASK_NOTIFICATION_FIXTURE"] == "1" {
+                NavigationStack {
+                    TaskNotificationFixture()
+                }
             } else {
                 RootView()
                     .environment(settings)

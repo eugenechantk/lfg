@@ -159,6 +159,7 @@ struct ThinkingView: View {
                     header(showsDisclosure: true)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("thinkingDisclosure")
             } else {
                 header(showsDisclosure: false)
                     .accessibilityIdentifier("compactingConversationIndicator")
