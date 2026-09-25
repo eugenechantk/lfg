@@ -231,19 +231,45 @@ extension MarkdownUI.Theme {
     }
 }
 
-/// GFM markdown via MarkdownUI, with images (local paths + http) resolved
-/// through the host. Used for assistant + user prose.
+/// Assistant GFM rendered as contiguous native selectable prose sections.
+/// Tables deliberately return to MarkdownUI: its grid preserves the shipping
+/// row/column layout and gives each cell its own selection surface.
 struct ProseView: View {
     let text: String
     @Environment(\.hostFiles) private var hostFiles
 
     var body: some View {
-        // No `.textSelection(.enabled)`: on iOS it only offers "copy the whole
-        // block". Range selection comes from the native text views the
-        // `lfgFlat` theme puts inside each paragraph / cell / code block.
-        Markdown(text)
-            .markdownImageProvider(HostImageProvider(hostFiles: hostFiles))
-            .markdownTheme(.lfgFlat)
+        let sections = SelectableMarkdownSections.split(text)
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
+                sectionView(section, followedByAnotherSection: index < sections.count - 1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func sectionView(
+        _ section: SelectableMarkdownSection,
+        followedByAnotherSection: Bool
+    ) -> some View {
+        switch section {
+        case .prose(let markdown):
+            // One native text view owns this entire prose/list run, so UIKit can
+            // extend a selection across its paragraph and list-item boundaries.
+            SelectableProseView(markdown: markdown)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, followedByAnotherSection ? 16 : 0)
+        case .table(let markdown):
+            // Restore the original MarkdownUI grid and per-cell selection. The
+            // table itself does not need selection spanning multiple cells.
+            // Its root-level Markdown margin does not create space between our
+            // sibling sections, so match the 16pt paragraph boundary explicitly.
+            Markdown(markdown)
+                .markdownImageProvider(HostImageProvider(hostFiles: hostFiles))
+                .markdownTheme(.lfgFlat)
+                .padding(.bottom, followedByAnotherSection ? 16 : 0)
+        }
     }
 }
 

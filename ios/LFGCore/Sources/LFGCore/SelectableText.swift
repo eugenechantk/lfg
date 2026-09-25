@@ -1,11 +1,11 @@
 import Foundation
 
-/// Block model behind the "Select Text" sheet.
+/// Block model behind the transcript's whole-message selectable text view.
 ///
 /// The transcript renders markdown through MarkdownUI, whose parsed block tree
 /// is internal and whose blocks are separate SwiftUI `Text`s — on iOS that
-/// gives "long-press → Copy the whole block" and nothing finer. The sheet
-/// instead needs ONE native text view holding the whole message, so it needs
+/// gives "long-press → Copy the whole block" and nothing finer. Cross-block
+/// selection needs ONE native text view holding the whole message, so it needs
 /// its own structure. Foundation's markdown parser (`.full` interpreted
 /// syntax) emits presentation intents for everything the transcript uses —
 /// headings, inline styles, links, nested lists, code blocks, quotes and GFM

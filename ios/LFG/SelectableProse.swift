@@ -7,8 +7,9 @@ import LFGCore
 /// A transcript message rendered in ONE non-scrolling `UITextView`, so the
 /// reader gets UIKit's own selection on the transcript itself: long-press for
 /// the cursor + magnifier, drag to extend, handles, and the system edit menu
-/// (Copy · Look Up · Translate · Share). One text view per message means a
-/// drag can run across paragraphs, list items and table cells.
+/// (Copy · Look Up · Translate · Share). One text view per contiguous prose
+/// section means a drag can run across paragraphs and list items. Tables stay
+/// in MarkdownUI's grid and intentionally keep one selection surface per cell.
 ///
 /// Structure comes from `SelectableText` (LFGCore); `SelectableTextRenderer`
 /// turns it into an attributed string; `ProseTextView` draws table gridlines
@@ -147,10 +148,10 @@ struct SelectableProseView: UIViewRepresentable {
                 && rendered != nil
             let sameWidth = renderedWidth.map { abs($0 - width) < 0.5 } ?? false
 
-            // Paragraphs, table cells, code blocks and user bubbles all lay out
-            // their existing attributed string at the proposed UITextView width;
-            // rebuilding the string is unnecessary. Only the retired-but-kept
-            // whole-message table renderer bakes column widths into attributes.
+            // Paragraphs, code blocks and user bubbles lay out their existing
+            // attributed string at the proposed UITextView width. Whole-message
+            // tables bake column widths into attributes and must rebuild when
+            // that width changes.
             if sameInputs && (!renderedDependsOnWidth || sameWidth) {
                 renderedWidth = width
                 return

@@ -1,4 +1,4 @@
-// The "Select Text" sheet renders a message through Foundation's markdown
+// The selectable transcript renders a message through Foundation's markdown
 // parser instead of MarkdownUI (whose block model is internal). These pin the
 // block structure that renderer relies on — especially tables, which have to
 // come out as one row per line so a drag across cells copies as TSV.
@@ -79,6 +79,30 @@ struct SelectableTextTests {
         ]
         #expect(blocks == expected)
         #expect(SelectableText.plainText(blocks) == "• one\n• two\n  ◦ nested\n  ◦ nested two\n1. first\n2. second")
+    }
+
+    @Test func paragraphsAndListItemsFormOneCopyableDocument() {
+        let markdown = """
+        Before the list.
+
+        - first bullet
+        - second bullet
+
+        After the list.
+        """
+
+        let blocks = SelectableText.parse(markdown: markdown)
+
+        #expect(blocks == [
+            .paragraph(spans: [.init(text: "Before the list.")], depth: 0, marker: nil, quoted: false),
+            .paragraph(spans: [.init(text: "first bullet")], depth: 1, marker: "•", quoted: false),
+            .paragraph(spans: [.init(text: "second bullet")], depth: 1, marker: "•", quoted: false),
+            .paragraph(spans: [.init(text: "After the list.")], depth: 0, marker: nil, quoted: false),
+        ])
+        #expect(
+            SelectableText.plainText(blocks)
+                == "Before the list.\n\n• first bullet\n• second bullet\n\nAfter the list."
+        )
     }
 
     /// Only the first paragraph of a list item gets the marker; a continuation

@@ -108,9 +108,8 @@ private struct TextBubble: View {
         } else {
             // Assistant turns are full-width markdown — no bubble.
             VStack(alignment: .leading, spacing: 6) {
-                // MarkdownUI layout; each paragraph / table cell / code block
-                // is a native text view (see `Theme.lfgFlat`), so a long-press
-                // selects in place, scoped to that block.
+                // One native text view owns the whole assistant turn, so a
+                // long-press selection can cross paragraphs and list items.
                 ProseView(text: prose)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if !media.isEmpty { MediaAttachmentsView(refs: media) }
