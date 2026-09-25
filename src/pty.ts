@@ -95,6 +95,20 @@ export class PtyBridge {
   }
 }
 
+// Detached sessions can be left in tmux's sticky `window-size manual` mode by
+// resize-window. Restore automatic sizing before the phone attaches so the
+// pane follows the PTY width (including a later Wide/Fit toggle).
+export function restoreTermWindowAutoSize(sessionName: string, tmuxSocket?: string): boolean {
+  const args = ["tmux", ...(tmuxSocket ? ["-L", tmuxSocket] : []),
+    "set-option", "-w", "-t", sessionName, "window-size", "latest"];
+  try {
+    return Bun.spawnSync(args, { stdout: "ignore", stderr: "ignore" }).exitCode === 0;
+  } catch {
+    // The session may not exist yet. New tmux sessions start in automatic mode.
+    return false;
+  }
+}
+
 // Sanitize a caller-supplied terminal id into a tmux session name fragment:
 // tmux session names can't contain `.` or `:` and we don't want shell-hostile
 // chars. Keep it short and predictable.

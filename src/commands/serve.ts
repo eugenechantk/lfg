@@ -82,7 +82,7 @@ import {
   awaitCodexBootstrap,
 } from "../tmux.ts";
 import { addManaged, forkLineageForSession, normalizeParentSessionId, patchManaged, removeManaged } from "../managed.ts";
-import { PtyBridge, termSessionName } from "../pty.ts";
+import { PtyBridge, restoreTermWindowAutoSize, termSessionName } from "../pty.ts";
 import { accessConfigFromEnv, authorizeTunnelledRequest, cachedJwks } from "../access-jwt.ts";
 import { TermScroll } from "../term-scroll.ts";
 import { capturePaneScroll, capturePaneEscaped, paneWidth, ensureFolderTrusted } from "../tmux.ts";
@@ -1186,6 +1186,7 @@ export async function cmdServe(options: {
         if (ws.data.browserSignIn) { browserSignIn.open(ws); return; }
         try {
           const { sessionName, cols, rows } = ws.data;
+          restoreTermWindowAutoSize(sessionName);
           const bridge = new PtyBridge(
             ["tmux", "new-session", "-A", "-s", sessionName],
             { cols, rows, cwd: homedir() },

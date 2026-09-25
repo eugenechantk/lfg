@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { PtyBridge, termSessionName } from "./pty.ts";
+import { PtyBridge, restoreTermWindowAutoSize, termSessionName } from "./pty.ts";
 
 const dec = new TextDecoder();
 
@@ -75,4 +75,32 @@ test("termSessionName sanitizes ids", () => {
   expect(termSessionName("phone")).toBe("lfg-term-phone");
   expect(termSessionName("a.b:c/d")).toBe("lfg-term-abcd");
   expect(termSessionName("")).toBe("lfg-term-main");
+});
+
+test("a terminal attach restores a manually sized tmux window and follows PTY resizes", async () => {
+  const socket = `lfg-pty-test-${process.pid}-${Math.random().toString(36).slice(2)}`;
+  const tmux = (...args: string[]) => Bun.spawnSync(["tmux", "-L", socket, ...args]);
+  const windowWidth = () => Number(new TextDecoder().decode(
+    tmux("display-message", "-p", "-t", "phone", "#{window_width}").stdout,
+  ).trim());
+  let bridge: PtyBridge | null = null;
+  try {
+    expect(tmux("new-session", "-d", "-s", "phone", "-x", "120", "-y", "40").exitCode).toBe(0);
+    expect(tmux("resize-window", "-t", "phone", "-x", "120", "-y", "200").exitCode).toBe(0);
+    expect(new TextDecoder().decode(tmux("show-options", "-w", "-t", "phone", "window-size").stdout).trim())
+      .toBe("window-size manual");
+
+    expect(restoreTermWindowAutoSize("phone", socket)).toBe(true);
+    expect(new TextDecoder().decode(tmux("show-options", "-w", "-t", "phone", "window-size").stdout).trim())
+      .toBe("window-size latest");
+
+    bridge = new PtyBridge(["tmux", "-L", socket, "attach-session", "-t", "phone"],
+      { cols: 48, rows: 20 });
+    expect(await waitFor(() => windowWidth() === 48)).toBe(true);
+    bridge.resize(120, 20);
+    expect(await waitFor(() => windowWidth() === 120)).toBe(true);
+  } finally {
+    bridge?.close();
+    tmux("kill-server");
+  }
 });
