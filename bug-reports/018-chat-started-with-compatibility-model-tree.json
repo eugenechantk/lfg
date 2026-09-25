@@ -1,0 +1,176 @@
+{
+  "accessibility" : {
+    "element_count" : 9,
+    "frame_space" : "points",
+    "tree" : [
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 437
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 874,
+          "width" : 402,
+          "x" : 0,
+          "y" : 0
+        },
+        "label" : "lfg",
+        "role" : "Application",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 89
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 402,
+          "x" : 0,
+          "y" : 62
+        },
+        "id" : "_TtGC7SwiftUI32NavigationStackHosting",
+        "role" : "Group",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 741
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 22,
+          "width" : 354,
+          "x" : 24,
+          "y" : 730
+        },
+        "id" : "composer.message",
+        "role" : "TextField",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 46,
+          "y" : 782
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 44,
+          "width" : 44,
+          "x" : 24,
+          "y" : 760
+        },
+        "id" : "composer.attach",
+        "label" : "Attach",
+        "role" : "PopUpButton",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 362,
+          "y" : 782
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 32,
+          "width" : 32,
+          "x" : 346,
+          "y" : 766
+        },
+        "id" : "composer.send",
+        "label" : "Up",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 313,
+          "y" : 623
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 117,
+          "x" : 255,
+          "y" : 613
+        },
+        "role" : "StaticText",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 58,
+          "y" : 669
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 14,
+          "width" : 83,
+          "x" : 17,
+          "y" : 662
+        },
+        "id" : "thinkingDisclosure",
+        "label" : "Thinking",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 24,
+          "y" : 696
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 17,
+          "x" : 16,
+          "y" : 687
+        },
+        "role" : "StaticText",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 380,
+          "y" : 437
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 874,
+          "width" : 44,
+          "x" : 358,
+          "y" : 0
+        },
+        "id" : "userMessageScrubber",
+        "label" : "User message index",
+        "role" : "Slider",
+        "visible" : true
+      }
+    ]
+  },
+  "schemaVersion" : "1.0.0",
+  "screenshot" : {
+    "captured" : true,
+    "height" : 874,
+    "optimized" : false,
+    "path" : "bug-reports\/018-chat-started-with-compatibility-model.jpg",
+    "pixel_height" : 874,
+    "pixel_width" : 402,
+    "point_height" : 874,
+    "point_width" : 402,
+    "size_bytes" : 21355,
+    "unit" : "points",
+    "width" : 402
+  },
+  "simulator" : {
+    "name" : "Simulator",
+    "runtime" : "iOS",
+    "udid" : "71442893-3249-4AE6-AE32-7E64D09AB374"
+  },
+  "success" : true,
+  "timestamp" : "2026-09-25T08:01:04Z",
+  "type" : "ui_snapshot"
+}

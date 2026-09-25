@@ -1,0 +1,837 @@
+{
+  "accessibility" : {
+    "element_count" : 50,
+    "frame_space" : "points",
+    "tree" : [
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 437
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 874,
+          "width" : 402,
+          "x" : 0,
+          "y" : 0
+        },
+        "label" : "lfg",
+        "role" : "Application",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 89
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 402,
+          "x" : 0,
+          "y" : 62
+        },
+        "id" : "_TtGC7SwiftUI32NavigationStackHosting",
+        "role" : "Group",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 440
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 22,
+          "width" : 354,
+          "x" : 24,
+          "y" : 429
+        },
+        "id" : "composer.message",
+        "role" : "TextField",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 46,
+          "y" : 481
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 44,
+          "width" : 44,
+          "x" : 24,
+          "y" : 459
+        },
+        "id" : "composer.attach",
+        "label" : "Attach",
+        "role" : "PopUpButton",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 362,
+          "y" : 481
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 32,
+          "width" : 32,
+          "x" : 346,
+          "y" : 465
+        },
+        "id" : "composer.send",
+        "label" : "Up",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 313,
+          "y" : 182
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 117,
+          "x" : 254,
+          "y" : 173
+        },
+        "role" : "StaticText",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 58,
+          "y" : 228
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 14,
+          "width" : 83,
+          "x" : 17,
+          "y" : 221
+        },
+        "id" : "thinkingDisclosure",
+        "label" : "Thinking",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 24,
+          "y" : 256
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 17,
+          "x" : 16,
+          "y" : 246
+        },
+        "role" : "StaticText",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 289,
+          "y" : 304
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 165,
+          "x" : 207,
+          "y" : 294
+        },
+        "role" : "StaticText",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 58,
+          "y" : 350
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 14,
+          "width" : 83,
+          "x" : 17,
+          "y" : 343
+        },
+        "id" : "thinkingDisclosure",
+        "label" : "Thinking",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 48,
+          "y" : 377
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 65,
+          "x" : 16,
+          "y" : 368
+        },
+        "role" : "StaticText",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 380,
+          "y" : 420
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 840,
+          "width" : 44,
+          "x" : 358,
+          "y" : 0
+        },
+        "id" : "userMessageScrubber",
+        "label" : "User message index",
+        "role" : "Slider",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 67,
+          "y" : 561
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 44,
+          "width" : 134,
+          "x" : 0,
+          "y" : 539
+        },
+        "label" : "I",
+        "role" : "GenericElement",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 561
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 44,
+          "width" : 134,
+          "x" : 134,
+          "y" : 539
+        },
+        "label" : "The",
+        "role" : "GenericElement",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 335,
+          "y" : 561
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 44,
+          "width" : 134,
+          "x" : 268,
+          "y" : 539
+        },
+        "label" : "Reply",
+        "role" : "GenericElement",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 24,
+          "y" : 617
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 4,
+          "y" : 590
+        },
+        "label" : "Q",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 63,
+          "y" : 617
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 44,
+          "y" : 590
+        },
+        "label" : "W",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 103,
+          "y" : 617
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 83,
+          "y" : 590
+        },
+        "label" : "E",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 142,
+          "y" : 617
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 122,
+          "y" : 590
+        },
+        "label" : "R",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 182,
+          "y" : 617
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 162,
+          "y" : 590
+        },
+        "label" : "T",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 221,
+          "y" : 617
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 202,
+          "y" : 590
+        },
+        "label" : "Y",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 261,
+          "y" : 617
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 241,
+          "y" : 590
+        },
+        "label" : "U",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 300,
+          "y" : 617
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 281,
+          "y" : 590
+        },
+        "label" : "I",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 340,
+          "y" : 617
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 320,
+          "y" : 590
+        },
+        "label" : "O",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 379,
+          "y" : 617
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 360,
+          "y" : 590
+        },
+        "label" : "P",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 43,
+          "y" : 671
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 24,
+          "y" : 644
+        },
+        "label" : "A",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 83,
+          "y" : 671
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 63,
+          "y" : 644
+        },
+        "label" : "S",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 122,
+          "y" : 671
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 103,
+          "y" : 644
+        },
+        "label" : "D",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 162,
+          "y" : 671
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 142,
+          "y" : 644
+        },
+        "label" : "F",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 202,
+          "y" : 671
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 182,
+          "y" : 644
+        },
+        "label" : "G",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 241,
+          "y" : 671
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 221,
+          "y" : 644
+        },
+        "label" : "H",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 280,
+          "y" : 671
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 261,
+          "y" : 644
+        },
+        "label" : "J",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 320,
+          "y" : 671
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 300,
+          "y" : 644
+        },
+        "label" : "K",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 359,
+          "y" : 671
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 340,
+          "y" : 644
+        },
+        "label" : "L",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 30,
+          "y" : 725
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 51,
+          "x" : 4,
+          "y" : 698
+        },
+        "id" : "shift",
+        "label" : "shift",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 83,
+          "y" : 725
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 63,
+          "y" : 698
+        },
+        "label" : "Z",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 122,
+          "y" : 725
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 103,
+          "y" : 698
+        },
+        "label" : "X",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 162,
+          "y" : 725
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 142,
+          "y" : 698
+        },
+        "label" : "C",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 202,
+          "y" : 725
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 182,
+          "y" : 698
+        },
+        "label" : "V",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 241,
+          "y" : 725
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 221,
+          "y" : 698
+        },
+        "label" : "B",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 280,
+          "y" : 725
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 261,
+          "y" : 698
+        },
+        "label" : "N",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 320,
+          "y" : 725
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 39,
+          "x" : 300,
+          "y" : 698
+        },
+        "label" : "M",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 373,
+          "y" : 725
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 51,
+          "x" : 348,
+          "y" : 698
+        },
+        "id" : "delete",
+        "label" : "delete",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 29,
+          "y" : 779
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 49,
+          "x" : 4,
+          "y" : 752
+        },
+        "id" : "more",
+        "label" : "numbers",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 78,
+          "y" : 779
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 49,
+          "x" : 53,
+          "y" : 752
+        },
+        "id" : "emoji",
+        "label" : "Emoji",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 779
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 197,
+          "x" : 103,
+          "y" : 752
+        },
+        "id" : "space",
+        "label" : " ",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 350,
+          "y" : 779
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 54,
+          "width" : 99,
+          "x" : 300,
+          "y" : 752
+        },
+        "id" : "Return",
+        "label" : "return",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 728
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 291,
+          "width" : 402,
+          "x" : 0,
+          "y" : 583
+        },
+        "role" : "GenericElement",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 42,
+          "y" : 840
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 68,
+          "width" : 68,
+          "x" : 8,
+          "y" : 805
+        },
+        "label" : "Next keyboard",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 359,
+          "y" : 839
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 68,
+          "width" : 68,
+          "x" : 325,
+          "y" : 805
+        },
+        "id" : "dictation",
+        "label" : "Dictate",
+        "role" : "Button",
+        "visible" : true
+      }
+    ]
+  },
+  "schemaVersion" : "1.0.0",
+  "screenshot" : {
+    "captured" : true,
+    "height" : 874,
+    "optimized" : false,
+    "path" : "bug-reports\/018-chat-switched-with-compatibility-model.jpg",
+    "pixel_height" : 874,
+    "pixel_width" : 402,
+    "point_height" : 874,
+    "point_width" : 402,
+    "size_bytes" : 48724,
+    "unit" : "points",
+    "width" : 402
+  },
+  "simulator" : {
+    "name" : "Simulator",
+    "runtime" : "iOS",
+    "udid" : "71442893-3249-4AE6-AE32-7E64D09AB374"
+  },
+  "success" : true,
+  "timestamp" : "2026-09-25T08:02:35Z",
+  "type" : "ui_snapshot"
+}
