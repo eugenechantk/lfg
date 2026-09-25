@@ -9,6 +9,7 @@ struct TranscriptMessageView: View {
     /// bubble then drops its top padding so stacked user turns read as one run
     /// instead of being separated by a double gap.
     var followsUserBubble: Bool = false
+    var onFollowup: ((String) -> Void)? = nil
 
     var body: some View {
         switch message.kind {
@@ -21,7 +22,7 @@ struct TranscriptMessageView: View {
         case "memory_citation":
             MemoryCitationView(text: message.text)
         default:
-            TextBubble(message: message, followsUserBubble: followsUserBubble)
+            TextBubble(message: message, followsUserBubble: followsUserBubble, onFollowup: onFollowup)
         }
     }
 }
@@ -51,7 +52,10 @@ private enum TranscriptRowTextCache {
     static func text(for message: SessionMessage) -> TranscriptRowText {
         let key = message.stableID
         if let hit = entries[key] { return hit }
-        let derived = TranscriptRowText.derive(from: message.text)
+        let derived = TranscriptRowText.derive(
+            from: message.text,
+            extractFollowups: message.role != "user"
+        )
         if entries.count >= capacity { entries.removeAll(keepingCapacity: true) }
         entries[key] = derived
         return derived
@@ -61,6 +65,7 @@ private enum TranscriptRowTextCache {
 private struct TextBubble: View {
     let message: SessionMessage
     var followsUserBubble: Bool = false
+    var onFollowup: ((String) -> Void)? = nil
     /// Sent time is hidden by default and toggled by tapping the bubble.
     @State private var showTimestamp = false
     private var isUser: Bool { message.role == "user" }
@@ -113,6 +118,23 @@ private struct TextBubble: View {
                 ProseView(text: prose)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if !media.isEmpty { MediaAttachmentsView(refs: media) }
+                if let onFollowup {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(rowText.followups.enumerated()), id: \.offset) { index, followup in
+                            Button {
+                                onFollowup(followup.prompt)
+                            } label: {
+                                Text(followup.title)
+                                    .font(.body)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("followup_\(index)")
+                        }
+                    }
+                }
                 if message.apiError == true {
                     Label("API error", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption2).foregroundStyle(.orange)

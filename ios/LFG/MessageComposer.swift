@@ -26,6 +26,8 @@ struct MessageComposer: View {
     var placeholder: String = "Message"
     var sending: Bool = false
     var autofocus = false
+    /// Increment to focus the input after an external action fills its binding.
+    var focusRequest = 0
     var onFocusChange: (Bool) -> Void = { _ in }
     /// Receives the trimmed text and any picked attachments.
     let onSend: (String, [ComposerAttachment]) -> Void
@@ -102,6 +104,9 @@ struct MessageComposer: View {
         .task(id: autofocus) {
             guard autofocus else { return }
             await Task.yield()
+            focused = true
+        }
+        .onChange(of: focusRequest) { _, _ in
             focused = true
         }
     }

@@ -49,6 +49,7 @@ struct SessionDetailView: View {
     @State private var queueAction: SessionStore.PendingSend?
     @State private var isAtBottom = true
     @State private var composerFocused = false
+    @State private var followupFocusRequest = 0
     /// Keyboard height captured from UIKit notifications. The transcript keeps
     /// its full-screen viewport for performance, while one animated content
     /// clearance moves its visual bottom with the floating composer.
@@ -505,6 +506,7 @@ struct SessionDetailView: View {
             MessageComposer(
                 text: $draft,
                 sending: isMovingHost,
+                focusRequest: followupFocusRequest,
                 onFocusChange: { isFocused in
                     composerFocused = isFocused
                     applyKeyboardTransition(
@@ -637,7 +639,11 @@ struct SessionDetailView: View {
                         ForEach(Array(renderedWindow.indices.reversed()), id: \.self) { idx in
                             TranscriptMessageView(
                                 message: renderedMessages[idx],
-                                followsUserBubble: idx > 0 && renderedMessages[idx - 1].rendersAsUserBubble
+                                followsUserBubble: idx > 0 && renderedMessages[idx - 1].rendersAsUserBubble,
+                                onFollowup: { prompt in
+                                    draft = FollowupDraft.adding(prompt, to: draft)
+                                    followupFocusRequest += 1
+                                }
                             )
                             .id(renderedMessages[idx].stableID)
                             .flippedRow()

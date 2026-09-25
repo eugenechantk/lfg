@@ -18,20 +18,26 @@ public struct TranscriptRowText: Equatable, Sendable {
     public let prose: String
     /// User-bubble text with attachment references stripped (shown as cards).
     public let displayText: String
+    /// Standalone assistant follow-up directives, shown as action text below prose.
+    public let followups: [FollowupDirective]
 
-    public init(media: [MediaRef], prose: String, displayText: String) {
+    public init(media: [MediaRef], prose: String, displayText: String, followups: [FollowupDirective] = []) {
         self.media = media
         self.prose = prose
         self.displayText = displayText
+        self.followups = followups
     }
 
-    /// Byte-for-byte the behaviour the two computed properties had, including
-    /// the `!?` difference between them: `prose` strips image markdown only,
-    /// `displayText` strips any ref's markdown *and* a bare leftover path.
-    public static func derive(from text: String) -> TranscriptRowText {
-        let media = MediaScanner.scan(text, includeInlineImages: true)
+    /// Extract follow-up directives from assistant prose, then preserve the
+    /// existing media treatment: prose strips image markdown only, while
+    /// displayText strips any ref's markdown and a bare leftover path.
+    public static func derive(from text: String, extractFollowups: Bool = true) -> TranscriptRowText {
+        let extracted = extractFollowups
+            ? FollowupDirectives.extract(from: text)
+            : FollowupDirectiveResult(prose: text, followups: [])
+        let media = MediaScanner.scan(extracted.prose, includeInlineImages: true)
 
-        var proseText = text
+        var proseText = extracted.prose
         for ref in media where ref.kind == .image {
             proseText = strippingMarkdown(ref.raw, from: proseText, imageOnly: true)
         }
@@ -45,7 +51,8 @@ public struct TranscriptRowText: Equatable, Sendable {
         return TranscriptRowText(
             media: media,
             prose: proseText.trimmingCharacters(in: .whitespacesAndNewlines),
-            displayText: display.trimmingCharacters(in: .whitespacesAndNewlines)
+            displayText: display.trimmingCharacters(in: .whitespacesAndNewlines),
+            followups: extracted.followups
         )
     }
 
