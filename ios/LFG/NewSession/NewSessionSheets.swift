@@ -295,6 +295,7 @@ private struct ModelChoice: Identifiable {
 struct ModelSheet: View {
     let selectedAgent: AgentKind
     let selectedModel: String
+    let catalog: ModelCatalogResponse
     /// Selecting a model sets the agent too — this is the whole reason the
     /// standalone agent picker was removed from the screen.
     let onSelect: (AgentKind, String) -> Void
@@ -305,8 +306,9 @@ struct ModelSheet: View {
 
     private func models(for kind: AgentKind) -> [String] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return kind.models }
-        return kind.models.filter { $0.lowercased().contains(q) }
+        let models = catalog.models(for: kind)
+        guard !q.isEmpty else { return models }
+        return models.filter { $0.lowercased().contains(q) }
     }
 
     var body: some View {

@@ -4,14 +4,22 @@ public enum SessionHandoff {
     public struct ModelSection: Sendable {
         public let agent: AgentKind
         public let title: String
-        public var models: [String] { agent.models }
+        public let models: [String]
     }
 
-    public static func modelSections(current: AgentKind, closed: Bool = false) -> [ModelSection] {
+    public static func modelSections(
+        current: AgentKind,
+        closed: Bool = false,
+        catalog: ModelCatalogResponse = .fallback
+    ) -> [ModelSection] {
         let other: AgentKind = current == .claude ? .codex : .claude
         return [
-            ModelSection(agent: current, title: closed ? "Resume with model" : "Switch in place"),
-            ModelSection(agent: other, title: "Switch to \(other == .claude ? "Claude Code" : "Codex")"),
+            ModelSection(agent: current,
+                         title: closed ? "Resume with model" : "Switch in place",
+                         models: catalog.models(for: current)),
+            ModelSection(agent: other,
+                         title: "Switch to \(other == .claude ? "Claude Code" : "Codex")",
+                         models: catalog.models(for: other)),
         ]
     }
 

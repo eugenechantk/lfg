@@ -107,6 +107,16 @@ struct NewSessionView: View {
             // Snapshot on open so ✕ can revert; clear on close.
             if new != nil, revertState == nil {
                 revertState = (cwd, cwdLabel, selectedHost, agent, model, modelPickedExplicitly)
+                if new == .model {
+                    Task {
+                        await store.loadModelCatalog(for: selectedHost)
+                        guard activeSheet == .model, !modelPickedExplicitly else { return }
+                        let selection = AgentModelSelection(agent: agent, model: model)
+                            .reconciled(with: store.modelCatalog(for: selectedHost))
+                        agent = selection.agent
+                        model = selection.model
+                    }
+                }
             } else if new == nil {
                 // A swipe-to-dismiss is also a keep/confirm path. Cancel first
                 // restores the snapshot, so persisting here covers every sheet
@@ -264,6 +274,7 @@ struct NewSessionView: View {
             ModelSheet(
                 selectedAgent: agent,
                 selectedModel: model,
+                catalog: store.modelCatalog(for: selectedHost),
                 onSelect: { kind, name in
                     agent = kind
                     model = name

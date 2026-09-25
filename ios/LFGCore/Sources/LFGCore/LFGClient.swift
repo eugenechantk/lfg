@@ -423,6 +423,11 @@ public struct LFGClient: Sendable {
         try await get("api/dirs", as: DirsResponse.self)
     }
 
+    public func models(refresh: Bool = false) async throws -> ModelCatalogResponse {
+        try await get("api/models", query: refresh ? [URLQueryItem(name: "refresh", value: "1")] : [],
+                      as: ModelCatalogResponse.self)
+    }
+
     public func createDir(name: String) async throws -> Repo {
         let data = try await send("POST", "api/dirs/new", json: ["name": name])
         struct R: Decodable { let name: String; let cwd: String }

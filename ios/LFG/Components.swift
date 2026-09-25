@@ -469,9 +469,9 @@ struct PausedBannerView: View {
             if canSwitchToOpus, let id = session.sessionId {
                 Button {
                     working = true
-                    Task { await store.setModel(id, "claude-opus-5"); working = false }
+                    Task { await store.setModel(id, AgentKind.claude.defaultModel); working = false }
                 } label: {
-                    Text(working ? "Resuming…" : "Resume on Opus 5")
+                    Text(working ? "Resuming…" : "Resume on Opus")
                 }
                 .buttonStyle(.borderedProminent).controlSize(.small).tint(.orange)
                 .disabled(working)

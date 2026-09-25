@@ -178,13 +178,38 @@ final class ModelsTests: XCTestCase {
     }
 
     func testAgentKindModels() {
-        XCTAssertEqual(AgentKind.claude.defaultModel, "claude-opus-5")
+        XCTAssertEqual(AgentKind.claude.defaultModel, "claude-opus-5-5")
         XCTAssertEqual(AgentKind.codex.defaultModel, "gpt-6-astra")
-        XCTAssertTrue(AgentKind.claude.models.contains("claude-fable-5"))
+        XCTAssertTrue(AgentKind.claude.models.contains("claude-fable-5-1"))
         XCTAssertTrue(AgentKind.claude.models.contains("opus"))
-        XCTAssertTrue(AgentKind.codex.models.contains("gpt-5.3-codex-spark"))
+        XCTAssertFalse(AgentKind.claude.pickerModels.contains("opus"))
+        XCTAssertTrue(AgentKind.codex.models.contains("gpt-6-sol"))
         XCTAssertTrue(AgentKind.codex.models.contains("gpt-5.6-sol"))
         XCTAssertEqual(AgentKind.allCases.count, 2)
+    }
+
+    func testModelCatalogDecodesDynamicModelsAndFallsBackPerAgent() throws {
+        let data = #"{"agents":{"claude":{"version":"2.1.280","defaultModel":"claude-opus-5-5","models":["claude-opus-5-5","claude-fable-5-1"]}}}"#.data(using: .utf8)!
+        let catalog = try JSONDecoder().decode(ModelCatalogResponse.self, from: data)
+
+        XCTAssertEqual(catalog.models(for: .claude), ["claude-opus-5-5", "claude-fable-5-1"])
+        XCTAssertEqual(catalog.defaultModel(for: .claude), "claude-opus-5-5")
+        XCTAssertEqual(catalog.version(for: .claude), "2.1.280")
+        XCTAssertEqual(catalog.models(for: .codex), AgentKind.codex.models)
+        XCTAssertEqual(catalog.defaultModel(for: .codex), AgentKind.codex.defaultModel)
+    }
+
+    func testPersistedSelectionKeepsSafeFutureModelUntilHostCatalogLoads() {
+        let selection = AgentModelSelection.restoringPersisted(
+            agentRawValue: "claude",
+            model: "claude-opus-5-5"
+        )
+
+        XCTAssertEqual(selection, AgentModelSelection(agent: .claude, model: "claude-opus-5-5"))
+        XCTAssertEqual(
+            AgentModelSelection.restoringPersisted(agentRawValue: "claude", model: "/model opus"),
+            AgentModelSelection(agent: .claude, model: AgentKind.claude.defaultModel)
+        )
     }
 
     func testAgentModelSelectionRestoresValidPersistedPair() {
@@ -201,7 +226,7 @@ final class ModelsTests: XCTestCase {
 
         XCTAssertEqual(selection, .default)
         XCTAssertEqual(selection.agent, .claude)
-        XCTAssertEqual(selection.model, "claude-opus-5")
+        XCTAssertEqual(selection.model, "claude-opus-5-5")
     }
 
     func testAgentModelSelectionReplacesStaleModelWithAgentsCurrentDefault() {

@@ -9,6 +9,7 @@ import { PATHS } from "../config.ts";
 import { prepareHandoff } from "../handoff.ts";
 import { switchCodexModel } from "../codex-model-switch.ts";
 import { hostInfo } from "../hostinfo.ts";
+import { currentModelCatalog, isSafeModelId } from "../model-catalog.ts";
 import { Journal } from "../journal.ts";
 import { startJournalPump } from "../journal-pump.ts";
 import { codexDelegationSessionIds, notePaneBusy } from "../activity.ts";
@@ -124,20 +125,6 @@ import {
 const REPOS_ROOT = process.env.LFG_REPOS_ROOT ?? join(homedir(), "repos");
 const SELF_REPO = PATHS.root;
 
-// Allowlisted Claude models. They land both on a launch argv (--model) and in a
-// `/model <id>` slash command we inject mid-session — so an unknown value is a
-// hard 400, never a silent fallback. Explicit current IDs are the picker/default
-// path; aliases stay accepted for existing clients and transcript-derived resume.
-const CLAUDE_MODEL_IDS = [
-  "claude-opus-5",
-  "claude-fable-5",
-  "claude-sonnet-5",
-  "claude-haiku-4-5",
-];
-const CLAUDE_MODEL_ALIASES = ["opus", "fable", "sonnet", "haiku"];
-const CLAUDE_MODELS = [...CLAUDE_MODEL_IDS, ...CLAUDE_MODEL_ALIASES];
-const CODEX_MODEL_RE = /^[A-Za-z0-9_.:-]{1,80}$/;
-
 function transcriptFamily(path: string): "claude" | "codex" | null {
   const claudeRoot = process.env.LFG_CLAUDE_PROJECTS_DIR ?? join(homedir(), ".claude", "projects");
   const codexRoot = join(process.env.HOME ?? homedir(), ".codex", "sessions");
@@ -148,8 +135,12 @@ function transcriptFamily(path: string): "claude" | "codex" | null {
 
 function validateModelForAgent(agent: "claude" | "codex", model: string | undefined): string | null {
   if (!model) return null;
-  if (agent === "claude" && !CLAUDE_MODELS.includes(model)) return `unknown model "${model}"`;
-  if (agent === "codex" && !CODEX_MODEL_RE.test(model)) return "invalid codex model name";
+  // Both CLIs own versioned/account-scoped catalogs. Binding this validation to
+  // an LFG release made every provider launch require a server patch. The argv
+  // is array-spawned and Claude's in-place switch is a local slash command, so
+  // enforce the strict shared token grammar here and let the installed CLI be
+  // authoritative about availability.
+  if (!isSafeModelId(model)) return `invalid ${agent} model name`;
   return null;
 }
 import {
@@ -1919,6 +1910,10 @@ export async function cmdServe(options: {
         return json({ repos: await listRepos() });
       }
 
+      if (path === "/api/models" && req.method === "GET") {
+        return json(await currentModelCatalog(url.searchParams.get("refresh") === "1"));
+      }
+
       // Directories for new sessions: scanned repos + the root and inbox
       // fallbacks. Create a new directory or reconfigure the inbox.
       if (path === "/api/dirs") {
@@ -2381,9 +2376,9 @@ export async function cmdServe(options: {
             return err(400, error instanceof Error ? error.message : "Could not prepare transcript handoff");
           }
         }
-        // Allowlist Claude models — they land on a shell argv. Unknown value =
-        // hard 400, never a silent fallback to some other model. Codex model
-        // names are provider/catalog driven, so validate shape instead.
+        // Model ids land on an argv (and for Claude, in a local slash command),
+        // so their shape is validated above. Availability is intentionally
+        // provider/catalog-driven instead of pinned to this LFG release.
         // Always spawn in a trusted folder — claude shows a blocking "trust this
         // folder?" dialog for any untrusted cwd, which hangs session startup. The
         // lfg-sessions skill is installed user-level (~/.claude/skills) so the

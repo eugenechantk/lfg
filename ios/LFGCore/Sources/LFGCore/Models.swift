@@ -624,19 +624,84 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    /// Models offered for this agent. Claude uses the server allowlists;
-    /// codex is catalog-driven so we provide common defaults.
-    public var models: [String] {
+    /// Bundled picker catalog. Current hosts override this at runtime via
+    /// `GET /api/models`; these values keep old/offline hosts usable.
+    public var pickerModels: [String] {
         switch self {
-        // First entry is the default. Claude → Opus 5, Codex → GPT-6 Astra.
         case .claude:
-            return ["claude-opus-5", "claude-fable-5", "claude-sonnet-5", "claude-haiku-4-5", "opus", "fable", "sonnet", "haiku"]
+            return ["claude-opus-5-5", "claude-fable-5-1", "claude-sonnet-5",
+                    "claude-haiku-4-5-20251001"]
         case .codex:
-            return ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"]
+            return ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol",
+                    "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"]
         }
     }
 
-    public var defaultModel: String { models.first ?? "sonnet" }
+    /// Accepted persisted/transcript-derived values. Legacy Claude aliases stay
+    /// valid without consuming limited UIMenu action slots in the picker.
+    public var models: [String] {
+        self == .claude ? pickerModels + ["opus", "fable", "sonnet", "haiku"] : pickerModels
+    }
+
+    public var defaultModel: String { pickerModels.first ?? "sonnet" }
+}
+
+/// One installed CLI's account-scoped model catalog. Every field is lenient so
+/// an older/newer host cannot make the whole create flow undecodable.
+public struct AgentModelCatalog: Codable, Sendable, Equatable {
+    public var version: String?
+    public var defaultModel: String
+    public var models: [String]
+
+    public init(version: String? = nil, defaultModel: String, models: [String]) {
+        self.version = version
+        self.defaultModel = defaultModel
+        self.models = models
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decodeIfPresent(String.self, forKey: .version)
+        defaultModel = (try c.decodeIfPresent(String.self, forKey: .defaultModel)) ?? ""
+        models = (try? c.decode([String].self, forKey: .models)) ?? []
+    }
+}
+
+public struct ModelCatalogResponse: Codable, Sendable, Equatable {
+    public var agents: [String: AgentModelCatalog]
+
+    public init(agents: [String: AgentModelCatalog] = [:]) {
+        self.agents = agents
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        agents = (try? c.decode([String: AgentModelCatalog].self, forKey: .agents)) ?? [:]
+    }
+
+    public static let fallback = ModelCatalogResponse(agents: Dictionary(
+        uniqueKeysWithValues: AgentKind.allCases.map { kind in
+            (kind.rawValue, AgentModelCatalog(defaultModel: kind.defaultModel, models: kind.pickerModels))
+        }
+    ))
+
+    public func models(for agent: AgentKind) -> [String] {
+        guard let discovered = agents[agent.rawValue]?.models.filter(AgentModelSelection.isSafeModelName),
+              !discovered.isEmpty else { return agent.pickerModels }
+        var seen = Set<String>()
+        return discovered.filter { seen.insert($0).inserted }
+    }
+
+    public func defaultModel(for agent: AgentKind) -> String {
+        let available = models(for: agent)
+        guard let preferred = agents[agent.rawValue]?.defaultModel,
+              available.contains(preferred) else { return available.first ?? agent.defaultModel }
+        return preferred
+    }
+
+    public func version(for agent: AgentKind) -> String? {
+        agents[agent.rawValue]?.version
+    }
 }
 
 /// A validated agent/model pair for starting a new session.
@@ -667,5 +732,36 @@ public struct AgentModelSelection: Equatable, Sendable {
             return AgentModelSelection(agent: agent, model: agent.defaultModel)
         }
         return AgentModelSelection(agent: agent, model: model)
+    }
+
+    /// Persisted selections may come from a newer host catalog than the app's
+    /// bundled fallback. Preserve a syntactically safe future id until the host
+    /// catalog can reconcile it instead of erasing it during app initialization.
+    public static func restoringPersisted(agentRawValue: String?, model: String?) -> AgentModelSelection {
+        guard let agentRawValue, let agent = AgentKind(rawValue: agentRawValue) else {
+            return .default
+        }
+        guard let model, isSafeModelName(model) else {
+            return AgentModelSelection(agent: agent, model: agent.defaultModel)
+        }
+        return AgentModelSelection(agent: agent, model: model)
+    }
+
+    public func reconciled(with catalog: ModelCatalogResponse) -> AgentModelSelection {
+        let available = catalog.models(for: agent)
+        guard available.contains(model) else {
+            return AgentModelSelection(agent: agent, model: catalog.defaultModel(for: agent))
+        }
+        return self
+    }
+
+    public static func isSafeModelName(_ model: String) -> Bool {
+        guard !model.isEmpty, model.utf8.count <= 80 else { return false }
+        return model.unicodeScalars.allSatisfy { scalar in
+            switch scalar.value {
+            case 48...57, 65...90, 97...122, 45, 46, 58, 95: return true
+            default: return false
+            }
+        }
     }
 }

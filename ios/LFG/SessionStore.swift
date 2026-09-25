@@ -352,6 +352,9 @@ import LFGCore
     private(set) var inbox: String = ""
     private(set) var users: [String] = []
     private(set) var usage: Usage?
+    /// Account/version-specific CLI catalogs, keyed by host id. Missing entries
+    /// intentionally read as the bundled compatibility catalog.
+    private(set) var modelCatalogByHost: [String: ModelCatalogResponse] = [:]
 
     private var seen: [String: Set<String>] = [:]
 
@@ -2806,6 +2809,29 @@ import LFGCore
         }
         users = (await u) ?? []
         usage = await g
+    }
+
+    func modelCatalog(for host: Host?) -> ModelCatalogResponse {
+        let target = host ?? agnosticHost
+        return target.flatMap { modelCatalogByHost[$0.id] } ?? .fallback
+    }
+
+    func modelCatalog(forSession sessionID: String) -> ModelCatalogResponse {
+        modelCatalog(for: host(forSession: sessionID))
+    }
+
+    /// Refresh only on explicit picker/detail entry, never in the 3s session
+    /// poll. The host briefly caches discovery and falls back on failure, so this
+    /// is cheap and self-heals after either CLI updates without app/server code.
+    func loadModelCatalog(for host: Host?, refresh: Bool = true) async {
+        guard let target = host ?? agnosticHost,
+              let client = settings.client(for: target),
+              let catalog = try? await client.models(refresh: refresh) else { return }
+        modelCatalogByHost[target.id] = catalog
+    }
+
+    func loadModelCatalog(forSession sessionID: String, refresh: Bool = true) async {
+        await loadModelCatalog(for: host(forSession: sessionID), refresh: refresh)
     }
 
     func createDirectory(_ name: String) async -> Repo? {

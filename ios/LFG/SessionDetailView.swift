@@ -286,6 +286,9 @@ struct SessionDetailView: View {
             store.loadHistory(sid)   // store-owned: not cancelled by view churn
             await store.loadBrowserFrame(sid)
         }
+        .task(id: "model-catalog-\(sid)") {
+            await store.loadModelCatalog(forSession: sid)
+        }
         .onDisappear {
             store.blur(sid)
         }
@@ -1397,7 +1400,11 @@ private struct SessionOptionsMenu: View {
                               handler: onShowInversionSpike))
 
         let switching = store.switchingModelSessionIds.contains(sid)
-        let models = SessionHandoff.modelSections(current: AgentKind(rawValue: agent) ?? .claude, closed: closed).map { section in
+        let models = SessionHandoff.modelSections(
+            current: AgentKind(rawValue: agent) ?? .claude,
+            closed: closed,
+            catalog: store.modelCatalog(forSession: sid)
+        ).map { section in
             let target = section.agent
             return UIMenu(title: section.title, options: .displayInline,
                 children: section.models.map { model in

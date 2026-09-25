@@ -134,9 +134,9 @@ struct LFGApp: App {
         recentDirs = RecentDirs.pushing(path, onto: recentDirs)
     }
 
-    /// Last agent/model kept in the new-session picker. The pair is
-    /// validated during initialization so removed catalog entries never leak
-    /// into a create request after an app update.
+    /// Last agent/model kept in the new-session picker. A future host-discovered
+    /// id must survive app initialization; NewSessionView reconciles it against
+    /// the selected host's live catalog before a create request.
     var lastNewSessionModelSelection: AgentModelSelection {
         didSet {
             defaults.set(lastNewSessionModelSelection.agent.rawValue, forKey: Self.newSessionAgentKey)
@@ -145,7 +145,7 @@ struct LFGApp: App {
     }
 
     func noteNewSessionModelSelection(agent: AgentKind, model: String) {
-        lastNewSessionModelSelection = AgentModelSelection.restoring(
+        lastNewSessionModelSelection = AgentModelSelection.restoringPersisted(
             agentRawValue: agent.rawValue,
             model: model
         )
@@ -223,7 +223,7 @@ struct LFGApp: App {
         sortMode = SortMode(rawValue: defaults.string(forKey: Self.sortModeKey) ?? "") ?? .recentActivity
         recentDirs = defaults.stringArray(forKey: Self.recentDirsKey) ?? []
         hiddenDirs = HiddenDirs(defaults.stringArray(forKey: Self.hiddenDirsKey) ?? [])
-        lastNewSessionModelSelection = AgentModelSelection.restoring(
+        lastNewSessionModelSelection = AgentModelSelection.restoringPersisted(
             agentRawValue: defaults.string(forKey: Self.newSessionAgentKey),
             model: defaults.string(forKey: Self.newSessionModelKey)
         )
