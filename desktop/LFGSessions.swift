@@ -104,6 +104,8 @@ struct ResumableAPISession: Decodable {
     let lastUserText: String?
     let agent: String
     let model: String?
+    let searchMatched: Bool?
+    let rank: Double?
 
     init(
         sessionId: String,
@@ -113,7 +115,9 @@ struct ResumableAPISession: Decodable {
         lastActivityAt: Double?,
         lastUserText: String?,
         agent: String = "claude",
-        model: String? = nil
+        model: String? = nil,
+        searchMatched: Bool? = nil,
+        rank: Double? = nil
     ) {
         self.sessionId = sessionId
         self.cwd = cwd
@@ -123,10 +127,12 @@ struct ResumableAPISession: Decodable {
         self.lastUserText = lastUserText
         self.agent = agent
         self.model = model
+        self.searchMatched = searchMatched
+        self.rank = rank
     }
 
     private enum CodingKeys: String, CodingKey {
-        case sessionId, cwd, project, title, lastActivityAt, lastUserText, agent, model
+        case sessionId, cwd, project, title, lastActivityAt, lastUserText, agent, model, searchMatched, rank
     }
 
     init(from decoder: Decoder) throws {
@@ -141,6 +147,8 @@ struct ResumableAPISession: Decodable {
         // was Claude, so that is the only backward-compatible default.
         agent = try c.decodeIfPresent(String.self, forKey: .agent) ?? "claude"
         model = try c.decodeIfPresent(String.self, forKey: .model)
+        searchMatched = try c.decodeIfPresent(Bool.self, forKey: .searchMatched)
+        rank = try c.decodeIfPresent(Double.self, forKey: .rank)
     }
 }
 struct ResumableResponse: Decodable {
@@ -148,6 +156,10 @@ struct ResumableResponse: Decodable {
     /// Cursor for the next page, or nil when this page exhausted the matches.
     /// Optional because an older host omits it entirely.
     let nextBefore: Double?
+}
+struct RankedSearchResponse: Decodable {
+    let sessions: [ResumableAPISession]
+    let nextCursor: String?
 }
 struct HostInfoResponse: Decodable { let hostId: String; let hostName: String }
 struct SessionStatesResponse: Decodable { let needsInputSessionIds: [String] }
@@ -486,7 +498,8 @@ enum SessionSearch {
     }
 
     static func matches(_ session: ResumableAPISession, terms: [String]) -> Bool {
-        matches(fields: [session.title, session.project, session.cwd, session.lastUserText,
+        if session.searchMatched == true { return true }
+        return matches(fields: [session.title, session.project, session.cwd, session.lastUserText,
                          session.model, session.agent, session.sessionId],
                 terms: terms)
     }
@@ -898,7 +911,8 @@ final class SessionStore: ObservableObject {
 
     private var searchTask: Task<Void, Never>?
     private var searchPagesByHost: [String: [ResumableAPISession]] = [:]
-    private var searchNextBeforeByHost: [String: Double] = [:]
+    private var searchNextCursorByHost: [String: String] = [:]
+    private(set) var searchRankByID: [String: Double] = [:]
 
     /// Debounce before a typed query hits the network — a normal word becomes
     /// one request per host instead of six.
@@ -908,7 +922,7 @@ final class SessionStore: ObservableObject {
     static let searchPageSize = 100
 
     var canLoadMoreSearch: Bool {
-        !searchQuery.isEmpty && !searchNextBeforeByHost.isEmpty
+        !searchQuery.isEmpty && !searchNextCursorByHost.isEmpty
     }
 
     /// Point the search at a new query. Cheap to call per keystroke: it
@@ -919,7 +933,8 @@ final class SessionStore: ObservableObject {
         searchQuery = q
         searchTask?.cancel()
         searchPagesByHost = [:]
-        searchNextBeforeByHost = [:]
+        searchNextCursorByHost = [:]
+        searchRankByID = [:]
         guard !q.isEmpty else {
             searchClosed = []
             searchLoading = false
@@ -1029,22 +1044,22 @@ final class SessionStore: ObservableObject {
     private func performSearch(_ q: String) async {
         let entries = Config.loadHosts()
         let excludes = hiddenDirs.paths
-        var pages: [(String, [ResumableAPISession], Double?)] = []
-        await withTaskGroup(of: (String, [ResumableAPISession], Double?).self) { group in
+        var pages: [(String, [ResumableAPISession], String?, Bool)] = []
+        await withTaskGroup(of: (String, [ResumableAPISession], String?, Bool).self) { group in
             for entry in entries {
                 group.addTask {
-                    let page = await Self.fetchSearchPage(
-                        entry: entry, query: q, before: nil, excludes: excludes)
-                    return (entry.url, page.sessions, page.nextBefore)
+                    let page = await Self.fetchRankedSearchPage(
+                        entry: entry, query: q, cursor: nil, excludes: excludes)
+                    return (entry.url, page.sessions, page.nextCursor, page.reset)
                 }
             }
             for await r in group { pages.append(r) }
         }
         // A query that moved on while this was in flight owns the state now.
         guard q == searchQuery, !Task.isCancelled else { return }
-        for (url, sessions, next) in pages {
+        for (url, sessions, next, _) in pages {
             searchPagesByHost[url] = sessions
-            searchNextBeforeByHost[url] = next
+            searchNextCursorByHost[url] = next
         }
         searchLoading = false
         rebuildSearchResults()
@@ -1053,29 +1068,30 @@ final class SessionStore: ObservableObject {
     func loadMoreSearch() async {
         guard !searchLoadingMore, !searchQuery.isEmpty else { return }
         let q = searchQuery
-        let cursors = searchNextBeforeByHost
+        let cursors = searchNextCursorByHost
         guard !cursors.isEmpty else { return }
         searchLoadingMore = true
         defer { searchLoadingMore = false }
 
         let entries = Config.loadHosts().filter { cursors[$0.url] != nil }
         let excludes = hiddenDirs.paths
-        var pages: [(String, [ResumableAPISession], Double?)] = []
-        await withTaskGroup(of: (String, [ResumableAPISession], Double?).self) { group in
+        var pages: [(String, [ResumableAPISession], String?, Bool)] = []
+        await withTaskGroup(of: (String, [ResumableAPISession], String?, Bool).self) { group in
             for entry in entries {
-                let before = cursors[entry.url]
+                let cursor = cursors[entry.url]
                 group.addTask {
-                    let page = await Self.fetchSearchPage(
-                        entry: entry, query: q, before: before, excludes: excludes)
-                    return (entry.url, page.sessions, page.nextBefore)
+                    let page = await Self.fetchRankedSearchPage(
+                        entry: entry, query: q, cursor: cursor, excludes: excludes)
+                    return (entry.url, page.sessions, page.nextCursor, page.reset)
                 }
             }
             for await r in group { pages.append(r) }
         }
         guard q == searchQuery else { return }
-        for (url, sessions, next) in pages {
-            searchPagesByHost[url, default: []].append(contentsOf: sessions)
-            searchNextBeforeByHost[url] = next
+        for (url, sessions, next, reset) in pages {
+            if reset { searchPagesByHost[url] = sessions }
+            else { searchPagesByHost[url, default: []].append(contentsOf: sessions) }
+            searchNextCursorByHost[url] = next
         }
         rebuildSearchResults()
     }
@@ -1196,8 +1212,15 @@ final class SessionStore: ObservableObject {
         // Search reaches every transcript each host has, not the pages already
         // loaded, so it needs the mute list applied independently — otherwise a
         // muted directory reappears the moment you type.
+        searchRankByID = Dictionary(searchPagesByHost.values.flatMap { $0 }.map {
+            ($0.sessionId, $0.rank ?? 0)
+        }, uniquingKeysWith: max)
         searchClosed = Self.visible(
-            out.sorted { ($0.session.lastActivityAt ?? 0) > ($1.session.lastActivityAt ?? 0) },
+            out.sorted {
+                let lhs = searchRankByID[$0.session.sessionId ?? ""] ?? 0
+                let rhs = searchRankByID[$1.session.sessionId ?? ""] ?? 0
+                return lhs == rhs ? ($0.session.lastActivityAt ?? 0) > ($1.session.lastActivityAt ?? 0) : lhs > rhs
+            },
             hiddenDirs: hiddenDirs)
     }
 
@@ -1600,6 +1623,59 @@ final class SessionStore: ObservableObject {
             return ([], nil)
         }
         return (page.sessions, page.nextBefore)
+    }
+
+    static func fetchRankedSearchPage(
+        entry: Config.HostEntry,
+        query: String,
+        cursor: String?,
+        excludes: [String] = []
+    ) async -> (sessions: [ResumableAPISession], nextCursor: String?, reset: Bool) {
+        if let cursor, cursor.hasPrefix("legacy:") {
+            let before = Double(String(cursor.dropFirst("legacy:".count)))
+            let page = await fetchSearchPage(entry: entry, query: query,
+                                             before: before, excludes: excludes)
+            return (page.sessions, page.nextBefore.map { "legacy:\($0)" }, false)
+        }
+        var comps = URLComponents(string: entry.url + "/api/sessions/search")
+        var queryItems = [URLQueryItem(name: "limit", value: String(searchPageSize)),
+                          URLQueryItem(name: "q", value: query)]
+        queryItems += excludeQueryItems(excludes)
+        if let cursor { queryItems.append(URLQueryItem(name: "cursor", value: cursor)) }
+        comps?.queryItems = queryItems
+        guard let url = comps?.url else { return ([], nil, false) }
+        let session = URLSession(configuration: {
+            let config = URLSessionConfiguration.ephemeral
+            config.timeoutIntervalForRequest = 30
+            return config
+        }())
+        for attempt in 0..<40 {
+            guard let (data, response) = try? await session.data(for: DesktopAPI.request(url)),
+                  let status = (response as? HTTPURLResponse)?.statusCode else {
+                return ([], nil, false)
+            }
+            if status == 503 && attempt < 39 {
+                try? await Task.sleep(for: .seconds(3))
+                if Task.isCancelled { return ([], nil, false) }
+                continue
+            }
+            if status == 409 && cursor != nil {
+                let restarted = await fetchRankedSearchPage(entry: entry, query: query,
+                                                            cursor: nil, excludes: excludes)
+                return (restarted.sessions, restarted.nextCursor, true)
+            }
+            if status == 404 {
+                let page = await fetchSearchPage(entry: entry, query: query,
+                                                 before: nil, excludes: excludes)
+                return (page.sessions, page.nextBefore.map { "legacy:\($0)" }, false)
+            }
+            guard (200..<300).contains(status),
+                  let page = try? JSONDecoder().decode(RankedSearchResponse.self, from: data) else {
+                return ([], nil, false)
+            }
+            return (page.sessions, page.nextCursor, false)
+        }
+        return ([], nil, false)
     }
 }
 
@@ -2732,6 +2808,16 @@ enum DesktopFeatureTestCLI {
             resumableRow(id: "x", title: "untitled", lastUserText: "restart the pump"),
             terms: SessionSearch.terms("restart")),
                    "the last user message matches")
+        let rankedBody = Data("""
+        {"sessions":[{"sessionId":"assistant-hit","title":"Untitled",
+        "agent":"claude","lastUserText":"Assistant: matching excerpt",
+        "searchMatched":true,"rank":92.5}],"nextCursor":"snapshot:1"}
+        """.utf8)
+        let rankedPage = try JSONDecoder().decode(RankedSearchResponse.self, from: rankedBody)
+        try expect(rankedPage.nextCursor == "snapshot:1" && rankedPage.sessions[0].rank == 92.5,
+                   "ranked search cursor and score decode")
+        try expect(SessionSearch.matches(rankedPage.sessions[0], terms: ["spread", "across", "messages"]),
+                   "verified prose matches survive local metadata filtering")
     }
 
     private static func resumableRow(
@@ -4479,7 +4565,9 @@ struct ContentView: View {
     private var matchingItems: [SessionItem] {
         let terms = SessionSearch.terms(searchText)
         guard !terms.isEmpty else { return store.items }
-        let local = store.items.filter { SessionSearch.matches($0, terms: terms) }
+        let local = store.items.filter {
+            !$0.session.closed && SessionSearch.matches($0, terms: terms)
+        }
         // Dedupe by id: a match a host returned may already be on screen as a
         // loaded closed row.
         var seen = Set(local.map(\.id))
@@ -4488,6 +4576,16 @@ struct ContentView: View {
 
     private var isSearching: Bool {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func searchOrdered(_ items: [SessionItem]) -> [SessionItem] {
+        items.sorted {
+            let lhs = store.searchRankByID[$0.session.sessionId ?? ""] ?? 0
+            let rhs = store.searchRankByID[$1.session.sessionId ?? ""] ?? 0
+            return lhs == rhs
+                ? ($0.session.lastActivityAt ?? 0) > ($1.session.lastActivityAt ?? 0)
+                : lhs > rhs
+        }
     }
 
     private var sections: [ListSection] {
@@ -4515,7 +4613,8 @@ struct ContentView: View {
             var leafCounts: [String: Int] = [:]
             for key in byDir.keys { leafCounts[leafFor(key), default: 0] += 1 }
             return byDir.map { key, items in
-                let sorted = items.sorted { ($0.session.lastActivityAt ?? 0) > ($1.session.lastActivityAt ?? 0) }
+                let sorted = isSearching ? searchOrdered(items)
+                    : items.sorted { ($0.session.lastActivityAt ?? 0) > ($1.session.lastActivityAt ?? 0) }
                 let leaf = leafFor(key)
                 let comps = key.split(separator: "/").map(String.init)
                 let title = (leafCounts[leaf] ?? 0) > 1 && comps.count >= 2
@@ -4529,7 +4628,14 @@ struct ContentView: View {
                 )
             }
             // Most-recently-active directory first, like the iOS client.
-            .sorted { ($0.items.first?.session.lastActivityAt ?? 0) > ($1.items.first?.session.lastActivityAt ?? 0) }
+            .sorted {
+                if isSearching {
+                    return (store.searchRankByID[$0.items.first?.session.sessionId ?? ""] ?? 0)
+                        > (store.searchRankByID[$1.items.first?.session.sessionId ?? ""] ?? 0)
+                }
+                return ($0.items.first?.session.lastActivityAt ?? 0)
+                    > ($1.items.first?.session.lastActivityAt ?? 0)
+            }
         }
     }
 
@@ -4538,8 +4644,7 @@ struct ContentView: View {
         childrenByParentId: [String: [SessionItem]] = [:]
     ) -> [ListSection] {
         SessionItem.Status.allCases.compactMap { g in
-            let groupItems = items.filter { $0.status == g }
-                .sorted { ($0.session.lastActivityAt ?? 0) > ($1.session.lastActivityAt ?? 0) }
+            let groupItems = searchOrdered(items.filter { $0.status == g })
             return groupItems.isEmpty ? nil
                 : ListSection(
                     id: "status-\(g.rawValue)",

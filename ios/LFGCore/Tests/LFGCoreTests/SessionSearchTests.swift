@@ -34,6 +34,21 @@ final class SessionSearchTests: XCTestCase {
         XCTAssertFalse(SessionSearch.matches(terms: ["a"], fields: [nil, "", nil]))
     }
 
+    func testRankedProseHitSurvivesClientReconciliation() {
+        let response = """
+        {"sessions":[{"sessionId":"assistant-hit","title":"Unrelated title",
+        "project":"work","lastUserText":"Assistant: matching excerpt",
+        "searchMatched":true,"rank":92.5,"closed":true}],"nextCursor":"snapshot:1"}
+        """.data(using: .utf8)!
+        let page = try! JSONDecoder().decode(RankedSearchResponse.self, from: response)
+        XCTAssertEqual(page.nextCursor, "snapshot:1")
+        XCTAssertEqual(page.sessions[0].rank, 92.5)
+        let results = SessionSearch.reconcile(perHost: [page.sessions],
+                                              terms: ["term", "spread", "across", "messages"],
+                                              liveIds: [])
+        XCTAssertEqual(results.map(\.sessionId), ["assistant-hit"])
+    }
+
     func testMatchesAPathFragment() {
         let fields: [String?] = ["a title", "/Users/eugene/dev/lfg"]
         XCTAssertTrue(SessionSearch.matches(terms: SessionSearch.terms("dev/lfg"), fields: fields))
