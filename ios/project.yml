@@ -27,6 +27,8 @@ targets:
     deploymentTarget: "18.0"
     sources:
       - path: LFG
+        excludes:
+          - ".syncthing.*.tmp"
       - path: Shared
       # A folder reference is resolved at build time, so the ignored private
       # payload can be present locally without becoming an individual project

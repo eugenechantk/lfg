@@ -34,6 +34,7 @@ ios/PrivateResources/BundledCloudflareAccess.private.json
 
 # Syncthing conflict copies + migration backups
 *.sync-conflict-*
+.syncthing.*.tmp
 ios/fastlane/*.bak
 
 # Transient verification evidence + tool state
