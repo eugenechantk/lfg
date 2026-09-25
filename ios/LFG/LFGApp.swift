@@ -62,6 +62,10 @@ struct LFGApp: App {
                 NavigationStack {
                     SelectTextFixture()
                 }
+            } else if ProcessInfo.processInfo.environment["LFG_UNREAD_SESSION_FIXTURE"] == "1" {
+                UnreadSessionFixture()
+                    .environment(settings)
+                    .environment(store)
             } else if ProcessInfo.processInfo.environment["LFG_SEND_FOLLOW_FIXTURE"] == "1" {
                 SessionSendFollowFixture()
                     .environment(settings)

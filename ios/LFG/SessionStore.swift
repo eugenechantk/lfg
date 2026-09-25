@@ -3844,6 +3844,71 @@ import LFGCore
     }
 
     #if DEBUG
+    /// Seed two idle sessions without touching a host. The first deliberately has
+    /// a stale loaded transcript behind its list preview, reproducing the unread
+    /// resurrection that occurred after navigating away from its detail.
+    func installUnreadSessionFixture() {
+        let unreadID = "fixture-unread-session"
+        let otherID = "fixture-other-session"
+        let stale = SessionMessage(
+            id: "fixture-unread-message-1",
+            role: "assistant",
+            kind: "text",
+            text: "An older locally loaded reply.",
+            ts: 1
+        )
+        let latest = SessionMessage(
+            id: "fixture-unread-message-2",
+            role: "assistant",
+            kind: "text",
+            text: "The latest reply shown by the session list.",
+            ts: 2
+        )
+        let other = SessionMessage(
+            id: "fixture-other-message-1",
+            role: "assistant",
+            kind: "text",
+            text: "A second session used to navigate away and back.",
+            ts: 1
+        )
+
+        sessions = [
+            Session(
+                sessionId: unreadID,
+                title: "Unread persistence regression",
+                agent: "claude",
+                cwd: "/tmp/lfg-unread-fixture",
+                lastActivityAt: 2,
+                busy: false,
+                last: latest
+            ),
+            Session(
+                sessionId: otherID,
+                title: "Other idle session",
+                agent: "codex",
+                cwd: "/tmp/lfg-unread-fixture",
+                lastActivityAt: 1,
+                busy: false,
+                last: other
+            )
+        ]
+        transcripts[unreadID] = [stale]
+        transcripts[otherID] = [other]
+        seen[unreadID] = [stale.stableID]
+        seen[otherID] = [other.stableID]
+        lastSeenMessageID[unreadID] = stale.id
+        lastSeenMessageID[otherID] = other.id
+        manualUnread.remove(unreadID)
+        manualUnread.remove(otherID)
+        persistSeen(mirroredUpdates: [
+            (unreadID, stale.id ?? ""),
+            (otherID, other.id ?? "")
+        ])
+        persistManualUnread()
+        bumpTranscript(unreadID)
+        bumpTranscript(otherID)
+    }
+
     /// Seed the real detail view without touching a host. The companion launch
     /// mode exercises composer focus, optimistic insertion, scroll targeting,
     /// and real-turn reconciliation through the shipping view hierarchy.
@@ -3864,6 +3929,21 @@ import LFGCore
                 kind: "text",
                 text: "Earlier assistant response \(index). This fixture is intentionally long enough to scroll away from the newest turn.",
                 ts: Double(index * 2 + 1)
+            ))
+        }
+        if ProcessInfo.processInfo.environment["LFG_FOLLOWUP_FIXTURE"] == "1" {
+            fixtureMessages.append(SessionMessage(
+                id: "fixture-followups",
+                role: "assistant",
+                kind: "text",
+                text: """
+                I completed the available sections of the form.
+
+                :codex-followup[Complete personal fields]{prompt="Add my date and place of birth, Chinese personal name, and previous-name status to the PDF."}
+                • :codex-followup[Prepare signing copy]{prompt="Review the entire form and prepare the final signing copy with all available fields completed."}
+                • :codex-followup[Draft return email]{prompt="Draft the email returning this form to View Well and asking them to confirm the remaining fields and charges."}
+                """,
+                ts: 100
             ))
         }
         let fixture = Session(
