@@ -17,6 +17,7 @@ struct TerminalScreen: View {
 
     @State private var hostURL: String?
     @State private var controller: TerminalController?
+    @State private var wideTerminal = false
 
     /// `initialHostURL` opens on that host (a session's host, from its menu);
     /// nil uses the default host.
@@ -111,6 +112,19 @@ struct TerminalScreen: View {
             .accessibilityIdentifier("terminalTitle")
             Spacer(minLength: 8)
 
+            Button {
+                wideTerminal.toggle()
+                controller?.setWideMode(wideTerminal)
+            } label: {
+                Text(wideTerminal ? "Fit" : "Wide")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 36, minHeight: 36)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(wideTerminal ? "Fit terminal to screen" : "Show wide terminal")
+            .accessibilityIdentifier("terminalWidthButton")
+
             if settings.hosts.count > 1 {
                 Menu {
                     ForEach(settings.hosts) { h in
@@ -147,6 +161,7 @@ struct TerminalScreen: View {
             return
         }
         let next = TerminalController(client: client, sessionName: Self.sessionName)
+        next.setWideMode(wideTerminal)
         controller = next
         next.connect()
     }
@@ -190,6 +205,7 @@ final class TerminalController: NSObject {
     private(set) var phase: Phase = .detached
 
     @ObservationIgnored let terminalView: SwiftTerm.TerminalView
+    @ObservationIgnored let viewport: TerminalViewportView
     @ObservationIgnored private let client: LFGClient
     @ObservationIgnored private let sessionName: String
     @ObservationIgnored private var socket: TerminalSocket?
@@ -208,6 +224,7 @@ final class TerminalController: NSObject {
         // buffer (lfg's queued agent messages) into the shell.
         view.allowMouseReporting = false
         terminalView = view
+        viewport = TerminalViewportView(terminalView: view)
         super.init()
         view.terminalDelegate = self
 
@@ -224,6 +241,13 @@ final class TerminalController: NSObject {
 
     @ObservationIgnored private var scrollRemainder: CGFloat = 0
     @ObservationIgnored private var flingTask: Task<Void, Never>?
+    @ObservationIgnored private var panAxis: PanAxis = .vertical
+
+    private enum PanAxis { case horizontal, vertical }
+
+    func setWideMode(_ wide: Bool) {
+        viewport.isWide = wide
+    }
 
     private var rowHeight: CGFloat {
         let rows = max(1, terminalView.getTerminal().rows)
@@ -235,13 +259,19 @@ final class TerminalController: NSObject {
         case .began:
             flingTask?.cancel()
             scrollRemainder = 0
+            let velocity = pan.velocity(in: terminalView)
+            panAxis = abs(velocity.x) > abs(velocity.y) ? .horizontal : .vertical
         case .changed:
-            // Finger down reveals older output, as in any scroll view.
-            let dy = pan.translation(in: terminalView).y
+            let delta = pan.translation(in: terminalView)
             pan.setTranslation(.zero, in: terminalView)
-            scrollBy(points: dy)
+            if panAxis == .horizontal {
+                viewport.scrollHorizontally(by: -delta.x)
+            } else {
+                // Finger down reveals older output, as in any scroll view.
+                scrollBy(points: delta.y)
+            }
         case .ended:
-            fling(velocity: pan.velocity(in: terminalView).y)
+            if panAxis == .vertical { fling(velocity: pan.velocity(in: terminalView).y) }
         default:
             break
         }
@@ -318,12 +348,12 @@ final class TerminalController: NSObject {
 }
 
 extension TerminalController: UIGestureRecognizerDelegate {
-    /// Only mostly-vertical drags scroll, and never while a text selection is
-    /// being adjusted.
+    /// A wide grid accepts sideways drags; both axes leave text selection alone.
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
         let v = pan.velocity(in: terminalView)
-        return abs(v.y) > abs(v.x) && !terminalView.selectionActive
+        guard !terminalView.selectionActive else { return false }
+        return abs(v.y) > abs(v.x) || viewport.hasHorizontalOverflow
     }
 
     /// SwiftTerm's own recognizers on the same view (the scroll view's pan, tap and
@@ -358,16 +388,62 @@ extension TerminalController: @preconcurrency TerminalViewDelegate {
     func rangeChanged(source: SwiftTerm.TerminalView, startY: Int, endY: Int) {}
 }
 
+/// Keeps the terminal grid wide enough for desktop-oriented TUIs while clipping
+/// it to the phone viewport. The terminal's actual bounds drive PTY resize.
+@MainActor
+final class TerminalViewportView: UIView {
+    let terminalView: SwiftTerm.TerminalView
+    var isWide = false {
+        didSet {
+            horizontalOffset = 0
+            setNeedsLayout()
+            layoutIfNeeded()
+        }
+    }
+
+    private var horizontalOffset: CGFloat = 0
+    private var gridWidth: CGFloat = 0
+    var hasHorizontalOverflow: Bool { gridWidth > bounds.width + 1 }
+
+    init(terminalView: SwiftTerm.TerminalView) {
+        self.terminalView = terminalView
+        super.init(frame: .zero)
+        clipsToBounds = true
+        addSubview(terminalView)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func scrollHorizontally(by points: CGFloat) {
+        guard hasHorizontalOverflow else { return }
+        horizontalOffset = min(max(0, horizontalOffset + points), gridWidth - bounds.width)
+        layoutTerminal()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let cellWidth = "W".size(withAttributes: [.font: terminalView.font]).width
+        gridWidth = isWide ? max(bounds.width, ceil(120 * cellWidth)) : bounds.width
+        horizontalOffset = min(horizontalOffset, max(0, gridWidth - bounds.width))
+        layoutTerminal()
+    }
+
+    private func layoutTerminal() {
+        let frame = CGRect(x: -horizontalOffset, y: 0, width: gridWidth, height: bounds.height)
+        if terminalView.frame != frame { terminalView.frame = frame }
+    }
+}
+
 /// Hosts the controller's long-lived SwiftTerm view, so a SwiftUI re-render never
 /// recreates the terminal or loses its scrollback.
 private struct TerminalHostingView: UIViewRepresentable {
     let controller: TerminalController
 
-    func makeUIView(context: Context) -> SwiftTerm.TerminalView {
-        let view = controller.terminalView
-        DispatchQueue.main.async { _ = view.becomeFirstResponder() }
-        return view
+    func makeUIView(context: Context) -> TerminalViewportView {
+        let viewport = controller.viewport
+        DispatchQueue.main.async { _ = controller.terminalView.becomeFirstResponder() }
+        return viewport
     }
 
-    func updateUIView(_ uiView: SwiftTerm.TerminalView, context: Context) {}
+    func updateUIView(_ uiView: TerminalViewportView, context: Context) {}
 }
