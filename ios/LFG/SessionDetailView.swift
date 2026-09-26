@@ -1183,6 +1183,7 @@ private struct SessionOptionsNavigationBarProxy: UIViewRepresentable {
     final class InstallerView: UIView {
         private weak var navigationBar: UINavigationBar?
         private weak var glyphView: UIImageView?
+        private var sourceFrameInScreen: CGRect?
         private var installationScheduled = false
 
         override init(frame: CGRect) {
@@ -1227,14 +1228,7 @@ private struct SessionOptionsNavigationBarProxy: UIViewRepresentable {
 
         override var accessibilityFrame: CGRect {
             get {
-                guard let navigationBar else { return super.accessibilityFrame }
-                let bar = navigationBar.convert(navigationBar.bounds, to: nil)
-                return CGRect(
-                    x: bar.maxX - 64,
-                    y: bar.midY - 22,
-                    width: 44,
-                    height: 44
-                )
+                sourceFrameInScreen ?? super.accessibilityFrame
             }
             set { super.accessibilityFrame = newValue }
         }
@@ -1253,11 +1247,13 @@ private struct SessionOptionsNavigationBarProxy: UIViewRepresentable {
             glyphView?.removeFromSuperview()
             glyphView = nil
             navigationBar = nil
+            sourceFrameInScreen = nil
         }
 
         private func installGlyphIfPossible() {
             guard let window,
-                  let currentBar = Self.navigationBar(in: window) else { return }
+                  let currentBar = Self.navigationBar(in: window),
+                  let source = Self.sessionOptionsSource(in: window) else { return }
 
             if navigationBar !== currentBar {
                 detachGlyph()
@@ -1265,12 +1261,11 @@ private struct SessionOptionsNavigationBarProxy: UIViewRepresentable {
             }
 
             if glyphView == nil {
-                let configuration = UIImage.SymbolConfiguration(pointSize: 17, weight: .regular)
+                let configuration = UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
                 let glyph = UIImageView(image: UIImage(
-                    systemName: "ellipsis.circle",
+                    systemName: "ellipsis",
                     withConfiguration: configuration
                 ))
-                glyph.translatesAutoresizingMaskIntoConstraints = false
                 glyph.tintColor = .label
                 glyph.contentMode = .center
                 glyph.isUserInteractionEnabled = false
@@ -1279,14 +1274,27 @@ private struct SessionOptionsNavigationBarProxy: UIViewRepresentable {
                 // reorders the navigation bar's private hosting subviews.
                 glyph.layer.zPosition = 10_000
                 currentBar.addSubview(glyph)
-                NSLayoutConstraint.activate([
-                    glyph.trailingAnchor.constraint(equalTo: currentBar.trailingAnchor, constant: -20),
-                    glyph.centerYAnchor.constraint(equalTo: currentBar.centerYAnchor),
-                    glyph.widthAnchor.constraint(equalToConstant: 44),
-                    glyph.heightAnchor.constraint(equalToConstant: 44),
-                ])
                 glyphView = glyph
             }
+
+            // SwiftUI/UIKit can resolve the toolbar item's position differently
+            // from the navigation bar's geometric center. Follow the real menu
+            // source center while keeping the full 44pt control footprint; the
+            // inner UIButton itself reports only symbol-sized bounds.
+            let sourceInBar = currentBar.convert(source.bounds, from: source)
+            glyphView?.frame = CGRect(
+                x: sourceInBar.midX - 22,
+                y: sourceInBar.midY - 22,
+                width: 44,
+                height: 44
+            )
+            let sourceInScreen = source.convert(source.bounds, to: nil)
+            sourceFrameInScreen = CGRect(
+                x: sourceInScreen.midX - 22,
+                y: sourceInScreen.midY - 22,
+                width: 44,
+                height: 44
+            )
         }
 
         private static func navigationBar(in view: UIView) -> UINavigationBar? {
@@ -1835,7 +1843,7 @@ private struct NativeSessionOptionsButton: UIViewRepresentable {
         let button = UIButton(type: .system)
         // Preserve the system toolbar/menu source and its Liquid Glass, but let
         // SessionOptionsNavigationBarProxy own the glyph outside this subtree.
-        button.setImage(UIImage(systemName: "ellipsis.circle"), for: .normal)
+        button.setImage(UIImage(systemName: "ellipsis"), for: .normal)
         button.tintColor = .clear
         button.contentHorizontalAlignment = .center
         button.contentVerticalAlignment = .center
