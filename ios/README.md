@@ -35,7 +35,7 @@ app with push notifications:
   and other-tool models second. Choosing the current tool switches in place
   (or resumes a closed session); choosing the other tool opens a new session
   with that model and the saved history. Cross-tool switches preserve the source
-  session and directory and wait for your next instruction after reading context.
+  session and directory, then continue the unfinished work after reading context.
   Closed sessions use the freshest reachable advertised copy. Unsaved active-turn
   output is excluded. The host must support `/api/sessions/handoff`.
 - **Push notifications** — get a push when one of your sessions finishes a turn

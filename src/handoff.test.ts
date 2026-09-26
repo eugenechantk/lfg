@@ -35,6 +35,11 @@ describe("cross-tool handoff", () => {
       expect(await readFile(result.contextPath, "utf8")).toContain("Keep ORCHID BRIDGE 472");
       expect(await readFile(result.contextPath, "utf8")).toContain("Remembered; awaiting instruction.");
       expect(result.prompt).toContain("from Codex to Claude Code");
+      expect(result.prompt).toContain("Continue the unfinished work from the recovered objective immediately");
+      expect(result.prompt).toContain("Do not ask me to repeat the task or give a new instruction");
+      expect(result.prompt).toContain("ask only that specific blocking question");
+      expect(result.prompt).toContain("verify current state before repeating external side effects");
+      expect(result.prompt).not.toContain("wait for my next instruction");
       expect(await readFile(source, "utf8")).toBe(raw);
     } finally { await rm(root, { recursive: true, force: true }); }
   });
@@ -58,7 +63,11 @@ describe("cross-tool handoff", () => {
       expect(readable).toContain("message 0");
       expect(readable).toContain("message 149");
       expect(prepared.prompt).toContain(prepared.contextPath);
-      expect(prepared.prompt).toContain("wait for my next instruction");
+      expect(prepared.prompt).toContain("Continue the unfinished work from the recovered objective immediately");
+      expect(prepared.prompt).toContain("Do not ask me to repeat the task or give a new instruction");
+      expect(prepared.prompt).toContain("ask only that specific blocking question");
+      expect(prepared.prompt).toContain("verify current state before repeating external side effects");
+      expect(prepared.prompt).not.toContain("wait for my next instruction");
       expect(await readFile(source, "utf8")).toBe(original);
       await writeFile(source, original + "later change");
       expect(await readFile(prepared.rawPath, "utf8")).toBe(complete);

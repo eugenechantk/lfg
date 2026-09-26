@@ -3,7 +3,7 @@
 ## Current user flow
 - iOS: the existing **Switch model** menu contains exactly two sections. Current tool models appear first (**Switch in place**, or **Resume with model** for a closed session); the other tool appears second (**Switch to Codex** / **Switch to Claude Code**). Selecting a model switches in place when the tool matches, otherwise snapshots history and opens a separate session in the other tool with that exact model.
 - Desktop: the session context menu has one **Switch to Codex** / **Switch to Claude Code** action. It starts the other tool using that CLI's configured default model. No desktop model picker or standalone Continue action.
-- Cross-tool switches preserve the original session and working directory. The destination reads saved history, acknowledges context, and waits for the next instruction.
+- Cross-tool switches preserve the original session and working directory. The destination reads saved history and continues the unfinished work without asking the user to repeat the task or provide a new instruction.
 
 ## Success criteria
 - [x] SC1: Both transcript formats export full immutable raw history plus readable conversation. Verify Bun fixtures with modern Codex response items, tools and partial records.
@@ -12,6 +12,8 @@
 - [x] SC4: New sessions recover saved context in both directions and original transcripts remain intact. Verify real Claude/Codex responses and hashes.
 - [ ] SC5: Desktop exposes only the applicable Switch to tool action and preserves existing opener routing. Verify desktop build, headless feature suite and transport probes; GUI remains subject to macOS permissions.
 - [x] SC6: Invalid source/target/model and failed bootstrap produce errors without orphan sessions or falsely reported success. Verify API probes and client validation tests.
+- [x] SC7: Both Claude-to-Codex and Codex-to-Claude handoff prompts explicitly direct the destination to continue unfinished work without waiting for a new instruction. Verify `src/handoff.test.ts`.
+- [x] SC8: The continuation directive remains bounded: completed work is reported, and only genuine decisions, permissions, or blockers may ask for user input. Verify exact prompt assertions in `src/handoff.test.ts`.
 
 ## Decisions
 - User correction replaces the earlier standalone Switch to Codex UI and expands direction to both tools.
@@ -20,9 +22,12 @@
 - Cross-tool creation uses `/api/sessions/handoff` with `sessionId`, `agent`, optional `model`, and optional `user`; older hosts fail explicitly.
 - Keep raw JSONL plus readable context under host LFG data. Do not synthesize private native rollout formats. Normalized prose is chronological; raw records retain branches, compaction metadata, tools and attachments.
 - Only saved content is included. A still-running source may have unsaved output. The source remains independent.
+- The current request supersedes the earlier wait-for-instructions behavior. The destination should continue autonomously, verify current state before repeating external side effects, and ask only when a genuine blocker requires input.
 - No host restart, commit, push, installation or TestFlight deployment is implied.
 
 ## Verification evidence
+- Continuation directive amendment: `bun test src/handoff.test.ts` passed 4 tests / 29 assertions in both handoff directions; `bunx tsc --noEmit -p .` passed; `bun test --timeout 10000` passed the complete backend suite (1,013 tests / 2,295 assertions). The default-timeout suite initially had one unrelated lease-corpus timeout at 5 seconds; its focused rerun passed 3/3 before the complete green rerun.
+- Independent continuation audit **PASS**: both generated directions satisfy the continuation, completion, bounded-question, source-separation and repeated-side-effect safeguards, and omit the old wait directive. See `../evidence/20260926-handoff-continue-audit/report.md`.
 - Bun: 21 tests, 61 assertions passed across handoff export, native Codex picker, tmux argv and model normalization (`bun-tests-revised.txt`). TypeScript typecheck and whitespace checks pass.
 - Swift: 581 XCTest cases (one existing skip), 175 Swift Testing cases passed; focused final section/HTTP tests also pass. Final iOS build succeeded (`ios-build-revised.jsonl`).
 - Desktop: optimized Swift build and 136 headless checks passed; actual desktop request path launched both tools with no model override (`desktop-forward-revised.json`, `desktop-reverse.json`).
