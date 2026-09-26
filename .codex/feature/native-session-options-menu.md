@@ -1,10 +1,10 @@
 # Feature: Native Session Options Menu
 
-## Status: Superseded 2026-09-26
+## Status: Current — native menu with independent glyph
 
-The native `UIButton` + `UIMenu` implementation was retired after iOS 26.3 independent audits showed that UIKit hides the toolbar source for up to 1.186 seconds after an action dismisses the menu. The current implementation uses an app-owned, scrollable popover with internal option pages so transcript streaming cannot reset its offset and context-menu source-preview dismissal cannot blank the More control.
+The action surface remains a native `UIButton` + `UIMenu`. On iOS 26.3 UIKit can hide the toolbar menu-source subtree for up to 1.186 seconds during dismissal, so the visible ellipsis is now an independent, noninteractive `UINavigationBar` sibling while the transparent toolbar button remains the real native-menu source.
 
-Current requirements, implementation, and passing independent evidence are tracked in `.codex/feature/session-more-button-stability.md`. The success criteria and evidence below are retained as the historical rationale for the superseded native implementation.
+Dismissal stability requirements and the failure history are tracked in `.codex/feature/session-more-button-stability.md`.
 
 ## User Story
 
@@ -26,6 +26,8 @@ As an LFG iOS user, I want the session toolbar's More button to present Apple's 
 - [x] SC4: Existing actions, submenus, disabled states, icons, section grouping, and destructive roles remain available.
 - [x] SC5: The More button stays a fixed circular toolbar control when the title is short or long.
 - [x] SC6: The More icon uses the dynamic label color, matching the back chevron instead of the blue accent color.
+- [x] SC7: Selecting a native-menu action leaves no post-menu frame without a recognizable ellipsis.
+- [x] SC8: The closed runtime accessibility tree exposes the enabled `sessionOptionsMenu` Button before and after action dismissal.
 
 ## Test Strategy
 
@@ -45,11 +47,11 @@ This regression is owned by UIKit's live menu presentation and cannot be proven 
 
 Use a stable `UIButton` with `showsMenuAsPrimaryAction` and a `UIDeferredMenuElement`. SwiftUI may update the representable as messages stream, but it only replaces the coordinator's menu builder; it never reassigns the button's root `UIMenu`. UIKit asks for the latest action tree when the user opens the menu, then owns the presented menu and its native scroll state for that presentation.
 
-Constrain the representable to a 44×44pt toolbar footprint and give its UIKit button required content-hugging priorities. Use dynamic `UIColor.label` for the symbol so it follows the system back chevron in light and dark appearances rather than inheriting the app accent color.
+Constrain the representable to a 44×44pt toolbar footprint and give its UIKit button required content-hugging priorities. Keep the source button's symbol transparent. Install a label-colored `ellipsis.circle` directly on the live `UINavigationBar` at the same 44×44pt trailing frame, with interaction and accessibility disabled on the glyph itself. The separate proxy advertises `sessionOptionsMenu` and forwards accessibility activation to the native source.
 
 ## Residual Risks
 
-The independent menu audit passed SC1–SC4. Disabled styling was not separately exercised because no disabled row existed in the audited running-session state; destructive styling, submenu reachability, sheet handoff, overflow scrolling, and streaming stability were exercised directly.
+The earlier independent menu audit passed SC1–SC4. Disabled styling was not separately exercised because no disabled row existed in the audited running-session state; destructive styling, submenu reachability, sheet handoff, overflow scrolling, and streaming stability were exercised directly.
 
 A follow-up independent visual audit passed SC5–SC6 for both short and long titles and confirmed the menu still opens from the fixed-size control.
 
@@ -57,6 +59,11 @@ Evidence: `.codex/evidence/20260818-174539-ios-visual-audit/evidence.md`
 
 Follow-up evidence: `.codex/evidence/20260818-184314-ios-visual-audit/evidence.md`
 
+Current local native-menu, 60 Hz dismissal, Rename, and accessibility evidence: `.codex/evidence/20260926-095829-native-session-more/evidence.md`
+
+Current independent evidence: `.codex/evidence/20260926-100348-ios-visual-audit/evidence.md`. PASS: native menu/submenus/overflow/destructive role confirmed; first menu-clear frame at PTS 4.900 contains the ellipsis; Rename begins at PTS 5.067; blank post-clear frames: 0 (0.000 seconds); closed AX state exposes the enabled visible 44×44 `sessionOptionsMenu` Button.
+
 ## Bugs
 
-None yet.
+- iOS 26.3 hides the native context-menu source subtree during dismissal. Keeping the visible glyph inside the toolbar representable failed independent audits with blank intervals up to approximately 1.186 seconds.
+- An app-owned popover removed the blank interval but was rejected because it was not the native Apple menu.

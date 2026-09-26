@@ -63,7 +63,6 @@ struct SessionDetailView: View {
     @State private var presentedSheet: PresentedSheet?
     /// The shell on this session's host (`TerminalScreen`), from the ••• menu.
     @State private var showTerminal = false
-    @State private var showingSessionOptions = false
     /// How many of the newest messages the transcript actually renders. The store
     /// still holds the whole conversation — this bounds only what SwiftUI has to
     /// place. See `TranscriptWindow` for the profile that motivates it.
@@ -265,10 +264,8 @@ struct SessionDetailView: View {
         .toolbar { toolbarMenu }
         .modifier(SessionNavigationBarBackdropVisibility())
         .overlay {
-            SessionOptionsAccessibilityProxy {
-                showingSessionOptions = true
-            }
-            .frame(width: 1, height: 1)
+            SessionOptionsNavigationBarProxy()
+                .frame(width: 1, height: 1)
         }
         .task(id: sid) {
             // Opening is now just state: the inverted list rests at the newest
@@ -1053,9 +1050,10 @@ struct SessionDetailView: View {
         }
 
         ToolbarItem(placement: .topBarTrailing) {
-            // Keep the trigger itself outside UIKit's context-menu source
-            // lifecycle. The app-owned popover remains stable while transcript
-            // deltas stream and leaves this toolbar glyph mounted on dismissal.
+            // UIKit may temporarily hide its context-menu source while the
+            // native menu dismisses. This button remains the real UIMenu source,
+            // while SessionOptionsNavigationBarProxy owns the visible glyph as
+            // an independent navigation-bar sibling.
             SessionOptionsMenu(
                 sid: sid,
                 agent: session.agent,
@@ -1075,8 +1073,7 @@ struct SessionDetailView: View {
                 onRename: { newTitle = session.title; renaming = true },
                 onRestoreBrowserPreview: { dismissedBrowserFrameID = nil },
                 onConfirmEnd: { confirmEnd = true },
-                onMarkedUnread: onMarkedUnread,
-                showingOptions: $showingSessionOptions
+                onMarkedUnread: onMarkedUnread
             )
         }
     }
@@ -1161,46 +1158,76 @@ private struct SessionNavigationBarBackdropVisibility: ViewModifier {
     }
 }
 
-/// The navigation bar's visual SwiftUI button is omitted from iOS 26's runtime
-/// accessibility tree when the transcript renders behind transparent chrome.
-/// This zero-sized proxy advertises the visible button's real navigation-bar
-/// frame and forwards VoiceOver activation to the same popover state.
-private struct SessionOptionsAccessibilityProxy: UIViewRepresentable {
-    let onActivate: () -> Void
-
-    func makeUIView(context: Context) -> AccessibilityView {
-        let view = AccessibilityView()
-        view.backgroundColor = .clear
-        view.isAccessibilityElement = true
-        view.accessibilityLabel = "More"
-        view.accessibilityIdentifier = "sessionOptionsMenu"
-        view.accessibilityTraits = .button
-        return view
+/// Keeps the visible More glyph outside UIKit's native-menu source subtree.
+///
+/// iOS 26 can temporarily hide the toolbar source view while dismissing a
+/// `UIMenu`. The real transparent `UIButton` remains in the system toolbar so
+/// UIKit still owns touch handling, anchoring, scrolling, submenus, and Liquid
+/// Glass. This proxy installs only a noninteractive glyph directly on the live
+/// `UINavigationBar`, where source-preview cleanup cannot remove it. It also
+/// owns the stable accessibility element because transparent navigation chrome
+/// otherwise omits the toolbar custom view from the runtime tree.
+private struct SessionOptionsNavigationBarProxy: UIViewRepresentable {
+    func makeUIView(context: Context) -> InstallerView {
+        InstallerView()
     }
 
-    func updateUIView(_ view: AccessibilityView, context: Context) {
-        view.onActivate = onActivate
-        view.setNeedsLayout()
+    func updateUIView(_ view: InstallerView, context: Context) {
+        view.scheduleInstallation()
     }
 
-    final class AccessibilityView: UIView {
-        var onActivate: (() -> Void)?
+    static func dismantleUIView(_ view: InstallerView, coordinator: Void) {
+        view.detachGlyph()
+    }
+
+    final class InstallerView: UIView {
+        private weak var navigationBar: UINavigationBar?
+        private weak var glyphView: UIImageView?
+        private var installationScheduled = false
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            backgroundColor = .clear
+            isAccessibilityElement = true
+            accessibilityLabel = "More"
+            accessibilityIdentifier = "sessionOptionsMenu"
+            accessibilityTraits = .button
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window == nil {
+                detachGlyph()
+            } else {
+                scheduleInstallation()
+            }
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            installGlyphIfPossible()
+        }
 
         override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
             false
         }
 
         override func accessibilityActivate() -> Bool {
-            onActivate?()
+            guard let window,
+                  let source = Self.sessionOptionsSource(in: window) else {
+                return false
+            }
+            source.sendActions(for: .primaryActionTriggered)
             return true
         }
 
         override var accessibilityFrame: CGRect {
             get {
-                guard let window,
-                      let navigationBar = Self.navigationBar(in: window) else {
-                    return super.accessibilityFrame
-                }
+                guard let navigationBar else { return super.accessibilityFrame }
                 let bar = navigationBar.convert(navigationBar.bounds, to: nil)
                 return CGRect(
                     x: bar.maxX - 64,
@@ -1212,6 +1239,56 @@ private struct SessionOptionsAccessibilityProxy: UIViewRepresentable {
             set { super.accessibilityFrame = newValue }
         }
 
+        func scheduleInstallation() {
+            guard !installationScheduled else { return }
+            installationScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                installationScheduled = false
+                installGlyphIfPossible()
+            }
+        }
+
+        func detachGlyph() {
+            glyphView?.removeFromSuperview()
+            glyphView = nil
+            navigationBar = nil
+        }
+
+        private func installGlyphIfPossible() {
+            guard let window,
+                  let currentBar = Self.navigationBar(in: window) else { return }
+
+            if navigationBar !== currentBar {
+                detachGlyph()
+                navigationBar = currentBar
+            }
+
+            if glyphView == nil {
+                let configuration = UIImage.SymbolConfiguration(pointSize: 17, weight: .regular)
+                let glyph = UIImageView(image: UIImage(
+                    systemName: "ellipsis.circle",
+                    withConfiguration: configuration
+                ))
+                glyph.translatesAutoresizingMaskIntoConstraints = false
+                glyph.tintColor = .label
+                glyph.contentMode = .center
+                glyph.isUserInteractionEnabled = false
+                glyph.isAccessibilityElement = false
+                // Stay above the transparent toolbar source even if SwiftUI
+                // reorders the navigation bar's private hosting subviews.
+                glyph.layer.zPosition = 10_000
+                currentBar.addSubview(glyph)
+                NSLayoutConstraint.activate([
+                    glyph.trailingAnchor.constraint(equalTo: currentBar.trailingAnchor, constant: -20),
+                    glyph.centerYAnchor.constraint(equalTo: currentBar.centerYAnchor),
+                    glyph.widthAnchor.constraint(equalToConstant: 44),
+                    glyph.heightAnchor.constraint(equalToConstant: 44),
+                ])
+                glyphView = glyph
+            }
+        }
+
         private static func navigationBar(in view: UIView) -> UINavigationBar? {
             if let navigationBar = view as? UINavigationBar,
                !navigationBar.isHidden,
@@ -1219,6 +1296,14 @@ private struct SessionOptionsAccessibilityProxy: UIViewRepresentable {
                 return navigationBar
             }
             return view.subviews.lazy.compactMap(navigationBar(in:)).first
+        }
+
+        private static func sessionOptionsSource(in view: UIView) -> UIButton? {
+            if let button = view as? UIButton,
+               button.accessibilityIdentifier == "sessionOptionsMenuSource" {
+                return button
+            }
+            return view.subviews.lazy.compactMap(sessionOptionsSource(in:)).first
         }
     }
 }
@@ -1446,14 +1531,12 @@ private struct UserMessageScrubberAccessibilityProxy: UIViewRepresentable {
     }
 }
 
-/// An app-owned options popover whose toolbar trigger never participates in a
-/// context-menu source-preview animation.
+/// Apple's native pull-down menu, backed by a stable UIKit menu object.
 ///
-/// UIKit hides a context menu's source view while dismissing it on iOS 26. A
-/// native `UIMenu` therefore cannot keep the toolbar ellipsis continuously
-/// visible, even when the visible glyph and menu interaction use sibling views.
-/// This popover owns its scrolling and subpage navigation while leaving the
-/// SwiftUI toolbar button mounted and accessibility-visible throughout.
+/// A SwiftUI `Menu` directly inside this transcript-observing toolbar is rebuilt
+/// for every streaming delta, which makes UIKit recreate the presented menu at
+/// offset zero. `NativeSessionOptionsButton` assigns its root `UIMenu` only once;
+/// the deferred child reads the latest actions when a presentation begins.
 private struct SessionOptionsMenu: View {
     let sid: String
     let agent: String
@@ -1472,14 +1555,11 @@ private struct SessionOptionsMenu: View {
     let onRestoreBrowserPreview: () -> Void
     let onConfirmEnd: () -> Void
     let onMarkedUnread: () -> Void
-    @Binding var showingOptions: Bool
 
     @Environment(SessionStore.self) private var store
     @Environment(AppSettings.self) private var settings
     @State private var forking = false
     @State private var transferring = false
-    @State private var page: OptionsPage = .root
-    @State private var deferredAction: DeferredAction?
     /// A move the target's pre-flight said would resume from an older copy.
     /// Held until the user confirms or cancels — never moved silently.
     @State private var staleMove: StaleMove?
@@ -1490,62 +1570,12 @@ private struct SessionOptionsMenu: View {
         var id: String { target.id }
     }
 
-    private enum OptionsPage {
-        case root
-        case childSessions
-        case models
-        case assignees
-        case transferTargets
-
-        var title: String {
-            switch self {
-            case .root: "More"
-            case .childSessions: "Child sessions"
-            case .models: "Switch model"
-            case .assignees: "Assign to"
-            case .transferTargets: "Move to host"
-            }
-        }
-    }
-
-    private enum DeferredAction: Sendable {
-        case showPhoneSignIn(String?)
-        case showAttachments
-        case openTerminal
-        case showInversionSpike
-        case showChildSession(String?)
-        case rename
-        case restoreBrowserPreview
-        case confirmEnd
-    }
-
     var body: some View {
-        Button {
-            page = .root
-            showingOptions = true
-        } label: {
-            Image(systemName: "ellipsis.circle")
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-            .accessibilityHidden(true)
-            .accessibilityLabel("More")
-            .accessibilityIdentifier("sessionOptionsMenu")
+        NativeSessionOptionsButton { menuElements }
+            // A UIViewRepresentable otherwise accepts the toolbar's spare width,
+            // turning the system glass circle into a capsule for short titles.
+            // Match the fixed 44pt footprint of the native back control.
             .frame(width: 44, height: 44)
-            .popover(isPresented: $showingOptions, arrowEdge: .top) {
-                optionsPopover
-                    .presentationCompactAdaptation(.popover)
-            }
-            .onChange(of: showingOptions) { _, isShowing in
-                guard !isShowing else { return }
-                page = .root
-                guard let action = deferredAction else { return }
-                deferredAction = nil
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(250))
-                    perform(action)
-                }
-            }
             .confirmationDialog(
                 "Move anyway?",
                 isPresented: Binding(get: { staleMove != nil }, set: { if !$0 { staleMove = nil } }),
@@ -1566,349 +1596,171 @@ private struct SessionOptionsMenu: View {
             }
     }
 
-    private var optionsPopover: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                if page != .root {
-                    Button {
-                        page = .root
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .frame(width: 32, height: 32)
-                    }
-                    .accessibilityLabel("Back")
-                }
+    private var menuElements: [UIMenuElement] {
+        var primary: [UIMenuElement] = []
 
-                Text(page.title)
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                Button {
-                    showingOptions = false
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .symbolRenderingMode(.hierarchical)
-                        .frame(width: 32, height: 32)
-                }
-                .accessibilityLabel("Close")
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 48)
-
-            Divider()
-
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    optionsPage
-                }
-                .padding(.vertical, 6)
-            }
-            .scrollIndicators(.visible)
-        }
-        .buttonStyle(.plain)
-        .frame(width: 320, height: 520)
-    }
-
-    @ViewBuilder
-    private var optionsPage: some View {
-        switch page {
-        case .root:
-            rootOptions
-        case .childSessions:
-            childSessionOptions
-        case .models:
-            modelOptions
-        case .assignees:
-            assigneeOptions
-        case .transferTargets:
-            transferOptions
-        }
-    }
-
-    @ViewBuilder
-    private var rootOptions: some View {
         if isBusy {
-            optionButton("Stop", systemImage: "stop.circle", destructive: true) {
-                dismissOptions()
+            primary.append(action("Stop", systemImage: "stop.circle", attributes: .destructive) {
                 Task { await store.interrupt(sid) }
-            }
-            optionDivider
+            })
         }
 
         if !childAgents.isEmpty {
-            optionButton(
-                "Child sessions (\(childAgents.count))",
-                systemImage: "person.2",
-                showsChevron: true
-            ) { page = .childSessions }
-            optionDivider
+            let childActions: [UIMenuElement] = [
+                action("View all", systemImage: "list.bullet") {
+                    onShowChildSessions(nil)
+                },
+            ] + childAgents.map { child in
+                action(
+                    child.description,
+                    systemImage: child.status.menuSystemImage
+                ) {
+                    onShowChildSessions(child.id)
+                }
+            }
+            primary.append(UIMenu(
+                title: "Child sessions (\(childAgents.count))",
+                image: UIImage(systemName: "person.2"),
+                children: childActions
+            ))
         }
 
-        optionButton(
+        primary.append(action(
             signInRequests.isEmpty ? "Sign in on iPhone" : "Sign in on iPhone (\(signInRequests.count))",
             systemImage: "key"
-        ) { dismissThen(.showPhoneSignIn(nil)) }
-        optionDivider
-        optionButton("Files & Links", systemImage: "paperclip") {
-            dismissThen(.showAttachments)
-        }
-        optionDivider
-        optionButton("Open Terminal", systemImage: "apple.terminal") {
-            dismissThen(.openTerminal)
-        }
-        optionDivider
+        ) { onShowPhoneSignIn(nil) })
+        primary.append(action("Files & Links", systemImage: "paperclip", handler: onShowAttachments))
+        primary.append(action("Open Terminal", systemImage: "apple.terminal", handler: onOpenTerminal))
         // PHASE-2 SPIKE entry — remove with the spike.
-        optionButton("Spike: inverted transcript", systemImage: "arrow.up.arrow.down") {
-            dismissThen(.showInversionSpike)
-        }
-        optionDivider
+        primary.append(action("Spike: inverted transcript", systemImage: "arrow.up.arrow.down",
+                              handler: onShowInversionSpike))
 
-        optionButton(
-            switchingModels ? "Switching model…" : "Switch model",
-            systemImage: "cpu",
-            showsChevron: true,
-            disabled: switchingModels
-        ) { page = .models }
-        optionDivider
-        optionButton("Assign to", systemImage: "person", showsChevron: true) {
-            page = .assignees
-        }
-        optionDivider
-        optionButton("Rename", systemImage: "pencil", identifier: "renameSessionButton") {
-            dismissThen(.rename)
-        }
-
-        if let frame = store.browserFrames[sid],
-           frame.frameId == dismissedBrowserFrameID {
-            optionDivider
-            optionButton("Show Browser Preview", systemImage: "safari") {
-                dismissThen(.restoreBrowserPreview)
-            }
-        }
-
-        if canFork {
-            optionDivider
-            optionButton(
-                forking ? "Forking…" : "Fork session",
-                systemImage: "arrow.triangle.branch",
-                disabled: forking
-            ) {
-                dismissOptions()
-                Task { await forkSession() }
-            }
-        }
-
-        if canTransfer {
-            optionDivider
-            optionButton(
-                transferring ? "Moving…" : "Move to host",
-                systemImage: "arrow.left.arrow.right",
-                showsChevron: true,
-                disabled: transferring
-            ) { page = .transferTargets }
-        }
-
-        if ManualUnread.canMarkUnread(sid) {
-            optionDivider
-            if store.isManuallyUnread(sid) {
-                optionButton("Mark as read", systemImage: "envelope.open") {
-                    dismissOptions()
-                    store.markRead(sid)
-                }
-            } else {
-                optionButton("Mark as unread", systemImage: "envelope.badge") {
-                    dismissOptions()
-                    markUnreadAndExit()
-                }
-            }
-        }
-
-        if (tmuxIdentifier?.isEmpty == false) || !sid.isEmpty {
-            sectionDivider("Debug — tap to copy")
-        }
-        if let tmuxIdentifier, !tmuxIdentifier.isEmpty {
-            optionButton("tmux · \(tmuxIdentifier)", systemImage: "terminal") {
-                dismissOptions()
-                copyToClipboard(tmuxIdentifier)
-            }
-        }
-        if !sid.isEmpty {
-            if tmuxIdentifier?.isEmpty == false { optionDivider }
-            optionButton("\(agentIdLabel) · \(sid)", systemImage: "number") {
-                dismissOptions()
-                copyToClipboard(sid)
-            }
-        }
-
-        sectionDivider()
-        optionButton("End session", systemImage: "xmark.circle", destructive: true) {
-            dismissThen(.confirmEnd)
-        }
-    }
-
-    @ViewBuilder
-    private var childSessionOptions: some View {
-        optionButton("View all", systemImage: "list.bullet") {
-            dismissThen(.showChildSession(nil))
-        }
-        ForEach(childAgents) { child in
-            optionDivider
-            optionButton(child.description, systemImage: child.status.menuSystemImage) {
-                dismissThen(.showChildSession(child.id))
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var modelOptions: some View {
-        ForEach(Array(modelSections.enumerated()), id: \.offset) { sectionIndex, section in
-            if sectionIndex > 0 { sectionDivider() }
-            Text(section.title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-
-            ForEach(Array(section.models.enumerated()), id: \.offset) { modelIndex, model in
-                if modelIndex > 0 { optionDivider }
-                optionButton(
-                    model,
-                    isSelected: agent == section.agent.rawValue && store.session(sid)?.model == model,
-                    disabled: switchingModels || sid.hasPrefix("local-")
-                ) {
-                    dismissOptions()
-                    Task {
-                        let selection = AgentModelSelection(agent: section.agent, model: model)
-                        if let id = await store.switchModel(sid, to: selection) {
-                            store.requestSelection(id)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var assigneeOptions: some View {
-        optionButton("Unassigned") {
-            dismissOptions()
-            Task { await store.assign(sid, nil) }
-        }
-        ForEach(store.users, id: \.self) { user in
-            optionDivider
-            optionButton(user) {
-                dismissOptions()
-                Task { await store.assign(sid, user) }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var transferOptions: some View {
-        ForEach(Array(transferTargets.enumerated()), id: \.element.id) { index, target in
-            if index > 0 { optionDivider }
-            optionButton(
-                target.label,
-                systemImage: "desktopcomputer",
-                disabled: transferring
-            ) {
-                dismissOptions()
-                Task { await transfer(to: target) }
-            }
-        }
-    }
-
-    private var optionDivider: some View {
-        Divider().padding(.leading, 50)
-    }
-
-    private func sectionDivider(_ title: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Divider()
-            if let title {
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 14)
-            }
-        }
-        .padding(.top, 7)
-    }
-
-    private func optionButton(
-        _ title: String,
-        systemImage: String? = nil,
-        identifier: String? = nil,
-        showsChevron: Bool = false,
-        isSelected: Bool = false,
-        disabled: Bool = false,
-        destructive: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(role: destructive ? .destructive : nil, action: action) {
-            HStack(spacing: 12) {
-                if let systemImage {
-                    Image(systemName: systemImage)
-                        .frame(width: 24)
-                } else {
-                    Color.clear.frame(width: 24, height: 1)
-                }
-
-                Text(title)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .fontWeight(.semibold)
-                } else if showsChevron {
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .foregroundStyle(destructive ? Color.red : Color.primary)
-            .padding(.horizontal, 14)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .disabled(disabled)
-        .accessibilityIdentifier(identifier ?? "")
-    }
-
-    private var switchingModels: Bool {
-        store.switchingModelSessionIds.contains(sid)
-    }
-
-    private var modelSections: [SessionHandoff.ModelSection] {
-        SessionHandoff.modelSections(
+        let switching = store.switchingModelSessionIds.contains(sid)
+        let models = SessionHandoff.modelSections(
             current: AgentKind(rawValue: agent) ?? .claude,
             closed: closed,
             catalog: store.modelCatalog(forSession: sid)
-        )
+        ).map { section in
+            let target = section.agent
+            return UIMenu(title: section.title, options: .displayInline,
+                children: section.models.map { model in
+                    action(model, identifier: "switch_model_\(target.rawValue)_\(model)",
+                        attributes: switching || sid.hasPrefix("local-") ? .disabled : [],
+                        state: agent == target.rawValue && store.session(sid)?.model == model ? .on : .off) {
+                        Task {
+                            if let id = await store.switchModel(sid, to: AgentModelSelection(agent: target, model: model)) {
+                                store.requestSelection(id)
+                            }
+                        }
+                    }
+                })
+        }
+        primary.append(UIMenu(
+            title: switching ? "Switching model…" : "Switch model",
+            image: UIImage(systemName: "cpu"),
+            children: models
+        ))
+
+        var assignees: [UIMenuElement] = [
+            action("Unassigned") { Task { await store.assign(sid, nil) } }
+        ]
+        assignees.append(contentsOf: store.users.map { user in
+            action(user) { Task { await store.assign(sid, user) } }
+        })
+        primary.append(UIMenu(
+            title: "Assign to",
+            image: UIImage(systemName: "person"),
+            children: assignees
+        ))
+
+        primary.append(action("Rename", systemImage: "pencil", handler: onRename))
+
+        if let frame = store.browserFrames[sid],
+           frame.frameId == dismissedBrowserFrameID {
+            primary.append(action(
+                "Show Browser Preview",
+                systemImage: "safari",
+                handler: onRestoreBrowserPreview
+            ))
+        }
+
+        if canFork {
+            primary.append(action(
+                forking ? "Forking…" : "Fork session",
+                systemImage: "arrow.triangle.branch",
+                attributes: forking ? .disabled : []
+            ) {
+                Task { await forkSession() }
+            })
+        }
+
+        if canTransfer {
+            let targets = transferTargets.map { target in
+                action(
+                    target.label,
+                    systemImage: "desktopcomputer",
+                    attributes: transferring ? .disabled : []
+                ) {
+                    Task { await transfer(to: target) }
+                }
+            }
+            primary.append(UIMenu(
+                title: transferring ? "Moving…" : "Move to host",
+                image: UIImage(systemName: "arrow.left.arrow.right"),
+                children: targets
+            ))
+        }
+
+        if ManualUnread.canMarkUnread(sid) {
+            if store.isManuallyUnread(sid) {
+                primary.append(action("Mark as read", systemImage: "envelope.open") {
+                    store.markRead(sid)
+                })
+            } else {
+                primary.append(action("Mark as unread", systemImage: "envelope.badge") {
+                    markUnreadAndExit()
+                })
+            }
+        }
+
+        var debug: [UIMenuElement] = []
+        if let tmuxIdentifier, !tmuxIdentifier.isEmpty {
+            debug.append(action("tmux · \(tmuxIdentifier)", systemImage: "terminal") {
+                copyToClipboard(tmuxIdentifier)
+            })
+        }
+        if !sid.isEmpty {
+            debug.append(action("\(agentIdLabel) · \(sid)", systemImage: "number") {
+                copyToClipboard(sid)
+            })
+        }
+
+        return [
+            UIMenu(options: .displayInline, children: primary),
+            UIMenu(title: "Debug — tap to copy", options: .displayInline, children: debug),
+            UIMenu(options: .displayInline, children: [
+                action("End session", systemImage: "xmark.circle", attributes: .destructive,
+                       handler: onConfirmEnd)
+            ])
+        ]
     }
 
-    private func dismissOptions() {
-        showingOptions = false
-        page = .root
-    }
-
-    private func dismissThen(_ action: DeferredAction) {
-        deferredAction = action
-        dismissOptions()
-    }
-
-    private func perform(_ action: DeferredAction) {
-        switch action {
-        case .showPhoneSignIn(let id): onShowPhoneSignIn(id)
-        case .showAttachments: onShowAttachments()
-        case .openTerminal: onOpenTerminal()
-        case .showInversionSpike: onShowInversionSpike()
-        case .showChildSession(let id): onShowChildSessions(id)
-        case .rename: onRename()
-        case .restoreBrowserPreview: onRestoreBrowserPreview()
-        case .confirmEnd: onConfirmEnd()
+    private func action(
+        _ title: String,
+        systemImage: String? = nil,
+        identifier: String? = nil,
+        attributes: UIMenuElement.Attributes = [],
+        state: UIMenuElement.State = .off,
+        handler: @escaping @MainActor () -> Void
+    ) -> UIAction {
+        UIAction(
+            title: title,
+            image: systemImage.flatMap(UIImage.init(systemName:)),
+            identifier: identifier.map(UIAction.Identifier.init(rawValue:)),
+            attributes: attributes,
+            state: state
+        ) { _ in
+            MainActor.assumeIsolated { handler() }
         }
     }
 
@@ -1967,6 +1819,55 @@ private struct SessionOptionsMenu: View {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
+}
+
+/// A UIKit pull-down button whose root menu identity never changes after mount.
+/// `updateUIView` only replaces the deferred builder, so a live SwiftUI update can
+/// affect the next presentation without disturbing the one the user is scrolling.
+private struct NativeSessionOptionsButton: UIViewRepresentable {
+    let makeElements: @MainActor () -> [UIMenuElement]
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(makeElements: makeElements)
+    }
+
+    func makeUIView(context: Context) -> UIButton {
+        let button = UIButton(type: .system)
+        // Preserve the system toolbar/menu source and its Liquid Glass, but let
+        // SessionOptionsNavigationBarProxy own the glyph outside this subtree.
+        button.setImage(UIImage(systemName: "ellipsis.circle"), for: .normal)
+        button.tintColor = .clear
+        button.contentHorizontalAlignment = .center
+        button.contentVerticalAlignment = .center
+        button.setContentHuggingPriority(.required, for: .horizontal)
+        button.setContentHuggingPriority(.required, for: .vertical)
+        button.isAccessibilityElement = false
+        button.accessibilityIdentifier = "sessionOptionsMenuSource"
+        button.showsMenuAsPrimaryAction = true
+        button.menu = UIMenu(children: [
+            UIDeferredMenuElement.uncached { [weak coordinator = context.coordinator] completion in
+                guard let coordinator else {
+                    completion([])
+                    return
+                }
+                completion(MainActor.assumeIsolated { coordinator.makeElements() })
+            }
+        ])
+        return button
+    }
+
+    func updateUIView(_ button: UIButton, context: Context) {
+        context.coordinator.makeElements = makeElements
+    }
+
+    @MainActor
+    final class Coordinator {
+        var makeElements: @MainActor () -> [UIMenuElement]
+
+        init(makeElements: @escaping @MainActor () -> [UIMenuElement]) {
+            self.makeElements = makeElements
+        }
+    }
 }
 
 /// The 180° flip that makes the transcript an inverted list.
