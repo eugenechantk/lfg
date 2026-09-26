@@ -38,6 +38,13 @@ import Testing
         #expect(sections[1].models == ["claude-opus-5-5", "claude-fable-5-1"])
     }
 
+    @Test func crossProviderSwitchStatusNamesTheDestinationProvider() {
+        #expect(SessionHandoff.crossProviderSwitchStatus(from: .claude, to: .codex) == "Switching to Codex…")
+        #expect(SessionHandoff.crossProviderSwitchStatus(from: .codex, to: .claude) == "Switching to Claude…")
+        #expect(SessionHandoff.crossProviderSwitchStatus(from: .claude, to: .claude) == nil)
+        #expect(SessionHandoff.crossProviderSwitchStatus(from: .codex, to: .codex) == nil)
+    }
+
     @Test func closedSessionUsesHostWithFreshestKnownCopy() {
         let a = Host(url: "http://a.test")
         let b = Host(url: "http://b.test")

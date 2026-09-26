@@ -70,6 +70,10 @@ struct LFGApp: App {
                 SessionSendFollowFixture()
                     .environment(settings)
                     .environment(store)
+            } else if ProcessInfo.processInfo.environment["LFG_MODEL_SWITCH_STATUS_FIXTURE"] == "1" {
+                CrossProviderSwitchStatusFixture()
+                    .environment(settings)
+                    .environment(store)
             } else if ProcessInfo.processInfo.environment["LFG_LOCAL_COMMAND_OUTPUT_FIXTURE"] == "1" {
                 NavigationStack {
                     LocalCommandOutputFixture()
@@ -95,6 +99,33 @@ struct LFGApp: App {
         }
     }
 }
+
+#if DEBUG
+/// Network-free harness for the cross-provider title-bar status.
+/// Launch with `LFG_MODEL_SWITCH_STATUS_FIXTURE=1`.
+struct CrossProviderSwitchStatusFixture: View {
+    var body: some View {
+        NavigationStack {
+            Color(.systemBackground)
+                .ignoresSafeArea()
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        SessionTitleBarContent(
+                            title: "Cross-provider model switch",
+                            hostLabel: nil,
+                            modelSwitchStatus: "Switching to Codex…",
+                            isMovingHost: false,
+                            isBusy: false,
+                            path: "/tmp/lfg-model-switch-fixture",
+                            onTitleTapped: {}
+                        )
+                    }
+                }
+        }
+        .accessibilityIdentifier("crossProviderSwitchStatusFixture")
+    }
+}
+#endif
 
 /// Persisted connection + filter settings. Multi-host: the client fans out to
 /// every configured `Host` (each an `lfg serve` machine on the Tailscale net),

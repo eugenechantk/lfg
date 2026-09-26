@@ -172,6 +172,11 @@ struct SessionDetailView: View {
     }
     private var isMovingHost: Bool { store.isMovingHost(sid) }
     private var childAgents: [ChildAgentSession] { store.childAgentsBySession[sid] ?? [] }
+    private var crossProviderSwitchStatus: String? {
+        guard let source = AgentKind(rawValue: session.agent),
+              let target = store.switchingModelTargetsBySession[sid] else { return nil }
+        return SessionHandoff.crossProviderSwitchStatus(from: source, to: target)
+    }
 
     /// Owning host's short label, shown as a pill in the title area in multi-host
     /// setups (a single-host client has nothing to disambiguate).
@@ -1003,50 +1008,16 @@ struct SessionDetailView: View {
     @ToolbarContentBuilder
     private var toolbarMenu: some ToolbarContent {
         ToolbarItem(placement: .principal) {
-            VStack(spacing: 1) {
-                // Titles are whole sentences (the session's first prompt), so the
-                // one-line nav-bar title almost always truncates. Tapping it opens
-                // a popover with the full text rather than expanding the bar, which
-                // would reflow the status/path line under it on every session.
-                Text(displayTitle)
-                    .font(.headline)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.easeOut(duration: 0.18)) { showFullTitle.toggle() }
-                    }
-                    .accessibilityIdentifier("sessionTitle")
-                    .accessibilityHint("Shows the full session title")
-                HStack(spacing: 5) {
-                    if let host = hostLabel {
-                        Text(host)
-                            .font(.caption2)
-                            .padding(.horizontal, 6).padding(.vertical, 1)
-                            .background(Color(.tertiarySystemFill), in: Capsule())
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .accessibilityIdentifier("sessionHostPill")
-                    }
-                    if isMovingHost || isBusy {
-                        ProgressView().controlSize(.mini)
-                        Text(isMovingHost ? "Moving host…" : "Running")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .accessibilityIdentifier("sessionActivityStatus")
-                    } else if let path = headerPath {
-                        // No status text while idle — surface the working path there
-                        // instead so it's clear which directory this session drives.
-                        Text(path)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.head)   // keep the meaningful tail visible
-                    }
-                }
+            SessionTitleBarContent(
+                title: displayTitle,
+                hostLabel: hostLabel,
+                modelSwitchStatus: crossProviderSwitchStatus,
+                isMovingHost: isMovingHost,
+                isBusy: isBusy,
+                path: headerPath
+            ) {
+                withAnimation(.easeOut(duration: 0.18)) { showFullTitle.toggle() }
             }
-            .animation(.easeInOut(duration: 0.2), value: isBusy)
-            .animation(.easeInOut(duration: 0.2), value: isMovingHost)
         }
 
         ToolbarItem(placement: .topBarTrailing) {
@@ -1143,6 +1114,66 @@ struct SessionDetailView: View {
         return nil
     }
 
+}
+
+/// The navigation bar's principal content, kept independent of transcript state
+/// so activity transitions remain stable and can be verified in isolation.
+struct SessionTitleBarContent: View {
+    let title: String
+    let hostLabel: String?
+    let modelSwitchStatus: String?
+    let isMovingHost: Bool
+    let isBusy: Bool
+    let path: String?
+    let onTitleTapped: () -> Void
+
+    var body: some View {
+        VStack(spacing: 1) {
+            // Titles are whole sentences, so keep the bar to one line and let
+            // SessionDetailView reveal the full title when this is tapped.
+            Text(title)
+                .font(.headline)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onTitleTapped)
+                .accessibilityIdentifier("sessionTitle")
+                .accessibilityHint("Shows the full session title")
+            HStack(spacing: 5) {
+                if let hostLabel {
+                    Text(hostLabel)
+                        .font(.caption2)
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(Color(.tertiarySystemFill), in: Capsule())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .accessibilityIdentifier("sessionHostPill")
+                }
+                if let modelSwitchStatus {
+                    ProgressView().controlSize(.mini)
+                    Text(modelSwitchStatus)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("sessionModelSwitchStatus")
+                } else if isMovingHost || isBusy {
+                    ProgressView().controlSize(.mini)
+                    Text(isMovingHost ? "Moving host…" : "Running")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("sessionActivityStatus")
+                } else if let path {
+                    Text(path)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: isBusy)
+        .animation(.easeInOut(duration: 0.2), value: isMovingHost)
+        .animation(.easeInOut(duration: 0.2), value: modelSwitchStatus)
+    }
 }
 
 /// The custom full-width glass fade owns the navigation backdrop on iOS 26.

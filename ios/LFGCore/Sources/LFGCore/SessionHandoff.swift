@@ -30,6 +30,13 @@ public enum SessionHandoff {
         return closed ? .resume : .inPlace
     }
 
+    /// Title-bar activity shown only while the session is changing providers.
+    /// Same-provider model changes keep the session's ordinary activity/path.
+    public static func crossProviderSwitchStatus(from source: AgentKind, to target: AgentKind) -> String? {
+        guard source != target else { return nil }
+        return "Switching to \(target.displayName)…"
+    }
+
     /// Live sources stay on their owner. Closed sessions have no live routing
     /// entry: use a reachable host that actually advertised this transcript.
     public static func sourceHost(

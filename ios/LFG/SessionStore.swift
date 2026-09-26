@@ -4562,6 +4562,9 @@ import LFGCore
     }
 
     private(set) var switchingModelSessionIds: Set<String> = []
+    /// Destination provider for an in-flight model switch. The title bar uses
+    /// this to name cross-provider handoffs while the options menu is dismissed.
+    private(set) var switchingModelTargetsBySession: [String: AgentKind] = [:]
 
     func switchModel(_ sourceID: String, to selection: AgentModelSelection) async -> String? {
         guard !switchingModelSessionIds.contains(sourceID),
@@ -4578,7 +4581,11 @@ import LFGCore
             return nil
         }
         switchingModelSessionIds.insert(sourceID)
-        defer { switchingModelSessionIds.remove(sourceID) }
+        switchingModelTargetsBySession[sourceID] = selection.agent
+        defer {
+            switchingModelSessionIds.remove(sourceID)
+            switchingModelTargetsBySession.removeValue(forKey: sourceID)
+        }
         do {
             let route = SessionHandoff.modelSwitchRoute(from: sourceAgent, to: selection.agent, closed: source.closed)
             if route == .inPlace {
