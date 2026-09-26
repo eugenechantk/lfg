@@ -537,65 +537,101 @@ struct PausedBannerView: View {
 struct PendingStripView: View {
     let sessionID: String
     let items: [SessionStore.PendingSend]
-    /// Tapping an in-flight (not-failed) message surfaces remove / edit / send-now.
-    var onTap: (SessionStore.PendingSend) -> Void = { _ in }
+    /// Returns an edited queued message to the owning composer.
+    var onEdit: (String) -> Void = { _ in }
     @Environment(SessionStore.self) private var store
 
     var body: some View {
         if !items.isEmpty {
             VStack(spacing: 6) {
                 ForEach(items) { item in
-                    HStack(spacing: 8) {
-                        if item.queuedOffline {
-                            Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
-                        } else if item.failed {
-                            Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red)
-                        } else {
-                            ProgressView().controlSize(.mini)
+                    if item.failed {
+                        pendingRow(item)
+                    } else {
+                        // A Menu is presented from its label's own bounds. Keeping
+                        // it inside each ForEach row gives UIKit the tapped row as
+                        // the source rect instead of the session screen's origin.
+                        Menu {
+                            queuedMessageActions(for: item)
+                        } label: {
+                            pendingRow(item)
                         }
-                        Text(item.displayText)
-                            .font(.caption).lineLimit(1).foregroundStyle(.secondary)
-                        Spacer(minLength: 0)
-                        if item.queuedOffline {
-                            // An offline-queued message is waiting on the phone,
-                            // not on the host — but the user still needs to be
-                            // able to force it through or take it back, same as
-                            // any server-tracked send. Carry the same
-                            // ellipsis affordance so the row reads as tappable.
-                            Text("Queued")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Image(systemName: "ellipsis.circle").font(.caption).foregroundStyle(.tertiary)
-                        } else if item.failed {
-                            Button("Retry") { Task { await store.retryPending(sessionID, item) } }
-                                .font(.caption2).buttonStyle(.bordered).controlSize(.mini)
-                        } else if item.queuedForResume {
-                            // Waking a closed session. Labelled the same as any
-                            // other queued message on purpose — from here it is
-                            // one: the host has it, nothing has run it yet. It
-                            // stays this way until the reopened session's
-                            // transcript carries the turn, at which point it
-                            // becomes a real accent bubble.
-                            Text("Queued")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Image(systemName: "ellipsis.circle").font(.caption).foregroundStyle(.tertiary)
-                        } else {
-                            // Affordance hint that the queued message is tappable.
-                            Image(systemName: "ellipsis.circle").font(.caption).foregroundStyle(.tertiary)
-                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Queued message options")
+                        .accessibilityHint("Shows actions for this queued message")
+                        .accessibilityIdentifier(rowAccessibilityIdentifier(for: item))
                     }
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(.quaternary.opacity(0.4), in: Capsule())
-                    .contentShape(Capsule())
-                    .accessibilityIdentifier(
-                        item.queuedForResume ? "pendingStripRowResuming" : "pendingStripRow")
-                    // Failed rows carry their own inline Retry button, so a tap
-                    // there would compete with it; everything else opens the menu.
-                    .onTapGesture { if !item.failed { onTap(item) } }
                 }
             }
         }
+    }
+
+    private func pendingRow(_ item: SessionStore.PendingSend) -> some View {
+        HStack(spacing: 8) {
+            if item.queuedOffline {
+                Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
+            } else if item.failed {
+                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red)
+            } else {
+                ProgressView().controlSize(.mini)
+            }
+            Text(item.displayText)
+                .font(.caption).lineLimit(1).foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            if item.queuedOffline {
+                Text("Queued")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Image(systemName: "ellipsis.circle").font(.caption).foregroundStyle(.tertiary)
+            } else if item.failed {
+                Button("Retry") { Task { await store.retryPending(sessionID, item) } }
+                    .font(.caption2).buttonStyle(.bordered).controlSize(.mini)
+            } else if item.queuedForResume {
+                Text("Queued")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Image(systemName: "ellipsis.circle").font(.caption).foregroundStyle(.tertiary)
+            } else {
+                Image(systemName: "ellipsis.circle").font(.caption).foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 5)
+        .background(.quaternary.opacity(0.4), in: Capsule())
+        .contentShape(Capsule())
+        .accessibilityIdentifier(rowAccessibilityIdentifier(for: item))
+    }
+
+    @ViewBuilder
+    private func queuedMessageActions(for item: SessionStore.PendingSend) -> some View {
+        // A resume kickoff is not a server queue entry, so only removal is honest.
+        if item.queuedForResume && !item.queuedOffline {
+            Button("Remove", role: .destructive) {
+                Task { await store.removeQueued(sessionID, item) }
+            }
+            .accessibilityIdentifier("queuedMessageRemoveButton")
+        } else {
+            Button(item.queuedOffline ? "Try sending now" : "Send now (interrupt)") {
+                Task { await store.sendQueuedNow(sessionID, item) }
+            }
+            .accessibilityIdentifier("queuedMessageSendNowButton")
+            Button("Edit") {
+                Task {
+                    if let editable = await store.editQueued(sessionID, item) {
+                        onEdit(editable)
+                    }
+                }
+            }
+            .accessibilityIdentifier("queuedMessageEditButton")
+            Button("Remove", role: .destructive) {
+                Task { await store.removeQueued(sessionID, item) }
+            }
+            .accessibilityIdentifier("queuedMessageRemoveButton")
+        }
+        Button("Cancel", role: .cancel) {}
+    }
+
+    private func rowAccessibilityIdentifier(for item: SessionStore.PendingSend) -> String {
+        item.queuedForResume ? "pendingStripRowResuming" : "pendingStripRow"
     }
 }
 

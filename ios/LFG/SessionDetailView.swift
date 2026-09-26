@@ -45,8 +45,6 @@ struct SessionDetailView: View {
     @State private var showFullTitle = false
     @State private var newTitle = ""
     @State private var confirmEnd = false
-    /// The queued message the user tapped (drives the remove / edit / send-now sheet).
-    @State private var queueAction: SessionStore.PendingSend?
     @State private var isAtBottom = true
     @State private var composerFocused = false
     @State private var followupFocusRequest = 0
@@ -355,42 +353,6 @@ struct SessionDetailView: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") { Task { await store.rename(sid, newTitle) } }
         }
-        .confirmationDialog(
-            "Queued message",
-            isPresented: Binding(get: { queueAction != nil }, set: { if !$0 { queueAction = nil } }),
-            titleVisibility: .visible,
-            presenting: queueAction
-        ) { item in
-            // A message waking a closed session is the resumed process's kickoff
-            // argument, not a queue entry — there is nothing to interrupt and
-            // nothing to pull back and edit. Offering either would be a no-op
-            // dressed as an action. Remove is still honest: it stops showing the
-            // row here (the reopened session will surface the real turn anyway),
-            // which is the escape hatch if a resume never lands.
-            if item.queuedForResume && !item.queuedOffline {
-                Button("Remove", role: .destructive) { Task { await store.removeQueued(sid, item) } }
-                Button("Cancel", role: .cancel) {}
-            } else {
-                // An offline-queued message never reached the host, so there is no
-                // running turn to interrupt — "send now" just means try the host
-                // again instead of waiting for the reconnect drain.
-                Button(item.queuedOffline ? "Try sending now" : "Send now (interrupt)") {
-                    Task { await store.sendQueuedNow(sid, item) }
-                }
-                .accessibilityIdentifier("queuedMessageSendNowButton")
-                Button("Edit") {
-                    Task {
-                        if let editable = await store.editQueued(sid, item) { draft = editable }
-                    }
-                }
-                .accessibilityIdentifier("queuedMessageEditButton")
-                Button("Remove", role: .destructive) { Task { await store.removeQueued(sid, item) } }
-                    .accessibilityIdentifier("queuedMessageRemoveButton")
-                Button("Cancel", role: .cancel) {}
-            }
-        } message: { item in
-            Text(item.displayText)
-        }
         .confirmationDialog("End this session?", isPresented: $confirmEnd, titleVisibility: .visible) {
             // Gated on the result: `close` returns false and sets `lastError` when
             // the server could not reap the agent. Dismissing regardless made a
@@ -458,8 +420,8 @@ struct SessionDetailView: View {
             // as a transcript bubble. It becomes a blue bubble only when
             // the real user turn comes back from the host, so "queued" and
             // "received" never look the same.
-            PendingStripView(sessionID: sid, items: pendingBars) { tapped in
-                queueAction = tapped
+            PendingStripView(sessionID: sid, items: pendingBars) { editable in
+                draft = editable
             }
             .padding(.horizontal, 16)
 
@@ -1329,20 +1291,28 @@ private struct SessionOptionsNavigationBarProxy: UIViewRepresentable {
         }
 
         private static func navigationBar(in view: UIView) -> UINavigationBar? {
-            if let navigationBar = view as? UINavigationBar,
-               !navigationBar.isHidden,
-               navigationBar.alpha > 0 {
-                return navigationBar
+            var pending = [view]
+            while let candidate = pending.popLast() {
+                if let navigationBar = candidate as? UINavigationBar,
+                   !navigationBar.isHidden,
+                   navigationBar.alpha > 0 {
+                    return navigationBar
+                }
+                pending.append(contentsOf: candidate.subviews)
             }
-            return view.subviews.lazy.compactMap(navigationBar(in:)).first
+            return nil
         }
 
         private static func sessionOptionsSource(in view: UIView) -> UIButton? {
-            if let button = view as? UIButton,
-               button.accessibilityIdentifier == "sessionOptionsMenuSource" {
-                return button
+            var pending = [view]
+            while let candidate = pending.popLast() {
+                if let button = candidate as? UIButton,
+                   button.accessibilityIdentifier == "sessionOptionsMenuSource" {
+                    return button
+                }
+                pending.append(contentsOf: candidate.subviews)
             }
-            return view.subviews.lazy.compactMap(sessionOptionsSource(in:)).first
+            return nil
         }
     }
 }
@@ -1799,7 +1769,10 @@ private struct SessionOptionsMenu: View {
             attributes: attributes,
             state: state
         ) { _ in
-            MainActor.assumeIsolated { handler() }
+            // UIKit normally invokes actions on the main thread, but this is a
+            // runtime callback rather than a compiler-proven actor boundary.
+            // Hop instead of asserting so an off-main delivery cannot trap.
+            Task { @MainActor in handler() }
         }
     }
 
@@ -1885,11 +1858,17 @@ private struct NativeSessionOptionsButton: UIViewRepresentable {
         button.showsMenuAsPrimaryAction = true
         button.menu = UIMenu(children: [
             UIDeferredMenuElement.uncached { [weak coordinator = context.coordinator] completion in
-                guard let coordinator else {
-                    completion([])
-                    return
+                // Deferred menu providers may be resolved asynchronously. The
+                // builder reads MainActor-owned SwiftUI/store state, so always
+                // hop rather than using MainActor.assumeIsolated (which traps if
+                // UIKit calls this closure from a worker queue).
+                Task { @MainActor in
+                    guard let coordinator else {
+                        completion([])
+                        return
+                    }
+                    completion(coordinator.makeElements())
                 }
-                completion(MainActor.assumeIsolated { coordinator.makeElements() })
             }
         ])
         return button

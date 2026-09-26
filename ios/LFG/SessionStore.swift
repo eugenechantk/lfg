@@ -4025,7 +4025,16 @@ import LFGCore
         busy[id] = true
 
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(queued ? 4_000 : 700))
+            // UI evidence needs enough time to inspect the queued row and open
+            // its source-anchored menu. This DEBUG-only flag keeps that state
+            // stable without changing the normal fixture or production send.
+            let holdQueued = queued
+                && ProcessInfo.processInfo.environment[
+                    "LFG_SEND_FOLLOW_FIXTURE_HOLD_QUEUED"
+                ] == "1"
+            try? await Task.sleep(for: holdQueued
+                ? .seconds(60)
+                : .milliseconds(queued ? 4_000 : 700))
             guard let self else { return }
             self.transcripts[id, default: []].append(SessionMessage(
                 id: "fixture-landed-\(pendingID)",
