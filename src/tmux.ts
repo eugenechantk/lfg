@@ -762,14 +762,19 @@ export function spawnManagedCodexSession(opts: {
   return { ok: true };
 }
 
-// Codex 0.135 can show an update selector before the composer, which strands a
+// Codex can show an update selector before the composer, which strands a
 // dashboard-spawned pane until someone manually presses "Skip". Dismiss only
 // that exact startup prompt; normal permission/question selectors are left for
-// the dashboard's prompt-answer flow.
+// the dashboard's prompt-answer flow. Newer releases changed the heading from
+// "Update available!" to "Update available · old → new", so key off the stable
+// words plus the selector's exact Skip option.
+export function isCodexUpdatePrompt(pane: string): boolean {
+  return /Update available\b/i.test(pane) && /\b2\.\s+Skip\b/.test(pane);
+}
+
 export function dismissCodexUpdatePrompt(target: string): boolean {
   const pane = capturePane(target);
-  if (!pane || !/Update available!/i.test(pane) || !/\b2\.\s+Skip\b/.test(pane))
-    return false;
+  if (!pane || !isCodexUpdatePrompt(pane)) return false;
   Bun.spawnSync(["tmux", "send-keys", "-t", target, "-l", "2"]);
   Bun.spawnSync(["tmux", "send-keys", "-t", target, "Enter"]);
   return true;

@@ -23,6 +23,11 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     public var tmuxTarget: String?
     public var tmuxName: String?
     public var managed: Bool?
+    /// `external` means another frontend owns the live writer. LFG may read the
+    /// transcript but must fork before sending; nil is the legacy direct case.
+    public var control: String?
+    /// Best-effort frontend label used only for explanatory product copy.
+    public var source: String?
     /// Best-effort "mid-turn" baseline from the REST list. Used to correct a
     /// stale "Working" badge for sessions the live SSE stream doesn't cover (or
     /// whose busy delta was missed across a reconnect). nil on older servers.
@@ -74,6 +79,46 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
 
     public var isBlocked: Bool { status == "blocked" }
     public var isClaude: Bool { agent == "claude" }
+    public var isExternallyOwned: Bool { control == "external" }
+    public var externalOwnerName: String? {
+        guard isExternallyOwned else { return nil }
+        switch source {
+        case "chatgpt-desktop": return "ChatGPT Desktop"
+        case "claude-desktop": return "Claude Desktop"
+        case "codex-app-server": return "Codex desktop client"
+        case "terminal": return agent == "claude" ? "Claude Code on desktop" : "Codex on desktop"
+        default: return "another desktop client"
+        }
+    }
+
+    /// Turn a source/display snapshot into the immediate client-side row for a
+    /// server-confirmed LFG fork. A concurrent session-list poll can observe the
+    /// short-lived app-server between `thread/fork` and TUI attachment and cache
+    /// the new id as externally owned. The fork response is newer and stronger
+    /// evidence: LFG has opened the branch and returned its managed tmux name.
+    /// The next authoritative list refresh fills in the pane target and title.
+    public mutating func markAsLFGFork(
+        sessionId: String,
+        tmuxName: String?,
+        cwd: String?,
+        nowMs: Double = Date().timeIntervalSince1970 * 1_000
+    ) {
+        self.sessionId = sessionId
+        self.tmuxName = tmuxName
+        self.tmuxTarget = nil
+        if let cwd, !cwd.isEmpty { self.cwd = cwd }
+        managed = true
+        control = "direct"
+        source = "lfg"
+        closed = false
+        busy = false
+        status = "ok"
+        statusReason = nil
+        statusDetail = nil
+        prompt = nil
+        startedAt = nowMs
+        lastActivityAt = nowMs
+    }
 
     /// Map retired AI-SDK agent values from old servers/persisted records onto
     /// the CLI kinds so downstream switches only ever see "claude"/"codex".
@@ -95,6 +140,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         assignedUser: String? = nil, parentSessionId: String? = nil, lastUserText: String? = nil,
         startedAt: Double? = nil, lastActivityAt: Double? = nil,
         tmuxTarget: String? = nil, tmuxName: String? = nil, managed: Bool? = nil,
+        control: String? = nil, source: String? = nil,
         busy: Bool? = nil, runningChildAgentCount: Int = 0,
         childAgents: [ChildAgentSession] = [],
         runningBackgroundProcessCount: Int = 0,
@@ -108,6 +154,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         self.lastUserText = lastUserText
         self.startedAt = startedAt; self.lastActivityAt = lastActivityAt
         self.tmuxTarget = tmuxTarget; self.tmuxName = tmuxName; self.managed = managed
+        self.control = control; self.source = source
         self.busy = busy; self.runningChildAgentCount = max(0, runningChildAgentCount)
         self.childAgents = childAgents
         self.runningBackgroundProcessCount = max(0, runningBackgroundProcessCount)
@@ -134,6 +181,8 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         tmuxTarget = try c.decodeIfPresent(String.self, forKey: .tmuxTarget)
         tmuxName = try c.decodeIfPresent(String.self, forKey: .tmuxName)
         managed = try c.decodeIfPresent(Bool.self, forKey: .managed)
+        control = try c.decodeIfPresent(String.self, forKey: .control)
+        source = try c.decodeIfPresent(String.self, forKey: .source)
         busy = try c.decodeIfPresent(Bool.self, forKey: .busy)
         runningChildAgentCount = max(
             0,

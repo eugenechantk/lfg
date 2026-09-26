@@ -4562,11 +4562,29 @@ import LFGCore
     /// the detail view deep-links straight into the fork. Routed to the source
     /// session's host.
     func fork(_ req: ForkRequest) async -> String? {
+        let source = session(req.sessionId)
+        let owner = host(forSession: req.sessionId)
         guard let client = client(forSession: req.sessionId) else { return nil }
         do {
             let resp = try await client.fork(req)
             await refresh()
-            return resp.sessionId
+            guard let id = resp.sessionId else { return nil }
+
+            // A regular poll can overlap the server's short-lived app-server
+            // fork and cache the new id as `external` before its managed TUI is
+            // attached. The successful fork response is the ownership handoff:
+            // publish that stronger fact now so navigation lands on a writable
+            // composer instead of another "Continue in LFG" notice.
+            if let index = sessions.firstIndex(where: { $0.sessionId == id }) {
+                sessions[index].markAsLFGFork(
+                    sessionId: id, tmuxName: resp.tmuxName, cwd: resp.cwd)
+            } else if var branch = source {
+                branch.markAsLFGFork(
+                    sessionId: id, tmuxName: resp.tmuxName, cwd: resp.cwd)
+                sessions.append(branch)
+            }
+            if let owner { hostBySession[id] = owner.id }
+            return id
         } catch { lastError = "Fork failed: \(error.localizedDescription)"; return nil }
     }
 

@@ -61,6 +61,7 @@ struct SessionDetailView: View {
     @State private var presentedSheet: PresentedSheet?
     /// The shell on this session's host (`TerminalScreen`), from the ••• menu.
     @State private var showTerminal = false
+    @State private var continuingInLFG = false
     /// How many of the newest messages the transcript actually renders. The store
     /// still holds the whole conversation — this bounds only what SwiftUI has to
     /// place. See `TranscriptWindow` for the profile that motivates it.
@@ -474,30 +475,48 @@ struct SessionDetailView: View {
                 .accessibilityIdentifier("phone_sign_in_request_button")
             }
 
-            MessageComposer(
-                text: $draft,
-                sending: isMovingHost,
-                focusRequest: followupFocusRequest,
-                onFocusChange: { isFocused in
-                    composerFocused = isFocused
-                    applyKeyboardTransition(
-                        occlusionHeight: keyboardOcclusionHeight,
-                        animation: .easeOut(duration: 0.25)
-                    )
-                }
-            ) { text, atts in
-                let wasAtBottom = isAtBottom
-                let shouldJump = TranscriptWindow.shouldJumpAfterSend(
-                    isAtBottom: wasAtBottom,
-                    composerFocused: composerFocused
+            if session.isExternallyOwned {
+                ExternalSessionComposerNotice(
+                    ownerName: session.externalOwnerName ?? "another desktop client",
+                    continuing: continuingInLFG,
+                    action: continueInLFG
                 )
-                // Capture reader intent before dispatch mutates the transcript.
-                // A reader at newest may need an explicit keyboard-aware follow;
-                // a reader in history must remain there through both optimistic
-                // insertion and reconciliation.
-                followSendUntilLanded = shouldJump
-                store.dispatchSend(sid, text: text, attachments: atts)
+            } else {
+                MessageComposer(
+                    text: $draft,
+                    sending: isMovingHost,
+                    focusRequest: followupFocusRequest,
+                    onFocusChange: { isFocused in
+                        composerFocused = isFocused
+                        applyKeyboardTransition(
+                            occlusionHeight: keyboardOcclusionHeight,
+                            animation: .easeOut(duration: 0.25)
+                        )
+                    }
+                ) { text, atts in
+                    let wasAtBottom = isAtBottom
+                    let shouldJump = TranscriptWindow.shouldJumpAfterSend(
+                        isAtBottom: wasAtBottom,
+                        composerFocused: composerFocused
+                    )
+                    // Capture reader intent before dispatch mutates the transcript.
+                    // A reader at newest may need an explicit keyboard-aware follow;
+                    // a reader in history must remain there through both optimistic
+                    // insertion and reconciliation.
+                    followSendUntilLanded = shouldJump
+                    store.dispatchSend(sid, text: text, attachments: atts)
+                }
             }
+        }
+    }
+
+    private func continueInLFG() {
+        guard !continuingInLFG, !sid.isEmpty else { return }
+        continuingInLFG = true
+        Task {
+            let newID = await store.fork(ForkRequest(sessionId: sid))
+            continuingInLFG = false
+            if let newID { store.requestSelection(newID) }
         }
     }
 
@@ -991,6 +1010,7 @@ struct SessionDetailView: View {
                 sid: sid,
                 agent: session.agent,
                 closed: session.closed,
+                externallyOwned: session.isExternallyOwned,
                 tmuxIdentifier: session.tmuxName ?? session.tmuxTarget,
                 isBusy: isBusy,
                 childAgents: childAgents,
@@ -1550,6 +1570,7 @@ private struct SessionOptionsMenu: View {
     let sid: String
     let agent: String
     let closed: Bool
+    let externallyOwned: Bool
     let tmuxIdentifier: String?
     let isBusy: Bool
     let childAgents: [ChildAgentSession]
@@ -1608,7 +1629,7 @@ private struct SessionOptionsMenu: View {
     private var menuElements: [UIMenuElement] {
         var primary: [UIMenuElement] = []
 
-        if isBusy {
+        if isBusy && !externallyOwned {
             primary.append(action("Stop", systemImage: "stop.circle", attributes: .destructive) {
                 Task { await store.interrupt(sid) }
             })
@@ -1634,12 +1655,16 @@ private struct SessionOptionsMenu: View {
             ))
         }
 
-        primary.append(action(
-            signInRequests.isEmpty ? "Sign in on iPhone" : "Sign in on iPhone (\(signInRequests.count))",
-            systemImage: "key"
-        ) { onShowPhoneSignIn(nil) })
+        if !externallyOwned {
+            primary.append(action(
+                signInRequests.isEmpty ? "Sign in on iPhone" : "Sign in on iPhone (\(signInRequests.count))",
+                systemImage: "key"
+            ) { onShowPhoneSignIn(nil) })
+        }
         primary.append(action("Files & Links", systemImage: "paperclip", handler: onShowAttachments))
-        primary.append(action("Open Terminal", systemImage: "apple.terminal", handler: onOpenTerminal))
+        if !externallyOwned {
+            primary.append(action("Open Terminal", systemImage: "apple.terminal", handler: onOpenTerminal))
+        }
         // PHASE-2 SPIKE entry — remove with the spike.
         primary.append(action("Spike: inverted transcript", systemImage: "arrow.up.arrow.down",
                               handler: onShowInversionSpike))
@@ -1664,11 +1689,13 @@ private struct SessionOptionsMenu: View {
                     }
                 })
         }
-        primary.append(UIMenu(
-            title: switching ? "Switching model…" : "Switch model",
-            image: UIImage(systemName: "cpu"),
-            children: models
-        ))
+        if !externallyOwned {
+            primary.append(UIMenu(
+                title: switching ? "Switching model…" : "Switch model",
+                image: UIImage(systemName: "cpu"),
+                children: models
+            ))
+        }
 
         var assignees: [UIMenuElement] = [
             action("Unassigned") { Task { await store.assign(sid, nil) } }
@@ -1695,7 +1722,7 @@ private struct SessionOptionsMenu: View {
 
         if canFork {
             primary.append(action(
-                forking ? "Forking…" : "Fork session",
+                forking ? "Continuing…" : (externallyOwned ? "Continue in LFG" : "Fork session"),
                 systemImage: "arrow.triangle.branch",
                 attributes: forking ? .disabled : []
             ) {
@@ -1744,14 +1771,17 @@ private struct SessionOptionsMenu: View {
             })
         }
 
-        return [
+        var sections: [UIMenuElement] = [
             UIMenu(options: .displayInline, children: primary),
-            UIMenu(title: "Debug — tap to copy", options: .displayInline, children: debug),
-            UIMenu(options: .displayInline, children: [
+            UIMenu(title: "Debug — tap to copy", options: .displayInline, children: debug)
+        ]
+        if !externallyOwned {
+            sections.append(UIMenu(options: .displayInline, children: [
                 action("End session", systemImage: "xmark.circle", attributes: .destructive,
                        handler: onConfirmEnd)
-            ])
-        ]
+            ]))
+        }
+        return sections
     }
 
     private func action(
@@ -1991,6 +2021,43 @@ struct OfflineComposerNotice: View {
         .padding(.vertical, 7)
         .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
         .padding(.horizontal, 16)
+    }
+}
+
+/// A live transcript whose writer belongs to another desktop frontend. Reading
+/// remains live; continuing creates a lineage-preserving LFG branch instead of
+/// racing the owner's writer lock or interrupting the desktop app.
+struct ExternalSessionComposerNotice: View {
+    let ownerName: String
+    let continuing: Bool
+    let action: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "desktopcomputer")
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 1)
+                Text("Open in \(ownerName). You can read it here; continuing creates an LFG branch from the latest saved turn.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button(action: action) {
+                HStack(spacing: 7) {
+                    if continuing { ProgressView().controlSize(.small) }
+                    Text(continuing ? "Continuing…" : "Continue in LFG")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(continuing)
+            .accessibilityIdentifier("continue_external_session")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.regularMaterial)
     }
 }
 

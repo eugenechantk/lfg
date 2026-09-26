@@ -49,6 +49,7 @@ import {
   previewLast,
   recentMessages,
   snapshotMessages,
+  codexForkHistoryBase,
   messagePage,
   byteBoundedPageStart,
   normalizeLineMessages,
@@ -63,6 +64,7 @@ import {
   transcriptSearchSyncing,
   cwdForTranscript,
   modelAliasForTranscript,
+  externalResumeError,
   type Session,
   type PendingPrompt,
 } from "../sessions.ts";
@@ -87,6 +89,7 @@ import {
 import { addManaged, forkLineageForSession, normalizeParentSessionId, patchManaged, removeManaged } from "../managed.ts";
 import { PtyBridge, restoreTermWindowAutoSize, termSessionName } from "../pty.ts";
 import { accessConfigFromEnv, authorizeTunnelledRequest, cachedJwks } from "../access-jwt.ts";
+import { forkCodexThreadViaAppServer } from "../codex-app-server.ts";
 import { TermScroll } from "../term-scroll.ts";
 import { capturePaneScroll, capturePaneEscaped, paneWidth, ensureFolderTrusted } from "../tmux.ts";
 import { rootDir, inboxDir, setInbox, createDir, expandUserPath } from "../dirs.ts";
@@ -258,6 +261,8 @@ async function resumeClosedSession(opts: {
   // Already running? Don't double-spawn — point the caller at the live one.
   const live = (await listSessions()).find((s) => s.sessionId === sessionId);
   if (live && (live.agent === "claude" || live.agent === "codex")) {
+    const ownershipError = externalResumeError(live);
+    if (ownershipError) return { ok: false, status: 409, error: ownershipError };
     const modelError = validateModelForAgent(live.agent, opts.model);
     if (modelError) return { ok: false, status: 400, error: modelError };
     return {
@@ -365,6 +370,50 @@ async function forkSession(opts: {
   if (modelError) return { ok: false, status: 400, error: modelError };
   const cwd = (await cwdForTranscript(transcript)) ?? SELF_REPO;
   if (agent === "codex") {
+    const live = (await listSessions()).find((session) => session.sessionId === sessionId);
+    if (live?.control === "external") {
+      let newId: string;
+      try {
+        newId = await forkCodexThreadViaAppServer({ threadId: sessionId, cwd, model: opts.model });
+        console.log(`[fork] codex external ${sessionId} → ${newId}`);
+      } catch (error) {
+        return {
+          ok: false,
+          status: 502,
+          error: error instanceof Error ? error.message : "Codex could not fork the desktop session",
+        };
+      }
+      const tmuxName = `lfg-${randomBytes(3).toString("hex")}`;
+      const spawnStartedAt = Date.now();
+      const r = spawnManagedCodexSession({ name: tmuxName, cwd, resume: newId });
+      if (!r.ok) return { ok: false, status: 502, error: r.error || "failed to open forked session" };
+      tmuxSetRemainOnExit(tmuxName, true);
+      addManaged({
+        tmuxName,
+        cwd,
+        createdAt: spawnStartedAt,
+        agent: "codex",
+        sessionId: newId,
+        forkedFrom: sessionId,
+      });
+      if (opts.user) assignUser(tmuxName, opts.user);
+      const failure = await awaitCodexBootstrap({
+        name: tmuxName,
+        watchMs: CODEX_RESUME_WATCH_MS,
+        pollMs: CODEX_RESUME_WATCH_POLL_MS,
+        onPid: (pid) => acquireLease(newId, pid),
+      });
+      if (failure) {
+        removeManaged(tmuxName);
+        assignUser(tmuxName, null);
+        tmuxKillSession(tmuxName);
+        await releaseLease(newId);
+        console.log(`[fork] codex external ${newId} failed to open: ${failure}`);
+        return { ok: false, status: 502, error: `Codex could not open the fork: ${failure}` };
+      }
+      tmuxSetRemainOnExit(tmuxName, false);
+      return { ok: true, tmuxName, cwd, newId, agent: "codex" };
+    }
     const tmuxName = `lfg-${randomBytes(3).toString("hex")}`;
     const spawnStartedAt = Date.now();
     const r = spawnManagedCodexSession({
@@ -765,6 +814,40 @@ async function messagePageFromSnapshot(
   };
 }
 
+function messagePageFromMessages(
+  all: Awaited<ReturnType<typeof snapshotMessages>>,
+  opts: { before?: number | null; limit?: number; pageMaxBytes?: number | null },
+): {
+  messages: Awaited<ReturnType<typeof snapshotMessages>>;
+  nextBefore: number | null;
+  total: number;
+} {
+  const limit = Math.max(1, Math.min(500, opts.limit ?? 220));
+  const rawEnd = opts.before ?? all.length;
+  const end = Math.max(0, Math.min(all.length, rawEnd));
+  const countBoundedStart = Math.max(0, end - limit);
+  const start = byteBoundedPageStart(all, countBoundedStart, end, opts.pageMaxBytes);
+  return {
+    messages: all.slice(start, end),
+    nextBefore: start > 0 ? start : null,
+    total: all.length,
+  };
+}
+
+async function materializedCodexForkMessages(
+  path: string,
+): Promise<Awaited<ReturnType<typeof snapshotMessages>> | null> {
+  const base = await codexForkHistoryBase(path);
+  if (!base) return null;
+  const source = await resolveTranscript(base.threadId);
+  if (!source || source === path) return null;
+  const [inherited, branch] = await Promise.all([
+    snapshotMessages(source, 0, { maxBytes: base.endByteOffset }),
+    recentMessages(path, 0, { maxBytes: null }),
+  ]);
+  return [...inherited, ...branch];
+}
+
 function backwardPageMaxBytes(url: URL): number | null {
   const raw = parseInt(url.searchParams.get("maxBytes") ?? "", 10);
   return Number.isFinite(raw)
@@ -812,6 +895,7 @@ export async function messagesResponseForSession(sid: string, url: URL): Promise
     forkPending = true;
     forkSourceBytes = lineage.forkSourceBytes ?? null;
   }
+  const materializedFork = forkPending ? null : await materializedCodexForkMessages(tp);
 
   if (url.searchParams.get("page") === "backward") {
     const rawLimit = parseInt(url.searchParams.get("limit") ?? "220", 10);
@@ -819,7 +903,13 @@ export async function messagesResponseForSession(sid: string, url: URL): Promise
     const before =
       rawBefore == null ? null : Math.max(0, parseInt(rawBefore, 10) || 0);
     const pageMaxBytes = backwardPageMaxBytes(url);
-    const page = forkPending
+    const page = materializedFork
+      ? messagePageFromMessages(materializedFork, {
+          before,
+          limit: Number.isFinite(rawLimit) ? rawLimit : 220,
+          pageMaxBytes,
+        })
+      : forkPending
       ? await messagePageFromSnapshot(tp, {
           before,
           limit: Number.isFinite(rawLimit) ? rawLimit : 220,
@@ -837,6 +927,7 @@ export async function messagesResponseForSession(sid: string, url: URL): Promise
       nextBefore: page.nextBefore,
       messages: page.messages,
       ...(forkPending ? { forkPending: true } : {}),
+      ...(materializedFork ? { forkedHistory: true } : {}),
     });
   }
 
@@ -845,13 +936,16 @@ export async function messagesResponseForSession(sid: string, url: URL): Promise
   const lim = full
     ? Math.max(0, Math.min(20000, Number.isFinite(rawLimit) ? rawLimit : 0))
     : Math.min(200, Math.max(1, Number.isFinite(rawLimit) ? rawLimit : 30));
-  const messages = forkPending
+  const messages = materializedFork
+    ? (lim > 0 ? materializedFork.slice(-lim) : materializedFork)
+    : forkPending
     ? await snapshotMessages(tp, lim, { maxBytes: forkSourceBytes })
     : await recentMessages(tp, lim, { maxBytes: full ? null : undefined });
   return json({
     id: sid,
     messages,
     ...(forkPending ? { forkPending: true } : {}),
+    ...(materializedFork ? { forkedHistory: true } : {}),
   });
 }
 
@@ -2587,8 +2681,12 @@ export async function cmdServe(options: {
               msg: msgBody,
             });
           }
-          if (!sess.tmuxTarget)
-            return err(409, "session is not in a tmux pane — cannot send");
+          if (!sess.tmuxTarget) {
+            return err(
+              409,
+              externalResumeError(sess) ?? "session is not in a tmux pane — cannot send",
+            );
+          }
           // Enqueue and return immediately; the queue confirms delivery in the
           // background and the client tracks status via the `queue` SSE event.
           const msg = enqueueMessage(m[1], text, { clientId });

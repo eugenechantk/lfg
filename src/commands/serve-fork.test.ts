@@ -13,10 +13,12 @@ import type { Session } from "../sessions.ts";
 
 const prevData = process.env.LFG_DATA;
 const prevProjects = process.env.LFG_CLAUDE_PROJECTS_DIR;
+const prevCodexSessions = process.env.LFG_CODEX_SESSIONS_DIR;
 const root = mkdtempSync(join(tmpdir(), "lfg-serve-fork-test-"));
 const dataDir = join(root, "data");
 const projectsDir = join(root, "projects");
 const projectDir = join(projectsDir, "p");
+const codexSessionsDir = join(root, "codex-sessions");
 
 const sourceSid = "00000000-0000-4000-8000-0000000000a1";
 const forkSid = "00000000-0000-4000-8000-0000000000f1";
@@ -27,6 +29,7 @@ const unknownSid = "00000000-0000-4000-8000-000000000099";
 beforeEach(() => {
   process.env.LFG_DATA = dataDir;
   process.env.LFG_CLAUDE_PROJECTS_DIR = projectsDir;
+  process.env.LFG_CODEX_SESSIONS_DIR = codexSessionsDir;
   rmSync(root, { recursive: true, force: true });
   mkdirSync(projectDir, { recursive: true });
 });
@@ -36,6 +39,8 @@ afterAll(() => {
   else process.env.LFG_DATA = prevData;
   if (prevProjects === undefined) delete process.env.LFG_CLAUDE_PROJECTS_DIR;
   else process.env.LFG_CLAUDE_PROJECTS_DIR = prevProjects;
+  if (prevCodexSessions === undefined) delete process.env.LFG_CODEX_SESSIONS_DIR;
+  else process.env.LFG_CODEX_SESSIONS_DIR = prevCodexSessions;
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -100,6 +105,64 @@ describe("fork /messages fallback", () => {
     );
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe("materialized Codex fork history", () => {
+  test("composes the inherited byte range with messages written in the branch", async () => {
+    const dir = join(codexSessionsDir, "2026", "09", "26");
+    mkdirSync(dir, { recursive: true });
+    const sourceMeta = JSON.stringify({
+      timestamp: "2026-09-26T00:00:00.000Z",
+      type: "session_meta",
+      payload: { id: sourceSid, cwd: "/repo", timestamp: "2026-09-26T00:00:00.000Z" },
+    }) + "\n";
+    const codexMessage = (role: "user" | "assistant", text: string) => JSON.stringify({
+      timestamp: "2026-09-26T00:00:01.000Z",
+      type: "response_item",
+      payload: {
+        type: "message", role,
+        content: [{ type: role === "user" ? "input_text" : "output_text", text }],
+        ...(role === "user" ? {
+          internal_chat_message_metadata_passthrough: { content_item_kinds: ["user.text"] },
+        } : {}),
+      },
+    }) + "\n";
+    const inherited = sourceMeta
+      + codexMessage("user", "desktop question")
+      + codexMessage("assistant", "desktop answer");
+    writeFileSync(join(dir, `rollout-source-${sourceSid}.jsonl`),
+      inherited + codexMessage("user", "written after fork"));
+    const branchMeta = JSON.stringify({
+      timestamp: "2026-09-26T00:01:00.000Z",
+      type: "session_meta",
+      payload: {
+        id: forkSid, cwd: "/repo", timestamp: "2026-09-26T00:01:00.000Z",
+        forked_from_id: sourceSid,
+        history_base: {
+          thread_id: sourceSid,
+          end_ordinal_exclusive: 3,
+          end_byte_offset: Buffer.byteLength(inherited),
+        },
+      },
+    }) + "\n";
+    writeFileSync(join(dir, `rollout-branch-${forkSid}.jsonl`),
+      branchMeta + codexMessage("assistant", "branch answer"));
+
+    const res = await messagesResponseForSession(
+      forkSid,
+      new URL(`http://lfg.test/api/sessions/${forkSid}/messages?full=1`),
+    );
+    const body = await res.json() as {
+      forkedHistory?: boolean;
+      messages: Array<{ text: string }>;
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.forkedHistory).toBe(true);
+    expect(body.messages.map((message) => message.text)).toEqual([
+      "desktop question", "desktop answer", "branch answer",
+    ]);
   });
 });
 

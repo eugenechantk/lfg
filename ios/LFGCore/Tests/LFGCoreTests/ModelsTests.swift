@@ -70,6 +70,24 @@ final class ModelsTests: XCTestCase {
         XCTAssertFalse(s1.hasPane)
     }
 
+    func testExternalSessionOwnershipDecodesAndDefaultsSafely() throws {
+        let json = Data("""
+        {"sessions":[
+          {"agent":"codex","sessionId":"desktop","title":"Desktop work",
+           "control":"external","source":"chatgpt-desktop"},
+          {"agent":"claude","sessionId":"legacy","title":"Old host"}
+        ]}
+        """.utf8)
+
+        let sessions = try JSONDecoder().decode(SessionsResponse.self, from: json).sessions
+        XCTAssertTrue(sessions[0].isExternallyOwned)
+        XCTAssertEqual(sessions[0].source, "chatgpt-desktop")
+        XCTAssertEqual(sessions[0].externalOwnerName, "ChatGPT Desktop")
+        XCTAssertFalse(sessions[1].isExternallyOwned)
+        XCTAssertNil(sessions[1].source)
+        XCTAssertNil(sessions[1].externalOwnerName)
+    }
+
     func testDecodeSessionChildAgentsLeniently() throws {
         // The list row carries the agents the badge counted (server folds them in
         // `withSessionWorkActivity`). Older servers omit the key → empty array.
@@ -271,5 +289,35 @@ final class ModelsTests: XCTestCase {
         )
 
         XCTAssertEqual(selection, .default)
+    }
+
+    func testMarkAsLFGForkClearsTransientExternalOwnership() {
+        var session = Session(
+            sessionId: "source", title: "Desktop thread", agent: "codex",
+            cwd: "/old", status: "blocked", statusReason: "writer_lock",
+            statusDetail: "owned elsewhere", startedAt: 10, lastActivityAt: 20,
+            control: "external", source: "codex-app-server", busy: true,
+            closed: true, prompt: AgentPrompt(question: "Update?", options: [])
+        )
+
+        session.markAsLFGFork(
+            sessionId: "branch", tmuxName: "lfg-abc123", cwd: "/repo", nowMs: 30)
+
+        XCTAssertEqual(session.sessionId, "branch")
+        XCTAssertEqual(session.tmuxName, "lfg-abc123")
+        XCTAssertNil(session.tmuxTarget)
+        XCTAssertEqual(session.cwd, "/repo")
+        XCTAssertEqual(session.control, "direct")
+        XCTAssertEqual(session.source, "lfg")
+        XCTAssertEqual(session.managed, true)
+        XCTAssertFalse(session.isExternallyOwned)
+        XCTAssertFalse(session.closed)
+        XCTAssertEqual(session.busy, false)
+        XCTAssertEqual(session.status, "ok")
+        XCTAssertNil(session.statusReason)
+        XCTAssertNil(session.statusDetail)
+        XCTAssertNil(session.prompt)
+        XCTAssertEqual(session.startedAt, 30)
+        XCTAssertEqual(session.lastActivityAt, 30)
     }
 }

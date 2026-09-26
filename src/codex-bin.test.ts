@@ -2,7 +2,26 @@ import { describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { codexBin, codexErrorFromPane, codexPaneSettled, parseCodexVersion, pickNewestCodex } from "./tmux.ts";
+import {
+  codexBin,
+  codexErrorFromPane,
+  codexPaneSettled,
+  isCodexUpdatePrompt,
+  parseCodexVersion,
+  pickNewestCodex,
+} from "./tmux.ts";
+
+describe("isCodexUpdatePrompt", () => {
+  it("recognizes both legacy and current Codex update headings", () => {
+    expect(isCodexUpdatePrompt("✨ Update available! 0.146.0 -> 0.153.4\n  2. Skip\n")).toBe(true);
+    expect(isCodexUpdatePrompt("Update available · 0.156.0 → 0.157.1\n  2. Skip\n")).toBe(true);
+  });
+
+  it("does not consume ordinary user prompts", () => {
+    expect(isCodexUpdatePrompt("Needs your input\n  2. Skip\n")).toBe(false);
+    expect(isCodexUpdatePrompt("Update available · 0.156.0 → 0.157.1\n  2. No, quit\n")).toBe(false);
+  });
+});
 
 describe("codexPaneSettled — the composer is the only positive bootstrap signal", () => {
   it("is true once BOTH the composer row and the model · cwd status line render", () => {

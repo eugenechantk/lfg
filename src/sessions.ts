@@ -77,7 +77,8 @@ function claudeProjectsDir(): string {
 }
 
 function codexSessionsDir(): string {
-  return join(process.env.HOME ?? homedir(), ".codex", "sessions");
+  return process.env.LFG_CODEX_SESSIONS_DIR
+    ?? join(process.env.HOME ?? homedir(), ".codex", "sessions");
 }
 
 export type SessionMsg = {
@@ -108,6 +109,13 @@ export type SessionMsg = {
 
 export type Session = {
   agent: "claude" | "codex";
+  // Whether LFG can send directly to the owning frontend. `external` means the
+  // transcript is readable, but another app/process owns the writer; callers
+  // must fork to continue without interrupting it.
+  control: "direct" | "external";
+  // Best-effort frontend label for product copy and diagnostics. Ownership is
+  // carried separately in `control` so behavior never depends on this label.
+  source: "lfg" | "chatgpt-desktop" | "claude-desktop" | "codex-app-server" | "terminal";
   pid: number;
   cmd: string;
   cwd: string | null;
@@ -580,6 +588,62 @@ export type CodexThread = {
   agentRole?: string | null;
   spawnDepth?: number | null;
 };
+
+export type SessionControl = Session["control"];
+export type SessionSource = Session["source"];
+
+export function sessionControl(tmuxTarget: string | null | undefined): SessionControl {
+  return tmuxTarget ? "direct" : "external";
+}
+
+export function sessionSource(opts: {
+  agent: Session["agent"];
+  cmd: string;
+  tmuxTarget: string | null | undefined;
+  managed: boolean;
+}): SessionSource {
+  if (opts.managed) return "lfg";
+  const command = opts.cmd.toLowerCase();
+  if (opts.agent === "codex" && command.includes("/chatgpt.app/")) return "chatgpt-desktop";
+  if (opts.agent === "claude" && command.includes("/claude.app/")) return "claude-desktop";
+  if (opts.agent === "codex" && /\bapp-server\b/.test(command)) return "codex-app-server";
+  return "terminal";
+}
+
+export function externalResumeError(
+  session: Pick<Session, "control" | "source">,
+): string | null {
+  if (session.control !== "external") return null;
+  const owner = session.source === "chatgpt-desktop"
+    ? "ChatGPT Desktop"
+    : session.source === "claude-desktop"
+      ? "Claude Desktop"
+      : session.source === "codex-app-server"
+        ? "another Codex desktop client"
+        : "another desktop client";
+  return `session is active in ${owner}; fork it to continue in LFG`;
+}
+
+export function codexAppServerClaims<T extends Pick<CodexThread, "id" | "path">>(opts: {
+  procs: Array<{ pid: number; cmd: string }>;
+  threads: T[];
+  openPathsByPid: ReadonlyMap<number, readonly string[]>;
+  claimedIds?: ReadonlySet<string>;
+}): Array<{ pid: number; cmd: string; thread: T }> {
+  const threadByPath = new Map(opts.threads.map((thread) => [thread.path, thread] as const));
+  const claimed = new Set(opts.claimedIds ?? []);
+  const out: Array<{ pid: number; cmd: string; thread: T }> = [];
+  for (const proc of opts.procs) {
+    if (!/\bapp-server\b/.test(proc.cmd)) continue;
+    for (const path of opts.openPathsByPid.get(proc.pid) ?? []) {
+      const thread = threadByPath.get(path);
+      if (!thread || claimed.has(thread.id)) continue;
+      claimed.add(thread.id);
+      out.push({ ...proc, thread });
+    }
+  }
+  return out;
+}
 
 function codexSubagentThread(thread: CodexThread): CodexSubagentThread {
   return {
@@ -3022,7 +3086,10 @@ async function listSessionsUncached(
       ...codexProcs.map((p) => p.pid),
     ]),
     primeOpenCodexRollouts(
-      codexProcs.filter((p) => !/\bapp-server\b/.test(p.cmd)).map((p) => p.pid),
+      // App-server processes are not rows by themselves, but a writable rollout
+      // descriptor is authoritative proof that a desktop frontend owns that
+      // thread. Prime them too so those threads can surface as external rows.
+      codexProcs.map((p) => p.pid),
     ),
   ]);
   const enriched = await Promise.all(
@@ -3115,6 +3182,7 @@ async function listSessionsUncached(
     const tmuxTarget =
       isHeadless(e.cmd) || !e.authoritative ? null : tmuxTargetForPid(e.pid);
     const tmuxName = tmuxTarget ? tmuxTarget.split(":")[0] : null;
+    const managedFields = managedFieldsForTmuxName(tmuxName, managedByName);
     const transcriptRecent =
       lastActivityAt != null && Date.now() - lastActivityAt < REST_BUSY_WINDOW_MS;
     const delegated = sessionId ? delegatedSessionIds.has(sessionId) : false;
@@ -3137,6 +3205,13 @@ async function listSessionsUncached(
         : null;
     out.push({
       agent: "claude",
+      control: sessionControl(tmuxTarget),
+      source: sessionSource({
+        agent: "claude",
+        cmd: e.cmd,
+        tmuxTarget,
+        managed: managedFields.managed,
+      }),
       pid: e.pid,
       cmd: e.cmd,
       cwd: e.cwd,
@@ -3159,7 +3234,7 @@ async function listSessionsUncached(
       // pane would hit the wrong session.
       tmuxTarget,
       tmuxName,
-      ...managedFieldsForTmuxName(tmuxName, managedByName),
+      ...managedFields,
       assignedUser: tmuxName ? (assigns[tmuxName] ?? null) : null,
       model,
       status: health.status,
@@ -3282,8 +3357,16 @@ async function listSessionsUncached(
       tmuxTarget && transcriptPath
         ? await sessionTurnState({ sessionId, transcriptPath })
         : null;
+    const managedFields = managedFieldsForTmuxName(tmuxName, managedByName);
     out.push({
       agent: "codex",
+      control: sessionControl(tmuxTarget),
+      source: sessionSource({
+        agent: "codex",
+        cmd: p.cmd,
+        tmuxTarget,
+        managed: managedFields.managed,
+      }),
       pid: p.pid,
       cmd: p.cmd,
       cwd,
@@ -3298,13 +3381,72 @@ async function listSessionsUncached(
       last,
       tmuxTarget,
       tmuxName,
-      ...managedFieldsForTmuxName(tmuxName, managedByName),
+      ...managedFields,
       assignedUser: tmuxName ? (assigns[tmuxName] ?? null) : null,
       // The native picker updates its footer immediately, but turn_context
       // retains the previous model until the next user turn. Prefer the live
       // footer so model menus do not revert their checkmark after a switch.
       model: (tmuxTarget ? codexModelFromPane(await capturePaneAsync(tmuxTarget)) : null)
         ?? liveModel ?? p.cmd.match(/--model\s+(\S+)/)?.[1] ?? null,
+      ...computeStatus(lastAssistant, null),
+    });
+  }
+
+  // A Codex app-server is a multi-thread engine, not one user-facing session,
+  // so the process itself stays suppressed. Its writable rollout descriptors,
+  // however, are the exact threads currently owned by that frontend. Surface
+  // one read-only row per such rollout; app-servers with no owned rollout still
+  // produce no phantom card.
+  const externalCodexClaims = codexAppServerClaims({
+    procs: codexProcs,
+    threads: codex,
+    openPathsByPid: new Map(
+      codexProcs.map((proc) => [proc.pid, openCodexRolloutPaths(proc.pid)] as const),
+    ),
+    claimedIds: claimedCodex,
+  });
+  for (const { pid, cmd, thread } of externalCodexClaims) {
+    claimedCodex.add(thread.id);
+    const transcriptPath = thread.path;
+    const [last, lastUser, liveModel, lastAssistant] = await Promise.all([
+      previewLast(transcriptPath).catch(() => null),
+      lastUserText(transcriptPath).catch(() => null),
+      lastCodexModel(transcriptPath).catch(() => null),
+      lastAssistantMsg(transcriptPath).catch(() => null),
+    ]);
+    let mtimeMs: number | null = null;
+    try {
+      mtimeMs = statSync(transcriptPath).mtimeMs;
+    } catch {}
+    const lastActivityAt = last?.ts ?? thread.lastRecordAt ?? mtimeMs;
+    const cwd = thread.cwd;
+    const project = projectName(cwd);
+    const title = overrides[thread.id]
+      || await firstPromptTitle(transcriptPath)
+      || (cwd ? basename(cwd) : project);
+    const turn = await sessionTurnState({ sessionId: thread.id, transcriptPath });
+    const delegated = delegatedSessionIds.has(thread.id);
+    out.push({
+      agent: "codex",
+      control: "external",
+      source: sessionSource({ agent: "codex", cmd, tmuxTarget: null, managed: false }),
+      pid,
+      cmd,
+      cwd,
+      project,
+      title,
+      lastUserText: lastUser,
+      sessionId: thread.id,
+      startedAt: thread.createdAt,
+      transcriptPath,
+      lastActivityAt,
+      busy: resolveBusy({ verdict: turn, paneBusy: false, delegated }),
+      last,
+      tmuxTarget: null,
+      tmuxName: null,
+      managed: false,
+      assignedUser: null,
+      model: liveModel,
       ...computeStatus(lastAssistant, null),
     });
   }
@@ -4204,6 +4346,42 @@ export async function snapshotMessages(
   }
   const collapsed = collapseCodexLifecycleMessages(msgs);
   return limit > 0 ? collapsed.slice(-limit) : collapsed;
+}
+
+export type CodexForkHistoryBase = {
+  threadId: string;
+  endByteOffset: number;
+};
+
+/**
+ * Codex stores a fork as a small rollout plus an immutable byte-range reference
+ * to its source rollout. The TUI/model understands that reference natively, but
+ * a plain JSONL reader does not. Expose the reference so HTTP transcript reads
+ * can render the same inherited conversation the resumed model receives.
+ */
+export async function codexForkHistoryBase(
+  path: string,
+): Promise<CodexForkHistoryBase | null> {
+  try {
+    const first = (await Bun.file(path).slice(0, 128 * 1024).text()).split("\n", 1)[0];
+    if (!first) return null;
+    const row = JSON.parse(first) as {
+      type?: unknown;
+      payload?: {
+        history_base?: { thread_id?: unknown; end_byte_offset?: unknown };
+      };
+    };
+    const base = row.type === "session_meta" ? row.payload?.history_base : null;
+    if (!base || typeof base.thread_id !== "string" || !UUID.test(base.thread_id)
+        || typeof base.end_byte_offset !== "number" || !Number.isFinite(base.end_byte_offset)
+        || base.end_byte_offset < 0) return null;
+    return {
+      threadId: base.thread_id,
+      endByteOffset: Math.floor(base.end_byte_offset),
+    };
+  } catch {
+    return null;
+  }
 }
 
 // A prompt read straight from the transcript's structured AskUserQuestion

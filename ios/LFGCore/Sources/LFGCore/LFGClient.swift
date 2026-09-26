@@ -636,7 +636,11 @@ public struct LFGClient: Sendable {
     public func fork(_ r: ForkRequest) async throws -> NewSessionResponse {
         let data = try await send("POST", "api/sessions/fork", json: [
             "sessionId": r.sessionId, "model": r.model, "user": r.user,
-        ])
+        // A Codex branch is not acknowledged until its new TUI has survived the
+        // server's 30-second bootstrap watch. Keep this above that bound (and in
+        // line with handoff) so a healthy branch cannot be orphaned merely because
+        // URLSession gave up before the server returned its new session id.
+        ], timeout: 90)
         return try JSONDecoder().decode(NewSessionResponse.self, from: data)
     }
 
