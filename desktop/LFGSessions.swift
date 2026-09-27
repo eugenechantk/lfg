@@ -2483,7 +2483,8 @@ enum DesktopFeatureTestCLI {
         let proEntry = Config.HostEntry(url: "http://localhost:8766", displayName: "Pro")
         let airEntry = Config.HostEntry(url: "https://lfg-air.example", ssh: "air", displayName: "Air", transport: .ssh)
         let proInfo = HostInfoResponse(hostId: "pro-id", hostName: "not-this-mac")
-        let airInfo = HostInfoResponse(hostId: "air-id", hostName: "Eugenes-MacBook-Air")
+        // Not a real hostname: the suite also runs ON the Air, where that name is local.
+        let airInfo = HostInfoResponse(hostId: "air-id", hostName: "test-remote-host")
         func liveRow(_ id: String, tmux: String?) -> APISession {
             APISession(agent: "codex", pid: 1, cwd: "/tmp", project: "p", title: "t", sessionId: id, busy: false,
                        lastActivityAt: 1, tmuxName: tmux, model: nil, status: nil, lastUserText: nil)
