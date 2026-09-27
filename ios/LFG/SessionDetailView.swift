@@ -1001,11 +1001,24 @@ struct SessionDetailView: View {
             }
         }
 
+        if #available(iOS 26.0, *) {
+            sessionOptionsToolbarItem
+                // The visible proxy owns an exact circle. Suppress the
+                // toolbar's extra horizontal chrome so it cannot turn that
+                // circle into a capsule.
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            sessionOptionsToolbarItem
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var sessionOptionsToolbarItem: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             // UIKit may temporarily hide its context-menu source while the
             // native menu dismisses. This button remains the real UIMenu source,
-            // while SessionOptionsNavigationBarProxy owns the visible glyph as
-            // an independent navigation-bar sibling.
+            // while SessionOptionsNavigationBarProxy owns the visible circular
+            // control as an independent navigation-bar sibling.
             SessionOptionsMenu(
                 sid: sid,
                 agent: session.agent,
@@ -1171,15 +1184,21 @@ private struct SessionNavigationBarBackdropVisibility: ViewModifier {
     }
 }
 
-/// Keeps the visible More glyph outside UIKit's native-menu source subtree.
+private extension Notification.Name {
+    static let sessionOptionsMenuDidDismiss = Notification.Name(
+        "sessionOptionsMenuDidDismiss"
+    )
+}
+
+/// Keeps the visible More control outside UIKit's native-menu source subtree.
 ///
 /// iOS 26 can temporarily hide the toolbar source view while dismissing a
 /// `UIMenu`. The real transparent `UIButton` remains in the system toolbar so
 /// UIKit still owns touch handling, anchoring, scrolling, submenus, and Liquid
-/// Glass. This proxy installs only a noninteractive glyph directly on the live
-/// `UINavigationBar`, where source-preview cleanup cannot remove it. It also
-/// owns the stable accessibility element because transparent navigation chrome
-/// otherwise omits the toolbar custom view from the runtime tree.
+/// Glass menu. This proxy installs a noninteractive circular control directly
+/// on the live `UINavigationBar`, where source-preview cleanup cannot remove it.
+/// It also owns the stable accessibility element because transparent navigation
+/// chrome otherwise omits the toolbar custom view from the runtime tree.
 private struct SessionOptionsNavigationBarProxy: UIViewRepresentable {
     func makeUIView(context: Context) -> InstallerView {
         InstallerView()
@@ -1190,12 +1209,14 @@ private struct SessionOptionsNavigationBarProxy: UIViewRepresentable {
     }
 
     static func dismantleUIView(_ view: InstallerView, coordinator: Void) {
-        view.detachGlyph()
+        view.detachControl()
     }
 
     final class InstallerView: UIView {
         private weak var navigationBar: UINavigationBar?
-        private weak var glyphView: UIImageView?
+        // Strong ownership is intentional: UIKit may temporarily detach views
+        // near the menu source while the dismissal preview is cleaned up.
+        private var controlView: UIView?
         private var sourceFrameInScreen: CGRect?
         private var installationScheduled = false
 
@@ -1206,6 +1227,12 @@ private struct SessionOptionsNavigationBarProxy: UIViewRepresentable {
             accessibilityLabel = "More"
             accessibilityIdentifier = "sessionOptionsMenu"
             accessibilityTraits = .button
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(menuDidDismiss(_:)),
+                name: .sessionOptionsMenuDidDismiss,
+                object: nil
+            )
         }
 
         required init?(coder: NSCoder) {
@@ -1215,7 +1242,7 @@ private struct SessionOptionsNavigationBarProxy: UIViewRepresentable {
         override func didMoveToWindow() {
             super.didMoveToWindow()
             if window == nil {
-                detachGlyph()
+                detachControl()
             } else {
                 scheduleInstallation()
             }
@@ -1223,7 +1250,7 @@ private struct SessionOptionsNavigationBarProxy: UIViewRepresentable {
 
         override func layoutSubviews() {
             super.layoutSubviews()
-            installGlyphIfPossible()
+            installControlIfPossible()
         }
 
         override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
@@ -1246,56 +1273,59 @@ private struct SessionOptionsNavigationBarProxy: UIViewRepresentable {
             set { super.accessibilityFrame = newValue }
         }
 
+        @objc private func menuDidDismiss(_ notification: Notification) {
+            guard let source = notification.object as? UIButton,
+                  let window,
+                  Self.sessionOptionsSource(in: window) === source else { return }
+            installControlIfPossible(forceReattach: true)
+        }
+
         func scheduleInstallation() {
             guard !installationScheduled else { return }
             installationScheduled = true
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 installationScheduled = false
-                installGlyphIfPossible()
+                installControlIfPossible()
             }
         }
 
-        func detachGlyph() {
-            glyphView?.removeFromSuperview()
-            glyphView = nil
+        func detachControl() {
+            controlView?.removeFromSuperview()
+            controlView = nil
             navigationBar = nil
             sourceFrameInScreen = nil
         }
 
-        private func installGlyphIfPossible() {
+        private func installControlIfPossible(forceReattach: Bool = false) {
             guard let window,
                   let currentBar = Self.navigationBar(in: window),
                   let source = Self.sessionOptionsSource(in: window) else { return }
 
             if navigationBar !== currentBar {
-                detachGlyph()
+                detachControl()
                 navigationBar = currentBar
             }
 
-            if glyphView == nil {
-                let configuration = UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
-                let glyph = UIImageView(image: UIImage(
-                    systemName: "ellipsis",
-                    withConfiguration: configuration
-                ))
-                glyph.tintColor = .label
-                glyph.contentMode = .center
-                glyph.isUserInteractionEnabled = false
-                glyph.isAccessibilityElement = false
-                // Stay above the transparent toolbar source even if SwiftUI
-                // reorders the navigation bar's private hosting subviews.
-                glyph.layer.zPosition = 10_000
-                currentBar.addSubview(glyph)
-                glyphView = glyph
+            if controlView == nil {
+                controlView = makeControlView()
             }
+            guard let controlView else { return }
+
+            if forceReattach || controlView.superview !== currentBar {
+                controlView.removeFromSuperview()
+                currentBar.addSubview(controlView)
+            }
+            controlView.isHidden = false
+            controlView.alpha = 1
+            currentBar.bringSubviewToFront(controlView)
 
             // SwiftUI/UIKit can resolve the toolbar item's position differently
             // from the navigation bar's geometric center. Follow the real menu
             // source center while keeping the full 44pt control footprint; the
             // inner UIButton itself reports only symbol-sized bounds.
             let sourceInBar = currentBar.convert(source.bounds, from: source)
-            glyphView?.frame = CGRect(
+            controlView.frame = CGRect(
                 x: sourceInBar.midX - 22,
                 y: sourceInBar.midY - 22,
                 width: 44,
@@ -1308,6 +1338,45 @@ private struct SessionOptionsNavigationBarProxy: UIViewRepresentable {
                 width: 44,
                 height: 44
             )
+        }
+
+        private func makeControlView() -> UIView {
+            let control: UIVisualEffectView
+            if #available(iOS 26.0, *) {
+                let effect = UIGlassEffect(style: .regular)
+                effect.isInteractive = true
+                control = UIVisualEffectView(effect: effect)
+            } else {
+                control = UIVisualEffectView(
+                    effect: UIBlurEffect(style: .systemChromeMaterial)
+                )
+            }
+
+            control.layer.cornerRadius = 22
+            control.layer.cornerCurve = .continuous
+            control.clipsToBounds = true
+            control.isUserInteractionEnabled = false
+            control.isAccessibilityElement = false
+            // Stay above the transparent toolbar source even if SwiftUI
+            // reorders the navigation bar's private hosting subviews.
+            control.layer.zPosition = 10_000
+
+            let configuration = UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
+            let glyph = UIImageView(image: UIImage(
+                systemName: "ellipsis",
+                withConfiguration: configuration
+            ))
+            glyph.tintColor = .label
+            glyph.contentMode = .center
+            glyph.isUserInteractionEnabled = false
+            glyph.isAccessibilityElement = false
+            glyph.translatesAutoresizingMaskIntoConstraints = false
+            control.contentView.addSubview(glyph)
+            NSLayoutConstraint.activate([
+                glyph.centerXAnchor.constraint(equalTo: control.contentView.centerXAnchor),
+                glyph.centerYAnchor.constraint(equalTo: control.contentView.centerYAnchor)
+            ])
+            return control
         }
 
         private static func navigationBar(in view: UIView) -> UINavigationBar? {
@@ -1874,9 +1943,9 @@ private struct NativeSessionOptionsButton: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> UIButton {
-        let button = UIButton(type: .system)
-        // Preserve the system toolbar/menu source and its Liquid Glass, but let
-        // SessionOptionsNavigationBarProxy own the glyph outside this subtree.
+        let button = StableSessionOptionsButton(type: .system)
+        // Preserve the system toolbar/menu source while the navigation-bar
+        // proxy owns all visible chrome outside this subtree.
         button.setImage(UIImage(systemName: "ellipsis"), for: .normal)
         button.tintColor = .clear
         button.contentHorizontalAlignment = .center
@@ -1914,6 +1983,36 @@ private struct NativeSessionOptionsButton: UIViewRepresentable {
 
         init(makeElements: @escaping @MainActor () -> [UIMenuElement]) {
             self.makeElements = makeElements
+        }
+    }
+}
+
+/// Reports the end of UIKit's native pull-down transition after its cleanup is
+/// complete. The proxy uses this callback to restore any view state UIKit
+/// temporarily changed while animating the menu back to its source.
+private final class StableSessionOptionsButton: UIButton {
+    override func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction,
+        willEndFor configuration: UIContextMenuConfiguration,
+        animator: (any UIContextMenuInteractionAnimating)?
+    ) {
+        super.contextMenuInteraction(
+            interaction,
+            willEndFor: configuration,
+            animator: animator
+        )
+
+        let notifyDismissal = { [weak self] in
+            guard let self else { return }
+            NotificationCenter.default.post(
+                name: .sessionOptionsMenuDidDismiss,
+                object: self
+            )
+        }
+        if let animator {
+            animator.addCompletion(notifyDismissal)
+        } else {
+            DispatchQueue.main.async(execute: notifyDismissal)
         }
     }
 }

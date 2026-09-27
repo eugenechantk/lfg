@@ -29,4 +29,36 @@ describe("iOS native session menu safety", () => {
     expect(proxySearches).not.toContain("compactMap(sessionOptionsSource(in:))");
     expect(proxySearches.match(/while let candidate = pending\.popLast\(\)/g)?.length).toBe(2);
   });
+
+  test("the visible More control is a strongly-owned circular glass proxy", async () => {
+    const source = await Bun.file(
+      import.meta.dir + "/../ios/LFG/SessionDetailView.swift",
+    ).text();
+    const start = source.indexOf("private struct SessionOptionsNavigationBarProxy");
+    const end = source.indexOf("/// A transparent 44-point", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+
+    const proxy = source.slice(start, end);
+    expect(proxy).toContain("private var controlView: UIView?");
+    expect(proxy).not.toContain("private weak var controlView");
+    expect(proxy).toContain("UIGlassEffect(style: .regular)");
+    expect(proxy).toContain("control.layer.cornerRadius = 22");
+    expect(source).toContain(".sharedBackgroundVisibility(.hidden)");
+  });
+
+  test("native menu dismissal restores the visible proxy", async () => {
+    const source = await Bun.file(
+      import.meta.dir + "/../ios/LFG/SessionDetailView.swift",
+    ).text();
+    const start = source.indexOf("private struct SessionOptionsNavigationBarProxy");
+    const end = source.indexOf("/// The 180° flip", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+
+    const menuBridge = source.slice(start, end);
+    expect(menuBridge).toContain("sessionOptionsMenuDidDismiss");
+    expect(menuBridge).toContain("animator.addCompletion");
+    expect(menuBridge).toContain("installControlIfPossible(forceReattach: true)");
+  });
 });
