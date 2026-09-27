@@ -1,6 +1,20 @@
 import SwiftUI
 import LFGCore
 
+private struct TranscriptPreviewFilesKey: EnvironmentKey {
+    static let defaultValue: [MediaRef]? = nil
+}
+
+extension EnvironmentValues {
+    /// Session-wide, file-only order shared by every inline transcript card.
+    /// `nil` means the index is not available in this rendering context, so the
+    /// card falls back to the attachments in its own message.
+    var transcriptPreviewFiles: [MediaRef]? {
+        get { self[TranscriptPreviewFilesKey.self] }
+        set { self[TranscriptPreviewFilesKey.self] = newValue }
+    }
+}
+
 // MARK: - Transcript message
 
 struct TranscriptMessageView: View {

@@ -317,6 +317,25 @@ public struct FilePreviewSequence: Equatable, Sendable {
             ? selected.id
             : files.first?.id
     }
+
+    /// Builds the pager used by an inline transcript attachment.
+    ///
+    /// Prefer the session-wide Files & Links order so opening a card in the
+    /// conversation has the same previous/next navigation as opening that file
+    /// from the index. During initial transcript loading the session index can
+    /// be absent or briefly stale, so retain the row's own attachments as a
+    /// safe fallback that always includes the card the user tapped.
+    public static func forInlinePreview(
+        sessionFiles: [MediaRef]?,
+        rowFiles: [MediaRef],
+        selected: MediaRef
+    ) -> FilePreviewSequence {
+        let sessionFiles = sessionFiles ?? []
+        let files = sessionFiles.contains(where: { $0.id == selected.id })
+            ? sessionFiles
+            : rowFiles
+        return FilePreviewSequence(files: files, selected: selected)
+    }
 }
 
 public enum TranscriptResourceIndex {

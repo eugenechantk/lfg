@@ -84,6 +84,10 @@ struct SessionDetailView: View {
     /// older rows can pass behind the stack.
     @State private var bottomChromeHeight: CGFloat = 0
     @State private var frozenTranscriptBottomContentMargin: CGFloat?
+    /// File-only session order used by inline attachment previews. Rebuilt only
+    /// when the transcript version changes so ordinary scrolling never repeats
+    /// the whole-transcript media scan.
+    @State private var transcriptPreviewFiles: [MediaRef]?
 
     /// Structural top is the visual bottom because the transcript is inverted.
     /// A scroll-content margin keeps this boundary outside the transcript's
@@ -214,6 +218,7 @@ struct SessionDetailView: View {
 
     var body: some View {
         sessionSurface
+            .environment(\.transcriptPreviewFiles, transcriptPreviewFiles)
             // Full title, revealed by tapping the (truncated) nav-bar title. An overlay
             // card rather than an expanded bar, because these titles are whole
             // sentences and can need several lines (see `fullTitle` for where the
@@ -287,6 +292,7 @@ struct SessionDetailView: View {
             followSendUntilLanded = false
             keyboardBottomClearance = 0
             frozenTranscriptBottomContentMargin = nil
+            transcriptPreviewFiles = nil
             #if DEBUG
             if draft.isEmpty { draft = debugInitialDraft }
             #endif
@@ -294,6 +300,14 @@ struct SessionDetailView: View {
             store.focus(sid)
             store.loadHistory(sid)   // store-owned: not cancelled by view churn
             await store.loadBrowserFrame(sid)
+        }
+        .task(id: "inline-file-index-\(sid)-\(store.transcriptVersion[sid] ?? 0)") {
+            let snapshot = messages
+            let files = await Task.detached(priority: .utility) {
+                TranscriptResourceIndex.collect(from: snapshot).files.map(\.ref)
+            }.value
+            guard !Task.isCancelled else { return }
+            transcriptPreviewFiles = files
         }
         .task(id: "model-catalog-\(sid)") {
             await store.loadModelCatalog(forSession: sid)

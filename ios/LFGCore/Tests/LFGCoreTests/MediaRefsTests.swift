@@ -145,6 +145,37 @@ struct FilePreviewSequenceTests {
         #expect(sequence.files.isEmpty)
         #expect(sequence.initialID == nil)
     }
+
+    @Test("inline preview uses the full session sequence when it contains the selection")
+    func inlineUsesSessionSequence() {
+        let sequence = FilePreviewSequence.forInlinePreview(
+            sessionFiles: [first, middle, last],
+            rowFiles: [middle, last],
+            selected: middle
+        )
+
+        #expect(sequence.files == [first, middle, last])
+        #expect(sequence.initialID == middle.id)
+    }
+
+    @Test("inline preview falls back to its row when the session index is unavailable or stale")
+    func inlineFallsBackToRowSequence() {
+        let unavailable = FilePreviewSequence.forInlinePreview(
+            sessionFiles: nil,
+            rowFiles: [middle, last],
+            selected: middle
+        )
+        let stale = FilePreviewSequence.forInlinePreview(
+            sessionFiles: [first],
+            rowFiles: [middle, last],
+            selected: middle
+        )
+
+        #expect(unavailable.files == [middle, last])
+        #expect(unavailable.initialID == middle.id)
+        #expect(stale.files == [middle, last])
+        #expect(stale.initialID == middle.id)
+    }
 }
 
 @Suite("File share names")

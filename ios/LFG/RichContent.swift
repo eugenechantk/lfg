@@ -375,6 +375,7 @@ private struct AuthenticatedImage: View {
 struct MediaAttachmentsView: View {
     let refs: [MediaRef]
     @Environment(\.hostFiles) private var hostFiles
+    @Environment(\.transcriptPreviewFiles) private var transcriptPreviewFiles
     @State private var viewing: MediaRef?
 
     var body: some View {
@@ -384,9 +385,13 @@ struct MediaAttachmentsView: View {
             }
         }
         .sheet(item: $viewing) { ref in
+            let sequence = FilePreviewSequence.forInlinePreview(
+                sessionFiles: transcriptPreviewFiles,
+                rowFiles: refs,
+                selected: ref
+            )
             FileViewerSheet(
-                ref: ref,
-                files: [ref],
+                sequence: sequence,
                 hostFiles: hostFiles
             )
         }
@@ -658,10 +663,16 @@ struct FileViewerSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     init(ref: MediaRef, files: [MediaRef], hostFiles: HostFiles?) {
-        let sequence = FilePreviewSequence(files: files, selected: ref)
+        self.init(
+            sequence: FilePreviewSequence(files: files, selected: ref),
+            hostFiles: hostFiles
+        )
+    }
+
+    init(sequence: FilePreviewSequence, hostFiles: HostFiles?) {
         self.sequence = sequence
         self.hostFiles = hostFiles
-        _selectedID = State(initialValue: sequence.initialID ?? ref.id)
+        _selectedID = State(initialValue: sequence.initialID ?? "")
     }
 
     private var selectedRef: MediaRef? {
