@@ -5881,6 +5881,45 @@ enum AttachCommandCLI {
     }
 }
 
+/// `lfg --open-session <sessionId> [resume-locally]`: refresh against every
+/// host, take the row the list would show for this session, and do exactly
+/// what clicking it does (`Opener.open`) — or, with `resume-locally`, what its
+/// "Resume locally" menu item does (`Opener.resumeLocally`). The only thing
+/// not exercised is the SwiftUI button calling one of those two lines, which
+/// is what makes it usable while the screen is locked.
+enum OpenSessionCLI {
+    static func runIfRequested() {
+        let args = CommandLine.arguments
+        guard args.dropFirst().first == "--open-session", args.count >= 3 else { return }
+        let id = args[2]
+        let resumeHere = args.dropFirst(3).first == "resume-locally"
+        let done = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var line = "{\"ok\":false,\"error\":\"no row for \(id)\"}"
+        Task { @MainActor in
+            let store = SessionStore()
+            await store.refresh()
+            guard let item = store.items.first(where: { $0.session.sessionId == id }) else {
+                done.signal(); return
+            }
+            let row = "\"host\":\"\(item.hostLabel)\",\"closed\":\(item.session.closed),"
+                + "\"tmux\":\"\(item.session.tmuxName ?? "")\",\"canOpen\":\(item.canOpen)"
+            let result = await Task.detached {
+                resumeHere ? Opener.resumeLocally(item) : Opener.open(item)
+            }.value
+            let quoted = (result ?? "opened").replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"").replacingOccurrences(of: "\n", with: " ")
+            line = "{\"ok\":\(result == nil),\(row),\"result\":\"\(quoted)\"}"
+            done.signal()
+        }
+        while done.wait(timeout: .now() + 0.05) == .timedOut {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+        }
+        print(line)
+        fflush(stdout)
+        Darwin.exit(0)
+    }
+}
+
 /// `lfg --resume-check <sessionId>`: what clicking a closed row would do, from
 /// the real hosts and the real synced lease, without opening a window. Also
 /// prints the agent binaries as THIS process resolved them — run the installed
@@ -6385,6 +6424,7 @@ struct LFGSessionsApp: App {
         MoveTestCLI.runIfRequested()
         AttachCommandCLI.runIfRequested()
         ResumeCheckCLI.runIfRequested()
+        OpenSessionCLI.runIfRequested()
         Opener.warmTransportProbe()
     }
 

@@ -96,3 +96,23 @@ this Mac's transcript trails the owning host's `lastActivityAt` by >60s (`transc
 
 Also: the Air's tmux had `mouse off` (the Pro's home-manager config sets it on) — no way to scroll
 over mosh. Set live and appended to the Air's `~/.tmux.conf` (backup `.bak-20260927`).
+
+## Round 4 — end-to-end verification (2026-09-28, both screens locked)
+
+Eugene asked whether I had clicked through it myself; I had not. Both Macs were locked (`lsappinfo
+front` = loginwindow, black `screencapture`), so axdriver saw only a stub window. Added
+`lfg --open-session <id> [resume-locally]`: a real `SessionStore.refresh()`, the row the list would
+show, then `Opener.open` / `Opener.resumeLocally` — the two calls the button and menu item make.
+
+| Check | How | Result |
+|---|---|---|
+| Open live Air session | `--open-session 01a0e2ae…` | window 15834; Air `lfg-b35207` gained client ttys009 80x80 |
+| Typing | iTerm `write text` into that window | "lfg typing test 123" appeared in the Air codex composer; cleared with ^U |
+| Scrolling | 5× SGR wheel-up `ESC[<64;20;10M` via the window | Air pane → copy-mode, scroll_position 20; iTerm `mouseReportingMode` = 2 (?1002, set by tmux via mosh) so a physical wheel emits these |
+| Resume before sync | disposable codex thread `01a0e3a0…` made + closed on the Air | refused: "transcript hasn't reached this Mac yet" |
+| Resume after sync (sha256 identical) | `--open-session 01a0e3a0… resume-locally` | lfgd-01a0e3a0 on the Pro, codex 0.156.0 up with the Air's history (READY 12:09) |
+| Continue | typed a message + Return | codex replied CONTINUED at 12:21 on the Pro |
+
+Not exercised: the physical SwiftUI click and a physical wheel (locked screens). Side findings: the Air's
+`/api/sessions/new` fails for codex ("Codex started but did not produce a session ID", HTTP 504);
+windows closed without detaching orphaned three mosh-servers on the Air (detached + killed).
