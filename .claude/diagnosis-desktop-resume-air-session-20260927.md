@@ -74,3 +74,25 @@ launcher) attached within 1s at 80x64; screenshot showed the Air codex session. 
 
 Side finding: `tell application id "com.eugenechan.lfg-desktop" to activate` launched a stale copy at
 `.codex/evidence/claude-codex-handoff/lfg.app` (LaunchServices had it registered). Launch by path.
+
+## Round 3 — "Resume locally" on the live Air session
+
+The context-menu "Resume locally" called `Opener.resumeLocally` directly — past the live-elsewhere
+check — while the session was still running on the Air (pid 56655). It still died instantly:
+
+- **PATH.** iTerm starts window commands with the Finder PATH, and tmux gives a new session the
+  creating client's PATH (it overrides `new-session -e PATH=…`, measured). `~/.bun/bin/codex` is
+  `#!/usr/bin/env node`: `env: node: No such file or directory`, exit 127 — reproduced from a
+  bare-env client on the Pro's real tmux server. Fix: the window script exports `Opener.agentPATH`
+  (bun, ~/.local, Homebrew, system) before running anything; verified live from a bare client.
+- **Stale copy.** The Pro's rollout was 22:33 / 62.7 MB vs the Air's 23:01 / 71.7 MB — an exact
+  byte prefix (sha256 of the Air's first 62,722,163 bytes matched), i.e. Syncthing ~45 min behind,
+  not diverged. Resuming it would continue from an old point and fork on the next sync.
+
+Fix: every local resume goes through `resumeLocally`, which now runs the live-elsewhere check itself
+(a click attaches to a live pane; "Resume locally" refuses and says where it runs) and refuses when
+this Mac's transcript trails the owning host's `lastActivityAt` by >60s (`transcriptLag`).
+154 assertions.
+
+Also: the Air's tmux had `mouse off` (the Pro's home-manager config sets it on) — no way to scroll
+over mosh. Set live and appended to the Air's `~/.tmux.conf` (backup `.bak-20260927`).

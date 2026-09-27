@@ -2391,8 +2391,13 @@ enum DesktopFeatureTestCLI {
         try expect(moshArgv.suffix(4).elementsEqual(["--", "/bin/sh", "-c", remoteAttach]),
                    "the remote command rides after `-- /bin/sh -c`")
         try expect(!FileManager.default.fileExists(atPath: scriptPath), "the window script deletes itself")
-        let sshArgv = try run(["-c", Opener.holdOnFailure(Opener.remoteAttachCommand(
-            sshTarget: "air", tmuxName: "lfg-abc123", moshPath: nil))], path: "\(rig.path):/usr/bin:/bin")
+        let childPATH = try run(["-c", Opener.holdOnFailure("\(rig.path)/fake-mosh \"$PATH\"")], path: "/usr/bin:/bin")
+        try expect(childPATH.first == Opener.agentPATH,
+                   "whatever iTerm's PATH, the window's command (and the tmux session it creates) gets the agent PATH")
+        // Bare, not through the window script: its `export PATH` would find the
+        // real ssh ahead of the fake. The script itself is covered above.
+        let sshArgv = try run(["-c", Opener.remoteAttachCommand(
+            sshTarget: "air", tmuxName: "lfg-abc123", moshPath: nil)], path: "\(rig.path):/usr/bin:/bin")
         try expect(sshArgv == ["-t", "-o", "ConnectTimeout=5", "air", remoteAttach],
                    "ssh receives the remote command as one argument")
         let tmuxArgv = try run(["-c", remoteAttach.replacingOccurrences(
@@ -2518,6 +2523,26 @@ enum DesktopFeatureTestCLI {
             sessionId: "s1", snapshots: airDown,
             lease: Opener.SyncedLease(hostId: "air-id", heartbeatAt: now.addingTimeInterval(-60), ended: true),
             now: now) else { throw TestFailure("an ended lease doesn't block") }
+
+        // The local copy lags the owner by Syncthing's delay; resuming it forks.
+        let airActivityMs = 1_790_521_268_206.0 // 23:01:08, the Air's last turn
+        try expect(Opener.transcriptLag(localModified: Date(timeIntervalSince1970: 1_790_519_600),
+                                        remoteLastActivityMs: airActivityMs).map { Int($0 / 60) } == 27,
+                   "a copy last written at 22:33 is 27 min behind a 23:01 turn")
+        try expect(Opener.transcriptLag(localModified: Date(timeIntervalSince1970: 1_790_521_300),
+                                        remoteLastActivityMs: airActivityMs) == nil,
+                   "a copy written after the last turn is current")
+        try expect(Opener.transcriptLag(localModified: Date(timeIntervalSince1970: 1_790_521_230),
+                                        remoteLastActivityMs: airActivityMs) == nil,
+                   "under a minute behind is clock skew, not lag")
+        try expect(Opener.transcriptLag(localModified: nil, remoteLastActivityMs: airActivityMs) == .infinity,
+                   "no local copy at all can't be resumed")
+        try expect(Opener.transcriptLag(localModified: nil, remoteLastActivityMs: nil) == nil,
+                   "nothing to compare against doesn't block")
+        let panePATH = Opener.agentPATH.split(separator: ":").map(String.init)
+        try expect(panePATH.first == NSHomeDirectory() + "/.bun/bin" && panePATH.contains("/opt/homebrew/bin")
+                    && panePATH.contains("/usr/bin"),
+                   "a resumed pane can find the bun codex AND the node it runs on, whatever the tmux server's PATH")
 
         // MARK: Hidden directories
         //
@@ -3493,19 +3518,7 @@ enum Opener {
         guard item.opensByResume else {
             return "This session is already running outside tmux, so lfg cannot attach to it."
         }
-        guard let id = s.sessionId else { return resumeLocally(item) }
-        switch resumeCheck(sessionId: id) {
-        case .resume:
-            return resumeLocally(item)
-        case .attach(let live):
-            return open(live) // has a tmuxName, so this attaches — never resumes again
-        case .runningOutsideTmux(let hostLabel):
-            return "This session is still running on \(hostLabel), outside tmux, so lfg can't attach to it. Continue it there."
-        case .heldByUnreachableHost(let minutesAgo):
-            return "Another machine was running this session \(minutesAgo) min ago and isn't answering, "
-                + "so lfg can't tell whether it still is. Resuming here would give the session two writers. "
-                + "Open it from that machine, or try again once it's reachable."
-        }
+        return resumeLocally(item, attachIfLive: true)
     }
 
     // MARK: Is a "closed" row really closed?
@@ -3617,12 +3630,7 @@ enum Opener {
     private static func syncedLease(for sessionId: String) -> SyncedLease? {
         let fm = FileManager.default
         let name = "\(sessionId).lease.json"
-        func subdirs(_ path: String) -> [String] {
-            ((try? fm.contentsOfDirectory(atPath: path)) ?? []).map { "\(path)/\($0)" }
-        }
-        let claudeDirs = subdirs(home + "/.claude/projects")
-        let codexDirs = subdirs(home + "/.codex/sessions").flatMap(subdirs).flatMap(subdirs)
-        for dir in claudeDirs + codexDirs {
+        for dir in transcriptDirs() {
             guard let data = fm.contents(atPath: "\(dir)/\(name)"),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let hostId = json["hostId"] as? String,
@@ -3652,13 +3660,45 @@ enum Opener {
         }
     }
 
-    static func resumeLocally(_ item: SessionItem) -> String? {
+    /// Every local resume goes through here — a row click (`attachIfLive`:
+    /// a session live in tmux somewhere is attached instead) and the
+    /// "Resume locally" menu item (it is refused instead: the user asked for
+    /// THIS Mac, and running it here too would fork the thread).
+    static func resumeLocally(_ item: SessionItem, attachIfLive: Bool = false) -> String? {
         let s = item.session
         guard let id = s.sessionId else {
             return "This session has no session id yet — nothing to resume."
         }
         guard let inner = resumeAgentCommand(agent: s.agent, sessionId: id) else {
             return "Only Claude and Codex sessions can be resumed across machines (this is \(s.agent))."
+        }
+        switch resumeCheck(sessionId: id) {
+        case .resume:
+            break
+        case .attach(let live) where attachIfLive || live.hostIsLocal:
+            return open(live) // has a tmuxName, so this attaches — never resumes again
+        case .attach(let live):
+            return "This session is still running on \(live.hostLabel). Stop it there first — resuming it here "
+                + "as well would give the thread two writers. (Click the row to open it where it runs.)"
+        case .runningOutsideTmux(let hostLabel):
+            return "This session is still running on \(hostLabel), outside tmux, so lfg can't attach to it. Continue it there."
+        case .heldByUnreachableHost(let minutesAgo):
+            return "Another machine was running this session \(minutesAgo) min ago and isn't answering, "
+                + "so lfg can't tell whether it still is. Resuming here would give the session two writers. "
+                + "Open it from that machine, or try again once it's reachable."
+        }
+        // The other Mac's last turns reach this one by Syncthing, which lags
+        // tens of minutes on a hot 70 MB rollout (2026-09-27: 22:33 here vs
+        // 23:01 on the Air). Resuming the old copy continues from an old point,
+        // and Syncthing then files the two histories as a conflict.
+        let local = localTranscript(for: id)
+        if let lag = transcriptLag(localModified: local.flatMap(modificationDate),
+                                   remoteLastActivityMs: item.hostIsLocal ? nil : s.lastActivityAt) {
+            return lag.isInfinite
+                ? "This session's transcript hasn't reached this Mac yet. Try again once Syncthing catches up."
+                : "This Mac's copy of the transcript is \(max(1, Int(lag / 60))) min behind \(item.hostLabel)'s — "
+                    + "Syncthing hasn't delivered the latest turns yet. Resuming now would continue from an older "
+                    + "point and fork the thread. Try again once it catches up."
         }
         // A missing binary kills the pane at once, tmux exits 0, and the
         // window vanishes with nothing to read — so say it here instead.
@@ -3676,6 +3716,57 @@ enum Opener {
         // -A: if we already opened this one, attach instead of erroring.
         let cmd = "\(shq(tmux)) new-session -A -s \(shq(tmuxName)) -c \(shq(cwd)) \(shq(inner))"
         return runInNewITermWindow(cmd)
+    }
+
+    /// PATH for everything a window runs (exported by `holdOnFailure`). iTerm
+    /// starts window commands with the Finder PATH (/usr/bin:/bin:/usr/sbin:
+    /// /sbin:/usr/local/bin), and tmux gives a new session its creating
+    /// client's PATH — it even overrides `new-session -e PATH=…`. So a resumed
+    /// `~/.bun/bin/codex`, a `#!/usr/bin/env node` script, couldn't find node
+    /// and died before printing anything (2026-09-27: `env: node: No such file
+    /// or directory`, exit 127). An agent that did start would be missing git,
+    /// rg, bun and gh as well.
+    static let agentPATH = ([home + "/.bun/bin", home + "/.local/bin", "/opt/homebrew/bin", "/opt/homebrew/sbin"]
+        + ["/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]).joined(separator: ":")
+
+    /// Seconds this Mac's transcript trails the owning host's last activity,
+    /// `.infinity` when there is no local copy at all, nil when it's current
+    /// (or there's nothing to compare against). A minute of slack covers clock
+    /// skew and the write that lands just after the activity stamp.
+    static func transcriptLag(localModified: Date?, remoteLastActivityMs: Double?) -> TimeInterval? {
+        guard let remoteLastActivityMs else { return nil }
+        guard let localModified else { return .infinity }
+        let lag = remoteLastActivityMs / 1000 - localModified.timeIntervalSince1970
+        return lag > 60 ? lag : nil
+    }
+
+    private static func modificationDate(_ url: URL) -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
+    }
+
+    /// The session's transcript on this Mac: `~/.claude/projects/<slug>/<id>.jsonl`
+    /// or `~/.codex/sessions/<y>/<m>/<d>/rollout-<ts>-<id>.jsonl`.
+    private static func localTranscript(for sessionId: String) -> URL? {
+        let fm = FileManager.default
+        for dir in transcriptDirs() {
+            let claude = URL(fileURLWithPath: "\(dir)/\(sessionId).jsonl")
+            if fm.fileExists(atPath: claude.path) { return claude }
+            let names = (try? fm.contentsOfDirectory(atPath: dir)) ?? []
+            if let rollout = names.first(where: { $0.hasPrefix("rollout-") && $0.hasSuffix("-\(sessionId).jsonl") }) {
+                return URL(fileURLWithPath: "\(dir)/\(rollout)")
+            }
+        }
+        return nil
+    }
+
+    /// Every directory a transcript (and its lease) can live in.
+    private static func transcriptDirs() -> [String] {
+        let fm = FileManager.default
+        func subdirs(_ path: String) -> [String] {
+            ((try? fm.contentsOfDirectory(atPath: path)) ?? []).map { "\(path)/\($0)" }
+        }
+        return subdirs(home + "/.claude/projects")
+            + subdirs(home + "/.codex/sessions").flatMap(subdirs).flatMap(subdirs)
     }
 
     /// tmux invocation that attaches to `tmuxName` after handing the window's
@@ -3752,10 +3843,12 @@ enum Opener {
     /// simulated `stty raw min 0 time 0`: the plain hold vanished, this held.
     ///
     /// `rm -f "$0"` first: sh already holds the file open, so the script cleans
-    /// up after itself without racing its own execution.
+    /// up after itself without racing its own execution. Then a real PATH —
+    /// see `agentPATH`.
     static func holdOnFailure(_ command: String) -> String {
         """
         rm -f "$0"
+        export PATH=\(shq(agentPATH))
         \(command)
         s=$?
         if [ $s -ne 0 ]; then
