@@ -28,6 +28,28 @@ public struct MediaRef: Identifiable, Equatable, Hashable, Sendable {
     public var id: String { raw }
     public var filename: String { label ?? (raw as NSString).lastPathComponent }
 
+    /// A safe local name for the system share sheet. A markdown label is often
+    /// prose ("Weather map") rather than a filename; retain it, but append the
+    /// source extension so iOS still identifies the item as an image, video,
+    /// PDF, or document and offers the corresponding activities.
+    public var shareFilename: String {
+        let sourceName: String
+        if (raw.hasPrefix("http://") || raw.hasPrefix("https://") || raw.hasPrefix("file://")),
+           let url = URL(string: raw) {
+            sourceName = FileShareExport.safeFilename(
+                url.lastPathComponent.removingPercentEncoding ?? url.lastPathComponent
+            )
+        } else {
+            sourceName = FileShareExport.safeFilename(raw)
+        }
+        let sourceExtension = (sourceName as NSString).pathExtension
+        let preferred = FileShareExport.safeFilename(label ?? sourceName)
+        guard !sourceExtension.isEmpty,
+              !preferred.lowercased().hasSuffix(".\(sourceExtension.lowercased())")
+        else { return preferred }
+        return "\(preferred).\(sourceExtension)"
+    }
+
     public init(raw: String, kind: MediaKind, label: String? = nil) {
         self.raw = raw; self.kind = kind
         self.label = (label?.isEmpty == false) ? label : nil

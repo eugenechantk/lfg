@@ -86,6 +86,8 @@ struct LFGApp: App {
                 NavigationStack {
                     TaskNotificationFixture()
                 }
+            } else if ProcessInfo.processInfo.environment["LFG_FILE_SHARE_FIXTURE"] == "1" {
+                FileShareFixture()
             } else {
                 RootView()
                     .environment(settings)

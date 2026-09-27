@@ -147,6 +147,49 @@ struct FilePreviewSequenceTests {
     }
 }
 
+@Suite("File share names")
+struct FileShareNameTests {
+    @Test("keeps the source extension when a friendly label omits it")
+    func friendlyLabelKeepsSourceExtension() {
+        let ref = MediaRef(
+            raw: "/exports/weather-map.png",
+            kind: .image,
+            label: "Weather map"
+        )
+
+        #expect(ref.shareFilename == "Weather map.png")
+    }
+
+    @Test("does not duplicate an extension already present in the label")
+    func labelWithExtensionIsPreserved() {
+        let ref = MediaRef(
+            raw: "/exports/final-report.pdf",
+            kind: .pdf,
+            label: "Board report.PDF"
+        )
+
+        #expect(ref.shareFilename == "Board report.PDF")
+    }
+
+    @Test("uses a safe source filename when there is no label")
+    func sourceFilenameIsSafe() {
+        let ref = MediaRef(raw: #"C:\exports\clip.mov"#, kind: .video)
+
+        #expect(ref.shareFilename == "clip.mov")
+    }
+
+    @Test("derives the type from a remote URL path rather than its query")
+    func remoteURLUsesPathExtension() {
+        let ref = MediaRef(
+            raw: "https://cdn.example.com/demo%20clip.MP4?download=1",
+            kind: .video,
+            label: "Demo clip"
+        )
+
+        #expect(ref.shareFilename == "Demo clip.MP4")
+    }
+}
+
 @Suite("Web links")
 struct LinkScannerTests {
     @Test("bare and markdown links are both found, labels preserved")

@@ -63,6 +63,13 @@ struct HostFiles: Sendable {
     func viewerURL(for ref: MediaRef) -> URL? {
         resolve(rawPath: ref.raw, maxWidth: ref.kind == .image ? Self.viewerImageWidth : nil)
     }
+
+    /// Sharing must use the original resource. Passing the viewer rendition to
+    /// the activity sheet would quietly save a downscaled JPEG instead of the
+    /// file the user asked for.
+    func shareURL(for ref: MediaRef) -> URL? {
+        resolve(rawPath: ref.raw)
+    }
 }
 
 /// Decoded inline images, keyed by URL, so a transcript row that leaves and
@@ -644,6 +651,9 @@ struct FileViewerSheet: View {
     @State private var selectedID: String
     @State private var imageIsZoomed = false
     @State private var pagingForward = true
+    @State private var shareRequest: MediaRef?
+    @State private var shareExport: PreparedFileShareExport?
+    @State private var shareError: String?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -684,11 +694,46 @@ struct FileViewerSheet: View {
             .navigationTitle(selectedRef?.filename ?? "File")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if let ref = selectedRef {
+                        if let shareRequest {
+                            ProgressView()
+                                .accessibilityLabel("Preparing \(shareRequest.filename) to share")
+                                .accessibilityIdentifier("filePreviewShareProgress")
+                        } else {
+                            Button {
+                                shareRequest = ref
+                            } label: {
+                                Image(systemName: "square.and.arrow.up")
+                            }
+                            .accessibilityLabel("Share \(ref.filename)")
+                            .accessibilityIdentifier("filePreviewShareButton")
+                        }
+                    }
                     Button("Done") { dismiss() }
                         .accessibilityIdentifier("filePreviewDoneButton")
                 }
             }
+        }
+        .sheet(item: $shareExport) { export in
+            FileActivitySheet(fileURL: export.fileURL)
+                .onDisappear { FileShareExport.cleanup(export) }
+        }
+        .alert(
+            "Couldn't share file",
+            isPresented: Binding(
+                get: { shareError != nil },
+                set: { if !$0 { shareError = nil } }
+            )
+        ) {
+            Button("OK") { shareError = nil }
+        } message: {
+            Text(shareError ?? "")
+        }
+        .task(id: shareRequest?.id) {
+            guard let request = shareRequest else { return }
+            await prepareShare(for: request)
+            if shareRequest?.id == request.id { shareRequest = nil }
         }
     }
 
@@ -720,7 +765,80 @@ struct FileViewerSheet: View {
             selectedID = sequence.files[destination].id
         }
     }
+
+    private func prepareShare(for ref: MediaRef) async {
+        guard let url = hostFiles?.shareURL(for: ref) else {
+            shareError = "This file isn't available on the host."
+            return
+        }
+
+        do {
+            let downloaded: URL
+            if let client = hostFiles?.client {
+                downloaded = try await client.downloadResource(from: url)
+            } else {
+                downloaded = try await URLSession.shared.download(from: url).0
+            }
+            guard !Task.isCancelled else { return }
+
+            let export = try FileShareExport.prepare(
+                downloadedFile: downloaded,
+                filename: ref.shareFilename
+            )
+            if Task.isCancelled {
+                FileShareExport.cleanup(export)
+                return
+            }
+            shareExport = export
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled else { return }
+            shareError = error.localizedDescription
+        }
+    }
 }
+
+/// Native activity sheet. A local file URL lets iOS infer the real UTI and
+/// supply type-specific actions such as Save Image, Save Video, or Save to Files.
+private struct FileActivitySheet: UIViewControllerRepresentable {
+    let fileURL: URL
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
+#if DEBUG
+/// Network-backed, deterministic harness for the complete activity-sheet flow.
+/// Launch with `LFG_FILE_SHARE_FIXTURE=1` while serving the `ios` directory on
+/// port 8877; the fixture intentionally uses a friendly label without an
+/// extension to prove the exported file still retains its `.png` type.
+struct FileShareFixture: View {
+    private var ref: MediaRef {
+        let environment = ProcessInfo.processInfo.environment
+        let raw = environment["LFG_FILE_SHARE_FIXTURE_URL"]
+            ?? "http://127.0.0.1:8877/LFG/Assets.xcassets/LaunchIcon.imageset/LaunchIcon.png"
+        let ext = (URL(string: raw)?.pathExtension ?? "png")
+        return MediaRef(
+            raw: raw,
+            kind: MediaKind.from(ext: ext) ?? .other,
+            label: environment["LFG_FILE_SHARE_FIXTURE_LABEL"] ?? "Launch Icon"
+        )
+    }
+
+    var body: some View {
+        let ref = ref
+        FileViewerSheet(
+            ref: ref,
+            files: [ref],
+            hostFiles: HostFiles(client: LFGClient(baseURL: URL(string: ref.raw)!))
+        )
+    }
+}
+#endif
 
 /// One page in the file preview. The pager only constructs its current page,
 /// so hidden videos cannot start playing beside the one the user is watching.
