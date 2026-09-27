@@ -106,6 +106,7 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+        NSPhotoLibraryAddUsageDescription: Save images and videos from session files to your photo library.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
   LFGWidgets:
