@@ -1484,11 +1484,28 @@ final class SessionStore: ObservableObject {
     }
 
     private func isLocalURL(_ url: String) -> Bool {
+        Self.isLocalURL(url)
+    }
+
+    private func matchesLocalHostname(_ reported: String?) -> Bool {
+        Self.matchesHostname(reported, localHostname: localHostname)
+    }
+
+    /// The same locality test `refresh` applies, for callers without a store.
+    nonisolated static func isLocal(url: String, reportedHostName: String?) -> Bool {
+        var local = ProcessInfo.processInfo.hostName.lowercased()
+        for suffix in [".local", ".lan", ".home"] where local.hasSuffix(suffix) {
+            local = String(local.dropLast(suffix.count))
+        }
+        return isLocalURL(url) || matchesHostname(reportedHostName, localHostname: local)
+    }
+
+    nonisolated private static func isLocalURL(_ url: String) -> Bool {
         guard let host = URL(string: url)?.host?.lowercased() else { return false }
         return host == "localhost" || host == "127.0.0.1" || host == "::1"
     }
 
-    private func matchesLocalHostname(_ reported: String?) -> Bool {
+    nonisolated private static func matchesHostname(_ reported: String?, localHostname: String) -> Bool {
         guard let reported else { return false }
         var name = reported.lowercased()
         for suffix in [".local", ".lan", ".home"] where name.hasSuffix(suffix) {
@@ -1526,9 +1543,12 @@ final class SessionStore: ObservableObject {
             remoteTransport: entry.transport,
             displayName: Config.normalizedDisplayName(entry.displayName)
         )
+        // 10s, not 4: the Air's tunnel serves /api/sessions in up to ~6s
+        // (measured 2026-09-27), and a timeout here blanks the whole host —
+        // its live rows vanish and synced "closed" phantoms take their place.
         let session = URLSession(configuration: {
             let c = URLSessionConfiguration.ephemeral
-            c.timeoutIntervalForRequest = 4
+            c.timeoutIntervalForRequest = 10
             return c
         }())
         do {
@@ -2241,7 +2261,7 @@ enum DesktopFeatureTestCLI {
                    "mosh-server is resolved through the remote login shell's PATH")
         try expect(moshAttach.contains("'--ssh=ssh -o ConnectTimeout=5'"), "mosh keeps the fail-fast connect timeout")
         try expect(moshAttach.contains(" 'me@studio' -- /bin/sh -c "), "mosh wraps the remote command in a shell")
-        try expect(moshAttach.contains("attach-session -t 'lfg-abc123'"), "mosh attaches the requested tmux session")
+        try expect(moshAttach.contains("attach-session -t '\\''lfg-abc123'\\''"), "mosh attaches the requested tmux session")
 
         let sshAttach = Opener.remoteAttachCommand(
             sshTarget: "me@studio",
@@ -2250,7 +2270,7 @@ enum DesktopFeatureTestCLI {
         )
         try expect(sshAttach.hasPrefix("ssh -t -o ConnectTimeout=5 'me@studio' "),
                    "remote attach falls back to ssh when mosh is missing")
-        try expect(sshAttach.contains("attach-session -t 'lfg-abc123'"), "ssh fallback attaches the same session")
+        try expect(sshAttach.contains("attach-session -t '\\''lfg-abc123'\\''"), "ssh fallback attaches the same session")
         try expect(!sshAttach.contains("mosh"), "ssh fallback doesn't reference mosh")
 
         let cloudflareItem = SessionItem(
@@ -2293,7 +2313,7 @@ enum DesktopFeatureTestCLI {
             sshTarget: "pro", tmuxName: "lfg-abc123", moshPath: "/Users/me/.local/bin/mosh-bridged")
         try expect(bridgedAttach.hasPrefix("'/Users/me/.local/bin/mosh-bridged' '--server=PATH=/opt/homebrew/bin:/usr/local/bin:$PATH exec mosh-server' '--ssh=ssh -o ConnectTimeout=5' 'pro' -- /bin/sh -c "),
                    "bridged attach is the mosh attach with the wrapper as the binary")
-        try expect(bridgedAttach.contains("attach-session -t 'lfg-abc123'"), "bridged attach targets the tmux session")
+        try expect(bridgedAttach.contains("attach-session -t '\\''lfg-abc123'\\''"), "bridged attach targets the tmux session")
         try expect(HostsSettingsView.transportDetail(.moshBridged) == "mosh (bridged over ssh)"
                     && HostsSettingsView.transportDetail(.ssh) == "ssh only"
                     && HostsSettingsView.transportDetail(.automatic) == "mosh/ssh",
@@ -2307,12 +2327,12 @@ enum DesktopFeatureTestCLI {
         try expect(localAttach.contains("set-option -w -t 'lfg-abc123' window-size latest"),
                    "attach releases the window back to the client's size")
         try expect(localAttach.hasSuffix("';' attach-session -t 'lfg-abc123'"),
-                   "the tmux command separator is a single-quoted argument — iTerm tokenizes, no shell")
+                   "the tmux command separator is a single-quoted argument, so sh hands tmux a literal `;`")
         try expect(localAttach.range(of: "window-size latest")!.upperBound
                     < localAttach.range(of: "attach-session")!.lowerBound,
                    "the option flip precedes the attach, so the attach is what resizes the window")
         for remote in [moshAttach, sshAttach] {
-            try expect(remote.contains("set-option -w -t 'lfg-abc123' window-size latest"),
+            try expect(remote.contains("set-option -w -t '\\''lfg-abc123'\\'' window-size latest"),
                        "remote attach releases the window too — this is where the bug shows up")
         }
 
@@ -2322,16 +2342,64 @@ enum DesktopFeatureTestCLI {
         // bounds of missing value" (2026-09-16, an unreachable Air). Every
         // window command is wrapped so a failure holds the window open.
         let held = Opener.holdOnFailure(localAttach)
-        try expect(held.hasPrefix("/bin/sh -c \"") && held.hasSuffix("\""),
-                   "window commands run under sh as one double-quoted iTerm argument")
-        try expect(held.contains("\(localAttach); s=$?;"),
+        try expect(held.contains("\n\(localAttach)\ns=$?\n"),
                    "the original command runs unchanged and its exit status is captured")
         try expect(held.contains("if [ $s -ne 0 ]") && held.contains("read _ </dev/tty"),
                    "a non-zero exit prints the status and waits for Return; a clean detach still closes")
         try expect(held.range(of: "stty sane </dev/tty")!.upperBound < held.range(of: "read _")!.lowerBound,
                    "the tty is reset before the wait — a crashed mosh-client leaves it raw with VMIN=0, where read returns EOF")
-        try expect(Opener.holdOnFailure(sshAttach).contains("\\\"PATH="),
-                   "a remote command's own double quotes are escaped one level deeper for iTerm's tokenizer")
+
+        // Executed, not string-matched: the window script is run by a real sh
+        // with a fake mosh-bridged / ssh that record their argv, and the remote
+        // command is replayed against a fake tmux. The string-level version of
+        // this test passed for 11 days while iTerm cut every remote attach down
+        // to `sh -c 'PATH=…'` (2026-09-27).
+        let rig = FileManager.default.temporaryDirectory.appendingPathComponent("lfg-attach-rig-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: rig, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: rig) }
+        let argvFile = rig.appendingPathComponent("argv").path
+        let recorder = "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\0' \"$a\"; done > '\(argvFile)'\n"
+        for name in ["fake-mosh", "ssh", "tmux"] {
+            let path = rig.appendingPathComponent(name).path
+            try recorder.write(toFile: path, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path)
+        }
+        func run(_ args: [String], path: String) throws -> [String] {
+            try? FileManager.default.removeItem(atPath: argvFile)
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/bin/sh")
+            p.arguments = args
+            p.environment = ["PATH": path, "HOME": NSHomeDirectory()]
+            p.standardInput = FileHandle.nullDevice
+            p.standardOutput = FileHandle.nullDevice
+            p.standardError = FileHandle.nullDevice
+            try p.run()
+            p.waitUntilExit()
+            let data = FileManager.default.contents(atPath: argvFile) ?? Data()
+            return String(decoding: data, as: UTF8.self).split(separator: "\0", omittingEmptySubsequences: false)
+                .dropLast().map(String.init)
+        }
+        let remoteAttach = "PATH=/opt/homebrew/bin:/usr/local/bin:$PATH exec tmux set-option -w -t 'lfg-abc123' "
+            + "window-size latest ';' attach-session -t 'lfg-abc123'"
+        let rigMosh = Opener.remoteAttachCommand(sshTarget: "air", tmuxName: "lfg-abc123",
+                                                 moshPath: rig.appendingPathComponent("fake-mosh").path)
+        let launch = try Opener.windowLaunch(rigMosh, directory: rig)
+        let scriptPath = String(launch.dropFirst("/bin/sh '".count).dropLast())
+        let moshArgv = try run([scriptPath], path: "/usr/bin:/bin")
+        try expect(moshArgv.last == remoteAttach,
+                   "mosh-bridged receives the remote command whole, with $PATH left for the far side (got \(moshArgv.last ?? "nothing"))")
+        try expect(moshArgv.suffix(4).elementsEqual(["--", "/bin/sh", "-c", remoteAttach]),
+                   "the remote command rides after `-- /bin/sh -c`")
+        try expect(!FileManager.default.fileExists(atPath: scriptPath), "the window script deletes itself")
+        let sshArgv = try run(["-c", Opener.holdOnFailure(Opener.remoteAttachCommand(
+            sshTarget: "air", tmuxName: "lfg-abc123", moshPath: nil))], path: "\(rig.path):/usr/bin:/bin")
+        try expect(sshArgv == ["-t", "-o", "ConnectTimeout=5", "air", remoteAttach],
+                   "ssh receives the remote command as one argument")
+        let tmuxArgv = try run(["-c", remoteAttach.replacingOccurrences(
+            of: "PATH=/opt/homebrew/bin:/usr/local/bin:$PATH exec tmux", with: "exec tmux")], path: rig.path)
+        try expect(tmuxArgv == ["set-option", "-w", "-t", "lfg-abc123", "window-size", "latest", ";",
+                                "attach-session", "-t", "lfg-abc123"],
+                   "the far side's tmux gets both commands, split by a literal `;`")
 
         // Resume is a lifecycle state, not a fallback for a missing tmux name.
         // A live non-tmux Codex process cannot be attached, but starting a
@@ -2381,6 +2449,75 @@ enum DesktopFeatureTestCLI {
                    claudeResume?.contains("--dangerously-skip-permissions") == true &&
                    claudeResume?.hasSuffix(" --resume 'claude-closed'") == true,
                    "Claude resume keeps the native flag with bypass permissions")
+
+        // Binary resolution. The Finder-launched app's login shell finds none
+        // of the tools, so the known install dirs are what actually answer.
+        let installed: Set<String> = ["/Users/me/.bun/bin/codex", "/opt/homebrew/bin/claude", "/opt/homebrew/bin/codex"]
+        let known = ["/opt/homebrew/bin", "/usr/local/bin", "/Users/me/.local/bin", "/Users/me/.bun/bin"]
+        try expect(Opener.pickExecutable("codex", preferredDirs: [], shellAnswer: nil, knownDirs: known,
+                                         isExecutable: { $0 == "/Users/me/.bun/bin/codex" })
+                    == "/Users/me/.bun/bin/codex",
+                   "a codex only in ~/.bun/bin is found when the login shell can't see it (the 2026-09-27 resume failure)")
+        try expect(Opener.pickExecutable("codex", preferredDirs: ["/Users/me/.bun/bin"],
+                                         shellAnswer: "/opt/homebrew/bin/codex", knownDirs: known,
+                                         isExecutable: installed.contains)
+                    == "/Users/me/.bun/bin/codex",
+                   "the preferred bun codex beats a stray Homebrew copy the shell finds — no version skew")
+        try expect(Opener.pickExecutable("claude", preferredDirs: [], shellAnswer: nil, knownDirs: known,
+                                         isExecutable: installed.contains) == "/opt/homebrew/bin/claude",
+                   "claude resolves from Homebrew without the login shell")
+        try expect(Opener.pickExecutable("claude", preferredDirs: [], shellAnswer: "claude: aliased to foo",
+                                         knownDirs: [], isExecutable: { _ in true }) == nil,
+                   "a non-path shell answer (alias/function) is never used as the binary")
+        try expect(Opener.pickExecutable("mosh", preferredDirs: [], shellAnswer: nil, knownDirs: known,
+                                         isExecutable: installed.contains) == nil,
+                   "a tool installed nowhere resolves to nil, not a path that doesn't exist")
+
+        // A "closed" row may be live elsewhere: the Pro lists an Air session as
+        // closed whenever the synced lease is late (2026-09-27, 01a0e2ae).
+        let proEntry = Config.HostEntry(url: "http://localhost:8766", displayName: "Pro")
+        let airEntry = Config.HostEntry(url: "https://lfg-air.example", ssh: "air", displayName: "Air", transport: .ssh)
+        let proInfo = HostInfoResponse(hostId: "pro-id", hostName: "not-this-mac")
+        let airInfo = HostInfoResponse(hostId: "air-id", hostName: "Eugenes-MacBook-Air")
+        func liveRow(_ id: String, tmux: String?) -> APISession {
+            APISession(agent: "codex", pid: 1, cwd: "/tmp", project: "p", title: "t", sessionId: id, busy: false,
+                       lastActivityAt: 1, tmuxName: tmux, model: nil, status: nil, lastUserText: nil)
+        }
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let freshAirLease = Opener.SyncedLease(hostId: "air-id", heartbeatAt: now.addingTimeInterval(-120), ended: false)
+        let airDown = [Opener.HostSnapshot(entry: proEntry, info: proInfo, sessions: []),
+                       Opener.HostSnapshot(entry: airEntry, info: nil, sessions: nil)]
+
+        let liveOnAir = Opener.resumeCheck(
+            sessionId: "s1",
+            snapshots: [Opener.HostSnapshot(entry: proEntry, info: proInfo, sessions: []),
+                        Opener.HostSnapshot(entry: airEntry, info: airInfo, sessions: [liveRow("s1", tmux: "lfg-b35207")])],
+            lease: freshAirLease, now: now)
+        guard case .attach(let target) = liveOnAir else { throw TestFailure("a session live on the Air must attach there, not resume") }
+        try expect(target.session.tmuxName == "lfg-b35207" && !target.hostIsLocal && target.hostSSHTarget == "air"
+                    && target.hostRemoteTransport == .ssh,
+                   "the redirect attaches over the Air's own ssh target and transport")
+        guard case .runningOutsideTmux("Air") = Opener.resumeCheck(
+            sessionId: "s1",
+            snapshots: [Opener.HostSnapshot(entry: airEntry, info: airInfo, sessions: [liveRow("s1", tmux: nil)])],
+            lease: nil, now: now) else { throw TestFailure("a live session with no pane must refuse, naming its host") }
+        guard case .heldByUnreachableHost(2) = Opener.resumeCheck(sessionId: "s1", snapshots: airDown,
+                                                                  lease: freshAirLease, now: now) else {
+            throw TestFailure("a fresh lease from a host that didn't answer must block the resume")
+        }
+        guard case .resume = Opener.resumeCheck(
+            sessionId: "s1",
+            snapshots: [Opener.HostSnapshot(entry: proEntry, info: proInfo, sessions: []),
+                        Opener.HostSnapshot(entry: airEntry, info: airInfo, sessions: [])],
+            lease: freshAirLease, now: now) else { throw TestFailure("a host that answered 'not live' outranks its lease") }
+        guard case .resume = Opener.resumeCheck(
+            sessionId: "s1", snapshots: airDown,
+            lease: Opener.SyncedLease(hostId: "air-id", heartbeatAt: now.addingTimeInterval(-3600), ended: false),
+            now: now) else { throw TestFailure("an hour-old lease doesn't block resuming an offline host's session") }
+        guard case .resume = Opener.resumeCheck(
+            sessionId: "s1", snapshots: airDown,
+            lease: Opener.SyncedLease(hostId: "air-id", heartbeatAt: now.addingTimeInterval(-60), ended: true),
+            now: now) else { throw TestFailure("an ended lease doesn't block") }
 
         // MARK: Hidden directories
         //
@@ -3221,22 +3358,27 @@ enum DesktopSessionCreator {
 
 enum Opener {
     // Absolute paths so the command survives tmux's non-login `sh -c` env.
-    static let tmux = resolve("tmux", fallback: "/opt/homebrew/bin/tmux")
-    static let claude = resolve("claude", fallback: "/opt/homebrew/bin/claude")
-    static let codex = resolve("codex", fallback: "/opt/homebrew/bin/codex")
+    // The last-resort literals only keep the command's shape when nothing is
+    // installed; `resumeLocally` refuses a missing agent binary up front.
+    static let tmux = resolve("tmux") ?? "/opt/homebrew/bin/tmux"
+    static let claude = resolve("claude") ?? "/opt/homebrew/bin/claude"
+    /// `~/.bun/bin` first: one codex per Mac, and it is the bun copy codex's
+    /// own updater writes (the Homebrew copy was uninstalled 2026-09-06). It is
+    /// also first on the interactive PATH, so this matches what `cx` runs.
+    static let codex = resolve("codex", preferring: [home + "/.bun/bin"]) ?? "/opt/homebrew/bin/codex"
 
     /// Local mosh, when installed — nil means remote attach falls back to ssh.
     /// mosh is preferred because it survives IP changes, sleep, and packet
     /// loss, so an attached window outlives roaming between networks the way
     /// ssh's single long-lived TCP stream can't. Same transport as the
     /// `air`/`pro` aliases in ~/.zshrc.
-    static let mosh: String? = resolveOptional("mosh")
+    static let mosh: String? = resolve("mosh")
 
     /// `scripts/mosh-bridged`, when on the login PATH (~/.local/bin symlink) —
     /// mosh whose datagrams ride inside `ssh <alias>`, for hosts that are only
     /// reachable over a TCP path (Cloudflare Access). Same CLI shape as mosh, so
     /// `remoteAttachCommand` does not care which of the two it got.
-    static let moshBridged: String? = resolveOptional("mosh-bridged")
+    static let moshBridged: String? = resolve("mosh-bridged")
 
     /// Badge text for a remote row: which transport its window will use.
     static func remoteTransportLabel(for item: SessionItem) -> String {
@@ -3279,23 +3421,52 @@ enum Opener {
     /// on Intel Homebrew hosts, where it lives in /usr/local/bin.
     private static let remoteMoshServer = "PATH=\(remotePATH) exec mosh-server"
 
-    private static func resolveOptional(_ tool: String) -> String? {
-        let resolved = resolve(tool, fallback: "")
-        return resolved.isEmpty ? nil : resolved
+    private static let home = NSHomeDirectory()
+
+    /// Where tools live when the login shell can't see them. The login shell
+    /// alone is not enough: a Finder-launched app starts with
+    /// PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin, and `zsh -l` adds
+    /// neither Homebrew nor ~/.bun/bin — both come from ~/.zshrc, which a
+    /// non-interactive shell never reads. Measured 2026-09-27 in the app's own
+    /// env: `command -v` found none of tmux/claude/codex/mosh, so each came
+    /// from a hardcoded /opt/homebrew/bin fallback — and resuming a Codex
+    /// session died instantly once codex no longer lived there.
+    static let knownToolDirs = [
+        "/opt/homebrew/bin", "/usr/local/bin", home + "/.local/bin", home + "/.bun/bin",
+    ]
+
+    /// Absolute path to `tool`, or nil when it is installed nowhere we look.
+    private static func resolve(_ tool: String, preferring preferredDirs: [String] = []) -> String? {
+        pickExecutable(tool, preferredDirs: preferredDirs, shellAnswer: loginShellLookup(tool),
+                       knownDirs: knownToolDirs, isExecutable: FileManager.default.isExecutableFile(atPath:))
     }
 
-    private static func resolve(_ tool: String, fallback: String) -> String {
+    /// Pure resolution order, shared with the headless tests: an install in
+    /// `preferredDirs`, then the login shell's answer, then `knownDirs`. The
+    /// shell's answer must be an absolute, executable path — `command -v`
+    /// prints an alias or function by name.
+    static func pickExecutable(
+        _ tool: String, preferredDirs: [String], shellAnswer: String?, knownDirs: [String],
+        isExecutable: (String) -> Bool
+    ) -> String? {
+        let preferred = preferredDirs.map { "\($0)/\(tool)" }
+        let shell = shellAnswer.map { [$0] } ?? []
+        let known = knownDirs.map { "\($0)/\(tool)" }
+        return (preferred + shell + known).first { $0.hasPrefix("/") && isExecutable($0) }
+    }
+
+    private static func loginShellLookup(_ tool: String) -> String? {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
         p.arguments = ["-lc", "command -v \(tool)"]
         let pipe = Pipe()
         p.standardOutput = pipe
         p.standardError = Pipe()
-        guard (try? p.run()) != nil else { return fallback }
+        guard (try? p.run()) != nil else { return nil }
         p.waitUntilExit()
         let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return out.isEmpty ? fallback : out
+        return out.isEmpty ? nil : out
     }
 
     /// Open the session: attach when it's a local tmux session, ssh-attach
@@ -3322,7 +3493,144 @@ enum Opener {
         guard item.opensByResume else {
             return "This session is already running outside tmux, so lfg cannot attach to it."
         }
-        return resumeLocally(item)
+        guard let id = s.sessionId else { return resumeLocally(item) }
+        switch resumeCheck(sessionId: id) {
+        case .resume:
+            return resumeLocally(item)
+        case .attach(let live):
+            return open(live) // has a tmuxName, so this attaches — never resumes again
+        case .runningOutsideTmux(let hostLabel):
+            return "This session is still running on \(hostLabel), outside tmux, so lfg can't attach to it. Continue it there."
+        case .heldByUnreachableHost(let minutesAgo):
+            return "Another machine was running this session \(minutesAgo) min ago and isn't answering, "
+                + "so lfg can't tell whether it still is. Resuming here would give the session two writers. "
+                + "Open it from that machine, or try again once it's reachable."
+        }
+    }
+
+    // MARK: Is a "closed" row really closed?
+    //
+    // `closed` only ever means "closed on the host that listed it". A host's
+    // server hides a synced transcript while its lease is fresh (90s), but the
+    // lease reaches the other Mac by Syncthing, minutes late — so the Pro lists
+    // an Air session that is running right now as closed. The list drops that
+    // phantom only while the owning host answers the same refresh, and the Air's
+    // tunnel regularly doesn't (2026-09-27: /api/sessions 0.5–5.7s through
+    // Cloudflare, so ~1 refresh in 4 lost the Air). Clicking the phantom then
+    // resumed on the Pro: a second writer on a live thread. So the resume path
+    // asks every host itself, at click time, before starting anything.
+
+    struct HostSnapshot {
+        let entry: Config.HostEntry
+        let info: HostInfoResponse?
+        /// nil when the host didn't answer.
+        let sessions: [APISession]?
+    }
+
+    struct SyncedLease: Equatable {
+        let hostId: String
+        let heartbeatAt: Date
+        let ended: Bool
+    }
+
+    enum ResumeCheck {
+        case resume
+        case attach(SessionItem)
+        case runningOutsideTmux(String)
+        case heldByUnreachableHost(minutesAgo: Int)
+    }
+
+    /// How long a foreign lease still counts when its host can't be asked.
+    /// Generous on purpose: it has to outlast Syncthing's delivery lag, and the
+    /// cost of a false positive is a sentence, not a forked session.
+    static let unreachableLeaseWindow: TimeInterval = 15 * 60
+
+    /// Pure decision, shared with the headless tests. A host that answered is
+    /// believed over the lease; the lease only speaks for a host that didn't.
+    static func resumeCheck(
+        sessionId: String, snapshots: [HostSnapshot], lease: SyncedLease?, now: Date = Date()
+    ) -> ResumeCheck {
+        for snap in snapshots {
+            guard let live = snap.sessions?.first(where: { $0.sessionId == sessionId && !$0.closed }) else { continue }
+            let label = Config.normalizedDisplayName(snap.entry.displayName) ?? snap.info?.hostName ?? snap.entry.url
+            guard live.tmuxName != nil else { return .runningOutsideTmux(label) }
+            return .attach(SessionItem(
+                session: live,
+                hostURL: snap.entry.url,
+                hostId: snap.info?.hostId ?? snap.entry.url,
+                hostLabel: label,
+                hostIsLocal: SessionStore.isLocal(url: snap.entry.url, reportedHostName: snap.info?.hostName),
+                hostSSHTarget: Config.sshTarget(for: snap.entry),
+                hostRemoteTransport: snap.entry.transport))
+        }
+        guard let lease, !lease.ended else { return .resume }
+        let answered = Set(snapshots.filter { $0.sessions != nil }.compactMap { $0.info?.hostId })
+        guard !answered.contains(lease.hostId) else { return .resume }
+        let age = now.timeIntervalSince(lease.heartbeatAt)
+        guard age < unreachableLeaseWindow else { return .resume }
+        return .heldByUnreachableHost(minutesAgo: max(0, Int(age / 60)))
+    }
+
+    /// The live decision: every host asked now, plus the synced lease.
+    static func resumeCheck(sessionId: String) -> ResumeCheck {
+        resumeCheck(sessionId: sessionId, snapshots: liveSnapshots(), lease: syncedLease(for: sessionId))
+    }
+
+    /// Every configured host's live list, fetched now and in parallel. Blocking
+    /// by design — callers are already off the main thread for AppleScript.
+    private static func liveSnapshots() -> [HostSnapshot] {
+        let entries = Config.loadHosts()
+        let session = URLSession(configuration: {
+            let c = URLSessionConfiguration.ephemeral
+            c.timeoutIntervalForRequest = 10
+            return c
+        }())
+        func get<T: Decodable>(_ base: String, _ path: String, as: T.Type) -> T? {
+            guard let url = URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path) else {
+                return nil
+            }
+            let done = DispatchSemaphore(value: 0)
+            nonisolated(unsafe) var out: T?
+            session.dataTask(with: DesktopAPI.request(url)) { data, response, _ in
+                if let data, (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) == true {
+                    out = try? JSONDecoder().decode(T.self, from: data)
+                }
+                done.signal()
+            }.resume()
+            done.wait()
+            return out
+        }
+        let lock = NSLock()
+        nonisolated(unsafe) var snapshots = [HostSnapshot?](repeating: nil, count: entries.count)
+        DispatchQueue.concurrentPerform(iterations: entries.count) { i in
+            let entry = entries[i]
+            let info = get(entry.url, "/api/info", as: HostInfoResponse.self)
+            let sessions = info == nil ? nil : get(entry.url, "/api/sessions", as: SessionsResponse.self)?.sessions
+            lock.lock(); snapshots[i] = HostSnapshot(entry: entry, info: info, sessions: sessions); lock.unlock()
+        }
+        return snapshots.compactMap { $0 }
+    }
+
+    /// The session's shared lease, which lives beside its transcript in the
+    /// synced tree: `~/.claude/projects/<slug>/<id>.lease.json` or
+    /// `~/.codex/sessions/<y>/<m>/<d>/<id>.lease.json` (src/leases.ts).
+    private static func syncedLease(for sessionId: String) -> SyncedLease? {
+        let fm = FileManager.default
+        let name = "\(sessionId).lease.json"
+        func subdirs(_ path: String) -> [String] {
+            ((try? fm.contentsOfDirectory(atPath: path)) ?? []).map { "\(path)/\($0)" }
+        }
+        let claudeDirs = subdirs(home + "/.claude/projects")
+        let codexDirs = subdirs(home + "/.codex/sessions").flatMap(subdirs).flatMap(subdirs)
+        for dir in claudeDirs + codexDirs {
+            guard let data = fm.contents(atPath: "\(dir)/\(name)"),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let hostId = json["hostId"] as? String,
+                  let heartbeat = json["heartbeatAt"] as? Double else { continue }
+            return SyncedLease(hostId: hostId, heartbeatAt: Date(timeIntervalSince1970: heartbeat / 1000),
+                               ended: json["state"] as? String == "ended")
+        }
+        return nil
     }
 
     static func canResume(agent: String) -> Bool {
@@ -3351,6 +3659,13 @@ enum Opener {
         }
         guard let inner = resumeAgentCommand(agent: s.agent, sessionId: id) else {
             return "Only Claude and Codex sessions can be resumed across machines (this is \(s.agent))."
+        }
+        // A missing binary kills the pane at once, tmux exits 0, and the
+        // window vanishes with nothing to read — so say it here instead.
+        let binary = s.agent == "codex" ? codex : claude
+        guard FileManager.default.isExecutableFile(atPath: binary) else {
+            return "\(s.agent) isn't installed on this Mac — looked in "
+                + (knownToolDirs + ["the login shell's PATH"]).joined(separator: ", ") + "."
         }
         var cwd = s.cwd ?? NSHomeDirectory()
         if !FileManager.default.fileExists(atPath: cwd) {
@@ -3404,7 +3719,7 @@ enum Opener {
     static func remoteAttachCommand(sshTarget: String, tmuxName: String, moshPath: String?) -> String {
         let attach = attachCommand(tmuxCommand: "PATH=\(remotePATH) exec tmux", tmuxName: tmuxName)
         guard let moshPath else {
-            return "ssh -t -o ConnectTimeout=5 \(shq(sshTarget)) \(itermDoubleQuoted(attach))"
+            return "ssh -t -o ConnectTimeout=5 \(shq(sshTarget)) \(shq(attach))"
         }
         // ConnectTimeout rides along via --ssh so a dead host fails fast the
         // same way the ssh path does.
@@ -3416,33 +3731,40 @@ enum Opener {
             "--",
             "/bin/sh",
             "-c",
-            itermDoubleQuoted(attach),
+            shq(attach),
         ].joined(separator: " ")
     }
 
-    /// Wrap a window command so a failure stays on screen.
+    /// The script a window runs: the command, then a hold on failure.
     ///
     /// iTerm's default profile closes the session the moment its command
     /// exits, and `create window … command` then hands AppleScript
     /// `missing value` — so a command that died instantly (stale tmux session,
     /// unreachable host, a Cloudflare tunnel refusing the ssh handshake) took
     /// its own error message with it, and all anyone ever saw was
-    /// "Can't get bounds of missing value". Running the line under `sh -c`
-    /// changes nothing on success (the quoting is already POSIX: single quotes,
-    /// `';'` as its own tmux argument) and on a non-zero exit prints the status
-    /// and waits for Return, leaving the real reason readable in the window.
+    /// "Can't get bounds of missing value". On a non-zero exit this prints the
+    /// status and waits for Return, leaving the real reason readable.
     ///
     /// The `stty sane` / `tput rmcup` before the prompt are load-bearing: a
     /// mosh-client that dies abnormally (carrier never came up) leaves the tty
     /// raw with VMIN=0 and on the alternate screen, so a plain `read` returns
     /// EOF at once and the window closes anyway — measured 2026-09-16 with a
     /// simulated `stty raw min 0 time 0`: the plain hold vanished, this held.
+    ///
+    /// `rm -f "$0"` first: sh already holds the file open, so the script cleans
+    /// up after itself without racing its own execution.
     static func holdOnFailure(_ command: String) -> String {
-        let hold = "s=$?; if [ $s -ne 0 ]; then "
-            + "stty sane </dev/tty 2>/dev/null; tput rmcup 2>/dev/null; "
-            + "printf '\\n[lfg] command exited with status %s. Press Return to close this window.\\n' $s; "
-            + "read _ </dev/tty; fi"
-        return "/bin/sh -c " + itermDoubleQuoted("\(command); \(hold)")
+        """
+        rm -f "$0"
+        \(command)
+        s=$?
+        if [ $s -ne 0 ]; then
+          stty sane </dev/tty 2>/dev/null; tput rmcup 2>/dev/null
+          printf '\\n[lfg] command exited with status %s. Press Return to close this window.\\n' $s
+          read _ </dev/tty
+        fi
+
+        """
     }
 
     /// Single-quote a string for zsh.
@@ -3454,11 +3776,6 @@ enum Opener {
     private static func asq(_ s: String) -> String {
         s.replacingOccurrences(of: "\\", with: "\\\\")
          .replacingOccurrences(of: "\"", with: "\\\"")
-    }
-
-    private static func itermDoubleQuoted(_ s: String) -> String {
-        "\"" + s.replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 
     /// Run an AppleScript via `osascript` (thread-safe, unlike NSAppleScript).
@@ -3484,22 +3801,42 @@ enum Opener {
     /// What the open script returns when iTerm hands back no window at all.
     private static let vanishedMarker = "lfg:window-vanished"
 
-    private static func runInNewITermWindow(_ shellCommand: String) -> String? {
+    /// Write `shellCommand` (wrapped in `holdOnFailure`) to a throwaway script
+    /// and return the one-word-plus-path line iTerm is handed.
+    ///
+    /// Why a file: iTerm's `command` parameter is split by iTerm's own
+    /// tokenizer, not a shell, and it does not honour a backslash-escaped quote
+    /// inside a double-quoted word. The old one-liner nested the remote
+    /// command's quotes a level deeper (`/bin/sh -c "… -c \"PATH=… exec tmux …\""`)
+    /// and iTerm cut it at the first space: the far side ran `sh -c 'PATH=…'`,
+    /// exited 0, and the window closed with nothing to read — every remote
+    /// attach from 2026-09-16 on (argv dumped through a real iTerm 3.7.0 on
+    /// 2026-09-27). A path is the only thing iTerm has to tokenize now; the
+    /// command itself is parsed by sh, like any shell command.
+    static func windowLaunch(_ shellCommand: String, directory: URL = FileManager.default.temporaryDirectory) throws -> String {
+        let script = directory.appendingPathComponent("lfg-window-\(UUID().uuidString).sh")
+        try holdOnFailure(shellCommand).write(to: script, atomically: true, encoding: .utf8)
+        return "/bin/sh \(shq(script.path))"
+    }
+
+    static func runInNewITermWindow(_ shellCommand: String) -> String? {
         // Launch via the profile `command` parameter, NOT create-then-`write text`:
         // written text races the shell's startup and zsh's line-editor init can
-        // swallow it (the window opens to a bare prompt and nothing runs). The
-        // command param has no shell in the loop — iTerm tokenizes it itself
-        // (single-quoted args OK, but no shell builtins like `exec`).
+        // swallow it (the window opens to a bare prompt and nothing runs).
         //
         // `holdOnFailure` keeps a failing command's window (and its error text)
         // on screen; the `missing value` check below is the backstop for the
         // cases it can't cover (iTerm still launching, a profile that closes
         // windows regardless), so the user gets a sentence instead of
         // "Can't get bounds of missing value".
+        let launch: String
+        do { launch = try windowLaunch(shellCommand) } catch {
+            return "Couldn't write the window's launch script: \(error.localizedDescription)"
+        }
         let script = """
         tell application "iTerm"
             activate
-            set w to (create window with default profile command "\(asq(holdOnFailure(shellCommand)))")
+            set w to (create window with default profile command "\(asq(launch))")
             if w is missing value then return "\(vanishedMarker)"
             set b to bounds of w
             return (id of w as string) & "," & (item 1 of b) & "," & (item 2 of b) & "," & (item 3 of b) & "," & (item 4 of b)
@@ -5407,24 +5744,24 @@ struct ContentView: View {
     }
 }
 
-/// Prints the exact command a remote row would hand iTerm2 (before the
-/// `holdOnFailure` wrapper the window adds around it), so the transport
-/// can be exercised for real without driving the GUI. iTerm tokenizes this
-/// string itself with no shell in the loop, so verify it the same way
-/// (`shlex.split` + `execvp`) — running it through zsh would expand the `$PATH`
-/// that is meant to survive to the far side.
+/// Prints the exact command a remote row's window runs, so the transport can
+/// be exercised for real without driving the GUI. It is a POSIX sh command —
+/// the window runs it from a script via `/bin/sh` (see `windowLaunch`) — so
+/// `sh -c "$(lfg --attach-command …)"` is a faithful replay.
 enum AttachCommandCLI {
     static func runIfRequested() {
         let args = CommandLine.arguments
         guard args.dropFirst().first == "--attach-command" else { return }
         var rest = Array(args.dropFirst(2))
-        // `held`: print what the iTerm window is actually handed — the attach
-        // wrapped in `holdOnFailure` — so the window-side quoting can be
-        // exercised against a real iTerm without clicking a row.
+        // `held`: print the whole script the window runs — the attach wrapped
+        // in `holdOnFailure`. `open`: hand it to iTerm through the production
+        // launcher, exactly as clicking the row does.
         let held = rest.last == "held"
         if held { rest.removeLast() }
+        let openWindow = rest.last == "open"
+        if openWindow { rest.removeLast() }
         guard rest.count == 2 || rest.count == 3 else {
-            print("usage: lfg --attach-command <ssh-target> <tmux-session> [automatic|ssh|mosh-bridged] [held]")
+            print("usage: lfg --attach-command <ssh-target> <tmux-session> [automatic|ssh|mosh-bridged] [held|open]")
             Darwin.exit(1)
         }
         let transport = rest.count == 3 ? RemoteTransport(rawValue: rest[2]) : .automatic
@@ -5439,7 +5776,35 @@ enum AttachCommandCLI {
         case .moshBridged: moshPath = Opener.moshBridged
         }
         let attach = Opener.remoteAttachCommand(sshTarget: rest[0], tmuxName: rest[1], moshPath: moshPath)
+        if openWindow {
+            print(Opener.runInNewITermWindow(attach) ?? "opened")
+            fflush(stdout)
+            Darwin.exit(0)
+        }
         print(held ? Opener.holdOnFailure(attach) : attach)
+        fflush(stdout)
+        Darwin.exit(0)
+    }
+}
+
+/// `lfg --resume-check <sessionId>`: what clicking a closed row would do, from
+/// the real hosts and the real synced lease, without opening a window. Also
+/// prints the agent binaries as THIS process resolved them — run the installed
+/// app's executable to see what a Finder launch sees.
+enum ResumeCheckCLI {
+    static func runIfRequested() {
+        let args = CommandLine.arguments
+        guard args.dropFirst().first == "--resume-check", args.count == 3 else { return }
+        let decision: String
+        switch Opener.resumeCheck(sessionId: args[2]) {
+        case .resume: decision = "\"resume\""
+        case .attach(let item):
+            decision = "{\"attach\":{\"host\":\"\(item.hostLabel)\",\"tmux\":\"\(item.session.tmuxName ?? "")\","
+                + "\"local\":\(item.hostIsLocal),\"ssh\":\"\(item.hostSSHTarget ?? "")\",\"transport\":\"\(item.hostRemoteTransport.rawValue)\"}}"
+        case .runningOutsideTmux(let host): decision = "{\"runningOutsideTmux\":\"\(host)\"}"
+        case .heldByUnreachableHost(let minutes): decision = "{\"heldByUnreachableHost\":\(minutes)}"
+        }
+        print("{\"decision\":\(decision),\"tmux\":\"\(Opener.tmux)\",\"claude\":\"\(Opener.claude)\",\"codex\":\"\(Opener.codex)\"}")
         fflush(stdout)
         Darwin.exit(0)
     }
@@ -5925,6 +6290,7 @@ struct LFGSessionsApp: App {
         WindowFitCLI.runShotIfRequested()
         MoveTestCLI.runIfRequested()
         AttachCommandCLI.runIfRequested()
+        ResumeCheckCLI.runIfRequested()
         Opener.warmTransportProbe()
     }
 
