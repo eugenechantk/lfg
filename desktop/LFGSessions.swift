@@ -2525,6 +2525,33 @@ enum DesktopFeatureTestCLI {
             lease: Opener.SyncedLease(hostId: "air-id", heartbeatAt: now.addingTimeInterval(-60), ended: true),
             now: now) else { throw TestFailure("an ended lease doesn't block") }
 
+        // "Resume locally" on a session live elsewhere: idle → take over, busy → refuse;
+        // a click always attaches. (2026-09-28: an idle Air codex was refused outright.)
+        func airLive(busy: Bool) -> Opener.ResumeCheck {
+            let row = APISession(agent: "codex", pid: 1, cwd: "/tmp", project: "p", title: "t", sessionId: "s1",
+                                 busy: busy, lastActivityAt: 1, tmuxName: "lfg-b35207", model: nil, status: nil,
+                                 lastUserText: nil)
+            return .attach(SessionItem(session: row, hostURL: "https://lfg-air.example", hostId: "air-id",
+                                       hostLabel: "Air", hostIsLocal: false, hostSSHTarget: "air"))
+        }
+        guard case .takeOver(let idleTarget) = Opener.localResumePlan(airLive(busy: false), attachIfLive: false),
+              idleTarget.hostLabel == "Air" else {
+            throw TestFailure("Resume locally on an idle session live on the Air takes it over")
+        }
+        guard case .refuse(let busyReason) = Opener.localResumePlan(airLive(busy: true), attachIfLive: false),
+              busyReason.contains("working on Air") else {
+            throw TestFailure("Resume locally never stops a session mid-turn")
+        }
+        guard case .attach = Opener.localResumePlan(airLive(busy: false), attachIfLive: true) else {
+            throw TestFailure("a row click attaches where the session runs, idle or not")
+        }
+        guard case .resume = Opener.localResumePlan(.resume, attachIfLive: false) else {
+            throw TestFailure("nothing live anywhere → resume")
+        }
+        guard case .refuse = Opener.localResumePlan(.heldByUnreachableHost(minutesAgo: 2), attachIfLive: false) else {
+            throw TestFailure("an unverifiable owner is still refused, never taken over")
+        }
+
         // The local copy lags the owner by Syncthing's delay; resuming it forks.
         let airActivityMs = 1_790_521_268_206.0 // 23:01:08, the Air's last turn
         try expect(Opener.transcriptLag(localModified: Date(timeIntervalSince1970: 1_790_519_600),
@@ -3522,6 +3549,66 @@ enum Opener {
         return resumeLocally(item, attachIfLive: true)
     }
 
+    enum LocalResumePlan {
+        case resume
+        case attach(SessionItem)
+        case takeOver(SessionItem)
+        case refuse(String)
+    }
+
+    /// What a local resume does with the live check's answer. A click attaches
+    /// to a session live anywhere. "Resume locally" means THIS Mac: an idle
+    /// session live on another host is taken over (stopped there, resumed
+    /// here) — "live" there is often just codex parked at an empty prompt in
+    /// its pane (2026-09-28, "Sidewalk approach video", idle since 00:09).
+    /// A busy one is refused: stopping it would cut its turn off mid-flight.
+    static func localResumePlan(_ check: ResumeCheck, attachIfLive: Bool) -> LocalResumePlan {
+        switch check {
+        case .resume:
+            return .resume
+        case .attach(let live) where attachIfLive || live.hostIsLocal:
+            return .attach(live)
+        case .attach(let live) where live.session.busy:
+            return .refuse("This session is working on \(live.hostLabel) right now. Let the turn finish (or stop it "
+                + "there), then resume it here. Click the row to watch it where it runs.")
+        case .attach(let live):
+            return .takeOver(live)
+        case .runningOutsideTmux(let hostLabel):
+            return .refuse("This session is still running on \(hostLabel), outside tmux, so lfg can't stop or attach "
+                + "to it. Continue it there.")
+        case .heldByUnreachableHost(let minutesAgo):
+            return .refuse("Another machine was running this session \(minutesAgo) min ago and isn't answering, "
+                + "so lfg can't tell whether it still is. Resuming here would give the session two writers. "
+                + "Open it from that machine, or try again once it's reachable.")
+        }
+    }
+
+    /// `POST /api/sessions/<id>/close` on the owning host — the same call
+    /// "End session" makes. nil on success, otherwise the host's reason.
+    private static func closeRemotely(hostURL: String, sessionId: String) -> String? {
+        guard let url = URL(string: hostURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                            + "/api/sessions/\(sessionId)/close") else { return "bad host URL" }
+        let session = URLSession(configuration: {
+            let c = URLSessionConfiguration.ephemeral
+            c.timeoutIntervalForRequest = 20
+            return c
+        }())
+        let done = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var failure: String? = "no response"
+        session.dataTask(with: DesktopAPI.request(url, method: "POST")) { data, response, error in
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if (200..<300).contains(status) {
+                failure = nil
+            } else {
+                let body = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+                failure = (body?["error"] as? String) ?? error?.localizedDescription ?? "HTTP \(status)"
+            }
+            done.signal()
+        }.resume()
+        done.wait()
+        return failure
+    }
+
     // MARK: Is a "closed" row really closed?
     //
     // `closed` only ever means "closed on the host that listed it". A host's
@@ -3663,8 +3750,8 @@ enum Opener {
 
     /// Every local resume goes through here — a row click (`attachIfLive`:
     /// a session live in tmux somewhere is attached instead) and the
-    /// "Resume locally" menu item (it is refused instead: the user asked for
-    /// THIS Mac, and running it here too would fork the thread).
+    /// "Resume locally" menu item (an idle session live elsewhere is taken
+    /// over: stopped there, then resumed here — see `localResumePlan`).
     static func resumeLocally(_ item: SessionItem, attachIfLive: Bool = false) -> String? {
         let s = item.session
         guard let id = s.sessionId else {
@@ -3673,20 +3760,29 @@ enum Opener {
         guard let inner = resumeAgentCommand(agent: s.agent, sessionId: id) else {
             return "Only Claude and Codex sessions can be resumed across machines (this is \(s.agent))."
         }
-        switch resumeCheck(sessionId: id) {
+        var remoteActivityMs = item.hostIsLocal ? nil : s.lastActivityAt
+        var stoppedOn: String?
+        switch localResumePlan(resumeCheck(sessionId: id), attachIfLive: attachIfLive) {
         case .resume:
             break
-        case .attach(let live) where attachIfLive || live.hostIsLocal:
-            return open(live) // has a tmuxName, so this attaches — never resumes again
         case .attach(let live):
-            return "This session is still running on \(live.hostLabel). Stop it there first — resuming it here "
-                + "as well would give the thread two writers. (Click the row to open it where it runs.)"
-        case .runningOutsideTmux(let hostLabel):
-            return "This session is still running on \(hostLabel), outside tmux, so lfg can't attach to it. Continue it there."
-        case .heldByUnreachableHost(let minutesAgo):
-            return "Another machine was running this session \(minutesAgo) min ago and isn't answering, "
-                + "so lfg can't tell whether it still is. Resuming here would give the session two writers. "
-                + "Open it from that machine, or try again once it's reachable."
+            return open(live) // has a tmuxName, so this attaches — never resumes again
+        case .refuse(let reason):
+            return reason
+        case .takeOver(let live):
+            if let error = closeRemotely(hostURL: live.hostURL, sessionId: id) {
+                return "Couldn't stop this session on \(live.hostLabel) to move it here: \(error)"
+            }
+            stoppedOn = live.hostLabel
+            remoteActivityMs = live.session.lastActivityAt
+            // Usually already current (the idle session wrote its last turn
+            // long ago); otherwise give Syncthing a moment before refusing.
+            let deadline = Date().addingTimeInterval(30)
+            while Date() < deadline,
+                  transcriptLag(localModified: localTranscript(for: id).flatMap(modificationDate),
+                                remoteLastActivityMs: remoteActivityMs) != nil {
+                Thread.sleep(forTimeInterval: 1)
+            }
         }
         // The other Mac's last turns reach this one by Syncthing, which lags
         // tens of minutes on a hot 70 MB rollout (2026-09-27: 22:33 here vs
@@ -3694,10 +3790,11 @@ enum Opener {
         // and Syncthing then files the two histories as a conflict.
         let local = localTranscript(for: id)
         if let lag = transcriptLag(localModified: local.flatMap(modificationDate),
-                                   remoteLastActivityMs: item.hostIsLocal ? nil : s.lastActivityAt) {
+                                   remoteLastActivityMs: remoteActivityMs) {
+            let stopped = stoppedOn.map { "Stopped it on \($0) so it can move here, but " } ?? ""
             return lag.isInfinite
-                ? "This session's transcript hasn't reached this Mac yet. Try again once Syncthing catches up."
-                : "This Mac's copy of the transcript is \(max(1, Int(lag / 60))) min behind \(item.hostLabel)'s — "
+                ? stopped + "this session's transcript hasn't reached this Mac yet. Try again once Syncthing catches up."
+                : stopped + "this Mac's copy of the transcript is \(max(1, Int(lag / 60))) min behind \(stoppedOn ?? item.hostLabel)'s — "
                     + "Syncthing hasn't delivered the latest turns yet. Resuming now would continue from an older "
                     + "point and fork the thread. Try again once it catches up."
         }

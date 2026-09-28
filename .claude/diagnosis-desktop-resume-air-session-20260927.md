@@ -116,3 +116,19 @@ show, then `Opener.open` / `Opener.resumeLocally` — the two calls the button a
 Not exercised: the physical SwiftUI click and a physical wheel (locked screens). Side findings: the Air's
 `/api/sessions/new` fails for codex ("Codex started but did not produce a session ID", HTTP 504);
 windows closed without detaching orphaned three mosh-servers on the Air (detached + killed).
+
+## Round 5 — "Resume locally" on an idle-but-live remote session (2026-09-28)
+
+"Sidewalk approach video" (01a0e2ae) was refused as "still running on Air": codex pid 56655 was alive in
+`lfg-b35207`, but idle at an empty prompt since 00:09 — Eugene's "not running". Refusing was too strict
+for an explicit "Resume locally". `Opener.localResumePlan` now: click → attach wherever it runs;
+"Resume locally" → idle live-elsewhere session is **taken over** (POST `/api/sessions/<id>/close` on the
+owner — the "End session" call, which also releases the lease — then wait ≤30s for this Mac's copy to
+reach the owner's `lastActivityAt`, then resume here); busy → refused (never cut a turn off).
+
+Verified with a real AX click (Pro unlocked): disposable Air codex `01a0e58e…` idle in `resume-test2`,
+synced (sha256 equal, ~80s). AXShowMenu on its row + press "Resume locally" → Air `resume-test2` gone,
+`lfgd-01a0e58e` up on the Pro with the Air's history; typed a message + Return → "MOVED" (9:13).
+Plain AX press on the live Sidewalk row → attached (new Air client). Wheel: iTerm `mouseReportingMode`
+= 2 on that window and SGR wheel sequences scroll the Air pane; a pid-posted CGEvent wheel did not
+reach iTerm, so the physical wheel is the one hop not machine-verified.
