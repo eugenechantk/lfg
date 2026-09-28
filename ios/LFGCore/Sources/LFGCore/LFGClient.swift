@@ -730,6 +730,11 @@ public struct LFGClient: Sendable {
         _ = try await send("POST", "api/sessions/\(id)/model", json: ["model": model])
     }
 
+    /// Change a live session's reasoning effort for that session only.
+    public func setEffort(_ id: String, effort: String) async throws {
+        _ = try await send("POST", "api/sessions/\(id)/effort", json: ["effort": effort])
+    }
+
     public func rename(_ id: String, title: String) async throws {
         _ = try await send("PUT", "api/sessions/\(id)/title", json: ["title": title])
     }

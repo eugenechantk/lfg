@@ -1562,6 +1562,9 @@ private struct SessionOptionsMenu: View {
                 children: models
             ))
         }
+        if let effort = effortMenu(modelSwitching: switching) {
+            primary.append(effort)
+        }
 
         var assignees: [UIMenuElement] = [
             action("Unassigned") { Task { await store.assign(sid, nil) } }
@@ -1670,6 +1673,31 @@ private struct SessionOptionsMenu: View {
             // Hop instead of asserting so an off-main delivery cannot trap.
             Task { @MainActor in handler() }
         }
+    }
+
+    /// Reasoning effort for this live session, per the host's catalog for its
+    /// current model. Hidden where it cannot apply: closed or externally owned
+    /// sessions, and models without effort control (Claude Haiku).
+    private func effortMenu(modelSwitching: Bool) -> UIMenu? {
+        guard !externallyOwned, !closed, let kind = AgentKind(rawValue: agent) else { return nil }
+        let session = store.session(sid)
+        let levels = store.modelCatalog(forSession: sid).efforts(for: kind, model: session?.model)
+        guard !levels.isEmpty else { return nil }
+        let changing = store.changingEffortSessionIds.contains(sid)
+        let current = session?.effort
+        return UIMenu(
+            title: changing ? "Changing effort…" : "Effort",
+            subtitle: current.map(SessionEffort.displayName),
+            image: UIImage(systemName: "gauge.with.dots.needle.50percent"),
+            identifier: UIMenu.Identifier("session_effort_menu"),
+            children: levels.map { level in
+                action(SessionEffort.displayName(level), identifier: "set_effort_\(level)",
+                    attributes: changing || modelSwitching || sid.hasPrefix("local-") ? .disabled : [],
+                    state: current == level ? .on : .off) {
+                        Task { await store.setEffort(sid, to: level) }
+                    }
+            }
+        )
     }
 
     private var canFork: Bool {

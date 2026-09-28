@@ -10,6 +10,9 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     public var title: String
     public var agent: String          // "claude" | "codex" (legacy AI-SDK values normalized at decode)
     public var model: String?         // model id/alias: claude-opus-5, opus, gpt-5.6, …
+    /// Reasoning effort the live process runs with (low … max, Codex ultra).
+    /// nil on older hosts, closed sessions, or when the host can't tell.
+    public var effort: String?
     public var project: String?
     public var cwd: String?
     public var status: String?        // "ok" | "blocked"
@@ -135,7 +138,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
 
     public init(
         sessionId: String? = nil, title: String = "", agent: String = "claude",
-        model: String? = nil, project: String? = nil, cwd: String? = nil,
+        model: String? = nil, effort: String? = nil, project: String? = nil, cwd: String? = nil,
         status: String? = nil, statusReason: String? = nil, statusDetail: String? = nil,
         assignedUser: String? = nil, parentSessionId: String? = nil, lastUserText: String? = nil,
         startedAt: Double? = nil, lastActivityAt: Double? = nil,
@@ -148,7 +151,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         prompt: AgentPrompt? = nil
     ) {
         self.sessionId = sessionId; self.title = title; self.agent = agent
-        self.model = model; self.project = project; self.cwd = cwd
+        self.model = model; self.effort = effort; self.project = project; self.cwd = cwd
         self.status = status; self.statusReason = statusReason; self.statusDetail = statusDetail
         self.assignedUser = assignedUser; self.parentSessionId = parentSessionId
         self.lastUserText = lastUserText
@@ -168,6 +171,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         title = (try c.decodeIfPresent(String.self, forKey: .title)) ?? ""
         agent = Session.normalizedAgent((try c.decodeIfPresent(String.self, forKey: .agent)) ?? "claude")
         model = try c.decodeIfPresent(String.self, forKey: .model)
+        effort = try? c.decodeIfPresent(String.self, forKey: .effort)
         project = try c.decodeIfPresent(String.self, forKey: .project)
         cwd = try c.decodeIfPresent(String.self, forKey: .cwd)
         status = try c.decodeIfPresent(String.self, forKey: .status)
@@ -720,11 +724,15 @@ public struct AgentModelCatalog: Codable, Sendable, Equatable {
     public var version: String?
     public var defaultModel: String
     public var models: [String]
+    /// Reasoning levels per model id. `[]` = the model has no effort control
+    /// (Claude Haiku); a model missing here is unknown. Older hosts omit it.
+    public var efforts: [String: [String]]
 
-    public init(version: String? = nil, defaultModel: String, models: [String]) {
+    public init(version: String? = nil, defaultModel: String, models: [String], efforts: [String: [String]] = [:]) {
         self.version = version
         self.defaultModel = defaultModel
         self.models = models
+        self.efforts = efforts
     }
 
     public init(from decoder: Decoder) throws {
@@ -732,6 +740,7 @@ public struct AgentModelCatalog: Codable, Sendable, Equatable {
         version = try c.decodeIfPresent(String.self, forKey: .version)
         defaultModel = (try c.decodeIfPresent(String.self, forKey: .defaultModel)) ?? ""
         models = (try? c.decode([String].self, forKey: .models)) ?? []
+        efforts = (try? c.decode([String: [String]].self, forKey: .efforts)) ?? [:]
     }
 }
 
@@ -769,6 +778,25 @@ public struct ModelCatalogResponse: Codable, Sendable, Equatable {
 
     public func version(for agent: AgentKind) -> String? {
         agents[agent.rawValue]?.version
+    }
+
+    /// Effort levels a session on `model` can switch between, in the CLI's own
+    /// order. Claude rows carry aliases (`opus`) while the catalog is keyed by
+    /// full ids (`claude-opus-5-5`), so an alias resolves to the first catalog
+    /// model of its family — the one the alias launches. Unknown models, and
+    /// hosts that predate the field, get the CLI's usual levels.
+    public func efforts(for agent: AgentKind, model: String?) -> [String] {
+        let byModel = agents[agent.rawValue]?.efforts ?? [:]
+        var levels: [String]?
+        if let model {
+            levels = byModel[model]
+            if levels == nil, agent == .claude, let family = SessionEffort.claudeFamily(of: model) {
+                let candidates = models(for: agent) + byModel.keys.sorted()
+                levels = candidates.first { $0.lowercased().contains(family) && byModel[$0] != nil }
+                    .flatMap { byModel[$0] }
+            }
+        }
+        return (levels ?? SessionEffort.usualLevels(for: agent)).filter(SessionEffort.isKnown)
     }
 }
 

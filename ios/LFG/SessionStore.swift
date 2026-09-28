@@ -4593,6 +4593,17 @@ import LFGCore
     /// this to name cross-provider handoffs while the options menu is dismissed.
     private(set) var switchingModelTargetsBySession: [String: AgentKind] = [:]
 
+    /// Sessions with an effort change in flight. The options menu disables its
+    /// levels meanwhile (a Claude change relaunches the pane).
+    private(set) var changingEffortSessionIds: Set<String> = []
+
+    func setEffort(_ id: String, to effort: String) async {
+        guard !changingEffortSessionIds.contains(id) else { return }
+        changingEffortSessionIds.insert(id)
+        defer { changingEffortSessionIds.remove(id) }
+        await run("Change effort", for: id) { try await $0.setEffort(id, effort: effort) }
+    }
+
     func switchModel(_ sourceID: String, to selection: AgentModelSelection) async -> String? {
         guard !switchingModelSessionIds.contains(sourceID),
               let source = session(sourceID), let sourceAgent = AgentKind(rawValue: source.agent) else { return nil }
