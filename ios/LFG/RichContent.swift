@@ -712,27 +712,7 @@ struct FileViewerSheet: View {
             .accessibilityIdentifier("filePreviewPager")
             .navigationTitle(selectedRef?.filename ?? "File")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    if let ref = selectedRef {
-                        if let shareRequest {
-                            ProgressView()
-                                .accessibilityLabel("Preparing \(shareRequest.filename) to share")
-                                .accessibilityIdentifier("filePreviewShareProgress")
-                        } else {
-                            Button {
-                                shareRequest = ref
-                            } label: {
-                                Image(systemName: "square.and.arrow.up")
-                            }
-                            .accessibilityLabel("Share \(ref.filename)")
-                            .accessibilityIdentifier("filePreviewShareButton")
-                        }
-                    }
-                    Button("Done") { dismiss() }
-                        .accessibilityIdentifier("filePreviewDoneButton")
-                }
-            }
+            .toolbar { fileViewerToolbar }
         }
         .sheet(item: $shareExport) { export in
             FileActivitySheet(fileURL: export.fileURL)
@@ -753,6 +733,38 @@ struct FileViewerSheet: View {
             guard let request = shareRequest else { return }
             await prepareShare(for: request)
             if shareRequest?.id == request.id { shareRequest = nil }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var fileViewerToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            if let ref = selectedRef {
+                if let shareRequest {
+                    ProgressView()
+                        .accessibilityLabel("Preparing \(shareRequest.filename) to share")
+                        .accessibilityIdentifier("filePreviewShareProgress")
+                } else {
+                    Button {
+                        shareRequest = ref
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Share \(ref.filename)")
+                    .accessibilityIdentifier("filePreviewShareButton")
+                }
+            }
+        }
+
+        if #available(iOS 26.0, *) {
+            // A fixed toolbar spacer forms a separate Liquid Glass group.
+            // Without it, SwiftUI combines Share and Done into one wrapper.
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
+        }
+
+        ToolbarItem(placement: .topBarTrailing) {
+            Button("Done") { dismiss() }
+                .accessibilityIdentifier("filePreviewDoneButton")
         }
     }
 
