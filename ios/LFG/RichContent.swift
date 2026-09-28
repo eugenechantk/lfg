@@ -374,6 +374,7 @@ private struct AuthenticatedImage: View {
 /// The card says what the file is; the tap is how you look at it.
 struct MediaAttachmentsView: View {
     let refs: [MediaRef]
+    var onOpen: ((MediaRef, [MediaRef]) -> Void)? = nil
     @Environment(\.hostFiles) private var hostFiles
     @Environment(\.transcriptPreviewFiles) private var transcriptPreviewFiles
     @State private var viewing: MediaRef?
@@ -398,7 +399,13 @@ struct MediaAttachmentsView: View {
     }
 
     private func fileCard(_ ref: MediaRef) -> some View {
-        Button { viewing = ref } label: {
+        Button {
+            if let onOpen {
+                onOpen(ref, refs)
+            } else {
+                viewing = ref
+            }
+        } label: {
             HStack(spacing: 10) {
                 Image(systemName: icon(ref.kind)).font(.title3).foregroundStyle(.secondary)
                 Text(ref.filename).font(.subheadline).lineLimit(1)
@@ -410,6 +417,7 @@ struct MediaAttachmentsView: View {
             .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("inlineFileCard_\(ref.filename)")
     }
 
     private func icon(_ kind: MediaKind) -> String {

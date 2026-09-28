@@ -24,6 +24,7 @@ struct TranscriptMessageView: View {
     /// instead of being separated by a double gap.
     var followsUserBubble: Bool = false
     var onFollowup: ((String) -> Void)? = nil
+    var onOpenFile: ((MediaRef, [MediaRef]) -> Void)? = nil
 
     var body: some View {
         switch message.kind {
@@ -36,7 +37,12 @@ struct TranscriptMessageView: View {
         case "memory_citation":
             MemoryCitationView(text: message.text)
         default:
-            TextBubble(message: message, followsUserBubble: followsUserBubble, onFollowup: onFollowup)
+            TextBubble(
+                message: message,
+                followsUserBubble: followsUserBubble,
+                onFollowup: onFollowup,
+                onOpenFile: onOpenFile
+            )
         }
     }
 }
@@ -80,6 +86,7 @@ private struct TextBubble: View {
     let message: SessionMessage
     var followsUserBubble: Bool = false
     var onFollowup: ((String) -> Void)? = nil
+    var onOpenFile: ((MediaRef, [MediaRef]) -> Void)? = nil
     /// Sent time is hidden by default and toggled by tapping the bubble.
     @State private var showTimestamp = false
     private var isUser: Bool { message.role == "user" }
@@ -112,7 +119,10 @@ private struct TextBubble: View {
                     }
                     // Narrower than assistant attachments so the cards read as
                     // part of the trailing bubble run.
-                    if !media.isEmpty { MediaAttachmentsView(refs: media).frame(maxWidth: 280) }
+                    if !media.isEmpty {
+                        MediaAttachmentsView(refs: media, onOpen: onOpenFile)
+                            .frame(maxWidth: 280)
+                    }
                     // Sent-time caption — only while toggled on.
                     if showTimestamp, let sentAt = timestampText {
                         Text(sentAt)
@@ -131,7 +141,7 @@ private struct TextBubble: View {
                 // long-press selection can cross paragraphs and list items.
                 ProseView(text: prose)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if !media.isEmpty { MediaAttachmentsView(refs: media) }
+                if !media.isEmpty { MediaAttachmentsView(refs: media, onOpen: onOpenFile) }
                 if let onFollowup {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(rowText.followups.enumerated()), id: \.offset) { index, followup in

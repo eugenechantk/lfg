@@ -23,6 +23,7 @@ As a user viewing a session file from either the transcript or Files & Links, I 
 - [x] An inline transcript file opens on the tapped file with the full session file sequence.
 - [x] Swiping left and right from an inline transcript preview moves through adjacent session files.
 - [x] If the session-wide index is not ready or does not contain the tapped file, inline preview falls back to the files in that transcript row.
+- [x] Tapping an inline file presents the viewer even while the transcript file index is refreshing.
 
 ## Test Strategy
 
@@ -48,6 +49,7 @@ As a user viewing a session file from either the transcript or Files & Links, I 
 
 - Add a small platform-neutral `FilePreviewSequence` value in LFGCore.
 - Present the selected file in a gesture-driven pager sourced from `AttachmentsSheet` or the transcript's shared session file index.
+- Own inline viewer presentation on the stable session view, not on a lazy transcript row that can be recreated during index refresh.
 - Compute the session file index only when transcript identity changes, then expose it to inline attachment cards through SwiftUI environment state.
 - Fall back to the current row's files while the session index is unavailable or stale.
 - Page on horizontal swipes at base zoom; preserve image pan gestures while zoomed.
@@ -55,9 +57,18 @@ As a user viewing a session file from either the transcript or Files & Links, I 
 
 ## Residual Risks
 
-- None identified for the requested flow. Direct verification and the independent visual audit both passed on iPhone 17 Pro, iOS 26.3.
+- None identified for the requested flow. Direct Debug and Release verification and the independent Release visual audit passed on iPhone 17 Pro, iOS 26.3.
 
 ## Bugs
 
 - The first native `TabView` implementation also paged during a zoomed image pan. Replaced it with explicit gesture arbitration and re-verified the corrected behavior.
 - Bug 019: inline transcript cards supplied only `[ref]`, leaving the pager with no adjacent destination.
+- Bug 020: a lazy transcript row owned the inline viewer sheet, so row recreation during an index refresh could discard the tap before presentation completed.
+
+## Bug 020 Verification
+
+- Focused `FilePreviewSequenceTests`: 5 passed.
+- Full LFGCore suite: 814 passed, 1 optional test skipped.
+- Debug and Release FlowDeck builds succeeded.
+- Independent Release audit: `.codex/evidence/20260927-204705-ios-visual-audit/evidence.md` — PASS.
+- Continuous Release interaction recording: `.codex/evidence/20260927-204705-ios-visual-audit/05-release-search-open-page-back.mov`.

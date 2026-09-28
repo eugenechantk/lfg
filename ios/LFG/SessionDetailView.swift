@@ -7,6 +7,7 @@ struct SessionDetailView: View {
 
     private enum PresentedSheet: Identifiable {
         case attachments
+        case filePreview(selected: MediaRef, rowFiles: [MediaRef])
         case phoneSignIn(requestID: String?)
         case requestedSignIn(requestID: String)
         case childSessions(selectedID: String?)
@@ -17,6 +18,7 @@ struct SessionDetailView: View {
             case .phoneSignIn(let requestID): "phone-sign-in-\(requestID ?? "all")"
             case .requestedSignIn(let requestID): "sign-in-\(requestID)"
             case .attachments: "attachments"
+            case .filePreview(let selected, _): "file-preview-\(selected.id)"
             case .childSessions(let selectedID): "child-sessions-\(selectedID ?? "all")"
             case .inversionSpike: "inversion-spike"
             }
@@ -36,6 +38,7 @@ struct SessionDetailView: View {
     #endif
     @Environment(SessionStore.self) private var store
     @Environment(AppSettings.self) private var settings
+    @Environment(\.hostFiles) private var hostFiles
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var signInRequests: [PhoneSignInAgentRequest] = []
@@ -355,6 +358,15 @@ struct SessionDetailView: View {
                     .presentationDragIndicator(.visible)
             case .attachments:
                 AttachmentsSheet(messages: messages)
+            case .filePreview(let selected, let rowFiles):
+                FileViewerSheet(
+                    sequence: FilePreviewSequence.forInlinePreview(
+                        sessionFiles: transcriptPreviewFiles,
+                        rowFiles: rowFiles,
+                        selected: selected
+                    ),
+                    hostFiles: resolvedHostFiles
+                )
             case .inversionSpike:
                 InvertedTranscriptSpike(sessionID: sid)
             case .childSessions(let selectedID):
@@ -619,7 +631,10 @@ struct SessionDetailView: View {
                     if let preamble = PromptPreamble.message(
                         for: prompt, sessionID: sid, transcriptTail: messages
                     ) {
-                        TranscriptMessageView(message: preamble)
+                        TranscriptMessageView(
+                            message: preamble,
+                            onOpenFile: openInlineFile
+                        )
                             .id(preamble.stableID)
                             .flippedRow()
                     }
@@ -647,7 +662,8 @@ struct SessionDetailView: View {
                                 onFollowup: { prompt in
                                     draft = FollowupDraft.adding(prompt, to: draft)
                                     followupFocusRequest += 1
-                                }
+                                },
+                                onOpenFile: openInlineFile
                             )
                             .id(renderedMessages[idx].stableID)
                             .flippedRow()
@@ -791,6 +807,19 @@ struct SessionDetailView: View {
             )
         }
       }
+    }
+
+    /// Inline rows live inside a lazy transcript and can be recreated while the
+    /// session-wide file index refreshes. Keep sheet ownership on this stable
+    /// session view so a row update cannot discard an in-flight presentation.
+    private func openInlineFile(_ selected: MediaRef, rowFiles: [MediaRef]) {
+        presentedSheet = .filePreview(selected: selected, rowFiles: rowFiles)
+    }
+
+    private var resolvedHostFiles: HostFiles? {
+        var files = hostFiles
+        if let cwd = session.cwd, !cwd.isEmpty { files?.cwd = cwd }
+        return files
     }
 
     private var userMessageScrubberAccessibilityValue: String {
