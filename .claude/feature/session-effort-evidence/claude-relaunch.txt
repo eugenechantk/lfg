@@ -1,0 +1,2 @@
+relaunch {"ok":true}
+after 2s {"sid":"38d8ea7b-008b-48b1-b63d-71e2e492ed15","sameSid":true,"pid":84503,"model":"sonnet","effort":"max","cmd":"/opt/homebrew/bin/claude --dangerously-skip-permissions --add-dir /Users/eugenechan/dev/personal --resume 38d8ea7b-008b-48b1-b63d-71e2e492ed15 --model claude-sonnet-5 --effort max"}

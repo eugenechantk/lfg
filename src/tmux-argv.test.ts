@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { DEFAULT_MODEL, managedCodexSessionArgv, managedSessionArgv } from "./tmux.ts";
+import { DEFAULT_MODEL, claudeRelaunchArgv, managedCodexSessionArgv, managedSessionArgv } from "./tmux.ts";
 
 const ID = "11111111-2222-3333-4444-555555555555";
 
@@ -95,5 +95,35 @@ describe("managedCodexSessionArgv — hook trust", () => {
   it("still present on the resume path", () => {
     const argv = managedCodexSessionArgv({ name: "s", cwd: "/tmp/x", resume: "abc-123" });
     expect(argv).toContain("--dangerously-bypass-hook-trust");
+  });
+});
+
+describe("claudeRelaunchArgv — model and effort changes", () => {
+  const base = { tmuxTarget: "lfg-x:0.0", cwd: "/tmp/x", sessionId: ID };
+  const flag = (argv: string[], name: string) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : null);
+
+  it("respawns the same pane on the same conversation", () => {
+    const argv = claudeRelaunchArgv({ ...base, model: "sonnet" });
+    expect(argv.slice(0, 3)).toEqual(["tmux", "respawn-pane", "-k"]);
+    expect(flag(argv, "-t")).toBe("lfg-x:0.0");
+    expect(flag(argv, "--resume")).toBe(ID);
+  });
+
+  it("an effort change pins effort and keeps the exact model", () => {
+    const argv = claudeRelaunchArgv({ ...base, model: "claude-opus-5", effort: "max" });
+    expect(flag(argv, "--model")).toBe("claude-opus-5");
+    expect(flag(argv, "--effort")).toBe("max");
+  });
+
+  it("a model switch carries a session's explicit effort", () => {
+    const argv = claudeRelaunchArgv({ ...base, model: "sonnet", effort: "low" });
+    expect(flag(argv, "--model")).toBe("sonnet");
+    expect(flag(argv, "--effort")).toBe("low");
+  });
+
+  it("omits what is unknown so Claude's own defaults apply", () => {
+    const argv = claudeRelaunchArgv({ ...base, model: null, effort: null });
+    expect(argv).not.toContain("--model");
+    expect(argv).not.toContain("--effort");
   });
 });

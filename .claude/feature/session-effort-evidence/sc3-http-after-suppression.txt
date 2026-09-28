@@ -1,0 +1,5 @@
+high    {"ok":true,"effort":"high"} [200]
+ultra   {"error":"This Codex model does not offer ultra effort."} [409]
+low     {"ok":true,"effort":"low"} [200]
+max     {"ok":true,"effort":"max"} [200]
+medium  {"ok":true,"effort":"medium"} [200]

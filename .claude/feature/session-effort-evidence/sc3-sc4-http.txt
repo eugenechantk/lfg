@@ -1,0 +1,12 @@
+codex injection            {"error":"unknown effort \"high; rm -rf ~\""} [400] 0.0s
+codex -> max               {"ok":true,"effort":"max"} [200] 3.5s
+  row: {"model": "gpt-6-luna", "effort": "max", "busy": false, "pid": 73173}
+codex -> ultra (luna)      {"error":"This Codex model does not offer ultra effort."} [409] 2.3s
+  row: {"model": "gpt-6-luna", "effort": "max", "busy": false, "pid": 73173}
+codex -> medium            {"error":"Answer Codex's current prompt before changing effort."} [409] 0.1s
+  row: {"model": "gpt-6-luna", "effort": "max", "busy": false, "pid": 73173}
+claude -> low              {"ok":true,"relaunched":true,"effort":"low"} [200] 0.1s
+  row: {"model": "sonnet", "effort": "low", "busy": false, "pid": 89166}
+/opt/homebrew/bin/claude --dangerously-skip-permissions --add-dir /Users/eugenechan/dev/personal --resume 38d8ea7b-008b-48b1-b63d-71e2e492ed15 --model claude-sonnet-5 --effort low
+claude -> low (no-op)      {"ok":true,"effort":"low"} [200] 0.0s
+  row: {"model": "sonnet", "effort": "low", "busy": false, "pid": 89166}

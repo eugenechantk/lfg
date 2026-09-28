@@ -1,0 +1,8 @@
+{"ok":true,"relaunched":true,"effort":"medium"}  reply after 9.6s
+  immediate GET: [(32686, 'probe-effort-claude', 'opus', 'medium')]
+{"ok":true,"relaunched":true,"effort":"max"}  reply after 6.7s
+  immediate GET: [(33037, 'probe-effort-claude', 'opus', 'max')]
+{"ok":true,"relaunched":true,"effort":"xhigh"}  reply after 5.0s
+  immediate GET: [(33316, 'probe-effort-claude', 'opus', 'xhigh')]
+{"ok":true,"relaunched":true,"effort":"low"}  reply after 5.3s
+  immediate GET: [(33662, 'probe-effort-claude', 'opus', 'low')]

@@ -681,19 +681,38 @@ export function spawnManagedSession(opts: {
 // with the requested --model is the reliable boundary. `--resume` preserves the
 // full conversation; respawn-pane keeps the tmux pane/name and managed binding.
 // No prompt is re-submitted — it lands at the composer, ready to go.
+//
+// Effort changes take the same path: `/effort <level>` typed into the TUI saves
+// the level as the default for every new session (settings.json, synced to the
+// other Mac), whereas `--effort` is scoped to this process. A null model or
+// effort is omitted, so the relaunched process falls back to Claude's defaults.
+export function claudeRelaunchArgv(opts: {
+  tmuxTarget: string;
+  cwd: string;
+  sessionId: string;
+  model?: string | null;
+  effort?: string | null;
+}): string[] {
+  const argv = [
+    "tmux", "respawn-pane", "-k", "-c", opts.cwd, "-t", opts.tmuxTarget,
+    claudeBin(), "--dangerously-skip-permissions", "--add-dir", reposRoot(),
+    "--resume", opts.sessionId,
+  ];
+  if (opts.model) argv.push("--model", opts.model);
+  if (opts.effort) argv.push("--effort", opts.effort);
+  return argv;
+}
+
 export function relaunchSessionWithModel(opts: {
   tmuxTarget: string;
   cwd: string;
   sessionId: string;
-  model: string;
+  model?: string | null;
+  effort?: string | null;
 }): { ok: boolean; error?: string } {
   const dec = new TextDecoder();
   ensureFolderTrusted(opts.cwd);
-  const r = Bun.spawnSync([
-    "tmux", "respawn-pane", "-k", "-c", opts.cwd, "-t", opts.tmuxTarget,
-    claudeBin(), "--dangerously-skip-permissions", "--add-dir", reposRoot(),
-    "--resume", opts.sessionId, "--model", opts.model,
-  ]);
+  const r = Bun.spawnSync(claudeRelaunchArgv(opts));
   if (r.exitCode !== 0)
     return { ok: false, error: dec.decode(r.stderr) || "respawn-pane failed" };
   return { ok: true };
@@ -1205,7 +1224,8 @@ const METER_LOOKBACK_LINES = 6;
 //
 // Discriminator: a `›` composer line lying BELOW the last rule line. Claude's
 // composer content sits *between* two rule lines, so only codex puts one there.
-const CODEX_PROMPT = /^\s*›\s*(.*?)\s*$/;
+// Ultra effort (multi-agent) draws the same composer with `»` instead.
+const CODEX_PROMPT = /^\s*[›»]\s*(.*?)\s*$/;
 
 // Codex terminates its unbordered composer with a model + cwd status line:
 //   gpt-5.6-sol high fast · ~/dev/personal/lfg · Main [default]

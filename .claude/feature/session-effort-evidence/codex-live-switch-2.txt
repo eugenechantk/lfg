@@ -1,0 +1,6 @@
+{"target":"ultra","result":{"ok":true},"ms":3251,"footerEffort":"ultra"}
+{"target":"xhigh","result":{"ok":false,"error":"Finish the open Codex prompt or clear its draft before changing effort."},"ms":13,"footerEffort":"ultra"}
+{"target":"max","result":{"ok":false,"error":"Finish the open Codex prompt or clear its draft before changing effort."},"ms":12,"footerEffort":"ultra"}
+{"target":"low","result":{"ok":false,"error":"Finish the open Codex prompt or clear its draft before changing effort."},"ms":13,"footerEffort":"ultra"}
+{"target":"high","result":{"ok":false,"error":"Finish the open Codex prompt or clear its draft before changing effort."},"ms":13,"footerEffort":"ultra"}
+{"target":"high","result":{"ok":false,"error":"Finish the open Codex prompt or clear its draft before changing effort."},"ms":11,"footerEffort":"ultra"}

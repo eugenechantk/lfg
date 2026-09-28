@@ -1,0 +1,17 @@
+claude lfgd-9b6082b5          model=opus           effort=xhigh  | (no chip: default effort)
+claude lfgd-2edd539a          model=opus           effort=xhigh  | (no chip: default effort)
+claude lfgd-7819bcba          model=opus           effort=xhigh  | (no chip: default effort)
+codex  lfg-2bd6f9             model=gpt-5.6-sol    effort=high   | GPT-5.6-Sol high fast · ~/dev/personal/lfg · 
+codex  lfg-b9ac18             model=gpt-6-sol      effort=high   | GPT-6-Sol high fast · ~/dev/inbox · Resume sa
+claude lfg-1fb388             model=opus           effort=xhigh  | (no chip: default effort)
+claude lfg-88727c             model=opus           effort=xhigh  | (no chip: default effort)
+codex  lfg-0feca0             model=gpt-5.6-sol    effort=high   | GPT-5.6-Sol high fast · ~/dev/inbox · Design 
+claude cy-011747-58827        model=opus           effort=xhigh  | (no chip: default effort)
+codex  None                   model=gpt-6-sol      effort=high   | 
+claude lfg-e10abc             model=opus           effort=xhigh  | (no chip: default effort)
+codex  lfg-f852a4             model=gpt-5.6-sol    effort=high   | GPT-5.6-Sol high fast · ~/dev/personal/lfg · 
+claude lfg-7fab60             model=opus           effort=xhigh  | (no chip: default effort)
+codex  lfg-b9d94d             model=gpt-6-sol      effort=high   | GPT-6-Sol high fast · ~/dev/personal/ai-weath
+claude lfg-2ec9f4             model=opus           effort=xhigh  | ⏺ Confirmed the old regex was leaking ◈ max ·
+codex  probe-effort           model=gpt-6-luna     effort=low    | GPT-6-Luna low fast · ~/dev/inbox            
+claude probe-effort-claude    model=sonnet         effort=max    | (no chip: default effort)

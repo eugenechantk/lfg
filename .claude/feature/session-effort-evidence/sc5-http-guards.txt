@@ -1,0 +1,6 @@
+claude bogus                       {"error":"unknown effort \"bogus\""} [400]
+claude ultra (not a flag value)    {"error":"Claude Code does not accept effort \"ultra\""} [400]
+claude missing body                {"error":"expected { effort }"} [400]
+codex injection                    {"error":"not found"} [404]
+external codex (no pane)           {"error":"session is not in a tmux pane — cannot change effort"} [409]
+unknown session                    {"error":"session not found"} [404]

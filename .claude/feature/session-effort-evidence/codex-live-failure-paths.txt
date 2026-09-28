@@ -1,0 +1,5 @@
+model->luna {"ok":true} {"model":"gpt-6-luna","effort":"medium","pickerOpen":false}
+luna ultra {"ok":false,"error":"Codex did not open its advanced reasoning levels."} {"model":"gpt-6-luna","effort":"medium","pickerOpen":false}
+luna max {"ok":false,"error":"Codex did not open its advanced reasoning levels."} {"model":"gpt-6-luna","effort":"medium","pickerOpen":false}
+with draft {"ok":false,"error":"Finish the open Codex prompt or clear its draft before changing effort."} {"model":"gpt-6-luna","effort":"medium","pickerOpen":false}
+model->sol {"ok":true} {"model":"gpt-6-sol","effort":"medium","pickerOpen":false}

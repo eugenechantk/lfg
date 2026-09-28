@@ -1,0 +1,7 @@
+{"target":"xhigh","result":{"ok":true},"ms":1070,"footerEffort":"xhigh"}
+{"target":"ultra","result":{"ok":true},"ms":3338,"footerEffort":"ultra"}
+{"target":"max","result":{"ok":true},"ms":3298,"footerEffort":"max"}
+{"target":"low","result":{"ok":true},"ms":1251,"footerEffort":"low"}
+{"target":"ultra","result":{"ok":true},"ms":3572,"footerEffort":"ultra"}
+{"target":"high","result":{"ok":true},"ms":1121,"footerEffort":"high"}
+{"target":"high","result":{"ok":true},"ms":4,"footerEffort":"high"}

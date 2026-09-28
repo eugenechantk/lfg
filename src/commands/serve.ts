@@ -7,7 +7,9 @@ import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { PATHS } from "../config.ts";
 import { prepareHandoff } from "../handoff.ts";
-import { switchCodexModel } from "../codex-model-switch.ts";
+import { switchCodexEffort, switchCodexModel } from "../codex-model-switch.ts";
+import { effortSwitchBlocker, launchFlag, validateEffortForAgent } from "../session-effort.ts";
+import { panePromptSuppressed } from "../pane-drive.ts";
 import { hostInfo } from "../hostinfo.ts";
 import { currentModelCatalog, isSafeModelId } from "../model-catalog.ts";
 import { claudeModelSwitchBlocker } from "../claude-model-switch.ts";
@@ -45,6 +47,8 @@ import {
   codexSubagentsForParent,
   resolveCodexSubagentTranscript,
   noteConfirmedSessionModel,
+  noteConfirmedSessionEffort,
+  liveClaudeModelId,
   resolveTranscript,
   previewLast,
   recentMessages,
@@ -138,6 +142,24 @@ function transcriptFamily(path: string): "claude" | "codex" | null {
   if (path.startsWith(`${claudeRoot}/`) || path.includes("/.claude/projects/")) return "claude";
   if (path.startsWith(`${codexRoot}/`) || path.includes("/.codex/sessions/")) return "codex";
   return null;
+}
+
+// Reply to a Claude relaunch only once the NEW process owns the session row.
+// `respawn-pane -k` signals the old claude, which takes seconds to shut down;
+// until then it still owns the row, and just after it the new process may not
+// have written its pidfile, so the row briefly vanishes. A client refreshing on
+// our reply read either state and kept it until its next poll (measured: the
+// menu showed the old effort ~15 s after the change). Bounded, so a process
+// ignoring the signal can't hang the reply.
+async function awaitRelaunched(sessionId: string, oldPid: number, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!defaultCloseDeps.alive(oldPid)) {
+      const row = (await listSessions()).find((s) => s.sessionId === sessionId);
+      if (row && row.pid !== oldPid && row.tmuxTarget) return;
+    }
+    await Bun.sleep(250);
+  }
 }
 
 function validateModelForAgent(agent: "claude" | "codex", model: string | undefined): string | null {
@@ -1117,7 +1139,7 @@ async function voiceStatusSnapshot(): Promise<string> {
     if (s.tmuxTarget) {
       const pane = await capturePaneAsync(s.tmuxTarget);
       const tp = s.sessionId ? await resolveTranscript(s.sessionId) : null;
-      const prompt = await resolveSessionPrompt(tp, pane);
+      const prompt = await resolveSessionPrompt(tp, panePromptSuppressed(s.tmuxTarget) ? null : pane);
       if (prompt) {
         status = "BLOCKED";
         const opts = prompt.options
@@ -2736,8 +2758,13 @@ export async function cmdServe(options: {
               cwd: sess.cwd,
               sessionId: sess.sessionId,
               model,
+              // Keep an effort chosen for this session (launched with --effort).
+              // Without a flag the effort is Claude's per-model default, which
+              // should follow the new model rather than be pinned.
+              effort: launchFlag(sess.cmd, "--effort") ? sess.effort : null,
             });
             if (!r.ok) return err(500, r.error || "relaunch failed");
+            await awaitRelaunched(m[1], sess.pid);
             return json({ ok: true, relaunched: true, model });
           }
           if (sess.agent === "codex") {
@@ -2750,6 +2777,53 @@ export async function cmdServe(options: {
             await noteConfirmedSessionModel(m[1], sess.pid, model);
             return json({ ok: true, model });
           }
+        }
+      }
+
+      // Change a running session's reasoning effort, for this session only.
+      // Claude relaunches the pane with --effort (its `/effort` command saves a
+      // global default); Codex drives its native picker and commits with the
+      // session-only key. Same idle-only rule as a model switch.
+      {
+        const m = path.match(/^\/api\/sessions\/([0-9a-fA-F-]{36})\/effort$/);
+        if (m && req.method === "POST") {
+          const body = (await req.json().catch(() => null)) as { effort?: string } | null;
+          const effort = typeof body?.effort === "string" ? body.effort.trim() : "";
+          if (!effort) return err(400, "expected { effort }");
+          const sess = (await listSessions()).find((s) => s.sessionId === m[1]);
+          if (!sess) return err(404, "session not found");
+          if (sess.agent !== "claude" && sess.agent !== "codex")
+            return err(409, "effort change requires a Claude Code or Codex session");
+          const effortError = validateEffortForAgent(sess.agent, effort);
+          if (effortError) return err(400, effortError);
+          if (!sess.tmuxTarget)
+            return err(409, "session is not in a tmux pane — cannot change effort");
+          const blocker = effortSwitchBlocker(sess.agent, {
+            busy: sess.busy === true,
+            queued: listQueue(m[1]).some(message =>
+              message.status === "pending" || message.status === "sending" || message.status === "queued"),
+            prompting: journal.promptPresent(m[1]),
+          });
+          if (blocker) return err(409, blocker);
+          if (sess.agent === "claude") {
+            if (sess.effort === effort) return json({ ok: true, effort });
+            if (!sess.sessionId || !sess.cwd)
+              return err(409, "cannot relaunch: session id or cwd unknown");
+            const r = relaunchSessionWithModel({
+              tmuxTarget: sess.tmuxTarget,
+              cwd: sess.cwd,
+              sessionId: sess.sessionId,
+              model: await liveClaudeModelId(sess),
+              effort,
+            });
+            if (!r.ok) return err(500, r.error || "relaunch failed");
+            await awaitRelaunched(m[1], sess.pid);
+            return json({ ok: true, relaunched: true, effort });
+          }
+          const switched = await switchCodexEffort(sess.tmuxTarget, effort);
+          if (!switched.ok) return err(409, switched.error || "Codex effort change failed");
+          await noteConfirmedSessionEffort(m[1], sess.pid, effort);
+          return json({ ok: true, effort });
         }
       }
 

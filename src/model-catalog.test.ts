@@ -14,8 +14,12 @@ describe("automatic CLI model catalog", () => {
       catalog: {
         config: {
           models: [
-            { id: "claude-opus-5-5", name: "Opus 5.5", section: "main" },
+            {
+              id: "claude-opus-5-5", name: "Opus 5.5", section: "main",
+              thinking: { type: "effort", effort_options: [{ id: "low" }, { id: "xhigh" }, { id: "max" }, { id: "rm -rf" }] },
+            },
             { id: "claude-fable-5-1", name: "Fable 5.1", section: "main" },
+            { id: "claude-haiku-4-5", name: "Haiku 4.5", section: "main", thinking: { type: "none" } },
             { id: "claude-opus-5", name: "Opus 5", section: "overflow" },
             { id: "bad model; rm -rf", name: "Unsafe", section: "main" },
           ],
@@ -27,7 +31,10 @@ describe("automatic CLI model catalog", () => {
     expect(parsed).toEqual({
       version: "2.1.280",
       defaultModel: "claude-fable-5-1",
-      models: ["claude-opus-5-5", "claude-fable-5-1"],
+      models: ["claude-opus-5-5", "claude-fable-5-1", "claude-haiku-4-5"],
+      // Fable carries no `thinking` block → unknown, so it is left out; Haiku's
+      // `{ type: "none" }` is a real "no effort control".
+      efforts: { "claude-opus-5-5": ["low", "xhigh", "max"], "claude-haiku-4-5": [] },
     });
   });
 
@@ -39,7 +46,10 @@ describe("automatic CLI model catalog", () => {
         id: 2,
         result: {
           data: [
-            { model: "gpt-6-astra", hidden: false, isDefault: true },
+            {
+              model: "gpt-6-astra", hidden: false, isDefault: true,
+              supportedReasoningEfforts: [{ reasoningEffort: "low" }, { reasoningEffort: "ultra" }, { reasoningEffort: "bogus" }],
+            },
             { model: "gpt-6-sol", hidden: false, isDefault: false },
             { model: "gpt-hidden", hidden: true, isDefault: false },
             { model: "gpt-6-sol", hidden: false, isDefault: false },
@@ -53,6 +63,7 @@ describe("automatic CLI model catalog", () => {
       version: "0.156.0",
       defaultModel: "gpt-6-astra",
       models: ["gpt-6-astra", "gpt-6-sol"],
+      efforts: { "gpt-6-astra": ["low", "ultra"] },
     });
   });
 
@@ -71,20 +82,22 @@ describe("automatic CLI model catalog", () => {
       version: null,
       defaultModel: "opus",
       models: ["opus", "fable", "sonnet", "haiku"],
+      efforts: {},
     });
     expect(BUNDLED_MODEL_CATALOG.agents.codex).toEqual({
       version: null,
       defaultModel: "gpt-5.6-sol",
       models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
+      efforts: {},
     });
     expect(BUNDLED_MODEL_CATALOG.agents.claude.models).not.toContain("claude-opus-5-5");
     expect(BUNDLED_MODEL_CATALOG.agents.codex.models).not.toContain("gpt-6-astra");
     expect(mergeWithBundledFallbacks({
-      claude: { version: "2.1.280", defaultModel: "claude-opus-5-5", models: ["claude-opus-5-5"] },
+      claude: { version: "2.1.280", defaultModel: "claude-opus-5-5", models: ["claude-opus-5-5"], efforts: {} },
       codex: null,
     })).toEqual({
       agents: {
-        claude: { version: "2.1.280", defaultModel: "claude-opus-5-5", models: ["claude-opus-5-5"] },
+        claude: { version: "2.1.280", defaultModel: "claude-opus-5-5", models: ["claude-opus-5-5"], efforts: {} },
         codex: BUNDLED_MODEL_CATALOG.agents.codex,
       },
     });

@@ -76,7 +76,7 @@ const CHROME = [
   // real table arrives correctly formatted once the turn flushes.
   /[│┌┐└┘├┤┬┴┼╭╮╰╯]/,
   /^\s*\/\w+$/, // "/rc" hint
-  /^●\s+\w+\s+·\s+\/effort/, // model/effort chip
+  /^[●◈]\s+\w+\s+·\s+\/effort/, // model/effort chip ("◈ max · /effort" since 2.1.28x)
 ];
 
 /** Blank lines are handled by `consume` as paragraph breaks, not here. */

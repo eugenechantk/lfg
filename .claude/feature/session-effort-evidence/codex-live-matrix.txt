@@ -1,0 +1,15 @@
+model->sol       {"ok":true} 925ms {"model":"gpt-6-sol","effort":"medium","composer":true}
+sol low          {"ok":true} 910ms {"model":"gpt-6-sol","effort":"low","composer":true}
+sol medium       {"ok":true} 911ms {"model":"gpt-6-sol","effort":"medium","composer":true}
+sol high         {"ok":true} 926ms {"model":"gpt-6-sol","effort":"high","composer":true}
+sol xhigh        {"ok":true} 928ms {"model":"gpt-6-sol","effort":"xhigh","composer":true}
+sol max          {"ok":true} 3155ms {"model":"gpt-6-sol","effort":"max","composer":true}
+sol ultra        {"ok":true} 3145ms {"model":"gpt-6-sol","effort":"ultra","composer":true}
+sol low          {"ok":true} 1147ms {"model":"gpt-6-sol","effort":"low","composer":true}
+sol ultra        {"ok":true} 3409ms {"model":"gpt-6-sol","effort":"ultra","composer":true}
+sol high         {"ok":true} 992ms {"model":"gpt-6-sol","effort":"high","composer":true}
+model->luna      {"ok":true} 793ms {"model":"gpt-6-luna","effort":"medium","composer":true}
+luna max         {"ok":true} 3263ms {"model":"gpt-6-luna","effort":"max","composer":true}
+luna ultra       {"ok":false,"error":"This Codex model does not offer ultra effort."} 2074ms {"model":"gpt-6-luna","effort":"max","composer":true}
+luna low         {"ok":true} 1130ms {"model":"gpt-6-luna","effort":"low","composer":true}
+draft guard      {"ok":false,"error":"Finish the open Codex prompt or clear its draft before changing effort."} 18ms {"model":"gpt-6-luna","effort":"low","composer":true}

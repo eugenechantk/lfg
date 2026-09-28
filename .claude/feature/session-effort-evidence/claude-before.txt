@@ -1,0 +1,1 @@
+{"sid":"38d8ea7b-008b-48b1-b63d-71e2e492ed15","pid":83120,"model":"sonnet","effort":"high","busy":false,"cmd":"claude --dangerously-skip-permissions --model sonnet -- Reply with just the word OK.","liveModelId":"claude-sonnet-5"}

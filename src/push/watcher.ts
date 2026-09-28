@@ -49,6 +49,7 @@ import { busyWithRunningWork } from "../subagents.ts";
 import { basename, join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { PATHS } from "../config.ts";
+import { panePromptSuppressed } from "../pane-drive.ts";
 
 // One observation of a session at a single tick.
 export type SessionState = {
@@ -499,7 +500,8 @@ async function observeSession(
   const pane = await capturePaneAsync(s.tmuxTarget);
   const tp = s.sessionId ? await resolveTranscript(s.sessionId) : null;
   let prompt: PendingPrompt | PanePrompt | { question: string } | null = tp ? await pendingToolPrompt(tp) : null;
-  if (!prompt && pane) prompt = parsePrompt(pane);
+  // A selector lfg itself is driving (model/effort change) is not a question.
+  if (!prompt && pane && !panePromptSuppressed(s.tmuxTarget)) prompt = parsePrompt(pane);
   // Same precedence as serve.ts's resolveSessionPrompt: a real dialog first.
   if (!prompt) prompt = signIn;
   // The SAME derivation the journal pump runs (`journal-pump.ts`), through the

@@ -2,11 +2,16 @@ import { readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { claudeBin, codexBin } from "./tmux.ts";
+import { isEffortLevel } from "./session-effort.ts";
 
 export type AgentModelCatalog = {
   version: string | null;
   defaultModel: string;
   models: string[];
+  // Reasoning levels each model accepts, keyed by model id. [] = the model has
+  // no effort control (Claude Haiku). A model missing from the map is unknown;
+  // clients then fall back to the CLI's usual levels.
+  efforts: Record<string, string[]>;
 };
 
 export type ModelCatalogResponse = {
@@ -24,6 +29,7 @@ export const BUNDLED_MODEL_CATALOG: ModelCatalogResponse = {
       // they stay usable on hosts that predate GET /api/models.
       defaultModel: "opus",
       models: ["opus", "fable", "sonnet", "haiku"],
+      efforts: {},
     },
     codex: {
       version: null,
@@ -31,6 +37,7 @@ export const BUNDLED_MODEL_CATALOG: ModelCatalogResponse = {
       // host replaces these with its live CLI-discovered catalog.
       defaultModel: "gpt-5.6-sol",
       models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
+      efforts: {},
     },
   },
 };
@@ -45,25 +52,39 @@ function uniqueSafeModels(values: unknown[]): string[] {
   return [...new Set(values.filter(isSafeModelId))];
 }
 
+function uniqueEfforts(values: unknown[]): string[] {
+  return [...new Set(values.filter(isEffortLevel))];
+}
+
 export function parseClaudeCatalog(raw: string, version: string | null): AgentModelCatalog | null {
   try {
     const parsed = JSON.parse(raw) as {
       catalog?: {
-        config?: { models?: Array<{ id?: unknown; section?: unknown }> };
+        config?: { models?: Array<{
+          id?: unknown;
+          section?: unknown;
+          thinking?: { type?: unknown; effort_options?: Array<{ id?: unknown }> };
+        }> };
         state?: { model?: unknown };
       };
     };
     const entries = parsed.catalog?.config?.models;
     if (!Array.isArray(entries)) return null;
-    const models = uniqueSafeModels(
-      entries.filter(entry => entry?.section === "main").map(entry => entry?.id),
-    );
+    const main = entries.filter(entry => entry?.section === "main");
+    const models = uniqueSafeModels(main.map(entry => entry?.id));
     if (models.length === 0) return null;
     const stateModel = parsed.catalog?.state?.model;
     const defaultModel = isSafeModelId(stateModel) && models.includes(stateModel)
       ? stateModel
       : models[0]!;
-    return { version, defaultModel, models };
+    const efforts: Record<string, string[]> = {};
+    for (const entry of main) {
+      if (!isSafeModelId(entry?.id) || entry.id in efforts || !entry.thinking) continue;
+      // `{ type: "none" }` (Haiku) is a real "no effort control", not unknown.
+      const options = Array.isArray(entry.thinking.effort_options) ? entry.thinking.effort_options : [];
+      efforts[entry.id] = uniqueEfforts(options.map(option => option?.id));
+    }
+    return { version, defaultModel, models, efforts };
   } catch {
     return null;
   }
@@ -72,7 +93,12 @@ export function parseClaudeCatalog(raw: string, version: string | null): AgentMo
 export function parseCodexModelListOutput(raw: string, version: string | null): AgentModelCatalog | null {
   let response: {
     id?: unknown;
-    result?: { data?: Array<{ model?: unknown; hidden?: unknown; isDefault?: unknown }> };
+    result?: { data?: Array<{
+      model?: unknown;
+      hidden?: unknown;
+      isDefault?: unknown;
+      supportedReasoningEfforts?: Array<{ reasoningEffort?: unknown }>;
+    }> };
   } | null = null;
   for (const line of raw.split("\n")) {
     try {
@@ -91,7 +117,13 @@ export function parseCodexModelListOutput(raw: string, version: string | null): 
   const defaultModel = isSafeModelId(providerDefault) && models.includes(providerDefault)
     ? providerDefault
     : models[0]!;
-  return { version, defaultModel, models };
+  const efforts: Record<string, string[]> = {};
+  for (const entry of visible) {
+    const model = entry.model as string;
+    if (model in efforts || !Array.isArray(entry.supportedReasoningEfforts)) continue;
+    efforts[model] = uniqueEfforts(entry.supportedReasoningEfforts.map(option => option?.reasoningEffort));
+  }
+  return { version, defaultModel, models, efforts };
 }
 
 export function mergeWithBundledFallbacks(discovered: {

@@ -10,6 +10,7 @@ import { rankSessions, RankedSearchPager } from "./ranked-session-search";
 import { tmpdir } from "node:os";
 import { tmuxTargetForPid, paneTtyForTarget, capturePaneAsync } from "./tmux";
 import { codexModelFromPane } from "./codex-model-state.ts";
+import { codexEffortFromPane, isEffortLevel, launchFlag, liveLaunchSetting } from "./session-effort.ts";
 import { listManaged, patchManaged, type ManagedSession } from "./managed";
 import { isClosing } from "./closing";
 import { userAssignments } from "./users";
@@ -166,6 +167,11 @@ export type Session = {
   // `/model` switch, not just the launch flag), falling back to the launch
   // `--model` arg. null when not yet known (e.g. no assistant output yet).
   model: string | null;
+  // Reasoning effort the live process is running with (low/medium/high/xhigh/
+  // max, plus Codex's ultra). Claude: this process's latest assistant turn,
+  // else its `--effort` flag; Codex: the status footer, else the rollout's
+  // turn_context. null when unknown or the model has no effort control.
+  effort?: string | null;
   // Health of the session as far as the build is concerned. "ok" = running
   // normally; "blocked" = the session can't make forward progress until a
   // human acts (e.g. its model was retired/disabled, or the agent ran out of
@@ -2919,15 +2925,42 @@ export function managedFieldsForTmuxName(
 // line with `message.model`, so the tail tells us the *live* model even after a
 // mid-session `/model` switch (the launch `--model` arg goes stale). Returns
 // null for a session that hasn't produced an assistant turn yet.
-async function lastAssistantModel(path: string): Promise<string | null> {
+// Claude stamps the same lines with the turn's `effort`, and `at` lets a caller
+// tell whether the turn predates the current process (see liveLaunchSetting).
+type AssistantSettings = { model: string; effort: string | null; at: number | null };
+
+async function lastAssistantSettings(path: string): Promise<AssistantSettings | null> {
   return scanBack(path, (line) => {
-    let x: { type?: string; message?: { model?: string } };
+    let x: { type?: string; timestamp?: string; effort?: unknown; message?: { model?: string } };
     try {
       x = JSON.parse(line);
     } catch {
       return null;
     }
-    return x.type === "assistant" && x.message?.model ? x.message.model : null;
+    if (x.type !== "assistant" || !x.message?.model) return null;
+    const at = x.timestamp ? Date.parse(x.timestamp) : NaN;
+    return {
+      model: x.message.model,
+      effort: isEffortLevel(x.effort) ? x.effort : null,
+      at: Number.isFinite(at) ? at : null,
+    };
+  });
+}
+
+async function lastAssistantModel(path: string): Promise<string | null> {
+  return (await lastAssistantSettings(path))?.model ?? null;
+}
+
+/** The exact model id a live Claude process is running, for relaunching it on
+ * the same model. Full id rather than the row's alias, so a relaunch never
+ * silently moves e.g. `claude-opus-5` onto whatever `opus` now resolves to. */
+export async function liveClaudeModelId(s: Pick<Session, "cmd" | "startedAt" | "transcriptPath">): Promise<string | null> {
+  const turn = s.transcriptPath ? await lastAssistantSettings(s.transcriptPath).catch(() => null) : null;
+  return liveLaunchSetting({
+    flag: launchFlag(s.cmd, "--model"),
+    transcript: turn?.model && turn.model !== "<synthetic>" ? turn.model : null,
+    transcriptAt: turn?.at ?? null,
+    processStartedAt: s.startedAt,
   });
 }
 
@@ -2935,16 +2968,29 @@ async function lastAssistantModel(path: string): Promise<string | null> {
 // record instead of a per-message model. A native picker change does not update
 // this record until another turn starts, so live lists prefer the terminal
 // footer and use this as their fallback. Closed sessions use the saved model.
-export async function lastCodexModel(path: string): Promise<string | null> {
+async function lastCodexTurnSettings(path: string): Promise<{ model: string; effort: string | null } | null> {
   return scanBack(path, (line) => {
-    let x: { type?: string; payload?: { model?: string } };
+    let x: {
+      type?: string;
+      payload?: {
+        model?: string;
+        effort?: unknown;
+        collaboration_mode?: { settings?: { reasoning_effort?: unknown } };
+      };
+    };
     try {
       x = JSON.parse(line);
     } catch {
       return null;
     }
-    return x.type === "turn_context" && x.payload?.model ? x.payload.model : null;
+    if (x.type !== "turn_context" || !x.payload?.model) return null;
+    const effort = x.payload.effort ?? x.payload.collaboration_mode?.settings?.reasoning_effort;
+    return { model: x.payload.model, effort: isEffortLevel(effort) ? effort : null };
   });
+}
+
+export async function lastCodexModel(path: string): Promise<string | null> {
+  return (await lastCodexTurnSettings(path))?.model ?? null;
 }
 
 // The short model alias (opus/sonnet/…) a now-closed session last ran on, read
@@ -3018,9 +3064,21 @@ let lastGood: Session[] | null = null;
  * Await the existing scan rather than invalidating it and spawning a duplicate
  * process scan. Subsequent scans read the live footer normally. */
 export async function noteConfirmedSessionModel(sessionId: string, pid: number, model: string): Promise<void> {
+  await noteConfirmedSessionSetting(sessionId, pid, { model });
+}
+
+export async function noteConfirmedSessionEffort(sessionId: string, pid: number, effort: string): Promise<void> {
+  await noteConfirmedSessionSetting(sessionId, pid, { effort });
+}
+
+async function noteConfirmedSessionSetting(
+  sessionId: string,
+  pid: number,
+  patch: Partial<Pick<Session, "model" | "effort">>,
+): Promise<void> {
   const update = (sessions: Session[] | null) => {
     for (const session of sessions ?? []) {
-      if (session.sessionId === sessionId && session.pid === pid) session.model = model;
+      if (session.sessionId === sessionId && session.pid === pid) Object.assign(session, patch);
     }
   };
   if (listCache) update(await listCache.promise);
@@ -3153,6 +3211,7 @@ async function listSessionsUncached(
     let lastActivityAt: number | null = null;
     let lastUser: string | null = null;
     let liveModel: string | null = null;
+    let lastTurn: AssistantSettings | null = null;
     if (transcriptPath) {
       // lastActivityAt means CONVERSATION activity, so it comes from the last
       // message's timestamp, not the file mtime. The transcript dir is synced
@@ -3167,13 +3226,27 @@ async function listSessionsUncached(
       last = await previewLast(transcriptPath).catch(() => null);
       lastActivityAt = last?.ts ?? mtimeMs;
       lastUser = await lastUserText(transcriptPath).catch(() => null);
-      liveModel = await lastAssistantModel(transcriptPath).catch(() => null);
+      lastTurn = await lastAssistantSettings(transcriptPath).catch(() => null);
+      liveModel = lastTurn?.model ?? null;
       lastAssistant = await lastAssistantMsg(transcriptPath).catch(() => null);
     }
     // Prefer the transcript's live model; fall back to the launch `--model` arg
     // (always present on a lfg-managed session, so the badge shows instantly
-    // before the first assistant turn).
-    const model = modelAlias(liveModel) ?? modelAlias(e.cmd.match(/--model\s+(\S+)/)?.[1]);
+    // before the first assistant turn). lfg switches model and effort by
+    // relaunching with the flag, which writes nothing to the transcript until
+    // the next turn — so a transcript older than this process loses to the flag.
+    const model = modelAlias(liveLaunchSetting({
+      flag: launchFlag(e.cmd, "--model"),
+      transcript: liveModel,
+      transcriptAt: lastTurn?.at ?? null,
+      processStartedAt: e.startedAt,
+    }));
+    const effort = liveLaunchSetting({
+      flag: launchFlag(e.cmd, "--effort"),
+      transcript: lastTurn?.effort ?? null,
+      transcriptAt: lastTurn?.at ?? null,
+      processStartedAt: e.startedAt,
+    });
     const health = computeStatus(lastAssistant, liveModel);
     const project = projectName(e.cwd);
     let title = (sessionId && overrides[sessionId]) || null;
@@ -3237,6 +3310,7 @@ async function listSessionsUncached(
       ...managedFields,
       assignedUser: tmuxName ? (assigns[tmuxName] ?? null) : null,
       model,
+      effort,
       status: health.status,
       statusReason: health.statusReason,
       statusDetail: health.statusDetail,
@@ -3325,6 +3399,7 @@ async function listSessionsUncached(
     let lastActivityAt: number | null = null;
     let lastUser: string | null = null;
     let liveModel: string | null = null;
+    let liveEffort: string | null = null;
     if (transcriptPath) {
       // Conversation activity from the last message's ts, mtime only as
       // fallback — same rationale as the claude site above (synced mtimes lie).
@@ -3335,7 +3410,9 @@ async function listSessionsUncached(
       last = await previewLast(transcriptPath).catch(() => null);
       lastActivityAt = last?.ts ?? mtimeMs;
       lastUser = await lastUserText(transcriptPath).catch(() => null);
-      liveModel = await lastCodexModel(transcriptPath).catch(() => null);
+      const turnSettings = await lastCodexTurnSettings(transcriptPath).catch(() => null);
+      liveModel = turnSettings?.model ?? null;
+      liveEffort = turnSettings?.effort ?? null;
       // Status is graded from the last ASSISTANT turn, same as the claude site:
       // grading `last` (any role) meant sending into a usage-limited codex
       // session put a user row at the tail and erased its "blocked".
@@ -3358,6 +3435,7 @@ async function listSessionsUncached(
         ? await sessionTurnState({ sessionId, transcriptPath })
         : null;
     const managedFields = managedFieldsForTmuxName(tmuxName, managedByName);
+    const footerPane = tmuxTarget ? await capturePaneAsync(tmuxTarget) : null;
     out.push({
       agent: "codex",
       control: sessionControl(tmuxTarget),
@@ -3386,8 +3464,8 @@ async function listSessionsUncached(
       // The native picker updates its footer immediately, but turn_context
       // retains the previous model until the next user turn. Prefer the live
       // footer so model menus do not revert their checkmark after a switch.
-      model: (tmuxTarget ? codexModelFromPane(await capturePaneAsync(tmuxTarget)) : null)
-        ?? liveModel ?? p.cmd.match(/--model\s+(\S+)/)?.[1] ?? null,
+      model: codexModelFromPane(footerPane) ?? liveModel ?? p.cmd.match(/--model\s+(\S+)/)?.[1] ?? null,
+      effort: codexEffortFromPane(footerPane) ?? liveEffort,
       ...computeStatus(lastAssistant, null),
     });
   }
@@ -3408,10 +3486,10 @@ async function listSessionsUncached(
   for (const { pid, cmd, thread } of externalCodexClaims) {
     claimedCodex.add(thread.id);
     const transcriptPath = thread.path;
-    const [last, lastUser, liveModel, lastAssistant] = await Promise.all([
+    const [last, lastUser, turnSettings, lastAssistant] = await Promise.all([
       previewLast(transcriptPath).catch(() => null),
       lastUserText(transcriptPath).catch(() => null),
-      lastCodexModel(transcriptPath).catch(() => null),
+      lastCodexTurnSettings(transcriptPath).catch(() => null),
       lastAssistantMsg(transcriptPath).catch(() => null),
     ]);
     let mtimeMs: number | null = null;
@@ -3446,7 +3524,8 @@ async function listSessionsUncached(
       tmuxName: null,
       managed: false,
       assignedUser: null,
-      model: liveModel,
+      model: turnSettings?.model ?? null,
+      effort: turnSettings?.effort ?? null,
       ...computeStatus(lastAssistant, null),
     });
   }

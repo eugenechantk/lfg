@@ -1,0 +1,6 @@
+{"target":"low","result":{"ok":true},"ms":1029,"footerEffort":"low","footer":"GPT-6-Sol low fast · ~/dev/inbox                            "}
+{"target":"max","result":{"ok":true},"ms":3369,"footerEffort":"max","footer":"GPT-6-Sol max fast · ~/dev/inbox                            "}
+{"target":"ultra","result":{"ok":false,"error":"This Codex CLI cannot change effort for one session only. Update Codex."},"ms":1334,"footerEffort":"max","footer":"GPT-6-Sol max fast · ~/dev/inbox                            "}
+{"target":"xhigh","result":{"ok":false,"error":"This Codex CLI cannot change effort for one session only. Update Codex."},"ms":1296,"footerEffort":"max","footer":"GPT-6-Sol max fast · ~/dev/inbox                            "}
+{"target":"high","result":{"ok":false,"error":"This Codex CLI cannot change effort for one session only. Update Codex."},"ms":1298,"footerEffort":"max","footer":"GPT-6-Sol max fast · ~/dev/inbox                            "}
+{"target":"high","result":{"ok":false,"error":"This Codex CLI cannot change effort for one session only. Update Codex."},"ms":1286,"footerEffort":"max","footer":"GPT-6-Sol max fast · ~/dev/inbox                            "}

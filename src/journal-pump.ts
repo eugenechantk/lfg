@@ -42,6 +42,7 @@ import { forgetTurnState } from "./turn-state.ts";
 import { forgetHookState } from "./hook-state.ts";
 import { resolveBusy, sessionTurnState } from "./session-state.ts";
 import { busyWithRunningWork } from "./subagents.ts";
+import { panePromptSuppressed } from "./pane-drive.ts";
 import { statSync } from "node:fs";
 import {
   BrowserFrameExtractor,
@@ -498,7 +499,9 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       // by the time the selector renders the top of the turn is gone — but it
       // WAS on screen a few captures ago. See `pane-history.ts`.
       w.stitcher.consume(styled);
-      const prompt = withStitchedPreamble(await deps.resolvePrompt(w.tp, pane, w.sid), w);
+      // A selector lfg itself is driving (model/effort change) is not a question.
+      const promptPane = panePromptSuppressed(w.target) ? null : pane;
+      const prompt = withStitchedPreamble(await deps.resolvePrompt(w.tp, promptPane, w.sid), w);
       if (deltas.promptChanged(w.sid, prompt))
         j.append(w.sid, "prompt", { sid: w.sid, prompt });
       const paneBusy = pane ? isBusy(pane) : false;

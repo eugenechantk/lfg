@@ -283,6 +283,14 @@ describe("defects found by looking at real output", () => {
     expect(healSpans("**one** and **two**")).toBe("**one** and **two**");
   });
 
+  test("the effort chip is chrome in both glyphs", () => {
+    // Claude Code 2.1.280 right-aligns "◈ max · /effort" above the composer
+    // whenever a session runs a non-default effort.
+    const s = new PaneStitcher();
+    s.consume(`⏺ prose line\n${" ".repeat(90)}◈ max · /effort\n● high · /effort`);
+    expect(s.preamble()).toBe("prose line");
+  });
+
   test("a spinner with an apostrophe is still chrome", () => {
     // "✽ Beboppin'… (19s · ↓ 815 tokens)" leaked into the prose.
     const s = new PaneStitcher();

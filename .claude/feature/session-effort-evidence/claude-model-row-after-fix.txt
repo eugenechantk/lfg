@@ -1,0 +1,10 @@
+lfgd-9b6082b5          opus xhigh
+lfgd-2edd539a          opus xhigh
+lfgd-7819bcba          opus xhigh
+lfg-1fb388             opus xhigh
+lfg-88727c             opus xhigh
+cy-011747-58827        opus xhigh
+lfg-e10abc             opus xhigh
+lfg-7fab60             opus xhigh
+lfg-2ec9f4             opus xhigh
+probe-effort-claude    opus low

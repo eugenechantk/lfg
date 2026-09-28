@@ -233,6 +233,20 @@ describe("codex composer", () => {
     expect(codexComposerIndex(CODEX_SELECTOR.split("\n"))).toBeNull();
     expect(inputBoxFromPane(CODEX_SELECTOR)).toBeNull();
   });
+
+  // Captured from codex-cli 0.156.0 after `/model` → Ultra (session only).
+  test("Ultra effort's » composer is still the composer", () => {
+    const ultra = [
+      "• Model changed to gpt-6-sol ultra for this session only",
+      "",
+      "» Ask Codex to do anything",
+      "",
+      "  GPT-6-Sol ultra fast · ~/dev/inbox                                ⚠ 2 warnings · f2 to view",
+    ].join("\n");
+    expect(codexComposerIndex(ultra.split("\n"))).toBe(2);
+    expect(inputBoxFromPane(ultra)).toBe("Ask Codex to do anything");
+    expect(inputBoxFromPane(ultra.replace("» Ask Codex to do anything", "» run the tests"))).toBe("run the tests");
+  });
 });
 
 describe("claude panes are unaffected", () => {
