@@ -1262,13 +1262,15 @@ struct SessionRow: View {
                     .truncationMode(.tail)
                     .frame(height: 22, alignment: .leading)
                 HStack(spacing: 7) {
-                    metaText
-                        .font(.system(size: 15))
-                        .foregroundStyle(Tokens.meta)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .frame(height: 20, alignment: .leading)
-                        .accessibilityLabel(metaAccessibilityText)
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
+                        metaText
+                            .font(.system(size: 15))
+                            .foregroundStyle(Tokens.meta)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(height: 20, alignment: .leading)
+                            .accessibilityLabel(metaAccessibilityText)
+                    }
                     if let hostLabel {
                         HStack(spacing: 4) {
                             Image(systemName: "desktopcomputer")
@@ -1297,6 +1299,10 @@ struct SessionRow: View {
         session.title.isEmpty ? "Untitled session" : session.title
     }
 
+    private var listTime: SessionListTime? {
+        SessionListTime.resolve(session: session, isWorking: group == .working)
+    }
+
     private var metaText: Text {
         var text = Text(directoryText)
         if !session.closed, let model = session.model, !model.isEmpty {
@@ -1314,8 +1320,8 @@ struct SessionRow: View {
                 + Text(Image(systemName: "terminal"))
                 + Text(" \(session.runningBackgroundProcessCount)")
         }
-        if let at = session.lastActivityAt {
-            text = text + Text(" · \(at.asCompactRelativeFromMillis)")
+        if let listTime {
+            text = text + Text(" · \(listTime.timestamp.asCompactRelativeFromMillis)")
         }
         return text
     }
@@ -1335,8 +1341,12 @@ struct SessionRow: View {
         ) {
             parts.append(processActivity)
         }
-        if let at = session.lastActivityAt {
-            parts.append(at.asCompactRelativeFromMillis)
+        if let listTime {
+            let time = listTime.timestamp.asCompactRelativeFromMillis
+            switch listTime {
+            case .runningSince: parts.append("Running for \(time)")
+            case .lastActivity: parts.append("Last activity \(time) ago")
+            }
         }
         return parts.joined(separator: ", ")
     }
@@ -1350,6 +1360,47 @@ struct SessionRow: View {
         return "No directory"
     }
 }
+
+#if DEBUG
+/// Network-free rows for verifying the clock selected by each list state.
+/// Launch with `LFG_SESSION_LIST_TIME_FIXTURE=1`.
+struct SessionListTimeFixture: View {
+    @State private var nowMs = Date().timeIntervalSince1970 * 1_000
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Working").font(.caption).padding(.horizontal, 20)
+                SessionRow(
+                    session: Session(sessionId: "time-working", title: "Working since start",
+                                     cwd: "/tmp/work", startedAt: nowMs - 45_000,
+                                     lastActivityAt: nowMs - 5_000),
+                    group: .working
+                )
+                Divider()
+                Text("Idle").font(.caption).padding(.horizontal, 20)
+                SessionRow(
+                    session: Session(sessionId: "time-idle", title: "Idle since activity",
+                                     cwd: "/tmp/idle", startedAt: nowMs - 120_000,
+                                     lastActivityAt: nowMs - 30_000),
+                    group: .idle
+                )
+                Divider()
+                Text("Closed").font(.caption).padding(.horizontal, 20)
+                SessionRow(
+                    session: Session(sessionId: "time-closed", title: "Closed since activity",
+                                     cwd: "/tmp/closed", lastActivityAt: nowMs - 90_000,
+                                     closed: true),
+                    group: .closed
+                )
+                Spacer()
+            }
+            .navigationTitle("Session times")
+            .accessibilityIdentifier("sessionListTimeFixture")
+        }
+    }
+}
+#endif
 
 /// Presentation for the tri-state connection status. "Reconnecting…" is its own
 /// state on purpose: an unknown or still-being-established connection is not an

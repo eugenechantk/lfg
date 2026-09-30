@@ -88,6 +88,10 @@ struct LFGApp: App {
                 }
             } else if ProcessInfo.processInfo.environment["LFG_FILE_SHARE_FIXTURE"] == "1" {
                 FileShareFixture()
+            } else if ProcessInfo.processInfo.environment["LFG_SESSION_LIST_TIME_FIXTURE"] == "1" {
+                SessionListTimeFixture()
+                    .environment(settings)
+                    .environment(store)
             } else {
                 RootView()
                     .environment(settings)
