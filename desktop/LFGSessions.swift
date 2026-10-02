@@ -997,9 +997,11 @@ final class SessionStore: ObservableObject {
 
         do {
             let created = try await DesktopSessionCreator.create(plan: plan, host: host)
-            if let error = Opener.open(created) { return error }
+            // Opening iTerm should not wait for every configured host to finish
+            // its list refresh (one offline host can take several seconds).
+            let opening = Task.detached { Opener.open(created) }
             await refresh()
-            return nil
+            return await opening.value
         } catch {
             return "Create failed: \(error.localizedDescription)"
         }
@@ -1020,9 +1022,9 @@ final class SessionStore: ObservableObject {
         defer { handingOffIds.remove(id) }
         do {
             let created = try await DesktopSessionCreator.switchTool(item: item, host: host, agent: agent)
-            let error = await Task.detached { Opener.open(created) }.value
+            let opening = Task.detached { Opener.open(created) }
             await refresh()
-            return error
+            return await opening.value
         } catch { return "Switch tool failed: \(error.localizedDescription)" }
     }
 
@@ -4040,6 +4042,14 @@ enum Opener {
                 + "Run it by hand to see why:\n\(shellCommand)"
         }
         stretchToFullDesktopHeight(out)
+        // Creating/resizing a window via AppleScript does not guarantee it
+        // remains frontmost when the action began in LFG's context menu.
+        // Activate after all window work, so the returned tmux is ready for
+        // input without the user selecting the new session again.
+        let (_, focusError) = runAppleScript("tell application \"iTerm\" to activate")
+        if let focusError {
+            return "iTerm2 opened the session but couldn't bring its window forward: \(focusError)"
+        }
         return nil
     }
 
