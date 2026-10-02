@@ -404,6 +404,11 @@ struct SessionItem: Identifiable {
             && Opener.canResume(agent: session.agent)
     }
 
+    var canFork: Bool {
+        session.sessionId?.isEmpty == false
+            && (session.agent == "claude" || session.agent == "codex")
+    }
+
     enum Status: Int, CaseIterable {
         case needsInput, paused, working, idle, closed
         var title: String {
@@ -891,6 +896,7 @@ final class SessionStore: ObservableObject {
     @Published var closingIds: Set<String> = []
     @Published var creatingSession = false
     @Published var handingOffIds: Set<String> = []
+    @Published var forkingIds: Set<String> = []
 
     // MARK: Search across every session on every host
     //
@@ -1026,6 +1032,28 @@ final class SessionStore: ObservableObject {
             await refresh()
             return await opening.value
         } catch { return "Switch tool failed: \(error.localizedDescription)" }
+    }
+
+    func canStartFork(_ item: SessionItem) -> Bool {
+        guard item.canFork, let id = item.session.sessionId else { return false }
+        return !forkingIds.contains(id)
+    }
+
+    func fork(_ item: SessionItem) async -> String? {
+        guard canStartFork(item), let id = item.session.sessionId else { return nil }
+        guard let host = creationHost(for: item.hostURL) else {
+            return "The source host is no longer configured."
+        }
+        forkingIds.insert(id)
+        defer { forkingIds.remove(id) }
+        do {
+            let created = try await DesktopSessionCreator.fork(item: item, host: host)
+            let opening = Task.detached { Opener.open(created) }
+            await refresh()
+            return await opening.value
+        } catch {
+            return "Fork failed: \(error.localizedDescription)"
+        }
     }
 
     private func creationHost(for url: String) -> HostState? {
@@ -2962,6 +2990,46 @@ enum DesktopFeatureTestCLI {
         let handoffPayload = try JSONSerialization.jsonObject(with: handoffBody) as? [String: String]
         try expect(handoffPayload == ["sessionId": "claude-source", "agent": "codex"], "handoff sends source identity without overriding its directory")
         try expect(handoff.timeoutInterval == 90, "handoff allows transcript export and Codex binding time")
+
+        let source = newSessionTestItem(
+            id: "codex-source", title: "Source", project: "lfg",
+            cwd: "/Users/me/dev/lfg", lastActivity: 1, agent: "codex",
+            model: "gpt-5.6-sol", hostURL: "https://source.test")
+        try expect(source.canFork && !newSessionTestItem(
+            id: "other", title: "Other", project: "lfg", cwd: "/tmp",
+            lastActivity: 1, agent: "other", model: nil,
+            hostURL: "https://source.test").canFork,
+                   "only Claude and Codex conversations with IDs offer branching")
+        let forkStore = SessionStore()
+        try expect(forkStore.canStartFork(source), "an eligible source can start a fork")
+        forkStore.forkingIds.insert("codex-source")
+        try expect(!forkStore.canStartFork(source), "an in-flight fork blocks a second request")
+        let fork = try DesktopSessionCreator.forkRequest(item: source)
+        let forkBody = try require(fork.httpBody, "fork has a request body")
+        let forkPayload = try JSONSerialization.jsonObject(with: forkBody) as? [String: String]
+        try expect(fork.httpMethod == "POST" && fork.url?.absoluteString == "https://source.test/api/sessions/fork",
+                   "fork targets the source host")
+        try expect(forkPayload == ["sessionId": "codex-source"] && fork.timeoutInterval == 90,
+                   "fork carries only source identity and waits for Codex bootstrap")
+        let branch = try DesktopSessionCreator.createdItem(
+            response: DesktopNewSessionResponse(
+                ok: true, sessionId: "codex-branch", tmuxName: "lfg-branch",
+                cwd: "/Users/me/dev/lfg", agent: "codex"),
+            plan: DesktopNewSessionPlan(hostURL: source.hostURL, cwd: "/Users/me/dev/lfg",
+                                        agent: "codex", model: "gpt-5.6-sol"),
+            host: createdHost)
+        try expect(branch.session.sessionId == "codex-branch" && branch.session.tmuxName == "lfg-branch",
+                   "the returned branch keeps its new identity and tmux target for iTerm")
+        let unboundClaudeBranch = try DesktopSessionCreator.createdItem(
+            response: DesktopNewSessionResponse(
+                ok: true, sessionId: nil, tmuxName: "lfg-claude-branch",
+                cwd: "/Users/me/dev/lfg", agent: "claude"),
+            plan: DesktopNewSessionPlan(hostURL: source.hostURL, cwd: "/Users/me/dev/lfg",
+                                        agent: "claude", model: "opus"),
+            host: createdHost)
+        try expect(unboundClaudeBranch.session.sessionId == nil
+                   && unboundClaudeBranch.session.tmuxName == "lfg-claude-branch",
+                   "a Claude fork can attach while its new transcript ID is still binding")
     }
 
     /// Search spans every session on every host, so the rules that keep that
@@ -3322,6 +3390,35 @@ enum DesktopSessionCreator {
         }
         return try createdItem(response: created, plan: DesktopNewSessionPlan(
             hostURL: item.hostURL, cwd: item.session.cwd ?? "", agent: agent, model: ""
+        ), host: host)
+    }
+
+    static func forkRequest(item: SessionItem) throws -> URLRequest {
+        guard item.canFork, let sourceId = item.session.sessionId else {
+            throw CreationError.message("source session cannot be forked")
+        }
+        guard let url = endpoint(item.hostURL, path: "/api/sessions/fork") else {
+            throw CreationError.message("bad host URL")
+        }
+        var request = DesktopAPI.request(url, method: "POST")
+        request.timeoutInterval = 90
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["sessionId": sourceId])
+        return request
+    }
+
+    static func fork(item: SessionItem, host: HostState) async throws -> SessionItem {
+        let request = try forkRequest(item: item)
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+        let created = try JSONDecoder().decode(DesktopNewSessionResponse.self, from: data)
+        guard created.ok != false, created.agent == item.session.agent,
+              created.sessionId != item.session.sessionId else {
+            throw CreationError.message("host did not return a separate branch")
+        }
+        return try createdItem(response: created, plan: DesktopNewSessionPlan(
+            hostURL: item.hostURL, cwd: item.session.cwd ?? "",
+            agent: item.session.agent, model: item.session.model ?? ""
         ), host: host)
     }
 
@@ -5312,22 +5409,29 @@ struct ContentView: View {
         let isMoving = item.session.sessionId.map {
             store.movingIds.contains($0) || store.closingIds.contains($0)
         } ?? false
-        return Button {
-            guard !isMoving, item.canOpen else { return }
-            // Off the main thread: the AppleScript round-trip can
-            // block for a minute on the first-run automation
-            // consent prompt, and must not freeze the UI.
-            Task.detached {
-                let err = Opener.open(item)
-                if let err {
-                    await MainActor.run { alertMessage = err }
+        return HStack(spacing: 0) {
+            Button {
+                guard !isMoving else { return }
+                // Off the main thread: the AppleScript round-trip can
+                // block for a minute on the first-run automation
+                // consent prompt, and must not freeze the UI.
+                Task.detached {
+                    let err = Opener.open(item)
+                    if let err {
+                        await MainActor.run { alertMessage = err }
+                    }
                 }
+            } label: {
+                SessionRow(item: item, showHost: store.multipleHosts, isMoving: isMoving)
             }
-        } label: {
-            SessionRow(item: item, showHost: store.multipleHosts, isMoving: isMoving)
+            .buttonStyle(.plain)
+            // A live session outside tmux cannot be attached, but its row
+            // still needs an active context menu so it can be forked. Clicking
+            // it now surfaces Opener's explanation instead of doing nothing.
+            .disabled(isMoving)
         }
-        .buttonStyle(.plain)
-        .disabled(isMoving || !item.canOpen)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .contextMenu {
             if !isMoving {
                 if item.session.sessionId != nil {
@@ -5345,6 +5449,15 @@ struct ContentView: View {
                     }
                     .disabled(store.handingOffIds.contains(id))
                     .accessibilityIdentifier("switch_tool_\(target)")
+                }
+                if item.canFork, let id = item.session.sessionId {
+                    Button(store.forkingIds.contains(id) ? "Forking…" : "Fork session") {
+                        Task {
+                            if let error = await store.fork(item) { alertMessage = error }
+                        }
+                    }
+                    .disabled(!store.canStartFork(item))
+                    .accessibilityIdentifier("fork_session")
                 }
                 if !item.hostIsLocal, item.session.sessionId != nil {
                     Button("Resume locally") {

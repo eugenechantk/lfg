@@ -19,6 +19,11 @@ are stretched to the full visible height of the display they open on.
 
 ## UI
 
+- **Fork session** — right-click a Claude Code or Codex conversation and
+  choose this action to branch its saved history into a new LFG-managed tmux
+  session on the source host. The new session opens in a separate iTerm2 window;
+  the original conversation stays available. Works for live and closed rows
+  with a session ID. Requires a host with `/api/sessions/fork` support.
 - **Switch tools** — right-click a Claude Code or Codex session and choose
   **Switch to Codex** or **Switch to Claude Code**. The source host saves a
   transcript snapshot, starts the other CLI in the same directory using its
