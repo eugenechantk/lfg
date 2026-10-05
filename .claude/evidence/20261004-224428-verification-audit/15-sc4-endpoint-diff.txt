@@ -1,0 +1,35 @@
+$ git status --short -- <audited files>
+ M src/commands/serve.ts
+ M src/session-state.ts
+?? src/interrupt-marks.test.ts
+?? src/interrupt-marks.ts
+
+$ git diff --stat -- src/session-state.ts src/commands/serve.ts
+ src/commands/serve.ts |  5 +++++
+ src/session-state.ts  | 34 ++++++++++++++++++++++++++++++----
+ 2 files changed, 35 insertions(+), 4 deletions(-)
+
+$ git diff -- src/commands/serve.ts
+diff --git a/src/commands/serve.ts b/src/commands/serve.ts
+index 35c328f..90f1a2b 100644
+--- a/src/commands/serve.ts
++++ b/src/commands/serve.ts
+@@ -109,6 +109,7 @@ import type { Server, ServerWebSocket } from "bun";
+ /// slow request. 64 MB comfortably covers a phone screen recording.
+ const MAX_UPLOAD_BYTES = 64 * 1024 * 1024;
+ import { closeAll, defaultCloseDeps, interruptAndConfirm, markClosed } from "../closing.ts";
++import { noteConfirmedInterrupt } from "../interrupt-marks.ts";
+ import { logOp } from "../ops-log.ts";
+ import { assignUser, userRoster } from "../users.ts";
+ import { acquireLease, ensureLease, foreignFresh, releaseLease } from "../leases.ts";
+@@ -3033,6 +3034,10 @@ export async function cmdServe(options: {
+             sent: r.sent,
+             stopped: r.stopped,
+           });
++          // Only a CONFIRMED stop may close the turn. Stopped before the first
++          // reply, Claude rewinds and writes no interrupt marker, so without this
++          // the session reads "Working" for STALL_MS (`interrupt-marks.ts`).
++          if (r.stopped === true) noteConfirmedInterrupt(m[1], sess.transcriptPath);
+           if (!r.sent) return err(502, "interrupt failed");
+           // 200 either way: the Escape was delivered, and a turn that ignores it
+           // is not a server error. `stopped` carries the truth.

@@ -25,12 +25,17 @@
 
 import { stat } from "node:fs/promises";
 import { hookState } from "./hook-state.ts";
+import { interruptStands } from "./interrupt-marks.ts";
 import { transcriptTurnState, type TurnState } from "./turn-state.ts";
 
 export type StateVerdict = {
   state: TurnState;
-  /** Which layer decided. Carried for logging and for the state debug endpoint. */
-  source: "hook" | "transcript";
+  /**
+   * Which layer decided. Carried for logging and for the state debug endpoint.
+   * `interrupt` = a stop lfg confirmed closed a turn neither layer could retract
+   * (see `interrupt-marks.ts`).
+   */
+  source: "hook" | "transcript" | "interrupt";
   /**
    * The verdict said `running`, but whichever layer said it last spoke more than
    * `STALL_MS` ago, so `state` was demoted to `idle`. Carried for the state debug
@@ -90,6 +95,27 @@ export async function sessionTurnState(args: {
     args.sessionId ? hookState(args.sessionId, args.transcriptPath) : Promise.resolve(null),
     args.transcriptPath ? transcriptTurnState(args.transcriptPath) : Promise.resolve(null),
   ]);
+  const verdict = await arbitrate(hook, transcript, args.transcriptPath, now);
+  // A confirmed stop is applied LAST and only ever closes a turn. Escape before
+  // the first assistant row leaves the transcript reading `running` with nothing
+  // to retract it; lfg watched the pane go idle, and that stands until either
+  // layer speaks again. See `interrupt-marks.ts`.
+  if (
+    verdict?.state === "running" &&
+    args.sessionId &&
+    (await interruptStands(args.sessionId, args.transcriptPath, hook?.at ?? null))
+  ) {
+    return { state: "idle", source: "interrupt" };
+  }
+  return verdict;
+}
+
+async function arbitrate(
+  hook: Awaited<ReturnType<typeof hookState>>,
+  transcript: TurnState | null,
+  transcriptPath: string | null | undefined,
+  now: number,
+): Promise<StateVerdict | null> {
 
   // The stall check needs the timestamp of the layer that DECIDED, not the newest
   // timestamp available — a fresh hook heartbeat must not vouch for a transcript
@@ -117,9 +143,9 @@ export async function sessionTurnState(args: {
   // file `transcriptTurnState` just read — cheap next to the `ps`/`tmux` spawns in
   // the same pass.
   let transcriptAt: number | null = null;
-  if (transcript != null && args.transcriptPath) {
+  if (transcript != null && transcriptPath) {
     try {
-      transcriptAt = (await stat(args.transcriptPath)).mtimeMs;
+      transcriptAt = (await stat(transcriptPath)).mtimeMs;
     } catch {
       transcriptAt = null;
     }

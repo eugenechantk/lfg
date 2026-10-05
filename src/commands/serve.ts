@@ -109,6 +109,7 @@ import type { Server, ServerWebSocket } from "bun";
 /// slow request. 64 MB comfortably covers a phone screen recording.
 const MAX_UPLOAD_BYTES = 64 * 1024 * 1024;
 import { closeAll, defaultCloseDeps, interruptAndConfirm, markClosed } from "../closing.ts";
+import { interruptBaseline, noteConfirmedInterrupt } from "../interrupt-marks.ts";
 import { logOp } from "../ops-log.ts";
 import { assignUser, userRoster } from "../users.ts";
 import { acquireLease, ensureLease, foreignFresh, releaseLease } from "../leases.ts";
@@ -3017,6 +3018,7 @@ export async function cmdServe(options: {
           // wedged agent swallows the key and the old code reported success
           // anyway. `stopped` is the honest answer, and the client shows it.
           const started = Date.now();
+          const baseline = interruptBaseline(sess.transcriptPath, started);
           const r = await interruptAndConfirm(sess.tmuxTarget, {
             escape: tmuxInterrupt,
             capture: capturePaneAsync,
@@ -3033,6 +3035,13 @@ export async function cmdServe(options: {
             sent: r.sent,
             stopped: r.stopped,
           });
+          // Only a CONFIRMED stop may close the turn. Stopped before the first
+          // reply, Claude rewinds and writes no interrupt marker, so without this
+          // the session reads "Working" for STALL_MS (`interrupt-marks.ts`). Claude
+          // only: codex writes its own `turn_aborted`, and its mid-turn records
+          // are not decisive, so a mark could hide a codex turn that kept going.
+          if (r.stopped === true && sess.agent === "claude")
+            noteConfirmedInterrupt(m[1], baseline);
           if (!r.sent) return err(502, "interrupt failed");
           // 200 either way: the Escape was delivered, and a turn that ignores it
           // is not a server error. `stopped` carries the truth.
