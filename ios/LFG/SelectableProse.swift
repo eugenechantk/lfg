@@ -656,11 +656,15 @@ struct SelectTextFixture: View {
       - confirm `tmux` resolves on PATH
     - Re-run the smoke test
 
-    1. Pull main
+    1. Pull main, then regenerate the project:
+       ```sh
+       git pull origin main && cd ios && xcodegen generate && flowdeck build --json
+       ```
     2. Build
 
     ```sh
     ssh eugenechan@eugenes-macbook-air 'scripts/serve-forever.sh'
+    #   aligned   | columns   | survive
     ```
 
     > Do not restart the Pro; it owns the tunnel.

@@ -240,7 +240,8 @@ extension MarkdownUI.Theme {
 
 /// Assistant GFM rendered as contiguous native selectable prose sections.
 /// Tables deliberately return to MarkdownUI: its grid preserves the shipping
-/// row/column layout and gives each cell its own selection surface.
+/// row/column layout and gives each cell its own selection surface. Fenced
+/// code gets its own horizontally scrolling box so its columns survive.
 struct ProseView: View {
     let text: String
     @Environment(\.hostFiles) private var hostFiles
@@ -249,33 +250,50 @@ struct ProseView: View {
         let sections = SelectableMarkdownSections.split(text)
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
-                sectionView(section, followedByAnotherSection: index < sections.count - 1)
+                sectionView(section)
+                    .padding(.bottom, index < sections.count - 1 ? Self.gap(between: section, and: sections[index + 1]) : 0)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// The 16pt paragraph boundary, except around a code block nested in a
+    /// list, which sits closer so it still reads as part of its item.
+    private static func gap(between upper: SelectableMarkdownSection, and lower: SelectableMarkdownSection) -> CGFloat {
+        for section in [upper, lower] {
+            if case .code(_, let depth) = section, depth > 0 { return 10 }
+        }
+        return 16
+    }
+
     @ViewBuilder
-    private func sectionView(
-        _ section: SelectableMarkdownSection,
-        followedByAnotherSection: Bool
-    ) -> some View {
+    private func sectionView(_ section: SelectableMarkdownSection) -> some View {
         switch section {
         case .prose(let markdown):
             // One native text view owns this entire prose/list run, so UIKit can
             // extend a selection across its paragraph and list-item boundaries.
             SelectableProseView(markdown: markdown)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, followedByAnotherSection ? 16 : 0)
         case .table(let markdown):
             // Restore the original MarkdownUI grid and per-cell selection. The
             // table itself does not need selection spanning multiple cells.
             // Its root-level Markdown margin does not create space between our
-            // sibling sections, so match the 16pt paragraph boundary explicitly.
+            // sibling sections; `gap` supplies the paragraph boundary.
             Markdown(markdown)
                 .markdownImageProvider(HostImageProvider(hostFiles: hostFiles))
                 .markdownTheme(.lfgFlat)
-                .padding(.bottom, followedByAnotherSection ? 16 : 0)
+        case .code(let code, let depth):
+            // Unwrapped and scrolling sideways, so indentation and aligned
+            // columns stay as written. The box's left edge lines up with the
+            // paragraphs, or with the text of the list item that owns it.
+            ScrollView(.horizontal) {
+                SelectableProseView(code: code)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+            }
+            .background(Color(.secondarySystemBackground))
+            .clipShape(.rect(cornerRadius: 8))
+            .padding(.leading, CGFloat(depth) * SelectableTextRenderer.listIndent)
         }
     }
 }

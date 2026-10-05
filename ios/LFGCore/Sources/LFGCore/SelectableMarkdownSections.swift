@@ -5,10 +5,15 @@ import Foundation
 /// Contiguous prose stays in one native text view so selection can cross
 /// paragraphs and list items. GFM pipe tables are isolated because MarkdownUI's
 /// grid is the authoritative table renderer and intentionally owns one native
-/// selection surface per cell.
+/// selection surface per cell. Fenced code blocks are isolated so they can
+/// scroll horizontally instead of wrapping inside the prose text view.
 public enum SelectableMarkdownSection: Equatable, Sendable {
     case prose(String)
     case table(String)
+    /// A fenced code block's body with the fence's indentation removed.
+    /// `depth` is how many list items it is nested in (0 at top level), so
+    /// the box can line up with the text of the item that owns it.
+    case code(String, depth: Int)
 }
 
 public enum SelectableMarkdownSections {
@@ -16,61 +21,65 @@ public enum SelectableMarkdownSections {
         guard !markdown.isEmpty else { return [] }
 
         let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        let tableRanges = findTableRanges(in: lines)
-        guard !tableRanges.isEmpty else { return [.prose(markdown)] }
-
         var sections: [SelectableMarkdownSection] = []
-        var cursor = lines.startIndex
+        var proseStart = lines.startIndex
+        var listColumns: [Int] = []
+        var index = lines.startIndex
 
-        for tableRange in tableRanges {
-            appendProse(lines[cursor..<tableRange.lowerBound], to: &sections)
-            sections.append(.table(lines[tableRange].joined(separator: "\n")))
-            cursor = tableRange.upperBound
+        while index < lines.count {
+            let line = lines[index]
+            let isBlank = line.trimmingCharacters(in: .whitespaces).isEmpty
+            if !isBlank {
+                // A line leaves every list item whose content column it sits
+                // left of. (Lazy continuation lines are not modelled.)
+                let indent = leadingSpaceCount(line)
+                listColumns.removeAll { $0 > indent }
+            }
+
+            if let fence = opensFence(line, listColumns: listColumns) {
+                appendProse(lines[proseStart..<index], to: &sections)
+                var end = index + 1
+                while end < lines.count, !closesFence(lines[end], fence: fence) {
+                    end += 1
+                }
+                let body = lines[(index + 1)..<end]
+                    .map { dropLeadingSpaces($0, upTo: fence.indent) }
+                    .joined(separator: "\n")
+                let depth = listColumns.filter { $0 <= fence.indent }.count
+                sections.append(.code(body, depth: depth))
+                index = min(end + 1, lines.count)
+                proseStart = index
+                continue
+            }
+
+            if index + 1 < lines.count, isTableHeader(line, delimiter: lines[index + 1]) {
+                var end = index + 2
+                while end < lines.count, isTableBodyRow(lines[end]) {
+                    end += 1
+                }
+                appendProse(lines[proseStart..<index], to: &sections)
+                sections.append(.table(lines[index..<end].joined(separator: "\n")))
+                index = end
+                proseStart = index
+                continue
+            }
+
+            if !isBlank, let column = listItemContentColumn(line) {
+                listColumns.append(column)
+            }
+            index += 1
         }
-        appendProse(lines[cursor..<lines.endIndex], to: &sections)
+
+        guard !sections.isEmpty else { return [.prose(markdown)] }
+        appendProse(lines[proseStart..<lines.endIndex], to: &sections)
         return sections
     }
 
     private struct Fence {
         let marker: Character
         let length: Int
-    }
-
-    private static func findTableRanges(in lines: [String]) -> [Range<Int>] {
-        guard lines.count >= 2 else { return [] }
-
-        var ranges: [Range<Int>] = []
-        var fence: Fence?
-        var index = 0
-
-        while index < lines.count {
-            if let activeFence = fence {
-                if closesFence(lines[index], fence: activeFence) { fence = nil }
-                index += 1
-                continue
-            }
-
-            if let openingFence = opensFence(lines[index]) {
-                fence = openingFence
-                index += 1
-                continue
-            }
-
-            guard index + 1 < lines.count,
-                  isTableHeader(lines[index], delimiter: lines[index + 1]) else {
-                index += 1
-                continue
-            }
-
-            var end = index + 2
-            while end < lines.count, isTableBodyRow(lines[end]) {
-                end += 1
-            }
-            ranges.append(index..<end)
-            index = end
-        }
-
-        return ranges
+        /// Leading spaces before the opening fence.
+        let indent: Int
     }
 
     private static func appendProse(
@@ -161,21 +170,56 @@ public enum SelectableMarkdownSections {
         return value.count >= 3 && value.allSatisfy { $0 == "-" }
     }
 
-    private static func opensFence(_ line: String) -> Fence? {
-        guard leadingSpaceCount(line) <= 3 else { return nil }
-        let trimmed = line.drop(while: { $0 == " " })
+    /// A fence may sit up to three spaces past the content column of the
+    /// list item it belongs to (or the margin, outside any list); deeper than
+    /// that it is indented-code text, not a fence.
+    private static func opensFence(_ line: String, listColumns: [Int]) -> Fence? {
+        let indent = leadingSpaceCount(line)
+        let container = listColumns.last { $0 <= indent } ?? 0
+        guard indent - container <= 3 else { return nil }
+        let trimmed = line.dropFirst(indent)
         guard let marker = trimmed.first, marker == "`" || marker == "~" else { return nil }
         let length = trimmed.prefix(while: { $0 == marker }).count
         guard length >= 3 else { return nil }
-        return Fence(marker: marker, length: length)
+        // A backtick fence's info string may not contain a backtick
+        // (otherwise the line is inline code, e.g. ```not a fence```).
+        if marker == "`", trimmed.dropFirst(length).contains("`") { return nil }
+        return Fence(marker: marker, length: length, indent: indent)
     }
 
     private static func closesFence(_ line: String, fence: Fence) -> Bool {
-        guard leadingSpaceCount(line) <= 3 else { return false }
+        guard leadingSpaceCount(line) <= fence.indent + 3 else { return false }
         let trimmed = line.drop(while: { $0 == " " })
         let markerRun = trimmed.prefix(while: { $0 == fence.marker })
         guard markerRun.count >= fence.length else { return false }
         return trimmed.dropFirst(markerRun.count).allSatisfy { $0.isWhitespace }
+    }
+
+    /// Column where a list item's content starts (`- `, `* `, `+ `, `1. `,
+    /// `1) `), or nil when the line is not a list item.
+    private static func listItemContentColumn(_ line: String) -> Int? {
+        let indent = leadingSpaceCount(line)
+        let rest = line.dropFirst(indent)
+        let markerLength: Int
+        if let first = rest.first, first == "-" || first == "*" || first == "+" {
+            markerLength = 1
+        } else {
+            let digits = rest.prefix(while: { $0.isASCII && $0.isNumber }).count
+            guard (1...9).contains(digits),
+                  let delimiter = rest.dropFirst(digits).first,
+                  delimiter == "." || delimiter == ")" else { return nil }
+            markerLength = digits + 1
+        }
+        let afterMarker = rest.dropFirst(markerLength)
+        let spaces = afterMarker.prefix(while: { $0 == " " }).count
+        guard spaces > 0, spaces < afterMarker.count else { return nil }
+        // Five or more spaces after the marker start indented code; the
+        // content column is then one space past the marker.
+        return indent + markerLength + (spaces >= 5 ? 1 : spaces)
+    }
+
+    private static func dropLeadingSpaces(_ line: String, upTo count: Int) -> String {
+        String(line.dropFirst(min(count, leadingSpaceCount(line))))
     }
 
     private static func leadingSpaceCount(_ line: String) -> Int {

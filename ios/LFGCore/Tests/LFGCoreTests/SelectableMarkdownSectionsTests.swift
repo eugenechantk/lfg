@@ -65,7 +65,7 @@ struct SelectableMarkdownSectionsTests {
         ])
     }
 
-    @Test func tableSyntaxInsideFencedCodeStaysSelectableProse() {
+    @Test func tableSyntaxInsideFencedCodeStaysCode() {
         let markdown = """
         Before.
 
@@ -77,6 +77,96 @@ struct SelectableMarkdownSectionsTests {
 
         After.
         """
+
+        #expect(SelectableMarkdownSections.split(markdown) == [
+            .prose("Before."),
+            .code("| A | B |\n| --- | --- |\n| 1 | 2 |", depth: 0),
+            .prose("After."),
+        ])
+    }
+
+    @Test func fencedCodeIsIsolatedWithItsIndentationIntact() {
+        let markdown = """
+        Run this:
+
+        ```swift
+        func f() {
+            return   // aligned
+        }
+        ```
+        After.
+        """
+
+        #expect(SelectableMarkdownSections.split(markdown) == [
+            .prose("Run this:"),
+            .code("func f() {\n    return   // aligned\n}", depth: 0),
+            .prose("After."),
+        ])
+    }
+
+    @Test func codeInsideListItemKeepsDepthAndListNumbering() {
+        let markdown = """
+        1. Pull main:
+           ```sh
+           git pull origin main
+             --rebase
+           ```
+        2. Build
+        - bullet
+          ~~~
+          nested tilde
+          ~~~
+        """
+
+        #expect(SelectableMarkdownSections.split(markdown) == [
+            .prose("1. Pull main:"),
+            .code("git pull origin main\n  --rebase", depth: 1),
+            .prose("2. Build\n- bullet"),
+            .code("nested tilde", depth: 1),
+        ])
+    }
+
+    @Test func codeInsideNestedListCountsBothLevels() {
+        let markdown = """
+        - outer
+          - inner
+            ```
+            deep
+            ```
+        """
+
+        #expect(SelectableMarkdownSections.split(markdown) == [
+            .prose("- outer\n  - inner"),
+            .code("deep", depth: 2),
+        ])
+    }
+
+    @Test func unclosedFenceRunsToTheEnd() {
+        let markdown = "Intro.\n\n```\nstill streaming\nmore"
+
+        #expect(SelectableMarkdownSections.split(markdown) == [
+            .prose("Intro."),
+            .code("still streaming\nmore", depth: 0),
+        ])
+    }
+
+    @Test func longerClosingFenceClosesAndShorterDoesNot() {
+        let markdown = "````\n```\ninner\n```\n`````\nAfter."
+
+        #expect(SelectableMarkdownSections.split(markdown) == [
+            .code("```\ninner\n```", depth: 0),
+            .prose("After."),
+        ])
+    }
+
+    @Test func inlineTripleBackticksAreNotAFence() {
+        let markdown = "```inline code``` in a sentence."
+
+        #expect(SelectableMarkdownSections.split(markdown) == [.prose(markdown)])
+    }
+
+    @Test func fourSpaceIndentedFenceOutsideListIsNotAFence() {
+        let markdown = "Before.\n\n    ```\n    not a fence\n    ```\n\nAfter."
 
         #expect(SelectableMarkdownSections.split(markdown) == [.prose(markdown)])
     }
