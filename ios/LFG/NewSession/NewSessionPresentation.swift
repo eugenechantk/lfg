@@ -1,3 +1,4 @@
+import LFGCore
 import SwiftUI
 
 /// Presents the new-session surface as a full-screen cover, in BOTH size classes.
@@ -20,6 +21,7 @@ private struct NewSessionPresentationModifier: ViewModifier {
     @Binding var selection: String?
     @Binding var isPresented: Bool
     @Binding var autofocusComposer: Bool
+    @Binding var prefill: NewSessionPrefill?
 
     /// The id handed up by a create, held until the create screen is actually
     /// gone. See `applyPendingSelection`.
@@ -28,7 +30,7 @@ private struct NewSessionPresentationModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .fullScreenCover(isPresented: $isPresented, onDismiss: resetPresentation) {
-                NewSessionView(autofocusComposer: autofocusComposer) { newID in
+                NewSessionView(autofocusComposer: autofocusComposer, prefill: $prefill) { newID in
                     // Deliberately NOT `selection = newID`. The create screen is
                     // dismissing in this same runloop turn; a selection change made
                     // during that in-flight transition is swallowed. The optimistic
@@ -43,6 +45,9 @@ private struct NewSessionPresentationModifier: ViewModifier {
 
     private func resetPresentation() {
         autofocusComposer = false
+        // A link's prefill is one-shot: dismissed unused, it must not resurface
+        // the next time "+" opens this screen.
+        prefill = nil
         applyPendingSelection()
     }
 
@@ -63,12 +68,22 @@ extension View {
     func newSessionPresentation(
         selection: Binding<String?>,
         isPresented: Binding<Bool>,
-        autofocusComposer: Binding<Bool>
+        autofocusComposer: Binding<Bool>,
+        prefill: Binding<NewSessionPrefill?>
     ) -> some View {
         modifier(NewSessionPresentationModifier(
             selection: selection,
             isPresented: isPresented,
-            autofocusComposer: autofocusComposer
+            autofocusComposer: autofocusComposer,
+            prefill: prefill
         ))
     }
+}
+
+/// A one-shot request from an `lfg://new` link to open New Session with the
+/// composer (and optionally the directory) filled in. The id makes a second link
+/// with identical text still count as a new request.
+struct NewSessionPrefill: Equatable, Identifiable {
+    let id = UUID()
+    let link: NewSessionLink
 }

@@ -9,6 +9,7 @@ struct RootView: View {
     @State private var showSettings = false
     @State private var showNewSession = false
     @State private var focusNewSessionComposer = false
+    @State private var newSessionPrefill: NewSessionPrefill?
     @State private var columnVisibility = NavigationSplitViewVisibility.automatic
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var hSizeClass
@@ -19,6 +20,20 @@ struct RootView: View {
     private var isSideBySide: Bool { hSizeClass == .regular }
 
     private var sidebarHidden: Bool { columnVisibility == .detailOnly }
+
+    /// `lfg://new`: open New Session prefilled from the link. One main-actor hop
+    /// first — on a cold launch the URL arrives during the initial render, and
+    /// presenting the cover mid-update is the same hazard `openFromNotification`
+    /// defers around.
+    private func openNewSession(from link: NewSessionLink) {
+        guard settings.hasConfiguredHost else { return }
+        Task { @MainActor in
+            await Task.yield()
+            newSessionPrefill = NewSessionPrefill(link: link)
+            focusNewSessionComposer = true
+            showNewSession = true
+        }
+    }
 
     private func setSidebar(hidden: Bool) {
         guard sidebarHidden != hidden else { return }
@@ -58,7 +73,8 @@ struct RootView: View {
                         // navigation stack the session detail is pushed onto.
                         .newSessionPresentation(selection: $selection,
                                                 isPresented: $showNewSession,
-                                                autofocusComposer: $focusNewSessionComposer)
+                                                autofocusComposer: $focusNewSessionComposer,
+                                                prefill: $newSessionPrefill)
                         // Swipe the list away, from anywhere on it. Simultaneous, so
                         // the List keeps its vertical scroll and its rows keep their
                         // own gestures; this only acts on a decisively horizontal
@@ -166,13 +182,14 @@ struct RootView: View {
             AppBadge.set(count)
         }
         .onOpenURL { url in
-            let path = url.path.split(separator: "/", omittingEmptySubsequences: true)
-            guard url.scheme?.lowercased() == "lfg",
-                  url.host?.lowercased() == "session",
-                  path.count == 1,
-                  let sid = String(path[0]).removingPercentEncoding,
-                  !sid.isEmpty else { return }
-            store.openFromNotification(sid)
+            switch LFGDeepLink.parse(url) {
+            case .session(let sid):
+                store.openFromNotification(sid)
+            case .newSession(let link):
+                openNewSession(from: link)
+            case nil:
+                break
+            }
         }
         // iOS can't hold a socket while suspended, so the app owns an explicit
         // linger/reconnect around backgrounding: `.background` holds every host

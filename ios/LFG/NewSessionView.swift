@@ -28,6 +28,10 @@ struct NewSessionView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var autofocusComposer = false
+    /// Set by an `lfg://new` link; applied once, then cleared.
+    @Binding var prefill: NewSessionPrefill?
+    /// The link being applied, so a slower earlier link can't overwrite a newer one.
+    @State private var appliedPrefillID: UUID?
     var onCreated: (String?) -> Void
 
     // Agent remains part of creation state even though the standalone picker is
@@ -178,11 +182,66 @@ struct NewSessionView: View {
             // while the user is composing.
             applyInferredModel(for: cwd)
             if selectedHost == nil {
-                selectedHost = HostStore.defaultHost(settings.hosts) {
-                    store.hostStateByHost[$0.id]?.isLive == true
-                } ?? settings.hosts.first { $0.isDefault } ?? settings.hosts.first
+                selectedHost = fallbackHost
             }
+            // After the directory list has loaded, so a spoken project name can
+            // resolve against the host's repos.
+            await applyPrefill()
         }
+        // A link that arrives while this screen is already open replaces the draft.
+        .onChange(of: prefill?.id) { _, _ in
+            Task { await applyPrefill() }
+        }
+    }
+
+    /// The host a fresh New Session starts on: the live default, else the marked
+    /// default, else the first configured host.
+    private var fallbackHost: Host? {
+        HostStore.defaultHost(settings.hosts) {
+            store.hostStateByHost[$0.id]?.isLive == true
+        } ?? settings.hosts.first { $0.isDefault } ?? settings.hosts.first
+    }
+
+    /// Fill the composer, directory, host and model from an `lfg://new` link.
+    /// Never sends — starting the session stays a tap on send. The link replaces
+    /// the whole draft: anything it leaves out or names wrongly falls back to
+    /// what a freshly opened screen shows, so a second link never inherits the
+    /// first one's project, host or model.
+    private func applyPrefill() async {
+        guard let request = prefill else { return }
+        prefill = nil
+        appliedPrefillID = request.id
+        let link = request.link
+        draft = link.prompt ?? ""
+        selectedHost = NewSessionLinkHints.host(for: link.host, in: settings.hosts) ?? fallbackHost
+        let remembered = settings.lastNewSessionModelSelection
+        agent = remembered.agent
+        model = remembered.model
+        modelPickedExplicitly = false
+        let target = NewSessionDirectoryHint.directory(
+            for: link.directory,
+            in: allDirectories.map { .init(name: $0.name, path: $0.path) },
+            inbox: store.inbox)
+        selectDirectory(path: target.path, label: target.name)
+        guard link.agent != nil || link.model != nil else { return }
+        // Resolve against whatever catalog is cached so the chip is right at once,
+        // then again against the chosen host's live catalog, which is where
+        // current model ids (and spoken names for them) actually resolve.
+        applyLinkedModel(link)
+        await store.loadModelCatalog(for: selectedHost, refresh: false)
+        guard appliedPrefillID == request.id else { return }   // a newer link took over
+        applyLinkedModel(link)
+    }
+
+    /// A linked model counts as picked by hand, so the directory's inferred
+    /// model can't replace it.
+    private func applyLinkedModel(_ link: NewSessionLink) {
+        guard let selection = NewSessionLinkHints.modelSelection(
+            agent: link.agent, model: link.model,
+            catalog: store.modelCatalog(for: selectedHost)) else { return }
+        agent = selection.agent
+        model = selection.model
+        modelPickedExplicitly = true
     }
 
     // MARK: Pickers
