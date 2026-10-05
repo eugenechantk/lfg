@@ -112,6 +112,29 @@ export function ensureFolderTrusted(cwd: string): void {
   }
 }
 
+// codex has the same trap: an untrusted cwd stops on a "Folder access — Trust
+// this folder?" screen even under --sandbox danger-full-access, so the pane
+// never writes a rollout and create 504s "did not produce a session ID"
+// (2026-10-04: every Grok Bot codex start into ~/inbox). A
+// `-c projects."<dir>".trust_level=…` override does NOT satisfy the screen —
+// measured — so append the exact block codex itself writes on "Trust and
+// continue". Idempotent: any existing entry for `cwd` is left alone.
+export function ensureCodexFolderTrusted(
+  cwd: string,
+  cfgPath = `${homedir()}/.codex/config.toml`,
+): void {
+  try {
+    const key = cwd.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const header = `[projects."${key}"]`;
+    const cfg = existsSync(cfgPath) ? readFileSync(cfgPath, "utf8") : "";
+    if (cfg.split("\n").some((l) => l.trim() === header)) return;
+    const sep = cfg === "" || cfg.endsWith("\n\n") ? "" : cfg.endsWith("\n") ? "\n" : "\n\n";
+    writeFileSync(cfgPath, `${cfg}${sep}${header}\ntrust_level = "trusted"\n`);
+  } catch {
+    // best-effort — if we can't patch the config the worst case is the old hang
+  }
+}
+
 // Resolve the `claude` executable to an absolute path. We must NOT rely on a
 // bare `claude` in the spawn: when lfg runs as a systemd service its PATH
 // often lacks ~/.local/bin, so `tmux new-session … claude` can't exec claude
@@ -775,6 +798,7 @@ export function spawnManagedCodexSession(opts: {
   fork?: boolean;
 }): { ok: boolean; error?: string } {
   const dec = new TextDecoder();
+  ensureCodexFolderTrusted(opts.cwd);
   const create = Bun.spawnSync(managedCodexSessionArgv(opts));
   if (create.exitCode !== 0)
     return { ok: false, error: dec.decode(create.stderr) || "new-session failed" };
