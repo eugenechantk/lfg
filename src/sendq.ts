@@ -14,8 +14,10 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { nudgeJournalPump } from "./journal-pump.ts";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { tail } from "./transcript.ts";
 import {
   capturePane,
+  capturePaneAsync,
   isBusy,
   parsePrompt,
   questionSelectorOpen,
@@ -28,6 +30,7 @@ import {
   feedbackPromptOpen,
   tmuxDismissFeedback,
 } from "./tmux.ts";
+import { interruptAndConfirm } from "./closing.ts";
 import {
   listSessions,
   resolveTranscript,
@@ -350,11 +353,15 @@ export type SendNowPlan =
   | "deliver-only"
   | "interrupt-only"
   | "interrupt-then-deliver"
+  | "interrupt-then-resolve"
   | "deliver-then-interrupt";
 
 /**
- * Codex and Claude expose different native busy-send semantics. Claude already
- * owns a real next-turn queue, so interrupting first lets that queue drain.
+ * Codex and Claude expose different native busy-send semantics. A pending
+ * Claude row is still outside the TUI, so interrupting before first delivery is
+ * safe. For a queued Claude row, Escape can either start Claude's native next
+ * turn or discard an instruction already absorbed into the current turn. LFG
+ * resolves the transcript outcome before deciding whether to submit it again.
  * Codex's normal busy send steers the current turn, so LFG normally holds it;
  * for an explicit send-now, however, Codex's own UI supports the inverse:
  * queue the selected message, then Escape to "interrupt and send immediately".
@@ -365,8 +372,116 @@ export function sendNowPlan(
   status: "pending" | "queued",
 ): SendNowPlan {
   if (!agentBusy) return "deliver-only";
-  if (status === "queued") return "interrupt-only";
+  if (status === "queued") {
+    return agent === "claude" ? "interrupt-then-resolve" : "interrupt-only";
+  }
   return agent === "codex" ? "deliver-then-interrupt" : "interrupt-then-deliver";
+}
+
+export type ClaudeInterruptResolution =
+  | { kind: "waiting-interrupt" }
+  | { kind: "waiting-native-start" }
+  | { kind: "absorbed" }
+  | { kind: "started"; userTurnId: string | null };
+
+function claudeUserText(content: unknown): string | null {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return null;
+  const text = content
+    .filter((block): block is { type: string; text: string } =>
+      !!block && typeof block === "object"
+      && (block as { type?: unknown }).type === "text"
+      && typeof (block as { text?: unknown }).text === "string")
+    .map((block) => block.text)
+    .join("\n");
+  return text || null;
+}
+
+/**
+ * Resolve what Claude did with a native-queued message around Escape.
+ *
+ * Claude has two real transcript shapes:
+ * - `remove/absorbed_mid_turn` then interrupt: the instruction died with the
+ *   aborted turn and must be submitted again.
+ * - `dequeue`, interrupt, then a genuine `promptSource: queued` user row: the
+ *   native queue already started the fresh turn and retyping would duplicate it.
+ */
+export function claudeInterruptResolution(
+  lines: string[],
+  text: string,
+  createdAt: number,
+): ClaudeInterruptResolution {
+  const wanted = norm(text);
+  const notBefore = createdAt - 1_000;
+  let interruptIndex = -1;
+  let lastMatchingQueueOpBeforeInterrupt: { operation?: string; reason?: string } | null = null;
+  const parsed: Array<{
+    type?: string;
+    operation?: string;
+    reason?: string;
+    content?: unknown;
+    timestamp?: string;
+    uuid?: string;
+    promptSource?: string;
+    message?: { role?: string; content?: unknown };
+  } | null> = [];
+
+  for (const line of lines) {
+    try {
+      parsed.push(JSON.parse(line));
+    } catch {
+      parsed.push(null);
+    }
+  }
+
+  for (let i = 0; i < parsed.length; i++) {
+    const row = parsed[i];
+    if (!row) continue;
+    const at = row.timestamp ? Date.parse(row.timestamp) : NaN;
+    if (Number.isFinite(at) && at < notBefore) continue;
+    const userText = row.type === "user" ? claudeUserText(row.message?.content) : null;
+    if (userText?.trim().startsWith("[Request interrupted by user]")) {
+      interruptIndex = i;
+      lastMatchingQueueOpBeforeInterrupt = null;
+      for (let j = 0; j < i; j++) {
+        const op = parsed[j];
+        if (!op || op.type !== "queue-operation" || norm(String(op.content ?? "")) !== wanted) continue;
+        const opAt = op.timestamp ? Date.parse(op.timestamp) : NaN;
+        if (Number.isFinite(opAt) && opAt < notBefore) continue;
+        lastMatchingQueueOpBeforeInterrupt = op;
+      }
+    }
+  }
+
+  if (interruptIndex < 0) return { kind: "waiting-interrupt" };
+
+  for (let i = interruptIndex + 1; i < parsed.length; i++) {
+    const row = parsed[i];
+    if (!row || row.type !== "user") continue;
+    const at = row.timestamp ? Date.parse(row.timestamp) : NaN;
+    if (Number.isFinite(at) && at < notBefore) continue;
+    const userText = claudeUserText(row.message?.content);
+    if (userText && norm(userText) === wanted) {
+      return { kind: "started", userTurnId: row.uuid ?? null };
+    }
+  }
+
+  if (
+    lastMatchingQueueOpBeforeInterrupt?.operation === "remove"
+    && ["absorbed_mid_turn", "delivered_to_agent", "delivered_as_tool_result"]
+      .includes(lastMatchingQueueOpBeforeInterrupt.reason ?? "")
+  ) {
+    return { kind: "absorbed" };
+  }
+  return { kind: "waiting-native-start" };
+}
+
+async function currentClaudeInterruptResolution(
+  transcriptPath: string,
+  msg: QueuedMsg,
+): Promise<ClaudeInterruptResolution> {
+  const window = await tail(transcriptPath, 256 * 1024);
+  return claudeInterruptResolution(window.lines, msg.text, msg.createdAt);
 }
 
 function kick(sessionId: string) {
@@ -468,19 +583,26 @@ export function removeMessage(sessionId: string, id: string): boolean {
 
 // "Send now + interrupt": move the selected message to the head and choose the
 // agent-specific safe sequence below. Claude interrupts before LFG delivery;
-// busy Codex must enter its native queue first and then receive Escape. If the
-// session became idle meanwhile, never Escape the idle composer.
+// if Claude already absorbed the row into the turn being aborted, LFG re-drives
+// it only after the pane is confirmed idle. Busy Codex must enter its native
+// queue first and then receive Escape. If the session became idle meanwhile,
+// never Escape the idle composer.
 export async function sendNow(sessionId: string, id: string): Promise<boolean> {
   ensureRecovered();
   const s = queues.get(sessionId);
   if (!s) return false;
   const m = s.msgs.find((x) => x.id === id);
   if (!m || (m.status !== "pending" && m.status !== "queued")) return false;
+  // Capture the state the user acted on before the async session lookup. The
+  // journal pump can promote a Claude `queued` row to `delivered` during that
+  // await when it sees `absorbed_mid_turn`; that is precisely the aborted
+  // instruction this action still needs to re-drive after Escape.
+  const requestedStatus = m.status;
   // promote to the front of the pending order
   s.msgs = s.msgs.filter((x) => x.id !== id);
   s.msgs.unshift(m);
   const context = await deliveryContext(sessionId);
-  const plan = sendNowPlan(context.agent, context.busy, m.status);
+  const plan = sendNowPlan(context.agent, context.busy, requestedStatus);
   const started = Date.now();
 
   if (plan === "deliver-only") {
@@ -493,7 +615,7 @@ export async function sendNow(sessionId: string, id: string): Promise<boolean> {
     return true;
   }
 
-  if (plan === "interrupt-only" || plan === "interrupt-then-deliver") {
+  if (plan === "interrupt-only") {
     const target = await sessionTarget(sessionId);
     const interrupted = target ? tmuxInterrupt(target) : false;
     traceQueue(sessionId, m, "send-now-interrupt", {
@@ -503,7 +625,157 @@ export async function sendNow(sessionId: string, id: string): Promise<boolean> {
       elapsedMs: Date.now() - started,
     });
     if (!interrupted) return false;
-    if (plan === "interrupt-then-deliver") kick(sessionId);
+    return true;
+  }
+
+  if (plan === "interrupt-then-resolve") {
+    const target = await sessionTarget(sessionId);
+    const transcriptPath = await resolveTranscript(sessionId);
+    if (!target || !transcriptPath) return false;
+
+    // Keep the pump and journal promotion away from this row while the
+    // transcript tells us whether Claude absorbed it into the aborted turn or
+    // dequeued it as the next real turn.
+    const originalStatus = m.status;
+    m.status = "sending";
+    m.updatedAt = Date.now();
+    persistMsg(sessionId, m);
+
+    const interrupted = tmuxInterrupt(target);
+    if (!interrupted) {
+      m.status = originalStatus;
+      m.updatedAt = Date.now();
+      persistMsg(sessionId, m);
+      return false;
+    }
+
+    const deadline = Date.now() + 5_000;
+    let resolution: ClaudeInterruptResolution = { kind: "waiting-interrupt" };
+    while (Date.now() < deadline) {
+      resolution = await currentClaudeInterruptResolution(transcriptPath, m);
+      if (resolution.kind === "started" || resolution.kind === "absorbed") break;
+      await sleep(50);
+    }
+
+    traceQueue(sessionId, m, "send-now-interrupt", {
+      agent: context.agent,
+      plan,
+      interrupted,
+      resolution: resolution.kind,
+      elapsedMs: Date.now() - started,
+    });
+
+    if (resolution.kind === "started") {
+      // Claude's own native queue won the race and produced the fresh prompt.
+      // Retire LFG's receipt without typing the same instruction a second time.
+      m.status = "delivered";
+      m.error = undefined;
+      m.updatedAt = Date.now();
+      persistMsg(sessionId, m);
+      journalDelivered(sessionId, m, resolution.userTurnId);
+      traceQueue(sessionId, m, "send-now-native-started", {
+        agent: context.agent,
+        userTurnId: resolution.userTurnId,
+        elapsedMs: Date.now() - started,
+      });
+      pruneTerminal(s);
+      store?.pruneTerminal(sessionId, KEEP_TERMINAL);
+      nudgeJournalPump(sessionId);
+      return true;
+    }
+
+    // `absorbed` is definitive. A timed-out native queue is also safe to
+    // re-drive only once the pane is visibly idle; if it is still busy, retain
+    // the original receipt instead of risking duplicate execution.
+    let pane = await capturePaneAsync(target);
+    if (resolution.kind !== "absorbed") {
+      if (pane == null || isBusy(pane)) {
+        m.status = originalStatus;
+        m.updatedAt = Date.now();
+        persistMsg(sessionId, m);
+        return false;
+      }
+    } else {
+      const idleDeadline = Date.now() + 5_000;
+      while (pane != null && isBusy(pane) && Date.now() < idleDeadline) {
+        await sleep(50);
+        pane = await capturePaneAsync(target);
+      }
+      if (pane == null || isBusy(pane)) {
+        m.status = originalStatus;
+        m.updatedAt = Date.now();
+        persistMsg(sessionId, m);
+        return false;
+      }
+    }
+
+    m.status = "pending";
+    m.attempts = 0;
+    m.error = undefined;
+    m.updatedAt = Date.now();
+    persistMsg(sessionId, m);
+    traceQueue(sessionId, m, "send-now-redeliver", {
+      agent: context.agent,
+      from: originalStatus,
+      requestedStatus,
+      resolution: resolution.kind,
+      elapsedMs: Date.now() - started,
+    });
+    kick(sessionId);
+    return true;
+  }
+
+  if (plan === "interrupt-then-deliver") {
+    const target = await sessionTarget(sessionId);
+    if (!target) return false;
+
+    // Lock the row out of the delivery pump while Escape is unwinding the old
+    // turn, then submit it only after the pane is confirmed idle.
+    const originalStatus = m.status;
+    m.status = "sending";
+    m.updatedAt = Date.now();
+    persistMsg(sessionId, m);
+
+    const outcome = await interruptAndConfirm(target, {
+      escape: tmuxInterrupt,
+      capture: capturePaneAsync,
+      busy: isBusy,
+      wait: sleep,
+    });
+    traceQueue(sessionId, m, "send-now-interrupt", {
+      agent: context.agent,
+      plan,
+      sent: outcome.sent,
+      stopped: outcome.stopped,
+      elapsedMs: Date.now() - started,
+    });
+
+    if (!outcome.sent || outcome.stopped !== true) {
+      // The old turn may still be executing, so do not risk duplicating the
+      // message. Restore its honest pre-action state and let the normal queue
+      // policy continue tracking it.
+      m.status = originalStatus;
+      m.updatedAt = Date.now();
+      persistMsg(sessionId, m);
+      if (originalStatus === "pending") kick(sessionId);
+      return false;
+    }
+
+    // The old turn is definitely over. Submit this same durable row into the
+    // idle composer as a fresh prompt instead of trusting Claude's absorbed
+    // queue attachment to survive the interrupt.
+    m.status = "pending";
+    m.attempts = 0;
+    m.error = undefined;
+    m.updatedAt = Date.now();
+    persistMsg(sessionId, m);
+    traceQueue(sessionId, m, "send-now-redeliver", {
+      agent: context.agent,
+      from: originalStatus,
+      requestedStatus,
+      elapsedMs: Date.now() - started,
+    });
+    kick(sessionId);
     return true;
   }
 
@@ -560,7 +832,7 @@ export async function sendNow(sessionId: string, id: string): Promise<boolean> {
   return interrupted;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const norm = (s: string) => s.replace(/\s+/g, " ").trim();
 
 // We match a normalized prefix rather than the whole message: the composer

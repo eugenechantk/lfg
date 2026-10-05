@@ -3,6 +3,7 @@ import {
   __resetSendqForTests,
   composerTextHoldsNeedle,
   clearResolved,
+  claudeInterruptResolution,
   enqueueMessage,
   getMessage,
   pendingDeliveryDisposition,
@@ -31,13 +32,16 @@ describe("send-now sequencing policy", () => {
     expect(sendNowPlan("codex", true, "pending")).toBe("deliver-then-interrupt");
   });
 
-  test("busy Claude keeps its existing interrupt-before-delivery path", () => {
+  test("busy Claude pending rows interrupt before first delivery", () => {
     expect(sendNowPlan("claude", true, "pending")).toBe("interrupt-then-deliver");
   });
 
-  test("an already-native-queued message only needs the interrupt", () => {
+  test("busy Claude queued rows resolve the native outcome after interrupting", () => {
+    expect(sendNowPlan("claude", true, "queued")).toBe("interrupt-then-resolve");
+  });
+
+  test("an already-native-queued Codex message only needs the interrupt", () => {
     expect(sendNowPlan("codex", true, "queued")).toBe("interrupt-only");
-    expect(sendNowPlan("claude", true, "queued")).toBe("interrupt-only");
   });
 
   test("a session that became idle is delivered without a stray Escape", () => {
@@ -45,6 +49,64 @@ describe("send-now sequencing policy", () => {
     expect(sendNowPlan("codex", false, "queued")).toBe("deliver-only");
     expect(sendNowPlan("claude", false, "pending")).toBe("deliver-only");
     expect(sendNowPlan("claude", false, "queued")).toBe("deliver-only");
+  });
+});
+
+describe("Claude queued-message interrupt resolution", () => {
+  const text = "Reply exactly NEW_DONE.";
+  const line = (value: unknown) => JSON.stringify(value);
+  const marker = line({
+    type: "user",
+    timestamp: "2026-09-30T06:38:03.883Z",
+    message: { role: "user", content: [{ type: "text", text: "[Request interrupted by user]" }] },
+  });
+
+  test("an absorbed queue row belongs to the aborted turn and needs redelivery", () => {
+    const lines = [
+      line({ type: "queue-operation", operation: "enqueue", timestamp: "2026-09-30T06:38:01.499Z", content: text }),
+      line({ type: "queue-operation", operation: "remove", reason: "absorbed_mid_turn", timestamp: "2026-09-30T06:38:03.775Z", content: text }),
+      marker,
+    ];
+    expect(claudeInterruptResolution(lines, text, Date.parse("2026-09-30T06:38:01Z")))
+      .toEqual({ kind: "absorbed" });
+  });
+
+  test("a native dequeue after Escape is already the fresh turn", () => {
+    const lines = [
+      line({ type: "queue-operation", operation: "enqueue", timestamp: "2026-09-30T06:38:01.499Z", content: text }),
+      line({ type: "queue-operation", operation: "dequeue", timestamp: "2026-09-30T06:38:03.800Z" }),
+      marker,
+      line({
+        type: "user",
+        uuid: "fresh-turn",
+        timestamp: "2026-09-30T06:38:03.999Z",
+        promptSource: "queued",
+        message: { role: "user", content: text },
+      }),
+    ];
+    expect(claudeInterruptResolution(lines, text, Date.parse("2026-09-30T06:38:01Z")))
+      .toEqual({ kind: "started", userTurnId: "fresh-turn" });
+  });
+
+  test("waits when the interrupt marker landed but Claude has not resolved its native queue yet", () => {
+    const lines = [
+      line({ type: "queue-operation", operation: "enqueue", timestamp: "2026-09-30T06:38:01.499Z", content: text }),
+      marker,
+    ];
+    expect(claudeInterruptResolution(lines, text, Date.parse("2026-09-30T06:38:01Z")))
+      .toEqual({ kind: "waiting-native-start" });
+  });
+
+  test("ignores matching history from before this queue row", () => {
+    const old = line({
+      type: "user",
+      uuid: "old-turn",
+      timestamp: "2026-09-30T06:30:00.000Z",
+      promptSource: "typed",
+      message: { role: "user", content: text },
+    });
+    expect(claudeInterruptResolution([old, marker], text, Date.parse("2026-09-30T06:38:01Z")))
+      .toEqual({ kind: "waiting-native-start" });
   });
 });
 
