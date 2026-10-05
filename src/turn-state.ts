@@ -77,6 +77,11 @@ export function classifyTurnLine(line: string): TurnState | null {
   }
   if (!x || typeof x !== "object") return null;
 
+  // Claude can continue a conversation in a new transcript without writing a
+  // turn_duration to the old one. The old transcript is finished at this marker;
+  // otherwise its last assistant/tool row keeps that session marked running.
+  if (x.type === "continued-in") return "idle";
+
   if (x.type === "system") {
     // Only `turn_duration` is a boundary. `away_summary` is appended minutes
     // later and `stop_hook_summary` sits just before the boundary — neither may

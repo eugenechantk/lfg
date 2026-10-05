@@ -143,6 +143,15 @@ describe("transcriptTurnState", () => {
     expect(await transcriptTurnState(p)).toBe("idle");
   });
 
+  test("continuation into a new transcript ends the old turn", async () => {
+    const p = write([
+      prompt("go"),
+      toolUse(),
+      { type: "continued-in", continuedInSessionId: "47968866-8cff-46ce-8ee0-c75479696e5d" },
+    ]);
+    expect(await transcriptTurnState(p)).toBe("idle");
+  });
+
   test("interrupt followed by a new prompt → running again", async () => {
     const p = write([toolUse(), interrupted(), prompt("actually do this instead")]);
     expect(await transcriptTurnState(p)).toBe("running");

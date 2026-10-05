@@ -101,6 +101,16 @@ describe("sessionTurnState arbitration", () => {
     expect(got).toEqual({ state: "idle", source: "transcript" });
   });
 
+  test("a recent sync mtime cannot keep a continued transcript running", async () => {
+    hook("continued", "running", -(STALL_MS + 60_000));
+    const tp = transcript([
+      assistantRec,
+      { type: "continued-in", continuedInSessionId: "next-session" },
+    ], 9_000);
+    expect(await sessionTurnState({ sessionId: "continued", transcriptPath: tp }))
+      .toEqual({ state: "idle", source: "transcript" });
+  });
+
   test("new turn after a Stop: hook is newer than a stale transcript → running", async () => {
     hook("h5", "running", 9_000);
     const tp = transcript([assistantRec, turnEnd], 1_000);
