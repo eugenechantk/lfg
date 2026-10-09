@@ -1,0 +1,4 @@
+cache hosts: ['https://lfg-pro.eugenechantk.me']
+claude models equal: True | default equal: True | efforts equal: True | version saved/host: 2.1.280 2.1.280
+codex models equal: True | default equal: True | efforts equal: True | version saved/host: 0.159.2 0.159.2
+bundled codex list in app build: gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna  -> saved list contains gpt-6.1-sol: True

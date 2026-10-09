@@ -1,0 +1,123 @@
+=== CASE A: seeded last-good file, codex discovery forced to fail ===
+LFG_DATA = /private/tmp/claude-501/-Users-eugenechan-dev-personal-lfg/37ccd237-32ac-4643-9542-53254187f4da/scratchpad/sc3-seeded.B3MP | PATHS.data = /private/tmp/claude-501/-Users-eugenechan-dev-personal-lfg/37ccd237-32ac-4643-9542-53254187f4da/scratchpad/sc3-seeded.B3MP | LFG_CODEX_BIN = /usr/bin/false
+seed file before: {
+  "codex": {
+    "version": "0.160.0",
+    "defaultModel": "gpt-6.1-sol",
+    "models": ["gpt-6.1-sol", "gpt-6-astra", "audit-seeded-model"],
+    "efforts": { "gpt-6.1-sol": ["low", "high"] }
+  }
+}
+
+currentModelCatalog(true) took 15ms
+served codex: {"version":"0.160.0","defaultModel":"gpt-6.1-sol","models":["gpt-6.1-sol","gpt-6-astra","audit-seeded-model"],"efforts":{"gpt-6.1-sol":["low","high"]}}
+served claude: {"version":"2.1.280","defaultModel":"claude-opus-5-5","models":["claude-opus-5-5","claude-fable-5-1","claude-sonnet-5-5","claude-haiku-5-5"],"efforts":{"claude-opus-5-5":["low","medium","high","xhigh","max"],"claude-fable-5-1":["low","medium","high","xhigh","max"],"claude-sonnet-5-5":["low","medium","high","xhigh","max"],"claude-haiku-5-5":["low","medium","high","xhigh","max"]}}
+codex equals bundled fallback: false
+file after: {
+  "claude": {
+    "version": "2.1.280",
+    "defaultModel": "claude-opus-5-5",
+    "models": [
+      "claude-opus-5-5",
+      "claude-fable-5-1",
+      "claude-sonnet-5-5",
+      "claude-haiku-5-5"
+    ],
+    "efforts": {
+      "claude-opus-5-5": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "claude-fable-5-1": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "claude-sonnet-5-5": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "claude-haiku-5-5": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    }
+  },
+  "codex": {
+    "version": "0.160.0",
+    "defaultModel": "gpt-6.1-sol",
+    "models": [
+      "gpt-6.1-sol",
+      "gpt-6-astra",
+      "audit-seeded-model"
+    ],
+    "efforts": {
+      "gpt-6.1-sol": [
+        "low",
+        "high"
+      ]
+    }
+  }
+}
+
+
+=== CASE B (control): no last-good file, codex discovery forced to fail ===
+LFG_DATA = /private/tmp/claude-501/-Users-eugenechan-dev-personal-lfg/37ccd237-32ac-4643-9542-53254187f4da/scratchpad/sc3-control.ImCj | PATHS.data = /private/tmp/claude-501/-Users-eugenechan-dev-personal-lfg/37ccd237-32ac-4643-9542-53254187f4da/scratchpad/sc3-control.ImCj | LFG_CODEX_BIN = /usr/bin/false
+seed file before: <absent>
+currentModelCatalog(true) took 10ms
+served codex: {"version":null,"defaultModel":"gpt-5.6-sol","models":["gpt-5.6-sol","gpt-5.6-terra","gpt-5.6-luna"],"efforts":{}}
+served claude: {"version":"2.1.280","defaultModel":"claude-opus-5-5","models":["claude-opus-5-5","claude-fable-5-1","claude-sonnet-5-5","claude-haiku-5-5"],"efforts":{"claude-opus-5-5":["low","medium","high","xhigh","max"],"claude-fable-5-1":["low","medium","high","xhigh","max"],"claude-sonnet-5-5":["low","medium","high","xhigh","max"],"claude-haiku-5-5":["low","medium","high","xhigh","max"]}}
+codex equals bundled fallback: true
+file after: {
+  "claude": {
+    "version": "2.1.280",
+    "defaultModel": "claude-opus-5-5",
+    "models": [
+      "claude-opus-5-5",
+      "claude-fable-5-1",
+      "claude-sonnet-5-5",
+      "claude-haiku-5-5"
+    ],
+    "efforts": {
+      "claude-opus-5-5": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "claude-fable-5-1": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "claude-sonnet-5-5": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "claude-haiku-5-5": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    }
+  }
+}

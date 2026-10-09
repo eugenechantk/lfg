@@ -1,6 +1,7 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { PATHS } from "./config.ts";
 import { claudeBin, codexBin } from "./tmux.ts";
 import { isEffortLevel } from "./session-effort.ts";
 
@@ -138,6 +139,74 @@ export function mergeWithBundledFallbacks(discovered: {
   };
 }
 
+// Last successful discovery per agent, persisted so a failed discovery (a codex
+// app-server that misses its 5s deadline) serves the host's real list instead of
+// the compiled one. Clients save whatever this endpoint answers, so a single
+// fallback to the compiled gpt-5.6 list would otherwise spread to every phone.
+export type LastGoodModelCatalog = Partial<Record<"claude" | "codex", AgentModelCatalog>>;
+
+export function resolveModelCatalog(
+  discovered: { claude: AgentModelCatalog | null; codex: AgentModelCatalog | null },
+  lastGood: LastGoodModelCatalog,
+): { catalog: ModelCatalogResponse; lastGood: LastGoodModelCatalog } {
+  const claude = discovered.claude ?? lastGood.claude ?? null;
+  const codex = discovered.codex ?? lastGood.codex ?? null;
+  const next: LastGoodModelCatalog = {};
+  if (claude) next.claude = claude;
+  if (codex) next.codex = codex;
+  return { catalog: mergeWithBundledFallbacks({ claude, codex }), lastGood: next };
+}
+
+function sanitizeAgentCatalog(value: unknown): AgentModelCatalog | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as { version?: unknown; defaultModel?: unknown; models?: unknown; efforts?: unknown };
+  const models = Array.isArray(raw.models) ? uniqueSafeModels(raw.models) : [];
+  if (models.length === 0) return null;
+  const defaultModel = isSafeModelId(raw.defaultModel) && models.includes(raw.defaultModel)
+    ? raw.defaultModel
+    : models[0]!;
+  const efforts: Record<string, string[]> = {};
+  if (raw.efforts && typeof raw.efforts === "object") {
+    for (const [model, levels] of Object.entries(raw.efforts as Record<string, unknown>)) {
+      if (models.includes(model) && Array.isArray(levels)) efforts[model] = uniqueEfforts(levels);
+    }
+  }
+  return { version: typeof raw.version === "string" ? raw.version : null, defaultModel, models, efforts };
+}
+
+export function parseLastGoodCatalog(raw: string): LastGoodModelCatalog {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  const out: LastGoodModelCatalog = {};
+  for (const agent of ["claude", "codex"] as const) {
+    const catalog = sanitizeAgentCatalog(parsed?.[agent]);
+    if (catalog) out[agent] = catalog;
+  }
+  return out;
+}
+
+export async function readLastGoodCatalog(path: string): Promise<LastGoodModelCatalog> {
+  try {
+    return parseLastGoodCatalog(await readFile(path, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+export async function writeLastGoodCatalog(path: string, value: LastGoodModelCatalog): Promise<void> {
+  const tmp = `${path}.${process.pid}.tmp`;
+  await writeFile(tmp, JSON.stringify(value, null, 2) + "\n");
+  await rename(tmp, path);
+}
+
+function lastGoodCatalogPath(): string {
+  return join(PATHS.data, "model-catalog.json");
+}
+
 async function executableVersion(bin: string, pattern: RegExp): Promise<string | null> {
   try {
     const proc = Bun.spawn([bin, "--version"], { stdout: "pipe", stderr: "ignore" });
@@ -253,13 +322,22 @@ async function discoverCodexModels(): Promise<AgentModelCatalog | null> {
 
 let cached: { expiresAt: number; value: ModelCatalogResponse } | null = null;
 let inFlight: Promise<ModelCatalogResponse> | null = null;
+let lastGood: LastGoodModelCatalog | null = null;
 
 export async function currentModelCatalog(force = false): Promise<ModelCatalogResponse> {
   if (!force && cached && cached.expiresAt > Date.now()) return cached.value;
   if (inFlight) return inFlight;
   inFlight = (async () => {
     const [claude, codex] = await Promise.all([discoverClaudeModels(), discoverCodexModels()]);
-    const value = mergeWithBundledFallbacks({ claude, codex });
+    const path = lastGoodCatalogPath();
+    const previous = lastGood ?? await readLastGoodCatalog(path);
+    const resolved = resolveModelCatalog({ claude, codex }, previous);
+    if (JSON.stringify(resolved.lastGood) !== JSON.stringify(previous)) {
+      // Best effort: a failed write only costs the fallback after a restart.
+      await writeLastGoodCatalog(path, resolved.lastGood).catch(() => {});
+    }
+    lastGood = resolved.lastGood;
+    const value = resolved.catalog;
     cached = { expiresAt: Date.now() + 15_000, value };
     return value;
   })();

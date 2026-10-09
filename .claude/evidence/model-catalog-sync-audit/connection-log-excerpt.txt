@@ -1,0 +1,9 @@
+18:56:42.865 APP restored saved model catalogs: https://lfg-pro.eugenechantk.me
+18:56:42.867 APP === launch v1.3.0 (1) — 2026-10-08 18:56:42.867 +0800 ===
+18:56:43.460 APP foreground
+18:58:22.799 APP background — holding links for 25s grace
+18:58:35.688 APP foreground after 13s backgrounded
+--- Air host (configured, offline) sample ---
+18:56:43.873 STR [lfg-air.eugenechantk.me] ERROR after 0.4s — HTTP 530
+18:56:43.910 STA [lfg-air.eugenechantk.me] degraded(Connection lost) -> degraded(HTTP 530) via probeFailed(HTTP 530)
+18:56:45.111 STR [lfg-air.eugenechantk.me] ERROR after 0.2s — HTTP 530

@@ -184,6 +184,15 @@ struct NewSessionView: View {
             if selectedHost == nil {
                 selectedHost = fallbackHost
             }
+            // The inferred/remembered model may be newer than the bundled list,
+            // so only the host's own catalog can say whether it is still offered.
+            // `refresh: false` serves the host's cached discovery. A failed load
+            // leaves the chip alone; `start` reconciles again before creating.
+            await store.loadModelCatalog(for: selectedHost, refresh: false)
+            if store.hasModelCatalog(for: selectedHost) {
+                model = AgentModelSelection(agent: agent, model: model)
+                    .reconciled(with: store.modelCatalog(for: selectedHost)).model
+            }
             // After the directory list has loaded, so a spoken project name can
             // resolve against the host's repos.
             await applyPrefill()
@@ -381,7 +390,8 @@ struct NewSessionView: View {
         let inferred = AgentModelSelection.inferred(
             forCwd: path,
             in: store.sessions,
-            fallback: settings.lastNewSessionModelSelection)
+            fallback: settings.lastNewSessionModelSelection,
+            catalog: store.modelCatalog(for: selectedHost))
         agent = inferred.agent
         model = inferred.model
     }
@@ -423,6 +433,12 @@ struct NewSessionView: View {
         // A persisted selection can outlive the host that advertised it. Re-run
         // reconciliation at the request boundary so starting without reopening
         // the model sheet cannot submit an ID this host does not advertise.
+        // Load first if needed: the bundled fallback stands in for a missing
+        // catalog, and reconciling against it turns gpt-6.1-sol into gpt-5.6-sol.
+        // Usually a no-op, since `.task` already loaded it.
+        if !store.hasModelCatalog(for: selectedHost) {
+            await store.loadModelCatalog(for: selectedHost, refresh: false)
+        }
         let selection = AgentModelSelection(agent: agent, model: model)
             .reconciled(with: store.modelCatalog(for: selectedHost))
         agent = selection.agent

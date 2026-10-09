@@ -1,10 +1,17 @@
 import { describe, expect, it } from "bun:test";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   BUNDLED_MODEL_CATALOG,
   isSafeModelId,
   mergeWithBundledFallbacks,
   parseClaudeCatalog,
   parseCodexModelListOutput,
+  parseLastGoodCatalog,
+  readLastGoodCatalog,
+  resolveModelCatalog,
+  writeLastGoodCatalog,
 } from "./model-catalog.ts";
 
 describe("automatic CLI model catalog", () => {
@@ -101,5 +108,72 @@ describe("automatic CLI model catalog", () => {
         codex: BUNDLED_MODEL_CATALOG.agents.codex,
       },
     });
+  });
+});
+
+describe("last successful discovery", () => {
+  const codex61 = {
+    version: "0.160.0",
+    defaultModel: "gpt-6.1-sol",
+    models: ["gpt-6.1-sol", "gpt-6-astra", "gpt-5.6-sol"],
+    efforts: { "gpt-6.1-sol": ["low", "high"] },
+  };
+  const claude55 = {
+    version: "2.1.290",
+    defaultModel: "claude-opus-5-5",
+    models: ["claude-opus-5-5", "claude-fable-5-1"],
+    efforts: {},
+  };
+
+  it("serves and remembers a fresh discovery", () => {
+    const { catalog, lastGood } = resolveModelCatalog({ claude: claude55, codex: codex61 }, {});
+    expect(catalog).toEqual({ agents: { claude: claude55, codex: codex61 } });
+    expect(lastGood).toEqual({ claude: claude55, codex: codex61 });
+  });
+
+  // A codex app-server timeout used to hand every client the compiled
+  // gpt-5.6 list, from a host that runs gpt-6.1.
+  it("serves the last good list for an agent whose discovery failed", () => {
+    const { catalog, lastGood } = resolveModelCatalog({ claude: claude55, codex: null }, { codex: codex61 });
+    expect(catalog.agents.codex).toEqual(codex61);
+    expect(catalog.agents.claude).toEqual(claude55);
+    expect(lastGood).toEqual({ claude: claude55, codex: codex61 });
+  });
+
+  it("falls back to the compiled list only when nothing was ever discovered", () => {
+    const { catalog, lastGood } = resolveModelCatalog({ claude: null, codex: null }, {});
+    expect(catalog).toEqual(BUNDLED_MODEL_CATALOG);
+    expect(lastGood).toEqual({});
+  });
+
+  it("re-validates the saved file instead of trusting it", () => {
+    expect(parseLastGoodCatalog("not json")).toEqual({});
+    expect(parseLastGoodCatalog(JSON.stringify({ codex: { models: [] } }))).toEqual({});
+    expect(parseLastGoodCatalog(JSON.stringify({
+      codex: {
+        version: 7,
+        defaultModel: "$(rm -rf /)",
+        models: ["gpt-6.1-sol", "bad model", "gpt-6.1-sol"],
+        efforts: { "gpt-6.1-sol": ["high", "nonsense"], "bad model": ["low"] },
+      },
+      someFutureAgent: codex61,
+    }))).toEqual({
+      codex: {
+        version: null,
+        defaultModel: "gpt-6.1-sol",
+        models: ["gpt-6.1-sol"],
+        efforts: { "gpt-6.1-sol": ["high"] },
+      },
+    });
+  });
+
+  it("round-trips through the file on disk", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "lfg-model-catalog-")), "model-catalog.json");
+    expect(await readLastGoodCatalog(path)).toEqual({});
+    await writeLastGoodCatalog(path, { claude: claude55, codex: codex61 });
+    expect(await readLastGoodCatalog(path)).toEqual({ claude: claude55, codex: codex61 });
+    writeFileSync(path, "{ truncated");
+    expect(await readLastGoodCatalog(path)).toEqual({});
+    expect(readFileSync(path, "utf8")).toBe("{ truncated");
   });
 });

@@ -15,14 +15,22 @@ extension AgentModelSelection {
     ///
     /// Two tiers, because a session can be known without its model being known:
     ///
-    /// 1. The newest session in `cwd` whose model is readable — that pair, resolved
-    ///    through `restoring` so a retired catalog entry degrades to the agent's
-    ///    current default rather than leaking into a create request.
+    /// 1. The newest session in `cwd` whose model is readable — that pair, kept
+    ///    as-is when the id is syntactically safe. This deliberately does NOT
+    ///    check the app's bundled model list: that list is a compatibility floor
+    ///    for old hosts, so every model newer than this build (gpt-6.1-sol, when
+    ///    the bundle stops at gpt-5.6) used to be swapped for the bundled default.
+    ///    Whether the host still offers the id is decided by `reconciled(with:)`
+    ///    against that host's live catalog, at the chip and at the create request.
     /// 2. Failing that, the newest session in `cwd` with a recognizable agent, on
     ///    that agent's default model. A transcript with no assistant turn (or a
     ///    server too old to report `model` on closed rows) still tells us the
     ///    runtime, and "codex on its default model" beats "claude" for a codex
     ///    directory.
+    ///
+    /// "Default model" is `catalog`'s — the host's own answer — so it moves with
+    /// the host's CLIs. The compiled default only applies when no catalog is
+    /// known (`.fallback`).
     ///
     /// Falls back to `fallback` when the directory has no usable history at all.
     ///
@@ -34,7 +42,8 @@ extension AgentModelSelection {
     public static func inferred(
         forCwd cwd: String,
         in sessions: [Session],
-        fallback: AgentModelSelection
+        fallback: AgentModelSelection,
+        catalog: ModelCatalogResponse = .fallback
     ) -> AgentModelSelection {
         let target = normalizedPath(cwd)
         guard !target.isEmpty else { return fallback }
@@ -44,15 +53,15 @@ extension AgentModelSelection {
         // host) and that ordering has nothing to do with recency.
         let candidates = sessions
             .filter { normalizedPath($0.cwd ?? "") == target }
-            .filter { AgentKind(rawValue: $0.agent) != nil }
-            .sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
+            .compactMap { session in AgentKind(rawValue: session.agent).map { (session, $0) } }
+            .sorted { ($0.0.lastActivityAt ?? 0) > ($1.0.lastActivityAt ?? 0) }
 
-        if let withModel = candidates.first(where: { ($0.model?.isEmpty == false) }) {
-            return .restoring(agentRawValue: withModel.agent, model: withModel.model)
+        if let (session, agent) = candidates.first(where: { $0.0.model?.isEmpty == false }),
+           let model = session.model, isSafeModelName(model) {
+            return AgentModelSelection(agent: agent, model: model)
         }
-        if let withAgent = candidates.first {
-            // No model to restore, so `restoring` supplies the agent's default.
-            return .restoring(agentRawValue: withAgent.agent, model: nil)
+        if let (_, agent) = candidates.first {
+            return AgentModelSelection(agent: agent, model: catalog.defaultModel(for: agent))
         }
         return fallback
     }

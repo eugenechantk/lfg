@@ -1,0 +1,5 @@
+plist: /Users/eugenechan/Library/Developer/CoreSimulator/Devices/85FB247F-5E5F-40AD-BBB5-E856D95EE9F8/data/Containers/Data/Application/564D32C5-D019-4DFF-BA11-AE955F158DB6/Library/Preferences/com.eugenechan.lfg.plist mtime: 2026-10-08T18:56:54
+keys: ['com.apple.UIKit.UISplitViewController.Root', 'lfg.cursor.https://lfg-pro.eugenechantk.me', 'lfg.hosts', 'lfg.liveActivity.aggregator', 'lfg.liveActivity.channelId', 'lfg.modelCatalogCache.v1', 'lfg.newSessionAgent', 'lfg.newSessionModel', 'lfg.storeReadStateSeededFromUserDefaults']
+host https://lfg-pro.eugenechantk.me: fetchedAt=813149804.497823 (2026-10-08T18:56:44+08:00)
+   codex: default=gpt-6.1-sol models=['gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']
+   claude: default=claude-opus-5-5 models=['claude-opus-5-5', 'claude-fable-5-1', 'claude-sonnet-5-5', 'claude-haiku-5-5']

@@ -75,12 +75,57 @@ final class NewSessionModelDefaultsTests: XCTestCase {
         XCTAssertEqual(s.model, "sonnet")
     }
 
+    // A model newer than the bundled list is still the directory's model. The
+    // bundle stopped at gpt-5.6, so this used to come back as gpt-5.6-sol.
+    func testModelNewerThanTheBundledListSurvivesInference() {
+        let sessions = [session("a1", cwd: "/a", agent: "codex", model: "gpt-6.1-sol", at: 10)]
+        let s = AgentModelSelection.inferred(forCwd: "/a", in: sessions, fallback: fallback)
+        XCTAssertFalse(AgentKind.codex.models.contains("gpt-6.1-sol"))
+        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: "gpt-6.1-sol"))
+
+        let live = ModelCatalogResponse(agents: [
+            "codex": AgentModelCatalog(defaultModel: "gpt-6.1-sol",
+                                       models: ["gpt-6.1-sol", "gpt-6-sol", "gpt-5.6-sol"]),
+        ])
+        XCTAssertEqual(s.reconciled(with: live).model, "gpt-6.1-sol")
+    }
+
     // SC6: catalogs evolve; a retired model must never reach a create request.
-    func testUnknownModelDegradesToTheAgentDefaultNotTheRawValue() {
+    // The host's live catalog is the judge, at the request boundary.
+    func testRetiredModelDegradesWhenReconciledWithTheHostCatalog() {
         let sessions = [session("a1", cwd: "/a", agent: "codex", model: "gpt-4o-ancient", at: 10)]
         let s = AgentModelSelection.inferred(forCwd: "/a", in: sessions, fallback: fallback)
-        XCTAssertEqual(s.agent, .codex)
-        XCTAssertEqual(s.model, AgentKind.codex.defaultModel)
+        let live = ModelCatalogResponse(agents: [
+            "codex": AgentModelCatalog(defaultModel: "gpt-6.1-sol", models: ["gpt-6.1-sol", "gpt-6-sol"]),
+        ])
+        XCTAssertEqual(s.reconciled(with: live), AgentModelSelection(agent: .codex, model: "gpt-6.1-sol"))
+    }
+
+    // An id that is not safe to put on an argv never leaves inference.
+    func testUnsafeModelDegradesToTheAgentDefault() {
+        let sessions = [session("a1", cwd: "/a", agent: "codex", model: "gpt; rm -rf /", at: 10)]
+        let s = AgentModelSelection.inferred(forCwd: "/a", in: sessions, fallback: fallback)
+        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: AgentKind.codex.defaultModel))
+    }
+
+    private let hostCatalog = ModelCatalogResponse(agents: [
+        "codex": AgentModelCatalog(defaultModel: "gpt-6.1-sol", models: ["gpt-6.1-sol", "gpt-5.6-sol"]),
+    ])
+
+    // SC4: "the agent's default" is the host's default, not this build's. A
+    // codex directory with no readable model used to open on gpt-5.6-sol.
+    func testAgentOnlyDirectoryUsesTheHostsDefault() {
+        let sessions = [session("a1", cwd: "/a", agent: "codex", model: nil, at: 10)]
+        let s = AgentModelSelection.inferred(
+            forCwd: "/a", in: sessions, fallback: fallback, catalog: hostCatalog)
+        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: "gpt-6.1-sol"))
+    }
+
+    func testUnsafeModelDegradesToTheHostsDefault() {
+        let sessions = [session("a1", cwd: "/a", agent: "codex", model: "gpt; rm -rf /", at: 10)]
+        let s = AgentModelSelection.inferred(
+            forCwd: "/a", in: sessions, fallback: fallback, catalog: hostCatalog)
+        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: "gpt-6.1-sol"))
     }
 
     // An agent this build doesn't know is not a runtime we can propose.

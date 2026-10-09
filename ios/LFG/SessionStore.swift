@@ -352,9 +352,12 @@ import LFGCore
     private(set) var inbox: String = ""
     private(set) var users: [String] = []
     private(set) var usage: Usage?
-    /// Account/version-specific CLI catalogs, keyed by host id. Missing entries
-    /// intentionally read as the bundled compatibility catalog.
+    /// Account/version-specific CLI catalogs, keyed by host id. Restored from the
+    /// device at launch and saved on every answer (`modelCatalogCache`), so the
+    /// bundled compatibility catalog only covers a host never reached yet.
     private(set) var modelCatalogByHost: [String: ModelCatalogResponse] = [:]
+    @ObservationIgnored private var modelCatalogCache: ModelCatalogCache
+    @ObservationIgnored private var modelCatalogRefreshing: Set<String> = []
 
     private var seen: [String: Set<String>] = [:]
 
@@ -519,6 +522,12 @@ import LFGCore
         manualUnread = Set(d.stringArray(forKey: Self.manualUnreadKey) ?? [])
         lastOpenedAt = opened
         needsReadStateMigration = !d.bool(forKey: Self.migratedKey) && !opened.isEmpty
+        modelCatalogCache = ModelCatalogCache.decode(d.data(forKey: ModelCatalogCache.defaultsKey))
+            .pruned(keeping: Set(settings.hosts.map(\.id)))
+        modelCatalogByHost = modelCatalogCache.catalogs
+        let restored = modelCatalogCache.entries.keys.sorted()
+        ConnectionLog.shared.log(.lifecycle, "restored saved model catalogs: "
+            + (restored.isEmpty ? "none" : restored.joined(separator: ", ")))
     }
 
     // No deinit for pathMonitor: the store is app-lifetime and `stop()` cancels
@@ -779,6 +788,7 @@ import LFGCore
         // in front of the one thing the user is waiting to see.
         syncLinks()
         startReconnectBurst()
+        refreshModelCatalogs()
         guard pollTask == nil else { return }
         // Slow reconcile only: live delivery is the links' job now. This loop
         // is belt-and-braces (list membership, closed sessions, anything an
@@ -2857,18 +2867,52 @@ import LFGCore
         return target.flatMap { modelCatalogByHost[$0.id] } ?? .fallback
     }
 
+    /// Whether `modelCatalog(for:)` would answer with this host's own catalog
+    /// (fetched now or saved from an earlier answer) rather than the bundled
+    /// fallback. Reconciling against the fallback erases every model newer than
+    /// this build, so callers about to reconcile load first.
+    func hasModelCatalog(for host: Host?) -> Bool {
+        (host ?? agnosticHost).map { modelCatalogByHost[$0.id] != nil } ?? false
+    }
+
     func modelCatalog(forSession sessionID: String) -> ModelCatalogResponse {
         modelCatalog(for: host(forSession: sessionID))
     }
 
-    /// Refresh only on explicit picker/detail entry, never in the 3s session
-    /// poll. The host briefly caches discovery and falls back on failure, so this
-    /// is cheap and self-heals after either CLI updates without app/server code.
+    /// Refresh on explicit picker/detail entry and on launch/foreground
+    /// (`refreshModelCatalogs`), never in the session poll. The host briefly
+    /// caches discovery and serves its last good list on failure, so this is
+    /// cheap and self-heals after either CLI updates without app/server code.
     func loadModelCatalog(for host: Host?, refresh: Bool = true) async {
         guard let target = host ?? agnosticHost,
               let client = settings.client(for: target),
               let catalog = try? await client.models(refresh: refresh) else { return }
-        modelCatalogByHost[target.id] = catalog
+        noteModelCatalog(catalog, for: target.id)
+    }
+
+    /// Ask every configured host for its catalog. Runs on launch and foreground,
+    /// so the saved catalogs track CLI updates without a picker being opened.
+    /// One task per host, each saved as it lands: an offline host's timeout
+    /// must not delay the others, and only that host's next refresh waits on it.
+    func refreshModelCatalogs() {
+        for host in settings.hosts where !modelCatalogRefreshing.contains(host.id) {
+            guard let client = settings.client(for: host) else { continue }
+            let id = host.id
+            modelCatalogRefreshing.insert(id)
+            Task { [weak self] in
+                let catalog = try? await client.models()
+                guard let self else { return }
+                self.modelCatalogRefreshing.remove(id)
+                if let catalog { self.noteModelCatalog(catalog, for: id) }
+            }
+        }
+    }
+
+    private func noteModelCatalog(_ catalog: ModelCatalogResponse, for hostID: String) {
+        modelCatalogByHost[hostID] = catalog
+        modelCatalogCache.record(catalog, for: hostID, at: Date())
+        modelCatalogCache = modelCatalogCache.pruned(keeping: Set(settings.hosts.map(\.id)))
+        UserDefaults.standard.set(modelCatalogCache.encoded(), forKey: ModelCatalogCache.defaultsKey)
     }
 
     func loadModelCatalog(forSession sessionID: String, refresh: Bool = true) async {

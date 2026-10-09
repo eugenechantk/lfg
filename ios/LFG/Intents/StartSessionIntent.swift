@@ -86,7 +86,8 @@ struct StartSessionIntent: AppIntent {
         }
         let directory = StartSessionPlanner.directory(hint: project, dirs: dirs)
         guard !directory.path.isEmpty else { throw StartError.noDirectory }
-        let catalog = (try? await client.models()) ?? .fallback
+        let saved = ModelCatalogCache.decode(UserDefaults.standard.data(forKey: ModelCatalogCache.defaultsKey))
+        let catalog = (try? await client.models()) ?? saved.catalogs[target.id] ?? .fallback
         let selection = StartSessionPlanner.selection(agent: agent, model: model, catalog: catalog,
                                                       remembered: settings.lastNewSessionModelSelection)
         let plan = StartSessionPlan(host: target, directory: directory, selection: selection)

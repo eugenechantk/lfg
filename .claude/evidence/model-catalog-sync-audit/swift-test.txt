@@ -1,0 +1,2016 @@
+Building for debugging...
+[0/2] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.09s)
+Test Suite 'All tests' started at 2026-10-08 18:53:57.133.
+Test Suite 'LFGCorePackageTests.xctest' started at 2026-10-08 18:53:57.133.
+Test Suite 'AnchorAfterMutationTests' started at 2026-10-08 18:53:57.133.
+Test Case '-[LFGCoreTests.AnchorAfterMutationTests testAppendWithGrownWindowDoesNotAnchor]' started.
+Test Case '-[LFGCoreTests.AnchorAfterMutationTests testAppendWithGrownWindowDoesNotAnchor]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.AnchorAfterMutationTests testEmptyInputsAreSafe]' started.
+Test Case '-[LFGCoreTests.AnchorAfterMutationTests testEmptyInputsAreSafe]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.AnchorAfterMutationTests testUnchangedRenderedTopDoesNotAnchor]' started.
+Test Case '-[LFGCoreTests.AnchorAfterMutationTests testUnchangedRenderedTopDoesNotAnchor]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.AnchorAfterMutationTests testVanishedTopRowYieldsNoAnchor]' started.
+Test Case '-[LFGCoreTests.AnchorAfterMutationTests testVanishedTopRowYieldsNoAnchor]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.AnchorAfterMutationTests testWindowStartMovingReturnsThePreviousTopRow]' started.
+Test Case '-[LFGCoreTests.AnchorAfterMutationTests testWindowStartMovingReturnsThePreviousTopRow]' passed (0.000 seconds).
+Test Suite 'AnchorAfterMutationTests' passed at 2026-10-08 18:53:57.135.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'BackgroundSyncTests' started at 2026-10-08 18:53:57.135.
+Test Case '-[LFGCoreTests.BackgroundSyncTests testCursorKeyShape]' started.
+Test Case '-[LFGCoreTests.BackgroundSyncTests testCursorKeyShape]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.BackgroundSyncTests testHintCoexistsWithNavigationPayload]' started.
+Test Case '-[LFGCoreTests.BackgroundSyncTests testHintCoexistsWithNavigationPayload]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.BackgroundSyncTests testHintParsesNumberSeq]' started.
+Test Case '-[LFGCoreTests.BackgroundSyncTests testHintParsesNumberSeq]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.BackgroundSyncTests testHintParsesStringSeq]' started.
+Test Case '-[LFGCoreTests.BackgroundSyncTests testHintParsesStringSeq]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.BackgroundSyncTests testHintRejectsMissingOrEmptyFields]' started.
+Test Case '-[LFGCoreTests.BackgroundSyncTests testHintRejectsMissingOrEmptyFields]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.BackgroundSyncTests testPageCanServeFalse]' started.
+Test Case '-[LFGCoreTests.BackgroundSyncTests testPageCanServeFalse]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.BackgroundSyncTests testPageDecodesQueueAckRowsWithSessionHint]' started.
+Test Case '-[LFGCoreTests.BackgroundSyncTests testPageDecodesQueueAckRowsWithSessionHint]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.BackgroundSyncTests testPageDecodesRowsThroughTheStreamPath]' started.
+Test Case '-[LFGCoreTests.BackgroundSyncTests testPageDecodesRowsThroughTheStreamPath]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.BackgroundSyncTests testPageSkipsUnknownEventTypes]' started.
+Test Case '-[LFGCoreTests.BackgroundSyncTests testPageSkipsUnknownEventTypes]' passed (0.000 seconds).
+Test Suite 'BackgroundSyncTests' passed at 2026-10-08 18:53:57.137.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'BrowserPreviewLayoutTests' started at 2026-10-08 18:53:57.137.
+Test Case '-[LFGCoreTests.BrowserPreviewLayoutTests testConstrainedPointStaysInsideMargins]' started.
+Test Case '-[LFGCoreTests.BrowserPreviewLayoutTests testConstrainedPointStaysInsideMargins]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.BrowserPreviewLayoutTests testDraggingPastEitherEdgeDocks]' started.
+Test Case '-[LFGCoreTests.BrowserPreviewLayoutTests testDraggingPastEitherEdgeDocks]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.BrowserPreviewLayoutTests testNarrowContainerUsesOneStableHorizontalCenter]' started.
+Test Case '-[LFGCoreTests.BrowserPreviewLayoutTests testNarrowContainerUsesOneStableHorizontalCenter]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.BrowserPreviewLayoutTests testRestingAtAnEdgeDoesNotDockWithoutOvershoot]' started.
+Test Case '-[LFGCoreTests.BrowserPreviewLayoutTests testRestingAtAnEdgeDoesNotDockWithoutOvershoot]' passed (0.000 seconds).
+Test Suite 'BrowserPreviewLayoutTests' passed at 2026-10-08 18:53:57.137.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'ChildAgentSessionTests' started at 2026-10-08 18:53:57.138.
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testCollectionPresentationHandlesSingularAndTerminalStates]' started.
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testCollectionPresentationHandlesSingularAndTerminalStates]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testCollectionPresentationPrioritizesActiveAndProblemStates]' started.
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testCollectionPresentationPrioritizesActiveAndProblemStates]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testDecodesChildAgentResponseLeniently]' started.
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testDecodesChildAgentResponseLeniently]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testRunningChildKeepsParentRunningWhenParentTurnIsIdle]' started.
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testRunningChildKeepsParentRunningWhenParentTurnIsIdle]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testServerRunningCountBridgesBeforeChildSummariesArrive]' started.
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testServerRunningCountBridgesBeforeChildSummariesArrive]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testSessionWorkCountersHaveAccessibleZeroSingularAndPluralCopy]' started.
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testSessionWorkCountersHaveAccessibleZeroSingularAndPluralCopy]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testStatusPresentationIsStableForEveryServerValue]' started.
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testStatusPresentationIsStableForEveryServerValue]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testTerminalChildrenDoNotKeepIdleParentRunning]' started.
+Test Case '-[LFGCoreTests.ChildAgentSessionTests testTerminalChildrenDoNotKeepIdleParentRunning]' passed (0.000 seconds).
+Test Suite 'ChildAgentSessionTests' passed at 2026-10-08 18:53:57.139.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'ChildSessionsBarVisibilityTests' started at 2026-10-08 18:53:57.139.
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testAgentsThatFinishedAfterTheSendStillShow]' started.
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testAgentsThatFinishedAfterTheSendStillShow]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testFetchFromAPeerNeverBlanksWhatTheOwnerSaid]' started.
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testFetchFromAPeerNeverBlanksWhatTheOwnerSaid]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testFetchFromTheOwnerIsAuthoritativeEvenWhenEmpty]' started.
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testFetchFromTheOwnerIsAuthoritativeEvenWhenEmpty]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testFinishedAgentsHideAfterAFollowUp]' started.
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testFinishedAgentsHideAfterAFollowUp]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testFinishedAgentsShowUntilTheUserSendsAgain]' started.
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testFinishedAgentsShowUntilTheUserSendsAgain]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testLatestActivityFallsBackThroughTheAvailableTimestamps]' started.
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testLatestActivityFallsBackThroughTheAvailableTimestamps]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testNoAgentsMeansNoBar]' started.
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testNoAgentsMeansNoBar]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testRunningAgentKeepsTheBarEvenRightAfterASend]' started.
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testRunningAgentKeepsTheBarEvenRightAfterASend]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testSeedFillsAnEmptyStoreFromTheRow]' started.
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testSeedFillsAnEmptyStoreFromTheRow]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testSeedNeverClobbersWithAnEmptyRow]' started.
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testSeedNeverClobbersWithAnEmptyRow]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testSeedPrefersTheFresherSetAndKeepsExistingOnTie]' started.
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testSeedPrefersTheFresherSetAndKeepsExistingOnTie]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testSendAtTheSameInstantSupersedes]' started.
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testSendAtTheSameInstantSupersedes]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testTransportFailureKeepsTheSnapshotRegardlessOfHost]' started.
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testTransportFailureKeepsTheSnapshotRegardlessOfHost]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testUntimedAgentsHideOnceSomethingHasBeenSent]' started.
+Test Case '-[LFGCoreTests.ChildSessionsBarVisibilityTests testUntimedAgentsHideOnceSomethingHasBeenSent]' passed (0.000 seconds).
+Test Suite 'ChildSessionsBarVisibilityTests' passed at 2026-10-08 18:53:57.140.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'CloudflareAccessTests' started at 2026-10-08 18:53:57.140.
+Test Case '-[LFGCoreTests.CloudflareAccessTests testClientWithoutCredentialPreservesExistingRequests]' started.
+Test Case '-[LFGCoreTests.CloudflareAccessTests testClientWithoutCredentialPreservesExistingRequests]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.CloudflareAccessTests testDifferentPortIsNotTreatedAsSameOrigin]' started.
+Test Case '-[LFGCoreTests.CloudflareAccessTests testDifferentPortIsNotTreatedAsSameOrigin]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.CloudflareAccessTests testEventStreamCarriesAccessHeaders]' started.
+Test Case '-[LFGCoreTests.CloudflareAccessTests testEventStreamCarriesAccessHeaders]' passed (0.003 seconds).
+Test Case '-[LFGCoreTests.CloudflareAccessTests testExternalResourceNeverReceivesCredential]' started.
+Test Case '-[LFGCoreTests.CloudflareAccessTests testExternalResourceNeverReceivesCredential]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.CloudflareAccessTests testPreparedBackgroundSendCarriesAccessHeaders]' started.
+Test Case '-[LFGCoreTests.CloudflareAccessTests testPreparedBackgroundSendCarriesAccessHeaders]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.CloudflareAccessTests testRESTAndUploadRequestsCarryAccessHeaders]' started.
+Test Case '-[LFGCoreTests.CloudflareAccessTests testRESTAndUploadRequestsCarryAccessHeaders]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.CloudflareAccessTests testSameOriginResourceRequestCarriesCredential]' started.
+Test Case '-[LFGCoreTests.CloudflareAccessTests testSameOriginResourceRequestCarriesCredential]' passed (0.000 seconds).
+Test Suite 'CloudflareAccessTests' passed at 2026-10-08 18:53:57.146.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+Test Suite 'ConnectionLogTests' started at 2026-10-08 18:53:57.146.
+Test Case '-[LFGCoreTests.ConnectionLogTests testDeviceWideEntriesOmitTheHostColumn]' started.
+Test Case '-[LFGCoreTests.ConnectionLogTests testDeviceWideEntriesOmitTheHostColumn]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.ConnectionLogTests testEntriesComeBackNewestFirst]' started.
+Test Case '-[LFGCoreTests.ConnectionLogTests testEntriesComeBackNewestFirst]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ConnectionLogTests testEntriesWrittenInOneRunAreReadableInTheNext]' started.
+Test Case '-[LFGCoreTests.ConnectionLogTests testEntriesWrittenInOneRunAreReadableInTheNext]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.ConnectionLogTests testEveryCategoryHasADistinctGlyph]' started.
+Test Case '-[LFGCoreTests.ConnectionLogTests testEveryCategoryHasADistinctGlyph]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ConnectionLogTests testEveryComponentNamesTheSameHostIdentically]' started.
+Test Case '-[LFGCoreTests.ConnectionLogTests testEveryComponentNamesTheSameHostIdentically]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ConnectionLogTests testEveryEntryIsOnDiskWithoutAnExplicitFlush]' started.
+Test Case '-[LFGCoreTests.ConnectionLogTests testEveryEntryIsOnDiskWithoutAnExplicitFlush]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.ConnectionLogTests testExportIncludesEntriesNotYetFlushed]' started.
+Test Case '-[LFGCoreTests.ConnectionLogTests testExportIncludesEntriesNotYetFlushed]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.ConnectionLogTests testFileIsCappedByDroppingTheOldestBytes]' started.
+Test Case '-[LFGCoreTests.ConnectionLogTests testFileIsCappedByDroppingTheOldestBytes]' passed (0.199 seconds).
+Test Case '-[LFGCoreTests.ConnectionLogTests testLaunchBannerSeparatesRuns]' started.
+Test Case '-[LFGCoreTests.ConnectionLogTests testLaunchBannerSeparatesRuns]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.ConnectionLogTests testLogLabelIgnoresMutableDisplayNames]' started.
+Test Case '-[LFGCoreTests.ConnectionLogTests testLogLabelIgnoresMutableDisplayNames]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ConnectionLogTests testRenderedLineCarriesTimeCategoryHostAndMessage]' started.
+Test Case '-[LFGCoreTests.ConnectionLogTests testRenderedLineCarriesTimeCategoryHostAndMessage]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ConnectionLogTests testRingKeepsTheNewestEntriesAndEvictsTheOldest]' started.
+Test Case '-[LFGCoreTests.ConnectionLogTests testRingKeepsTheNewestEntriesAndEvictsTheOldest]' passed (0.005 seconds).
+Test Case '-[LFGCoreTests.ConnectionLogTests testRotationNeverLeavesAPartialFirstLine]' started.
+Test Case '-[LFGCoreTests.ConnectionLogTests testRotationNeverLeavesAPartialFirstLine]' passed (0.176 seconds).
+Test Suite 'ConnectionLogTests' passed at 2026-10-08 18:53:57.533.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.386 (0.387) seconds
+Test Suite 'DirectoryFilterIndicatorTests' started at 2026-10-08 18:53:57.533.
+Test Case '-[LFGCoreTests.DirectoryFilterIndicatorTests testConfiguredFilterHidingLiveSessionsBadgesTheCount]' started.
+Test Case '-[LFGCoreTests.DirectoryFilterIndicatorTests testConfiguredFilterHidingLiveSessionsBadgesTheCount]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.DirectoryFilterIndicatorTests testConfiguredFilterHidingNothingLiveIsStillActive]' started.
+Test Case '-[LFGCoreTests.DirectoryFilterIndicatorTests testConfiguredFilterHidingNothingLiveIsStillActive]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.DirectoryFilterIndicatorTests testCountWithoutAFilterIsStillOff]' started.
+Test Case '-[LFGCoreTests.DirectoryFilterIndicatorTests testCountWithoutAFilterIsStillOff]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.DirectoryFilterIndicatorTests testNoFilterIsOff]' started.
+Test Case '-[LFGCoreTests.DirectoryFilterIndicatorTests testNoFilterIsOff]' passed (0.000 seconds).
+Test Suite 'DirectoryFilterIndicatorTests' passed at 2026-10-08 18:53:57.534.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'FleetActivityDedupeTests' started at 2026-10-08 18:53:57.534.
+Test Case '-[LFGCoreTests.FleetActivityDedupeTests testEndListNeverContainsTheSurvivor]' started.
+Test Case '-[LFGCoreTests.FleetActivityDedupeTests testEndListNeverContainsTheSurvivor]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetActivityDedupeTests testNewestUpdatedAtSurvivesRegardlessOfOrder]' started.
+Test Case '-[LFGCoreTests.FleetActivityDedupeTests testNewestUpdatedAtSurvivesRegardlessOfOrder]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetActivityDedupeTests testNoCardsKeepsNothing]' started.
+Test Case '-[LFGCoreTests.FleetActivityDedupeTests testNoCardsKeepsNothing]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetActivityDedupeTests testSingleCardIsKeptAndNothingEnds]' started.
+Test Case '-[LFGCoreTests.FleetActivityDedupeTests testSingleCardIsKeptAndNothingEnds]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetActivityDedupeTests testTieBreaksOnLargerIdDeterministically]' started.
+Test Case '-[LFGCoreTests.FleetActivityDedupeTests testTieBreaksOnLargerIdDeterministically]' passed (0.000 seconds).
+Test Suite 'FleetActivityDedupeTests' passed at 2026-10-08 18:53:57.535.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'FleetActivitySnapshotTests' started at 2026-10-08 18:53:57.535.
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testBlockedSessionIsExcluded]' started.
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testBlockedSessionIsExcluded]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testBlockedSessionWithAPromptStillCountsAsNeedsInput]' started.
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testBlockedSessionWithAPromptStillCountsAsNeedsInput]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testClosedSessionIsExcludedEvenWithAPendingPrompt]' started.
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testClosedSessionIsExcludedEvenWithAPendingPrompt]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testClosedSessionIsExcludedEvenWithAStaleBusyFlag]' started.
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testClosedSessionIsExcludedEvenWithAStaleBusyFlag]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testCountsAndOrdersNeedsInputFirstAndCarriesElapsedTime]' started.
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testCountsAndOrdersNeedsInputFirstAndCarriesElapsedTime]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testDuplicatePriorRowsDoNotTrap]' started.
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testDuplicatePriorRowsDoNotTrap]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testFallsBackToTruncatedSessionIdWhenTitleIsEmpty]' started.
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testFallsBackToTruncatedSessionIdWhenTitleIsEmpty]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testIdleSessionsAreExcludedEntirely]' started.
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testIdleSessionsAreExcludedEntirely]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testMoreCountsOnlyTheOverflowBeyondRenderedRows]' started.
+Test Case '-[LFGCoreTests.FleetActivitySnapshotTests testMoreCountsOnlyTheOverflowBeyondRenderedRows]' passed (0.000 seconds).
+Test Suite 'FleetActivitySnapshotTests' passed at 2026-10-08 18:53:57.536.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'FleetAggregatorClientTests' started at 2026-10-08 18:53:57.536.
+Test Case '-[LFGCoreTests.FleetAggregatorClientTests testChannelIsAGetWithARealQueryString]' started.
+Test Case '-[LFGCoreTests.FleetAggregatorClientTests testChannelIsAGetWithARealQueryString]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetAggregatorClientTests testConfigRoundTripsThroughItsCache]' started.
+Test Case '-[LFGCoreTests.FleetAggregatorClientTests testConfigRoundTripsThroughItsCache]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetAggregatorClientTests testHostResponseParsing]' started.
+Test Case '-[LFGCoreTests.FleetAggregatorClientTests testHostResponseParsing]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetAggregatorClientTests testStartedAndEndedReportsCarryTheEnvironment]' started.
+Test Case '-[LFGCoreTests.FleetAggregatorClientTests testStartedAndEndedReportsCarryTheEnvironment]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetAggregatorClientTests testStartTokenGoesStraightToTheWorkerWithTheDeviceId]' started.
+Test Case '-[LFGCoreTests.FleetAggregatorClientTests testStartTokenGoesStraightToTheWorkerWithTheDeviceId]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetAggregatorClientTests testStartTokenOmitsAMissingDeviceId]' started.
+Test Case '-[LFGCoreTests.FleetAggregatorClientTests testStartTokenOmitsAMissingDeviceId]' passed (0.000 seconds).
+Test Suite 'FleetAggregatorClientTests' passed at 2026-10-08 18:53:57.537.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'FleetCountTrustTests' started at 2026-10-08 18:53:57.537.
+Test Case '-[LFGCoreTests.FleetCountTrustTests testADownHostDoesNotExcuseAnUnansweredUpHost]' started.
+Test Case '-[LFGCoreTests.FleetCountTrustTests testADownHostDoesNotExcuseAnUnansweredUpHost]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetCountTrustTests testADownHostThatAnsweredEarlierThisLaunchIsStillExcluded]' started.
+Test Case '-[LFGCoreTests.FleetCountTrustTests testADownHostThatAnsweredEarlierThisLaunchIsStillExcluded]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetCountTrustTests testAnUpHostThatHasNotAnsweredVetoes]' started.
+Test Case '-[LFGCoreTests.FleetCountTrustTests testAnUpHostThatHasNotAnsweredVetoes]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetCountTrustTests testASleepingHostDoesNotFreezeTheCard]' started.
+Test Case '-[LFGCoreTests.FleetCountTrustTests testASleepingHostDoesNotFreezeTheCard]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetCountTrustTests testEveryHostKnownDownIsNotTrustworthy]' started.
+Test Case '-[LFGCoreTests.FleetCountTrustTests testEveryHostKnownDownIsNotTrustworthy]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetCountTrustTests testEveryUpHostFetchedIsTrustworthy]' started.
+Test Case '-[LFGCoreTests.FleetCountTrustTests testEveryUpHostFetchedIsTrustworthy]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetCountTrustTests testFetchedIdsForRemovedHostsAreIgnored]' started.
+Test Case '-[LFGCoreTests.FleetCountTrustTests testFetchedIdsForRemovedHostsAreIgnored]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetCountTrustTests testNoHostsIsNotTrustworthy]' started.
+Test Case '-[LFGCoreTests.FleetCountTrustTests testNoHostsIsNotTrustworthy]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetCountTrustTests testNothingFetchedYetIsNotTrustworthy]' started.
+Test Case '-[LFGCoreTests.FleetCountTrustTests testNothingFetchedYetIsNotTrustworthy]' passed (0.000 seconds).
+Test Suite 'FleetCountTrustTests' passed at 2026-10-08 18:53:57.538.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'FleetEndGateTests' started at 2026-10-08 18:53:57.538.
+Test Case '-[LFGCoreTests.FleetEndGateTests testActiveResetsTheClockAndKeeps]' started.
+Test Case '-[LFGCoreTests.FleetEndGateTests testActiveResetsTheClockAndKeeps]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetEndGateTests testActivityInsideTheHoldCancelsIt]' started.
+Test Case '-[LFGCoreTests.FleetEndGateTests testActivityInsideTheHoldCancelsIt]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetEndGateTests testDefaultHoldIsZeroSoATrustworthyZeroEndsAtOnce]' started.
+Test Case '-[LFGCoreTests.FleetEndGateTests testDefaultHoldIsZeroSoATrustworthyZeroEndsAtOnce]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetEndGateTests testDefaultStillNeverEndsAnUntrustworthyZero]' started.
+Test Case '-[LFGCoreTests.FleetEndGateTests testDefaultStillNeverEndsAnUntrustworthyZero]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetEndGateTests testFirstTrustworthyZeroStartsTheHoldWithoutEnding]' started.
+Test Case '-[LFGCoreTests.FleetEndGateTests testFirstTrustworthyZeroStartsTheHoldWithoutEnding]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetEndGateTests testHostGoingDownMidHoldResetsTheClock]' started.
+Test Case '-[LFGCoreTests.FleetEndGateTests testHostGoingDownMidHoldResetsTheClock]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetEndGateTests testUntrustworthyCountIsUntouchedAndResetsTheClock]' started.
+Test Case '-[LFGCoreTests.FleetEndGateTests testUntrustworthyCountIsUntouchedAndResetsTheClock]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetEndGateTests testUntrustworthyWithActivityIsStillUntouched]' started.
+Test Case '-[LFGCoreTests.FleetEndGateTests testUntrustworthyWithActivityIsStillUntouched]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetEndGateTests testZeroInsideTheHoldKeeps]' started.
+Test Case '-[LFGCoreTests.FleetEndGateTests testZeroInsideTheHoldKeeps]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.FleetEndGateTests testZeroPastTheHoldEnds]' started.
+Test Case '-[LFGCoreTests.FleetEndGateTests testZeroPastTheHoldEnds]' passed (0.000 seconds).
+Test Suite 'FleetEndGateTests' passed at 2026-10-08 18:53:57.539.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'HiddenDirsTests' started at 2026-10-08 18:53:57.539.
+Test Case '-[LFGCoreTests.HiddenDirsTests testAddingAnInvalidPathIsANoOp]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testAddingAnInvalidPathIsANoOp]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testAddingIsIdempotentAcrossCaseAndTrailingSlash]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testAddingIsIdempotentAcrossCaseAndTrailingSlash]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testAddingPreservesOrder]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testAddingPreservesOrder]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testAllWildcardPatternsAreRejected]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testAllWildcardPatternsAreRejected]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testDisplayName]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testDisplayName]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testDoesNotHideOtherDirectories]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testDoesNotHideOtherDirectories]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testDuplicateInputCollapses]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testDuplicateInputCollapses]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testEmptyListHidesNothing]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testEmptyListHidesNothing]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testGlobBacktracks]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testGlobBacktracks]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testGlobBasics]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testGlobBasics]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testGlobStarCrossesPathSeparators]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testGlobStarCrossesPathSeparators]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testHidesDescendants]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testHidesDescendants]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testHidesExactDirectory]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testHidesExactDirectory]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testLiteralEntriesAreNotTreatedAsPatterns]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testLiteralEntriesAreNotTreatedAsPatterns]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testMatchingIsCaseInsensitive]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testMatchingIsCaseInsensitive]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testMultipleEntriesAllApply]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testMultipleEntriesAllApply]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testNoSuggestionForStablePaths]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testNoSuggestionForStablePaths]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testPatternDoesNotOverreachToAncestors]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testPatternDoesNotOverreachToAncestors]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testPatternHidesChildrenOfWhatItMatches]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testPatternHidesChildrenOfWhatItMatches]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testPatternHidesEveryRunOfAPerRunDirectory]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testPatternHidesEveryRunOfAPerRunDirectory]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testPatternsAreCaseInsensitive]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testPatternsAreCaseInsensitive]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testQuestionMarkMatchesExactlyOneCharacter]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testQuestionMarkMatchesExactlyOneCharacter]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testRelativePatternIsAcceptedButRelativeLiteralIsNot]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testRelativePatternIsAcceptedButRelativeLiteralIsNot]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testRemoving]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testRemoving]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testRemovingRestoresVisibility]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testRemovingRestoresVisibility]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testRootIsRejected]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testRootIsRejected]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testSessionWithoutCwdIsNeverHidden]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testSessionWithoutCwdIsNeverHidden]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testSiblingSharingAPrefixIsNotHidden]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testSiblingSharingAPrefixIsNotHidden]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testSuggestionHidesItsOwnSource]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testSuggestionHidesItsOwnSource]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testSuggestsAPatternForPidSuffixedScratchDirectories]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testSuggestsAPatternForPidSuffixedScratchDirectories]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testTildeAndRelativePathsAreRejected]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testTildeAndRelativePathsAreRejected]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testTrailingAndRepeatedSlashesNormalize]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testTrailingAndRepeatedSlashesNormalize]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HiddenDirsTests testWhitespaceIsTrimmed]' started.
+Test Case '-[LFGCoreTests.HiddenDirsTests testWhitespaceIsTrimmed]' passed (0.000 seconds).
+Test Suite 'HiddenDirsTests' passed at 2026-10-08 18:53:57.543.
+	 Executed 33 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+Test Suite 'HostEventsTests' started at 2026-10-08 18:53:57.543.
+Test Case '-[LFGCoreTests.HostEventsTests testAColdHostStillClimbsToTheBackoffCapRatherThanStalling]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testAColdHostStillClimbsToTheBackoffCapRatherThanStalling]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testAFastPathIsUnchangedByTheFix]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testAFastPathIsUnchangedByTheFix]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testAFreshLinkIsNeverCold]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testAFreshLinkIsNeverCold]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testAHostStrugglingButStillAnsweringIsNotCold]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testAHostStrugglingButStillAnsweringIsNotCold]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testAHostUnreachedPastTheThresholdIsCold]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testAHostUnreachedPastTheThresholdIsCold]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testARelayedPathActuallyGetsItsWidenedBudget]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testARelayedPathActuallyGetsItsWidenedBudget]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testColdHostKeepsPingingButOnceAMinute]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testColdHostKeepsPingingButOnceAMinute]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testDecodesBareHeartbeatWithoutHead]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testDecodesBareHeartbeatWithoutHead]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testDecodesHeartbeatWithHead]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testDecodesHeartbeatWithHead]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testDecodesJournaledEventWithSeq]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testDecodesJournaledEventWithSeq]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testDecodesResyncWithHead]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testDecodesResyncWithHead]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testEventWithoutIdIsSkipped]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testEventWithoutIdIsSkipped]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testForegroundSkipsBackoffForAReachableHostOnly]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testForegroundSkipsBackoffForAReachableHostOnly]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testKeepaliveCadenceIsFixedAndDoesNotStretchWithPingDuration]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testKeepaliveCadenceIsFixedAndDoesNotStretchWithPingDuration]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testKeepaliveFiresInEveryStartedStateNotJustHealthyOnes]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testKeepaliveFiresInEveryStartedStateNotJustHealthyOnes]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testKeepaliveRebasesRatherThanBurstingAfterAnOverrun]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testKeepaliveRebasesRatherThanBurstingAfterAnOverrun]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testKeepaliveStaysWellInsideTheCarrierNatBindingExpiry]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testKeepaliveStaysWellInsideTheCarrierNatBindingExpiry]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testLastEventIdPersistsAcrossFramesPerSpec]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testLastEventIdPersistsAcrossFramesPerSpec]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testParserCapturesIdFieldOnFrames]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testParserCapturesIdFieldOnFrames]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testQuietRedialSitsBetweenOneHeartbeatAndTheStaleWatchdog]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testQuietRedialSitsBetweenOneHeartbeatAndTheStaleWatchdog]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testReconnectScheduleStartsImmediateAndCapsAt30]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testReconnectScheduleStartsImmediateAndCapsAt30]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testStaleTimeoutMeetsDetectionTarget]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testStaleTimeoutMeetsDetectionTarget]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testStreamTimeoutIsNeverTighterThanTheStaleWatchdog]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testStreamTimeoutIsNeverTighterThanTheStaleWatchdog]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testTheConnectPhaseKeepsItsOwnBound]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testTheConnectPhaseKeepsItsOwnBound]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testUnknownEventTypeDecodesToNilNotCrash]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testUnknownEventTypeDecodesToNilNotCrash]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostEventsTests testUnreachableBannerOnlyAfterSustainedFailure]' started.
+Test Case '-[LFGCoreTests.HostEventsTests testUnreachableBannerOnlyAfterSustainedFailure]' passed (0.000 seconds).
+Test Suite 'HostEventsTests' passed at 2026-10-08 18:53:57.547.
+	 Executed 26 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'HostFileURLEscapingTests' started at 2026-10-08 18:53:57.547.
+Test Case '-[LFGCoreTests.HostFileURLEscapingTests testPlusIsPercentEncoded]' started.
+Test Case '-[LFGCoreTests.HostFileURLEscapingTests testPlusIsPercentEncoded]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostFileURLEscapingTests testSpacesAndOtherCharactersStillRoundTrip]' started.
+Test Case '-[LFGCoreTests.HostFileURLEscapingTests testSpacesAndOtherCharactersStillRoundTrip]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostFileURLEscapingTests testWidthIsStillCarried]' started.
+Test Case '-[LFGCoreTests.HostFileURLEscapingTests testWidthIsStillCarried]' passed (0.000 seconds).
+Test Suite 'HostFileURLEscapingTests' passed at 2026-10-08 18:53:57.547.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'HostHealthTests' started at 2026-10-08 18:53:57.547.
+Test Case '-[LFGCoreTests.HostHealthTests testAllDownSurfacesFirstConfiguredHostsFailure]' started.
+Test Case '-[LFGCoreTests.HostHealthTests testAllDownSurfacesFirstConfiguredHostsFailure]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostHealthTests testAnyHealthyHostMakesAggregateOK]' started.
+Test Case '-[LFGCoreTests.HostHealthTests testAnyHealthyHostMakesAggregateOK]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostHealthTests testAtFailureThresholdGoesCold]' started.
+Test Case '-[LFGCoreTests.HostHealthTests testAtFailureThresholdGoesCold]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostHealthTests testColdBackoffRespectsCustomInterval]' started.
+Test Case '-[LFGCoreTests.HostHealthTests testColdBackoffRespectsCustomInterval]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostHealthTests testColdHostProbedOnlyOnEveryNthTick]' started.
+Test Case '-[LFGCoreTests.HostHealthTests testColdHostProbedOnlyOnEveryNthTick]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostHealthTests testColdSkippedHostKeepsRememberedStateAndNeverReadsAsUnconfigured]' started.
+Test Case '-[LFGCoreTests.HostHealthTests testColdSkippedHostKeepsRememberedStateAndNeverReadsAsUnconfigured]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostHealthTests testColdThresholdExceedsTheVisibleOfflineDebounceThreshold]' started.
+Test Case '-[LFGCoreTests.HostHealthTests testColdThresholdExceedsTheVisibleOfflineDebounceThreshold]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostHealthTests testConfiguredButNothingProbedYetIsUnknownNotFailure]' started.
+Test Case '-[LFGCoreTests.HostHealthTests testConfiguredButNothingProbedYetIsUnknownNotFailure]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostHealthTests testDegenerateIntervalsDegradeToEveryTickAndNeverDivideByZero]' started.
+Test Case '-[LFGCoreTests.HostHealthTests testDegenerateIntervalsDegradeToEveryTickAndNeverDivideByZero]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostHealthTests testFailuresBelowThresholdStillProbedEveryTick]' started.
+Test Case '-[LFGCoreTests.HostHealthTests testFailuresBelowThresholdStillProbedEveryTick]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostHealthTests testHealthEntriesForRemovedHostsAreIgnored]' started.
+Test Case '-[LFGCoreTests.HostHealthTests testHealthEntriesForRemovedHostsAreIgnored]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostHealthTests testHealthyHostIsProbedEveryTick]' started.
+Test Case '-[LFGCoreTests.HostHealthTests testHealthyHostIsProbedEveryTick]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostHealthTests testNoConfiguredHostsAggregatesToNoHostConfigured]' started.
+Test Case '-[LFGCoreTests.HostHealthTests testNoConfiguredHostsAggregatesToNoHostConfigured]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostHealthTests testPollTimeoutIsFarBelowUserInitiatedTimeout]' started.
+Test Case '-[LFGCoreTests.HostHealthTests testPollTimeoutIsFarBelowUserInitiatedTimeout]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostHealthTests testRecoveredHostIsProbedOnTheVeryNextTick]' started.
+Test Case '-[LFGCoreTests.HostHealthTests testRecoveredHostIsProbedOnTheVeryNextTick]' passed (0.000 seconds).
+Test Suite 'HostHealthTests' passed at 2026-10-08 18:53:57.549.
+	 Executed 15 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'HostProbePolicyInvariantTests' started at 2026-10-08 18:53:57.549.
+Test Case '-[LFGCoreTests.HostProbePolicyInvariantTests testColdCadenceDerivesFromThePollInterval]' started.
+Test Case '-[LFGCoreTests.HostProbePolicyInvariantTests testColdCadenceDerivesFromThePollInterval]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostProbePolicyInvariantTests testDefaultsMatchThePreviousHandTunedValues]' started.
+Test Case '-[LFGCoreTests.HostProbePolicyInvariantTests testDefaultsMatchThePreviousHandTunedValues]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostProbePolicyInvariantTests testDegeneratePollIntervalDoesNotDivideByZero]' started.
+Test Case '-[LFGCoreTests.HostProbePolicyInvariantTests testDegeneratePollIntervalDoesNotDivideByZero]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostProbePolicyInvariantTests testHostGoesColdOnTheTickAfterItIsShownOffline]' started.
+Test Case '-[LFGCoreTests.HostProbePolicyInvariantTests testHostGoesColdOnTheTickAfterItIsShownOffline]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostProbePolicyInvariantTests testProbeThresholdAlwaysExceedsDisplayThreshold]' started.
+Test Case '-[LFGCoreTests.HostProbePolicyInvariantTests testProbeThresholdAlwaysExceedsDisplayThreshold]' passed (0.000 seconds).
+Test Suite 'HostProbePolicyInvariantTests' passed at 2026-10-08 18:53:57.549.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'HostStateSequenceTests' started at 2026-10-08 18:53:57.549.
+Test Case '-[LFGCoreTests.HostStateSequenceTests testAGenuinelyDownHostBannersAndStays]' started.
+Test Case '-[LFGCoreTests.HostStateSequenceTests testAGenuinelyDownHostBannersAndStays]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateSequenceTests testBackgroundedThenColdPathRecoversWithoutEverBannering]' started.
+Test Case '-[LFGCoreTests.HostStateSequenceTests testBackgroundedThenColdPathRecoversWithoutEverBannering]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateSequenceTests testColdLaunchAgainstAHealthyHostNeverShowsOffline]' started.
+Test Case '-[LFGCoreTests.HostStateSequenceTests testColdLaunchAgainstAHealthyHostNeverShowsOffline]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateSequenceTests testProbeFailuresCannotBannerAHostWhoseLinkIsStreaming]' started.
+Test Case '-[LFGCoreTests.HostStateSequenceTests testProbeFailuresCannotBannerAHostWhoseLinkIsStreaming]' passed (0.000 seconds).
+Test Suite 'HostStateSequenceTests' passed at 2026-10-08 18:53:57.550.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'HostStateTests' started at 2026-10-08 18:53:57.550.
+Test Case '-[LFGCoreTests.HostStateTests testAllBadReportsTheFirstConfiguredHostInOrder]' started.
+Test Case '-[LFGCoreTests.HostStateTests testAllBadReportsTheFirstConfiguredHostInOrder]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testAnyEvidenceOfHealthRecoversImmediatelyFromEveryState]' started.
+Test Case '-[LFGCoreTests.HostStateTests testAnyEvidenceOfHealthRecoversImmediatelyFromEveryState]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testAPathBlipThatClearsNeverBannersAndReturnsToLive]' started.
+Test Case '-[LFGCoreTests.HostStateTests testAPathBlipThatClearsNeverBannersAndReturnsToLive]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testATransientPathLossIsDebouncedLikeEveryOtherFailure]' started.
+Test Case '-[LFGCoreTests.HostStateTests testATransientPathLossIsDebouncedLikeEveryOtherFailure]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testBackgroundTeardownDuringAnOutageKeepsTheClockRunning]' started.
+Test Case '-[LFGCoreTests.HostStateTests testBackgroundTeardownDuringAnOutageKeepsTheClockRunning]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testFirstFailureStartsTheClockAndLaterFailuresDoNotRestartIt]' started.
+Test Case '-[LFGCoreTests.HostStateTests testFirstFailureStartsTheClockAndLaterFailuresDoNotRestartIt]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testForegroundingAHealthyHostChangesNothing]' started.
+Test Case '-[LFGCoreTests.HostStateTests testForegroundingAHealthyHostChangesNothing]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testForegroundingDiscardsAPathVerdictMeasuredBeforeSuspension]' started.
+Test Case '-[LFGCoreTests.HostStateTests testForegroundingDiscardsAPathVerdictMeasuredBeforeSuspension]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testForegroundingDoesNotEraseAGenuineHostOutage]' started.
+Test Case '-[LFGCoreTests.HostStateTests testForegroundingDoesNotEraseAGenuineHostOutage]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testGraceWindowDelaysTheBannerThenShowsIt]' started.
+Test Case '-[LFGCoreTests.HostStateTests testGraceWindowDelaysTheBannerThenShowsIt]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testNoHostsConfiguredIsNil]' started.
+Test Case '-[LFGCoreTests.HostStateTests testNoHostsConfiguredIsNil]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testNoNetworkOverridesAndRestoreGoesToNeutralNotHealthy]' started.
+Test Case '-[LFGCoreTests.HostStateTests testNoNetworkOverridesAndRestoreGoesToNeutralNotHealthy]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testNothingObservedYetIsNotOffline]' started.
+Test Case '-[LFGCoreTests.HostStateTests testNothingObservedYetIsNotOffline]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testOneLiveHostMakesTheFleetUsable]' started.
+Test Case '-[LFGCoreTests.HostStateTests testOneLiveHostMakesTheFleetUsable]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testPathLossRecheckIsScheduledLikeADegradedHost]' started.
+Test Case '-[LFGCoreTests.HostStateTests testPathLossRecheckIsScheduledLikeADegradedHost]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testRedialingDoesNotResetTheFailureClock]' started.
+Test Case '-[LFGCoreTests.HostStateTests testRedialingDoesNotResetTheFailureClock]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testRepeatedPathFlappingStillReachesTheBanner]' started.
+Test Case '-[LFGCoreTests.HostStateTests testRepeatedPathFlappingStillReachesTheBanner]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testRestoredPathStopsBlamingTheRadioButKeepsTheClock]' started.
+Test Case '-[LFGCoreTests.HostStateTests testRestoredPathStopsBlamingTheRadioButKeepsTheClock]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testSettleIsIdempotentAndKeepsTheFirstReason]' started.
+Test Case '-[LFGCoreTests.HostStateTests testSettleIsIdempotentAndKeepsTheFirstReason]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testSustainedPathLossIsStillDistinguishableFromAHostOutage]' started.
+Test Case '-[LFGCoreTests.HostStateTests testSustainedPathLossIsStillDistinguishableFromAHostOutage]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testTeardownFromAHealthyStateIsNotAFailure]' started.
+Test Case '-[LFGCoreTests.HostStateTests testTeardownFromAHealthyStateIsNotAFailure]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.HostStateTests testTimeUntilOfflineDrivesTheRecheckDeadline]' started.
+Test Case '-[LFGCoreTests.HostStateTests testTimeUntilOfflineDrivesTheRecheckDeadline]' passed (0.000 seconds).
+Test Suite 'HostStateTests' passed at 2026-10-08 18:53:57.553.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.001 (0.003) seconds
+Test Suite 'InvertedNewestEndTests' started at 2026-10-08 18:53:57.553.
+Test Case '-[LFGCoreTests.InvertedNewestEndTests testAnswerIsIndependentOfContentHeight]' started.
+Test Case '-[LFGCoreTests.InvertedNewestEndTests testAnswerIsIndependentOfContentHeight]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.InvertedNewestEndTests testOffsetZeroIsNewest]' started.
+Test Case '-[LFGCoreTests.InvertedNewestEndTests testOffsetZeroIsNewest]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.InvertedNewestEndTests testOverscrollBounceIsStillNewest]' started.
+Test Case '-[LFGCoreTests.InvertedNewestEndTests testOverscrollBounceIsStillNewest]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.InvertedNewestEndTests testScrolledIntoHistoryIsNotNewest]' started.
+Test Case '-[LFGCoreTests.InvertedNewestEndTests testScrolledIntoHistoryIsNotNewest]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.InvertedNewestEndTests testWithinEpsilonIsNewest]' started.
+Test Case '-[LFGCoreTests.InvertedNewestEndTests testWithinEpsilonIsNewest]' passed (0.000 seconds).
+Test Suite 'InvertedNewestEndTests' passed at 2026-10-08 18:53:57.553.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'KeyboardViewportPolicyTests' started at 2026-10-08 18:53:57.553.
+Test Case '-[LFGCoreTests.KeyboardViewportPolicyTests testBottomPinnedReaderIsRepinnedWhenTheKeyboardResizesTheViewport]' started.
+Test Case '-[LFGCoreTests.KeyboardViewportPolicyTests testBottomPinnedReaderIsRepinnedWhenTheKeyboardResizesTheViewport]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.KeyboardViewportPolicyTests testHistoryAnchorIsEnforcedOnlyWhileRevealingAPage]' started.
+Test Case '-[LFGCoreTests.KeyboardViewportPolicyTests testHistoryAnchorIsEnforcedOnlyWhileRevealingAPage]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.KeyboardViewportPolicyTests testOpeningStillOutranksBottomAnchorVisibility]' started.
+Test Case '-[LFGCoreTests.KeyboardViewportPolicyTests testOpeningStillOutranksBottomAnchorVisibility]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.KeyboardViewportPolicyTests testReaderInHistoryIsNeverMovedByTheKeyboard]' started.
+Test Case '-[LFGCoreTests.KeyboardViewportPolicyTests testReaderInHistoryIsNeverMovedByTheKeyboard]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.KeyboardViewportPolicyTests testRepinAlwaysRunsAtLeastOnce]' started.
+Test Case '-[LFGCoreTests.KeyboardViewportPolicyTests testRepinAlwaysRunsAtLeastOnce]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.KeyboardViewportPolicyTests testRepinSpansTheReportedKeyboardAnimation]' started.
+Test Case '-[LFGCoreTests.KeyboardViewportPolicyTests testRepinSpansTheReportedKeyboardAnimation]' passed (0.000 seconds).
+Test Suite 'KeyboardViewportPolicyTests' passed at 2026-10-08 18:53:57.554.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'LFGClientHandoffTests' started at 2026-10-08 18:53:57.554.
+Test Case '-[LFGCoreTests.LFGClientHandoffTests testHandoffTargetsSourceHostAndReturnsNewCodexIdentity]' started.
+Test Case '-[LFGCoreTests.LFGClientHandoffTests testHandoffTargetsSourceHostAndReturnsNewCodexIdentity]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.LFGClientHandoffTests testInvalidSuccessNeverSelectsSourceOrUnboundSession]' started.
+Test Case '-[LFGCoreTests.LFGClientHandoffTests testInvalidSuccessNeverSelectsSourceOrUnboundSession]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.LFGClientHandoffTests testOlderHostAndMissingSourceSurfaceErrors]' started.
+Test Case '-[LFGCoreTests.LFGClientHandoffTests testOlderHostAndMissingSourceSurfaceErrors]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGClientHandoffTests testReverseHandoffForwardsSelectedClaudeModel]' started.
+Test Case '-[LFGCoreTests.LFGClientHandoffTests testReverseHandoffForwardsSelectedClaudeModel]' passed (0.000 seconds).
+Test Suite 'LFGClientHandoffTests' passed at 2026-10-08 18:53:57.557.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'LFGClientInterruptTests' started at 2026-10-08 18:53:57.557.
+Test Case '-[LFGCoreTests.LFGClientInterruptTests testInterruptPostsToTheSessionsInterruptPath]' started.
+Test Case '-[LFGCoreTests.LFGClientInterruptTests testInterruptPostsToTheSessionsInterruptPath]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGClientInterruptTests testNonJSONBodyDecodesAsNilRatherThanThrowing]' started.
+Test Case '-[LFGCoreTests.LFGClientInterruptTests testNonJSONBodyDecodesAsNilRatherThanThrowing]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGClientInterruptTests testOlderServerWithoutTheFieldDecodesAsNil]' started.
+Test Case '-[LFGCoreTests.LFGClientInterruptTests testOlderServerWithoutTheFieldDecodesAsNil]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGClientInterruptTests testReportsNotStoppedWhenTheAgentIgnoredTheEscape]' started.
+Test Case '-[LFGCoreTests.LFGClientInterruptTests testReportsNotStoppedWhenTheAgentIgnoredTheEscape]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGClientInterruptTests testReportsStoppedWhenTheTurnActuallyEnded]' started.
+Test Case '-[LFGCoreTests.LFGClientInterruptTests testReportsStoppedWhenTheTurnActuallyEnded]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGClientInterruptTests testUnscrapeablePaneDecodesAsNil]' started.
+Test Case '-[LFGCoreTests.LFGClientInterruptTests testUnscrapeablePaneDecodesAsNil]' passed (0.000 seconds).
+Test Suite 'LFGClientInterruptTests' passed at 2026-10-08 18:53:57.559.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'LFGClientLiveActivityTests' started at 2026-10-08 18:53:57.560.
+Test Case '-[LFGCoreTests.LFGClientLiveActivityTests testLiveActivityChannelDecodesNullAsNoChannel]' started.
+Test Case '-[LFGCoreTests.LFGClientLiveActivityTests testLiveActivityChannelDecodesNullAsNoChannel]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGClientLiveActivityTests testLiveActivityChannelIsFetchedForTheGivenEnvironment]' started.
+Test Case '-[LFGCoreTests.LFGClientLiveActivityTests testLiveActivityChannelIsFetchedForTheGivenEnvironment]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGClientLiveActivityTests testRegisterLiveActivityStartTokenPostsExpectedBody]' started.
+Test Case '-[LFGCoreTests.LFGClientLiveActivityTests testRegisterLiveActivityStartTokenPostsExpectedBody]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGClientLiveActivityTests testReportLiveActivityStartedCarriesNoPayload]' started.
+Test Case '-[LFGCoreTests.LFGClientLiveActivityTests testReportLiveActivityStartedCarriesNoPayload]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGClientLiveActivityTests testSendMessagePostsClientIdWhenProvided]' started.
+Test Case '-[LFGCoreTests.LFGClientLiveActivityTests testSendMessagePostsClientIdWhenProvided]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGClientLiveActivityTests testSendMessageRequestBuildsSameClientIdBody]' started.
+Test Case '-[LFGCoreTests.LFGClientLiveActivityTests testSendMessageRequestBuildsSameClientIdBody]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGClientLiveActivityTests testSendMessageRequestOmitsNilClientId]' started.
+Test Case '-[LFGCoreTests.LFGClientLiveActivityTests testSendMessageRequestOmitsNilClientId]' passed (0.000 seconds).
+Test Suite 'LFGClientLiveActivityTests' passed at 2026-10-08 18:53:57.562.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'LFGDeepLinkTests' started at 2026-10-08 18:53:57.562.
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testBareNewLinkOpensABlankComposer]' started.
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testBareNewLinkOpensABlankComposer]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testBlankValuesAreTreatedAsAbsent]' started.
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testBlankValuesAreTreatedAsAbsent]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testBuiltURLRoundTripsReservedCharacters]' started.
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testBuiltURLRoundTripsReservedCharacters]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testMalformedNewLinksAreRejected]' started.
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testMalformedNewLinksAreRejected]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testMalformedSessionLinksAreRejected]' started.
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testMalformedSessionLinksAreRejected]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testNewLinkCarriesHostAgentAndModel]' started.
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testNewLinkCarriesHostAgentAndModel]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testNewLinkCarriesPromptAndDirectory]' started.
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testNewLinkCarriesPromptAndDirectory]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testProviderIsAnAliasForAgent]' started.
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testProviderIsAnAliasForAgent]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testSessionLinkParsesTheID]' started.
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testSessionLinkParsesTheID]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testUnknownItemsAreIgnoredAndTheFirstValueWins]' started.
+Test Case '-[LFGCoreTests.LFGDeepLinkTests testUnknownItemsAreIgnoredAndTheFirstValueWins]' passed (0.000 seconds).
+Test Suite 'LFGDeepLinkTests' passed at 2026-10-08 18:53:57.563.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'LFGStorePersistenceTests' started at 2026-10-08 18:53:57.563.
+Test Case '-[LFGCoreTests.LFGStorePersistenceTests testDataSurvivesStoreReopenOnDisk]' started.
+Test Case '-[LFGCoreTests.LFGStorePersistenceTests testDataSurvivesStoreReopenOnDisk]' passed (0.007 seconds).
+Test Suite 'LFGStorePersistenceTests' passed at 2026-10-08 18:53:57.571.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.007 (0.007) seconds
+Test Suite 'LFGStoreTests' started at 2026-10-08 18:53:57.571.
+Test Case '-[LFGCoreTests.LFGStoreTests testAttachmentOnlyOutboxCanStartEmptyThenReceiveUploadedPaths]' started.
+Test Case '-[LFGCoreTests.LFGStoreTests testAttachmentOnlyOutboxCanStartEmptyThenReceiveUploadedPaths]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.LFGStoreTests testCursorOnlyMovesForward]' started.
+Test Case '-[LFGCoreTests.LFGStoreTests testCursorOnlyMovesForward]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.LFGStoreTests testDeleteOutbox]' started.
+Test Case '-[LFGCoreTests.LFGStoreTests testDeleteOutbox]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.LFGStoreTests testMessagesAreBoundedPerSessionAtCap]' started.
+Test Case '-[LFGCoreTests.LFGStoreTests testMessagesAreBoundedPerSessionAtCap]' passed (0.010 seconds).
+Test Case '-[LFGCoreTests.LFGStoreTests testMigrationCreatesV1TablesOnFreshDatabase]' started.
+Test Case '-[LFGCoreTests.LFGStoreTests testMigrationCreatesV1TablesOnFreshDatabase]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.LFGStoreTests testObservationsEmitOnRelevantWrites]' started.
+Test Case '-[LFGCoreTests.LFGStoreTests testObservationsEmitOnRelevantWrites]' passed (0.070 seconds).
+Test Case '-[LFGCoreTests.LFGStoreTests testOutboxRoundTripAndTerminalStates]' started.
+Test Case '-[LFGCoreTests.LFGStoreTests testOutboxRoundTripAndTerminalStates]' passed (0.002 seconds).
+Test Case '-[LFGCoreTests.LFGStoreTests testPartialSessionUpdateDoesNotNullExistingColumns]' started.
+Test Case '-[LFGCoreTests.LFGStoreTests testPartialSessionUpdateDoesNotNullExistingColumns]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.LFGStoreTests testReadStateRoundTrip]' started.
+Test Case '-[LFGCoreTests.LFGStoreTests testReadStateRoundTrip]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.LFGStoreTests testReplaceSessionsDropsSessionsMissingFromTheSnapshot]' started.
+Test Case '-[LFGCoreTests.LFGStoreTests testReplaceSessionsDropsSessionsMissingFromTheSnapshot]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.LFGStoreTests testReplaceSessionsKeepsTranscriptAndReadStateForEvictedSessions]' started.
+Test Case '-[LFGCoreTests.LFGStoreTests testReplaceSessionsKeepsTranscriptAndReadStateForEvictedSessions]' passed (0.002 seconds).
+Test Case '-[LFGCoreTests.LFGStoreTests testReplaceSessionsOnlyEvictsWithinTheSameHost]' started.
+Test Case '-[LFGCoreTests.LFGStoreTests testReplaceSessionsOnlyEvictsWithinTheSameHost]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.LFGStoreTests testRetryableOutboxIncludesFailedButNotDelivered]' started.
+Test Case '-[LFGCoreTests.LFGStoreTests testRetryableOutboxIncludesFailedButNotDelivered]' passed (0.001 seconds).
+Test Case '-[LFGCoreTests.LFGStoreTests testUpsertsAreIdempotent]' started.
+Test Case '-[LFGCoreTests.LFGStoreTests testUpsertsAreIdempotent]' passed (0.003 seconds).
+Test Suite 'LFGStoreTests' passed at 2026-10-08 18:53:57.669.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.097 (0.098) seconds
+Test Suite 'ManualUnreadTests' started at 2026-10-08 18:53:57.669.
+Test Case '-[LFGCoreTests.ManualUnreadTests testAfterOpeningClearsOnlyOpenedSession]' started.
+Test Case '-[LFGCoreTests.ManualUnreadTests testAfterOpeningClearsOnlyOpenedSession]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ManualUnreadTests testAfterOpeningLeavesUnrelatedFlagsUntouched]' started.
+Test Case '-[LFGCoreTests.ManualUnreadTests testAfterOpeningLeavesUnrelatedFlagsUntouched]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ManualUnreadTests testCanMarkUnreadAcceptsServerSessionID]' started.
+Test Case '-[LFGCoreTests.ManualUnreadTests testCanMarkUnreadAcceptsServerSessionID]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ManualUnreadTests testCanMarkUnreadRejectsPlaceholderAndEmptyIDs]' started.
+Test Case '-[LFGCoreTests.ManualUnreadTests testCanMarkUnreadRejectsPlaceholderAndEmptyIDs]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ManualUnreadTests testListActionIsNilForPlaceholderAndClosed]' started.
+Test Case '-[LFGCoreTests.ManualUnreadTests testListActionIsNilForPlaceholderAndClosed]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ManualUnreadTests testListActionOffersMarkReadForUnreadRow]' started.
+Test Case '-[LFGCoreTests.ManualUnreadTests testListActionOffersMarkReadForUnreadRow]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ManualUnreadTests testListActionOffersMarkUnreadForReadRow]' started.
+Test Case '-[LFGCoreTests.ManualUnreadTests testListActionOffersMarkUnreadForReadRow]' passed (0.000 seconds).
+Test Suite 'ManualUnreadTests' passed at 2026-10-08 18:53:57.670.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'MediaFastPathTests' started at 2026-10-08 18:53:57.670.
+Test Case '-[LFGCoreTests.MediaFastPathTests testAuthenticatesOnlySameOriginWithCredential]' started.
+Test Case '-[LFGCoreTests.MediaFastPathTests testAuthenticatesOnlySameOriginWithCredential]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MediaFastPathTests testHostFileURLCarriesPathAndOptionalWidth]' started.
+Test Case '-[LFGCoreTests.MediaFastPathTests testHostFileURLCarriesPathAndOptionalWidth]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MediaFastPathTests testHostFileURLIgnoresNonPositiveWidth]' started.
+Test Case '-[LFGCoreTests.MediaFastPathTests testHostFileURLIgnoresNonPositiveWidth]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MediaFastPathTests testRangeHeaderForBoundedAndOpenRequests]' started.
+Test Case '-[LFGCoreTests.MediaFastPathTests testRangeHeaderForBoundedAndOpenRequests]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MediaFastPathTests testTotalLengthPrefersContentRange]' started.
+Test Case '-[LFGCoreTests.MediaFastPathTests testTotalLengthPrefersContentRange]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MediaFastPathTests testUniformTypeFromMimeThenExtension]' started.
+Test Case '-[LFGCoreTests.MediaFastPathTests testUniformTypeFromMimeThenExtension]' passed (0.000 seconds).
+Test Suite 'MediaFastPathTests' passed at 2026-10-08 18:53:57.671.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'ModelCatalogCacheTests' started at 2026-10-08 18:53:57.671.
+Test Case '-[LFGCoreTests.ModelCatalogCacheTests testMissingOrCorruptDataIsAnEmptyCache]' started.
+Test Case '-[LFGCoreTests.ModelCatalogCacheTests testMissingOrCorruptDataIsAnEmptyCache]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelCatalogCacheTests testPruningKeepsOnlyConfiguredHosts]' started.
+Test Case '-[LFGCoreTests.ModelCatalogCacheTests testPruningKeepsOnlyConfiguredHosts]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelCatalogCacheTests testRecordingAgainReplacesTheEntry]' started.
+Test Case '-[LFGCoreTests.ModelCatalogCacheTests testRecordingAgainReplacesTheEntry]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelCatalogCacheTests testRoundTripsEachHostsCatalog]' started.
+Test Case '-[LFGCoreTests.ModelCatalogCacheTests testRoundTripsEachHostsCatalog]' passed (0.000 seconds).
+Test Suite 'ModelCatalogCacheTests' passed at 2026-10-08 18:53:57.672.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'ModelsTests' started at 2026-10-08 18:53:57.672.
+Test Case '-[LFGCoreTests.ModelsTests testAgentKindModels]' started.
+Test Case '-[LFGCoreTests.ModelsTests testAgentKindModels]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testAgentModelSelectionDefaultsFirstUseToClaudeOpus]' started.
+Test Case '-[LFGCoreTests.ModelsTests testAgentModelSelectionDefaultsFirstUseToClaudeOpus]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testAgentModelSelectionReplacesRetiredAisdkAgentWithGlobalDefault]' started.
+Test Case '-[LFGCoreTests.ModelsTests testAgentModelSelectionReplacesRetiredAisdkAgentWithGlobalDefault]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testAgentModelSelectionReplacesStaleModelWithAgentsCurrentDefault]' started.
+Test Case '-[LFGCoreTests.ModelsTests testAgentModelSelectionReplacesStaleModelWithAgentsCurrentDefault]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testAgentModelSelectionReplacesUnknownAgentWithGlobalDefault]' started.
+Test Case '-[LFGCoreTests.ModelsTests testAgentModelSelectionReplacesUnknownAgentWithGlobalDefault]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testAgentModelSelectionRestoresValidPersistedPair]' started.
+Test Case '-[LFGCoreTests.ModelsTests testAgentModelSelectionRestoresValidPersistedPair]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testAgentPromptDecodesSignInRequest]' started.
+Test Case '-[LFGCoreTests.ModelsTests testAgentPromptDecodesSignInRequest]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testClientStringInitNormalizesURL]' started.
+Test Case '-[LFGCoreTests.ModelsTests testClientStringInitNormalizesURL]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testDecodeMessagesResponse]' started.
+Test Case '-[LFGCoreTests.ModelsTests testDecodeMessagesResponse]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testDecodeReposAndUsage]' started.
+Test Case '-[LFGCoreTests.ModelsTests testDecodeReposAndUsage]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testDecodeResumableSessionsFromServerFields]' started.
+Test Case '-[LFGCoreTests.ModelsTests testDecodeResumableSessionsFromServerFields]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testDecodeRoster]' started.
+Test Case '-[LFGCoreTests.ModelsTests testDecodeRoster]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testDecodeSessionChildAgentsLeniently]' started.
+Test Case '-[LFGCoreTests.ModelsTests testDecodeSessionChildAgentsLeniently]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testDecodeSessionsResponseLeniently]' started.
+Test Case '-[LFGCoreTests.ModelsTests testDecodeSessionsResponseLeniently]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testExternalSessionOwnershipDecodesAndDefaultsSafely]' started.
+Test Case '-[LFGCoreTests.ModelsTests testExternalSessionOwnershipDecodesAndDefaultsSafely]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testFallbackCatalogReconcilesUnsupportedFutureModelsBeforeSubmission]' started.
+Test Case '-[LFGCoreTests.ModelsTests testFallbackCatalogReconcilesUnsupportedFutureModelsBeforeSubmission]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testMarkAsLFGForkClearsTransientExternalOwnership]' started.
+Test Case '-[LFGCoreTests.ModelsTests testMarkAsLFGForkClearsTransientExternalOwnership]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testModelCatalogDecodesDynamicModelsAndFallsBackPerAgent]' started.
+Test Case '-[LFGCoreTests.ModelsTests testModelCatalogDecodesDynamicModelsAndFallsBackPerAgent]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testPersistedSelectionKeepsSafeFutureModelUntilHostCatalogLoads]' started.
+Test Case '-[LFGCoreTests.ModelsTests testPersistedSelectionKeepsSafeFutureModelUntilHostCatalogLoads]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ModelsTests testSessionClosedFlagDefaultsFalseAndSurvivesInit]' started.
+Test Case '-[LFGCoreTests.ModelsTests testSessionClosedFlagDefaultsFalseAndSurvivesInit]' passed (0.000 seconds).
+Test Suite 'ModelsTests' passed at 2026-10-08 18:53:57.675.
+	 Executed 20 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'MultiHostTests' started at 2026-10-08 18:53:57.675.
+Test Case '-[LFGCoreTests.MultiHostTests testDefaultHostFallsBackWhenDefaultOffline]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testDefaultHostFallsBackWhenDefaultOffline]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testDefaultHostNilWhenNoneReachable]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testDefaultHostNilWhenNoneReachable]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testDefaultHostPrefersMarkedDefaultWhenReachable]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testDefaultHostPrefersMarkedDefaultWhenReachable]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testEncodeDecodeRoundTrip]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testEncodeDecodeRoundTrip]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testExistingHostListWinsOverLegacy]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testExistingHostListWinsOverLegacy]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testHostDisplayNameRoundTripsThroughCoding]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testHostDisplayNameRoundTripsThroughCoding]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testHostInfoDecodesAndIsLenient]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testHostInfoDecodesAndIsLenient]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testHostLabelPrefersUserDisplayNameShownInFull]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testHostLabelPrefersUserDisplayNameShownInFull]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testHostLabelUsesFriendlyNameFirstComponentElseURL]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testHostLabelUsesFriendlyNameFirstComponentElseURL]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testIsOfflineOnlyForLiveSessionOnDownHost]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testIsOfflineOnlyForLiveSessionOnDownHost]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testMergeTagsSessionsByHostAndDedupesFirstWins]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testMergeTagsSessionsByHostAndDedupesFirstWins]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testMigrateEmptyLegacyYieldsNoHosts]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testMigrateEmptyLegacyYieldsNoHosts]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testMigrateLegacyBaseURLBecomesOneDefaultHost]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testMigrateLegacyBaseURLBecomesOneDefaultHost]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testNormalizedCollapsesMultipleDefaults]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testNormalizedCollapsesMultipleDefaults]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testNormalizedPicksFirstWhenNoDefault]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testNormalizedPicksFirstWhenNoDefault]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testPartialOutageAgnosticWorkLandsOnReachableHost]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testPartialOutageAgnosticWorkLandsOnReachableHost]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testPreferredHostURLUsesPrivateCloudflareTunnel]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testPreferredHostURLUsesPrivateCloudflareTunnel]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testReconcileDedupesSyncedTranscriptsAcrossHosts]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testReconcileDedupesSyncedTranscriptsAcrossHosts]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testReconcileDropsSessionsLiveOnAnyHost]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testReconcileDropsSessionsLiveOnAnyHost]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testReconcilePreservesFirstAppearanceOrder]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testReconcilePreservesFirstAppearanceOrder]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testRecoveredHostsDetectsDownToUpTransition]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testRecoveredHostsDetectsDownToUpTransition]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testRecoveredHostsHandlesBothHostsComingBack]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testRecoveredHostsHandlesBothHostsComingBack]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testRecoveredHostsIgnoresStillUpAndStillDown]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testRecoveredHostsIgnoresStillUpAndStillDown]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testRecoveredHostsIgnoresUpToDownTransition]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testRecoveredHostsIgnoresUpToDownTransition]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testRecoveredHostsTreatsFirstSightingAsNotARecovery]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testRecoveredHostsTreatsFirstSightingAsNotARecovery]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testRouteClosedSessionRerouteToReachableHostWhenOwnerDown]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testRouteClosedSessionRerouteToReachableHostWhenOwnerDown]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testRouteLiveSessionGoesToItsOwnerWhenReachable]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testRouteLiveSessionGoesToItsOwnerWhenReachable]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testRouteLiveSessionStaysOnDownOwnerRatherThanRerouting]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testRouteLiveSessionStaysOnDownOwnerRatherThanRerouting]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testRouteReturnsNilWhenNoOwnerAndNoReachableHost]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testRouteReturnsNilWhenNoOwnerAndNoReachableHost]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.MultiHostTests testRouteUnknownOwnerUsesAgnosticHost]' started.
+Test Case '-[LFGCoreTests.MultiHostTests testRouteUnknownOwnerUsesAgnosticHost]' passed (0.000 seconds).
+Test Suite 'MultiHostTests' passed at 2026-10-08 18:53:57.678.
+	 Executed 30 tests, with 0 failures (0 unexpected) in 0.002 (0.004) seconds
+Test Suite 'NewSessionDirectoryHintTests' started at 2026-10-08 18:53:57.678.
+Test Case '-[LFGCoreTests.NewSessionDirectoryHintTests testFirstListedEntryWinsATie]' started.
+Test Case '-[LFGCoreTests.NewSessionDirectoryHintTests testFirstListedEntryWinsATie]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionDirectoryHintTests testLinkedDirectoryFallsBackToInbox]' started.
+Test Case '-[LFGCoreTests.NewSessionDirectoryHintTests testLinkedDirectoryFallsBackToInbox]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionDirectoryHintTests testNamesMatchIgnoringCaseSpacesAndPunctuation]' started.
+Test Case '-[LFGCoreTests.NewSessionDirectoryHintTests testNamesMatchIgnoringCaseSpacesAndPunctuation]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionDirectoryHintTests testPathsPassThroughLabelledByTheirLastComponent]' started.
+Test Case '-[LFGCoreTests.NewSessionDirectoryHintTests testPathsPassThroughLabelledByTheirLastComponent]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionDirectoryHintTests testUnknownOrBlankHintsResolveToNothing]' started.
+Test Case '-[LFGCoreTests.NewSessionDirectoryHintTests testUnknownOrBlankHintsResolveToNothing]' passed (0.000 seconds).
+Test Suite 'NewSessionDirectoryHintTests' passed at 2026-10-08 18:53:57.679.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'NewSessionLinkHintsTests' started at 2026-10-08 18:53:57.679.
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testAgentHintsAcceptAgentAndProviderNames]' started.
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testAgentHintsAcceptAgentAndProviderNames]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testAModelImpliesItsProviderAndAnAgentNarrowsTheSearch]' started.
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testAModelImpliesItsProviderAndAnAgentNarrowsTheSearch]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testAnAgentWithoutAUsableModelGetsThatAgentsDefault]' started.
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testAnAgentWithoutAUsableModelGetsThatAgentsDefault]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testHostHintsMatchAuthorityAndURL]' started.
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testHostHintsMatchAuthorityAndURL]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testHostHintsMatchNamesLoosely]' started.
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testHostHintsMatchNamesLoosely]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testModelHintsResolveExactThenNormalizedThenContains]' started.
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testModelHintsResolveExactThenNormalizedThenContains]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testNothingUsableMeansNoExplicitSelection]' started.
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testNothingUsableMeansNoExplicitSelection]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testUnknownOrBlankHostHintsMatchNothing]' started.
+Test Case '-[LFGCoreTests.NewSessionLinkHintsTests testUnknownOrBlankHostHintsMatchNothing]' passed (0.000 seconds).
+Test Suite 'NewSessionLinkHintsTests' passed at 2026-10-08 18:53:57.681.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'NewSessionModelDefaultsTests' started at 2026-10-08 18:53:57.681.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testAgentOnlyDirectoryUsesTheHostsDefault]' started.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testAgentOnlyDirectoryUsesTheHostsDefault]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testDoesNotWalkUpToAParentDirectory]' started.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testDoesNotWalkUpToAParentDirectory]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testFallsBackOnAnEmptyDirectoryString]' started.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testFallsBackOnAnEmptyDirectoryString]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testFallsBackWhenTheDirectoryHasNoSessions]' started.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testFallsBackWhenTheDirectoryHasNoSessions]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testIgnoresTheIncomingListOrder]' started.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testIgnoresTheIncomingListOrder]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testModelNewerThanTheBundledListSurvivesInference]' started.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testModelNewerThanTheBundledListSurvivesInference]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testPicksTheNewestSessionInThatDirectory]' started.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testPicksTheNewestSessionInThatDirectory]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testPrefersTheNewestSessionThatHasAModel]' started.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testPrefersTheNewestSessionThatHasAModel]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testResumableSessionDecodesModel]' started.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testResumableSessionDecodesModel]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testRetiredModelDegradesWhenReconciledWithTheHostCatalog]' started.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testRetiredModelDegradesWhenReconciledWithTheHostCatalog]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testTrailingSlashesAndWhitespaceMatchTheSameDirectory]' started.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testTrailingSlashesAndWhitespaceMatchTheSameDirectory]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testUnknownAgentIsSkippedInFavourOfAKnownOne]' started.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testUnknownAgentIsSkippedInFavourOfAKnownOne]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testUnsafeModelDegradesToTheAgentDefault]' started.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testUnsafeModelDegradesToTheAgentDefault]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testUnsafeModelDegradesToTheHostsDefault]' started.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testUnsafeModelDegradesToTheHostsDefault]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testUsesTheAgentAloneWhenNoSessionCarriesAModel]' started.
+Test Case '-[LFGCoreTests.NewSessionModelDefaultsTests testUsesTheAgentAloneWhenNoSessionCarriesAModel]' passed (0.000 seconds).
+Test Suite 'NewSessionModelDefaultsTests' passed at 2026-10-08 18:53:57.683.
+	 Executed 15 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'NewestEndTrackingTests' started at 2026-10-08 18:53:57.683.
+Test Case '-[LFGCoreTests.NewestEndTrackingTests testHistoryOffsetsCollapseToOneTrackingValue]' started.
+Test Case '-[LFGCoreTests.NewestEndTrackingTests testHistoryOffsetsCollapseToOneTrackingValue]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.NewestEndTrackingTests testTrackingValueChangesOnlyAcrossNewestBoundary]' started.
+Test Case '-[LFGCoreTests.NewestEndTrackingTests testTrackingValueChangesOnlyAcrossNewestBoundary]' passed (0.000 seconds).
+Test Suite 'NewestEndTrackingTests' passed at 2026-10-08 18:53:57.683.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'OpenArrivalConfirmationTests' started at 2026-10-08 18:53:57.683.
+Test Case '-[LFGCoreTests.OpenArrivalConfirmationTests testBottomInsetCountsTowardBothChecks]' started.
+Test Case '-[LFGCoreTests.OpenArrivalConfirmationTests testBottomInsetCountsTowardBothChecks]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OpenArrivalConfirmationTests testContentEqualToTheViewportCannotConfirm]' started.
+Test Case '-[LFGCoreTests.OpenArrivalConfirmationTests testContentEqualToTheViewportCannotConfirm]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OpenArrivalConfirmationTests testRealTranscriptAtItsEndConfirms]' started.
+Test Case '-[LFGCoreTests.OpenArrivalConfirmationTests testRealTranscriptAtItsEndConfirms]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OpenArrivalConfirmationTests testRealTranscriptNotAtItsEndDoesNotConfirm]' started.
+Test Case '-[LFGCoreTests.OpenArrivalConfirmationTests testRealTranscriptNotAtItsEndDoesNotConfirm]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OpenArrivalConfirmationTests testShortTranscriptCannotConfirmAnOpen]' started.
+Test Case '-[LFGCoreTests.OpenArrivalConfirmationTests testShortTranscriptCannotConfirmAnOpen]' passed (0.000 seconds).
+Test Suite 'OpenArrivalConfirmationTests' passed at 2026-10-08 18:53:57.684.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'OpenPinBudgetTests' started at 2026-10-08 18:53:57.684.
+Test Case '-[LFGCoreTests.OpenPinBudgetTests testBudgetIsNeverZero]' started.
+Test Case '-[LFGCoreTests.OpenPinBudgetTests testBudgetIsNeverZero]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OpenPinBudgetTests testGeometryBackedBudgetSpansACodeOpen]' started.
+Test Case '-[LFGCoreTests.OpenPinBudgetTests testGeometryBackedBudgetSpansACodeOpen]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OpenPinBudgetTests testWithoutGeometryTheBudgetStaysShort]' started.
+Test Case '-[LFGCoreTests.OpenPinBudgetTests testWithoutGeometryTheBudgetStaysShort]' passed (0.000 seconds).
+Test Suite 'OpenPinBudgetTests' passed at 2026-10-08 18:53:57.684.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'OptimisticSendReconciliationTests' started at 2026-10-08 18:53:57.684.
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testMatchingUserTurnNormalizesWhitespaceAndCase]' started.
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testMatchingUserTurnNormalizesWhitespaceAndCase]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testMatchingUserTurnRequiresLocalUserTranscriptEntry]' started.
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testMatchingUserTurnRequiresLocalUserTranscriptEntry]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testMatchingUserTurnScansOnlyTheMostRecentUserTurns]' started.
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testMatchingUserTurnScansOnlyTheMostRecentUserTurns]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testQueueItemMatchingUsesNormalizedPendingPrefix]' started.
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testQueueItemMatchingUsesNormalizedPendingPrefix]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testShortPendingTextDoesNotMatchAmbiguously]' started.
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testShortPendingTextDoesNotMatchAmbiguously]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testTimestampedPendingSendFindsHistoricalTurnBeyondTailWindow]' started.
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testTimestampedPendingSendFindsHistoricalTurnBeyondTailWindow]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testTimestampedPendingSendIgnoresSameTextBeforeSend]' started.
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testTimestampedPendingSendIgnoresSameTextBeforeSend]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testTimestampedShortPendingTextMatchesExactlyButNotAsSubstring]' started.
+Test Case '-[LFGCoreTests.OptimisticSendReconciliationTests testTimestampedShortPendingTextMatchesExactlyButNotAsSubstring]' passed (0.000 seconds).
+Test Suite 'OptimisticSendReconciliationTests' passed at 2026-10-08 18:53:57.685.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'OutboxResurrectionTests' started at 2026-10-08 18:53:57.685.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testAgeFromUpdatedAtWouldMisclassifyAStaleRow]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testAgeFromUpdatedAtWouldMisclassifyAStaleRow]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testAncientRowAlreadyInTranscriptIsRetired]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testAncientRowAlreadyInTranscriptIsRetired]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testAncientUndeliveredRowIsPruned]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testAncientUndeliveredRowIsPruned]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testAutomaticSendsOnlyEverPermitRetry]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testAutomaticSendsOnlyEverPermitRetry]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testDeliveredRowIsRetiredAtAnyAge]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testDeliveredRowIsRetiredAtAnyAge]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testDeliveryUnderADifferentClientIdStillRetires]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testDeliveryUnderADifferentClientIdStillRetires]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testFreshRowIsRetried]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testFreshRowIsRetried]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testNegativeAgeIsTreatedAsFresh]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testNegativeAgeIsTreatedAsFresh]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testReachableDrainDoesNotRetryAStaleRow]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testReachableDrainDoesNotRetryAStaleRow]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testReachableDrainStillRetriesRecentRows]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testReachableDrainStillRetriesRecentRows]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testRecentTerminalRowSurfaces]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testRecentTerminalRowSurfaces]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testResurrectionSearchesFarDeeperThanTheLivePath]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testResurrectionSearchesFarDeeperThanTheLivePath]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testStaleRowIsRefusedAtTheBoundaryForEveryAutomaticCaller]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testStaleRowIsRefusedAtTheBoundaryForEveryAutomaticCaller]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testUserInitiatedRetryIsAllowedAtAnyAge]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testUserInitiatedRetryIsAllowedAtAnyAge]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testUserInitiatedRetryStillRefusesAProvenDelivery]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testUserInitiatedRetryStillRefusesAProvenDelivery]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testWindowBoundariesAreExact]' started.
+Test Case '-[LFGCoreTests.OutboxResurrectionTests testWindowBoundariesAreExact]' passed (0.000 seconds).
+Test Suite 'OutboxResurrectionTests' passed at 2026-10-08 18:53:57.687.
+	 Executed 16 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'OutgoingSendPresentationTests' started at 2026-10-08 18:53:57.687.
+Test Case '-[LFGCoreTests.OutgoingSendPresentationTests testBusySessionWaitsInTheStrip]' started.
+Test Case '-[LFGCoreTests.OutgoingSendPresentationTests testBusySessionWaitsInTheStrip]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutgoingSendPresentationTests testClosedSessionQueuesForResumeRatherThanRenderingABubble]' started.
+Test Case '-[LFGCoreTests.OutgoingSendPresentationTests testClosedSessionQueuesForResumeRatherThanRenderingABubble]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutgoingSendPresentationTests testIdleLiveSessionSendsAsAFinishedBubble]' started.
+Test Case '-[LFGCoreTests.OutgoingSendPresentationTests testIdleLiveSessionSendsAsAFinishedBubble]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutgoingSendPresentationTests testNoWaitingStateIsEverConfirmedOrABubble]' started.
+Test Case '-[LFGCoreTests.OutgoingSendPresentationTests testNoWaitingStateIsEverConfirmedOrABubble]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutgoingSendPresentationTests testResumeBeatsAStaleBusyFlag]' started.
+Test Case '-[LFGCoreTests.OutgoingSendPresentationTests testResumeBeatsAStaleBusyFlag]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutgoingSendPresentationTests testSessionSittingOnAPromptWaitsInTheStrip]' started.
+Test Case '-[LFGCoreTests.OutgoingSendPresentationTests testSessionSittingOnAPromptWaitsInTheStrip]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.OutgoingSendPresentationTests testUnreachableHostBeatsEverything]' started.
+Test Case '-[LFGCoreTests.OutgoingSendPresentationTests testUnreachableHostBeatsEverything]' passed (0.000 seconds).
+Test Suite 'OutgoingSendPresentationTests' passed at 2026-10-08 18:53:57.688.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'PushTests' started at 2026-10-08 18:53:57.688.
+Test Case '-[LFGCoreTests.PushTests testDenialAfterRegistrationDeactivates]' started.
+Test Case '-[LFGCoreTests.PushTests testDenialAfterRegistrationDeactivates]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.PushTests testParseNotificationExtractsEmbeddedSessionSnapshot]' started.
+Test Case '-[LFGCoreTests.PushTests testParseNotificationExtractsEmbeddedSessionSnapshot]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.PushTests testParseNotificationExtractsSidAndKind]' started.
+Test Case '-[LFGCoreTests.PushTests testParseNotificationExtractsSidAndKind]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.PushTests testParseNotificationIgnoresMismatchedSessionId]' started.
+Test Case '-[LFGCoreTests.PushTests testParseNotificationIgnoresMismatchedSessionId]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.PushTests testParseNotificationRejectsMissingSid]' started.
+Test Case '-[LFGCoreTests.PushTests testParseNotificationRejectsMissingSid]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.PushTests testParseNotificationToleratesUnknownKind]' started.
+Test Case '-[LFGCoreTests.PushTests testParseNotificationToleratesUnknownKind]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.PushTests testParseNotificationWithoutSessionLeavesSnapshotNil]' started.
+Test Case '-[LFGCoreTests.PushTests testParseNotificationWithoutSessionLeavesSnapshotNil]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.PushTests testRegistrationDenied]' started.
+Test Case '-[LFGCoreTests.PushTests testRegistrationDenied]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.PushTests testRegistrationHappyPath]' started.
+Test Case '-[LFGCoreTests.PushTests testRegistrationHappyPath]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.PushTests testServerFailureSurfacesReason]' started.
+Test Case '-[LFGCoreTests.PushTests testServerFailureSurfacesReason]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.PushTests testTokenHexEncoding]' started.
+Test Case '-[LFGCoreTests.PushTests testTokenHexEncoding]' passed (0.000 seconds).
+Test Suite 'PushTests' passed at 2026-10-08 18:53:57.689.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'QueueAckResolutionTests' started at 2026-10-08 18:53:57.689.
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testAgentCommittedMessageStaysVisibleWhenServerRejectsRemoval]' started.
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testAgentCommittedMessageStaysVisibleWhenServerRejectsRemoval]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testDeliveredKeepsTheRowWhileTheTurnIsMissingLocally]' started.
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testDeliveredKeepsTheRowWhileTheTurnIsMissingLocally]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testDeliveredRemovesTheRowOnceTheTurnIsLocal]' started.
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testDeliveredRemovesTheRowOnceTheTurnIsLocal]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testFailedMarksTheRowRegardlessOfTheTranscript]' started.
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testFailedMarksTheRowRegardlessOfTheTranscript]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testFailedRequestKeepsTheRowVisible]' started.
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testFailedRequestKeepsTheRowVisible]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testMessageUnknownToTheServerIsRemovedLocally]' started.
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testMessageUnknownToTheServerIsRemovedLocally]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testOfflineMessageWithoutServerQueueCanBeRemovedLocally]' started.
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testOfflineMessageWithoutServerQueueCanBeRemovedLocally]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testServerHeldMessageIsRemovedLocallyAfterServerAcceptsRemoval]' started.
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testServerHeldMessageIsRemovedLocallyAfterServerAcceptsRemoval]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testUnknownAckKindsAreIgnored]' started.
+Test Case '-[LFGCoreTests.QueueAckResolutionTests testUnknownAckKindsAreIgnored]' passed (0.000 seconds).
+Test Suite 'QueueAckResolutionTests' passed at 2026-10-08 18:53:57.690.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'ReadRouteTests' started at 2026-10-08 18:53:57.690.
+Test Case '-[LFGCoreTests.ReadRouteTests testAWriteStillGoesToTheDownOwnerForALiveSession]' started.
+Test Case '-[LFGCoreTests.ReadRouteTests testAWriteStillGoesToTheDownOwnerForALiveSession]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadRouteTests testReadFallsBackToAReachablePeerWhenTheOwnerIsDown]' started.
+Test Case '-[LFGCoreTests.ReadRouteTests testReadFallsBackToAReachablePeerWhenTheOwnerIsDown]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadRouteTests testReadFallsBackToTheOwnerWhenNothingIsReachable]' started.
+Test Case '-[LFGCoreTests.ReadRouteTests testReadFallsBackToTheOwnerWhenNothingIsReachable]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadRouteTests testReadPrefersTheOwnerWhenItIsUp]' started.
+Test Case '-[LFGCoreTests.ReadRouteTests testReadPrefersTheOwnerWhenItIsUp]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadRouteTests testReadWithNoOwnerUsesTheAgnosticHost]' started.
+Test Case '-[LFGCoreTests.ReadRouteTests testReadWithNoOwnerUsesTheAgnosticHost]' passed (0.000 seconds).
+Test Suite 'ReadRouteTests' passed at 2026-10-08 18:53:57.691.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'ReadStateTests' started at 2026-10-08 18:53:57.691.
+Test Case '-[LFGCoreTests.ReadStateTests testIdentityIsImmuneToClockSkew]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testIdentityIsImmuneToClockSkew]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testMalformedLastDoesNotFailSessionDecode]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testMalformedLastDoesNotFailSessionDecode]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testMigrationMessageAfterOpenIsUnread]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testMigrationMessageAfterOpenIsUnread]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testMigrationNeverOpenedButHasMessageIsUnread]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testMigrationNeverOpenedButHasMessageIsUnread]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testMigrationNoMessageIsNeverUnread]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testMigrationNoMessageIsNeverUnread]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testMigrationOpenedAfterMessageIsRead]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testMigrationOpenedAfterMessageIsRead]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testMigrationOpenedExactlyAtMessageIsRead]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testMigrationOpenedExactlyAtMessageIsRead]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testNeverSeenButHasMessageIsUnread]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testNeverSeenButHasMessageIsUnread]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testNewMessageAfterSeenIsUnread]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testNewMessageAfterSeenIsUnread]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testNoMessagesIsNeverUnread]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testNoMessagesIsNeverUnread]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testOpeningFallsBackToLoadedTranscriptWhenSessionRowHasNoPreview]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testOpeningFallsBackToLoadedTranscriptWhenSessionRowHasNoPreview]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testOpeningPrefersSessionLatestOverStaleLoadedTranscript]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testOpeningPrefersSessionLatestOverStaleLoadedTranscript]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testOpeningUsesStreamedTranscriptWhenItIsAheadOfSessionPoll]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testOpeningUsesStreamedTranscriptWhenItIsAheadOfSessionPoll]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testSeenTheNewestMessageIsRead]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testSeenTheNewestMessageIsRead]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testSessionDecodesLastMessage]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testSessionDecodesLastMessage]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testSessionDecodesWithoutLastMessage]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testSessionDecodesWithoutLastMessage]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ReadStateTests testTouchedTranscriptWithNoNewMessageStaysRead]' started.
+Test Case '-[LFGCoreTests.ReadStateTests testTouchedTranscriptWithNoNewMessageStaysRead]' passed (0.000 seconds).
+Test Suite 'ReadStateTests' passed at 2026-10-08 18:53:57.693.
+	 Executed 17 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'RecentDirsTests' started at 2026-10-08 18:53:57.693.
+Test Case '-[LFGCoreTests.RecentDirsTests testBlankPathIsIgnored]' started.
+Test Case '-[LFGCoreTests.RecentDirsTests testBlankPathIsIgnored]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RecentDirsTests testCapEvictsOldest]' started.
+Test Case '-[LFGCoreTests.RecentDirsTests testCapEvictsOldest]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RecentDirsTests testCapOfOneKeepsOnlyNewest]' started.
+Test Case '-[LFGCoreTests.RecentDirsTests testCapOfOneKeepsOnlyNewest]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RecentDirsTests testExistingBlanksAreDropped]' started.
+Test Case '-[LFGCoreTests.RecentDirsTests testExistingBlanksAreDropped]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RecentDirsTests testMostRecentGoesFirst]' started.
+Test Case '-[LFGCoreTests.RecentDirsTests testMostRecentGoesFirst]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RecentDirsTests testNonPositiveCapReturnsExistingUnchanged]' started.
+Test Case '-[LFGCoreTests.RecentDirsTests testNonPositiveCapReturnsExistingUnchanged]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RecentDirsTests testPushOntoEmpty]' started.
+Test Case '-[LFGCoreTests.RecentDirsTests testPushOntoEmpty]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RecentDirsTests testRemoving]' started.
+Test Case '-[LFGCoreTests.RecentDirsTests testRemoving]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RecentDirsTests testReselectPromotesWithoutDuplicating]' started.
+Test Case '-[LFGCoreTests.RecentDirsTests testReselectPromotesWithoutDuplicating]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RecentDirsTests testRootIsPreserved]' started.
+Test Case '-[LFGCoreTests.RecentDirsTests testRootIsPreserved]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RecentDirsTests testTrailingSlashIsNormalised]' started.
+Test Case '-[LFGCoreTests.RecentDirsTests testTrailingSlashIsNormalised]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RecentDirsTests testWhitespaceIsTrimmed]' started.
+Test Case '-[LFGCoreTests.RecentDirsTests testWhitespaceIsTrimmed]' passed (0.000 seconds).
+Test Suite 'RecentDirsTests' passed at 2026-10-08 18:53:57.695.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'RestartTrackingTests' started at 2026-10-08 18:53:57.695.
+Test Case '-[LFGCoreTests.RestartTrackingTests testEmptyIdIsNeverMarked]' started.
+Test Case '-[LFGCoreTests.RestartTrackingTests testEmptyIdIsNeverMarked]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RestartTrackingTests testLiveIdClearsTheMark]' started.
+Test Case '-[LFGCoreTests.RestartTrackingTests testLiveIdClearsTheMark]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RestartTrackingTests testMarkedSessionIsRestarting]' started.
+Test Case '-[LFGCoreTests.RestartTrackingTests testMarkedSessionIsRestarting]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RestartTrackingTests testMarkExpiresAfterTheTimeout]' started.
+Test Case '-[LFGCoreTests.RestartTrackingTests testMarkExpiresAfterTheTimeout]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RestartTrackingTests testMoveCarriesTheMarkAcrossAnIdChange]' started.
+Test Case '-[LFGCoreTests.RestartTrackingTests testMoveCarriesTheMarkAcrossAnIdChange]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RestartTrackingTests testMoveIsANoOpWhenNothingIsMarked]' started.
+Test Case '-[LFGCoreTests.RestartTrackingTests testMoveIsANoOpWhenNothingIsMarked]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RestartTrackingTests testMoveKeepsTheOriginalStartTime]' started.
+Test Case '-[LFGCoreTests.RestartTrackingTests testMoveKeepsTheOriginalStartTime]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RestartTrackingTests testPruneDropsOnlyExpiredMarks]' started.
+Test Case '-[LFGCoreTests.RestartTrackingTests testPruneDropsOnlyExpiredMarks]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.RestartTrackingTests testRemarkingResetsTheClock]' started.
+Test Case '-[LFGCoreTests.RestartTrackingTests testRemarkingResetsTheClock]' passed (0.000 seconds).
+Test Suite 'RestartTrackingTests' passed at 2026-10-08 18:53:57.696.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'ResumableClosedTests' started at 2026-10-08 18:53:57.696.
+Test Case '-[LFGCoreTests.ResumableClosedTests testCrossHostFilterDropsASessionLiveOnAnotherHost]' started.
+Test Case '-[LFGCoreTests.ResumableClosedTests testCrossHostFilterDropsASessionLiveOnAnotherHost]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ResumableClosedTests testCrossHostFilterKeepsAGenuinelyClosedSessionAndDedupes]' started.
+Test Case '-[LFGCoreTests.ResumableClosedTests testCrossHostFilterKeepsAGenuinelyClosedSessionAndDedupes]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ResumableClosedTests testDecodesServerComputedClosedFlag]' started.
+Test Case '-[LFGCoreTests.ResumableClosedTests testDecodesServerComputedClosedFlag]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ResumableClosedTests testDefaultsToClosedWhenAnOlderServerOmitsTheField]' started.
+Test Case '-[LFGCoreTests.ResumableClosedTests testDefaultsToClosedWhenAnOlderServerOmitsTheField]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ResumableClosedTests testHonoursAnExplicitFalseRatherThanAssumingClosed]' started.
+Test Case '-[LFGCoreTests.ResumableClosedTests testHonoursAnExplicitFalseRatherThanAssumingClosed]' passed (0.000 seconds).
+Test Suite 'ResumableClosedTests' passed at 2026-10-08 18:53:57.696.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'ResumeSettlementTests' started at 2026-10-08 18:53:57.696.
+Test Case '-[LFGCoreTests.ResumeSettlementTests testASettledResumeReturnsToTheClosedList]' started.
+Test Case '-[LFGCoreTests.ResumeSettlementTests testASettledResumeReturnsToTheClosedList]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ResumeSettlementTests testOnlyTheSettledIdsAreReturned]' started.
+Test Case '-[LFGCoreTests.ResumeSettlementTests testOnlyTheSettledIdsAreReturned]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ResumeSettlementTests testSettlesAfterTTLWhenTheReviveNeverLanded]' started.
+Test Case '-[LFGCoreTests.ResumeSettlementTests testSettlesAfterTTLWhenTheReviveNeverLanded]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ResumeSettlementTests testSettlesOnceSeenLive]' started.
+Test Case '-[LFGCoreTests.ResumeSettlementTests testSettlesOnceSeenLive]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ResumeSettlementTests testStaysSuppressedWhileWaitingWithinTTL]' started.
+Test Case '-[LFGCoreTests.ResumeSettlementTests testStaysSuppressedWhileWaitingWithinTTL]' passed (0.000 seconds).
+Test Suite 'ResumeSettlementTests' passed at 2026-10-08 18:53:57.697.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'SSEParserTests' started at 2026-10-08 18:53:57.697.
+Test Case '-[LFGCoreTests.SSEParserTests testCommentIsHeartbeat]' started.
+Test Case '-[LFGCoreTests.SSEParserTests testCommentIsHeartbeat]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SSEParserTests testCRLFStripped]' started.
+Test Case '-[LFGCoreTests.SSEParserTests testCRLFStripped]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SSEParserTests testDecodeBrowserFrameEvent]' started.
+Test Case '-[LFGCoreTests.SSEParserTests testDecodeBrowserFrameEvent]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SSEParserTests testDecodeMessageEvent]' started.
+Test Case '-[LFGCoreTests.SSEParserTests testDecodeMessageEvent]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SSEParserTests testDecodePromptClearedEvent]' started.
+Test Case '-[LFGCoreTests.SSEParserTests testDecodePromptClearedEvent]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SSEParserTests testDecodePromptEvent]' started.
+Test Case '-[LFGCoreTests.SSEParserTests testDecodePromptEvent]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SSEParserTests testDecodeQueueDeliveredAckEvent]' started.
+Test Case '-[LFGCoreTests.SSEParserTests testDecodeQueueDeliveredAckEvent]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SSEParserTests testDecodeQueueEvent]' started.
+Test Case '-[LFGCoreTests.SSEParserTests testDecodeQueueEvent]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SSEParserTests testDecodeQueueFailedAckEventWithoutUserTurnId]' started.
+Test Case '-[LFGCoreTests.SSEParserTests testDecodeQueueFailedAckEventWithoutUserTurnId]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SSEParserTests testDecodeResetEvent]' started.
+Test Case '-[LFGCoreTests.SSEParserTests testDecodeResetEvent]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SSEParserTests testFeedLineMatchesProductionPath]' started.
+Test Case '-[LFGCoreTests.SSEParserTests testFeedLineMatchesProductionPath]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SSEParserTests testMultipleFramesInOneChunk]' started.
+Test Case '-[LFGCoreTests.SSEParserTests testMultipleFramesInOneChunk]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SSEParserTests testParsesSingleEventAcrossChunks]' started.
+Test Case '-[LFGCoreTests.SSEParserTests testParsesSingleEventAcrossChunks]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SSEParserTests testPartialLineBuffering]' started.
+Test Case '-[LFGCoreTests.SSEParserTests testPartialLineBuffering]' passed (0.000 seconds).
+Test Suite 'SSEParserTests' passed at 2026-10-08 18:53:57.699.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'ScrolledToEndTests' started at 2026-10-08 18:53:57.699.
+Test Case '-[LFGCoreTests.ScrolledToEndTests testBottomInsetIsPartOfTheScrollableExtent]' started.
+Test Case '-[LFGCoreTests.ScrolledToEndTests testBottomInsetIsPartOfTheScrollableExtent]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ScrolledToEndTests testContentShorterThanTheViewportIsAlwaysAtTheEnd]' started.
+Test Case '-[LFGCoreTests.ScrolledToEndTests testContentShorterThanTheViewportIsAlwaysAtTheEnd]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ScrolledToEndTests testExactlyAtTheEndCounts]' started.
+Test Case '-[LFGCoreTests.ScrolledToEndTests testExactlyAtTheEndCounts]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ScrolledToEndTests testJustOverTheThresholdIsNotAtTheEnd]' started.
+Test Case '-[LFGCoreTests.ScrolledToEndTests testJustOverTheThresholdIsNotAtTheEnd]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ScrolledToEndTests testReaderScrolledUpIsNotAtTheEnd]' started.
+Test Case '-[LFGCoreTests.ScrolledToEndTests testReaderScrolledUpIsNotAtTheEnd]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.ScrolledToEndTests testWithinTheThresholdStillCounts]' started.
+Test Case '-[LFGCoreTests.ScrolledToEndTests testWithinTheThresholdStillCounts]' passed (0.000 seconds).
+Test Suite 'ScrolledToEndTests' passed at 2026-10-08 18:53:57.700.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'SendFailurePolicyTests' started at 2026-10-08 18:53:57.700.
+Test Case '-[LFGCoreTests.SendFailurePolicyTests testAttachmentsAlwaysRequeueSilently]' started.
+Test Case '-[LFGCoreTests.SendFailurePolicyTests testAttachmentsAlwaysRequeueSilently]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendFailurePolicyTests testBannerFallsBackWhenThereIsNoReason]' started.
+Test Case '-[LFGCoreTests.SendFailurePolicyTests testBannerFallsBackWhenThereIsNoReason]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendFailurePolicyTests testBannerPrefersTheHostsOwnWords]' started.
+Test Case '-[LFGCoreTests.SendFailurePolicyTests testBannerPrefersTheHostsOwnWords]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendFailurePolicyTests testHostAnsweredAndRejectedIsTerminalAndAnnounced]' started.
+Test Case '-[LFGCoreTests.SendFailurePolicyTests testHostAnsweredAndRejectedIsTerminalAndAnnounced]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendFailurePolicyTests testRequeuedFailurePresentationIsNotTerminal]' started.
+Test Case '-[LFGCoreTests.SendFailurePolicyTests testRequeuedFailurePresentationIsNotTerminal]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendFailurePolicyTests testTerminalFailurePresentationClearsQueuedState]' started.
+Test Case '-[LFGCoreTests.SendFailurePolicyTests testTerminalFailurePresentationClearsQueuedState]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendFailurePolicyTests testUnreachableHostRequeuesSilently]' started.
+Test Case '-[LFGCoreTests.SendFailurePolicyTests testUnreachableHostRequeuesSilently]' passed (0.000 seconds).
+Test Suite 'SendFailurePolicyTests' passed at 2026-10-08 18:53:57.701.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'SendTerminalityTests' started at 2026-10-08 18:53:57.701.
+Test Case '-[LFGCoreTests.SendTerminalityTests testAttachmentsRequeueRegardlessOfEvidence]' started.
+Test Case '-[LFGCoreTests.SendTerminalityTests testAttachmentsRequeueRegardlessOfEvidence]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendTerminalityTests testConfirmWindowIsBounded]' started.
+Test Case '-[LFGCoreTests.SendTerminalityTests testConfirmWindowIsBounded]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendTerminalityTests testEvidenceIsReadFromTheThrownError]' started.
+Test Case '-[LFGCoreTests.SendTerminalityTests testEvidenceIsReadFromTheThrownError]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendTerminalityTests testHostDownRequeuesRegardlessOfEvidence]' started.
+Test Case '-[LFGCoreTests.SendTerminalityTests testHostDownRequeuesRegardlessOfEvidence]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendTerminalityTests testNotReachableWithLiveHostConfirms]' started.
+Test Case '-[LFGCoreTests.SendTerminalityTests testNotReachableWithLiveHostConfirms]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendTerminalityTests testServerAnsweredIsImmediatelyTerminal]' started.
+Test Case '-[LFGCoreTests.SendTerminalityTests testServerAnsweredIsImmediatelyTerminal]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendTerminalityTests testTimedOutURLErrorAgainstReachableHostIsConfirming]' started.
+Test Case '-[LFGCoreTests.SendTerminalityTests testTimedOutURLErrorAgainstReachableHostIsConfirming]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendTerminalityTests testTimeoutAgainstReachableHostConfirmsRatherThanFails]' started.
+Test Case '-[LFGCoreTests.SendTerminalityTests testTimeoutAgainstReachableHostConfirmsRatherThanFails]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendTerminalityTests testTimeoutThenDeliveredResolvesWithoutABanner]' started.
+Test Case '-[LFGCoreTests.SendTerminalityTests testTimeoutThenDeliveredResolvesWithoutABanner]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendTerminalityTests testTimeoutThenTrulyLostBecomesTerminalAtTheEndOfTheWindow]' started.
+Test Case '-[LFGCoreTests.SendTerminalityTests testTimeoutThenTrulyLostBecomesTerminalAtTheEndOfTheWindow]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendTerminalityTests testUnambiguousTransportFailuresStayTerminal]' started.
+Test Case '-[LFGCoreTests.SendTerminalityTests testUnambiguousTransportFailuresStayTerminal]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendTerminalityTests testUnknownTransportCodeConfirmsRatherThanFails]' started.
+Test Case '-[LFGCoreTests.SendTerminalityTests testUnknownTransportCodeConfirmsRatherThanFails]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SendTerminalityTests testUnsendableIsTerminal]' started.
+Test Case '-[LFGCoreTests.SendTerminalityTests testUnsendableIsTerminal]' passed (0.000 seconds).
+Test Suite 'SendTerminalityTests' passed at 2026-10-08 18:53:57.702.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'SessionFocusTests' started at 2026-10-08 18:53:57.702.
+Test Case '-[LFGCoreTests.SessionFocusTests testClearedFocusLeavesLaterMessageUnread]' started.
+Test Case '-[LFGCoreTests.SessionFocusTests testClearedFocusLeavesLaterMessageUnread]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionFocusTests testDisappearingFocusedSessionClearsReadFocus]' started.
+Test Case '-[LFGCoreTests.SessionFocusTests testDisappearingFocusedSessionClearsReadFocus]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionFocusTests testDisappearingOldDetailDoesNotClearNewFocus]' started.
+Test Case '-[LFGCoreTests.SessionFocusTests testDisappearingOldDetailDoesNotClearNewFocus]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionFocusTests testFocusSnapshotCapturesTheExactCurrentListRow]' started.
+Test Case '-[LFGCoreTests.SessionFocusTests testFocusSnapshotCapturesTheExactCurrentListRow]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionFocusTests testFocusSnapshotDoesNotGuessAnotherSession]' started.
+Test Case '-[LFGCoreTests.SessionFocusTests testFocusSnapshotDoesNotGuessAnotherSession]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionFocusTests testStillFocusedSessionSuppressesUnreadGrouping]' started.
+Test Case '-[LFGCoreTests.SessionFocusTests testStillFocusedSessionSuppressesUnreadGrouping]' passed (0.000 seconds).
+Test Suite 'SessionFocusTests' passed at 2026-10-08 18:53:57.703.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'SessionListReconciliationTests' started at 2026-10-08 18:53:57.703.
+Test Case '-[LFGCoreTests.SessionListReconciliationTests testSessionListReconcileDropsClosedOnlyWhenCurrentlyLive]' started.
+Test Case '-[LFGCoreTests.SessionListReconciliationTests testSessionListReconcileDropsClosedOnlyWhenCurrentlyLive]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionListReconciliationTests testSessionListReconcilePreservesCodexResumableRows]' started.
+Test Case '-[LFGCoreTests.SessionListReconciliationTests testSessionListReconcilePreservesCodexResumableRows]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionListReconciliationTests testSessionListReconcileSuppressesOptimisticAndResumedClosedRows]' started.
+Test Case '-[LFGCoreTests.SessionListReconciliationTests testSessionListReconcileSuppressesOptimisticAndResumedClosedRows]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionListReconciliationTests testSessionListReconcileUsesCurrentLiveIdsForClosedFallback]' started.
+Test Case '-[LFGCoreTests.SessionListReconciliationTests testSessionListReconcileUsesCurrentLiveIdsForClosedFallback]' passed (0.000 seconds).
+Test Suite 'SessionListReconciliationTests' passed at 2026-10-08 18:53:57.704.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'SessionSearchTests' started at 2026-10-08 18:53:57.704.
+Test Case '-[LFGCoreTests.SessionSearchTests testAllEmptyFieldsMatchNothing]' started.
+Test Case '-[LFGCoreTests.SessionSearchTests testAllEmptyFieldsMatchNothing]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionSearchTests testAStaleHostStillContributesItsGenuineMatches]' started.
+Test Case '-[LFGCoreTests.SessionSearchTests testAStaleHostStillContributesItsGenuineMatches]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionSearchTests testDedupesTheSameSyncedTranscriptSeenByTwoHosts]' started.
+Test Case '-[LFGCoreTests.SessionSearchTests testDedupesTheSameSyncedTranscriptSeenByTwoHosts]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionSearchTests testDropsASessionLiveOnAnyHost]' started.
+Test Case '-[LFGCoreTests.SessionSearchTests testDropsASessionLiveOnAnyHost]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionSearchTests testEmptyQueryHasNoTerms]' started.
+Test Case '-[LFGCoreTests.SessionSearchTests testEmptyQueryHasNoTerms]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionSearchTests testKeepsARowTheHostMatchedThroughItsUserTurns]' started.
+Test Case '-[LFGCoreTests.SessionSearchTests testKeepsARowTheHostMatchedThroughItsUserTurns]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionSearchTests testMatchesAPathFragment]' started.
+Test Case '-[LFGCoreTests.SessionSearchTests testMatchesAPathFragment]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionSearchTests testMatchesCaseInsensitivelyAcrossFields]' started.
+Test Case '-[LFGCoreTests.SessionSearchTests testMatchesCaseInsensitivelyAcrossFields]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionSearchTests testMergesMatchesFromEveryHost]' started.
+Test Case '-[LFGCoreTests.SessionSearchTests testMergesMatchesFromEveryHost]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionSearchTests testNoTermsMatchesEverything]' started.
+Test Case '-[LFGCoreTests.SessionSearchTests testNoTermsMatchesEverything]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionSearchTests testRankedProseHitSurvivesClientReconciliation]' started.
+Test Case '-[LFGCoreTests.SessionSearchTests testRankedProseHitSurvivesClientReconciliation]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionSearchTests testRejectsAnUnfilteredPageFromAHostThatIgnoredTheQuery]' started.
+Test Case '-[LFGCoreTests.SessionSearchTests testRejectsAnUnfilteredPageFromAHostThatIgnoredTheQuery]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionSearchTests testTermsAndAcrossDifferentFields]' started.
+Test Case '-[LFGCoreTests.SessionSearchTests testTermsAndAcrossDifferentFields]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionSearchTests testTermsLowercasesAndSplitsOnWhitespace]' started.
+Test Case '-[LFGCoreTests.SessionSearchTests testTermsLowercasesAndSplitsOnWhitespace]' passed (0.000 seconds).
+Test Suite 'SessionSearchTests' passed at 2026-10-08 18:53:57.706.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'SessionTransferIdleMoveTests' started at 2026-10-08 18:53:57.706.
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testAKnownDownSourceAlwaysMovesWithoutIt]' started.
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testAKnownDownSourceAlwaysMovesWithoutIt]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testAnEdge530OnCloseMeansTheHostWentAway]' started.
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testAnEdge530OnCloseMeansTheHostWentAway]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testAPendingPromptIsNotIdle]' started.
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testAPendingPromptIsNotIdle]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testARealRefusalOnCloseStillAborts]' started.
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testARealRefusalOnCloseStillAborts]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testBusySessionOnAReachableSourceStillClosesFirst]' started.
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testBusySessionOnAReachableSourceStillClosesFirst]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testCloudflare530HtmlIsTheEdgeNotTheHost]' started.
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testCloudflare530HtmlIsTheEdgeNotTheHost]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testGateway502And504HtmlAreTheEdge]' started.
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testGateway502And504HtmlAreTheEdge]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testIdleSessionMovesWithoutTheSourceEvenWhenItLooksUp]' started.
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testIdleSessionMovesWithoutTheSourceEvenWhenItLooksUp]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testLfgsOwnJson502IsNotTheEdge]' started.
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testLfgsOwnJson502IsNotTheEdge]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testOrdinaryStatusesAreNeverTheEdge]' started.
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testOrdinaryStatusesAreNeverTheEdge]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testTheResultingPlanSkipsTheCloseForcesTheResumeAndDefersCleanup]' started.
+Test Case '-[LFGCoreTests.SessionTransferIdleMoveTests testTheResultingPlanSkipsTheCloseForcesTheResumeAndDefersCleanup]' passed (0.000 seconds).
+Test Suite 'SessionTransferIdleMoveTests' passed at 2026-10-08 18:53:57.707.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'SessionTransferTests' started at 2026-10-08 18:53:57.707.
+Test Case '-[LFGCoreTests.SessionTransferTests testBehindLabel]' started.
+Test Case '-[LFGCoreTests.SessionTransferTests testBehindLabel]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferTests testCloseFailureClassification]' started.
+Test Case '-[LFGCoreTests.SessionTransferTests testCloseFailureClassification]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferTests testDeferredClosesAddIsIdempotentAndTakeIsOneShot]' started.
+Test Case '-[LFGCoreTests.SessionTransferTests testDeferredClosesAddIsIdempotentAndTakeIsOneShot]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferTests testDeferredClosesForgetDropsSessionEverywhere]' started.
+Test Case '-[LFGCoreTests.SessionTransferTests testDeferredClosesForgetDropsSessionEverywhere]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferTests testDeferredClosesRoundTripAndTolerateGarbage]' started.
+Test Case '-[LFGCoreTests.SessionTransferTests testDeferredClosesRoundTripAndTolerateGarbage]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferTests testKnownDownSourceSkipsCloseForcesResumeAndDefersClose]' started.
+Test Case '-[LFGCoreTests.SessionTransferTests testKnownDownSourceSkipsCloseForcesResumeAndDefersClose]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferTests testPreflightFreshCopyIsReady]' started.
+Test Case '-[LFGCoreTests.SessionTransferTests testPreflightFreshCopyIsReady]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferTests testPreflightMissingCwdBlocksWithPath]' started.
+Test Case '-[LFGCoreTests.SessionTransferTests testPreflightMissingCwdBlocksWithPath]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferTests testPreflightMissingTranscriptBlocks]' started.
+Test Case '-[LFGCoreTests.SessionTransferTests testPreflightMissingTranscriptBlocks]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferTests testPreflightStaleCopyAsksInsteadOfBlocking]' started.
+Test Case '-[LFGCoreTests.SessionTransferTests testPreflightStaleCopyAsksInsteadOfBlocking]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferTests testPreflightWithoutTimestampsIsReadyNotStale]' started.
+Test Case '-[LFGCoreTests.SessionTransferTests testPreflightWithoutTimestampsIsReadyNotStale]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferTests testReachableSourceClosesFirstAndDoesNotForce]' started.
+Test Case '-[LFGCoreTests.SessionTransferTests testReachableSourceClosesFirstAndDoesNotForce]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferTests testResumeRequestCarriesForceOnlyWhenSet]' started.
+Test Case '-[LFGCoreTests.SessionTransferTests testResumeRequestCarriesForceOnlyWhenSet]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.SessionTransferTests testTranscriptStatusDecodesLenientlyAndFoundDefaultsFalse]' started.
+Test Case '-[LFGCoreTests.SessionTransferTests testTranscriptStatusDecodesLenientlyAndFoundDefaultsFalse]' passed (0.000 seconds).
+Test Suite 'SessionTransferTests' passed at 2026-10-08 18:53:57.709.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'StartSessionPlanTests' started at 2026-10-08 18:53:57.709.
+Test Case '-[LFGCoreTests.StartSessionPlanTests testDirectoryHintOrInbox]' started.
+Test Case '-[LFGCoreTests.StartSessionPlanTests testDirectoryHintOrInbox]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.StartSessionPlanTests testHostHintOrFallback]' started.
+Test Case '-[LFGCoreTests.StartSessionPlanTests testHostHintOrFallback]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.StartSessionPlanTests testNotificationSaysWhatStartedWhere]' started.
+Test Case '-[LFGCoreTests.StartSessionPlanTests testNotificationSaysWhatStartedWhere]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.StartSessionPlanTests testSelectionHintElseRememberedReconciled]' started.
+Test Case '-[LFGCoreTests.StartSessionPlanTests testSelectionHintElseRememberedReconciled]' passed (0.000 seconds).
+Test Suite 'StartSessionPlanTests' passed at 2026-10-08 18:53:57.710.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'TerminalConnectionTests' started at 2026-10-08 18:53:57.710.
+Test Case '-[LFGCoreTests.TerminalConnectionTests testBasePathIsPreserved]' started.
+Test Case '-[LFGCoreTests.TerminalConnectionTests testBasePathIsPreserved]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TerminalConnectionTests testCloseCodesMapToDisconnectReasons]' started.
+Test Case '-[LFGCoreTests.TerminalConnectionTests testCloseCodesMapToDisconnectReasons]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TerminalConnectionTests testDimensionsAreClampedToServerRange]' started.
+Test Case '-[LFGCoreTests.TerminalConnectionTests testDimensionsAreClampedToServerRange]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TerminalConnectionTests testHostLabelsAreDisambiguatedOnlyWhenTheyClash]' started.
+Test Case '-[LFGCoreTests.TerminalConnectionTests testHostLabelsAreDisambiguatedOnlyWhenTheyClash]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TerminalConnectionTests testHTTPHostWithPortBecomesWS]' started.
+Test Case '-[LFGCoreTests.TerminalConnectionTests testHTTPHostWithPortBecomesWS]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TerminalConnectionTests testHTTPSHostBecomesWSSWithSessionAndSize]' started.
+Test Case '-[LFGCoreTests.TerminalConnectionTests testHTTPSHostBecomesWSSWithSessionAndSize]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TerminalConnectionTests testLiveTerminalRoundTrip]' started.
+/Users/eugenechan/dev/personal/lfg/ios/LFGCore/Tests/LFGCoreTests/TerminalConnectionTests.swift:101: -[LFGCoreTests.TerminalConnectionTests testLiveTerminalRoundTrip] : Test skipped - set LFG_TERM_TEST_URL to run against a live server
+Test Case '-[LFGCoreTests.TerminalConnectionTests testLiveTerminalRoundTrip]' skipped (0.001 seconds).
+Test Case '-[LFGCoreTests.TerminalConnectionTests testNetworkDisconnectShowsPlainMessage]' started.
+Test Case '-[LFGCoreTests.TerminalConnectionTests testNetworkDisconnectShowsPlainMessage]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TerminalConnectionTests testNoCredentialMeansNoAccessHeaders]' started.
+Test Case '-[LFGCoreTests.TerminalConnectionTests testNoCredentialMeansNoAccessHeaders]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TerminalConnectionTests testResizeControlFrameMatchesServerFormat]' started.
+Test Case '-[LFGCoreTests.TerminalConnectionTests testResizeControlFrameMatchesServerFormat]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TerminalConnectionTests testScrollControlFrameMatchesServerFormat]' started.
+Test Case '-[LFGCoreTests.TerminalConnectionTests testScrollControlFrameMatchesServerFormat]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TerminalConnectionTests testTerminalRequestCarriesAccessHeaders]' started.
+Test Case '-[LFGCoreTests.TerminalConnectionTests testTerminalRequestCarriesAccessHeaders]' passed (0.000 seconds).
+Test Suite 'TerminalConnectionTests' passed at 2026-10-08 18:53:57.712.
+	 Executed 12 tests, with 1 test skipped and 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'TranscriptHistoryPageMergeTests' started at 2026-10-08 18:53:57.712.
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testDuplicatesWithinOnePageCollapse]' started.
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testDuplicatesWithinOnePageCollapse]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testEmptyPageLeavesTheTranscriptIdentical]' started.
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testEmptyPageLeavesTheTranscriptIdentical]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testFirstPageIntoAnEmptyTranscript]' started.
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testFirstPageIntoAnEmptyTranscript]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testInterleavedTimestampsStillMergeInOrder]' started.
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testInterleavedTimestampsStillMergeInOrder]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testMatchesLegacyOrderingAcrossRandomisedCases]' started.
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testMatchesLegacyOrderingAcrossRandomisedCases]' passed (0.004 seconds).
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testMissingTimestampsSortOldestJustAsBefore]' started.
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testMissingTimestampsSortOldestJustAsBefore]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testNewerPageAppends]' started.
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testNewerPageAppends]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testOlderPagePrependsWithoutTouchingExistingRows]' started.
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testOlderPagePrependsWithoutTouchingExistingRows]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testPartiallyOverlappingPageKeepsOnlyTheNewRows]' started.
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testPartiallyOverlappingPageKeepsOnlyTheNewRows]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testRedeliveredPageIsANoOp]' started.
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testRedeliveredPageIsANoOp]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testSuccessivePagesEachPrepend]' started.
+Test Case '-[LFGCoreTests.TranscriptHistoryPageMergeTests testSuccessivePagesEachPrepend]' passed (0.000 seconds).
+Test Suite 'TranscriptHistoryPageMergeTests' passed at 2026-10-08 18:53:57.718.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+Test Suite 'TranscriptMergeTests' started at 2026-10-08 18:53:57.718.
+Test Case '-[LFGCoreTests.TranscriptMergeTests testUnionDeduplicatesByStableIDAndKeepsLaterPayload]' started.
+Test Case '-[LFGCoreTests.TranscriptMergeTests testUnionDeduplicatesByStableIDAndKeepsLaterPayload]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptMergeTests testUnionFallsBackToArrivalOrderWhenTimestampsAreMissingOrEqual]' started.
+Test Case '-[LFGCoreTests.TranscriptMergeTests testUnionFallsBackToArrivalOrderWhenTimestampsAreMissingOrEqual]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptMergeTests testUnionKeepsSourceAndDestinationMessagesInTimestampOrder]' started.
+Test Case '-[LFGCoreTests.TranscriptMergeTests testUnionKeepsSourceAndDestinationMessagesInTimestampOrder]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptMergeTests testUnionUsesStableIDForMessagesWithoutTranscriptIds]' started.
+Test Case '-[LFGCoreTests.TranscriptMergeTests testUnionUsesStableIDForMessagesWithoutTranscriptIds]' passed (0.000 seconds).
+Test Suite 'TranscriptMergeTests' passed at 2026-10-08 18:53:57.718.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'TranscriptWindowTests' started at 2026-10-08 18:53:57.718.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testAtBottomContinuesFollowingAfterOpeningCompletes]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testAtBottomContinuesFollowingAfterOpeningCompletes]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testBottomContentMarginClampsInvalidGeometry]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testBottomContentMarginClampsInvalidGeometry]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testCompletedOpeningCannotScheduleAnotherInitialPin]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testCompletedOpeningCannotScheduleAnotherInitialPin]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testEmptyTranscriptStartsAtZero]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testEmptyTranscriptStartsAtZero]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testExtendAddsOnePage]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testExtendAddsOnePage]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testExtendStopsAtTheStartOfTheTranscript]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testExtendStopsAtTheStartOfTheTranscript]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testFocusedBottomBoundaryAvoidsDuplicateKeyboardSafeArea]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testFocusedBottomBoundaryAvoidsDuplicateKeyboardSafeArea]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testFocusedKeyboardPreservesReaderPositionInHistory]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testFocusedKeyboardPreservesReaderPositionInHistory]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testFocusedKeyboardReservesItsOccludedHeightAndFollowsNewest]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testFocusedKeyboardReservesItsOccludedHeightAndFollowsNewest]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testGrowIgnoresNegativeDeltas]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testGrowIgnoresNegativeDeltas]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testGrowKeepsTheOldestRenderedMessageInPlaceWhenTurnsArrive]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testGrowKeepsTheOldestRenderedMessageInPlaceWhenTurnsArrive]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testHasOlderIsTrueOnlyWhenHistorySitsAboveTheWindow]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testHasOlderIsTrueOnlyWhenHistorySitsAboveTheWindow]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testHiddenKeyboardClearsTranscriptReserveWithoutFollowing]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testHiddenKeyboardClearsTranscriptReserveWithoutFollowing]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testHiddenKeyboardDoesNotApplyHistoryKeyboardCompensation]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testHiddenKeyboardDoesNotApplyHistoryKeyboardCompensation]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testHidingKeyboardPreservesReaderPositionInHistory]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testHidingKeyboardPreservesReaderPositionInHistory]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testHidingKeyboardReturnsFollowingTranscriptToOrdinaryNewestEdge]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testHidingKeyboardReturnsFollowingTranscriptToOrdinaryNewestEdge]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testHistoryKeepsItsCapturedBottomMarginWhenComposerHeightChanges]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testHistoryKeepsItsCapturedBottomMarginWhenComposerHeightChanges]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testHistoryKeyboardCompensatesForTheHomeIndicatorRegion]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testHistoryKeyboardCompensatesForTheHomeIndicatorRegion]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testIdleBottomBoundaryIsAContentMarginNotTranscriptContent]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testIdleBottomBoundaryIsAContentMarginNotTranscriptContent]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testManualScrollUpStopsFollowingAfterOpeningCompletes]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testManualScrollUpStopsFollowingAfterOpeningCompletes]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testMixedHistoryAndLiveGrowthIgnoresRowsPrependedAboveTheViewport]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testMixedHistoryAndLiveGrowthIgnoresRowsPrependedAboveTheViewport]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testNegativeKeyboardOcclusionIsClampedToZero]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testNegativeKeyboardOcclusionIsClampedToZero]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testNewestEdgeDoesNotApplyHistoryKeyboardCompensation]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testNewestEdgeDoesNotApplyHistoryKeyboardCompensation]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testNewestUsesTheCurrentCalculatedBottomMargin]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testNewestUsesTheCurrentCalculatedBottomMargin]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testNewLiveMessagesGrowTheWindowByOnlyTheAppendedRows]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testNewLiveMessagesGrowTheWindowByOnlyTheAppendedRows]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testNonPositiveWindowStillRendersSomething]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testNonPositiveWindowStillRendersSomething]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testOlderHistoryPrependDoesNotGrowTheTailWindow]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testOlderHistoryPrependDoesNotGrowTheTailWindow]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testOpeningFollowsLatestWhileTheBottomAnchorIsTemporarilyAbsent]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testOpeningFollowsLatestWhileTheBottomAnchorIsTemporarilyAbsent]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testOpeningKeepsWaitingWhileTheTranscriptIsEmpty]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testOpeningKeepsWaitingWhileTheTranscriptIsEmpty]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testOpeningSettlesAsSoonAsTheNewestTailCanRender]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testOpeningSettlesAsSoonAsTheNewestTailCanRender]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testRepeatedExtendsWalkAllTheWayBackAndThenStop]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testRepeatedExtendsWalkAllTheWayBackAndThenStop]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testReplacementWithoutStableIdentityDoesNotGuessAtWindowGrowth]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testReplacementWithoutStableIdentityDoesNotGuessAtWindowGrowth]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testSendingAtNewestUsesNaturalOffsetWithoutAnExtraJump]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testSendingAtNewestUsesNaturalOffsetWithoutAnExtraJump]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testSendingAtNewestWithFocusedComposerRevealsMessageAboveKeyboard]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testSendingAtNewestWithFocusedComposerRevealsMessageAboveKeyboard]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testSendingFromHistoryPreservesReaderPosition]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testSendingFromHistoryPreservesReaderPosition]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testSendingFromHistoryWithFocusedComposerPreservesReaderPosition]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testSendingFromHistoryWithFocusedComposerPreservesReaderPosition]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testUnfocusedComposerDoesNotMoveTranscriptForKeyboardFrame]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testUnfocusedComposerDoesNotMoveTranscriptForKeyboardFrame]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testWindowLongerThanTranscriptRendersEverything]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testWindowLongerThanTranscriptRendersEverything]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TranscriptWindowTests testWindowShorterThanTranscriptRendersTheNewestTail]' started.
+Test Case '-[LFGCoreTests.TranscriptWindowTests testWindowShorterThanTranscriptRendersTheNewestTail]' passed (0.000 seconds).
+Test Suite 'TranscriptWindowTests' passed at 2026-10-08 18:53:57.723.
+	 Executed 39 tests, with 0 failures (0 unexpected) in 0.002 (0.004) seconds
+Test Suite 'TransientErrorPresentationTests' started at 2026-10-08 18:53:57.723.
+Test Case '-[LFGCoreTests.TransientErrorPresentationTests testExpiredEventDoesNotRestartItsLifetimeWhenDetailAppears]' started.
+Test Case '-[LFGCoreTests.TransientErrorPresentationTests testExpiredEventDoesNotRestartItsLifetimeWhenDetailAppears]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TransientErrorPresentationTests testFreshGlobalAndMatchingSessionEventsStillAppear]' started.
+Test Case '-[LFGCoreTests.TransientErrorPresentationTests testFreshGlobalAndMatchingSessionEventsStillAppear]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TransientErrorPresentationTests testPendingSendErrorAppearsOnlyForItsMatchingFailedRow]' started.
+Test Case '-[LFGCoreTests.TransientErrorPresentationTests testPendingSendErrorAppearsOnlyForItsMatchingFailedRow]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TransientErrorPresentationTests testPendingSendErrorDisappearsWhenItsFailedRowIsGone]' started.
+Test Case '-[LFGCoreTests.TransientErrorPresentationTests testPendingSendErrorDisappearsWhenItsFailedRowIsGone]' passed (0.000 seconds).
+Test Case '-[LFGCoreTests.TransientErrorPresentationTests testSessionErrorDoesNotAppearInAnotherSession]' started.
+Test Case '-[LFGCoreTests.TransientErrorPresentationTests testSessionErrorDoesNotAppearInAnotherSession]' passed (0.000 seconds).
+Test Suite 'TransientErrorPresentationTests' passed at 2026-10-08 18:53:57.723.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'LFGCorePackageTests.xctest' passed at 2026-10-08 18:53:57.723.
+	 Executed 637 tests, with 1 test skipped and 0 failures (0 unexpected) in 0.553 (0.590) seconds
+Test Suite 'All tests' passed at 2026-10-08 18:53:57.724.
+	 Executed 637 tests, with 1 test skipped and 0 failures (0 unexpected) in 0.553 (0.591) seconds
+􀟈  Test run started.
+􀄵  Testing Library Version: 1501
+􀄵  Target Platform: arm64e-apple-macos14.0
+􀟈  Suite "Attachment filename sanitizing" started.
+􀟈  Suite "Session handoff routing" started.
+􀟈  Suite "Uploaded attachments render as cards" started.
+􀟈  Suite "SessionDisplayState" started.
+􀟈  Suite "Transcript system notice presentation" started.
+􀟈  Suite "Host connection presentation" started.
+􀟈  Suite "Outgoing attachment message assembly" started.
+􀟈  Suite "Transcript row text" started.
+􀟈  Suite "JournalFreshness" started.
+􀟈  Suite "Transcript history top-row presentation" started.
+􀟈  Suite "PathQuality" started.
+􀟈  Suite "File preview sequence" started.
+􀟈  Suite "SelectableText" started.
+􀟈  Suite "Session effort" started.
+􀟈  Suite "File share names" started.
+􀟈  Suite "Transcript resource index" started.
+􀟈  Suite "Cloudflare-safe transcript history paging" started.
+􀟈  Suite "Session prompt baseline" started.
+􀟈  Suite SessionTransferFlowTests started.
+􀟈  Suite "File share export" started.
+􀟈  Suite "Paths containing spaces" started.
+􀟈  Suite "Session list time" started.
+􀟈  Suite "Transcript memory citation presentation" started.
+􀟈  Suite "Attachment metadata" started.
+􀟈  Suite "Offline outbox sidecar naming" started.
+􀟈  Suite "Web links" started.
+􀟈  Suite FollowupDirectivesTests started.
+􀟈  Suite "Offline host live claims" started.
+􀟈  Suite "Transcript thinking presentation" started.
+􀟈  Suite "Bundled Cloudflare Access" started.
+􀟈  Test phoneSignInHistoryDistinguishesOutcomesAndDecodesMilliseconds() started.
+􀟈  Suite "Attachment content types" started.
+􀟈  Suite "User message scrubber" started.
+􀟈  Suite SelectableMarkdownSectionsTests started.
+􀟈  Suite "Prompt preamble" started.
+􀟈  Test agentSignInDoneSendsAllDomainsWithoutClientRetargeting() started.
+􀟈  Test phoneSignInDropsSameSiteNoneOnInsecureCookies() started.
+􀟈  Test phoneSignInFiltersExactDomainsAndPreservesCookieFlags() started.
+􀟈  Test "prose mentioning a .csv OUTSIDE the upload dir is still not a card" started.
+􀟈  Test "a non-media file the user attached still becomes a card" started.
+􀟈  Test phoneSignInExtractsFoundationCookieAttributes() started.
+􀟈  Test "whitespace collapses to underscores so the path stays one token" started.
+􀟈  Test "absurd lengths are truncated but keep the extension" started.
+􀟈  Test phoneSignInRequestUsesOwningHostCredentialsAndRejectsPlaintext() started.
+􀟈  Test "a missing extension takes the fallback, never nothing" started.
+􀟈  Test "known media in the upload dir keeps its real kind" started.
+􀟈  Test "all four attachments of one send are claimed together, in order" started.
+􀟈  Test "windows separators are separators too" started.
+􀟈  Test "control characters and exotica are scrubbed" started.
+􀟈  Test hostCatalogReplacesBundledModelsWithoutChangingSectionOrder() started.
+􀟈  Test modelsAreGroupedWithCurrentToolFirst() started.
+􀟈  Test closedSessionUsesHostWithFreshestKnownCopy() started.
+􀟈  Test "resolves the full precedence table" started.
+􀟈  Test "extension case is normalised" started.
+􀟈  Test "uses a readable fallback for an empty notice" started.
+􀟈  Test "a blocked session is never reported as working" started.
+􀟈  Test "traversal cannot escape the upload directory" started.
+􀟈  Test "the table covers every input combination" started.
+􀟈  Test "preserves the visible local command while trimming wrapper whitespace" started.
+􀟈  Test phoneSignInRequiresSecureURLs() started.
+􀟈  Test "a missing upload fails instead of silently degrading the message" started.
+􀟈  Test "Live is connected even while the fleet reconnects" started.
+􀟈  Test "empty and separator-only names still produce a usable name" started.
+􀟈  Test "typed text and attachments form one ordered message" started.
+􀟈  Test liveSessionNeverFallsBackToAnotherHostsSnapshot() started.
+􀟈  Test "a plain markdown link survives in prose" started.
+􀟈  Test "empty text is safe" started.
+􀟈  Test "attachment-only messages contain every uploaded path" started.
+􀟈  Test "display text strips refs and bare paths" started.
+􀟈  Test "a snapshot requested after the journal statement wins immediately" started.
+􀟈  Test "send readiness accepts text, attachments, or both, but not an empty draft" started.
+􀟈  Test "Sustained failures are reconnecting during the burst, then offline" started.
+􀟈  Test "A sustained change does move it — the window is not a lock" started.
+􀟈  Test "Summary is readable and carries the grade and the number behind it" started.
+􀟈  Test "the TTL boundary yields, so equality can't latch" started.
+􀟈  Test "A punched cellular path (tens of ms) is still 'direct' and still unscaled" started.
+􀟈  Test "keeps an ordinary name untouched" started.
+􀟈  Test "inline image leaves prose but is still collected as media" started.
+􀟈  Test "plain text passes through untouched" started.
+􀟈  Test crossProviderSwitchStatusNamesTheDestinationProvider() started.
+􀟈  Test "buffered earlier rows keep the progressive reveal affordance" started.
+􀟈  Test "Between LAN and relay the scaling is proportional, not stepped" started.
+􀟈  Test "an empty sequence has no initial selection" started.
+􀟈  Test "active network paging takes precedence over buffered-row reveal" started.
+􀟈  Test "Unproven and transient states are reconnecting" started.
+􀟈  Test "a journal statement received during the request out-votes that snapshot" started.
+􀟈  Test "completed history with no buffered earlier rows hides the top row" started.
+􀟈  Test "network paging shows an honest loading row even before older rows are buffered" started.
+􀟈  Test "No samples: scale is exactly 1 and every derived timeout is the constant" started.
+􀟈  Test "inline preview uses the full session sequence when it contains the selection" started.
+􀟈  Test "Even-sized windows take the midpoint of the two middle samples" started.
+􀟈  Test "Relay RTT (150ms) hits every cap" started.
+􀟈  Test "inline preview falls back to its row when the session index is unavailable or stale" started.
+􀟈  Test "preserves Files list order and opens on the tapped file" started.
+􀟈  Test "text-only messages are unchanged apart from surrounding whitespace" started.
+􀟈  Test "the default TTL comfortably exceeds the pump's sweep interval" started.
+􀟈  Test "equal request and journal timestamps let the level snapshot win" started.
+􀟈  Test "a backwards clock reads as fresh, not as an enormous age" started.
+􀟈  Test linksSurviveAsSpans() started.
+􀟈  Test "a session the journal has never spoken for takes the snapshot" started.
+􀟈  Test "a journal value past the TTL yields to the snapshot" started.
+􀟈  Test codeBlockKeepsContentVerbatim() started.
+􀟈  Test "just inside the TTL still holds the veto" started.
+􀟈  Test "falls back to the first file when selection is absent" started.
+􀟈  Test softAndHardLineBreaksInsideParagraph() started.
+􀟈  Test "The caps are hard — a catastrophic RTT cannot widen a timeout further" started.
+􀟈  Test "A derived timeout is never shorter than the constant it replaces" started.
+􀟈  Test "a custom TTL is honoured" started.
+􀟈  Test codexModelsOfferTheirOwnLevels() started.
+􀟈  Test labelsMatchTheCLIPickers() started.
+􀟈  Test paragraphsAndListItemsFormOneCopyableDocument() started.
+􀟈  Test "One stalled ping among four good ones does not move the estimate" started.
+􀟈  Test "derives the type from a remote URL path rather than its query" started.
+􀟈  Test modelsWithoutEffortControlOfferNothing() started.
+􀟈  Test "uses a safe source filename when there is no label" started.
+􀟈  Test sessionRowsCarryEffortAndOlderHostsDecode() started.
+􀟈  Test plainTextRenderingJoinsTableCellsWithTabs() started.
+􀟈  Test blockquoteIsMarked() started.
+􀟈  Test claudeAliasesResolveToTheirCatalogFamily() started.
+􀟈  Test unparseableInputFallsBackToRawParagraph() started.
+􀟈  Test emptyInputYieldsNoBlocks() started.
+􀟈  Test unknownModelsAndOldHostsFallBackToTheCLIsUsualLevels() started.
+􀟈  Test raggedTableRowsArePaddedToHeaderWidth() started.
+􀟈  Test headingsCarryLevel() started.
+􀟈  Test "a fresh journal value out-votes the snapshot" started.
+􀟈  Test "keeps the source extension when a friendly label omits it" started.
+􀟈  Test plainTextIsOneParagraph() started.
+􀟈  Test "collects files from markdown images, links and bare paths" started.
+􀟈  Test continuationParagraphInListItemHasNoMarker() started.
+􀟈  Test "links sort newest first too" started.
+􀟈  Test "newest first, and a repeat keeps its first label" started.
+􀟈  Test thematicBreakBecomesRule() started.
+􀟈  Test "repeated exports are isolated even when the filename is identical" started.
+􀟈  Test "does not duplicate an extension already present in the label" started.
+􀟈  Test "The window is bounded and keeps the most recent samples" started.
+􀟈  Test "cleanup removes the whole isolated export" started.
+􀟈  Test "tool calls and results are ignored" started.
+􀟈  Test "user uploads are collected too" started.
+􀟈  Test "empty transcript yields nothing" started.
+􀟈  Test "copies the downloaded bytes under the intended filename" started.
+􀟈  Test "an undated turn sorts with the nearest newer turn" started.
+􀟈  Test "an entirely empty message is rejected" started.
+􀟈  Test "decodes a parked question, including the pane-scraped context" started.
+􀟈  Test "uses a readable fallback for malformed payloads" started.
+􀟈  Test "files within one turn keep the order the agent wrote them" started.
+􀟈  Test "a malformed prompt does not fail the whole session decode" started.
+􀟈  Test tableBecomesHeaderAndRows() started.
+􀟈  Test "a session with no question decodes to nil, not a failure" started.
+􀟈  Test "an explicit content type wins over the inferred one" started.
+􀟈  Test "ordering is by timestamp, not the array's order" started.
+􀟈  Test "nonworking rows use the last activity" started.
+􀟈  Test "working duration starts at the session start, across later messages" started.
+􀟈  Test "baseline yields to a fresh journal statement, wins when there is none" started.
+􀟈  Test "parses citation notes, locations, and prior-session count" started.
+􀟈  Test "LAN RTT leaves every timeout at its LAN value" started.
+􀟈  Test "Nonsense samples are ignored rather than poisoning the estimate" started.
+􀟈  Test "prose that merely mentions a parenthesised phrase is not a file" started.
+􀟈  Test "round-trips through Codable for the outbox" started.
+􀟈  Test "path-like and empty names cannot escape the export directory" started.
+􀟈  Test "a markdown link whose path has spaces is found whole" started.
+􀟈  Test "a link title is not part of the path" started.
+􀟈  Test "yields the newest bounded page before requesting older cursors" started.
+􀟈  Test "a markdown image whose path has spaces is found whole" started.
+􀟈  Test "the tail after a space is not also offered as a relative path" started.
+􀟈  Test inlineStylesAreCarriedOnSpans() started.
+􀟈  Test "trailing sentence punctuation is not part of the URL" started.
+􀟈  Test "missing start cannot turn message age into running duration" started.
+􀟈  Test "host strips www and is nil for a non-URL" started.
+􀟈  Test "CommonMark's angle form is accepted and unwrapped" started.
+􀟈  Test "compaction is a visible static thinking-style label" started.
+􀟈  Test "raw filename infers a sanitized name, type and kind together" started.
+􀟈  Test nestedListsCarryDepthAndMarkers() started.
+􀟈  Test "duplicates collapse across the transcript" started.
+􀟈  Test testRepeatedMovesKeepEveryOpenNavigationAliasOnLatestSession() started.
+􀟈  Test "display name prefers the label, then the distinguishing path segment" started.
+􀟈  Test "bare and markdown links are both found, labels preserved" started.
+􀟈  Test "a spaced destination that is not a path is not a file" started.
+􀟈  Test extractsMixedBulletStylesInOrder() started.
+􀟈  Test draftAdditionPreservesExistingText() started.
+􀟈  Test "image markdown with spaces is stripped from prose once it is a card" started.
+􀟈  Test "a URL that is a file is not also a link" started.
+􀟈  Test "decodes and canonicalizes an ordered multi-host HTTPS configuration" started.
+􀟈  Test "a session with no known owner is left alone rather than guessed at" started.
+􀟈  Test malformedAndFencedDirectivesRemainVisible() started.
+􀟈  Test "everything reachable retracts nothing" started.
+􀟈  Test "adds all bundled hosts only when they are not already configured" started.
+􀟈  Test "rejects incomplete, malformed, or non-HTTPS configurations" started.
+􀟈  Test doesNotAlterUserTextWhenExtractionDisabled() started.
+􀟈  Test "preserves an existing default when adding the bundled host" started.
+􀟈  Test "a blipping host inside its grace window retracts nothing" started.
+􀟈  Test "accepts the legacy single-host payload" started.
+􀟈  Test "sidecar names round-trip index and filename" started.
+􀟈  Test decodesEscapedPrompt() started.
+􀟈  Test "ordinary reasoning keeps the existing expandable Thinking presentation" started.
+􀟈  Test "a whole fleet down retracts everything — no session can still be Working" started.
+􀟈  Test "a down host's sessions are all retractable, the healthy host's are not" started.
+􀟈  Test "junk in the sidecar directory is dropped, not replayed at random" started.
+􀟈  Test "kind follows the extension" started.
+􀟈  Test "known extensions map to real MIME types" started.
+􀟈  Test "anchors include only rendered user bubbles in chronological order" started.
+􀟈  Test "ordering is numeric, not lexicographic" started.
+􀟈  Test "a filename containing the separator still parses on the first one" started.
+􀟈  Test "legacy and new sidecars interleave correctly" started.
+􀟈  Test "required window expands only for older targets" started.
+􀟈  Test "unknown extensions are labelled honestly, not guessed" started.
+􀟈  Test "position maps across all anchors and clamps at edges" started.
+􀟈  Test tableAtEndDoesNotCreateEmptyProseSection() started.
+􀟈  Test "legacy <index>.png sidecars from the previous build still replay" started.
+􀟈  Test "position returns nil without usable anchors or height" started.
+􀟈  Test inlineTripleBackticksAreNotAFence() started.
+􀟈  Test "unrelated prose in the tail does not suppress it" started.
+􀟈  Test "MIME types map back to extensions, parameters and all" started.
+􀟈  Test "only the tail is consulted, so old prose can't suppress a repeat question" started.
+􀟈  Test codeInsideNestedListCountsBothLevels() started.
+􀟈  Test fencedCodeIsIsolatedWithItsIndentationIntact() started.
+􀟈  Test multipleAndBoundaryTablesPreserveOrder() started.
+􀟈  Test fourSpaceIndentedFenceOutsideListIsNotAFence() started.
+􀟈  Test proseAndListStayInOneSelectableSection() started.
+􀟈  Test codeInsideListItemKeepsDepthAndListNumbering() started.
+􀟈  Test unclosedFenceRunsToTheEnd() started.
+􀟈  Test tableSyntaxInsideFencedCodeStaysCode() started.
+􀟈  Test longerClosingFenceClosesAndShorterDoesNot() started.
+􀟈  Test tableIsIsolatedBetweenSelectableProseSections() started.
+􀟈  Test fourSpaceIndentedTableSyntaxStaysSelectableProse() started.
+􀟈  Test "a very short context is never suppressed by coincidental containment" started.
+􀟈  Test delimiterLikeTextWithoutHeaderPipeIsNotATable() started.
+􀟈  Test "identity is stable across a re-scrape so the row updates, not duplicates" started.
+􀟈  Test "nothing to render without a question or without context" started.
+􀟈  Test "matches the real turn despite the scrape's rewrapping" started.
+􀟈  Test "stands down once the real turn lands, even while the prompt is still set" started.
+􀟈  Test "renders as an ordinary assistant text turn" started.
+􀟈  Test "a tool line carrying the same text does not count as the real turn" started.
+􀟈  Test case passing 1 argument rtt → 0.0001 to "A derived timeout is never shorter than the constant it replaces" started.
+􀟈  Test case passing 1 argument rtt → 0.001 to "A derived timeout is never shorter than the constant it replaces" started.
+􁁛  Test phoneSignInHistoryDistinguishesOutcomesAndDecodesMilliseconds() passed after 0.003 seconds.
+􀟈  Test case passing 1 argument rtt → 0.05 to "A derived timeout is never shorter than the constant it replaces" started.
+􀟈  Test case passing 1 argument rtt → 0.15 to "A derived timeout is never shorter than the constant it replaces" started.
+􀟈  Test case passing 1 argument rtt → 0.1 to "A derived timeout is never shorter than the constant it replaces" started.
+􀟈  Test case passing 1 argument rtt → 1.0 to "A derived timeout is never shorter than the constant it replaces" started.
+􀟈  Test case passing 1 argument rtt → 30.0 to "A derived timeout is never shorter than the constant it replaces" started.
+􀟈  Test "a clipped scrape still matches — the real turn is its superset" started.
+􀟈  Test case passing 1 argument rtt → 0.06 to "A derived timeout is never shorter than the constant it replaces" started.
+􀟈  Test case passing 1 argument rtt → 0.005 to "LAN RTT leaves every timeout at its LAN value" started.
+􀟈  Test case passing 1 argument rtt → 0.001 to "LAN RTT leaves every timeout at its LAN value" started.
+􀟈  Test case passing 1 argument rtt → 0.02 to "LAN RTT leaves every timeout at its LAN value" started.
+􀟈  Test case passing 1 argument rtt → 0.05 to "LAN RTT leaves every timeout at its LAN value" started.
+􁁛  Test phoneSignInFiltersExactDomainsAndPreservesCookieFlags() passed after 0.005 seconds.
+􁁛  Test phoneSignInDropsSameSiteNoneOnInsecureCookies() passed after 0.006 seconds.
+􁁛  Test "whitespace collapses to underscores so the path stays one token" passed after 0.006 seconds.
+􀟈  Test case passing 1 argument json → "{}" to "rejects incomplete, malformed, or non-HTTPS configurations" started.
+􁁛  Test "absurd lengths are truncated but keep the extension" passed after 0.006 seconds.
+􀟈  Test case passing 1 argument json → "{"hostURLs":[],"hostURL":"https://lfg.example.com","clientID":"id","clientSecret":"secret"}" to "rejects incomplete, malformed, or non-HTTPS configurations" started.
+􀟈  Test case passing 1 argument json → "{"hostURLs":["https://lfg.example.com","http://unsafe.example.com"],"clientID":"id","clientSecret":"secret"}" to "rejects incomplete, malformed, or non-HTTPS configurations" started.
+􀟈  Test case passing 1 argument json → "{"hostURL":"not a URL","clientID":"id","clientSecret":"secret"}" to "rejects incomplete, malformed, or non-HTTPS configurations" started.
+􀟈  Test case passing 1 argument json → "{"hostURL":"https://lfg.example.com","clientID":"","clientSecret":"secret"}" to "rejects incomplete, malformed, or non-HTTPS configurations" started.
+􀟈  Test case passing 1 argument json → "{"hostURL":"http://lfg.example.com","clientID":"id","clientSecret":"secret"}" to "rejects incomplete, malformed, or non-HTTPS configurations" started.
+􁁛  Test "a missing extension takes the fallback, never nothing" passed after 0.006 seconds.
+􁁛  Test "windows separators are separators too" passed after 0.006 seconds.
+􁁛  Test phoneSignInExtractsFoundationCookieAttributes() passed after 0.006 seconds.
+􁁛  Test "control characters and exotica are scrubbed" passed after 0.006 seconds.
+􁁛  Test closedSessionUsesHostWithFreshestKnownCopy() passed after 0.006 seconds.
+􀟈  Test case passing 1 argument json → "{"hostURL":"https://lfg.example.com/path","clientID":"id","clientSecret":"secret"}" to "rejects incomplete, malformed, or non-HTTPS configurations" started.
+􁁛  Test hostCatalogReplacesBundledModelsWithoutChangingSectionOrder() passed after 0.006 seconds.
+􁁛  Test modelsAreGroupedWithCurrentToolFirst() passed after 0.006 seconds.
+􁁛  Test "resolves the full precedence table" passed after 0.006 seconds.
+􁁛  Test "a blocked session is never reported as working" passed after 0.006 seconds.
+􁁛  Test "extension case is normalised" passed after 0.006 seconds.
+􁁛  Test "preserves the visible local command while trimming wrapper whitespace" passed after 0.006 seconds.
+􁁛  Test "uses a readable fallback for an empty notice" passed after 0.006 seconds.
+􁁛  Test "traversal cannot escape the upload directory" passed after 0.006 seconds.
+􁁛  Test "the table covers every input combination" passed after 0.006 seconds.
+􁁛  Test "Live is connected even while the fleet reconnects" passed after 0.006 seconds.
+􁁛  Test phoneSignInRequiresSecureURLs() passed after 0.007 seconds.
+􁁛  Test "typed text and attachments form one ordered message" passed after 0.006 seconds.
+􁁛  Test liveSessionNeverFallsBackToAnotherHostsSnapshot() passed after 0.006 seconds.
+􁁛  Test "empty and separator-only names still produce a usable name" passed after 0.006 seconds.
+􁁛  Test "attachment-only messages contain every uploaded path" passed after 0.006 seconds.
+􁁛  Test "prose mentioning a .csv OUTSIDE the upload dir is still not a card" passed after 0.007 seconds.
+􁁛  Test "a snapshot requested after the journal statement wins immediately" passed after 0.006 seconds.
+􁁛  Test "a plain markdown link survives in prose" passed after 0.006 seconds.
+􁁛  Test "empty text is safe" passed after 0.006 seconds.
+􁁛  Test "a non-media file the user attached still becomes a card" passed after 0.007 seconds.
+􁁛  Test "the TTL boundary yields, so equality can't latch" passed after 0.006 seconds.
+􁁛  Test "known media in the upload dir keeps its real kind" passed after 0.007 seconds.
+􁁛  Test "send readiness accepts text, attachments, or both, but not an empty draft" passed after 0.007 seconds.
+􁁛  Test "Sustained failures are reconnecting during the burst, then offline" passed after 0.007 seconds.
+􁁛  Test "Summary is readable and carries the grade and the number behind it" passed after 0.006 seconds.
+􁁛  Test "a missing upload fails instead of silently degrading the message" passed after 0.007 seconds.
+􁁛  Test "plain text passes through untouched" passed after 0.006 seconds.
+􁁛  Test "all four attachments of one send are claimed together, in order" passed after 0.007 seconds.
+􁁛  Test "inline image leaves prose but is still collected as media" passed after 0.006 seconds.
+􁁛  Test "Between LAN and relay the scaling is proportional, not stepped" passed after 0.006 seconds.
+􁁛  Test "an empty sequence has no initial selection" passed after 0.006 seconds.
+􁁛  Test "keeps an ordinary name untouched" passed after 0.007 seconds.
+􁁛  Test "display text strips refs and bare paths" passed after 0.007 seconds.
+􁁛  Test "inline preview uses the full session sequence when it contains the selection" passed after 0.006 seconds.
+􁁛  Test "active network paging takes precedence over buffered-row reveal" passed after 0.006 seconds.
+􁁛  Test "A sustained change does move it — the window is not a lock" passed after 0.006 seconds.
+􁁛  Test "network paging shows an honest loading row even before older rows are buffered" passed after 0.006 seconds.
+􁁛  Test "inline preview falls back to its row when the session index is unavailable or stale" passed after 0.006 seconds.
+􁁛  Test "A punched cellular path (tens of ms) is still 'direct' and still unscaled" passed after 0.006 seconds.
+􁁛  Test crossProviderSwitchStatusNamesTheDestinationProvider() passed after 0.007 seconds.
+􁁛  Test "a backwards clock reads as fresh, not as an enormous age" passed after 0.006 seconds.
+􁁛  Test "completed history with no buffered earlier rows hides the top row" passed after 0.006 seconds.
+􁁛  Test "preserves Files list order and opens on the tapped file" passed after 0.006 seconds.
+􁁛  Test "Even-sized windows take the midpoint of the two middle samples" passed after 0.006 seconds.
+􁁛  Test "a session the journal has never spoken for takes the snapshot" passed after 0.006 seconds.
+􁁛  Test "the default TTL comfortably exceeds the pump's sweep interval" passed after 0.006 seconds.
+􁁛  Test "No samples: scale is exactly 1 and every derived timeout is the constant" passed after 0.006 seconds.
+􁁛  Test "text-only messages are unchanged apart from surrounding whitespace" passed after 0.007 seconds.
+􁁛  Test "equal request and journal timestamps let the level snapshot win" passed after 0.007 seconds.
+􁁛  Test "just inside the TTL still holds the veto" passed after 0.006 seconds.
+􁁛  Test "buffered earlier rows keep the progressive reveal affordance" passed after 0.006 seconds.
+􁁛  Test "The caps are hard — a catastrophic RTT cannot widen a timeout further" passed after 0.006 seconds.
+􁁛  Test "a journal statement received during the request out-votes that snapshot" passed after 0.006 seconds.
+􁁛  Test "a journal value past the TTL yields to the snapshot" passed after 0.006 seconds.
+􁁛  Test "One stalled ping among four good ones does not move the estimate" passed after 0.006 seconds.
+􁁛  Test "derives the type from a remote URL path rather than its query" passed after 0.006 seconds.
+􁁛  Test emptyInputYieldsNoBlocks() passed after 0.006 seconds.
+􁁛  Test "Relay RTT (150ms) hits every cap" passed after 0.006 seconds.
+􁁛  Test "falls back to the first file when selection is absent" passed after 0.006 seconds.
+􁁛  Test sessionRowsCarryEffortAndOlderHostsDecode() passed after 0.006 seconds.
+􁁛  Test claudeAliasesResolveToTheirCatalogFamily() passed after 0.006 seconds.
+􁁛  Test "a fresh journal value out-votes the snapshot" passed after 0.007 seconds.
+􁁛  Test modelsWithoutEffortControlOfferNothing() passed after 0.006 seconds.
+􁁛  Test "keeps the source extension when a friendly label omits it" passed after 0.006 seconds.
+􁁛  Test "uses a safe source filename when there is no label" passed after 0.006 seconds.
+􁁛  Test "collects files from markdown images, links and bare paths" passed after 0.006 seconds.
+􁁛  Test "newest first, and a repeat keeps its first label" passed after 0.006 seconds.
+􁁛  Test plainTextIsOneParagraph() passed after 0.006 seconds.
+􁁛  Test labelsMatchTheCLIPickers() passed after 0.006 seconds.
+􁁛  Test "links sort newest first too" passed after 0.006 seconds.
+􁁛  Test thematicBreakBecomesRule() passed after 0.006 seconds.
+􁁛  Test blockquoteIsMarked() passed after 0.006 seconds.
+􁁛  Test "Unproven and transient states are reconnecting" passed after 0.007 seconds.
+􁁛  Test "a custom TTL is honoured" passed after 0.006 seconds.
+􁁛  Test "A derived timeout is never shorter than the constant it replaces" with 8 test cases passed after 0.006 seconds.
+􁁛  Test linksSurviveAsSpans() passed after 0.007 seconds.
+􁁛  Test unparseableInputFallsBackToRawParagraph() passed after 0.006 seconds.
+􁁛  Test "does not duplicate an extension already present in the label" passed after 0.006 seconds.
+􁁛  Test codexModelsOfferTheirOwnLevels() passed after 0.006 seconds.
+􁁛  Test raggedTableRowsArePaddedToHeaderWidth() passed after 0.006 seconds.
+􁁛  Test continuationParagraphInListItemHasNoMarker() passed after 0.006 seconds.
+􁁛  Test codeBlockKeepsContentVerbatim() passed after 0.007 seconds.
+􁁛  Test headingsCarryLevel() passed after 0.006 seconds.
+􁁛  Test "The window is bounded and keeps the most recent samples" passed after 0.006 seconds.
+􁁛  Test paragraphsAndListItemsFormOneCopyableDocument() passed after 0.006 seconds.
+􁁛  Test unknownModelsAndOldHostsFallBackToTheCLIsUsualLevels() passed after 0.006 seconds.
+􁁛  Test "user uploads are collected too" passed after 0.006 seconds.
+􁁛  Test "an undated turn sorts with the nearest newer turn" passed after 0.006 seconds.
+􁁛  Test plainTextRenderingJoinsTableCellsWithTabs() passed after 0.006 seconds.
+􁁛  Test softAndHardLineBreaksInsideParagraph() passed after 0.007 seconds.
+􁁛  Test "tool calls and results are ignored" passed after 0.006 seconds.
+􁁛  Test "a malformed prompt does not fail the whole session decode" passed after 0.006 seconds.
+􁁛  Test "decodes a parked question, including the pane-scraped context" passed after 0.006 seconds.
+􁁛  Test "an entirely empty message is rejected" passed after 0.007 seconds.
+􁁛  Test "uses a readable fallback for malformed payloads" passed after 0.006 seconds.
+􁁛  Test "an explicit content type wins over the inferred one" passed after 0.006 seconds.
+􁁛  Test "empty transcript yields nothing" passed after 0.006 seconds.
+􁁛  Test "parses citation notes, locations, and prior-session count" passed after 0.006 seconds.
+􁁛  Test "a session with no question decodes to nil, not a failure" passed after 0.006 seconds.
+􁁛  Test "ordering is by timestamp, not the array's order" passed after 0.006 seconds.
+􁁛  Test "working duration starts at the session start, across later messages" passed after 0.006 seconds.
+􁁛  Test "Nonsense samples are ignored rather than poisoning the estimate" passed after 0.006 seconds.
+􁁛  Test "baseline yields to a fresh journal statement, wins when there is none" passed after 0.006 seconds.
+􁁛  Test "files within one turn keep the order the agent wrote them" passed after 0.006 seconds.
+􁁛  Test "prose that merely mentions a parenthesised phrase is not a file" passed after 0.006 seconds.
+􁁛  Test "LAN RTT leaves every timeout at its LAN value" with 4 test cases passed after 0.007 seconds.
+􁁛  Test "a markdown link whose path has spaces is found whole" passed after 0.006 seconds.
+􁁛  Test "round-trips through Codable for the outbox" passed after 0.006 seconds.
+􁁛  Test "compaction is a visible static thinking-style label" passed after 0.006 seconds.
+􁁛  Test "a markdown image whose path has spaces is found whole" passed after 0.006 seconds.
+􁁛  Test tableBecomesHeaderAndRows() passed after 0.007 seconds.
+􁁛  Test "nonworking rows use the last activity" passed after 0.006 seconds.
+􁁛  Test "a link title is not part of the path" passed after 0.006 seconds.
+􁁛  Test "the tail after a space is not also offered as a relative path" passed after 0.006 seconds.
+􁁛  Test "host strips www and is nil for a non-URL" passed after 0.006 seconds.
+􁁛  Test "trailing sentence punctuation is not part of the URL" passed after 0.006 seconds.
+􁁛  Test "path-like and empty names cannot escape the export directory" passed after 0.006 seconds.
+􁁛  Test "CommonMark's angle form is accepted and unwrapped" passed after 0.006 seconds.
+􁁛  Test inlineStylesAreCarriedOnSpans() passed after 0.007 seconds.
+􁁛  Test "a spaced destination that is not a path is not a file" passed after 0.006 seconds.
+􁁛  Test "bare and markdown links are both found, labels preserved" passed after 0.006 seconds.
+􁁛  Test "missing start cannot turn message age into running duration" passed after 0.006 seconds.
+􁁛  Test "raw filename infers a sanitized name, type and kind together" passed after 0.006 seconds.
+􁁛  Test "display name prefers the label, then the distinguishing path segment" passed after 0.006 seconds.
+􁁛  Test "a session with no known owner is left alone rather than guessed at" passed after 0.006 seconds.
+􁁛  Test "duplicates collapse across the transcript" passed after 0.006 seconds.
+􁁛  Test malformedAndFencedDirectivesRemainVisible() passed after 0.006 seconds.
+􁁛  Test "image markdown with spaces is stripped from prose once it is a card" passed after 0.006 seconds.
+􁁛  Test "everything reachable retracts nothing" passed after 0.006 seconds.
+􁁛  Test "a URL that is a file is not also a link" passed after 0.006 seconds.
+􁁛  Test "decodes and canonicalizes an ordered multi-host HTTPS configuration" passed after 0.006 seconds.
+􁁛  Test "adds all bundled hosts only when they are not already configured" passed after 0.006 seconds.
+􁁛  Test draftAdditionPreservesExistingText() passed after 0.006 seconds.
+􁁛  Test doesNotAlterUserTextWhenExtractionDisabled() passed after 0.006 seconds.
+􁁛  Test "preserves an existing default when adding the bundled host" passed after 0.006 seconds.
+􁁛  Test extractsMixedBulletStylesInOrder() passed after 0.006 seconds.
+􁁛  Test "sidecar names round-trip index and filename" passed after 0.006 seconds.
+􁁛  Test "a down host's sessions are all retractable, the healthy host's are not" passed after 0.006 seconds.
+􁁛  Test "a blipping host inside its grace window retracts nothing" passed after 0.006 seconds.
+􁁛  Test "accepts the legacy single-host payload" passed after 0.006 seconds.
+􁁛  Test "ordinary reasoning keeps the existing expandable Thinking presentation" passed after 0.006 seconds.
+􁁛  Test nestedListsCarryDepthAndMarkers() passed after 0.006 seconds.
+􁁛  Test "junk in the sidecar directory is dropped, not replayed at random" passed after 0.006 seconds.
+􁁛  Test "a whole fleet down retracts everything — no session can still be Working" passed after 0.006 seconds.
+􁁛  Test "kind follows the extension" passed after 0.006 seconds.
+􁁛  Test decodesEscapedPrompt() passed after 0.006 seconds.
+􁁛  Test "rejects incomplete, malformed, or non-HTTPS configurations" with 7 test cases passed after 0.006 seconds.
+􁁛  Test "required window expands only for older targets" passed after 0.005 seconds.
+􁁛  Test "legacy and new sidecars interleave correctly" passed after 0.005 seconds.
+􁁛  Test "unknown extensions are labelled honestly, not guessed" passed after 0.006 seconds.
+􁁛  Test "known extensions map to real MIME types" passed after 0.006 seconds.
+􁁛  Test "MIME types map back to extensions, parameters and all" passed after 0.005 seconds.
+􁁛  Test "legacy <index>.png sidecars from the previous build still replay" passed after 0.006 seconds.
+􁁛  Test tableAtEndDoesNotCreateEmptyProseSection() passed after 0.005 seconds.
+􁁛  Test "position maps across all anchors and clamps at edges" passed after 0.005 seconds.
+􁁛  Test "anchors include only rendered user bubbles in chronological order" passed after 0.006 seconds.
+􁁛  Test fourSpaceIndentedFenceOutsideListIsNotAFence() passed after 0.005 seconds.
+􁁛  Test "cleanup removes the whole isolated export" passed after 0.007 seconds.
+􁁛  Test "ordering is numeric, not lexicographic" passed after 0.006 seconds.
+􁁛  Test "unrelated prose in the tail does not suppress it" passed after 0.005 seconds.
+􁁛  Test inlineTripleBackticksAreNotAFence() passed after 0.005 seconds.
+􁁛  Test "a filename containing the separator still parses on the first one" passed after 0.006 seconds.
+􁁛  Test "copies the downloaded bytes under the intended filename" passed after 0.007 seconds.
+􁁛  Test codeInsideNestedListCountsBothLevels() passed after 0.005 seconds.
+􁁛  Test "position returns nil without usable anchors or height" passed after 0.006 seconds.
+􁁛  Test proseAndListStayInOneSelectableSection() passed after 0.005 seconds.
+􁁛  Test codeInsideListItemKeepsDepthAndListNumbering() passed after 0.005 seconds.
+􁁛  Test fencedCodeIsIsolatedWithItsIndentationIntact() passed after 0.005 seconds.
+􁁛  Test tableSyntaxInsideFencedCodeStaysCode() passed after 0.005 seconds.
+􁁛  Test "only the tail is consulted, so old prose can't suppress a repeat question" passed after 0.005 seconds.
+􁁛  Test multipleAndBoundaryTablesPreserveOrder() passed after 0.005 seconds.
+􁁛  Test longerClosingFenceClosesAndShorterDoesNot() passed after 0.005 seconds.
+􁁛  Test "repeated exports are isolated even when the filename is identical" passed after 0.007 seconds.
+􁁛  Test delimiterLikeTextWithoutHeaderPipeIsNotATable() passed after 0.005 seconds.
+􁁛  Test fourSpaceIndentedTableSyntaxStaysSelectableProse() passed after 0.005 seconds.
+􁁛  Test "nothing to render without a question or without context" passed after 0.005 seconds.
+􁁛  Test unclosedFenceRunsToTheEnd() passed after 0.005 seconds.
+􁁛  Test agentSignInDoneSendsAllDomainsWithoutClientRetargeting() passed after 0.008 seconds.
+􁁛  Test tableIsIsolatedBetweenSelectableProseSections() passed after 0.005 seconds.
+􁁛  Test phoneSignInRequestUsesOwningHostCredentialsAndRejectsPlaintext() passed after 0.008 seconds.
+􁁛  Test "a very short context is never suppressed by coincidental containment" passed after 0.005 seconds.
+􁁛  Test "stands down once the real turn lands, even while the prompt is still set" passed after 0.005 seconds.
+􁁛  Test "renders as an ordinary assistant text turn" passed after 0.005 seconds.
+􁁛  Test "a clipped scrape still matches — the real turn is its superset" passed after 0.005 seconds.
+􁁛  Test "identity is stable across a re-scrape so the row updates, not duplicates" passed after 0.005 seconds.
+􁁛  Test "matches the real turn despite the scrape's rewrapping" passed after 0.005 seconds.
+􁁛  Test "a tool line carrying the same text does not count as the real turn" passed after 0.004 seconds.
+􁁛  Suite "Host connection presentation" passed after 0.009 seconds.
+􁁛  Suite "Transcript system notice presentation" passed after 0.009 seconds.
+􁁛  Suite "Attachment filename sanitizing" passed after 0.009 seconds.
+􁁛  Suite "SessionDisplayState" passed after 0.009 seconds.
+􁁛  Suite "Transcript row text" passed after 0.009 seconds.
+􁁛  Suite "Session handoff routing" passed after 0.009 seconds.
+􁁛  Suite "Uploaded attachments render as cards" passed after 0.009 seconds.
+􁁛  Suite "Outgoing attachment message assembly" passed after 0.009 seconds.
+􁁛  Suite "File preview sequence" passed after 0.009 seconds.
+􁁛  Suite "Transcript history top-row presentation" passed after 0.009 seconds.
+􁁛  Suite "File share names" passed after 0.009 seconds.
+􁁛  Suite "Session effort" passed after 0.009 seconds.
+􁁛  Suite "Session list time" passed after 0.009 seconds.
+􁁛  Suite "Session prompt baseline" passed after 0.009 seconds.
+􁁛  Suite "Attachment metadata" passed after 0.009 seconds.
+􁁛  Suite "Transcript memory citation presentation" passed after 0.009 seconds.
+􁁛  Suite "Transcript resource index" passed after 0.009 seconds.
+􁁛  Suite "Transcript thinking presentation" passed after 0.009 seconds.
+􁁛  Suite "Paths containing spaces" passed after 0.009 seconds.
+􁁛  Suite "Offline outbox sidecar naming" passed after 0.009 seconds.
+􁁛  Suite "PathQuality" passed after 0.009 seconds.
+􁁛  Suite "File share export" passed after 0.009 seconds.
+􁁛  Suite "User message scrubber" passed after 0.009 seconds.
+􁁛  Suite "Attachment content types" passed after 0.009 seconds.
+􁁛  Suite "Web links" passed after 0.009 seconds.
+􁁛  Suite "SelectableText" passed after 0.009 seconds.
+􁁛  Suite "Offline host live claims" passed after 0.009 seconds.
+􁁛  Test testRepeatedMovesKeepEveryOpenNavigationAliasOnLatestSession() passed after 0.007 seconds.
+􁁛  Suite "Prompt preamble" passed after 0.009 seconds.
+􁁛  Suite "JournalFreshness" passed after 0.009 seconds.
+􁁛  Suite FollowupDirectivesTests passed after 0.009 seconds.
+􁁛  Suite "Bundled Cloudflare Access" passed after 0.009 seconds.
+􁁛  Suite SelectableMarkdownSectionsTests passed after 0.009 seconds.
+􀟈  Test testMovingBackToEarlierIDDoesNotCreateRedirectCycle() started.
+􁁛  Test testMovingBackToEarlierIDDoesNotCreateRedirectCycle() passed after 0.001 seconds.
+􀟈  Test testRefreshStartedBeforeMoveCannotOverwriteNewOwnership() started.
+􁁛  Test testRefreshStartedBeforeMoveCannotOverwriteNewOwnership() passed after 0.001 seconds.
+􀟈  Test testRecoveredSourceCannotReclaimRoutingWhileCleanupIsPending() started.
+􁁛  Test testRecoveredSourceCannotReclaimRoutingWhileCleanupIsPending() passed after 0.001 seconds.
+􀟈  Test testMovingBackCancelsOnlyDestinationsDeferredCleanup() started.
+􁁛  Test testMovingBackCancelsOnlyDestinationsDeferredCleanup() passed after 0.001 seconds.
+􀟈  Test testPreflightStillProtectsMissingDirectoryAndStaleHistory() started.
+􁁛  Test testPreflightStillProtectsMissingDirectoryAndStaleHistory() passed after 0.001 seconds.
+􀟈  Test testCompletedMoveRemovesOfflineSourceAndPreservesLiveTarget() started.
+􁁛  Test testCompletedMoveRemovesOfflineSourceAndPreservesLiveTarget() passed after 0.001 seconds.
+􀟈  Test testNewTargetSnapshotUsesReturnedIdAndClearsSourceLiveClaims() started.
+􁁛  Test testNewTargetSnapshotUsesReturnedIdAndClearsSourceLiveClaims() passed after 0.001 seconds.
+􀟈  Test testReachableAirWinsOverOfflineProSnapshotWithoutReorderingRows() started.
+􁁛  Test testReachableAirWinsOverOfflineProSnapshotWithoutReorderingRows() passed after 0.001 seconds.
+􀟈  Test testReconciliationKeepsIdStableTransferLiveOnAir() started.
+􁁛  Test "yields the newest bounded page before requesting older cursors" passed after 0.008 seconds.
+􁁛  Test testReconciliationKeepsIdStableTransferLiveOnAir() passed after 0.001 seconds.
+􀟈  Test "stops after a server repeats its backward cursor" started.
+􀟈  Test testOfflineSourceResumesOnAirWithoutContactingPro() started.
+􁁛  Test testOfflineSourceResumesOnAirWithoutContactingPro() passed after 0.001 seconds.
+􀟈  Test testAlreadyLiveOnAirCompletesOfflineMoveWithoutRetrying() started.
+􁁛  Test "stops after a server repeats its backward cursor" passed after 0.001 seconds.
+􀟈  Test "clamps the load to 5000 messages and shrinks the final request" started.
+􁁛  Test testAlreadyLiveOnAirCompletesOfflineMoveWithoutRetrying() passed after 0.001 seconds.
+􀟈  Test testRetryAfterLostResumeResponseReusesAirSession() started.
+􁁛  Test testRetryAfterLostResumeResponseReusesAirSession() passed after 0.001 seconds.
+􀟈  Test testOnlineSourceClosesBeforeUnforcedResume() started.
+􁁛  Test testOnlineSourceClosesBeforeUnforcedResume() passed after 0.001 seconds.
+􀟈  Test testOnlineMoveAlsoAcceptsAlreadyLiveDestination() started.
+􁁛  Test testOnlineMoveAlsoAcceptsAlreadyLiveDestination() passed after 0.001 seconds.
+􀟈  Test testSourceTransportFailureFallsBackToForcedResume() started.
+􁁛  Test testSourceTransportFailureFallsBackToForcedResume() passed after 0.001 seconds.
+􀟈  Test testSourceHTTPRefusalAbortsWithoutTouchingAir() started.
+􁁛  Test testSourceHTTPRefusalAbortsWithoutTouchingAir() passed after 0.001 seconds.
+􀟈  Test testTargetLeaseRefusalDoesNotCompleteMove() started.
+􁁛  Test testTargetLeaseRefusalDoesNotCompleteMove() passed after 0.001 seconds.
+􁁛  Suite SessionTransferFlowTests passed after 0.015 seconds.
+􁁛  Test "clamps the load to 5000 messages and shrinks the final request" passed after 0.020 seconds.
+􀟈  Test "authenticates every history page through Cloudflare Access" started.
+􁁛  Test "authenticates every history page through Cloudflare Access" passed after 0.001 seconds.
+􀟈  Test "retries a transient older page at the same cursor instead of restarting at newest" started.
+􁁛  Test "retries a transient older page at the same cursor instead of restarting at newest" passed after 0.001 seconds.
+􀟈  Test "requests a small first page, then full-size pages through the same cursor" started.
+􁁛  Test "requests a small first page, then full-size pages through the same cursor" passed after 0.001 seconds.
+􀟈  Test "a retry of the first page keeps the small budget" started.
+􁁛  Test "a retry of the first page keeps the small budget" passed after 0.001 seconds.
+􀟈  Test "opting out of the small first page restores one uniform budget" started.
+􁁛  Test "opting out of the small first page restores one uniform budget" passed after 0.001 seconds.
+􁁛  Suite "Cloudflare-safe transcript history paging" passed after 0.035 seconds.
+􁁛  Test run with 223 tests in 34 suites passed after 0.035 seconds.

@@ -621,10 +621,25 @@ enum DesktopNewSessionPlanner {
         guard let models = modelsByAgent[agent], let fallback = models.first else {
             return (defaultAgent, defaultModel)
         }
-        guard let model = nonempty(item.session.model), models.contains(model) else {
+        // Keep any id the server accepts, not just this build's list. The row
+        // ran on that host, so its model exists there; checking the hardcoded
+        // list swapped every newer model (gpt-6.1-sol) for the agent default.
+        guard let model = nonempty(item.session.model), isSafeModelID(model) else {
             return (agent, fallback)
         }
         return (agent, model)
+    }
+
+    /// Mirrors the server's `isSafeModelId` (`^[A-Za-z0-9_.:-]{1,80}$`), the
+    /// only check `POST /api/sessions/new` applies to a model.
+    private static func isSafeModelID(_ model: String) -> Bool {
+        guard model.utf8.count <= 80 else { return false }
+        return model.unicodeScalars.allSatisfy { scalar in
+            switch scalar.value {
+            case 48...57, 65...90, 97...122, 45, 46, 58, 95: return true
+            default: return false
+            }
+        }
     }
 
     private static func normalizedPath(_ raw: String?) -> String? {
@@ -2949,6 +2964,25 @@ enum DesktopFeatureTestCLI {
             defaultHostURL: "http://default:8766", inbox: "/inbox"
         )?.model == "gpt-5.6-terra",
                    "newest readable directory model wins over newer metadata without a model")
+
+        let newerThanBundle = newSessionTestItem(
+            id: "sleeping-beauty", title: "room game", project: "SleepingBeauty",
+            cwd: "/Users/me/dev/SleepingBeauty", lastActivity: 50,
+            agent: "codex", model: "gpt-6.1-sol", hostURL: "http://pro:8766")
+        try expect(DesktopNewSessionPlanner.plan(
+            query: "SleepingBeauty", items: [newerThanBundle],
+            defaultHostURL: "http://default:8766", inbox: "/inbox"
+        )?.model == "gpt-6.1-sol",
+                   "a model newer than the bundled list is kept, not swapped for the default")
+
+        let unsafeModel = newSessionTestItem(
+            id: "unsafe-model", title: "unsafe", project: "unsafe",
+            cwd: "/Users/me/dev/unsafe", lastActivity: 50,
+            agent: "codex", model: "gpt; rm -rf /", hostURL: "http://pro:8766")
+        try expect(DesktopNewSessionPlanner.plan(
+            query: "unsafe", items: [unsafeModel],
+            defaultHostURL: "http://default:8766", inbox: "/inbox"
+        )?.model == "gpt-6-astra", "an unsafe model id falls back to the agent default")
 
         try expect(DesktopNewSessionPlanner.plan(
             query: "missing", items: [exactDirectory],
