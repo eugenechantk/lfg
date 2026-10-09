@@ -21,7 +21,7 @@ previous sessions. Plus starts a conversation with Claude Code.
 
 Use focused API tests for bounded, ordered run summaries and Swift tests for
 decoding and host-qualified task identity. Build both native apps. Record native
-navigation and obtain an independent visual audit. Reuse isolated preview hosts;
+navigation and obtain an independent visual audit. Reuse isolated preview hosts.
 Deployment was outside the original verification scope. The later authorized
 release and desktop revision are recorded below.
 
