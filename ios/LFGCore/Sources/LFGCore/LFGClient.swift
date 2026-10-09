@@ -396,6 +396,33 @@ public struct LFGClient: Sendable {
 
     // MARK: Reads
 
+    public func iPhonePreviewDevices() async throws -> [IPhonePreviewDevice] {
+        struct Devices: Decodable { let devices: [IPhonePreviewDevice] }
+        return try await get("api/iphone-preview/devices", timeout: 8, as: Devices.self).devices
+    }
+
+    public func setIPhonePreview(_ device: String, enabled: Bool) async throws {
+        guard device.range(of: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$", options: .regularExpression) != nil else {
+            throw LFGError.decoding("Invalid iPhone profile")
+        }
+        try await send("POST", "api/iphone-preview/\(device)/enabled", json: ["enabled": enabled], timeout: 45)
+    }
+
+    public func iPhonePreviewFrame(_ device: String) async throws -> Data? {
+        guard device.range(of: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$", options: .regularExpression) != nil else {
+            throw LFGError.decoding("Invalid iPhone profile")
+        }
+        var request = URLRequest(url: url("api/iphone-preview/\(device)/frame"),
+                                 cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 8)
+        request.setValue("image/jpeg", forHTTPHeaderField: "Accept")
+        let data = try await performRaw(request)
+        guard !data.isEmpty else { return nil }
+        guard data.count <= 8 * 1024 * 1024, data.starts(with: [0xff, 0xd8]), data.suffix(2) == Data([0xff, 0xd9]) else {
+            throw LFGError.decoding("Invalid iPhone preview frame")
+        }
+        return data
+    }
+
     public func sessions(timeout: TimeInterval = LFGClient.readTimeout) async throws -> [Session] {
         try await get("api/sessions", timeout: timeout, as: SessionsResponse.self).sessions
     }
@@ -1177,6 +1204,8 @@ public struct MessageHistoryPages: AsyncSequence, Sendable {
 }
 
 /// Never replay a credential-bearing POST or host access headers to a redirect destination.
+extension LFGClient: IPhonePreviewTransport {}
+
 private final class PhoneSignInRedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {

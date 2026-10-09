@@ -93,6 +93,7 @@ import {
 import { addManaged, forkLineageForSession, normalizeParentSessionId, patchManaged, removeManaged } from "../managed.ts";
 import { PtyBridge, restoreTermWindowAutoSize, termSessionName } from "../pty.ts";
 import { accessConfigFromEnv, authorizeTunnelledRequest, cachedJwks } from "../access-jwt.ts";
+import { iphonePreviewRoutes } from "../iphone-preview.ts";
 import { forkCodexThreadViaAppServer } from "../codex-app-server.ts";
 import { TermScroll } from "../term-scroll.ts";
 import { capturePaneScroll, capturePaneEscaped, paneWidth, ensureFolderTrusted } from "../tmux.ts";
@@ -1217,6 +1218,7 @@ const termScrolls = new WeakMap<object, TermScroll>();
 // on the edge policy being right (see src/access-jwt.ts). Read once at startup.
 const termAccess = accessConfigFromEnv();
 const termAccessKeys = cachedJwks();
+const iphonePreviewHTTP = iphonePreviewRoutes();
 
 // Parse a terminal dimension from a query param, clamped to a sane range so a
 // bogus value can't allocate an absurd pty winsize.
@@ -1393,6 +1395,8 @@ export async function cmdServe(options: {
   ): Promise<Response | undefined> {
       const url = new URL(req.url);
       const path = url.pathname;
+
+      if (path.startsWith("/api/iphone-preview/")) return iphonePreviewHTTP(req);
 
       if (path === "/api/browser-sign-in/adapter") {
         if (req.method !== "GET" || !allowsSignInAdapter(req)) return err(403, "Local browser adapter required");

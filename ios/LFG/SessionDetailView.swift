@@ -11,7 +11,7 @@ struct SessionDetailView: View {
         case phoneSignIn(requestID: String?)
         case requestedSignIn(requestID: String)
         case childSessions(selectedID: String?)
-        case inversionSpike
+        case iPhonePreview
 
         var id: String {
             switch self {
@@ -20,7 +20,7 @@ struct SessionDetailView: View {
             case .attachments: "attachments"
             case .filePreview(let selected, _): "file-preview-\(selected.id)"
             case .childSessions(let selectedID): "child-sessions-\(selectedID ?? "all")"
-            case .inversionSpike: "inversion-spike"
+            case .iPhonePreview: "iphone-preview"
             }
         }
     }
@@ -362,8 +362,9 @@ struct SessionDetailView: View {
                     ),
                     hostFiles: resolvedHostFiles
                 )
-            case .inversionSpike:
-                InvertedTranscriptSpike(sessionID: sid)
+            case .iPhonePreview:
+                IPhonePreviewSheet(sessionID: sid)
+                    .presentationDetents([.large])
             case .childSessions(let selectedID):
                 ChildAgentSessionsSheet(parentSessionID: sid, initialChildID: selectedID)
                     .presentationDetents([.medium, .large])
@@ -1062,7 +1063,7 @@ struct SessionDetailView: View {
                 onShowAttachments: { presentedSheet = .attachments },
                 onOpenTerminal: { showTerminal = true },
                 onShowPhoneSignIn: { requestID in presentedSheet = .phoneSignIn(requestID: requestID) },
-                onShowInversionSpike: { presentedSheet = .inversionSpike },
+                onShowIPhonePreview: { presentedSheet = .iPhonePreview },
                 onShowChildSessions: { selectedID in
                     presentedSheet = .childSessions(selectedID: selectedID)
                 },
@@ -1443,7 +1444,7 @@ private struct SessionOptionsMenu: View {
     let onShowAttachments: () -> Void
     let onOpenTerminal: () -> Void
     let onShowPhoneSignIn: (String?) -> Void
-    let onShowInversionSpike: () -> Void
+    let onShowIPhonePreview: () -> Void
     let onShowChildSessions: (String?) -> Void
     let onRename: () -> Void
     let onRestoreBrowserPreview: () -> Void
@@ -1493,13 +1494,29 @@ private struct SessionOptionsMenu: View {
     }
 
     private var menuElements: [UIMenuElement] {
-        var primary: [UIMenuElement] = []
+        var lifecycle: [UIMenuElement] = []
+        var sessionOptions: [UIMenuElement] = []
+        var tools: [UIMenuElement] = []
 
         if isBusy && !externallyOwned {
-            primary.append(action("Stop", systemImage: "stop.circle", attributes: .destructive) {
+            lifecycle.append(action("Stop", systemImage: "stop.circle", attributes: .destructive) {
                 Task { await store.interrupt(sid) }
             })
         }
+
+
+        if !externallyOwned {
+            tools.append(action(
+                signInRequests.isEmpty ? "Sign in on iPhone" : "Sign in on iPhone (\(signInRequests.count))",
+                systemImage: "key"
+            ) { onShowPhoneSignIn(nil) })
+        }
+        tools.append(action("Files & Links", systemImage: "paperclip", handler: onShowAttachments))
+        if !externallyOwned {
+            tools.append(action("Open Terminal", systemImage: "apple.terminal", handler: onOpenTerminal))
+        }
+        tools.append(action("iPhone Preview", systemImage: "iphone",
+                            identifier: "session_iphone_preview", handler: onShowIPhonePreview))
 
         if !childAgents.isEmpty {
             let childActions: [UIMenuElement] = [
@@ -1514,26 +1531,12 @@ private struct SessionOptionsMenu: View {
                     onShowChildSessions(child.id)
                 }
             }
-            primary.append(UIMenu(
+            tools.append(UIMenu(
                 title: "Child sessions (\(childAgents.count))",
                 image: UIImage(systemName: "person.2"),
                 children: childActions
             ))
         }
-
-        if !externallyOwned {
-            primary.append(action(
-                signInRequests.isEmpty ? "Sign in on iPhone" : "Sign in on iPhone (\(signInRequests.count))",
-                systemImage: "key"
-            ) { onShowPhoneSignIn(nil) })
-        }
-        primary.append(action("Files & Links", systemImage: "paperclip", handler: onShowAttachments))
-        if !externallyOwned {
-            primary.append(action("Open Terminal", systemImage: "apple.terminal", handler: onOpenTerminal))
-        }
-        // PHASE-2 SPIKE entry — remove with the spike.
-        primary.append(action("Spike: inverted transcript", systemImage: "arrow.up.arrow.down",
-                              handler: onShowInversionSpike))
 
         let switching = store.switchingModelSessionIds.contains(sid)
         let models = SessionHandoff.modelSections(
@@ -1556,33 +1559,21 @@ private struct SessionOptionsMenu: View {
                 })
         }
         if !externallyOwned {
-            primary.append(UIMenu(
-                title: switching ? "Switching model…" : "Switch model",
+            sessionOptions.append(UIMenu(
+                title: switching ? "Switching model…" : "Model",
                 image: UIImage(systemName: "cpu"),
                 children: models
             ))
         }
         if let effort = effortMenu(modelSwitching: switching) {
-            primary.append(effort)
+            sessionOptions.append(effort)
         }
 
-        var assignees: [UIMenuElement] = [
-            action("Unassigned") { Task { await store.assign(sid, nil) } }
-        ]
-        assignees.append(contentsOf: store.users.map { user in
-            action(user) { Task { await store.assign(sid, user) } }
-        })
-        primary.append(UIMenu(
-            title: "Assign to",
-            image: UIImage(systemName: "person"),
-            children: assignees
-        ))
-
-        primary.append(action("Rename", systemImage: "pencil", handler: onRename))
+        sessionOptions.append(action("Rename", systemImage: "pencil", handler: onRename))
 
         if let frame = store.browserFrames[sid],
            frame.frameId == dismissedBrowserFrameID {
-            primary.append(action(
+            tools.append(action(
                 "Show Browser Preview",
                 systemImage: "safari",
                 handler: onRestoreBrowserPreview
@@ -1590,7 +1581,7 @@ private struct SessionOptionsMenu: View {
         }
 
         if canFork {
-            primary.append(action(
+            sessionOptions.append(action(
                 forking ? "Continuing…" : (externallyOwned ? "Continue in LFG" : "Fork session"),
                 systemImage: "arrow.triangle.branch",
                 attributes: forking ? .disabled : []
@@ -1609,8 +1600,8 @@ private struct SessionOptionsMenu: View {
                     Task { await transfer(to: target) }
                 }
             }
-            primary.append(UIMenu(
-                title: transferring ? "Moving…" : "Move to host",
+            sessionOptions.append(UIMenu(
+                title: transferring ? "Moving…" : "Host",
                 image: UIImage(systemName: "arrow.left.arrow.right"),
                 children: targets
             ))
@@ -1618,11 +1609,11 @@ private struct SessionOptionsMenu: View {
 
         if ManualUnread.canMarkUnread(sid) {
             if store.isManuallyUnread(sid) {
-                primary.append(action("Mark as read", systemImage: "envelope.open") {
+                lifecycle.append(action("Mark as read", systemImage: "envelope.open") {
                     store.markRead(sid)
                 })
             } else {
-                primary.append(action("Mark as unread", systemImage: "envelope.badge") {
+                lifecycle.append(action("Mark as unread", systemImage: "envelope.badge") {
                     markUnreadAndExit()
                 })
             }
@@ -1641,15 +1632,15 @@ private struct SessionOptionsMenu: View {
         }
 
         var sections: [UIMenuElement] = [
-            UIMenu(options: .displayInline, children: primary),
+            UIMenu(title: "Session options", options: .displayInline, children: sessionOptions),
+            UIMenu(title: "Tools", options: .displayInline, children: tools),
             UIMenu(title: "Debug — tap to copy", options: .displayInline, children: debug)
         ]
         if !externallyOwned {
-            sections.append(UIMenu(options: .displayInline, children: [
-                action("End session", systemImage: "xmark.circle", attributes: .destructive,
-                       handler: onConfirmEnd)
-            ]))
+            lifecycle.append(action("End session", systemImage: "xmark.circle", attributes: .destructive,
+                                   handler: onConfirmEnd))
         }
+        if !lifecycle.isEmpty { sections.append(UIMenu(options: .displayInline, children: lifecycle)) }
         return sections
     }
 

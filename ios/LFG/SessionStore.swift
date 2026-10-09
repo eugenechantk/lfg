@@ -198,6 +198,18 @@ import LFGCore
     /// Latest browser screenshot metadata per session. Bytes remain on the
     /// owning host and are fetched only while its detail view is visible.
     private(set) var browserFrames: [String: BrowserFrame] = [:]
+    @ObservationIgnored private var iPhonePreviews: [String: (host: String, preview: IPhonePreviewSession)] = [:]
+
+    func iPhonePreview(for sessionID: String) -> IPhonePreviewSession? {
+        // Use the owning host, including for externally owned sessions. Do not
+        // silently fall back to another Mac with a different physical phone.
+        guard let host = host(forSession: sessionID), let client = settings.client(for: host) else { return nil }
+        if let existing = iPhonePreviews[sessionID], existing.host == host.url { return existing.preview }
+        iPhonePreviews[sessionID]?.preview.stop()
+        let preview = IPhonePreviewSession(transport: client)
+        iPhonePreviews[sessionID] = (host.url, preview)
+        return preview
+    }
     /// Claude-internal child agents discovered from the parent transcript's
     /// sidecar directory. They are read-only views inside the parent detail,
     /// not independently steerable top-level LFG sessions.
@@ -4360,7 +4372,6 @@ import LFGCore
     }
     func setModel(_ id: String, _ model: String) async { await run("Switch model", for: id) { try await $0.setModel(id, model: model) } }
     func rename(_ id: String, _ title: String) async { await run("Rename", for: id) { try await $0.rename(id, title: title) } }
-    func assign(_ id: String, _ user: String?) async { await run("Assign", for: id) { try await $0.assign(id, user: user) } }
     /// End the session. Returns whether it actually ended — the server now 502s
     /// when a pane survives the kill, so callers must not dismiss the UI on a
     /// failure (see `SessionDetailView`'s "End session" button).

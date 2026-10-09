@@ -27,7 +27,6 @@
 		63029566171D863A6094B902 /* UnreadSessionFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19359E603CB585A140895D8E /* UnreadSessionFixture.swift */; };
 		63E697B25FFD5633F32DF474 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 0F494F67402A869EB8A3476E /* MarkdownUI */; };
 		677E66E5606A3B3D911193D0 /* AttachmentTray.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCD4448C18939CAC5940F467 /* AttachmentTray.swift */; };
-		67D2DA4CB28C5105844B9FAD /* TranscriptInversionSpike.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6928349876EE34955D912D72 /* TranscriptInversionSpike.swift */; };
 		680725D02451A3EEFF5A9F28 /* NewSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27C81E2B22DECF886C37B1A7 /* NewSessionView.swift */; };
 		6D57951618DB68F747829455 /* LFGFleetAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */; };
 		7254BB93C3886BB66A1304A2 /* LFGCore in Frameworks */ = {isa = PBXBuildFile; productRef = 672BDBCB9E1F5950E1DB7012 /* LFGCore */; };
@@ -49,6 +48,7 @@
 		C189723845E8FF48DC379B21 /* NewSessionPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 527BBB8AABCE2FF8891A9B59 /* NewSessionPresentation.swift */; };
 		C1B5BCFA6FA382188AFC753C /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */; };
 		C6D0589CE81A10D9963D3BCA /* PrivateResources in Resources */ = {isa = PBXBuildFile; fileRef = F13AC9330D0FCC5623AF2347 /* PrivateResources */; };
+		C7D9792B986379D476B65395 /* IPhonePreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3F09549B24327F312F73AEA /* IPhonePreviewSheet.swift */; };
 		CB98916E2422E0C76151160D /* LocalCommandOutputFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9437477BDAC213AC221941D /* LocalCommandOutputFixture.swift */; };
 		D2F9456B4314172C7546226F /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */; };
 		D34242B9518E03AED793C989 /* SessionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2641AAFED0A103CF2409D79C /* SessionListView.swift */; };
@@ -109,7 +109,6 @@
 		5C0AF429850CD7F98D54334E /* LFG.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LFG.entitlements; sourceTree = "<group>"; };
 		6461434AE6C2B0858AC679ED /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		649DB6E8EC8E3C5852C813C8 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
-		6928349876EE34955D912D72 /* TranscriptInversionSpike.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptInversionSpike.swift; sourceTree = "<group>"; };
 		6FE8624A330AAE0215211005 /* NewSessionTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionTheme.swift; sourceTree = "<group>"; };
 		700413D2AB6235CADFEDC13F /* PhoneSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSignInView.swift; sourceTree = "<group>"; };
 		716A5CB7BF742B16562A7EF8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -140,6 +139,7 @@
 		EB0F37496A85B98C8E3D9867 /* NewSessionComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionComposer.swift; sourceTree = "<group>"; };
 		EB9F7C4ADF1BED07B550BD99 /* NewSessionSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionSheets.swift; sourceTree = "<group>"; };
 		F13AC9330D0FCC5623AF2347 /* PrivateResources */ = {isa = PBXFileReference; lastKnownFileType = folder; path = PrivateResources; sourceTree = SOURCE_ROOT; };
+		F3F09549B24327F312F73AEA /* IPhonePreviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPhonePreviewSheet.swift; sourceTree = "<group>"; };
 		F4C23B1D7493D21B0344531F /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		F63A269E91FBB297094BA544 /* LFGCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LFGCore; path = LFGCore; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -208,6 +208,7 @@
 				C5AB3889AD4A389149350563 /* HostCredentialStore.swift */,
 				9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */,
 				716A5CB7BF742B16562A7EF8 /* Info.plist */,
+				F3F09549B24327F312F73AEA /* IPhonePreviewSheet.swift */,
 				649DB6E8EC8E3C5852C813C8 /* LaunchScreen.storyboard */,
 				5C0AF429850CD7F98D54334E /* LFG.entitlements */,
 				909139FA5D9B976298B7AA3F /* LFGApp.swift */,
@@ -228,7 +229,6 @@
 				847BA9F87A178565C0EEC901 /* SettingsView.swift */,
 				210FE0F59E5CE42AA932EF9E /* TerminalScreen.swift */,
 				25CBF3AE8C40F2EE10BB4BD0 /* Theme.swift */,
-				6928349876EE34955D912D72 /* TranscriptInversionSpike.swift */,
 				B256A006CA36864233180E24 /* UnreadBadges.swift */,
 				19359E603CB585A140895D8E /* UnreadSessionFixture.swift */,
 				55A38E97E7AFE9717D399132 /* Intents */,
@@ -310,6 +310,8 @@
 			dependencies = (
 			);
 			name = LFGWidgets;
+			packageProductDependencies = (
+			);
 			productName = LFGWidgets;
 			productReference = D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -369,7 +371,7 @@
 			packageReferences = (
 				51E8A3A0C2443D478A2B7FA6 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 				6ED60432A99F7EC822DF9350 /* XCLocalSwiftPackageReference "LFGCore" */,
-				4237D469E7BD1A7B7BC8F201 /* XCLocalSwiftPackageReference "SwiftTerm" */,
+				4237D469E7BD1A7B7BC8F201 /* XCLocalSwiftPackageReference "Vendor/SwiftTerm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 73237F52945A981B453A84AA /* Products */;
@@ -418,6 +420,7 @@
 				BF6314DDC10C441712E87E2E /* FleetActivityController.swift in Sources */,
 				11D0A935DB980CB4EBEF35AC /* HostCredentialStore.swift in Sources */,
 				8A8BAA0AADCD3A860CCA5B39 /* HostLink.swift in Sources */,
+				C7D9792B986379D476B65395 /* IPhonePreviewSheet.swift in Sources */,
 				8950528E1385EF07CB2814AD /* LFGApp.swift in Sources */,
 				16B0F6A79CE890FBF2B0E5E2 /* LFGFleetAttributes.swift in Sources */,
 				A9769E2F571F58BFBE480AB0 /* LiveActivityManager.swift in Sources */,
@@ -443,7 +446,6 @@
 				B681D6E26243704896087BB9 /* StartSessionIntent.swift in Sources */,
 				406EF855180AB2BA0E75D26A /* TerminalScreen.swift in Sources */,
 				17E5CC9417E33D6CADF1F707 /* Theme.swift in Sources */,
-				67D2DA4CB28C5105844B9FAD /* TranscriptInversionSpike.swift in Sources */,
 				BD04341584A4B9AA76A55AC4 /* UnreadBadges.swift in Sources */,
 				63029566171D863A6094B902 /* UnreadSessionFixture.swift in Sources */,
 			);
@@ -539,8 +541,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFGWidgets/Info.plist;
@@ -552,7 +553,6 @@
 				);
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -565,8 +565,8 @@
 				APS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
@@ -577,7 +577,6 @@
 				);
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -590,8 +589,8 @@
 				APS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LFG/LFG.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFG/Info.plist;
@@ -602,7 +601,6 @@
 				);
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -613,8 +611,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 39GJBP8V5A;
 				INFOPLIST_FILE = LFGWidgets/Info.plist;
@@ -626,7 +623,6 @@
 				);
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.LFGWidgets;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.eugenechan.lfg.LFGWidgets";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -724,7 +720,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		4237D469E7BD1A7B7BC8F201 /* XCLocalSwiftPackageReference "SwiftTerm" */ = {
+		4237D469E7BD1A7B7BC8F201 /* XCLocalSwiftPackageReference "Vendor/SwiftTerm" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Vendor/SwiftTerm;
 		};
