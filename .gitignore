@@ -50,6 +50,7 @@ ios/fastlane/*.bak
 
 # Desktop app build output
 desktop/build/
+macos/unlock/build/
 .worktrees/
 
 # Local iOS build output
