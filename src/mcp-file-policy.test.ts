@@ -93,6 +93,13 @@ test("looksSecret spares source files that merely mention the words", () => {
   expect(looksSecret("chrome-cookies.json")).toBe(true);
   expect(looksSecret("tokens.ts")).toBe(false);
   expect(looksSecret("app.sqlite")).toBe(true);
+  // Whole words only: a company-secretary form is not a secret.
+  expect(looksSecret("PaperBridge_company_secretary_form_draft.pdf")).toBe(false);
+  expect(looksSecret("secrets.pdf")).toBe(true);
+  expect(looksSecret("creds.json")).toBe(true);
+  expect(looksSecret("ApiTokens.plist")).toBe(true);
+  expect(looksSecret("credsHelper.ts")).toBe(false);
+  expect(looksSecret("tokenizer-notes.pdf")).toBe(false);
 });
 
 test("isProbablyText: utf-8 text yes, NUL bytes no, a character split at 8 KB still yes", () => {

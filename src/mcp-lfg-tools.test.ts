@@ -3,6 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { lfgTools, formatSessionList, sessionState, type LfgSession } from "./mcp-lfg-tools.ts";
+import { extractPdf, type PdfExtractor } from "./pdf-extract.ts";
+import { DownloadStore, handleDownload } from "./mcp-downloads.ts";
 import type { McpTool, ToolResult } from "./mcp-server.ts";
 
 // ---- a fake lfg ------------------------------------------------------------------
@@ -20,6 +22,7 @@ writeFileSync(join(home, "dev/app/.git/config"), "[core]\n");
 writeFileSync(join(home, "dev/app/.claude/plan.md"), "plan\n");
 writeFileSync(join(home, "dev/app/shot.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2]));
 writeFileSync(join(home, "dev/app/blob.bin"), Buffer.from([1, 0, 2, 0, 3]));
+writeFileSync(join(home, "dev/app/company_secretary_form.pdf"), "%PDF-1.4 stub");
 
 const A = "aaaaaaaa-1111-2222-3333-444444444444";
 const B = "bbbbbbbb-1111-2222-3333-444444444444";
@@ -28,6 +31,7 @@ const NOW = 1_800_000_000_000;
 let calls: Call[];
 let routes: Route[];
 let clock: number;
+let downloads: DownloadStore;
 
 function tools(extra: Partial<Parameters<typeof lfgTools>[0]> = {}): Record<string, McpTool> {
   const fake = (async (url: string, init?: RequestInit) => {
@@ -50,6 +54,8 @@ function tools(extra: Partial<Parameters<typeof lfgTools>[0]> = {}): Record<stri
     },
     waitPollMs: 4000,
     waitGraceMs: 8000,
+    downloads,
+    downloadBase: "https://files.test/",
     ...extra,
   });
   return Object.fromEntries(list.map((t) => [t.name, t]));
@@ -80,6 +86,7 @@ beforeEach(() => {
   calls = [];
   routes = [];
   clock = NOW;
+  downloads = new DownloadStore(null, () => clock);
 });
 
 // ---- formatting --------------------------------------------------------------------
@@ -414,9 +421,108 @@ test("read_file refuses a file the session never mentioned, and needs a session 
   await expect(t.read_file!.run({ path: "~/dev/app/report.md" })).rejects.toThrow("session_id");
 });
 
+test("read_file reads a PDF as form fields, page text, then page images within a budget", async () => {
+  const imgDir = mkdtempSync(join(tmpdir(), "mcp-pdf-img-"));
+  writeFileSync(join(imgDir, "p1.jpg"), Buffer.alloc(1000, 1));
+  writeFileSync(join(imgDir, "p2.jpg"), Buffer.alloc(3 * 1024 * 1024, 2)); // over the image budget
+  let asked: unknown[] = [];
+  const fakePdf: PdfExtractor = async (...a) => {
+    asked = a.slice(2);
+    return {
+      pageCount: 12,
+      fields: [
+        { page: 1, name: "Company name", type: "text", value: "PaperBridge Ltd" },
+        { page: 2, name: "Agree", type: "checkbox", value: "checked" },
+        { page: 2, name: "Notes", type: "text", value: "" },
+      ],
+      pages: [
+        { page: 1, text: "Form NNC1 Incorporation Form (Company Limited by Shares)", image: join(imgDir, "p1.jpg") },
+        { page: 2, text: "", image: join(imgDir, "p2.jpg") },
+      ],
+    };
+  };
+  routes.push(mentionRoute("dev/app/company_secretary_form.pdf"));
+  const t = tools({ pdf: fakePdf });
+  const r = await t.read_file!.run({ session_id: A, path: "~/dev/app/company_secretary_form.pdf", max_pages: 2, include_images: true });
+  expect(asked).toEqual([1, 2, 1200]);
+  const head = (r.content[0] as { text: string }).text;
+  expect(head).toContain("PDF, 12 pages");
+  expect(head).toContain("Showing pages 1–2. Use first_page / max_pages for others.");
+  expect(head).toContain("p1 Company name [text]: PaperBridge Ltd");
+  expect(head).toContain("p2 Agree [checkbox]: checked");
+  expect(head).toContain("p2 Notes [text]: (empty)");
+  expect(head).toContain("--- page 1 ---\nForm NNC1 Incorporation Form (Company Limited by Shares)");
+  expect(head).toContain("--- page 2 ---\n(no text on this page — see its image)");
+  expect(r.content.filter((c) => c.type === "image").length).toBe(1);
+  expect(txt(r)).toContain("Images for pages 2 left out");
+
+  // Default: a page whose text came through gets no image; a textless page (scan) does.
+  writeFileSync(join(imgDir, "p2.jpg"), Buffer.alloc(1000, 2));
+  const auto = await t.read_file!.run({ session_id: A, path: "~/dev/app/company_secretary_form.pdf" });
+  expect(auto.content.filter((c) => c.type === "image").length).toBe(1);
+  expect(txt(auto)).toContain("Page 2:");
+  expect(txt(auto)).not.toContain("Page 1:");
+  expect(txt(auto)).toContain("include_images=true");
+  const none = await t.read_file!.run({ session_id: A, path: "~/dev/app/company_secretary_form.pdf", include_images: false });
+  expect(none.content.length).toBe(1);
+  rmSync(imgDir, { recursive: true, force: true });
+});
+
+test("read_file reports a PDF the reader cannot open as an error", async () => {
+  routes.push(mentionRoute("dev/app/company_secretary_form.pdf"));
+  const broken: PdfExtractor = async () => {
+    throw new Error("the PDF is password-protected");
+  };
+  const r = await tools({ pdf: broken }).read_file!.run({ session_id: A, path: "~/dev/app/company_secretary_form.pdf" });
+  expect(r.isError).toBe(true);
+  expect(txt(r)).toContain("password-protected");
+});
+
+test("the real PDF reader (PDFKit helper) extracts text and renders the page", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "mcp-pdf-real-"));
+  writeFileSync(join(dir, "a.txt"), "hello lfg pdf test\n");
+  const made = await Bun.$`cupsfilter ${join(dir, "a.txt")}`.quiet().nothrow();
+  if (made.exitCode !== 0) return; // no CUPS on this machine
+  writeFileSync(join(dir, "a.pdf"), made.stdout);
+  const out = await extractPdf(join(dir, "a.pdf"), dir, 1, 5, 600);
+  expect(out.pageCount).toBe(1);
+  expect(out.pages[0]!.text).toContain("hello lfg pdf test");
+  expect(existsSync(out.pages[0]!.image!)).toBe(true);
+  expect(out.fields).toEqual([]);
+  rmSync(dir, { recursive: true, force: true });
+}, 120_000);
+
 test("the folder browser is gone: file access is per session only", () => {
   const names = Object.keys(tools());
   expect(names).not.toContain("list_directory");
   expect(names).toContain("list_session_files");
   expect(names).toContain("read_file");
+  expect(names).toContain("download_file");
+});
+
+test("download_file returns a working, expiring link for any file type the session mentioned", async () => {
+  routes.push(mentionRoute("dev/app/blob.bin", "dev/app/.env"));
+  const t = tools();
+  const out = txt(await t.download_file!.run({ session_id: A, path: "~/dev/app/blob.bin", expires_minutes: 30 }));
+  const url = out.match(/https:\/\/files\.test\/dl\/\S+/)![0];
+  expect(url).toMatch(/^https:\/\/files\.test\/dl\/[A-Za-z0-9_-]{43}\/blob\.bin$/);
+  expect(out).toContain("for 30 minutes");
+  // The link serves the exact bytes, as a download.
+  const res = handleDownload(new Request(url), downloads)!;
+  expect(res.status).toBe(200);
+  expect(Buffer.from(await res.arrayBuffer())).toEqual(Buffer.from([1, 0, 2, 0, 3]));
+  expect(res.headers.get("content-disposition")).toStartWith('attachment; filename="blob.bin"');
+  // …until it expires.
+  clock += 31 * 60_000;
+  expect(handleDownload(new Request(url), downloads)!.status).toBe(404);
+  // Same rules as read_file: secrets and unmentioned files get no link.
+  expect((await t.download_file!.run({ session_id: A, path: "~/dev/app/.env" })).isError).toBe(true);
+  expect(txt(await t.download_file!.run({ session_id: A, path: "~/dev/app/report.md" }))).toContain("never mentioned");
+});
+
+test("read_file points binary files at download_file", async () => {
+  routes.push(mentionRoute("dev/app/blob.bin"));
+  const r = await tools().read_file!.run({ session_id: A, path: "~/dev/app/blob.bin" });
+  expect(r.isError).toBe(true);
+  expect(txt(r)).toContain("Use download_file");
 });

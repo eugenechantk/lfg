@@ -2,8 +2,9 @@
 
 A remote MCP server that lets an assistant on someone else's servers — today
 **Grok Bot** (SpaceXAI + Cursor) — list, follow, start, steer, answer, stop and
-close the Claude Code / Codex sessions lfg manages, and read the files those
-sessions mentioned or wrote (nothing else on the Mac).
+close the Claude Code / Codex sessions lfg manages, and get the files those
+sessions mentioned or wrote (nothing else on the Mac) — either read into the
+conversation (`read_file`) or downloaded through an expiring link (`download_file`).
 
 ## Shape
 
@@ -18,6 +19,11 @@ scripts/lfg-mcp.ts  127.0.0.1:8791
    │ loopback HTTP
    ▼
 lfg serve  127.0.0.1:8766  →  claude / codex in tmux
+
+caller's HTTP GET  https://lfg-files.eugenechantk.me/dl/<token>/<name>
+   │ no Access app on this host; tunnel routes only ^/dl/
+   ▼
+scripts/lfg-mcp.ts → the one file that token names, until it expires
 ```
 
 - **Separate process, separate tunnel, separate Access app.** The MCP server is
@@ -61,7 +67,8 @@ then give Grok Bot the new headers. The old secret stops working at once.
 | `close_session` | `POST …/close` | `destructiveHint` |
 | `resume_session` | `POST /api/sessions/resume` | |
 | `list_session_files` | `messages?full=1` | files the session's whole transcript names, newest first |
-| `read_file` | `messages?full=1` + local read | needs `session_id`; only a file that session named; text ≤500 KB; images as MCP image content, downscaled to a ≤2048 px JPEG by `sips` when over 4 MB |
+| `read_file` | `messages?full=1` + local read | content into the conversation: text ≤500 KB; images as MCP image content (downscaled to a ≤2048 px JPEG by `sips` over 4 MB); PDFs via the PDFKit helper (below); other binaries → "use download_file" |
+| `download_file` | `messages?full=1` + `DownloadStore` | any file type; returns `https://lfg-files.eugenechantk.me/dl/<token>/<name>`, valid 60 min by default (5 min–24 h) |
 
 Every `tools/call` is logged with its arguments (clipped to 300 chars) to
 `~/.lfg/lfg-mcp.log` — the audit trail of what the remote assistant asked for.
@@ -79,9 +86,43 @@ Even a mentioned file is refused when it is:
 - in a hidden folder directly under `$HOME` (`~/.ssh`, `~/.cloudflared`,
   `~/.claude`, `~/.codex`, …), or in any hidden folder deeper down other than
   `.claude .codex .agents .github .worktrees .vscode` (so `.git` is out);
-- named like a secret: `.env*` and `*.env`, `creds`, keys and certificates,
-  `*.private.*`, `auth.json`, databases, and `secret|credential|password|token|cookie`
-  in anything that isn't a source file (`cookies.txt` is refused, `tokens.ts` isn't).
+- named like a secret: `.env*` and `*.env`, keys and certificates, `*.private.*`,
+  `auth.json`, databases, and the whole words secret(s), credential(s), creds,
+  password(s), passwd, token(s), cookie(s) in anything that isn't a source file
+  (`cookies.txt` is refused, `tokens.ts` isn't). Whole words, because substring
+  matching refused `PaperBridge_company_secretary_form_draft.pdf` on 2026-10-05.
+
+## Download links (`src/mcp-downloads.ts`)
+
+`download_file` is how the computer calling the MCP gets the exact file: it
+fetches the returned URL with a plain GET. The URL is a capability — 32 random
+bytes, no login — so Grok Bot's backend or Eugene's phone can open it directly,
+and anyone else holding it can too until it expires. Defaults keep that window
+short (60 min, max 24 h).
+
+- **Separate hostname, no Access.** `lfg-files.eugenechantk.me` has no Access
+  app; the tunnel routes only `^/dl/` there, and `/mcp` is never reachable on it
+  (404 at the tunnel, and the server would still demand the MCP app's JWT).
+- **Store:** `~/.lfg/lfg-mcp-downloads.json` (0600) keyed by SHA-256 of the
+  token, so the file on disk holds no live links; links survive restarts.
+- **At download time** the file must still be a regular file at the same
+  resolved path — swapping it for a symlink after the link was made returns 410.
+- Response headers: `Content-Disposition: attachment` (`?view=1` → inline),
+  `Cache-Control: private, no-store`, `X-Robots-Tag: noindex`,
+  `Content-Security-Policy: sandbox`. Every download is logged
+  (`download <token prefix>… <name> (<bytes>) from <ip>`).
+
+## PDFs (`scripts/pdf-extract.swift`, `src/pdf-extract.ts`)
+
+`read_file` on a `.pdf` runs a small PDFKit helper, compiled once into
+`~/.lfg/cache/pdf-extract` (rebuilt when the source is newer; warmed at server
+start). The reply is text first: every AcroForm field with its filled value
+(PDFKit's page text leaves these out), then each page's text. A flattened form's
+values are page text, so they come through either way. Page renders (≤1200 px
+JPEG) are sent only for pages with no text (scans) by default, because a 10-page
+form with images is a ~3 MB reply and the client's size limit is unknown;
+`include_images: true` sends them within a 2.4 MB budget. `first_page` /
+`max_pages` (default 10, max 30) pick the range.
 
 What this does and doesn't buy: it stops direct reads of arbitrary files. It does
 not stop an assistant from asking a session to name or print a file — the agents
@@ -99,6 +140,11 @@ start in (`~/dev`, `~/inbox`, Desktop, Downloads, Documents).
 - Deploy a code change: `launchctl kickstart -k gui/$(id -u)/dev.omg.lfg-mcp`.
 - Logs: `~/.lfg/lfg-mcp.log` (server; `client <name>` lines show who connected),
   `~/.cloudflared/lfg-mcp.log` (tunnel).
+- Testing a NEW hostname from this Mac: do not `dig` it before the DNS record
+  exists. The VPN answers all port-53 DNS itself and caches NXDOMAIN for ~30 min
+  (it did for `lfg-files`). Check with DNS-over-HTTPS
+  (`curl -H 'accept: application/dns-json' 'https://cloudflare-dns.com/dns-query?name=<host>&type=A'`)
+  and test with `curl --resolve <host>:443:<ip>`.
 - The tunnel runs through the default route (the VPN) because en0 → edge:7844 is
   blocked by the VPN's kill switch; MCP traffic is small.
 - `cloudflared tunnel route dns` obeys `tunnel:` in `~/.cloudflared/config.yml`

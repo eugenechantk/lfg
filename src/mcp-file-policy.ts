@@ -1,7 +1,8 @@
-// What the remote MCP server (src/mcp-server.ts) may read off this Mac.
+// Which files the remote MCP server (src/mcp-server.ts) may read (read_file) or
+// hand out as download links (download_file).
 //
 // The caller is an assistant on someone else's servers (Grok Bot runs from
-// Cursor's backend), so file reads are limited to **files a session itself
+// Cursor's backend), so both are limited to **files a session itself
 // mentioned** — paths that appear in its transcript (replies, tool calls) — and
 // even those must not pass through a hidden folder or look like a secret. lfg's
 // own `/api/file` serves all of $HOME to authenticated clients; this is
@@ -21,7 +22,6 @@ const DOT_DIR_ALLOW = new Set([".claude", ".codex", ".agents", ".github", ".work
 const SECRET_NAME = [
   /^\.env(\..*)?$/,
   /\.env$/,
-  /(^|[-_.])creds?([-_.]|$)/,
   /^\.(netrc|npmrc|pypirc|git-credentials)$/,
   /\.(pem|key|p12|p8|pfx|keystore|jks|mobileprovision|keychain|keychain-db|kdbx)$/,
   /^id_(rsa|dsa|ecdsa|ed25519)/,
@@ -34,8 +34,22 @@ const SECRET_NAME = [
 /**
  * Words that mark a secrets file (`Secrets.xcconfig`, `credentials.json`) but also
  * appear in ordinary source (`ForgotPasswordView.swift`), so source files are exempt.
+ * Matched as whole words of the name — `company_secretary_form.pdf` is a form, not
+ * a secret.
  */
-const SECRET_WORD = /secret|credential|password|token|cookie/;
+const SECRET_WORDS = new Set([
+  "secret", "secrets", "credential", "credentials", "creds", "password", "passwords", "passwd",
+  "token", "tokens", "cookie", "cookies",
+]);
+
+/** `ForgotPasswordView.swift` → forgot, password, view, swift. */
+function nameWords(name: string): string[] {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
 const SOURCE_EXT = /\.(swift|m|mm|h|c|cc|cpp|ts|tsx|js|jsx|mjs|py|rb|go|rs|kt|java|cs|php|vue|svelte|css|scss|html|md|mdx)$/;
 
 export type PathCheck = { ok: true; path: string } | { ok: false; reason: string };
@@ -62,7 +76,7 @@ function realOrNull(p: string): string | null {
 export function looksSecret(name: string): boolean {
   const n = name.toLowerCase();
   if (SECRET_NAME.some((re) => re.test(n))) return true;
-  return SECRET_WORD.test(n) && !SOURCE_EXT.test(n);
+  return !SOURCE_EXT.test(n) && nameWords(name).some((w) => SECRET_WORDS.has(w));
 }
 
 /** A dot-directory segment that is not one of the agent-doc folders. */

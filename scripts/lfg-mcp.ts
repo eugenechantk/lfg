@@ -12,10 +12,15 @@
 //   LFG_MCP_ACCESS_AUD      the Access app's AUD tag; unset = refuse all tunnelled requests
 //   LFG_ACCESS_TEAM_DOMAIN  shared with lfg (.env)
 //   LFG_BASE                default http://127.0.0.1:8766
+//   LFG_MCP_DOWNLOAD_BASE   default https://lfg-files.eugenechantk.me (download_file URLs)
 
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { cachedJwks, authorizeTunnelledRequest, accessConfigFromEnv } from "../src/access-jwt.ts";
 import { createMcpHandler } from "../src/mcp-server.ts";
 import { lfgTools, SERVER_INSTRUCTIONS } from "../src/mcp-lfg-tools.ts";
+import { DownloadStore, handleDownload } from "../src/mcp-downloads.ts";
+import { ensurePdfHelper } from "../src/pdf-extract.ts";
 
 const port = Number(process.env.LFG_MCP_PORT ?? 8791);
 if (port === 8766) throw new Error("port 8766 belongs to lfg serve");
@@ -25,6 +30,10 @@ const access = accessConfigFromEnv({
   LFG_ACCESS_AUD: process.env.LFG_MCP_ACCESS_AUD,
 });
 const keys = cachedJwks();
+// download_file's expiring links, served at /dl/ on a separate, login-free
+// hostname (the tunnel routes only ^/dl/ there; /mcp stays behind Access).
+const downloads = new DownloadStore(join(homedir(), ".lfg", "lfg-mcp-downloads.json"));
+const downloadBase = process.env.LFG_MCP_DOWNLOAD_BASE ?? "https://lfg-files.eugenechantk.me";
 
 const log = (line: string) => console.log(`${new Date().toISOString()} lfg-mcp: ${line}`);
 
@@ -32,7 +41,7 @@ const mcp = createMcpHandler({
   name: "lfg",
   version: "0.2.0",
   instructions: SERVER_INSTRUCTIONS,
-  tools: lfgTools({ base: lfgBase }),
+  tools: lfgTools({ base: lfgBase, downloads, downloadBase }),
   log,
 });
 
@@ -42,6 +51,8 @@ Bun.serve({
   async fetch(req) {
     const url = new URL(req.url);
     const via = req.headers.get("cf-connecting-ip") ? "tunnel" : "local";
+    // Download links carry their own capability token and need no Access login.
+    if (url.pathname.startsWith("/dl/")) return handleDownload(req, downloads, log) ?? new Response("not found", { status: 404 });
     if (url.pathname !== "/mcp") {
       log(`${req.method} ${url.pathname} ${via} → 404`);
       return new Response("not found", { status: 404 });
@@ -56,5 +67,11 @@ Bun.serve({
     return res;
   },
 });
+
+// Build the PDF reader now, not during a remote caller's first read_file.
+ensurePdfHelper().then(
+  (bin) => log(`pdf reader ready: ${bin}`),
+  (e) => log(`pdf reader unavailable: ${(e as Error).message}`),
+);
 
 log(`listening on 127.0.0.1:${port}; lfg at ${lfgBase}; access ${access ? `aud ${access.aud.slice(0, 8)}…` : "NOT CONFIGURED (tunnel requests refused)"}`);
