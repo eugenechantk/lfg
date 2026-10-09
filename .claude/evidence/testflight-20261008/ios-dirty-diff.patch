@@ -1,0 +1,283 @@
+diff --git a/ios/LFG/Intents/StartSessionIntent.swift b/ios/LFG/Intents/StartSessionIntent.swift
+index cfbd312..f959951 100644
+--- a/ios/LFG/Intents/StartSessionIntent.swift
++++ b/ios/LFG/Intents/StartSessionIntent.swift
+@@ -86,7 +86,8 @@ struct StartSessionIntent: AppIntent {
+         }
+         let directory = StartSessionPlanner.directory(hint: project, dirs: dirs)
+         guard !directory.path.isEmpty else { throw StartError.noDirectory }
+-        let catalog = (try? await client.models()) ?? .fallback
++        let saved = ModelCatalogCache.decode(UserDefaults.standard.data(forKey: ModelCatalogCache.defaultsKey))
++        let catalog = (try? await client.models()) ?? saved.catalogs[target.id] ?? .fallback
+         let selection = StartSessionPlanner.selection(agent: agent, model: model, catalog: catalog,
+                                                       remembered: settings.lastNewSessionModelSelection)
+         let plan = StartSessionPlan(host: target, directory: directory, selection: selection)
+diff --git a/ios/LFG/NewSessionView.swift b/ios/LFG/NewSessionView.swift
+index abacea0..cf53cd2 100644
+--- a/ios/LFG/NewSessionView.swift
++++ b/ios/LFG/NewSessionView.swift
+@@ -184,6 +184,15 @@ struct NewSessionView: View {
+             if selectedHost == nil {
+                 selectedHost = fallbackHost
+             }
++            // The inferred/remembered model may be newer than the bundled list,
++            // so only the host's own catalog can say whether it is still offered.
++            // `refresh: false` serves the host's cached discovery. A failed load
++            // leaves the chip alone; `start` reconciles again before creating.
++            await store.loadModelCatalog(for: selectedHost, refresh: false)
++            if store.hasModelCatalog(for: selectedHost) {
++                model = AgentModelSelection(agent: agent, model: model)
++                    .reconciled(with: store.modelCatalog(for: selectedHost)).model
++            }
+             // After the directory list has loaded, so a spoken project name can
+             // resolve against the host's repos.
+             await applyPrefill()
+@@ -381,7 +390,8 @@ struct NewSessionView: View {
+         let inferred = AgentModelSelection.inferred(
+             forCwd: path,
+             in: store.sessions,
+-            fallback: settings.lastNewSessionModelSelection)
++            fallback: settings.lastNewSessionModelSelection,
++            catalog: store.modelCatalog(for: selectedHost))
+         agent = inferred.agent
+         model = inferred.model
+     }
+@@ -423,6 +433,12 @@ struct NewSessionView: View {
+         // A persisted selection can outlive the host that advertised it. Re-run
+         // reconciliation at the request boundary so starting without reopening
+         // the model sheet cannot submit an ID this host does not advertise.
++        // Load first if needed: the bundled fallback stands in for a missing
++        // catalog, and reconciling against it turns gpt-6.1-sol into gpt-5.6-sol.
++        // Usually a no-op, since `.task` already loaded it.
++        if !store.hasModelCatalog(for: selectedHost) {
++            await store.loadModelCatalog(for: selectedHost, refresh: false)
++        }
+         let selection = AgentModelSelection(agent: agent, model: model)
+             .reconciled(with: store.modelCatalog(for: selectedHost))
+         agent = selection.agent
+diff --git a/ios/LFG/SessionStore.swift b/ios/LFG/SessionStore.swift
+index 812fd66..4c6112e 100644
+--- a/ios/LFG/SessionStore.swift
++++ b/ios/LFG/SessionStore.swift
+@@ -352,9 +352,12 @@ import LFGCore
+     private(set) var inbox: String = ""
+     private(set) var users: [String] = []
+     private(set) var usage: Usage?
+-    /// Account/version-specific CLI catalogs, keyed by host id. Missing entries
+-    /// intentionally read as the bundled compatibility catalog.
++    /// Account/version-specific CLI catalogs, keyed by host id. Restored from the
++    /// device at launch and saved on every answer (`modelCatalogCache`), so the
++    /// bundled compatibility catalog only covers a host never reached yet.
+     private(set) var modelCatalogByHost: [String: ModelCatalogResponse] = [:]
++    @ObservationIgnored private var modelCatalogCache: ModelCatalogCache
++    @ObservationIgnored private var modelCatalogRefreshing: Set<String> = []
+ 
+     private var seen: [String: Set<String>] = [:]
+ 
+@@ -519,6 +522,12 @@ import LFGCore
+         manualUnread = Set(d.stringArray(forKey: Self.manualUnreadKey) ?? [])
+         lastOpenedAt = opened
+         needsReadStateMigration = !d.bool(forKey: Self.migratedKey) && !opened.isEmpty
++        modelCatalogCache = ModelCatalogCache.decode(d.data(forKey: ModelCatalogCache.defaultsKey))
++            .pruned(keeping: Set(settings.hosts.map(\.id)))
++        modelCatalogByHost = modelCatalogCache.catalogs
++        let restored = modelCatalogCache.entries.keys.sorted()
++        ConnectionLog.shared.log(.lifecycle, "restored saved model catalogs: "
++            + (restored.isEmpty ? "none" : restored.joined(separator: ", ")))
+     }
+ 
+     // No deinit for pathMonitor: the store is app-lifetime and `stop()` cancels
+@@ -779,6 +788,7 @@ import LFGCore
+         // in front of the one thing the user is waiting to see.
+         syncLinks()
+         startReconnectBurst()
++        refreshModelCatalogs()
+         guard pollTask == nil else { return }
+         // Slow reconcile only: live delivery is the links' job now. This loop
+         // is belt-and-braces (list membership, closed sessions, anything an
+@@ -2857,18 +2867,52 @@ import LFGCore
+         return target.flatMap { modelCatalogByHost[$0.id] } ?? .fallback
+     }
+ 
++    /// Whether `modelCatalog(for:)` would answer with this host's own catalog
++    /// (fetched now or saved from an earlier answer) rather than the bundled
++    /// fallback. Reconciling against the fallback erases every model newer than
++    /// this build, so callers about to reconcile load first.
++    func hasModelCatalog(for host: Host?) -> Bool {
++        (host ?? agnosticHost).map { modelCatalogByHost[$0.id] != nil } ?? false
++    }
++
+     func modelCatalog(forSession sessionID: String) -> ModelCatalogResponse {
+         modelCatalog(for: host(forSession: sessionID))
+     }
+ 
+-    /// Refresh only on explicit picker/detail entry, never in the 3s session
+-    /// poll. The host briefly caches discovery and falls back on failure, so this
+-    /// is cheap and self-heals after either CLI updates without app/server code.
++    /// Refresh on explicit picker/detail entry and on launch/foreground
++    /// (`refreshModelCatalogs`), never in the session poll. The host briefly
++    /// caches discovery and serves its last good list on failure, so this is
++    /// cheap and self-heals after either CLI updates without app/server code.
+     func loadModelCatalog(for host: Host?, refresh: Bool = true) async {
+         guard let target = host ?? agnosticHost,
+               let client = settings.client(for: target),
+               let catalog = try? await client.models(refresh: refresh) else { return }
+-        modelCatalogByHost[target.id] = catalog
++        noteModelCatalog(catalog, for: target.id)
++    }
++
++    /// Ask every configured host for its catalog. Runs on launch and foreground,
++    /// so the saved catalogs track CLI updates without a picker being opened.
++    /// One task per host, each saved as it lands: an offline host's timeout
++    /// must not delay the others, and only that host's next refresh waits on it.
++    func refreshModelCatalogs() {
++        for host in settings.hosts where !modelCatalogRefreshing.contains(host.id) {
++            guard let client = settings.client(for: host) else { continue }
++            let id = host.id
++            modelCatalogRefreshing.insert(id)
++            Task { [weak self] in
++                let catalog = try? await client.models()
++                guard let self else { return }
++                self.modelCatalogRefreshing.remove(id)
++                if let catalog { self.noteModelCatalog(catalog, for: id) }
++            }
++        }
++    }
++
++    private func noteModelCatalog(_ catalog: ModelCatalogResponse, for hostID: String) {
++        modelCatalogByHost[hostID] = catalog
++        modelCatalogCache.record(catalog, for: hostID, at: Date())
++        modelCatalogCache = modelCatalogCache.pruned(keeping: Set(settings.hosts.map(\.id)))
++        UserDefaults.standard.set(modelCatalogCache.encoded(), forKey: ModelCatalogCache.defaultsKey)
+     }
+ 
+     func loadModelCatalog(forSession sessionID: String, refresh: Bool = true) async {
+diff --git a/ios/LFGCore/Sources/LFGCore/NewSessionModelDefaults.swift b/ios/LFGCore/Sources/LFGCore/NewSessionModelDefaults.swift
+index cb6a619..8ff18eb 100644
+--- a/ios/LFGCore/Sources/LFGCore/NewSessionModelDefaults.swift
++++ b/ios/LFGCore/Sources/LFGCore/NewSessionModelDefaults.swift
+@@ -15,15 +15,23 @@ extension AgentModelSelection {
+     ///
+     /// Two tiers, because a session can be known without its model being known:
+     ///
+-    /// 1. The newest session in `cwd` whose model is readable — that pair, resolved
+-    ///    through `restoring` so a retired catalog entry degrades to the agent's
+-    ///    current default rather than leaking into a create request.
++    /// 1. The newest session in `cwd` whose model is readable — that pair, kept
++    ///    as-is when the id is syntactically safe. This deliberately does NOT
++    ///    check the app's bundled model list: that list is a compatibility floor
++    ///    for old hosts, so every model newer than this build (gpt-6.1-sol, when
++    ///    the bundle stops at gpt-5.6) used to be swapped for the bundled default.
++    ///    Whether the host still offers the id is decided by `reconciled(with:)`
++    ///    against that host's live catalog, at the chip and at the create request.
+     /// 2. Failing that, the newest session in `cwd` with a recognizable agent, on
+     ///    that agent's default model. A transcript with no assistant turn (or a
+     ///    server too old to report `model` on closed rows) still tells us the
+     ///    runtime, and "codex on its default model" beats "claude" for a codex
+     ///    directory.
+     ///
++    /// "Default model" is `catalog`'s — the host's own answer — so it moves with
++    /// the host's CLIs. The compiled default only applies when no catalog is
++    /// known (`.fallback`).
++    ///
+     /// Falls back to `fallback` when the directory has no usable history at all.
+     ///
+     /// Matching is on the exact directory, with only trailing slashes normalized —
+@@ -34,7 +42,8 @@ extension AgentModelSelection {
+     public static func inferred(
+         forCwd cwd: String,
+         in sessions: [Session],
+-        fallback: AgentModelSelection
++        fallback: AgentModelSelection,
++        catalog: ModelCatalogResponse = .fallback
+     ) -> AgentModelSelection {
+         let target = normalizedPath(cwd)
+         guard !target.isEmpty else { return fallback }
+@@ -44,15 +53,15 @@ extension AgentModelSelection {
+         // host) and that ordering has nothing to do with recency.
+         let candidates = sessions
+             .filter { normalizedPath($0.cwd ?? "") == target }
+-            .filter { AgentKind(rawValue: $0.agent) != nil }
+-            .sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
++            .compactMap { session in AgentKind(rawValue: session.agent).map { (session, $0) } }
++            .sorted { ($0.0.lastActivityAt ?? 0) > ($1.0.lastActivityAt ?? 0) }
+ 
+-        if let withModel = candidates.first(where: { ($0.model?.isEmpty == false) }) {
+-            return .restoring(agentRawValue: withModel.agent, model: withModel.model)
++        if let (session, agent) = candidates.first(where: { $0.0.model?.isEmpty == false }),
++           let model = session.model, isSafeModelName(model) {
++            return AgentModelSelection(agent: agent, model: model)
+         }
+-        if let withAgent = candidates.first {
+-            // No model to restore, so `restoring` supplies the agent's default.
+-            return .restoring(agentRawValue: withAgent.agent, model: nil)
++        if let (_, agent) = candidates.first {
++            return AgentModelSelection(agent: agent, model: catalog.defaultModel(for: agent))
+         }
+         return fallback
+     }
+diff --git a/ios/LFGCore/Tests/LFGCoreTests/NewSessionModelDefaultsTests.swift b/ios/LFGCore/Tests/LFGCoreTests/NewSessionModelDefaultsTests.swift
+index 730289c..a434150 100644
+--- a/ios/LFGCore/Tests/LFGCoreTests/NewSessionModelDefaultsTests.swift
++++ b/ios/LFGCore/Tests/LFGCoreTests/NewSessionModelDefaultsTests.swift
+@@ -75,12 +75,57 @@ final class NewSessionModelDefaultsTests: XCTestCase {
+         XCTAssertEqual(s.model, "sonnet")
+     }
+ 
++    // A model newer than the bundled list is still the directory's model. The
++    // bundle stopped at gpt-5.6, so this used to come back as gpt-5.6-sol.
++    func testModelNewerThanTheBundledListSurvivesInference() {
++        let sessions = [session("a1", cwd: "/a", agent: "codex", model: "gpt-6.1-sol", at: 10)]
++        let s = AgentModelSelection.inferred(forCwd: "/a", in: sessions, fallback: fallback)
++        XCTAssertFalse(AgentKind.codex.models.contains("gpt-6.1-sol"))
++        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: "gpt-6.1-sol"))
++
++        let live = ModelCatalogResponse(agents: [
++            "codex": AgentModelCatalog(defaultModel: "gpt-6.1-sol",
++                                       models: ["gpt-6.1-sol", "gpt-6-sol", "gpt-5.6-sol"]),
++        ])
++        XCTAssertEqual(s.reconciled(with: live).model, "gpt-6.1-sol")
++    }
++
+     // SC6: catalogs evolve; a retired model must never reach a create request.
+-    func testUnknownModelDegradesToTheAgentDefaultNotTheRawValue() {
++    // The host's live catalog is the judge, at the request boundary.
++    func testRetiredModelDegradesWhenReconciledWithTheHostCatalog() {
+         let sessions = [session("a1", cwd: "/a", agent: "codex", model: "gpt-4o-ancient", at: 10)]
+         let s = AgentModelSelection.inferred(forCwd: "/a", in: sessions, fallback: fallback)
+-        XCTAssertEqual(s.agent, .codex)
+-        XCTAssertEqual(s.model, AgentKind.codex.defaultModel)
++        let live = ModelCatalogResponse(agents: [
++            "codex": AgentModelCatalog(defaultModel: "gpt-6.1-sol", models: ["gpt-6.1-sol", "gpt-6-sol"]),
++        ])
++        XCTAssertEqual(s.reconciled(with: live), AgentModelSelection(agent: .codex, model: "gpt-6.1-sol"))
++    }
++
++    // An id that is not safe to put on an argv never leaves inference.
++    func testUnsafeModelDegradesToTheAgentDefault() {
++        let sessions = [session("a1", cwd: "/a", agent: "codex", model: "gpt; rm -rf /", at: 10)]
++        let s = AgentModelSelection.inferred(forCwd: "/a", in: sessions, fallback: fallback)
++        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: AgentKind.codex.defaultModel))
++    }
++
++    private let hostCatalog = ModelCatalogResponse(agents: [
++        "codex": AgentModelCatalog(defaultModel: "gpt-6.1-sol", models: ["gpt-6.1-sol", "gpt-5.6-sol"]),
++    ])
++
++    // SC4: "the agent's default" is the host's default, not this build's. A
++    // codex directory with no readable model used to open on gpt-5.6-sol.
++    func testAgentOnlyDirectoryUsesTheHostsDefault() {
++        let sessions = [session("a1", cwd: "/a", agent: "codex", model: nil, at: 10)]
++        let s = AgentModelSelection.inferred(
++            forCwd: "/a", in: sessions, fallback: fallback, catalog: hostCatalog)
++        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: "gpt-6.1-sol"))
++    }
++
++    func testUnsafeModelDegradesToTheHostsDefault() {
++        let sessions = [session("a1", cwd: "/a", agent: "codex", model: "gpt; rm -rf /", at: 10)]
++        let s = AgentModelSelection.inferred(
++            forCwd: "/a", in: sessions, fallback: fallback, catalog: hostCatalog)
++        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: "gpt-6.1-sol"))
+     }
+ 
+     // An agent this build doesn't know is not a runtime we can propose.
