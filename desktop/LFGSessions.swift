@@ -3030,6 +3030,20 @@ enum DesktopFeatureTestCLI {
         try expect(unboundClaudeBranch.session.sessionId == nil
                    && unboundClaudeBranch.session.tmuxName == "lfg-claude-branch",
                    "a Claude fork can attach while its new transcript ID is still binding")
+
+        let shown = ForkModal(sessionId: "codex-source", title: "source")
+        try expect(ForkModal.outcome(of: "codex-source", error: nil, showing: shown) == .dismiss,
+                   "a successful fork closes its sheet")
+        try expect(ForkModal.outcome(of: "codex-source", error: "Fork failed: 502", showing: shown)
+                   == .fail("Fork failed: 502"), "a failed fork reports inside its sheet")
+        try expect(ForkModal.outcome(of: "codex-source", error: "Fork failed: 502", showing: nil)
+                   == .alert("Fork failed: 502"), "a fork that fails after Hide falls back to the alert")
+        try expect(ForkModal.outcome(of: "codex-source", error: nil, showing: nil) == .none,
+                   "a fork that succeeds after Hide shows nothing")
+        try expect(ForkModal.outcome(
+            of: "codex-source", error: "Fork failed: 502",
+            showing: ForkModal(sessionId: "other", title: "other")) == .alert("Fork failed: 502"),
+                   "a hidden fork's failure never overwrites another fork's sheet")
     }
 
     /// Search spans every session on every host, so the rules that keep that
@@ -5139,9 +5153,71 @@ struct DesktopConnectionStatusBar: View {
     }
 }
 
+/// What the "Forking session" sheet shows. The fork itself runs in
+/// SessionStore (`forkingIds`); this only decides where its result goes.
+struct ForkModal: Equatable {
+    let sessionId: String
+    let title: String
+    var failure: String?
+
+    enum Outcome: Equatable {
+        case dismiss          // success while the sheet still shows this fork
+        case fail(String)     // failure while it shows this fork: say so in the sheet
+        case alert(String)    // failure after Hide: the window's alert reports it
+        case none             // success after Hide
+    }
+
+    static func outcome(of sessionId: String, error: String?, showing: ForkModal?) -> Outcome {
+        let ownsSheet = showing?.sessionId == sessionId && showing?.failure == nil
+        switch (error, ownsSheet) {
+        case (nil, true): return .dismiss
+        case (nil, false): return .none
+        case (let error?, true): return .fail(error)
+        case (let error?, false): return .alert(error)
+        }
+    }
+}
+
+struct ForkProgressSheet: View {
+    let modal: ForkModal
+    let close: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                if modal.failure == nil {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                }
+                Text(modal.failure == nil ? "Forking session" : "Couldn't fork session")
+                    .font(.headline)
+            }
+            Text(modal.title)
+                .lineLimit(2)
+            Text(modal.failure ?? "A new terminal window opens when the branch is ready.")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                // Hide leaves the fork running; its menu item keeps reading "Forking…".
+                Button(modal.failure == nil ? "Hide" : "OK", action: close)
+                    .keyboardShortcut(modal.failure == nil ? .cancelAction : .defaultAction)
+                    .accessibilityIdentifier("fork_progress_close")
+            }
+        }
+        .padding(20)
+        .frame(width: 360, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("fork_progress_sheet")
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject private var store: SessionStore
     @State private var alertMessage: String?
+    /// The "Forking session" sheet; nil when it is not shown. See ForkModal.
+    @State private var forkModal: ForkModal?
     @State private var searchText = ""
     @State private var groupMode: GroupMode = .status
     /// Collapsible UI state is in-memory per the current run.
@@ -5452,9 +5528,7 @@ struct ContentView: View {
                 }
                 if item.canFork, let id = item.session.sessionId {
                     Button(store.forkingIds.contains(id) ? "Forking…" : "Fork session") {
-                        Task {
-                            if let error = await store.fork(item) { alertMessage = error }
-                        }
+                        startFork(item)
                     }
                     .disabled(!store.canStartFork(item))
                     .accessibilityIdentifier("fork_session")
@@ -5998,6 +6072,31 @@ struct ContentView: View {
             }
         } message: {
             Text("An empty title clears the override and restores the session's first prompt as its name.")
+        }
+        .sheet(isPresented: .init(
+            get: { forkModal != nil },
+            set: { if !$0 { forkModal = nil } }
+        )) {
+            if let forkModal {
+                ForkProgressSheet(modal: forkModal) { self.forkModal = nil }
+            }
+        }
+    }
+
+    /// Fork with a modal up for the whole request: the server waits for the
+    /// branch's session id (up to ~14s for codex) and iTerm opens after that,
+    /// so without it the click looks like it did nothing.
+    private func startFork(_ item: SessionItem) {
+        guard store.canStartFork(item), let id = item.session.sessionId else { return }
+        forkModal = ForkModal(sessionId: id, title: item.session.title)
+        Task {
+            let error = await store.fork(item)
+            switch ForkModal.outcome(of: id, error: error, showing: forkModal) {
+            case .dismiss: forkModal = nil
+            case .fail(let message): forkModal?.failure = message
+            case .alert(let message): alertMessage = message
+            case .none: break
+            }
         }
     }
 

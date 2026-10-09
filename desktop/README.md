@@ -24,6 +24,8 @@ are stretched to the full visible height of the display they open on.
   session on the source host. The new session opens in a separate iTerm2 window;
   the original conversation stays available. Works for live and closed rows
   with a session ID. Requires a host with `/api/sessions/fork` support.
+  A "Forking session" sheet stays up until the window opens and shows the
+  error there if the fork fails; **Hide** dismisses it while the fork runs on.
 - **Switch tools** — right-click a Claude Code or Codex session and choose
   **Switch to Codex** or **Switch to Claude Code**. The source host saves a
   transcript snapshot, starts the other CLI in the same directory using its
