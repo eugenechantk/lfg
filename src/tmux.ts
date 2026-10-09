@@ -666,7 +666,7 @@ export function managedSessionArgv(opts: {
   // `--` terminates option parsing so the variadic --add-dir can't swallow the
   // positional prompt as a second directory (which strands the new session at
   // an empty composer — the first message never gets submitted).
-  if (opts.prompt && opts.prompt.trim()) argv.push("--", opts.prompt);
+  if (opts.prompt && opts.prompt.trim()) argv.push("--", tmuxLiteral(opts.prompt));
   return argv;
 }
 
@@ -782,12 +782,59 @@ export function managedCodexSessionArgv(opts: {
   if (opts.model && !(opts.resume && !opts.fork)) argv.push("--model", opts.model);
   if (opts.resume && opts.resume.trim()) {
     argv.push(opts.fork ? "fork" : "resume", opts.resume.trim());
-    if (opts.prompt && opts.prompt.trim()) argv.push(opts.prompt);
+    if (opts.prompt && opts.prompt.trim()) argv.push(tmuxLiteral(opts.prompt));
   } else if (opts.prompt && opts.prompt.trim()) {
-    argv.push("--", opts.prompt);
+    argv.push("--", tmuxLiteral(opts.prompt));
   }
+  // Same tmux command queue as new-session, so the style exists before codex
+  // sends its colour probes. spawnManagedCodexSession removes it afterwards.
+  argv.push(";", "set-option", "-w", "-t", `=${opts.name}:`, "window-style", codexPaneStyle());
   return argv;
 }
+
+// tmux reads ANY argv element that ends in `;` as a command separator, so a
+// prompt like "fix the bug;" loses its `;` — or, with a command chained after
+// it, splits the queue. `\;` reaches the program as a literal `;`.
+export function tmuxLiteral(arg: string): string {
+  return arg.endsWith(";") ? `${arg.slice(0, -1)}\\;` : arg;
+}
+
+// codex asks the terminal for its colours (OSC 10 and 11) once, at startup,
+// and derives every tint from the answers — the composer's gray band among
+// them. tmux answers from an attached client's terminal or from the window
+// style. A detached `new-session -d` has neither, so lfg-started codex drew a
+// plain composer while the attached `cx` sessions had the band. It needs both
+// fg and bg. These are iTerm's default-profile pairs; `LFG_CODEX_PANE_STYLE`
+// (a tmux style, e.g. "fg=#dcdcdc,bg=#15191f") overrides them.
+// See .claude/diagnosis-codex-composer-bg-lost-20261009.md.
+export const CODEX_PANE_STYLES = {
+  dark: "fg=#dcdcdc,bg=#15191f",
+  light: "fg=#101010,bg=#fafafa",
+} as const;
+
+export function codexPaneStyle(
+  env: Record<string, string | undefined> = process.env,
+  appearance: () => "dark" | "light" = macAppearance,
+): string {
+  const override = env.LFG_CODEX_PANE_STYLE?.trim();
+  return override || CODEX_PANE_STYLES[appearance()];
+}
+
+// `defaults read -g AppleInterfaceStyle` prints "Dark" in dark mode and fails
+// in light mode. iTerm's profile follows the same switch.
+function macAppearance(): "dark" | "light" {
+  try {
+    const r = Bun.spawnSync(["/usr/bin/defaults", "read", "-g", "AppleInterfaceStyle"]);
+    return new TextDecoder().decode(r.stdout).trim() === "Dark" ? "dark" : "light";
+  } catch {
+    return "dark";
+  }
+}
+
+// How long the seeded style stays. codex reads the colours during startup;
+// after that the style would only paint over the real client's background
+// (a dark block in light mode, a fixed colour on the phone).
+const CODEX_PANE_STYLE_HOLD_MS = 15_000;
 
 export function spawnManagedCodexSession(opts: {
   name: string;
@@ -802,6 +849,14 @@ export function spawnManagedCodexSession(opts: {
   const create = Bun.spawnSync(managedCodexSessionArgv(opts));
   if (create.exitCode !== 0)
     return { ok: false, error: dec.decode(create.stderr) || "new-session failed" };
+  setTimeout(() => {
+    try {
+      Bun.spawn(["tmux", "set-option", "-u", "-w", "-t", `=${opts.name}:`, "window-style"], {
+        stdout: "ignore",
+        stderr: "ignore",
+      });
+    } catch {}
+  }, CODEX_PANE_STYLE_HOLD_MS);
   return { ok: true };
 }
 

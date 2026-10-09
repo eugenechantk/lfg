@@ -1,5 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { DEFAULT_MODEL, claudeRelaunchArgv, managedCodexSessionArgv, managedSessionArgv } from "./tmux.ts";
+import {
+  CODEX_PANE_STYLES,
+  DEFAULT_MODEL,
+  claudeRelaunchArgv,
+  codexPaneStyle,
+  managedCodexSessionArgv,
+  managedSessionArgv,
+  tmuxLiteral,
+} from "./tmux.ts";
 
 const ID = "11111111-2222-3333-4444-555555555555";
 
@@ -95,6 +103,45 @@ describe("managedCodexSessionArgv — hook trust", () => {
   it("still present on the resume path", () => {
     const argv = managedCodexSessionArgv({ name: "s", cwd: "/tmp/x", resume: "abc-123" });
     expect(argv).toContain("--dangerously-bypass-hook-trust");
+  });
+});
+
+describe("managedCodexSessionArgv — pane colours for codex's startup probe", () => {
+  // A detached new-session has no client to answer codex's OSC 10/11 colour
+  // queries, and codex never asks again, so the composer lost its gray band.
+  it("seeds the window style in the same tmux command queue as new-session", () => {
+    const argv = managedCodexSessionArgv({ name: "lfg-col", cwd: "/tmp", prompt: "hi" });
+    const sep = argv.lastIndexOf(";");
+    expect(argv.indexOf("new-session")).toBeLessThan(sep);
+    expect(argv.slice(sep + 1, sep + 6)).toEqual(["set-option", "-w", "-t", "=lfg-col:", "window-style"]);
+    expect(argv[sep + 6]).toMatch(/^fg=#[0-9a-f]{6},bg=#[0-9a-f]{6}$/);
+  });
+
+  it("the codex argv (prompt included) ends before the separator", () => {
+    const argv = managedCodexSessionArgv({ name: "lfg-col", cwd: "/tmp", resume: ID, fork: true });
+    const sep = argv.lastIndexOf(";");
+    expect(argv[sep - 2]).toBe("fork");
+    expect(argv[sep - 1]).toBe(ID);
+  });
+
+  it("picks iTerm's pair for the appearance, and the env override wins", () => {
+    expect(codexPaneStyle({}, () => "dark")).toBe(CODEX_PANE_STYLES.dark);
+    expect(codexPaneStyle({}, () => "light")).toBe(CODEX_PANE_STYLES.light);
+    expect(codexPaneStyle({ LFG_CODEX_PANE_STYLE: "fg=#000000,bg=#ffffff" }, () => "dark"))
+      .toBe("fg=#000000,bg=#ffffff");
+  });
+});
+
+describe("tmuxLiteral — a trailing `;` is a tmux command separator", () => {
+  it("escapes only a trailing semicolon", () => {
+    expect(tmuxLiteral("fix the bug;")).toBe("fix the bug\\;");
+    expect(tmuxLiteral("a; b")).toBe("a; b");
+    expect(tmuxLiteral("plain")).toBe("plain");
+  });
+
+  it("both spawners pass the prompt escaped", () => {
+    expect(managedCodexSessionArgv({ name: "s", cwd: "/tmp", prompt: "go;" })).toContain("go\\;");
+    expect(managedSessionArgv({ name: "s", cwd: "/tmp", prompt: "go;" })).toContain("go\\;");
   });
 });
 
