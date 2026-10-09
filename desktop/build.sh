@@ -22,7 +22,7 @@ swiftc -O -parse-as-library \
   -target arm64-apple-macosx26.0 \
   -o "$APP/Contents/MacOS/lfg" \
   LFGSessions.swift \
-  ScheduledTasksWindow.swift \
+  ScheduledTasksPane.swift \
   ../shared/ScheduledTasksView.swift \
   ../ios/LFGCore/Sources/LFGCore/ScheduledTasks.swift \
   ../ios/LFGCore/Sources/LFGCore/HiddenDirs.swift

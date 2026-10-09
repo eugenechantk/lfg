@@ -900,6 +900,7 @@ enum Config {
 
 @MainActor
 final class SessionStore: ObservableObject {
+    @Published var showingScheduledTasks = false
     @Published var configuredHosts: [Config.HostEntry] = Config.loadHosts()
     /// Directories muted on THIS Mac — see `Config.loadHiddenDirs`.
     @Published var hiddenDirs: HiddenDirs = Config.loadHiddenDirs()
@@ -4542,6 +4543,7 @@ struct MenuBarQuickAccessView: View {
             Divider()
 
             Button {
+                store.showingScheduledTasks = false
                 openWindow(id: "sessions")
                 NSApplication.shared.activate(ignoringOtherApps: true)
             } label: {
@@ -4560,7 +4562,8 @@ struct MenuBarQuickAccessView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("menu_bar_open_all_button")
             Button {
-                openWindow(id: "scheduled-tasks")
+                store.showingScheduledTasks = true
+                openWindow(id: "sessions")
                 NSApplication.shared.activate(ignoringOtherApps: true)
             } label: {
                 Label("Scheduled Tasks", systemImage: "calendar.badge.clock")
@@ -5256,7 +5259,6 @@ struct ForkProgressSheet: View {
 
 struct ContentView: View {
     @EnvironmentObject private var store: SessionStore
-    @Environment(\.openWindow) private var openWindow
     @State private var alertMessage: String?
     /// The "Forking session" sheet; nil when it is not shown. See ForkModal.
     @State private var forkModal: ForkModal?
@@ -5876,6 +5878,26 @@ struct ContentView: View {
     }
 
     var body: some View {
+        Group {
+            if store.showingScheduledTasks {
+                ScheduledTasksPane()
+                    .toolbar {
+                        ToolbarItem(placement: .navigation) {
+                            Button("Sessions", systemImage: "chevron.left") {
+                                store.showingScheduledTasks = false
+                            }
+                            .accessibilityIdentifier("tasks_back_to_sessions")
+                        }
+                    }
+            } else {
+                sessionsBody
+            }
+        }
+        .frame(minWidth: store.showingScheduledTasks ? 900 : 620,
+               minHeight: store.showingScheduledTasks ? 620 : 420)
+    }
+
+    private var sessionsBody: some View {
         List {
             ForEach(sections) { section in
                 Section {
@@ -6030,7 +6052,7 @@ struct ContentView: View {
             }
             // Mirrors iOS's search-then-plus reading order at every width.
             ToolbarItem(placement: .primaryAction) {
-                Button("Scheduled Tasks", systemImage: "calendar.badge.clock") { openWindow(id: "scheduled-tasks") }
+                Button("Scheduled Tasks", systemImage: "calendar.badge.clock") { store.showingScheduledTasks = true }
                     .labelStyle(.iconOnly).help("Scheduled Tasks")
                     .accessibilityIdentifier("scheduled_tasks_button")
             }
@@ -6795,9 +6817,7 @@ struct LFGSessionsApp: App {
             ContentView()
                 .environmentObject(store)
         }
-        Window("Scheduled Tasks", id: "scheduled-tasks") {
-            ScheduledTasksWindow().environmentObject(store)
-        }.defaultSize(width: 980, height: 740)
+        .windowResizability(.contentMinSize)
         MenuBarExtra {
             MenuBarQuickAccessView()
                 .environmentObject(store)

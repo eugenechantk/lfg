@@ -17,12 +17,13 @@ previous sessions. Plus starts a conversation with Claude Code.
 - [x] Plus opens chat setup directly with Claude Code and a host selector. Chat
   supports follow-up replies and saves tasks visible in the list.
 
-## Verification
+## Original verification
 
 Use focused API tests for bounded, ordered run summaries and Swift tests for
 decoding and host-qualified task identity. Build both native apps. Record native
 navigation and obtain an independent visual audit. Reuse isolated preview hosts;
-do not deploy, commit, or replace the installed desktop application.
+Deployment was outside the original verification scope. The later authorized
+release and desktop revision are recorded below.
 
 - `ScheduledTasksTests.swift`: seven tests pass, including recent sessions,
   compatibility with older hosts, model defaults, and host-qualified task identity.
@@ -53,3 +54,30 @@ The final native width checks passed. No known acceptance failures remain.
 The installed desktop app, production host, and published mobile build were not
 replaced by this task. Test sessions closed, preview processes stopped, and test
 tasks remain disabled with their transcripts preserved.
+
+
+## Desktop navigation revision — 2026-10-09
+
+Scheduled Tasks replaces the session list inside the existing desktop window. A Sessions button returns to the list. The menu-bar shortcuts select a view in that same window. Session search and grouping remain owned by ContentView during the switch.
+
+- [x] Opening Scheduled Tasks preserves the main window identity and creates no second window. AX snapshots retain the `sessions` window identifier.
+- [x] Sessions returns to the list with its search and grouping state. A unique session query and Directory grouping survive the round trip.
+- [x] Plus opens Claude Code setup within the task view. The independent audit opened and dismissed the sheet without creating work.
+- [x] Both installed desktop copies match the verified binary. Hashes, signatures, 168 feature assertions, and running executable paths passed.
+
+The independent native audit passed. Opening tasks expands a compact Sessions
+window to the task view's 900-point minimum. Both menu-bar shortcuts use the
+same window. Evidence: `.codex/evidence/release-20261009/desktop-container-audit/evidence.md`.
+
+The final signed desktop binary is installed and running on Pro and Air.
+Its SHA-256 is `fdaffa36d3075c532f6d8c561a18e2b9bd0ce6d92218438a7f6a5e5f415fe5c3`.
+Air lacks GUI inspection permissions; its install passed signature, hash,
+feature, process, and API checks. The native visual audit ran on Pro.
+
+iOS 1.3.0 build `202610091410` passed the TestFlight release checks.
+It uses the committed snapshot before this desktop-only revision.
+Both host servers and the Pro MCP service restarted successfully.
+The one-minute scheduler launched a new session naturally on both hosts.
+Pro completed successfully. Air's Claude request failed during outbound TLS
+connections. Both verification sessions were then closed through the API;
+their disabled one-time tasks and run history remain available.

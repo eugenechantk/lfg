@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct ScheduledTasksWindow: View {
+struct ScheduledTasksPane: View {
     @EnvironmentObject private var store: SessionStore
     @State private var error: String?
     var body: some View {
