@@ -30,6 +30,7 @@ targets:
         excludes:
           - ".syncthing.*.tmp"
       - path: Shared
+      - path: ../shared/ScheduledTasksView.swift
       # A folder reference is resolved at build time, so the ignored private
       # payload can be present locally without becoming an individual project
       # reference that breaks credential-free clones.

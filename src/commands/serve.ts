@@ -41,6 +41,8 @@ import {
 } from "../auto/store.ts";
 import { runAutoAgent } from "../auto/runner.ts";
 import { startAutoScheduler } from "../auto/scheduler.ts";
+import { TaskStore } from "../scheduled-tasks.ts";
+import { scheduledTaskRoutes, taskRuntime, type TaskApiCall } from "../scheduled-task-api.ts";
 import { startAutopilot } from "../autopilot/tick.ts";
 import {
   listSessions,
@@ -1260,6 +1262,19 @@ export async function cmdServe(options: {
   browserSignInHistoryPath?: string;
 } = {}) {
   const backgroundTasks = options.backgroundTasks !== false;
+  const taskStore = new TaskStore(join(PATHS.data, "scheduled-tasks.json"));
+  const taskCall: TaskApiCall = async (path, body) => {
+    const response = await handleHttp(new Request(`http://127.0.0.1:${PORT}${path}`, {
+      method: body === undefined ? "GET" : "POST",
+      ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+    }), server);
+    if (!response) throw new Error("No response from session API");
+    const data = await response.json() as any;
+    if (!response.ok) throw new Error(data.error ?? `Session API returned ${response.status}`);
+    return data;
+  };
+  const scheduledTasks = taskRuntime(taskStore, taskCall);
+  const taskRoutes = scheduledTaskRoutes(taskStore, scheduledTasks, taskCall, { root: PATHS.root, port: PORT, defaultCwd: SELF_REPO });
   // Event journal + the one global session pump: the single live-delivery path.
   // The per-connection pumps behind /api/live/stream and /api/sessions/:id/stream
   // are gone along with the web client that was their last consumer, so live
@@ -1397,6 +1412,8 @@ export async function cmdServe(options: {
       const path = url.pathname;
 
       if (path.startsWith("/api/iphone-preview/")) return iphonePreviewHTTP(req);
+
+      if (path.startsWith("/api/scheduled-tasks")) return (await taskRoutes(req)) ?? err(404, "not found");
 
       if (path === "/api/browser-sign-in/adapter") {
         if (req.method !== "GET" || !allowsSignInAdapter(req)) return err(403, "Local browser adapter required");
@@ -3119,6 +3136,7 @@ export async function cmdServe(options: {
   }
 
   if (backgroundTasks) startAutoScheduler((l) => console.log(l));
+  if (backgroundTasks) scheduledTasks.start();
   // Periodic maintenance over lfg's own state (session retitling today). Runs
   // here rather than as a separate daemon because this process already owns the
   // files those tasks mutate. LFG_AUTOPILOT=0 disables it.

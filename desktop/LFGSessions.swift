@@ -2805,9 +2805,9 @@ enum DesktopFeatureTestCLI {
         try expect(compactShort < 40,
                    "compact two-host status cluster stays dot-sized")
 
-        // Labels are dropped because they don't fit beside all four compact
+        // Labels are dropped because they don't fit beside all five compact
         // actions, not merely because the window crossed the compact threshold.
-        try expect(ContentView.hostLabelsFit(clusterWidth: 67, windowWidth: 600),
+        try expect(ContentView.hostLabelsFit(clusterWidth: 67, windowWidth: 650),
                    "short host names keep their labels when all compact actions fit")
         try expect(!ContentView.hostLabelsFit(clusterWidth: 67, windowWidth: 568),
                    "short labels give way before they can push Create into overflow")
@@ -2816,7 +2816,7 @@ enum DesktopFeatureTestCLI {
         try expect(!ContentView.hostLabelsFit(clusterWidth: 300, windowWidth: 700),
                    "long host names drop to dots rather than push an item into the overflow")
         try expect(ContentView.hostLabelsFit(clusterWidth: 300, windowWidth: 900),
-                   "a full-size window always keeps the labels")
+                   "medium windows retain labels when the compact actions fit")
 
         let needsInput = menuTestItem(
             id: "needs-input",
@@ -4559,6 +4559,13 @@ struct MenuBarQuickAccessView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("menu_bar_open_all_button")
+            Button {
+                openWindow(id: "scheduled-tasks")
+                NSApplication.shared.activate(ignoringOtherApps: true)
+            } label: {
+                Label("Scheduled Tasks", systemImage: "calendar.badge.clock")
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 14).padding(.vertical, 10)
+            }.buttonStyle(.plain).accessibilityIdentifier("menu_bar_scheduled_tasks")
         }
         .frame(width: 380)
         .background(Color(nsColor: .windowBackgroundColor))
@@ -5249,6 +5256,7 @@ struct ForkProgressSheet: View {
 
 struct ContentView: View {
     @EnvironmentObject private var store: SessionStore
+    @Environment(\.openWindow) private var openWindow
     @State private var alertMessage: String?
     /// The "Forking session" sheet; nil when it is not shown. See ForkModal.
     @State private var forkModal: ForkModal?
@@ -5710,23 +5718,19 @@ struct ContentView: View {
     /// (AppKit charges ~300pt of chrome before any item gets a point, so the
     /// budget is far tighter than the item widths suggest — see `--window-fit`.)
     ///
-    /// Raised 760 → 820 when the directory-filter button joined the full-size
-    /// trailing cluster: `--window-fit 760` showed the 150pt search field
-    /// dropping into the » overflow, and losing search is a far worse trade than
-    /// spending another 60pt in the compact layout — which is a complete layout,
-    /// not a degraded one (it reaches the same filter panel through the grouping
-    /// menu). Re-measure with `--window-fit` after touching any toolbar item.
-    static let compactToolbarWidth: CGFloat = 820
+    /// Scheduled Tasks must stay visible. The full toolbar overflowed at 900pt
+    /// after adding that action; retain the compact controls through medium
+    /// widths and use the full layout from 1200pt, where it was measured to fit.
+    static let compactToolbarWidth: CGFloat = 1200
 
-    /// Chrome plus the four standard-size compact icon actions. Whatever a compact window has
+    /// Chrome plus the five standard-size compact icon actions. Whatever a compact window has
     /// left over this is what the host-status cluster may spend on labels.
-    /// Runtime AX capture at 568pt showed short host labels pushing Create out;
-    /// 530pt collapses those names there while retaining them around 600pt.
-    static let compactStatusReserve: CGFloat = 530
+    /// Reserve another action's width for Scheduled Tasks before showing labels.
+    static let compactStatusReserve: CGFloat = 582
 
     private var isCompactToolbar: Bool { windowWidth < Self.compactToolbarWidth }
 
-    /// Keep short host names when all four actions still fit; otherwise the
+    /// Keep short host names when all five actions still fit; otherwise the
     /// create action outranks labels and the hosts collapse to bare dots.
     static func hostLabelsFit(clusterWidth: CGFloat, windowWidth: CGFloat) -> Bool {
         guard windowWidth < compactToolbarWidth else { return true }
@@ -5945,9 +5949,8 @@ struct ContentView: View {
             }
         }
         .listStyle(.inset)
-        // 568 is the measured minimum that keeps all four standard-size compact
-        // actions visible on the trailing edge without an overflow menu.
-        .frame(minWidth: 568, minHeight: 420)
+        // Leave room for the always-visible Scheduled Tasks action in compact mode.
+        .frame(minWidth: 620, minHeight: 420)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { width in
@@ -6026,6 +6029,12 @@ struct ContentView: View {
                 }
             }
             // Mirrors iOS's search-then-plus reading order at every width.
+            ToolbarItem(placement: .primaryAction) {
+                Button("Scheduled Tasks", systemImage: "calendar.badge.clock") { openWindow(id: "scheduled-tasks") }
+                    .labelStyle(.iconOnly).help("Scheduled Tasks")
+                    .accessibilityIdentifier("scheduled_tasks_button")
+            }
+            .sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .primaryAction) {
                 createSessionButton
             }
@@ -6786,6 +6795,9 @@ struct LFGSessionsApp: App {
             ContentView()
                 .environmentObject(store)
         }
+        Window("Scheduled Tasks", id: "scheduled-tasks") {
+            ScheduledTasksWindow().environmentObject(store)
+        }.defaultSize(width: 980, height: 740)
         MenuBarExtra {
             MenuBarQuickAccessView()
                 .environmentObject(store)

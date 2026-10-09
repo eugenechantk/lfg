@@ -15,6 +15,7 @@
 		16B0F6A79CE890FBF2B0E5E2 /* LFGFleetAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */; };
 		17E5CC9417E33D6CADF1F707 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25CBF3AE8C40F2EE10BB4BD0 /* Theme.swift */; };
 		1C4DEA4B71CE025D7E79107E /* SelectableProse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C932111B6E38085D1F5EDE8 /* SelectableProse.swift */; };
+		205D0AB41E932103E44D0EB4 /* ScheduledTasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF04EDE90109D7814EB6B429 /* ScheduledTasksView.swift */; };
 		20A5B356DC3393D9F80883A9 /* SessionSendFollowFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5ED2523205ABC71E4CAFB8 /* SessionSendFollowFixture.swift */; };
 		406EF855180AB2BA0E75D26A /* TerminalScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 210FE0F59E5CE42AA932EF9E /* TerminalScreen.swift */; };
 		50F6EF746AAEB80DB6229E05 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 073FCBCA797989A55F83BAE4 /* MessageComposer.swift */; };
@@ -127,6 +128,7 @@
 		C5AB3889AD4A389149350563 /* HostCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostCredentialStore.swift; sourceTree = "<group>"; };
 		CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
 		CDCC421082566E268167E6E7 /* RetiredSessionActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetiredSessionActivity.swift; sourceTree = "<group>"; };
+		CF04EDE90109D7814EB6B429 /* ScheduledTasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledTasksView.swift; sourceTree = "<group>"; };
 		D48FAC07EBFC6249487EAEB9 /* ConnectionLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionLogView.swift; sourceTree = "<group>"; };
 		D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = SharedAssets.xcassets; sourceTree = "<group>"; };
 		D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LFGWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -170,6 +172,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		00B0D72905AFA77EDEAC412D /* shared */ = {
+			isa = PBXGroup;
+			children = (
+				CF04EDE90109D7814EB6B429 /* ScheduledTasksView.swift */,
+			);
+			name = shared;
+			path = ../shared;
+			sourceTree = "<group>";
+		};
 		0542EECBB7F4E0F79564C5E6 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -189,6 +200,7 @@
 				FA8FE8245D3AF81F2B302E13 /* LFGWidgets */,
 				33994F66596F8E85A2F92388 /* Packages */,
 				4A14429DD60DEA489C97C92A /* Shared */,
+				00B0D72905AFA77EDEAC412D /* shared */,
 				0542EECBB7F4E0F79564C5E6 /* Frameworks */,
 				73237F52945A981B453A84AA /* Products */,
 			);
@@ -437,6 +449,7 @@
 				F2BF12A27D8AF0AA5A35222B /* RetiredSessionActivity.swift in Sources */,
 				85C03A175F9DF48F0DAF9D6E /* RichContent.swift in Sources */,
 				A541589C33833A613D05AD8B /* RootView.swift in Sources */,
+				205D0AB41E932103E44D0EB4 /* ScheduledTasksView.swift in Sources */,
 				1C4DEA4B71CE025D7E79107E /* SelectableProse.swift in Sources */,
 				D9DD48F43B87E8793C27102F /* SessionDetailView.swift in Sources */,
 				D34242B9518E03AED793C989 /* SessionListView.swift in Sources */,

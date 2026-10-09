@@ -159,3 +159,35 @@ start in (`~/dev`, `~/inbox`, Desktop, Downloads, Documents).
 - Prompt injection: an assistant that reads web pages or posts can be steered to
   call these tools. The server instructions tell it to act only on Eugene's
   requests, but that is advice, not enforcement.
+
+## Scheduled tasks
+
+Sessions can schedule a task once, at a repeating interval, or with a five-field
+cron expression. Both native clients provide a Scheduled Tasks manager, manual
+forms, and a conversation for working out the schedule.
+
+| Tool | Purpose |
+| --- | --- |
+| `list_scheduled_tasks` | List tasks, next runs, and current status. |
+| `create_scheduled_task` | Save instructions, directory, agent, timezone, and schedule. |
+| `update_scheduled_task` | Edit a task or change `enabled` to pause or resume it. |
+| `scheduled_task_runs` | Read paginated history with results and session IDs. |
+| `run_scheduled_task` | Start one run immediately. |
+| `cancel_scheduled_task` | Cancel future runs and retain history. |
+
+The host stores tasks in `~/.lfg/scheduled-tasks.json`. Each run starts a normal
+Claude or Codex session. The host must be awake with LFG running. When it returns,
+one-time tasks catch up once; repeating tasks combine missed runs into one run.
+A task never overlaps its own active run. Cancelling a task does not stop an
+already running session.
+
+For sessions without MCP, `bun scripts/lfg-task-tool.ts` exposes the same API.
+Use `list`, `create` (JSON on stdin), `update TASK_ID` (JSON on stdin), `runs TASK_ID`,
+`pause TASK_ID`, `resume TASK_ID`, `run TASK_ID`, or `cancel TASK_ID`.
+`LFG_TASK_BASE` defaults to `http://127.0.0.1:8766`.
+
+Schedules use an IANA timezone. A one-time schedule requires an ISO timestamp
+with an offset. Cron uses five fields and standard day-of-month OR weekday rules.
+Intervals have a minimum of one minute. Manual runs preserve a recurring task's
+next scheduled time. An uncertain launch after restart is marked interrupted;
+inspect its session before retrying.

@@ -6,6 +6,8 @@ struct RootView: View {
     @Environment(SessionStore.self) private var store
 
     @State private var selection: String?
+    private enum AppTab { case sessions, scheduledTasks }
+    @State private var selectedTab = AppTab.sessions
     @State private var showSettings = false
     @State private var showNewSession = false
     @State private var focusNewSessionComposer = false
@@ -29,6 +31,7 @@ struct RootView: View {
         guard settings.hasConfiguredHost else { return }
         Task { @MainActor in
             await Task.yield()
+            selectedTab = .sessions
             newSessionPrefill = NewSessionPrefill(link: link)
             focusNewSessionComposer = true
             showNewSession = true
@@ -55,6 +58,8 @@ struct RootView: View {
     var body: some View {
         Group {
             if settings.hasConfiguredHost {
+                TabView(selection: $selectedTab) {
+                    Tab("Sessions", systemImage: "bubble.left.and.bubble.right", value: AppTab.sessions) {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     SessionListView(selection: $selection,
                                     showSettings: $showSettings,
@@ -131,6 +136,21 @@ struct RootView: View {
                     }
                 }
                 .navigationSplitViewStyle(.balanced)
+                    }
+                    .accessibilityIdentifier("sessions_tab")
+                    Tab("Scheduled Tasks", systemImage: "calendar.badge.clock", value: AppTab.scheduledTasks) {
+                        ScheduledTasksView(hosts: settings.hosts.compactMap { host in
+                            guard let client = settings.client(for: host) else { return nil }
+                            return ScheduledTaskHost(id: host.id, name: host.label, baseURL: client.baseURL,
+                                headers: client.resourceRequest(for: client.baseURL).allHTTPHeaderFields ?? [:])
+                        }) { _, id in
+                            selectedTab = .sessions
+                            store.openFromNotification(id)
+                        }
+                    }
+                    .accessibilityIdentifier("scheduled_tasks_tab")
+                }
+                .tabViewStyle(.tabBarOnly)
             } else {
                 ConnectView()
             }
@@ -169,12 +189,14 @@ struct RootView: View {
             // a blank/black screen. The plain onChange below covers taps that
             // arrive while the app is already running.
             if let pending = store.requestedSelection {
+                selectedTab = .sessions
                 selection = pending
                 store.clearRequestedSelection()
             }
         }
         .onChange(of: store.requestedSelection) { _, requested in
             guard let requested else { return }
+            selectedTab = .sessions
             selection = requested
             store.clearRequestedSelection()
         }

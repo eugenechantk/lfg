@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc13",
+    "croner": "^10.0.1",
     "playwright-core": "^1.63.0",
     "qrcode-terminal": "^0.12.0",
     "tldts": "^7.4.12",

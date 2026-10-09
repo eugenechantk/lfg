@@ -28,6 +28,7 @@ import {
 } from "./mcp-file-policy.ts";
 import { text, type McpTool, type ToolContent, type ToolResult } from "./mcp-server.ts";
 import { extractPdf, type PdfExtractor } from "./pdf-extract.ts";
+import { scheduledTaskTools } from "./scheduled-task-tools.ts";
 
 // ---- lfg API client ------------------------------------------------------------
 
@@ -406,6 +407,7 @@ export function lfgTools(opts: LfgToolsOptions): McpTool[] {
   const sessionIdProp = { session_id: { type: "string", description: "Session id (UUID) from list_sessions." } };
 
   return [
+    ...scheduledTaskTools(api),
     {
       name: "list_sessions",
       description:

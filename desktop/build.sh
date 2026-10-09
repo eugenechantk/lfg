@@ -22,6 +22,9 @@ swiftc -O -parse-as-library \
   -target arm64-apple-macosx26.0 \
   -o "$APP/Contents/MacOS/lfg" \
   LFGSessions.swift \
+  ScheduledTasksWindow.swift \
+  ../shared/ScheduledTasksView.swift \
+  ../ios/LFGCore/Sources/LFGCore/ScheduledTasks.swift \
   ../ios/LFGCore/Sources/LFGCore/HiddenDirs.swift
 
 # App icon: reuse the iOS client's 1024px icon, converted to .icns.
