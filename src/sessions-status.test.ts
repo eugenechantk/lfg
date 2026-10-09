@@ -62,6 +62,35 @@ describe("computeStatus — structured signals", () => {
     const r = classify(assistantLine({ isApiErrorMessage: true }, "No response requested."), null);
     expect(r.status).toBe("ok");
   });
+
+  test("a network failure (server_error) is idle, not paused", () => {
+    // Verbatim real shapes (SleepingBeauty ab09cd87 / 787a2e54, 2026-10-07, and
+    // the corpus): Claude Code ends the turn after its retries, and the next
+    // prompt runs normally. Grading these "unknown" parked them under the
+    // paused banner as if the session were wedged.
+    for (const text of [
+      "API Error: Connection dropped (ECONNRESET)",
+      "API Error: Connection lost mid-response. The response above may be incomplete.",
+      "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
+      "API Error: Your computer went to sleep mid-response. The response above may be incomplete.",
+      // A wording that mentions "model" must not fall into the prose labels.
+      "API Error: Connection lost while the model was responding.",
+    ]) {
+      const r = classify(assistantLine({ isApiErrorMessage: true, error: "server_error" }, text));
+      expect(r.status).toBe("ok");
+      expect(r.statusReason).toBeNull();
+    }
+  });
+
+  test("a rate limit is still blocked — the next turn fails too", () => {
+    const r = classify(
+      assistantLine(
+        { isApiErrorMessage: true, error: "rate_limit", apiErrorStatus: 429 },
+        "You've hit your session limit · resets 8:20pm (Asia/Hong_Kong)",
+      ),
+    );
+    expect(r.status).toBe("blocked");
+  });
 });
 
 describe("computeStatus — prose labelling still works", () => {

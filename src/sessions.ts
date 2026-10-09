@@ -223,6 +223,18 @@ function computeStatus(
   const code = last.errorCode ?? null;
   const httpStatus = last.apiErrorStatus ?? null;
 
+  // --- transient: the turn failed, the session did not ------------------
+  // `server_error` is Claude Code's code for a NETWORK failure after its own
+  // retries ran out: "Connection dropped (ECONNRESET)", "Connection lost
+  // mid-response", "Can't reach the API server (ENOTFOUND)", "Your computer went
+  // to sleep mid-response". The turn is over (turn_duration follows) and the next
+  // prompt runs normally, so this is idle, not "Build paused". Grading it as an
+  // unknown block parked two SleepingBeauty sessions under the paused banner for
+  // a night after a VPN outage (2026-10-07) — they read as stuck, not finished.
+  // Checked before the prose labels: a future wording that mentions "model" must
+  // not be relabelled model_unavailable.
+  if (code === "server_error") return { status: "ok", statusReason: null, statusDetail: null };
+
   // --- structured first -------------------------------------------------
   // Claude Code writes a machine-readable `error` code and `apiErrorStatus`.
   // Reading those beats matching English, which changes with every upstream
