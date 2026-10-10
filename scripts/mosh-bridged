@@ -247,8 +247,21 @@ if [[ -n "$lan_ssh" ]]; then
   fi
 fi
 if [[ -z "$line" ]]; then
-  bootstrap=$("${ssh_run[@]}" "$target" "$bootstrap_cmd" 2>&1 || true)
-  line=$(print -r -- "$bootstrap" | grep '^MOSH CONNECT ' || true)
+  # One tunnel connect can stall past ConnectTimeout while the path is healthy
+  # either side of it (2026-10-10: a >5s stall Air->Cloudflare, ~0.7s before
+  # and after, nothing in the Pro's tunnel log). ssh exits 255 when it never
+  # got a session, so the remote command never ran: retry that once rather
+  # than lose the window. Any other failure (mosh-server missing) is not 255
+  # and still fails on the first try. Every failed attempt is logged.
+  for attempt in 1 2; do
+    t0=$EPOCHREALTIME rc=0
+    bootstrap=$("${ssh_run[@]}" "$target" "$bootstrap_cmd" 2>&1) || rc=$?
+    line=$(print -r -- "$bootstrap" | grep '^MOSH CONNECT ' || true)
+    [[ -n "$line" ]] && break
+    print -r -- "$(date '+%F %T') $target: tunnel bootstrap attempt $attempt failed rc=$rc after $(printf %.1f $(( EPOCHREALTIME - t0 )))s: ${${(f)bootstrap}[-1]:-}" >>| "$log"
+    (( rc == 255 )) || break
+    sleep 1
+  done
 fi
 if [[ -z "$line" ]]; then
   print -u2 "mosh-bridged: mosh-server bootstrap on '$target' failed:"; print -u2 -r -- "$bootstrap"; exit 1
