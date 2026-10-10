@@ -640,7 +640,10 @@ import LFGCore
     /// transcript is synced everywhere, so an offline owner is no reason to show
     /// an empty session. Rules live in `MultiHost.readRouteHost`.
     func readClient(forSession id: String) -> LFGClient? {
-        MultiHost.readRouteHost(owner: host(forSession: id),
+        let source = deepLinkTranscriptSource.flatMap { source in
+            source.sessionID == id ? settings.hosts.first { $0.id == source.hostID } : nil
+        }
+        return MultiHost.readRouteHost(owner: host(forSession: id), transcriptHost: source,
                                 reachable: isReachable,
                                 agnostic: agnosticHost)
             .flatMap { settings.client(for: $0) }
@@ -702,7 +705,7 @@ import LFGCore
     /// reconnect and resolve the session here: refresh the live list, and if the
     /// session has since closed (pane reaped), pull it from the resumable list so
     /// its transcript still opens (sending revives it via the server auto-resume).
-    func openFromNotification(_ sid: String, snapshot: Session? = nil) {
+    func openFromNotification(_ sid: String, snapshot: Session? = nil, sourceHostID: String? = nil) {
         // Defer onto the next main-actor turn. A notification tap calls this from
         // *inside* UIKit's launch / CATransaction-commit while it's snapshotting
         // for state restoration; setting `requestedSelection` synchronously there
@@ -712,6 +715,9 @@ import LFGCore
         // context — exactly like an in-app tap.
         Task { [weak self] in
             guard let self else { return }
+            if let sourceHostID {
+                self.deepLinkTranscriptSource = (sid, sourceHostID)
+            }
             // Seed the detail from the push's embedded snapshot so the session
             // screen renders instantly on tap, before the reconnect + refresh.
             // `resolveDeepLink`'s refresh swaps in the authoritative live copy.
@@ -719,8 +725,15 @@ import LFGCore
                 self.deepLinkSession = snapshot
             }
             self.requestedSelection = self.navID(sid)
-            await self.resolveDeepLink(sid)
+            await self.resolveDeepLink(sid, sourceHostID: sourceHostID)
         }
+    }
+
+    /// Resolve a session in a caller-owned navigation stack, without redirecting
+    /// the user to the Sessions tab. Tasks uses the same detail and transcript.
+    func prepareSessionForDisplay(_ sid: String, sourceHostID: String) async {
+        deepLinkTranscriptSource = (sid, sourceHostID)
+        await resolveDeepLink(sid, sourceHostID: sourceHostID)
     }
 
     /// Resolve a deep-linked session well enough for its detail view to bind.
@@ -736,15 +749,19 @@ import LFGCore
     /// Asked of every reachable host, not just the default one: `~/.claude/projects`
     /// is synced but a transcript's newest copy can be on a peer, and the old
     /// default-host-only lookup missed those outright. First host to answer with a
-    /// matching row wins — the copies describe the same conversation.
-    private func resolveDeepLink(_ sid: String) async {
+    /// matching row wins. Scheduled tasks try their recorded host first and
+    /// retain that transcript source until a live owner becomes authoritative.
+    private func resolveDeepLink(_ sid: String, sourceHostID: String? = nil) async {
         await refresh()                       // reconnect + load the live list
         if session(sid) != nil { return }     // live — detail can bind immediately
-        let hosts = settings.hosts.filter { isReachable($0) }
+        let candidates = settings.hosts.filter { $0.id == sourceHostID || isReachable($0) }
+        let hosts = candidates.filter { $0.id == sourceHostID }
+            + candidates.filter { $0.id != sourceHostID }
         for host in hosts {
             guard let c = settings.client(for: host) else { continue }
             guard let page = try? await c.resumable(limit: 5, q: sid),
                   let r = page.sessions.first(where: { $0.sessionId == sid }) else { continue }
+            deepLinkTranscriptSource = (sid, host.id)
             // Synthesize a display copy so the detail view + transcript open;
             // `session(_:)` returns it as a fallback.
             deepLinkSession = Session(
@@ -2988,6 +3005,12 @@ import LFGCore
                let hit = searchResults.first(where: { $0.sessionId == id }) {
                 deepLinkSession = hit
             }
+            if searchResults.contains(where: { $0.sessionId == id }),
+               let source = settings.hosts.first(where: { host in
+                   searchPagesByHost[host.id]?.contains(where: { $0.sessionId == id }) == true
+               }) {
+                deepLinkTranscriptSource = (id, source.id)
+            }
         }
         guard focusedID != id else { return }
         focusedID = id
@@ -3289,6 +3312,8 @@ import LFGCore
     /// and focusing a session that was reached through search (`focus`). Both are
     /// the same need — keep a display copy alive so `session(_:)` can answer.
     private var deepLinkSession: Session?
+    /// Read location for the most recent deep link, independent of live ownership.
+    private var deepLinkTranscriptSource: (sessionID: String, hostID: String)?
 
     func session(_ id: String) -> Session? {
         if let s = sessions.first(where: { $0.sessionId == id }) { return s }

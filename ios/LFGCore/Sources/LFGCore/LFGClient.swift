@@ -639,8 +639,10 @@ public struct LFGClient: Sendable {
     // MARK: Create / resume
 
     public func newSession(_ r: NewSessionRequest) async throws -> NewSessionResponse {
-        let data = try await send("POST", "api/sessions/new", json: [
+        let path = r.purpose == .scheduledTask ? "api/scheduled-tasks/chat" : "api/sessions/new"
+        let data = try await send("POST", path, json: [
             "cwd": r.cwd, "prompt": r.prompt, "agent": r.agent, "model": r.model, "user": r.user,
+            "timezone": r.purpose == .scheduledTask ? r.timezone : nil,
         ])
         return try JSONDecoder().decode(NewSessionResponse.self, from: data)
     }

@@ -22,6 +22,7 @@ private struct NewSessionPresentationModifier: ViewModifier {
     @Binding var isPresented: Bool
     @Binding var autofocusComposer: Bool
     @Binding var prefill: NewSessionPrefill?
+    var purpose: SessionCreationPurpose
 
     /// The id handed up by a create, held until the create screen is actually
     /// gone. See `applyPendingSelection`.
@@ -30,7 +31,7 @@ private struct NewSessionPresentationModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .fullScreenCover(isPresented: $isPresented, onDismiss: resetPresentation) {
-                NewSessionView(autofocusComposer: autofocusComposer, prefill: $prefill) { newID in
+                NewSessionView(autofocusComposer: autofocusComposer, purpose: purpose, prefill: $prefill) { newID in
                     // Deliberately NOT `selection = newID`. The create screen is
                     // dismissing in this same runloop turn; a selection change made
                     // during that in-flight transition is swallowed. The optimistic
@@ -69,13 +70,15 @@ extension View {
         selection: Binding<String?>,
         isPresented: Binding<Bool>,
         autofocusComposer: Binding<Bool>,
-        prefill: Binding<NewSessionPrefill?>
+        prefill: Binding<NewSessionPrefill?>,
+        purpose: SessionCreationPurpose = .conversation
     ) -> some View {
         modifier(NewSessionPresentationModifier(
             selection: selection,
             isPresented: isPresented,
             autofocusComposer: autofocusComposer,
-            prefill: prefill
+            prefill: prefill,
+            purpose: purpose
         ))
     }
 }

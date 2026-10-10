@@ -49,7 +49,7 @@ public enum OptimisticSendReconciliation {
                 inspectedUserTurns += 1
             }
 
-            let candidate = normalized(message.text)
+            let candidate = normalized(ScheduledTaskChatContext.displayedMessage(message.text))
             if requiresExactMatch ? candidate == key : candidate.contains(key) { return true }
         }
         return false

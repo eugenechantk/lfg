@@ -25,6 +25,8 @@ swiftc -O -parse-as-library \
   ScheduledTasksPane.swift \
   ../shared/ScheduledTasksView.swift \
   ../ios/LFGCore/Sources/LFGCore/ScheduledTasks.swift \
+  ../ios/LFGCore/Sources/LFGCore/ModelCatalog.swift \
+  ../ios/LFGCore/Sources/LFGCore/SessionEffort.swift \
   ../ios/LFGCore/Sources/LFGCore/HiddenDirs.swift
 
 # App icon: reuse the iOS client's 1024px icon, converted to .icns.

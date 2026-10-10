@@ -59,8 +59,16 @@ struct SessionListView: View {
     @Binding var showSettings: Bool
     @Binding var showNewSession: Bool
     @Binding var focusNewSessionComposer: Bool
-    @State private var searchText = ""
-    @State private var sortMenuHighlight = false
+    var searchQuery: Binding<String>? = nil
+    var usesTabSearch = false
+    var isSearchPresentation = false
+    var onSearch: (() -> Void)? = nil
+    var bottomSearchActive: Binding<Bool>? = nil
+    var bottomSearchShown = false
+    @State private var localSearchText = ""
+    @State private var listWidth: CGFloat = 320
+    private var searchText: String { searchQuery?.wrappedValue ?? localSearchText }
+    private var searchBinding: Binding<String> { searchQuery ?? $localSearchText }
     /// Directory-filter panel. A sheet rather than a menu because the panel needs
     /// a text field for a path or pattern, which a `Menu` cannot host.
     @State private var showDirectoryFilter = false
@@ -569,62 +577,6 @@ struct SessionListView: View {
         }
     }
 
-    /// Header button for directory filtering — always present, **active whenever
-    /// a filter is configured**, and badged with the number of live sessions that
-    /// filter is hiding right now.
-    ///
-    /// This is a **display** control, not configuration: which directories you
-    /// want to look at right now changes with what you're doing, in the same
-    /// breath as grouping and sorting, so it belongs beside them in the header
-    /// rather than several taps away in Settings.
-    ///
-    /// Being permanent also makes it the feature's disclosure. A filter with no
-    /// visible trace is a bug report waiting to happen — months after muting
-    /// `~/.gbrain` the sessions are simply *absent* and nothing says why.
-    ///
-    /// Which is why active-ness keys off the **mute list**, not the badge count.
-    /// Keying both off the count meant a configured filter went completely dark
-    /// the moment none of its directories had a running session — the common
-    /// case, and precisely when the reminder is most needed, because by then
-    /// you've forgotten you set it. A muted directory with nothing running still
-    /// hides its closed sessions from the list.
-    private var hiddenDirectoriesButton: some View {
-        let indicator = DirectoryFilterIndicator.resolve(
-            hasHiddenDirectories: !settings.hiddenDirs.isEmpty,
-            hiddenLiveSessionCount: store.hiddenLiveSessionCount)
-        let badge = indicator.badge
-        return Button {
-            showDirectoryFilter = true
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: indicator.isActive ? "eye.slash.fill" : "eye.slash")
-                    .font(.system(size: 13, weight: .medium))
-                if let badge {
-                    Text("\(badge)").font(.system(size: 13, weight: .semibold))
-                }
-            }
-            .foregroundStyle(indicator.isActive ? Tokens.accent : Tokens.label)
-            // The header squeezes its chrome to fit the status line; without
-            // `fixedSize` the badge is the first thing compressed away, leaving a
-            // bare icon that hides the one number worth showing.
-            .fixedSize()
-            // Padding follows the BADGE, not active-ness: an active-but-unbadged
-            // filter is still a lone glyph and keeps the round 38pt button.
-            .padding(.horizontal, badge != nil ? 11 : 0)
-            .frame(minWidth: 38, minHeight: 38)
-            // Deliberately NOT tinted: the accent lives on the glyph, and tinting
-            // the capsule accent too would put accent on accent. The active
-            // treatment is unchanged from before — only what triggers it moved.
-            .glassOrRaised(in: Capsule(), fallback: Tokens.raised, interactive: true)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel({
-            if let badge { return "Filter directories, \(badge) running sessions hidden" }
-            return indicator.isActive ? "Filter directories, filter on" : "Filter directories"
-        }())
-        .accessibilityIdentifier("directoryFilterButton")
-    }
-
     private func agentDisclosure(parentId: String, children: [Session]) -> some View {
         let isExpanded = expandedAgentParents.contains(parentId)
         let running = children.filter { store.group(for: $0) == .working }.count
@@ -697,25 +649,9 @@ struct SessionListView: View {
     var body: some View {
         @Bindable var settings = settings
         List(selection: $selection) {
-            // The banner only appears when the AGGREGATE is unhealthy — i.e.
-            // every configured host is down. A single host being offline
-            // leaves the aggregate `.ok` (some host still answers), so this
-            // stays hidden and the app keeps working; the top-bar per-host
-            // chips carry the partial-outage story instead.
-            // …and never while a launch/foreground reconnect burst is still
-            // running: a probe that hasn't been retried yet is not an outage,
-            // and a banner that appears for a second on every cold launch
-            // trains you to ignore it.
             if store.connectionStatus == .offline {
                 Section {
-                    // Name only the hosts that are actually down. When the
-                    // aggregate is unhealthy that is every host — but deriving
-                    // it rather than assuming it keeps the banner honest if the
-                    // guard above ever loosens.
-                    ConnectionBanner(state: store.fleetState,
-                                     offlineHosts: settings.hosts.count > 1
-                                        ? settings.hosts.filter { store.hostStateByHost[$0.id]?.isLive != true }.map(\.label)
-                                        : [])
+                    HostConnectionWarning()
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Tokens.screen)
                 }
@@ -817,22 +753,31 @@ struct SessionListView: View {
         .background(Tokens.screen)
         .refreshable { await store.refresh() }
         .listSectionSpacing(0)
-        // The header rides over the list as a top inset rather than sitting
-        // above it in a stack, so rows scroll under it through the same
-        // translucent ramp the session view uses.
-        .safeAreaInset(edge: .top, spacing: 0) {
-            customHeader(groupMode: $settings.groupMode, sortMode: $settings.sortMode)
-                .background(alignment: .top) { headerBackdrop }
-        }
-        .topScrollEdgeEffectHidden()
         .background(Tokens.screen.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
-        // The bottom chrome is now the system search field + a plus button, not
-        // the old faux-composer capsule. On iOS 26 that is Apple's own bottom
-        // search toolbar (`.searchable` + `DefaultToolbarItem(kind: .search)`),
-        // so it gets the platform's minimize/expand behaviour for free; older
-        // OSes have no such API and fall back to a hand-built equivalent.
-        .bottomSearchChrome(text: $searchText) { openNewSession(focusComposer: false) }
+        .toolbar(.visible, for: .navigationBar)
+        .navigationTitle(isSearchPresentation ? "Search sessions" : "")
+        .navigationBarTitleDisplayMode(.inline)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
+        .toolbar {
+            if !isSearchPresentation {
+                statusToolbar
+                if let onSearch {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Search sessions", systemImage: "magnifyingglass", action: onSearch)
+                            .accessibilityIdentifier("sessions_search")
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    moreMenu(groupMode: $settings.groupMode, sortMode: $settings.sortMode)
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showTerminal) { TerminalScreen() }
+        .bottomSearchChrome(text: searchBinding, enabled: !usesTabSearch) {
+            openNewSession(focusComposer: false)
+        }
+        .scopedBottomSearch(text: searchBinding, active: bottomSearchActive ?? .constant(false),
+            shown: bottomSearchShown, prompt: "Search sessions")
         // Hand every keystroke to the store, which debounces and queries the
         // hosts. Local filtering alone can't answer "search all my sessions" —
         // it only ever sees what pagination has loaded.
@@ -860,82 +805,41 @@ struct SessionListView: View {
         showNewSession = true
     }
 
-    private func customHeader(
-        groupMode: Binding<GroupMode>,
-        sortMode: Binding<SortMode>
-    ) -> some View {
-        HStack(alignment: .center) {
-            // The title slot carries host status rather than a static "All
-            // sessions": the label the design showed is the one thing on this
-            // screen that never tells you anything, and replacing the nav bar
-            // had otherwise dropped the connection state entirely on iPhone.
-            HeaderStatusLine()
-                .layoutPriority(1)
-            .accessibilityIdentifier("sessionListHeader")
-            Spacer(minLength: 12)
-            GlassChromeContainer(spacing: 10) {
-                HStack(spacing: 10) {
-                    // No search toggle here anymore — search lives in the bottom
-                    // bar, where the system puts it on iOS 26.
-                    hiddenDirectoriesButton
-                    groupSortMenu(groupMode: groupMode, sortMode: sortMode)
-                    headerButton("apple.terminal", size: 15, weight: .regular) { showTerminal = true }
-                        .accessibilityIdentifier("terminalButton")
-                        .accessibilityLabel("Terminal")
-                    headerButton("gearshape", size: 16, weight: .regular) { showSettings = true }
-                        .accessibilityIdentifier("sessionSettingsButton")
-                }
-            }
-        }
-        .fullScreenCover(isPresented: $showTerminal) { TerminalScreen() }
-        .padding(.top, 6)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 2)
-    }
-
-    /// What the header floats on. On iOS 26 that is the session view's glass
-    /// ramp, pinned to the screen top so it also covers the status bar; older
-    /// OSes have no glass and take the system bar material instead.
-    @ViewBuilder
-    private var headerBackdrop: some View {
+    @ToolbarContentBuilder
+    private var statusToolbar: some ToolbarContent {
         if #available(iOS 26.0, *) {
-            GeometryReader { proxy in
-                let frame = proxy.frame(in: .global)
-                // Full strength down to the header's midline, not just to the
-                // status bar: an iPad sidebar panel starts BELOW the status
-                // bar, so a ramp that begins easing at the header's top leaves
-                // the whole header in its weak half, and row titles run
-                // legibly through the host status line.
-                TopChromeFade(chromeHeight: max(frame.maxY, 0), barRow: frame.height / 2)
-                    .offset(y: -frame.minY)
-            }
+            ToolbarItem(placement: .topBarLeading) { headerStatus }
+                .sharedBackgroundVisibility(.hidden)
         } else {
-            Rectangle().fill(.bar).ignoresSafeArea(edges: .top)
+            ToolbarItem(placement: .topBarLeading) { headerStatus }
         }
     }
 
-    private func headerButton(
-        _ systemName: String,
-        size: CGFloat,
-        weight: Font.Weight = .medium,
-        background: Color = Tokens.raised,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: size, weight: weight))
-                .foregroundStyle(Tokens.label)
-                .frame(width: 38, height: 38)
-                .glassOrRaised(in: Circle(), fallback: background, interactive: true)
-        }
-        .buttonStyle(.plain)
+    private var headerStatus: some View {
+        HostConnectionHeader(listWidth: listWidth)
+            .accessibilityIdentifier("sessionListHeader")
     }
 
-    private func groupSortMenu(
+    private func moreMenu(
         groupMode: Binding<GroupMode>,
         sortMode: Binding<SortMode>
     ) -> some View {
         Menu {
+            Section {
+                Button {
+                    showDirectoryFilter = true
+                } label: {
+                    let indicator = DirectoryFilterIndicator.resolve(
+                        hasHiddenDirectories: !settings.hiddenDirs.isEmpty,
+                        hiddenLiveSessionCount: store.hiddenLiveSessionCount)
+                    Label(indicator.isActive ? "Directory filter (on)" : "Filter directories",
+                          systemImage: indicator.isActive ? "eye.slash.fill" : "eye.slash")
+                }.accessibilityIdentifier("directoryFilterButton")
+                Button("Terminal", systemImage: "apple.terminal") { showTerminal = true }
+                    .accessibilityIdentifier("terminalButton")
+                Button("Settings", systemImage: "gearshape") { showSettings = true }
+                    .accessibilityIdentifier("sessionSettingsButton")
+            }
             // Plain buttons inside a titled `Section`, NOT a `Picker`. UIKit
             // renders a menu section's header only when its children are menu
             // elements it owns; an inline `Picker` (either bare or wrapped in a
@@ -962,28 +866,22 @@ struct SessionListView: View {
                 }
             }
         } label: {
-            Image(systemName: "line.3.horizontal.decrease")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Tokens.label)
-                .frame(width: 38, height: 38)
-                .glassOrRaised(
-                    in: Circle(),
-                    fallback: sortMenuHighlight ? Tokens.accent : Tokens.raised,
-                    tint: sortMenuHighlight ? Tokens.accent : nil,
-                    interactive: true
-                )
+            Label("More session options", systemImage: "ellipsis")
         }
-        .buttonStyle(.plain)
-        .simultaneousGesture(TapGesture().onEnded {
-            sortMenuHighlight = true
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(1))
-                sortMenuHighlight = false
-            }
-        })
-        .accessibilityIdentifier("sessionSortMenu")
+        .accessibilityIdentifier("sessions_more")
     }
 
+}
+
+/// Shared list chrome, including the room reserved for Search and More.
+struct HostConnectionHeader: View {
+    let listWidth: CGFloat
+
+    var body: some View {
+        HeaderStatusLine()
+            .frame(width: max(80, min(240, listWidth - 164)))
+            .accessibilityIdentifier("hostConnectionHeader")
+    }
 }
 
 private struct HeaderStatusLine: View {
@@ -993,24 +891,30 @@ private struct HeaderStatusLine: View {
     var body: some View {
         HStack(spacing: 6) {
             if settings.hosts.count > 1 {
-                // Iterate the ELEMENTS, keyed by host id — never `hosts.indices`
-                // with a `hosts[index]` lookup inside. SwiftUI evaluates a row's
-                // body against the identity it already has, so when the array
-                // shrinks (removing a host in Settings) an index-keyed ForEach
-                // re-runs the body for the departing index and subscripts past
-                // the end: `Array._checkSubscript` trap, app gone. Removing the
-                // second of two hosts crashed reliably this way. Carrying the
-                // host in the tuple means there is no lookup left to go stale.
-                ForEach(Array(settings.hosts.enumerated()), id: \.element.id) { index, host in
-                    if index > 0 {
-                        Text("·")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Tokens.labelSecondary)
-                            .fixedSize()
-                            .accessibilityHidden(true)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) {
+                        // Iterate the ELEMENTS, keyed by host id — never `hosts.indices`
+                        // with a `hosts[index]` lookup inside. SwiftUI evaluates a row's
+                        // body against the identity it already has, so when the array
+                        // shrinks (removing a host in Settings) an index-keyed ForEach
+                        // re-runs the body for the departing index and subscripts past
+                        // the end: `Array._checkSubscript` trap, app gone. Removing the
+                        // second of two hosts crashed reliably this way. Carrying the
+                        // host in the tuple means there is no lookup left to go stale.
+                        ForEach(Array(settings.hosts.enumerated()), id: \.element.id) { index, host in
+                            if index > 0 {
+                                Text("·")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Tokens.labelSecondary)
+                                    .fixedSize()
+                                    .accessibilityHidden(true)
+                            }
+                            HostHeaderToken(host: host,
+                                            status: store.connectionStatus(forHost: host.id))
+                        }
                     }
-                    HostHeaderToken(host: host,
-                                    status: store.connectionStatus(forHost: host.id))
+                    .fixedSize(horizontal: true, vertical: false)
+                    compactHostStatus
                 }
             } else {
                 let status = store.connectionStatus
@@ -1040,6 +944,26 @@ private struct HeaderStatusLine: View {
         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         .lineLimit(1)
         .accessibilityElement(children: .combine)
+    }
+
+    private var compactHostStatus: some View {
+        let connected = settings.hosts.filter { store.connectionStatus(forHost: $0.id) == .connected }.count
+        let total = settings.hosts.count
+        let allConnected = connected == total
+        return HStack(spacing: 6) {
+            Circle()
+                .fill(allConnected ? Color(.systemGreen) : Color(.systemOrange))
+                .frame(width: 7, height: 7)
+            Text(allConnected ? "\(total) hosts online" : "\(connected)/\(total) hosts online")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Tokens.label)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(settings.hosts.map {
+            "\($0.label) \(store.connectionStatus(forHost: $0.id).accessibilityLabel)"
+        }.joined(separator: ", "))
     }
 }
 
@@ -1186,9 +1110,11 @@ private extension View {
     /// class: an iPad in Slide Over is compact-width and must not silently lose
     /// its search field again.
     @ViewBuilder
-    func bottomSearchChrome(text: Binding<String>,
+    func bottomSearchChrome(text: Binding<String>, enabled: Bool = true,
                             onNewSession: @escaping () -> Void) -> some View {
-        if #available(iOS 26.0, *), UIDevice.current.userInterfaceIdiom != .pad {
+        if !enabled {
+            self
+        } else if #available(iOS 26.0, *), UIDevice.current.userInterfaceIdiom != .pad {
             self
                 .searchable(text: text, placement: .toolbar, prompt: "Search sessions")
                 // Session titles are lowercase prompts and paths — the system

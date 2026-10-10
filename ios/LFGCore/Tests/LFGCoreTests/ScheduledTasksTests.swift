@@ -3,6 +3,55 @@ import Testing
 @testable import LFGCore
 
 @Suite struct ScheduledTasksTests {
+    @Test func activeSchedulesExcludePausedCompletedAndCancelledTasks() throws {
+        let cases: [(String, Bool)] = [
+            (#"{"id":"a","enabled":true,"schedule":{"kind":"cron","timezone":"UTC"},"lastRunAt":1000}"#, true),
+            (#"{"id":"a","enabled":true,"schedule":{"kind":"interval","timezone":"UTC"}}"#, true),
+            (#"{"id":"a","enabled":true,"nextRunAt":2000}"#, true),
+            (#"{"id":"a","enabled":false,"nextRunAt":2000}"#, false),
+            (#"{"id":"a","enabled":true,"lastRunAt":1000}"#, false),
+            (#"{"id":"a","enabled":true,"cancelledAt":1000}"#, false),
+            (#"{"id":"a","enabled":false,"lastRunAt":1000,"currentRun":{"id":"run","status":"running"}}"#, false)
+        ]
+        for (json, expected) in cases {
+            let task = try JSONDecoder().decode(ScheduledTaskRecord.self, from: Data(json.utf8))
+            #expect(task.isScheduleActive == expected)
+        }
+    }
+    @Test func taskGroupsKeepRecurringPausedAndRunningWorkPending() throws {
+        let cases: [(String, ScheduledTaskGroup)] = [
+            (#"{"id":"a","schedule":{"kind":"cron","timezone":"UTC"},"lastRunAt":1000}"#, .pending),
+            (#"{"id":"a","enabled":false,"schedule":{"kind":"interval","timezone":"UTC"}}"#, .pending),
+            (#"{"id":"a","schedule":{"kind":"once","timezone":"UTC"}}"#, .pending),
+            (#"{"id":"a","lastRunAt":1000,"schedule":{"kind":"once","timezone":"UTC"}}"#, .completed),
+            (#"{"id":"a","cancelledAt":1000}"#, .completed),
+            (#"{"id":"a","lastRunAt":1000,"currentRun":{"id":"run","status":"running"},"schedule":{"kind":"once","timezone":"UTC"}}"#, .pending),
+            (#"{"id":"a","cancelledAt":1000,"currentRun":{"id":"run","status":"needs_input"}}"#, .pending)
+        ]
+        for (json, expected) in cases {
+            let task = try JSONDecoder().decode(ScheduledTaskRecord.self, from: Data(json.utf8))
+            #expect(task.listGroup == expected)
+        }
+    }
+    @Test func editingChatCannotUseTheCreationEndpointOrAnotherTaskConversation() {
+        let creation = ScheduledTaskChatContext()
+        let edit = ScheduledTaskChatContext(taskID: "task-a")
+        let other = ScheduledTaskChatContext(taskID: "task-b")
+        #expect(creation.endpoint == "/api/scheduled-tasks/chat")
+        #expect(edit.endpoint == "/api/scheduled-tasks/task-a/chat")
+        #expect(creation.savedSessionKey(hostID: "host-a") == "lfg.taskAuthoring.host-a")
+        #expect(edit.savedSessionKey(hostID: "host-a") != creation.savedSessionKey(hostID: "host-a"))
+        #expect(edit.savedSessionKey(hostID: "host-a") != other.savedSessionKey(hostID: "host-a"))
+        #expect(edit.savedSessionKey(hostID: "host-a") != edit.savedSessionKey(hostID: "host-b"))
+    }
+    @Test func authoringTranscriptShowsOnlyTheRequestForBothModes() {
+        for prefix in ["Help the user create an LFG scheduled task", "Help the user edit an existing LFG scheduled task"] {
+            let kickoff = "\(prefix) through a short conversation.\nPrivate configuration\nThe user's request follows:\nMove it to 10 AM\nKeep weekdays."
+            #expect(ScheduledTaskChatContext.displayedMessage(kickoff) == "Move it to 10 AM\nKeep weekdays.")
+        }
+        let ordinary = "The user's request follows:\nThis is normal conversation."
+        #expect(ScheduledTaskChatContext.displayedMessage(ordinary) == ordinary)
+    }
     @Test func oneTimePayloadUsesAbsoluteInstant() throws {
         var draft = ScheduledTaskDraft()
         draft.kind = "once"; draft.date = Date(timeIntervalSince1970: 1_800_000_000)

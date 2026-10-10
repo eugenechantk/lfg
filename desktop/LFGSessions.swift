@@ -2157,6 +2157,24 @@ enum DesktopFeatureTestCLI {
 
     @MainActor
     private static func run() throws {
+        let taskHost = HostState(url: "https://tasks.example", sshTarget: "tasks-host",
+            remoteTransport: .ssh, displayName: "Tasks Host", isLocal: false)
+        let oldTaskSession = ResumableAPISession(sessionId: "old-run", cwd: "/tmp/task",
+            project: "task", title: "Earlier scheduled session", lastActivityAt: 1,
+            lastUserText: nil, agent: "codex", model: "chosen-model")
+        let wrongTaskSession = ResumableAPISession(sessionId: "other-run", cwd: "/tmp/other",
+            project: "other", title: "Mentions old-run", lastActivityAt: 2, lastUserText: nil)
+        let historical = ScheduledTaskSessionLookup.item(sessionID: "old-run", host: taskHost,
+            archived: [wrongTaskSession, oldTaskSession])
+        try expect(historical?.session.sessionId == "old-run", "task history selects the exact session, not a text match")
+        try expect(historical?.opensByResume == true, "historical runs outside the loaded list can resume in iTerm")
+        try expect(historical?.session.agent == "codex" && historical?.session.cwd == "/tmp/task",
+                   "historical session lookup preserves its agent and working directory")
+        try expect(historical?.hostSSHTarget == "tasks-host" && historical?.hostLabel == "Tasks Host",
+                   "historical session lookup retains the owning host")
+        try expect(ScheduledTaskSessionLookup.item(sessionID: "missing", host: taskHost,
+            archived: [wrongTaskSession]) == nil, "missing task sessions never open an unrelated conversation")
+
         try expect(Config.preferredHost.url == "https://lfg-pro.eugenechantk.me",
                    "preferred desktop host uses the Pro Cloudflare tunnel")
         try expect(Config.preferredHost.displayName == "Pro",
@@ -5067,6 +5085,20 @@ struct HostsSettingsView: View {
     }
 }
 
+/// Reused by Sessions and Tasks so a host outage has one presentation.
+struct DesktopConnectionWarning: View {
+    @EnvironmentObject private var store: SessionStore
+
+    var body: some View {
+        if !store.unreachableHosts.isEmpty {
+            Text("Unreachable: \(store.unreachableHosts.joined(separator: ", "))")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("host_connection_warning")
+        }
+    }
+}
+
 /// iOS-parity connection status in the leading title-bar slot. One host gets
 /// the aggregate Connected/Connecting/Offline label and running count; a fleet
 /// gets one compact named chip per configured host.
@@ -5715,25 +5747,16 @@ struct ContentView: View {
         "\(count) \(count == 1 ? "agent" : "agents")"
     }
 
-    /// Below this the toolbar can't hold the segmented picker plus labelled
-    /// host chips and search field without collapsing into the » overflow.
-    /// (AppKit charges ~300pt of chrome before any item gets a point, so the
-    /// budget is far tighter than the item widths suggest — see `--window-fit`.)
-    ///
-    /// Scheduled Tasks must stay visible. The full toolbar overflowed at 900pt
-    /// after adding that action; retain the compact controls through medium
-    /// widths and use the full layout from 1200pt, where it was measured to fit.
+    /// Keep search compact until the centered destination picker, host labels,
+    /// and a permanent search field have enough room.
     static let compactToolbarWidth: CGFloat = 1200
 
-    /// Chrome plus the five standard-size compact icon actions. Whatever a compact window has
-    /// left over this is what the host-status cluster may spend on labels.
-    /// Reserve another action's width for Scheduled Tasks before showing labels.
+    /// Reserve the center picker and trailing actions before showing host labels.
     static let compactStatusReserve: CGFloat = 582
 
     private var isCompactToolbar: Bool { windowWidth < Self.compactToolbarWidth }
 
-    /// Keep short host names when all five actions still fit; otherwise the
-    /// create action outranks labels and the hosts collapse to bare dots.
+    /// Keep short host names when the controls fit; otherwise use bare dots.
     static func hostLabelsFit(clusterWidth: CGFloat, windowWidth: CGFloat) -> Bool {
         guard windowWidth < compactToolbarWidth else { return true }
         return clusterWidth <= windowWidth - compactStatusReserve
@@ -5767,18 +5790,13 @@ struct ContentView: View {
                 Text(mode.title).tag(mode)
             }
         }
-        if isCompactToolbar {
-            // Segmented needs room to spell out every mode; a narrow window
-            // gets the same choice for the width of one icon.
-            //
-            // Directory filtering rides along in this menu when compact. At the
-            // The 568pt minimum has room for this standard-size menu plus the
-            // other three trailing actions. Directory filtering rides along in
-            // the menu rather than consuming a fifth compact toolbar item.
             Menu {
                 picker.pickerStyle(.inline).labelsHidden()
                 Divider()
                 Button(directoryFilterLabel) { showDirectoryFilter = true }
+                Button("Refresh", systemImage: "arrow.clockwise") { Task { await store.refresh() } }
+                    .disabled(store.refreshing)
+                    .accessibilityIdentifier("refresh_button")
             } label: {
                 Image(systemName: groupMode.symbol)
             }
@@ -5789,9 +5807,6 @@ struct ContentView: View {
             .fixedSize()
             .help("Grouped by \(groupMode.title)")
             .accessibilityIdentifier("group_mode_menu")
-        } else {
-            picker.pickerStyle(.segmented)
-        }
     }
 
     private var createSessionButton: some View {
@@ -5881,20 +5896,24 @@ struct ContentView: View {
         Group {
             if store.showingScheduledTasks {
                 ScheduledTasksPane()
-                    .toolbar {
-                        ToolbarItem(placement: .navigation) {
-                            Button("Sessions", systemImage: "chevron.left") {
-                                store.showingScheduledTasks = false
-                            }
-                            .accessibilityIdentifier("tasks_back_to_sessions")
-                        }
-                    }
             } else {
                 sessionsBody
             }
         }
-        .frame(minWidth: store.showingScheduledTasks ? 900 : 620,
-               minHeight: store.showingScheduledTasks ? 620 : 420)
+        // AppKit centers the destination picker only with room on both sides.
+        // Native resize audits establish 760pt as the minimum that stays centered.
+        .frame(minWidth: 760, minHeight: 420)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Picker("View", selection: $store.showingScheduledTasks) {
+                    Text("Sessions").tag(false)
+                    Text("Tasks").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .accessibilityIdentifier("list_destination_picker")
+            }
+        }
     }
 
     private var sessionsBody: some View {
@@ -5964,15 +5983,11 @@ struct ContentView: View {
                 .accessibilityIdentifier("load_more_search")
                 .onAppear { Task { await store.loadMoreSearch() } }
             }
-            if !store.unreachableHosts.isEmpty {
-                Text("Unreachable: \(store.unreachableHosts.joined(separator: ", "))")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
+            DesktopConnectionWarning()
         }
         .listStyle(.inset)
-        // Leave room for the always-visible Scheduled Tasks action in compact mode.
-        .frame(minWidth: 620, minHeight: 420)
+        // Leave room for the centered Sessions / Tasks picker at every width.
+        .frame(minWidth: 760, minHeight: 420)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { width in
@@ -5990,44 +6005,9 @@ struct ContentView: View {
                 DesktopConnectionStatusBar(compact: !showsHostLabels)
             }
             .sharedBackgroundVisibility(.hidden)
-            // A centered item costs twice the wider side's width in reserved
-            // space, which a narrow window can't spare — so in compact the
-            // grouping control joins the trailing cluster instead.
-            if !isCompactToolbar {
-                ToolbarItem(placement: .principal) {
-                    groupPicker
-                }
-            }
-            if isCompactToolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    groupPicker
-                }
-                .sharedBackgroundVisibility(.hidden)
-            }
-            // A display control, so it sits beside the grouping control rather
-            // than in Settings, and it is also the feature's disclosure — a
-            // filter you can't see is one you forget you set. Only in the
-            // full-size toolbar: compact has no room for a fifth item, so it
-            // reaches the same panel through the grouping menu.
-            if !isCompactToolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showDirectoryFilter.toggle()
-                    } label: {
-                        Image(systemName: store.hiddenLiveCount > 0 ? "eye.slash.fill" : "eye.slash")
-                    }
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
-                    .help(directoryFilterLabel)
-                    .accessibilityIdentifier("directory_filter_button")
-                }
-                .sharedBackgroundVisibility(.hidden)
-            }
             ToolbarItem(placement: .primaryAction) {
-                refreshButton
+                groupPicker
             }
-            // Adjacent items in one placement share a glass capsule by
-            // default; hide it so refresh is its own circle beside search.
             .sharedBackgroundVisibility(.hidden)
             if isCompactToolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -6050,13 +6030,6 @@ struct ContentView: View {
                     .frame(width: 150, height: 30)
                 }
             }
-            // Mirrors iOS's search-then-plus reading order at every width.
-            ToolbarItem(placement: .primaryAction) {
-                Button("Scheduled Tasks", systemImage: "calendar.badge.clock") { store.showingScheduledTasks = true }
-                    .labelStyle(.iconOnly).help("Scheduled Tasks")
-                    .accessibilityIdentifier("scheduled_tasks_button")
-            }
-            .sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .primaryAction) {
                 createSessionButton
             }

@@ -119,13 +119,14 @@ struct CircularBackButton: View {
 }
 
 struct NavRow: View {
+    var title = "New session"
     let onBack: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
             CircularBackButton(action: onBack)
 
-            Text("New session")
+            Text(title)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(NewSessionPalette.labelPrimary)
                 .frame(maxWidth: .infinity)
@@ -142,16 +143,18 @@ struct NavRow: View {
 }
 
 struct EmptyDraftState: View {
+    var title = "Describe a task to start"
+    var subtitle = "Your first message kicks off the session."
     var body: some View {
         VStack(spacing: 0) {
             LFGSparkMark()
 
-            Text("Describe a task to start")
+            Text(title)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(NewSessionPalette.labelPrimary)
                 .padding(.top, 8)
 
-            Text("Your first message kicks off the session.")
+            Text(subtitle)
                 .font(.system(size: 15))
                 .foregroundStyle(NewSessionPalette.labelSecondary)
                 .padding(.top, 6)

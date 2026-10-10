@@ -86,6 +86,7 @@ struct SessionDetailView: View {
     /// visual bottom, keeping the newest row above every floating control while
     /// older rows can pass behind the stack.
     @State private var bottomChromeHeight: CGFloat = 0
+    @State private var bottomContainerInset: CGFloat = 0
     @State private var frozenTranscriptBottomContentMargin: CGFloat?
     /// File-only session order used by inline attachment previews. Rebuilt only
     /// when the transcript version changes so ordinary scrolling never repeats
@@ -100,7 +101,8 @@ struct SessionDetailView: View {
             keyboardOcclusionHeight: Double(keyboardBottomClearance),
             bottomChromeHeight: Double(bottomChromeHeight),
             bottomSafeAreaInset: Double(windowBottomSafeAreaInset),
-            bottomTranscriptClearance: Double(Self.bottomTranscriptClearance)
+            bottomTranscriptClearance: Double(Self.bottomTranscriptClearance),
+            bottomContainerInset: Double(bottomContainerInset)
         ))
     }
     private var transcriptBottomContentMargin: CGFloat {
@@ -427,6 +429,18 @@ struct SessionDetailView: View {
                     // software keyboard without resizing the transcript behind it.
                     measuredBottomChrome
                 }
+                .background {
+                    // The transcript extends behind the tab bar, while the
+                    // composer stays above it. Measure that container inset
+                    // independently of the keyboard's animated safe area.
+                    GeometryReader { containerProxy in
+                        Color.clear
+                            .onChange(of: containerProxy.safeAreaInsets.bottom, initial: true) {
+                                bottomContainerInset = containerProxy.safeAreaInsets.bottom
+                            }
+                    }
+                    .ignoresSafeArea(.keyboard, edges: .bottom)
+                }
             }
         } else {
             transcript
@@ -560,7 +574,7 @@ struct SessionDetailView: View {
             }
             .safeAreaPadding(.bottom)
             .onPreferenceChange(SessionBottomChromeHeightKey.self) {
-                // UIWindow's inset is the stable device/container inset; it
+                // UIWindow's inset is the stable device inset; it
                 // does not grow with SwiftUI's keyboard safe-area region.
                 let measuredHeight = $0 + windowBottomSafeAreaInset
                 guard abs(bottomChromeHeight - measuredHeight) > 0.5 else { return }

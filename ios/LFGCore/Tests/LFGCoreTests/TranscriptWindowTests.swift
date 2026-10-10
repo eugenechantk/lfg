@@ -313,6 +313,32 @@ final class TranscriptWindowTests: XCTestCase {
         )
     }
 
+    func testTabBarReservesItsAdditionalContainerClearance() {
+        XCTAssertEqual(
+            TranscriptWindow.bottomContentMargin(
+                keyboardOcclusionHeight: 0,
+                bottomChromeHeight: 140,
+                bottomSafeAreaInset: 34,
+                bottomTranscriptClearance: 16,
+                bottomContainerInset: 83
+            ),
+            205
+        )
+    }
+
+    func testKeyboardReplacesTabBarClearance() {
+        XCTAssertEqual(
+            TranscriptWindow.bottomContentMargin(
+                keyboardOcclusionHeight: 335,
+                bottomChromeHeight: 140,
+                bottomSafeAreaInset: 34,
+                bottomTranscriptClearance: 16,
+                bottomContainerInset: 83
+            ),
+            441
+        )
+    }
+
     func testNewestUsesTheCurrentCalculatedBottomMargin() {
         XCTAssertEqual(
             TranscriptWindow.effectiveBottomContentMargin(

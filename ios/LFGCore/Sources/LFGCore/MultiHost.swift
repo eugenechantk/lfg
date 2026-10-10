@@ -172,10 +172,13 @@ public enum MultiHost {
     ///
     /// Falls back to `owner` when nothing is reachable, so the caller still has a
     /// client to try (and its own local-store fallback behind it).
-    public static func readRouteHost(owner: Host?, reachable: (Host) -> Bool,
+    public static func readRouteHost(owner: Host?, transcriptHost: Host? = nil, reachable: (Host) -> Bool,
                                      agnostic: Host?) -> Host? {
         if let owner, reachable(owner) { return owner }
-        return agnostic ?? owner
+        // An archived deep link knows which host returned the transcript.
+        // Prefer that copy while reachable; a peer may not have synced it yet.
+        if let transcriptHost, reachable(transcriptHost) { return transcriptHost }
+        return agnostic ?? transcriptHost ?? owner
     }
 
     /// Whether a session's work is currently unreachable — i.e. it is LIVE on a

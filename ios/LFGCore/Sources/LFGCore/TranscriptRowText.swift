@@ -32,6 +32,9 @@ public struct TranscriptRowText: Equatable, Sendable {
     /// existing media treatment: prose strips image markdown only, while
     /// displayText strips any ref's markdown and a bare leftover path.
     public static func derive(from text: String, extractFollowups: Bool = true) -> TranscriptRowText {
+        // User bubbles show the user's request, while the raw transcript retains
+        // the host's task setup instructions for the agent and diagnostics.
+        let text = extractFollowups ? text : ScheduledTaskChatContext.displayedMessage(text)
         let extracted = extractFollowups
             ? FollowupDirectives.extract(from: text)
             : FollowupDirectiveResult(prose: text, followups: [])

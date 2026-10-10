@@ -189,7 +189,8 @@ public enum TranscriptWindow {
         keyboardOcclusionHeight: Double,
         bottomChromeHeight: Double,
         bottomSafeAreaInset: Double,
-        bottomTranscriptClearance: Double
+        bottomTranscriptClearance: Double,
+        bottomContainerInset: Double = 0
     ) -> Double {
         let keyboardHeight = max(keyboardOcclusionHeight, 0)
         if keyboardHeight > 0 {
@@ -198,7 +199,10 @@ public enum TranscriptWindow {
             return keyboardHeight
                 + max(bottomChromeHeight - max(bottomSafeAreaInset, 0), 0)
         }
+        // A tab bar can lift the composer farther than the window's home
+        // indicator inset. The keyboard replaces this boundary when visible.
         return max(bottomChromeHeight, 0)
+            + max(bottomContainerInset - max(bottomSafeAreaInset, 0), 0)
             + max(bottomTranscriptClearance, 0)
     }
 

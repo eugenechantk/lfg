@@ -8,6 +8,16 @@ struct RootView: View {
     @State private var selection: String?
     private enum AppTab { case sessions, scheduledTasks }
     @State private var selectedTab = AppTab.sessions
+    @State private var searchScope = AppTab.sessions
+    @State private var sessionSearchText = ""
+    @State private var taskSearchText = ""
+    @State private var searchPresented = false
+    @State private var searchActive = false
+    @State private var bottomSafeArea: CGFloat = 0
+    @State private var showNewTask = false
+    @State private var focusNewTaskComposer = false
+    @State private var taskPath: [ScheduledTaskRoute] = []
+    @State private var taskSessionID: String?
     @State private var showSettings = false
     @State private var showNewSession = false
     @State private var focusNewSessionComposer = false
@@ -20,6 +30,7 @@ struct RootView: View {
     /// (iPad full screen / wide multitasking). In compact it collapses to a
     /// navigation stack, where a "hide sidebar" control does nothing.
     private var isSideBySide: Bool { hSizeClass == .regular }
+    private var usesSidebarDock: Bool { UIDevice.current.userInterfaceIdiom == .pad && isSideBySide }
 
     private var sidebarHidden: Bool { columnVisibility == .detailOnly }
 
@@ -58,99 +69,7 @@ struct RootView: View {
     var body: some View {
         Group {
             if settings.hasConfiguredHost {
-                TabView(selection: $selectedTab) {
-                    Tab("Sessions", systemImage: "bubble.left.and.bubble.right", value: AppTab.sessions) {
-                NavigationSplitView(columnVisibility: $columnVisibility) {
-                    SessionListView(selection: $selection,
-                                    showSettings: $showSettings,
-                                    showNewSession: $showNewSession,
-                                    focusNewSessionComposer: $focusNewSessionComposer)
-                        .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 460)
-                        // SwiftUI's own sidebar toggle only appears while the sidebar
-                        // is HIDDEN — the half of the job that already worked. Left in,
-                        // it sits beside ours and duplicates it. Removed here (the
-                        // toggle belongs to the sidebar column, wherever it renders) so
-                        // one button owns both directions.
-                        .toolbar(removing: .sidebarToggle)
-                        // Attached INSIDE the sidebar column: the create surface is
-                        // a full-screen cover, and presenting it from the column
-                        // the user is actually looking at keeps it off the
-                        // navigation stack the session detail is pushed onto.
-                        .newSessionPresentation(selection: $selection,
-                                                isPresented: $showNewSession,
-                                                autofocusComposer: $focusNewSessionComposer,
-                                                prefill: $newSessionPrefill)
-                        // Swipe the list away, from anywhere on it. Simultaneous, so
-                        // the List keeps its vertical scroll and its rows keep their
-                        // own gestures; this only acts on a decisively horizontal
-                        // leftward drag.
-                        //
-                        // Rows carry trailing `swipeActions` (hide-directory), so the
-                        // two gestures share a direction. Measured on device, they
-                        // separate cleanly by distance: a row reveals its action at
-                        // ~55pt, and this fires at 60. Firing from `onChanged` rather
-                        // than `onEnded` is what keeps that clean — it cancels the
-                        // row's half-finished reveal mid-drag, so bringing the sidebar
-                        // back doesn't surface a row sitting open on a Hide button.
-                        .simultaneousGesture(
-                            horizontalSwipe(.left) { setSidebar(hidden: true) },
-                            // `.subviews` leaves the List's own gestures alone and
-                            // switches mine off — there is nothing to close once the
-                            // sidebar is already hidden, and in compact the list is
-                            // the root of a stack, where "hide the sidebar" is not a
-                            // move the user can make sense of.
-                            including: (isSideBySide && !sidebarHidden) ? .all : .subviews
-                        )
-                } detail: {
-                    Group {
-                        if let selection {
-                            if let session = store.session(selection) {
-                                SessionDetailView(session: session,
-                                                  onEnded: { self.selection = nil },
-                                                  onMarkedUnread: { self.selection = nil })
-                                    .id(selection)
-                            } else {
-                                // Selected (often via a notification tap) but not
-                                // resolved yet — the live list is still loading or the
-                                // session is being pulled from the resumable list.
-                                // Show progress instead of the "nothing selected" empty
-                                // state, which read as "session lost".
-                                DetailLoading()
-                            }
-                        } else {
-                            DetailPlaceholder()
-                        }
-                    }
-                    // The toggle lives here, not inside SessionDetailView, so it is
-                    // present for the placeholder/loading states too — otherwise
-                    // hiding the sidebar and then ending a session would strand the
-                    // user on a screen with no way to bring the list back.
-                    .toolbar { sidebarToggle }
-                    // Swipe in from the leading edge to bring the list back. Only
-                    // mounted while the sidebar is hidden, so in the normal two-column
-                    // state nothing sits over the transcript intercepting touches.
-                    .overlay(alignment: .leading) {
-                        if isSideBySide && sidebarHidden {
-                            SwipeStrip(direction: .right) { setSidebar(hidden: false) }
-                        }
-                    }
-                }
-                .navigationSplitViewStyle(.balanced)
-                    }
-                    .accessibilityIdentifier("sessions_tab")
-                    Tab("Scheduled Tasks", systemImage: "calendar.badge.clock", value: AppTab.scheduledTasks) {
-                        ScheduledTasksView(hosts: settings.hosts.compactMap { host in
-                            guard let client = settings.client(for: host) else { return nil }
-                            return ScheduledTaskHost(id: host.id, name: host.label, baseURL: client.baseURL,
-                                headers: client.resourceRequest(for: client.baseURL).allHTTPHeaderFields ?? [:])
-                        }) { _, id in
-                            selectedTab = .sessions
-                            store.openFromNotification(id)
-                        }
-                    }
-                    .accessibilityIdentifier("scheduled_tasks_tab")
-                }
-                .tabViewStyle(.tabBarOnly)
+                mainTabs
             } else {
                 ConnectView()
             }
@@ -237,6 +156,289 @@ struct RootView: View {
         }
     }
 
+    private var mainTabs: some View {
+        TabView(selection: $selectedTab) {
+            Tab("Sessions", systemImage: "bubble.left.and.bubble.right", value: AppTab.sessions) {
+                sessionsContent()
+                    .toolbar(.hidden, for: .tabBar)
+            }
+            Tab("Tasks", systemImage: "calendar.badge.clock", value: AppTab.scheduledTasks) {
+                tasksContent()
+                    .toolbar(.hidden, for: .tabBar)
+                    .newSessionPresentation(selection: $taskSessionID,
+                        isPresented: $showNewTask, autofocusComposer: $focusNewTaskComposer,
+                        prefill: .constant(nil), purpose: .scheduledTask)
+            }
+        }
+        .tabViewStyle(.tabBarOnly)
+        .toolbar(.hidden, for: .tabBar)
+        // TabView does not consistently pass an outer safeAreaInset into its
+        // nested navigation stacks. Reserve real layout space for this bar.
+        .padding(.bottom, !usesSidebarDock && showsListDock ? 68 - dockLowering : 0)
+        .overlay(alignment: .bottom) {
+            if !usesSidebarDock && showsListDock { listDock.offset(y: dockLowering) }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { bottomSafeArea = $0 }
+        .onChange(of: searchActive) { _, active in
+            if !active { endSearch() }
+        }
+        .onChange(of: selectedTab) { _, _ in endSearch() }
+        .onChange(of: selection) { _, id in
+            if searchPresented, let id {
+                store.focus(id)
+                endSearch()
+            }
+        }
+        .onChange(of: taskPath) { _, path in
+            if !path.isEmpty { endSearch() }
+        }
+        .onChange(of: taskSessionID) { _, id in
+            if id != nil { endSearch() }
+        }
+    }
+
+    private var showsListDock: Bool {
+        let showsSessionList = selection == nil && (!isSideBySide || !sidebarHidden)
+        return !searchPresented && !showSettings && !showNewSession && !showNewTask
+            && (selectedTab == .sessions ? showsSessionList : taskPath.isEmpty && taskSessionID == nil)
+    }
+
+    private var showsSidebarDock: Bool {
+        usesSidebarDock && !sidebarHidden && !searchPresented
+            && !showSettings && !showNewSession && !showNewTask
+    }
+
+    private var dockLowering: CGFloat {
+        UIDevice.current.userInterfaceIdiom == .phone ? min(16, max(0, bottomSafeArea - 16)) : 0
+    }
+
+    private func searchFocus(for tab: AppTab) -> Binding<Bool> {
+        Binding(get: { searchScope == tab && searchActive }, set: { focused in
+            if searchScope == tab { searchActive = focused }
+        })
+    }
+
+    private func beginSearch(_ scope: AppTab) {
+        searchScope = scope
+        searchPresented = true
+        Task { @MainActor in
+            await Task.yield()
+            searchActive = true
+        }
+    }
+
+    private func endSearch() {
+        guard searchPresented else { return }
+        searchActive = false
+        searchPresented = false
+        if searchScope == .sessions {
+            sessionSearchText = ""
+            store.setSearchQuery("")
+        } else {
+            taskSearchText = ""
+        }
+    }
+
+    private var listDock: some View {
+        GlassChromeContainer(spacing: 12) {
+            HStack(spacing: 12) {
+                HStack(spacing: 0) {
+                    dockTab(.sessions, title: "Sessions", icon: "bubble.left.and.bubble.right", id: "sessions_tab")
+                    dockTab(.scheduledTasks, title: "Tasks", icon: "calendar.badge.clock", id: "scheduled_tasks_tab")
+                }
+                .padding(4)
+                .glassOrRaised(in: Capsule(), interactive: true)
+                Spacer(minLength: usesSidebarDock ? 0 : 12)
+                Button {
+                    if selectedTab == .scheduledTasks {
+                        beginTaskCreation()
+                    } else {
+                        focusNewSessionComposer = true
+                        showNewSession = true
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 22, weight: .medium))
+                        .frame(width: 56, height: 56)
+                        .glassOrRaised(in: Circle(), interactive: true)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(selectedTab == .scheduledTasks ? "New scheduled task" : "New session")
+                .accessibilityIdentifier("list_create")
+            }
+        }
+        .padding(.horizontal, usesSidebarDock ? 12 : 16)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .frame(maxWidth: .infinity)
+        .accessibilityIdentifier("list_dock")
+    }
+
+    private func dockTab(_ tab: AppTab, title: String, icon: String, id: String) -> some View {
+        Button { selectedTab = tab } label: {
+            VStack(spacing: 3) {
+                Image(systemName: icon).font(.system(size: 20))
+                Text(title).font(.system(size: 10, weight: .medium))
+            }
+            .foregroundStyle(selectedTab == tab ? Color.accentColor : .primary)
+            .frame(width: 88, height: 48)
+            .background(selectedTab == tab ? Color.primary.opacity(0.07) : .clear, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
+        .accessibilityIdentifier(id)
+    }
+
+    private func tasksContent() -> some View {
+        ScheduledTasksView(hosts: settings.hosts.compactMap { host in
+            guard let client = settings.client(for: host) else { return nil }
+            return ScheduledTaskHost(id: host.id, name: host.label, baseURL: client.baseURL,
+                headers: client.resourceRequest(for: client.baseURL).allHTTPHeaderFields ?? [:])
+        }, searchQuery: $taskSearchText,
+           navigationPath: $taskPath,
+           showsSearchField: false,
+           bottomSearchActive: searchFocus(for: .scheduledTasks),
+           bottomSearchShown: searchPresented && searchScope == .scheduledTasks,
+           sidebarVisibility: usesSidebarDock ? $columnVisibility : nil,
+           sidebarFooter: showsSidebarDock ? AnyView(listDock) : nil,
+           connectionHeader: { width in AnyView(HostConnectionHeader(listWidth: width)) },
+           connectionWarning: AnyView(HostConnectionWarning()),
+           connectedHostIDs: Set(settings.hosts.filter { store.connectionStatus(forHost: $0.id) == .connected }.map(\.id)),
+           usesBottomCreate: true,
+           onSearch: { beginSearch(.scheduledTasks) },
+           onCreate: beginTaskCreation,
+           sessionSelection: $taskSessionID,
+           sessionDestination: { AnyView(taskSessionView($0)) }) { hostID, id in
+            taskSessionID = store.navID(id)
+            Task { await store.prepareSessionForDisplay(id, sourceHostID: hostID) }
+        }
+    }
+
+    private func beginTaskCreation() {
+        endSearch()
+        selectedTab = .scheduledTasks
+        taskPath = []
+        focusNewTaskComposer = true
+        showNewTask = true
+    }
+
+    @ViewBuilder
+    private func taskSessionView(_ id: String) -> some View {
+        if let session = store.session(id) {
+            SessionDetailView(session: session,
+                onEnded: { taskSessionID = nil },
+                onMarkedUnread: { taskSessionID = nil })
+                .id(id)
+                .environment(\.hostFiles, store.host(forSession: session.sessionId ?? id)
+                    .flatMap { settings.client(for: $0) }.map { HostFiles(client: $0) }
+                    ?? settings.defaultClient.map { HostFiles(client: $0) })
+                .toolbar(.hidden, for: .tabBar)
+        } else {
+            DetailLoading()
+        }
+    }
+
+    private func sessionsContent() -> some View {
+        let selectedSession = $selection
+        return NavigationSplitView(columnVisibility: $columnVisibility) {
+            SessionListView(selection: selectedSession,
+                            showSettings: $showSettings,
+                            showNewSession: $showNewSession,
+                            focusNewSessionComposer: $focusNewSessionComposer,
+                            searchQuery: $sessionSearchText,
+                            usesTabSearch: true,
+                            onSearch: { beginSearch(.sessions) },
+                            bottomSearchActive: searchFocus(for: .sessions),
+                            bottomSearchShown: searchPresented && searchScope == .sessions)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if showsSidebarDock { listDock }
+                }
+                .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 460)
+                // SwiftUI's own sidebar toggle only appears while the sidebar
+                // is HIDDEN — the half of the job that already worked. Left in,
+                // it sits beside ours and duplicates it. Removed here (the
+                // toggle belongs to the sidebar column, wherever it renders) so
+                // one button owns both directions.
+                .toolbar(removing: .sidebarToggle)
+                // Attached INSIDE the sidebar column: the create surface is
+                // a full-screen cover, and presenting it from the column
+                // the user is actually looking at keeps it off the
+                // navigation stack the session detail is pushed onto.
+                .newSessionPresentation(selection: selectedSession,
+                                        isPresented: $showNewSession,
+                                        autofocusComposer: $focusNewSessionComposer,
+                                        prefill: $newSessionPrefill)
+                // Swipe the list away, from anywhere on it. Simultaneous, so
+                // the List keeps its vertical scroll and its rows keep their
+                // own gestures; this only acts on a decisively horizontal
+                // leftward drag.
+                //
+                // Rows carry trailing `swipeActions` (hide-directory), so the
+                // two gestures share a direction. Measured on device, they
+                // separate cleanly by distance: a row reveals its action at
+                // ~55pt, and this fires at 60. Firing from `onChanged` rather
+                // than `onEnded` is what keeps that clean — it cancels the
+                // row's half-finished reveal mid-drag, so bringing the sidebar
+                // back doesn't surface a row sitting open on a Hide button.
+                .simultaneousGesture(
+                    horizontalSwipe(.left) { setSidebar(hidden: true) },
+                    // `.subviews` leaves the List's own gestures alone and
+                    // switches mine off — there is nothing to close once the
+                    // sidebar is already hidden, and in compact the list is
+                    // the root of a stack, where "hide the sidebar" is not a
+                    // move the user can make sense of.
+                    including: (isSideBySide && !sidebarHidden) ? .all : .subviews
+                )
+        } detail: {
+            Group {
+                if let selection = selectedSession.wrappedValue {
+                    if let session = store.session(selection) {
+                        SessionDetailView(session: session,
+                                          onEnded: { selectedSession.wrappedValue = nil },
+                                          onMarkedUnread: { selectedSession.wrappedValue = nil })
+                            .id(selection)
+                            .toolbar {
+                                if isSideBySide {
+                                    ToolbarItem(placement: .topBarLeading) {
+                                        Button("Sessions", systemImage: "chevron.left") {
+                                            selectedSession.wrappedValue = nil
+                                            setSidebar(hidden: false)
+                                        }
+                                        .accessibilityIdentifier("session_back_to_list")
+                                    }
+                                }
+                            }
+                    } else {
+                        // Selected (often via a notification tap) but not
+                        // resolved yet — the live list is still loading or the
+                        // session is being pulled from the resumable list.
+                        // Show progress instead of the "nothing selected" empty
+                        // state, which read as "session lost".
+                        DetailLoading()
+                    }
+                } else {
+                    DetailPlaceholder()
+                }
+            }
+            // The toggle lives here, not inside SessionDetailView, so it is
+            // present for the placeholder/loading states too — otherwise
+            // hiding the sidebar and then ending a session would strand the
+            // user on a screen with no way to bring the list back.
+            .toolbar { sidebarToggle }
+            // Swipe in from the leading edge to bring the list back. Only
+            // mounted while the sidebar is hidden, so in the normal two-column
+            // state nothing sits over the transcript intercepting touches.
+            .overlay(alignment: .leading) {
+                if isSideBySide && sidebarHidden {
+                    SwipeStrip(direction: .right) { setSidebar(hidden: false) }
+                }
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+    }
+
     /// A drag that has committed to one horizontal direction — dominant in x and
     /// past a threshold wide enough that a lazy diagonal flick during scrolling
     /// can't trip it. Fires mid-drag rather than on release so the column starts
@@ -277,6 +479,88 @@ struct RootView: View {
                 .accessibilityLabel(sidebarHidden ? "Show sessions" : "Hide sessions")
                 .help(sidebarHidden ? "Show sessions" : "Hide sessions")
             }
+        }
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func scopedBottomSearch(text: Binding<String>, active: Binding<Bool>, shown: Bool,
+                            prompt: String) -> some View {
+        if !shown {
+            self
+        } else if #available(iOS 26.0, *), UIDevice.current.userInterfaceIdiom != .pad {
+            self
+                .searchable(text: text, isPresented: active, placement: .toolbar, prompt: prompt)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .toolbar { DefaultToolbarItem(kind: .search, placement: .bottomBar) }
+        } else {
+            // iPad places SwiftUI search in the navigation bar even when a
+            // bottom toolbar item is requested. Keep the system UISearchBar
+            // at the bottom so the same action works in both layouts.
+            self.safeAreaInset(edge: .bottom, spacing: 0) {
+                if shown {
+                    HStack(spacing: 0) {
+                        BottomNativeSearchField(text: text, active: active, prompt: prompt)
+                            .frame(maxWidth: .infinity)
+                        // UISearchBar ignores showsCancelButton on iPad.
+                        Button("Cancel") { active.wrappedValue = false }
+                            .frame(minWidth: 44, minHeight: 44)
+                            .padding(.trailing, 8)
+                            .accessibilityIdentifier("list_search_cancel")
+                    }
+                    .frame(height: 56)
+                    .padding(.horizontal, 8)
+                    .background(.bar)
+                }
+            }
+        }
+    }
+}
+
+private struct BottomNativeSearchField: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var active: Bool
+    let prompt: String
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIView(context: Context) -> UISearchBar {
+        let bar = UISearchBar()
+        bar.delegate = context.coordinator
+        bar.searchBarStyle = .minimal
+        bar.showsCancelButton = false
+        bar.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        bar.autocapitalizationType = .none
+        bar.autocorrectionType = .no
+        bar.accessibilityIdentifier = "list_search_field"
+        return bar
+    }
+
+    func updateUIView(_ bar: UISearchBar, context: Context) {
+        context.coordinator.parent = self
+        bar.placeholder = prompt
+        if bar.text != text { bar.text = text }
+        if active, !context.coordinator.requestedFocus {
+            context.coordinator.requestedFocus = true
+            DispatchQueue.main.async { bar.becomeFirstResponder() }
+        }
+    }
+
+    final class Coordinator: NSObject, UISearchBarDelegate {
+        var parent: BottomNativeSearchField
+        var requestedFocus = false
+        init(_ parent: BottomNativeSearchField) { self.parent = parent }
+        func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+            parent.text = searchText
+        }
+        func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
+            searchBar.resignFirstResponder()
+            parent.active = false
+        }
+        func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+            searchBar.resignFirstResponder()
         }
     }
 }
@@ -349,6 +633,22 @@ struct DetailLoading: View {
 /// when the *aggregate* is unhealthy — meaning every configured host is down. In
 /// a multi-host setup `offlineHosts` names them so the copy says "all hosts",
 /// never a singular "host" that would misread one machine as the whole fleet.
+struct HostConnectionWarning: View {
+    @Environment(SessionStore.self) private var store
+    @Environment(AppSettings.self) private var settings
+
+    var body: some View {
+        // Share Sessions' grace window and aggregate outage policy with Tasks.
+        // Partial outages belong in the per-host header, not a fleet banner.
+        if store.connectionStatus == .offline {
+            ConnectionBanner(state: store.fleetState,
+                offlineHosts: settings.hosts.count > 1
+                    ? settings.hosts.filter { store.hostStateByHost[$0.id]?.isLive != true }.map(\.label)
+                    : [])
+        }
+    }
+}
+
 struct ConnectionBanner: View {
     /// The host's real state, not a projection of it. `degraded` deliberately
     /// renders nothing: a host inside its grace window is a blip, and the whole
@@ -400,5 +700,6 @@ struct ConnectionBanner: View {
         .background(tint.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal)
+        .accessibilityIdentifier("hostConnectionWarning")
     }
 }

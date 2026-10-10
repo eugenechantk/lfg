@@ -28,6 +28,7 @@ struct NewSessionView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var autofocusComposer = false
+    var purpose: SessionCreationPurpose = .conversation
     /// Set by an `lfg://new` link; applied once, then cleared.
     @Binding var prefill: NewSessionPrefill?
     /// The link being applied, so a slower earlier link can't overwrite a newer one.
@@ -70,9 +71,11 @@ struct NewSessionView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                NavRow { dismiss() }
+                NavRow(title: purpose == .scheduledTask ? "New task" : "New session") { dismiss() }
 
-                EmptyDraftState()
+                EmptyDraftState(
+                    title: purpose == .scheduledTask ? "What would you like to schedule?" : "Describe a task to start",
+                    subtitle: purpose == .scheduledTask ? "Work out the details with your agent in a session." : "Your first message kicks off the session.")
                     .padding(.top, 74)
 
                 Spacer(minLength: 0)
@@ -444,7 +447,8 @@ struct NewSessionView: View {
         agent = selection.agent
         model = selection.model
         let req = NewSessionRequest(cwd: dir, prompt: text, agent: selection.agent.rawValue,
-                                    model: selection.model, user: settings.defaultOwner)
+                                    model: selection.model, user: settings.defaultOwner,
+                                    purpose: purpose, timezone: purpose == .scheduledTask ? TimeZone.current.identifier : nil)
         // Preserve the load-bearing optimistic path and its navigation order.
         // Promote this cwd in the MRU list so it surfaces under RECENT next time.
         settings.noteRecentDir(dir)
