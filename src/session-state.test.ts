@@ -1,10 +1,11 @@
 import { test, expect, describe, beforeEach } from "bun:test";
-import { mkdtempSync, writeFileSync, utimesSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, appendFileSync, utimesSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sessionTurnState, resolveBusy, STALL_MS } from "./session-state.ts";
 import { __resetHookStateCache } from "./hook-state.ts";
 import { __resetTurnStateCache } from "./turn-state.ts";
+import { __resetInterruptMarks, interruptBaseline, noteConfirmedInterrupt } from "./interrupt-marks.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "session-state-"));
 const stateDir = join(dir, "agent-state");
@@ -59,6 +60,69 @@ const interrupted = {
 beforeEach(() => {
   __resetHookStateCache();
   __resetTurnStateCache();
+  __resetInterruptMarks();
+});
+
+describe("quiet Codex turns", () => {
+  const event = (type: string, payload: Record<string, unknown> = {}) =>
+    ({ type: "event_msg", payload: { type, ...payload } });
+  const OLD = -(2 * 60 * 60_000);
+
+  test("an explicit open turn stays busy across repeated reads after hours of silence", async () => {
+    const tp = transcript([
+      event("task_started"),
+      { type: "response_item", payload: { type: "function_call", name: "exec_command" } },
+    ], OLD);
+    for (const offset of [0, STALL_MS, 4 * STALL_MS]) {
+      const verdict = await sessionTurnState({ sessionId: "quiet-codex", transcriptPath: tp, now: at(offset) });
+      expect(verdict).toEqual({ state: "running", source: "transcript" });
+      expect(resolveBusy({ verdict, paneBusy: false })).toBe(true);
+    }
+  });
+
+  test("a newer agreeing running hook cannot time out an explicit open turn", async () => {
+    hook("quiet-hook-codex", "running", OLD + 1_000);
+    const tp = transcript([event("task_started")], OLD);
+    const verdict = await sessionTurnState({ sessionId: "quiet-hook-codex", transcriptPath: tp });
+    expect(verdict).toEqual({ state: "running", source: "hook" });
+    expect(resolveBusy({ verdict, paneBusy: false })).toBe(true);
+  });
+
+  for (const state of ["idle", "ended"]) {
+    test(`a newer ${state} hook still closes an explicit open turn`, async () => {
+      const sid = `quiet-hook-${state}`;
+      hook(sid, state, OLD + 1_000);
+      const tp = transcript([event("task_started")], OLD);
+      expect(await sessionTurnState({ sessionId: sid, transcriptPath: tp }))
+        .toEqual({ state: "idle", source: "hook" });
+    });
+  }
+
+  test("an old completed Codex turn cannot vouch for a later stalled running hook", async () => {
+    hook("quiet-hook-after-end", "running", OLD + 1_000);
+    const tp = transcript([event("task_started"), event("task_complete")], OLD);
+    expect(await sessionTurnState({ sessionId: "quiet-hook-after-end", transcriptPath: tp }))
+      .toEqual({ state: "idle", source: "hook", stalled: true });
+  });
+
+  for (const end of [event("task_complete"), event("task_complete", { error: { message: "failed" } }), event("turn_aborted")]) {
+    test(`a quiet Codex turn closes on ${end.payload.type}${"error" in end.payload ? " with error" : ""}`, async () => {
+      const tp = transcript([event("task_started")], OLD);
+      expect((await sessionTurnState({ transcriptPath: tp }))?.state).toBe("running");
+      appendFileSync(tp, JSON.stringify(end) + "\n");
+      expect(await sessionTurnState({ transcriptPath: tp })).toEqual({ state: "idle", source: "transcript" });
+    });
+  }
+
+  test("a confirmed stop closes a quiet turn until a new explicit start", async () => {
+    const tp = transcript([event("task_started")], OLD);
+    noteConfirmedInterrupt("quiet-stopped", interruptBaseline(tp, at(0)));
+    expect(await sessionTurnState({ sessionId: "quiet-stopped", transcriptPath: tp }))
+      .toEqual({ state: "idle", source: "interrupt" });
+    appendFileSync(tp, JSON.stringify(event("task_started")) + "\n");
+    expect(await sessionTurnState({ sessionId: "quiet-stopped", transcriptPath: tp }))
+      .toEqual({ state: "running", source: "transcript" });
+  });
 });
 
 describe("sessionTurnState arbitration", () => {

@@ -26,7 +26,7 @@
 import { stat } from "node:fs/promises";
 import { hookState } from "./hook-state.ts";
 import { interruptStands } from "./interrupt-marks.ts";
-import { transcriptTurnState, type TurnState } from "./turn-state.ts";
+import { transcriptTurnEvidence, type TranscriptTurnEvidence, type TurnState } from "./turn-state.ts";
 
 export type StateVerdict = {
   state: TurnState;
@@ -45,8 +45,9 @@ export type StateVerdict = {
 };
 
 /**
- * How long a `running` verdict may go without either layer writing again before
- * it stops counting as a turn in flight.
+ * How long an inferred `running` verdict may go without either layer writing
+ * again before it stops counting as a turn in flight. Explicit Codex starts
+ * remain open until completion, abort, a confirmed stop, or ownership loss.
  *
  * WHY THIS EXISTS. Every layer here is EDGE-TRIGGERED on a turn boundary, and a
  * turn that dies mid-flight emits no closing edge in any of them:
@@ -62,10 +63,9 @@ export type StateVerdict = {
  * fallback for the ABSENCE of a verdict, so neither could ever fire on a session
  * that had one. This is the level-triggered check that was missing.
  *
- * WHY 15 MINUTES. A live turn is silent for the length of one tool call, and Bash
- * alone permits a 10-minute timeout, so the 12s used for the no-verdict fallback
- * would flap constantly. 15 minutes is the first threshold that cannot be reached
- * by a turn that is merely quiet.
+ * WHY 15 MINUTES. This legacy backstop bounds inferred Claude turns whose
+ * closing edge is missing. It is not proof that a Codex turn has finished:
+ * reasoning, tools, and waits can stay silent past this threshold.
  *
  * WHY NOT PERSISTED. Stall is a pure function of (verdict, last write, now), and
  * all three are already in hand here — computed at read time it cannot go stale.
@@ -93,7 +93,7 @@ export async function sessionTurnState(args: {
   const now = args.now ?? Date.now();
   const [hook, transcript] = await Promise.all([
     args.sessionId ? hookState(args.sessionId, args.transcriptPath) : Promise.resolve(null),
-    args.transcriptPath ? transcriptTurnState(args.transcriptPath) : Promise.resolve(null),
+    args.transcriptPath ? transcriptTurnEvidence(args.transcriptPath) : Promise.resolve(null),
   ]);
   const verdict = await arbitrate(hook, transcript, args.transcriptPath, now);
   // A confirmed stop is applied LAST and only ever closes a turn. Escape before
@@ -112,7 +112,7 @@ export async function sessionTurnState(args: {
 
 async function arbitrate(
   hook: Awaited<ReturnType<typeof hookState>>,
-  transcript: TurnState | null,
+  transcript: TranscriptTurnEvidence | null,
   transcriptPath: string | null | undefined,
   now: number,
 ): Promise<StateVerdict | null> {
@@ -127,8 +127,11 @@ async function arbitrate(
   // agent last wrote. Deliberately NOT the lease's `heartbeatAt`: that is written
   // by `startLeaseHeartbeat` from lfg's own enumeration, so it proves only that
   // this host can still see the pane.
+  // An explicit open Codex turn also corroborates a newer running hook. Which
+  // agreeing layer wins the timestamp tie must not reintroduce a silence timer.
+  const explicitOpenTurn = transcript?.explicit && transcript.state === "running";
   const decide = (state: TurnState, source: "hook" | "transcript", at: number): StateVerdict =>
-    state === "running" && now - at > STALL_MS
+    state === "running" && !explicitOpenTurn && now - at > STALL_MS
       ? { state: "idle", source, stalled: true }
       : { state, source };
 
@@ -157,8 +160,8 @@ async function arbitrate(
     // the verdict as-is rather than demoting on a guess — this function may add
     // certainty, never invent it.
     return transcriptAt == null
-      ? { state: transcript, source: "transcript" }
-      : decide(transcript, "transcript", transcriptAt);
+      ? { state: transcript.state, source: "transcript" }
+      : decide(transcript.state, "transcript", transcriptAt);
   }
   if (transcript == null) return decide(hookTurn, "hook", hook!.at);
 
@@ -175,7 +178,7 @@ async function arbitrate(
   // arriving late.
   return hook!.at > transcriptAt
     ? decide(hookTurn, "hook", hook!.at)
-    : decide(transcript, "transcript", transcriptAt);
+    : decide(transcript.state, "transcript", transcriptAt);
 }
 
 /**

@@ -488,14 +488,24 @@ export type SignInPromptLookup = (sid: string) => { question: string } | null;
 // uses. Pane-less sessions never surface pane-scraped prompts (matching the
 // live stream's behavior), but a phone sign-in request is not pane state and
 // counts either way.
-async function observeSession(
-  s: { sessionId?: string | null; tmuxTarget?: string | null },
+export async function observeSession(
+  s: {
+    sessionId?: string | null;
+    tmuxTarget?: string | null;
+    agent?: string | null;
+    transcriptPath?: string | null;
+  },
   signInPrompt?: SignInPromptLookup,
 ): Promise<SessionState> {
   const delegated = s.sessionId ? codexDelegationSessionIds().has(s.sessionId) : false;
   const signIn = s.sessionId ? (signInPrompt?.(s.sessionId) ?? null) : null;
   if (!s.tmuxTarget) {
-    return { busy: delegated, promptPresent: !!signIn, promptQuestion: signIn?.question ?? null };
+    const tp = s.agent === "codex"
+      ? s.transcriptPath ?? (s.sessionId ? await resolveTranscript(s.sessionId) : null)
+      : null;
+    const verdict = tp ? await sessionTurnState({ sessionId: s.sessionId, transcriptPath: tp }) : null;
+    const busy = resolveBusy({ verdict, paneBusy: false, delegated });
+    return { busy, promptPresent: !!signIn, promptQuestion: signIn?.question ?? null };
   }
   const pane = await capturePaneAsync(s.tmuxTarget);
   const tp = s.sessionId ? await resolveTranscript(s.sessionId) : null;
@@ -526,7 +536,7 @@ export type TickDeps = {
       }
     >
   >;
-  observe: (s: { sessionId?: string | null; tmuxTarget?: string | null }) => Promise<SessionState>;
+  observe: (s: PayloadSessionInput & { tmuxTarget?: string | null; transcriptPath?: string | null }) => Promise<SessionState>;
   devices: () => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
   cfg: ApnsConfig;
   send: (

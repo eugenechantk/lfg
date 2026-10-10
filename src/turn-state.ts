@@ -25,6 +25,12 @@ import { scanBack } from "./transcript.ts";
 
 export type TurnState = "running" | "idle";
 
+export type TranscriptTurnEvidence = {
+  state: TurnState;
+  /** Paired Codex lifecycle records, rather than an inferred open Claude turn. */
+  explicit: boolean;
+};
+
 /** The answer is nearly always the last line; `scanBack` grows this on a miss. */
 const SCAN_START_BYTES = 8 * 1024;
 /** Bound the memo so long-lived servers don't accumulate dead transcripts. */
@@ -69,6 +75,10 @@ const CODEX_TURN: Record<string, TurnState> = {
 
 /** First non-null wins when scanning newest-first. Null = keep looking. */
 export function classifyTurnLine(line: string): TurnState | null {
+  return classifyTurnEvidence(line)?.state ?? null;
+}
+
+function classifyTurnEvidence(line: string): TranscriptTurnEvidence | null {
   let x: Line;
   try {
     x = JSON.parse(line) as Line;
@@ -80,16 +90,16 @@ export function classifyTurnLine(line: string): TurnState | null {
   // Claude can continue a conversation in a new transcript without writing a
   // turn_duration to the old one. The old transcript is finished at this marker;
   // otherwise its last assistant/tool row keeps that session marked running.
-  if (x.type === "continued-in") return "idle";
+  if (x.type === "continued-in") return { state: "idle", explicit: false };
 
   if (x.type === "system") {
     // Only `turn_duration` is a boundary. `away_summary` is appended minutes
     // later and `stop_hook_summary` sits just before the boundary — neither may
     // re-open or close a turn on its own.
-    return x.subtype === "turn_duration" ? "idle" : null;
+    return x.subtype === "turn_duration" ? { state: "idle", explicit: false } : null;
   }
 
-  if (x.type === "assistant") return "running";
+  if (x.type === "assistant") return { state: "running", explicit: false };
 
   if (x.type === "user") {
     const c = x.message?.content;
@@ -102,11 +112,11 @@ export function classifyTurnLine(line: string): TurnState | null {
         : Array.isArray(c) && typeof (c[0] as { text?: unknown })?.text === "string"
           ? ((c[0] as { text: string }).text)
           : null;
-    if (text != null && INTERRUPT_RE.test(text.trim())) return "idle";
+    if (text != null && INTERRUPT_RE.test(text.trim())) return { state: "idle", explicit: false };
     if (x.isMeta === true) return null; // injected context, not a turn signal
     if (text != null && LOCAL_COMMAND_RE.test(text.trimStart())) return null;
     if (c == null || (Array.isArray(c) && c.length === 0)) return null;
-    return "running"; // typed prompt or tool_result — either way, mid-turn
+    return { state: "running", explicit: false }; // typed prompt or tool_result — either way, mid-turn
   }
 
   if (x.type === "event_msg") {
@@ -116,7 +126,8 @@ export function classifyTurnLine(line: string): TurnState | null {
     // `exec_command_end` and friends are mid-turn traffic — treating them as
     // "running" would be redundant (a `task_started` always precedes them when
     // scanning back) and would risk out-voting a newer `turn_aborted`.
-    return typeof t === "string" ? (CODEX_TURN[t] ?? null) : null;
+    const state = typeof t === "string" ? (CODEX_TURN[t] ?? null) : null;
+    return state == null ? null : { state, explicit: true };
   }
 
   // `mode`, `ai-title`, `last-prompt`, `file-history-*`, codex `response_item` /
@@ -126,16 +137,21 @@ export function classifyTurnLine(line: string): TurnState | null {
 
 // A transcript is append-only, so an unchanged size means an unchanged verdict.
 // That turns a per-session-per-second rescan into a per-session-per-second stat.
-const cache = new Map<string, { size: number; state: TurnState | null }>();
+const cache = new Map<string, { size: number; evidence: TranscriptTurnEvidence | null }>();
 let scans = 0;
 
 /**
- * `"running"` | `"idle"`, or `null` when the transcript can't answer — a codex
- * rollout, an unreadable file, a format we don't recognize. Null means "no
+ * `"running"` | `"idle"`, or `null` when the transcript can't answer — an
+ * unreadable file or a format we don't recognize. Null means "no
  * opinion", never "idle": callers keep whatever fallback they already had, so
  * this can add certainty but never silently mark a running session finished.
  */
 export async function transcriptTurnState(path: string): Promise<TurnState | null> {
+  return (await transcriptTurnEvidence(path))?.state ?? null;
+}
+
+/** Preserve whether the deciding record is an explicit lifecycle boundary. */
+export async function transcriptTurnEvidence(path: string): Promise<TranscriptTurnEvidence | null> {
   let size = 0;
   try {
     size = Bun.file(path).size;
@@ -145,16 +161,16 @@ export async function transcriptTurnState(path: string): Promise<TurnState | nul
   if (size === 0) return null;
 
   const hit = cache.get(path);
-  if (hit && hit.size === size) return hit.state;
+  if (hit && hit.size === size) return hit.evidence;
 
   scans++;
-  const state = await scanBack(path, classifyTurnLine, { startBytes: SCAN_START_BYTES });
+  const evidence = await scanBack(path, classifyTurnEvidence, { startBytes: SCAN_START_BYTES });
   if (cache.size >= CACHE_MAX && !cache.has(path)) {
     const oldest = cache.keys().next().value;
     if (oldest !== undefined) cache.delete(oldest);
   }
-  cache.set(path, { size, state });
-  return state;
+  cache.set(path, { size, evidence });
+  return evidence;
 }
 
 export function forgetTurnState(path: string): void {

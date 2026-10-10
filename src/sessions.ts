@@ -3442,8 +3442,9 @@ async function listSessionsUncached(
     // briefly scrape as idle while its rollout still has an open `task_started`.
     // Letting that raw false become the REST baseline made the iOS client's next
     // poll fight the live journal and flip a genuinely running turn to Idle.
+    // A CLI outside tmux has the same lifecycle records; silence is not idle.
     const turn =
-      tmuxTarget && transcriptPath
+      transcriptPath
         ? await sessionTurnState({ sessionId, transcriptPath })
         : null;
     const managedFields = managedFieldsForTmuxName(tmuxName, managedByName);

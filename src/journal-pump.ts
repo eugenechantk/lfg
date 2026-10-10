@@ -52,9 +52,26 @@ import {
 
 const MSG_TICK_MS = 700;
 const POLL_TICK_MS = 1000;
-// Same semantics as the old per-connection loop: a pane-less bare-CLI session
-// counts as busy while its transcript was written within this window.
+// Freshness is only a fallback for Codex without lifecycle records. Bare Claude
+// keeps the old per-connection rule.
 const BARE_BUSY_WINDOW_MS = 4000;
+
+/** Observe a live session without a pane, preserving explicit Codex turns. */
+export async function bareSessionBusy(args: {
+  agent: string;
+  sessionId?: string | null;
+  transcriptPath: string;
+  delegated?: boolean;
+}): Promise<boolean> {
+  let recent = false;
+  try {
+    recent = Date.now() - statSync(args.transcriptPath).mtimeMs < BARE_BUSY_WINDOW_MS;
+  } catch {}
+  const verdict = args.agent === "codex"
+    ? await sessionTurnState({ sessionId: args.sessionId, transcriptPath: args.transcriptPath })
+    : null;
+  return resolveBusy({ verdict, paneBusy: recent, delegated: args.delegated });
+}
 // Don't re-attempt a pane resize more often than this. A pane we can't grow
 // (a human is attached to it) must not cost two tmux spawns every tick.
 const RESIZE_RETRY_MS = 30_000;
@@ -472,15 +489,14 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
     try {
       const delegated = codexDelegationSessionIds().has(w.sid);
       if (!w.target) {
-        // Pane-less: transcript-freshness heuristic.
-        let baseBusy: boolean;
-        try {
-          baseBusy = Date.now() - statSync(w.tp).mtimeMs < BARE_BUSY_WINDOW_MS;
-        } catch {
-          baseBusy = false;
-        }
+        const baseBusy = await bareSessionBusy({
+          agent: w.agent,
+          sessionId: w.sid,
+          transcriptPath: w.tp,
+          delegated,
+        });
         const busy = busyWithRunningWork(
-          baseBusy || delegated,
+          baseBusy,
           w.runningChildAgentCount,
         );
         noteTurnEdge(w, busy);
