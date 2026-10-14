@@ -4645,6 +4645,8 @@ import LFGCore
         let source = session(req.sessionId)
         let owner = host(forSession: req.sessionId)
         guard let client = client(forSession: req.sessionId) else { return nil }
+        forkingSessionIds.insert(req.sessionId)
+        defer { forkingSessionIds.remove(req.sessionId) }
         do {
             let resp = try await client.fork(req)
             await refresh()
@@ -4666,6 +4668,16 @@ import LFGCore
             if let owner { hostBySession[id] = owner.id }
             return id
         } catch { lastError = "Fork failed: \(error.localizedDescription)"; return nil }
+    }
+
+    /// Sources with a fork request in flight. The title bar shows "Forking…"
+    /// from this, so both entry points (the ••• menu and "Continue in LFG")
+    /// get the same status without sharing view state.
+    private(set) var forkingSessionIds: Set<String> = []
+
+    func isForking(_ id: String) -> Bool {
+        let navigationID = navID(id)
+        return forkingSessionIds.contains { navID($0) == navigationID }
     }
 
     private(set) var switchingModelSessionIds: Set<String> = []

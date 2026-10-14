@@ -67,7 +67,7 @@ struct ScheduledTasksView: View {
     var bottomSearchActive: Binding<Bool>? = nil
     var bottomSearchShown = false
     var sidebarVisibility: Binding<NavigationSplitViewVisibility>? = nil
-    var sidebarFooter: AnyView? = nil
+    var listFooter: AnyView? = nil
     var connectionHeader: ((CGFloat) -> AnyView)? = nil
     var connectionWarning: AnyView? = nil
     var connectedHostIDs: Set<String>? = nil
@@ -172,7 +172,6 @@ struct ScheduledTasksView: View {
                 navigableTaskList
                     .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 460)
                     .toolbar(removing: .sidebarToggle)
-                    .safeAreaInset(edge: .bottom, spacing: 0) { sidebarFooter }
             } detail: {
                 NavigationStack(path: sidebarDetailPath) {
                     Group {
@@ -330,14 +329,11 @@ struct ScheduledTasksView: View {
 
     private var taskList: some View {
         VStack(spacing: 0) {
-            connectionWarning
-            if let error = taskRequestError {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label(error, systemImage: "exclamationmark.triangle").font(.callout)
-                    Button("Try again") { Task { await model.refresh() } }.accessibilityIdentifier("tasks_retry")
-                }.padding().frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("tasks_request_error")
-            }
+            #if os(macOS)
+            taskFeedback
+            #else
+            if model.loading || filtered.isEmpty { taskFeedback }
+            #endif
             if model.loading {
                 ProgressView("Loading tasks…").frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if filtered.isEmpty {
@@ -351,6 +347,11 @@ struct ScheduledTasksView: View {
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
+                    #if os(iOS)
+                    taskFeedback
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets())
+                    #endif
                     ForEach(ScheduledTaskGroup.allCases, id: \.self) { group in
                         let items = filtered.filter { $0.task.listGroup == group }
                         if !items.isEmpty {
@@ -368,13 +369,43 @@ struct ScheduledTasksView: View {
                             }
                         }
                     }
+                    #if os(iOS)
+                    taskHostRequirement
+                        .padding(.vertical, 12)
+                        .listRowSeparator(.hidden)
+                    #endif
                 }
                 .listStyle(.plain)
                 .accessibilityIdentifier("tasks_list")
             }
-            Text("Tasks run while their host is awake and LFG is running.")
-                .font(.caption).foregroundStyle(.secondary).padding().frame(maxWidth: .infinity, alignment: .leading)
+            #if os(macOS)
+            taskHostRequirement.padding()
+            #else
+            if model.loading || filtered.isEmpty { taskHostRequirement.padding() }
+            #endif
         }
+        #if os(iOS)
+        .listScrollChrome(footer: listFooter)
+        #endif
+    }
+
+    private var taskFeedback: some View {
+        Group {
+            connectionWarning
+            if let error = taskRequestError {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(error, systemImage: "exclamationmark.triangle").font(.callout)
+                    Button("Try again") { Task { await model.refresh() } }.accessibilityIdentifier("tasks_retry")
+                }.padding().frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("tasks_request_error")
+            }
+        }
+    }
+
+    private var taskHostRequirement: some View {
+        Text("Tasks run while their host is awake and LFG is running.")
+            .font(.caption).foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder

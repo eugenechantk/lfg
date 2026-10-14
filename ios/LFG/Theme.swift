@@ -144,48 +144,56 @@ extension Glass {
     }
 }
 
-/// Top scroll treatment shared by the session view and the session list:
-/// content runs under the status and top-bar region, darkened and blurred
-/// most where the status bar is, then easing out just past the bar's row —
-/// not a slab with a fade edge. Two layers give the ramp: dimmed Liquid Glass
-/// whose mask thins as it descends, and a background-coloured scrim that
-/// carries most of the darkness at the very top. The buttons float in their
-/// own glass circles and the title sits bare on the ramp, so the bar itself
-/// needs no plane of its own.
+/// The scroll edge treatment for the lists and the session view, drawn by the
+/// app instead of the system. Apple's default effect darkens hard when bare text
+/// sits in a bar (our host-status line), turning near-black and then clearing
+/// within a few points of the bar's edge. The session view's flipped transcript
+/// can't use the system effect at all. So both surfaces draw this gentler ramp,
+/// shaped after Apple's Settings app (measured on iOS 26.3): darkest at the
+/// screen edge, easing through the bar so content stays faintly visible behind
+/// it, and running out ~28pt past the bar's border — no hard edge.
 ///
-/// `chromeHeight` is the screen-top-to-bar-bottom distance; the caller places
-/// this view's top at the screen top.
+/// Two layers give the ramp: dimmed Liquid Glass for the blur and a
+/// background-coloured scrim for the fade. `barHeight` is the distance from the
+/// screen edge to the bar's inner border; the caller places this view against
+/// the screen edge named by `edge`.
 @available(iOS 26.0, *)
-struct TopChromeFade: View {
-    let chromeHeight: CGFloat
-    /// Height of the row holding the bar's controls (back / title / menu).
-    var barRow: CGFloat = 44
+struct ChromeFade: View {
+    var edge: VerticalEdge = .top
+    let barHeight: CGFloat
     @Environment(\.colorScheme) private var colorScheme
 
+    /// How far past the bar's border the ramp runs out, per edge.
+    static func tail(_ edge: VerticalEdge) -> CGFloat { edge == .top ? 28 : 32 }
+
+    /// Strength (0…1) at points measured from the screen edge.
+    private var curve: [(point: CGFloat, strength: Double)] {
+        let b = barHeight
+        switch edge {
+        case .top:
+            return [(0, 0.95), (max(b - 54, 0), 0.9), (b - 32, 0.78), (b - 16, 0.6),
+                    (b, 0.35), (b + 12, 0.15), (b + 28, 0)]
+        case .bottom:
+            return [(0, 0.9), (max(b - 48, 0), 0.75), (b - 24, 0.5), (b, 0.25),
+                    (b + 16, 0.1), (b + 32, 0)]
+        }
+    }
+
     var body: some View {
-        let tail: CGFloat = 36            // how far below the bar row the ramp runs out
-        let total = chromeHeight + tail
-        let statusBottom = total > 0 ? max(chromeHeight - barRow, 0) / total : 0
-        let chromeBottom = total > 0 ? chromeHeight / total : 0
+        let total = barHeight + Self.tail(edge)
         let base = Color(.systemBackground)
+        // Gradients run from the screen edge inward.
+        let start: UnitPoint = edge == .top ? .top : .bottom
+        let end: UnitPoint = edge == .top ? .bottom : .top
+        let points = curve.map { (location: min(max($0.point / total, 0), 1), strength: $0.strength) }
 
         let glassMask = LinearGradient(
-            stops: [
-                .init(color: .black, location: 0),
-                .init(color: .black, location: statusBottom),
-                .init(color: .black.opacity(0.3), location: chromeBottom),
-                .init(color: .clear, location: 1)
-            ],
-            startPoint: .top, endPoint: .bottom
+            stops: points.map { .init(color: .black.opacity($0.strength), location: $0.location) },
+            startPoint: start, endPoint: end
         )
         let scrim = LinearGradient(
-            stops: [
-                .init(color: base.opacity(0.9), location: 0),
-                .init(color: base.opacity(0.4), location: statusBottom),
-                .init(color: base.opacity(0.08), location: chromeBottom),
-                .init(color: base.opacity(0), location: 1)
-            ],
-            startPoint: .top, endPoint: .bottom
+            stops: points.map { .init(color: base.opacity(0.85 * $0.strength), location: $0.location) },
+            startPoint: start, endPoint: end
         )
 
         // The glass shape is inset negatively so its specular perimeter is
@@ -198,6 +206,30 @@ struct TopChromeFade: View {
             scrim
         }
         .frame(height: total)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Both `ChromeFade`s for a list that keeps its own safe areas (under a
+/// navigation bar, with a `safeAreaBar` dock). Applied inside the dock's bar, so
+/// the reader's insets are the chrome: status + navigation bar on top, dock +
+/// home indicator below.
+@available(iOS 26.0, *)
+private struct ListChromeFades: View {
+    var body: some View {
+        GeometryReader { proxy in
+            let insets = proxy.safeAreaInsets
+            VStack(spacing: 0) {
+                if insets.top > 0 { ChromeFade(edge: .top, barHeight: insets.top) }
+                Spacer(minLength: 0)
+                if insets.bottom > 0 { ChromeFade(edge: .bottom, barHeight: insets.bottom) }
+            }
+            // Stretch back out over the insets so each fade meets its screen edge.
+            .frame(width: proxy.size.width,
+                   height: proxy.size.height + insets.top + insets.bottom)
+            .offset(y: -insets.top)
+        }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -219,6 +251,22 @@ struct GlassChromeContainer<Content: View>: View {
 }
 
 extension View {
+    /// Attach list controls to the scrolling surface so content reaches the
+    /// glass, and draw `ChromeFade` at both edges in place of the system effect.
+    @ViewBuilder
+    func listScrollChrome(footer: AnyView?) -> some View {
+        if #available(iOS 26.0, *) {
+            self
+                .scrollEdgeEffectHidden(true, for: [.top, .bottom])
+                .overlay { ListChromeFades() }
+                .safeAreaBar(edge: .bottom, spacing: 0) {
+                    footer
+                }
+        } else {
+            self.safeAreaInset(edge: .bottom, spacing: 0) { footer }
+        }
+    }
+
     @ViewBuilder
     func glassOrRaised<S: Shape>(
         in shape: S,

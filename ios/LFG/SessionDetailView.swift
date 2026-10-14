@@ -417,10 +417,12 @@ struct SessionDetailView: View {
                         .ignoresSafeArea(.keyboard, edges: .bottom)
                         // The 180-degree transcript transform confuses SwiftUI's
                         // automatic edge detector, expanding its blur through the
-                        // viewport instead of confining it to a bar boundary.
+                        // viewport instead of confining it to a bar boundary
+                        // (re-checked on iOS 26.3). `ChromeFade` draws the same
+                        // edge the lists use instead.
                         .scrollEdgeEffectHidden(true, for: [.top, .bottom])
                         .overlay(alignment: .top) {
-                            TopChromeFade(chromeHeight: topChromeHeight)
+                            ChromeFade(barHeight: topChromeHeight)
                                 .offset(y: -topChromeHeight)
                         }
 
@@ -428,6 +430,16 @@ struct SessionDetailView: View {
                     // Its safe-area padding lifts the glass composer above the
                     // software keyboard without resizing the transcript behind it.
                     measuredBottomChrome
+                        // The bottom edge effect, pinned to the composer's top so
+                        // it lines up with the composer and rides up with the
+                        // keyboard.
+                        .background(alignment: .top) {
+                            GeometryReader { proxy in
+                                ChromeFade(edge: .bottom,
+                                           barHeight: proxy.size.height + windowBottomSafeAreaInset)
+                                    .offset(y: -ChromeFade.tail(.bottom))
+                            }
+                        }
                 }
                 .background {
                     // The transcript extends behind the tab bar, while the
@@ -1045,9 +1057,12 @@ struct SessionDetailView: View {
             SessionTitleBarContent(
                 title: displayTitle,
                 hostLabel: hostLabel,
-                modelSwitchStatus: crossProviderSwitchStatus,
-                isMovingHost: isMovingHost,
-                isBusy: isBusy,
+                activity: SessionTitleActivity.resolve(
+                    modelSwitchStatus: crossProviderSwitchStatus,
+                    forking: store.isForking(sid),
+                    movingHost: isMovingHost,
+                    busy: isBusy
+                ),
                 path: headerPath
             ) {
                 withAnimation(.easeOut(duration: 0.18)) { showFullTitle.toggle() }
@@ -1161,9 +1176,7 @@ struct SessionDetailView: View {
 struct SessionTitleBarContent: View {
     let title: String
     let hostLabel: String?
-    let modelSwitchStatus: String?
-    let isMovingHost: Bool
-    let isBusy: Bool
+    let activity: SessionTitleActivity?
     let path: String?
     let onTitleTapped: () -> Void
 
@@ -1189,18 +1202,12 @@ struct SessionTitleBarContent: View {
                         .lineLimit(1)
                         .accessibilityIdentifier("sessionHostPill")
                 }
-                if let modelSwitchStatus {
+                if let activity {
                     ProgressView().controlSize(.mini)
-                    Text(modelSwitchStatus)
+                    Text(activity.label)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("sessionModelSwitchStatus")
-                } else if isMovingHost || isBusy {
-                    ProgressView().controlSize(.mini)
-                    Text(isMovingHost ? "Moving host…" : "Running")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("sessionActivityStatus")
+                        .accessibilityIdentifier(activity.accessibilityIdentifier)
                 } else if let path {
                     Text(path)
                         .font(.caption2)
@@ -1210,9 +1217,17 @@ struct SessionTitleBarContent: View {
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: isBusy)
-        .animation(.easeInOut(duration: 0.2), value: isMovingHost)
-        .animation(.easeInOut(duration: 0.2), value: modelSwitchStatus)
+        .animation(.easeInOut(duration: 0.2), value: activity)
+    }
+}
+
+private extension SessionTitleActivity {
+    var accessibilityIdentifier: String {
+        switch self {
+        case .modelSwitch: "sessionModelSwitchStatus"
+        case .forking: "sessionForkingStatus"
+        case .movingHost, .running: "sessionActivityStatus"
+        }
     }
 }
 

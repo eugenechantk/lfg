@@ -65,6 +65,7 @@ struct SessionListView: View {
     var onSearch: (() -> Void)? = nil
     var bottomSearchActive: Binding<Bool>? = nil
     var bottomSearchShown = false
+    var listFooter: AnyView? = nil
     @State private var localSearchText = ""
     @State private var listWidth: CGFloat = 320
     private var searchText: String { searchQuery?.wrappedValue ?? localSearchText }
@@ -754,6 +755,7 @@ struct SessionListView: View {
         .refreshable { await store.refresh() }
         .listSectionSpacing(0)
         .background(Tokens.screen.ignoresSafeArea())
+        .listScrollChrome(footer: listFooter)
         .toolbar(.visible, for: .navigationBar)
         .navigationTitle(isSearchPresentation ? "Search sessions" : "")
         .navigationBarTitleDisplayMode(.inline)
@@ -1075,17 +1077,6 @@ private struct BottomSearchBar: View {
 }
 
 private extension View {
-    /// The list draws its own top fade (`TopChromeFade`); the system's edge
-    /// blur on top of it would double the treatment.
-    @ViewBuilder
-    func topScrollEdgeEffectHidden() -> some View {
-        if #available(iOS 26.0, *) {
-            self.scrollEdgeEffectHidden(true, for: .top)
-        } else {
-            self
-        }
-    }
-
     /// The bottom chrome for the session list: a search field plus a "new
     /// session" button.
     ///

@@ -119,9 +119,7 @@ struct CrossProviderSwitchStatusFixture: View {
                         SessionTitleBarContent(
                             title: "Cross-provider model switch",
                             hostLabel: nil,
-                            modelSwitchStatus: "Switching to Codex…",
-                            isMovingHost: false,
-                            isBusy: false,
+                            activity: .modelSwitch("Switching to Codex…"),
                             path: "/tmp/lfg-model-switch-fixture",
                             onTitleTapped: {}
                         )

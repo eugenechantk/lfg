@@ -172,12 +172,6 @@ struct RootView: View {
         }
         .tabViewStyle(.tabBarOnly)
         .toolbar(.hidden, for: .tabBar)
-        // TabView does not consistently pass an outer safeAreaInset into its
-        // nested navigation stacks. Reserve real layout space for this bar.
-        .padding(.bottom, !usesSidebarDock && showsListDock ? 68 - dockLowering : 0)
-        .overlay(alignment: .bottom) {
-            if !usesSidebarDock && showsListDock { listDock.offset(y: dockLowering) }
-        }
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { bottomSafeArea = $0 }
         .onChange(of: searchActive) { _, active in
             if !active { endSearch() }
@@ -208,8 +202,13 @@ struct RootView: View {
             && !showSettings && !showNewSession && !showNewTask
     }
 
-    private var dockLowering: CGFloat {
-        UIDevice.current.userInterfaceIdiom == .phone ? min(16, max(0, bottomSafeArea - 16)) : 0
+    private var listFooter: AnyView? {
+        guard usesSidebarDock ? showsSidebarDock : showsListDock else { return nil }
+        // Preserve the dock's home-indicator spacing without shortening the
+        // TabView and preventing rows from scrolling behind the controls.
+        let lowering = UIDevice.current.userInterfaceIdiom == .phone
+            ? min(16, max(0, bottomSafeArea - 16)) : 0
+        return AnyView(listDock.padding(.bottom, -lowering))
     }
 
     private func searchFocus(for tab: AppTab) -> Binding<Bool> {
@@ -260,9 +259,13 @@ struct RootView: View {
                     Image(systemName: "plus")
                         .font(.system(size: 22, weight: .medium))
                         .frame(width: 56, height: 56)
-                        .glassOrRaised(in: Circle(), interactive: true)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
+                // Glass wraps the button, as on the tab pill. Inside the list's
+                // `safeAreaBar`, interactive glass on the label itself took
+                // the touch and the button's action never ran.
+                .glassOrRaised(in: Circle(), interactive: true)
                 .accessibilityLabel(selectedTab == .scheduledTasks ? "New scheduled task" : "New session")
                 .accessibilityIdentifier("list_create")
             }
@@ -302,7 +305,7 @@ struct RootView: View {
            bottomSearchActive: searchFocus(for: .scheduledTasks),
            bottomSearchShown: searchPresented && searchScope == .scheduledTasks,
            sidebarVisibility: usesSidebarDock ? $columnVisibility : nil,
-           sidebarFooter: showsSidebarDock ? AnyView(listDock) : nil,
+           listFooter: listFooter,
            connectionHeader: { width in AnyView(HostConnectionHeader(listWidth: width)) },
            connectionWarning: AnyView(HostConnectionWarning()),
            connectedHostIDs: Set(settings.hosts.filter { store.connectionStatus(forHost: $0.id) == .connected }.map(\.id)),
@@ -351,10 +354,8 @@ struct RootView: View {
                             usesTabSearch: true,
                             onSearch: { beginSearch(.sessions) },
                             bottomSearchActive: searchFocus(for: .sessions),
-                            bottomSearchShown: searchPresented && searchScope == .sessions)
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if showsSidebarDock { listDock }
-                }
+                            bottomSearchShown: searchPresented && searchScope == .sessions,
+                            listFooter: listFooter)
                 .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 460)
                 // SwiftUI's own sidebar toggle only appears while the sidebar
                 // is HIDDEN — the half of the job that already worked. Left in,
