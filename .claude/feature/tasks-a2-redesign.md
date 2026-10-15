@@ -2,7 +2,7 @@
 
 Design: canvas "LFG UI Map", page **Tasks redesign** → row **A2 dark** (`tA2d-*`), and page **A2 build plan** (annotated copies of the same six screens). Desktop design: row **Desktop · A2** (`dA2-*`), matched to the mobile screens on 2026-10-15, with its own build-plan boards (`plan-desk-*`) on the A2 build plan page.
 
-Status: **implemented and verified, not shipped** (2026-10-15). Every phone and Mac screen passed `claude-design-verifier` against its board. Shipping needs an `lfg serve` restart on each host and a commit (SC14). Progress is in the Implementation log at the end; summary page: `.claude/tasks-a2/summary-page.md`.
+Status: **shipped to the servers and TestFlight** (2026-10-15). Commits `371f82d` (code) and `58f9f3d` (docs); `lfg serve` restarted on the Pro and the Air; TestFlight build 202610151935 (1.3.0, VALID, in beta testing). Every phone and Mac screen passed `claude-design-verifier` against its board. Progress is in the Implementation log at the end; summary page: `.claude/tasks-a2/summary-page.md`.
 
 ## User Story
 
@@ -224,7 +224,7 @@ Two pieces are deliberately **not** changed: `PromptPanelView` (it needs `Sessio
 - [x] SC12: Edit-chat sessions do not appear in the Sessions list. — **Verify by:** list API row carries `purpose`; simulator screenshot of Sessions before/after opening a chat.
 - [ ] SC13: Desktop shows the same list, task view (every card state) and form (Once and every Repeat pick) in a 400pt window, and opens sessions and the edit chat in iTerm. — **Verify by:** `lfg --window-shot` for each screen + `lfg --open-session` for a run row.
 - [ ] SC15: On the desktop, a needs-input run shows its question with only an "Answer in iTerm" button, and Change with chat opens the task's edit chat in iTerm. — **Verify by:** `--window-shot` of the needs-input view + `lfg --open-session <editSessionId>` and a `tmux list-clients` check.
-- [ ] SC14: Both apps build from a clean worktree at HEAD (see memory: main can be broken while every build is green). — **Verify by:** clean worktree, then FlowDeck iOS build and `desktop/build.sh`.
+- [x] SC14: Both apps build from a clean worktree at HEAD (see memory: main can be broken while every build is green). — **Verify by:** clean worktree, then FlowDeck iOS build and `desktop/build.sh`.
 
 ## Platform & Stack
 
@@ -314,7 +314,7 @@ All independent checks used `claude-design-verifier` against the boards rendered
 | SC12 | Live: the host lists the chat with `purpose: "task-edit"`; the phone's Sessions list omits it and keeps the host's other sessions. Mac: desktop check. Closed edit chats now keep the tag too (see Bugs; unit-tested, live after deploy). |
 | SC13 | Desktop screens PASS in round 7 (`verifier-desktop/evidence-r7.md`). **Not verified live:** opening iTerm needs a host running the new server. |
 | SC15 | The "Answer in iTerm" view is verified. The iTerm open itself is not verified, for the same reason as SC13. |
-| SC14 | **Not done.** Needs a commit; nothing is committed without Eugene's go-ahead. |
+| SC14 | Clean worktree at `58f9f3d`: iOS build succeeded; desktop build and 183 checks pass; bun 1201 pass (3 fail, same at the previous HEAD); LFGCore 969 pass. |
 
 ## Bugs
 

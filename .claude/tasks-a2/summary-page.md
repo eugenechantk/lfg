@@ -4,7 +4,7 @@ subtitle: Phone and Mac, each screen checked against its design board by an inde
 lang: en
 cols: 3
 ---
-The phone and the Mac now have the whole task flow: list, task view, edit form, and edit with chat. Every screen passed an independent design check. Shipping still needs a server restart and a commit.
+The phone and the Mac now have the whole task flow: list, task view, edit form, and edit with chat. Every screen passed an independent design check. The code is committed, both servers run it, and TestFlight build 202610151935 is in beta testing.
 
 ## A Verdicts by screen {span=2}
 | Screen | Boards | Rounds | Verdict |
@@ -17,10 +17,9 @@ The phone and the Mac now have the whole task flow: list, task view, edit form, 
 | Phone final regression | all phone boards | 2 | ok PASS |
 
 ## B Needs you {meta="3 items"}
-```callout warn Before this ships
-- Restart `lfg serve` on each host. The running servers lack the new task routes.
-- Say whether to commit. I have not committed anything.
+```callout info Left for you
 - Click Deny on the "lfg would like to record this computer's screen" prompt on the Pro.
+- Install TestFlight build 202610151935 when it reaches your phone.
 ```
 ## C How each round worked {span=2}
 ```flow LR
@@ -62,7 +61,6 @@ The verifier rendered each board in Chrome, drove the app on its own simulator, 
 |---|---|
 | lfg does not show background agents | warn sessions look idle while a verifier runs |
 | Keyboard-up chat layout | warn the simulator has no on-screen keyboard |
-| Clean-worktree builds of both apps | warn needs a commit first |
 
 ## H Tests
 ```kv cols=2
