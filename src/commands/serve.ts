@@ -42,7 +42,7 @@ import {
 import { runAutoAgent } from "../auto/runner.ts";
 import { startAutoScheduler } from "../auto/scheduler.ts";
 import { TaskStore } from "../scheduled-tasks.ts";
-import { scheduledTaskRoutes, taskRuntime, type TaskApiCall } from "../scheduled-task-api.ts";
+import { scheduledTaskRoutes, tagEditChats, taskRuntime, type TaskApiCall } from "../scheduled-task-api.ts";
 import { startAutopilot } from "../autopilot/tick.ts";
 import {
   listSessions,
@@ -116,6 +116,7 @@ import { interruptBaseline, noteConfirmedInterrupt } from "../interrupt-marks.ts
 import { logOp } from "../ops-log.ts";
 import { assignUser, userRoster } from "../users.ts";
 import { acquireLease, ensureLease, foreignFresh, releaseLease } from "../leases.ts";
+import { noteRunningHere } from "../ran-here.ts";
 import { aggregatorConfig, aggregatorRequest } from "../push/fleet-slice.ts";
 import { registerDevice, unregisterDevice, deviceCount } from "../push/store.ts";
 import { upsertLiveActivityToken } from "../push/liveactivity-store.ts";
@@ -1246,6 +1247,16 @@ function startLeaseHeartbeat(): () => void {
         // from enumeration removes the "remember to acquire" step entirely.
         if (s.sessionId) await ensureLease(s.sessionId, s.pid);
       }
+      // The lease vanishes when a session ends; this host-local record is what
+      // later says the closed row belongs here (see ran-here.ts). A claude row
+      // counts only when its own pidfile names the id: a bare `claude` with no
+      // readable pidfile is bound by guess (newest transcript in its cwd), and
+      // a synced transcript from the other Mac is exactly what that guess picks.
+      await noteRunningHere(
+        sessions.flatMap((s) =>
+          s.sessionId && (s.agent !== "claude" || sessionIdForPid(s.pid) === s.sessionId) ? [s.sessionId] : [],
+        ),
+      );
     } catch {}
     if (!stopped) timer = setTimeout(loop, 30_000);
   };
@@ -2433,7 +2444,8 @@ export async function cmdServe(options: {
         const page = q
           ? await searchResumable({ q, limit, before: cursor, exclude })
           : await listResumable({ limit, before: cursor, exclude });
-        return json(page);
+        // A closed task edit chat has lost its managed record; the task store still knows it.
+        return json(tagEditChats(page, await taskStore.editSessionIds()));
       }
 
       if (path === "/api/sessions/search" && req.method === "GET") {
@@ -2446,7 +2458,7 @@ export async function cmdServe(options: {
           cursor: url.searchParams.get("cursor"),
           exclude: url.searchParams.getAll("exclude"),
         });
-        return page ? json(page) : err(409, "search cursor expired; restart the query");
+        return page ? json(tagEditChats(page, await taskStore.editSessionIds())) : err(409, "search cursor expired; restart the query");
       }
 
       // Resume a closed claude session: relaunch `claude --resume <id>` in the
@@ -2501,6 +2513,8 @@ export async function cmdServe(options: {
           agent?: "claude" | "codex";
           parentSessionId?: unknown;
           sessionId?: string;
+          purpose?: unknown;
+          taskId?: unknown;
         } | null;
         const isHandoff = path === "/api/sessions/handoff";
         if (isHandoff && body?.agent !== "codex" && body?.agent !== "claude")
@@ -2580,6 +2594,8 @@ export async function cmdServe(options: {
           createdAt: Date.now(),
           agent,
           ...(parentSessionId ? { parentSessionId } : {}),
+          ...(body?.purpose === "task-edit" ? { purpose: "task-edit" as const,
+            ...(typeof body.taskId === "string" && body.taskId.length <= 64 ? { taskId: body.taskId } : {}) } : {}),
         });
         // Tag the new session to whoever created it so it lands in their filter
         // immediately (best-effort: assignUser ignores an unknown email).

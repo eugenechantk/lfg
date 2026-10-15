@@ -24,7 +24,11 @@ swiftc -O -parse-as-library \
   LFGSessions.swift \
   ScheduledTasksPane.swift \
   ../shared/ScheduledTasksView.swift \
+  ../shared/Tasks/*.swift \
   ../ios/LFGCore/Sources/LFGCore/ScheduledTasks.swift \
+  ../ios/LFGCore/Sources/LFGCore/TaskPresentation.swift \
+  ../ios/LFGCore/Sources/LFGCore/TaskDetailPresentation.swift \
+  ../ios/LFGCore/Sources/LFGCore/ScheduleDraft.swift \
   ../ios/LFGCore/Sources/LFGCore/ModelCatalog.swift \
   ../ios/LFGCore/Sources/LFGCore/SessionEffort.swift \
   ../ios/LFGCore/Sources/LFGCore/HiddenDirs.swift

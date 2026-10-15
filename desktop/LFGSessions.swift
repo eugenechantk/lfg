@@ -31,6 +31,54 @@ import Darwin
 import Dispatch
 import Security
 
+// MARK: - Destination switcher
+
+/// Sessions | Tasks with "needs you" badges, as on the dA2 boards: a faint track, the pick on a lighter pill.
+/// A native segmented control cannot carry the badges.
+struct DesktopDestinationSwitcher: View {
+    @Binding var showingTasks: Bool
+    let sessionsBadge: Int
+    let tasksBadge: Int
+
+    var body: some View {
+        HStack(spacing: 0) {
+            segment("Sessions", badge: sessionsBadge, tasks: false)
+            segment("Tasks", badge: tasksBadge, tasks: true)
+        }
+        .padding(3)
+        .background(Color.primary.opacity(0.07), in: Capsule())
+        .fixedSize()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("list_destination_picker")
+    }
+
+    private func segment(_ title: String, badge: Int, tasks: Bool) -> some View {
+        let on = showingTasks == tasks
+        return Button { showingTasks = tasks } label: {
+            HStack(spacing: 6) {
+                Text(title).font(.system(size: 12, weight: on ? .semibold : .medium))
+                if badge > 0 {
+                    Text("\(badge)")
+                        .font(.system(size: 10, weight: .heavy).monospacedDigit())
+                        .foregroundStyle(Color(red: 0.10, green: 0.07, blue: 0.02))
+                        .padding(.horizontal, 4)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(TaskColors.warningFill.opacity(on ? 1 : 0.9), in: Capsule())
+                }
+            }
+            .padding(.horizontal, 11)
+            .frame(height: 26)
+            .background(on ? Color.primary.opacity(0.16) : Color.clear, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(badge > 0 ? "\(title), \(badge) need you" : title)
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityIdentifier(tasks ? "destination_tasks" : "destination_sessions")
+        .help(title)
+    }
+}
+
 // MARK: - API models (subset of lfg's Session type)
 
 struct APISession: Decodable, Identifiable, Hashable {
@@ -48,13 +96,16 @@ struct APISession: Decodable, Identifiable, Hashable {
     let parentSessionId: String?
     let lastUserText: String?
     let closed: Bool
+    /// "task-edit" for a task's edit chat, which lives behind the task's Change with chat button.
+    var purpose: String? = nil
 
     var id: String { sessionId ?? "pid-\(pid)" }
 
     init(agent: String, pid: Int, cwd: String?, project: String, title: String,
          sessionId: String?, busy: Bool, lastActivityAt: Double?, tmuxName: String?,
          model: String?, status: String?, parentSessionId: String? = nil,
-         lastUserText: String?, closed: Bool = false) {
+         lastUserText: String?, closed: Bool = false, purpose: String? = nil) {
+        self.purpose = purpose
         self.agent = agent
         self.pid = pid
         self.cwd = cwd
@@ -72,7 +123,7 @@ struct APISession: Decodable, Identifiable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case agent, pid, cwd, project, title, sessionId, busy, lastActivityAt, tmuxName, model, status, parentSessionId, lastUserText
+        case agent, pid, cwd, project, title, sessionId, busy, lastActivityAt, tmuxName, model, status, parentSessionId, lastUserText, purpose
     }
 
     init(from decoder: Decoder) throws {
@@ -90,6 +141,7 @@ struct APISession: Decodable, Identifiable, Hashable {
         status = try c.decodeIfPresent(String.self, forKey: .status)
         parentSessionId = try c.decodeIfPresent(String.self, forKey: .parentSessionId)
         lastUserText = try c.decodeIfPresent(String.self, forKey: .lastUserText)
+        purpose = try? c.decodeIfPresent(String.self, forKey: .purpose)
         closed = false
     }
 }
@@ -106,6 +158,12 @@ struct ResumableAPISession: Decodable {
     let model: String?
     let searchMatched: Bool?
     let rank: Double?
+    /// When the answering host last ran this session (ms, from its own lease),
+    /// so the row can go to the host that ran it last — see `ClosedRowOwner`.
+    /// nil if it never ran it there, or from an older host.
+    let lastRunHereAt: Double?
+    /// "task-edit" for a closed scheduled-task edit chat; Sessions leaves it out.
+    var purpose: String? = nil
 
     init(
         sessionId: String,
@@ -117,7 +175,8 @@ struct ResumableAPISession: Decodable {
         agent: String = "claude",
         model: String? = nil,
         searchMatched: Bool? = nil,
-        rank: Double? = nil
+        rank: Double? = nil,
+        lastRunHereAt: Double? = nil
     ) {
         self.sessionId = sessionId
         self.cwd = cwd
@@ -129,10 +188,12 @@ struct ResumableAPISession: Decodable {
         self.model = model
         self.searchMatched = searchMatched
         self.rank = rank
+        self.lastRunHereAt = lastRunHereAt
     }
 
     private enum CodingKeys: String, CodingKey {
-        case sessionId, cwd, project, title, lastActivityAt, lastUserText, agent, model, searchMatched, rank
+        case sessionId, cwd, project, title, lastActivityAt, lastUserText, agent, model, searchMatched, rank,
+             lastRunHereAt, purpose
     }
 
     init(from decoder: Decoder) throws {
@@ -149,6 +210,35 @@ struct ResumableAPISession: Decodable {
         model = try c.decodeIfPresent(String.self, forKey: .model)
         searchMatched = try c.decodeIfPresent(Bool.self, forKey: .searchMatched)
         rank = try c.decodeIfPresent(Double.self, forKey: .rank)
+        lastRunHereAt = try c.decodeIfPresent(Double.self, forKey: .lastRunHereAt)
+        purpose = try? c.decodeIfPresent(String.self, forKey: .purpose)
+    }
+}
+
+/// Which host a closed row belongs to. `~/.claude/projects` and
+/// `~/.codex/sessions` are synced, so EVERY host lists every closed transcript;
+/// the row used to go to whichever host came first in hosts.json, so a session
+/// last run on the Air became a Pro row and forking it ran on the Pro. Lease
+/// files are not synced, so each host can only say when IT last ran the
+/// session (`lastRunHereAt`). The row goes to the host with the latest answer,
+/// else to the first host in config order, so no row is dropped.
+enum ClosedRowOwner {
+    /// `hosts` in config order, each with the closed rows it listed and when it
+    /// last ran each one (nil: never, as far as its lease knows). Returns
+    /// sessionId → host URL.
+    static func assign(hosts: [(url: String, rows: [(id: String, ranHereAt: Double?)])]) -> [String: String] {
+        var owner: [String: String] = [:]
+        var latest: [String: Double] = [:]
+        for host in hosts {
+            for row in host.rows {
+                if owner[row.id] == nil { owner[row.id] = host.url }
+                if let at = row.ranHereAt, at > (latest[row.id] ?? -.infinity) {
+                    latest[row.id] = at
+                    owner[row.id] = host.url
+                }
+            }
+        }
+        return owner
     }
 }
 struct ResumableResponse: Decodable {
@@ -319,6 +409,8 @@ struct HostState: Identifiable {
     var info: HostInfoResponse?
     var sessions: [APISession] = []
     var closedSessions: [APISession] = []
+    /// sessionId → when THIS host last ran it, for `closedSessions` (ClosedRowOwner).
+    var closedRanHereAt: [String: Double] = [:]
     /// Cursor for the page after `closedSessions`, from the host's `nextBefore`.
     /// nil when the host's closed corpus is exhausted (or predates paging).
     var closedNextBefore: Double? = nil
@@ -1155,6 +1247,9 @@ final class SessionStore: ObservableObject {
     @Published var closedLoadingMore = false
     /// Deeper closed pages per host URL, in load order (already row-shaped).
     private var moreClosedByHost: [String: [APISession]] = [:]
+    /// host URL → sessionId → when that host last ran it, from every
+    /// resumable/search page seen. Decides which host a closed row belongs to.
+    private var closedRanHereAt: [String: [String: Double]] = [:]
     /// Where the next deeper page starts, per host URL.
     private var closedNextBeforeByHost: [String: Double] = [:]
     /// Hosts whose closed corpus was paged to the end. Terminal on purpose:
@@ -1192,6 +1287,7 @@ final class SessionStore: ObservableObject {
             // retries on the next bottom-reach; marking exhausted here would
             // silently end paging on one flaky request.
             guard !sessions.isEmpty || next != nil else { continue }
+            closedRanHereAt[url, default: [:]].merge(Self.ranHereAt(of: sessions)) { $1 }
             moreClosedByHost[url, default: []]
                 .append(contentsOf: sessions.map(Self.closedSession(from:)))
             if let next {
@@ -1205,23 +1301,40 @@ final class SessionStore: ObservableObject {
     }
 
     /// Fold the deeper pages into the already-built `hosts`, applying the same
-    /// live/duplicate filters the refresh merge applies to page 1.
+    /// live/owner filters the refresh merge applies to page 1.
     private func mergeDeeperClosedPages() {
         guard !moreClosedByHost.isEmpty else { return }
-        let liveIds = Set(hosts.flatMap { $0.sessions.filter { !$0.closed }.compactMap(\.sessionId) })
-        var seenIds = Set(hosts.flatMap { $0.sessions.compactMap(\.sessionId) })
-        for i in hosts.indices {
-            guard let extra = moreClosedByHost[hosts[i].url], !extra.isEmpty else { continue }
-            let fresh = extra.filter { session in
-                guard let id = session.sessionId else { return false }
-                if liveIds.contains(id) { return false }
-                return seenIds.insert(id).inserted
+        placeClosedRows(&hosts)
+    }
+
+    /// Give each closed row to exactly one host: drop rows live anywhere, then
+    /// let `ClosedRowOwner` pick between the hosts that listed it. Rebuilt from
+    /// page 1 plus deeper pages every time, so a row moves to its owner as soon
+    /// as the owner lists it, even if another host listed it first.
+    private func placeClosedRows(_ hostStates: inout [HostState]) {
+        let liveIds = Set(hostStates.flatMap { $0.sessions.filter { !$0.closed }.compactMap(\.sessionId) })
+        let listed = hostStates.map { $0.closedSessions + (moreClosedByHost[$0.url] ?? []) }
+        let owners = ClosedRowOwner.assign(hosts: hostStates.indices.map { i in
+            let ranAt = closedRanHereAt[hostStates[i].url] ?? [:]
+            return (url: hostStates[i].url,
+                    rows: listed[i].compactMap(\.sessionId).filter { !liveIds.contains($0) }
+                        .map { (id: $0, ranHereAt: ranAt[$0]) })
+        })
+        for i in hostStates.indices {
+            var seen = Set<String>()
+            let closed = listed[i].filter { session in
+                guard let id = session.sessionId, owners[id] == hostStates[i].url else { return false }
+                return seen.insert(id).inserted
             }
-            guard !fresh.isEmpty else { continue }
-            hosts[i].sessions = (hosts[i].sessions + fresh).sorted {
+            hostStates[i].sessions = (hostStates[i].sessions.filter { !$0.closed } + closed).sorted {
                 ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0)
             }
         }
+    }
+
+    static func ranHereAt(of rows: [ResumableAPISession]) -> [String: Double] {
+        Dictionary(rows.compactMap { r in r.lastRunHereAt.map { (r.sessionId, $0) } },
+                   uniquingKeysWith: { _, newer in newer })
     }
 
     /// Collapse every host's search page into one list.
@@ -1236,14 +1349,27 @@ final class SessionStore: ObservableObject {
         let terms = SessionSearch.terms(searchQuery)
         let liveIds = Set(hosts.flatMap { $0.sessions.compactMap(\.sessionId) })
         let hostByURL = Dictionary(uniqueKeysWithValues: hosts.map { ($0.url, $0) })
+        let entries = Config.loadHosts()
+        for (url, page) in searchPagesByHost {
+            closedRanHereAt[url, default: [:]].merge(Self.ranHereAt(of: page)) { $1 }
+        }
+        let owners = ClosedRowOwner.assign(hosts: entries.compactMap { entry in
+            searchPagesByHost[entry.url].map { page in
+                let ranAt = closedRanHereAt[entry.url] ?? [:]
+                return (url: entry.url,
+                        rows: page.filter { SessionSearch.matches($0, terms: terms) && !liveIds.contains($0.sessionId) }
+                            .map { (id: $0.sessionId, ranHereAt: ranAt[$0.sessionId]) })
+            }
+        })
         var seen = Set<String>()
         var out: [SessionItem] = []
-        for entry in Config.loadHosts() {
+        for entry in entries {
             guard let page = searchPagesByHost[entry.url] else { continue }
             let host = hostByURL[entry.url]
             for r in page {
                 guard SessionSearch.matches(r, terms: terms) else { continue }
-                guard !liveIds.contains(r.sessionId), seen.insert(r.sessionId).inserted else { continue }
+                guard !liveIds.contains(r.sessionId), owners[r.sessionId] == entry.url,
+                      seen.insert(r.sessionId).inserted else { continue }
                 out.append(SessionItem(
                     session: Self.closedSession(from: r),
                     hostURL: entry.url,
@@ -1309,8 +1435,21 @@ final class SessionStore: ObservableObject {
 
     /// Pure so the feature test can exercise it without a live store or network.
     static func visible(_ items: [SessionItem], hiddenDirs: HiddenDirs) -> [SessionItem] {
+        // A task's edit chat opens from that task's Change with chat button; Sessions leaves it out (as on the phone).
+        let items = items.filter { $0.session.purpose != "task-edit" }
         guard !hiddenDirs.isEmpty else { return items }
         return items.filter { !hiddenDirs.hides(cwd: $0.session.cwd) }
+    }
+
+    /// A live session by id, ignoring the list's filters (mute list, task edit chats).
+    func liveItem(sessionId: String) -> SessionItem? {
+        for host in hosts {
+            guard let s = host.sessions.first(where: { $0.sessionId == sessionId && !$0.closed }) else { continue }
+            return SessionItem(session: s, hostURL: host.url, hostId: host.info?.hostId ?? host.url, hostLabel: host.label,
+                               hostIsLocal: host.isLocal, hostSSHTarget: host.sshTarget, hostRemoteTransport: host.remoteTransport,
+                               needsInput: host.needsInputSessionIds.contains(sessionId))
+        }
+        return nil
     }
 
     /// Live sessions the mute list is holding back — the number the disclosure
@@ -1443,21 +1582,13 @@ final class SessionStore: ObservableObject {
                 uniqueHosts.append(state)
             }
         }
-        let liveIds = Set(uniqueHosts.flatMap { $0.sessions.compactMap(\.sessionId) })
-        var seenClosedIds = Set<String>()
+        for host in uniqueHosts { closedRanHereAt[host.url, default: [:]].merge(host.closedRanHereAt) { $1 } }
+        // Page 1 is fresh from this refresh; deeper pages the user already
+        // scrolled to ride along so the rebuild can't shrink the list.
+        placeClosedRows(&uniqueHosts)
         for i in uniqueHosts.indices {
             let url = uniqueHosts[i].url
-            // Page 1 is fresh from this refresh; deeper pages the user already
-            // scrolled to ride along so the rebuild can't shrink the list.
             let deeper = moreClosedByHost[url] ?? []
-            let closed = (uniqueHosts[i].closedSessions + deeper).filter { session in
-                guard let id = session.sessionId else { return false }
-                if liveIds.contains(id) { return false }
-                return seenClosedIds.insert(id).inserted
-            }
-            uniqueHosts[i].sessions = (uniqueHosts[i].sessions + closed).sorted {
-                ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0)
-            }
             // Page 1 seeds the cursor only while no deeper page owns it —
             // rewinding on every poll would re-fetch page 2 forever. A host
             // paged to its end stays ended; later closures arrive via page 1.
@@ -1625,6 +1756,7 @@ final class SessionStore: ObservableObject {
             if let (resumableData, _) = try? await session.data(for: DesktopAPI.request(resumableURL)),
                let resumable = try? JSONDecoder().decode(ResumableResponse.self, from: resumableData) {
                 state.closedSessions = resumable.sessions.map(Self.closedSession(from:))
+                state.closedRanHereAt = Self.ranHereAt(of: resumable.sessions)
                 state.closedNextBefore = resumable.nextBefore
             }
         } catch {
@@ -1654,7 +1786,8 @@ final class SessionStore: ObservableObject {
             model: r.model,
             status: nil,
             lastUserText: r.lastUserText,
-            closed: true
+            closed: true,
+            purpose: r.purpose
         )
     }
 
@@ -2688,6 +2821,20 @@ enum DesktopFeatureTestCLI {
                    "the menu bar cannot show a session the window hides")
         try expect(mutedMenuIds.contains("real-work"), "real work still reaches the menu bar")
 
+        // A task's edit chat opens from the task's Change with chat button, not from Sessions.
+        let editChat = menuTestItem(id: "task-edit-chat", lastActivity: 400)
+        let tagged = SessionItem(session: APISession(agent: "claude", pid: 7, cwd: "/tmp/project", project: "project",
+                                                     title: "Edit task", sessionId: "task-edit-chat", busy: false, lastActivityAt: 400,
+                                                     tmuxName: "lfg-edit", model: nil, status: nil, lastUserText: nil, purpose: "task-edit"),
+                                 hostURL: editChat.hostURL, hostId: editChat.hostId, hostLabel: editChat.hostLabel,
+                                 hostIsLocal: editChat.hostIsLocal, hostSSHTarget: nil, hostRemoteTransport: editChat.hostRemoteTransport)
+        try expect(SessionStore.visible(mixed + [tagged], hiddenDirs: HiddenDirs()).map(\.session.id) == mixed.map(\.session.id),
+                   "task edit chats stay out of Sessions and the menu bar")
+        let closedChat = try JSONDecoder().decode(ResumableAPISession.self, from: Data(
+            #"{"sessionId":"closed-chat","title":"Change task","agent":"claude","purpose":"task-edit"}"#.utf8))
+        try expect(SessionStore.closedSession(from: closedChat).purpose == "task-edit",
+                   "a closed edit chat keeps its tag from the resumable listing")
+
         let blankName = Config.HostEntry(url: "http://studio:8766", displayName: "  ")
         try expect(blankName.displayLabel(reportedHostName: "Mac-Studio.local") == "Mac-Studio",
                    "blank display name falls back to short hostname")
@@ -3097,6 +3244,37 @@ enum DesktopFeatureTestCLI {
             of: "codex-source", error: "Fork failed: 502",
             showing: ForkModal(sessionId: "other", title: "other")) == .alert("Fork failed: 502"),
                    "a hidden fork's failure never overwrites another fork's sheet")
+
+        // Every host lists every closed transcript; the row (and so a fork from
+        // it) belongs to the host that last ran the session.
+        let owners = ClosedRowOwner.assign(hosts: [
+            (url: "pro", rows: [(id: "air-only-ran", ranHereAt: nil), (id: "pro-only-ran", ranHereAt: 50),
+                                (id: "both-air-later", ranHereAt: 10), (id: "no-lease", ranHereAt: nil),
+                                (id: "pro-listed", ranHereAt: nil)]),
+            (url: "air", rows: [(id: "air-only-ran", ranHereAt: 40), (id: "pro-only-ran", ranHereAt: nil),
+                                (id: "both-air-later", ranHereAt: 90), (id: "no-lease", ranHereAt: nil),
+                                (id: "air-listed", ranHereAt: nil)]),
+        ])
+        try expect(owners["air-only-ran"] == "air", "a closed session last run on the Air is an Air row")
+        try expect(owners["pro-only-ran"] == "pro", "a closed session last run on the Pro stays a Pro row")
+        try expect(owners["both-air-later"] == "air", "when both ran it, the later run wins")
+        try expect(owners["no-lease"] == "pro", "with no run on record the first host in config order keeps it")
+        try expect(owners["pro-listed"] == "pro" && owners["air-listed"] == "air",
+                   "a row only one host listed stays with that host")
+        // The Air's own hosts.json lists itself first: order must not decide.
+        let fromAir = ClosedRowOwner.assign(hosts: [
+            (url: "air", rows: [(id: "pro-ran", ranHereAt: nil), (id: "air-ran", ranHereAt: 70)]),
+            (url: "pro", rows: [(id: "pro-ran", ranHereAt: 60), (id: "air-ran", ranHereAt: nil)]),
+        ])
+        try expect(fromAir["pro-ran"] == "pro" && fromAir["air-ran"] == "air",
+                   "with the Air listed first, a session the Pro ran is still a Pro row")
+        let ownerOffline = ClosedRowOwner.assign(hosts: [(url: "pro", rows: [(id: "air-only-ran", ranHereAt: nil)])])
+        try expect(ownerOffline["air-only-ran"] == "pro",
+                   "a session whose owner is offline still shows, on the host that listed it")
+        let withRun = try JSONDecoder().decode(ResumableAPISession.self, from: Data(
+            #"{"sessionId":"s","title":"t","lastRunHereAt":1791622476730}"#.utf8))
+        try expect(withRun.lastRunHereAt == 1791622476730 && SessionStore.ranHereAt(of: [withRun]) == ["s": 1791622476730],
+                   "resumable rows carry when the answering host last ran them")
     }
 
     /// Search spans every session on every host, so the rules that keep that
@@ -4283,6 +4461,7 @@ struct SessionRow: View {
     let item: SessionItem
     let showHost: Bool
     let isMoving: Bool
+    var compact = false
 
     private var session: APISession { item.session }
 
@@ -4296,14 +4475,14 @@ struct SessionRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: compact ? 6 : 10) {
             Circle()
                 .fill(dotColor)
                 .frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.title)
                     .font(.system(size: 13, weight: .medium))
-                    .lineLimit(1)
+                    .lineLimit(compact ? 2 : 1)
                 HStack(spacing: 6) {
                     Text(session.project)
                     if let model = session.model { Text("· \(model)") }
@@ -4314,14 +4493,14 @@ struct SessionRow: View {
                 .lineLimit(1)
             }
             Spacer()
-            if showHost || !item.hostIsLocal {
+            if !compact, showHost || !item.hostIsLocal {
                 badge(item.hostLabel, color: item.hostIsLocal ? .secondary : .purple)
             }
-            if item.hostIsLocal, session.tmuxName != nil {
+            if !compact, item.hostIsLocal, session.tmuxName != nil {
                 badge("tmux", color: .blue)
-            } else if !item.hostIsLocal, session.tmuxName != nil {
+            } else if !compact, !item.hostIsLocal, session.tmuxName != nil {
                 badge(Opener.remoteTransportLabel(for: item), color: .green)
-            } else if item.opensByResume {
+            } else if !compact, item.opensByResume {
                 badge("resume", color: .orange)
             }
             if isMoving {
@@ -4332,12 +4511,15 @@ struct SessionRow: View {
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.secondary)
             }
-            Image(systemName: "arrow.up.forward.square")
-                .foregroundStyle(item.canOpen && !isMoving ? Color.accentColor : Color.secondary.opacity(0.3))
+            if !compact {
+                Image(systemName: "arrow.up.forward.square")
+                    .foregroundStyle(item.canOpen && !isMoving ? Color.accentColor : Color.secondary.opacity(0.3))
+            }
         }
         .padding(.vertical, 3)
         .contentShape(Rectangle())
         .opacity(item.canOpen && !isMoving ? 1 : 0.5)
+        .help(compact ? "\(session.title)\n\(item.hostLabel) · \(session.model ?? session.agent)" : "")
     }
 
     private func badge(_ text: String, color: Color) -> some View {
@@ -5151,6 +5333,7 @@ struct DesktopConnectionStatusBar: View {
 
     var body: some View {
         Self.cluster(chips: chips, compact: compact)
+            .fixedSize(horizontal: true, vertical: false)
             .accessibilityIdentifier("host_connection_status")
     }
 
@@ -5307,6 +5490,10 @@ struct ContentView: View {
     /// Tracks the window width so the toolbar can shed labels when the window
     /// is narrow (e.g. parked in a third of a 13" Air's screen).
     @State private var windowWidth: CGFloat = 0
+    /// The Tasks pane's pushed pages. A pushed task page swaps the switcher for Back (dA2 boards).
+    @State private var taskPath: [ScheduledTaskRoute] = ScheduledTasksPane.launchPath
+    /// Tasks waiting for an answer, for the switcher's Tasks badge. Last known while Sessions shows.
+    @State private var taskNeedsInput = 0
     @State private var compactSearchShown: Bool
     @State private var showDirectoryFilter = false
     @FocusState private var searchFieldFocused: Bool
@@ -5574,7 +5761,8 @@ struct ContentView: View {
                     }
                 }
             } label: {
-                SessionRow(item: item, showHost: store.multipleHosts, isMoving: isMoving)
+                SessionRow(item: item, showHost: store.multipleHosts, isMoving: isMoving,
+                           compact: windowWidth > 0 && windowWidth < 320)
             }
             .buttonStyle(.plain)
             // A live session outside tmux cannot be attached, but its row
@@ -5772,6 +5960,8 @@ struct ContentView: View {
         )
     }
 
+    private var usesCompactHostStatus: Bool { windowWidth < 700 || !showsHostLabels }
+
     /// Names the filter control, and says what it's currently doing — the count
     /// is the disclosure when the compact toolbar has no room for a badge.
     private var directoryFilterLabel: String {
@@ -5791,6 +5981,20 @@ struct ContentView: View {
             }
         }
             Menu {
+                if windowWidth < 500 {
+                    Button("Create session", systemImage: "plus") {
+                        Task {
+                            if let error = await store.createSession(searchQuery: searchText) { alertMessage = error }
+                        }
+                    }
+                    .disabled(store.creatingSession)
+                    Button("Search sessions", systemImage: "magnifyingglass") {
+                        compactSearchShown.toggle()
+                        searchFieldFocused = compactSearchShown
+                        if !compactSearchShown { searchText = "" }
+                    }
+                    Divider()
+                }
                 picker.pickerStyle(.inline).labelsHidden()
                 Divider()
                 Button(directoryFilterLabel) { showDirectoryFilter = true }
@@ -5820,7 +6024,7 @@ struct ContentView: View {
             if store.creatingSession {
                 ProgressView().controlSize(.small)
             } else {
-                Image(systemName: "plus")
+                Label("Create session", systemImage: "plus").labelStyle(.iconOnly)
             }
         }
         .disabled(store.creatingSession)
@@ -5854,9 +6058,10 @@ struct ContentView: View {
             searchFieldFocused = compactSearchShown
             if !compactSearchShown { searchText = "" }
         } label: {
-            Image(systemName: searchText.isEmpty
+            Label("Search sessions", systemImage: searchText.isEmpty
                   ? "magnifyingglass"
                   : "line.3.horizontal.decrease.circle.fill")
+                .labelStyle(.iconOnly)
         }
         .buttonStyle(.glass)
         .buttonBorderShape(.circle)
@@ -5892,26 +6097,60 @@ struct ContentView: View {
         .accessibilityIdentifier("compact_search_row")
     }
 
+    @ViewBuilder
+    private var destinationPicker: some View {
+        if windowWidth >= 280 {
+            DesktopDestinationSwitcher(showingTasks: $store.showingScheduledTasks,
+                                       sessionsBadge: MenuBarSessionProjection(items: store.items).needsInputCount,
+                                       tasksBadge: taskNeedsInput)
+        } else {
+            iconDestinationPicker
+        }
+    }
+
+    /// Below 280pt the destinations are icons in a native segmented control.
+    private var iconDestinationPicker: some View {
+        Picker("View", selection: $store.showingScheduledTasks) {
+            if windowWidth < 280 {
+                Image(systemName: "text.bubble").accessibilityLabel("Sessions").help("Sessions").tag(false)
+                Image(systemName: "calendar").accessibilityLabel("Tasks").help("Tasks").tag(true)
+            } else {
+                Text("Sessions").tag(false)
+                Text("Tasks").tag(true)
+            }
+        }
+        .pickerStyle(.segmented)
+        .controlSize(windowWidth < 500 ? .small : .large)
+        .labelsHidden()
+        .fixedSize()
+        .accessibilityIdentifier("list_destination_picker")
+        // Recreate the native segments when changing label style. AppKit
+        // otherwise retains the previous image alongside the text label.
+        .id(windowWidth < 280)
+    }
+
     var body: some View {
         Group {
             if store.showingScheduledTasks {
-                ScheduledTasksPane()
+                ScheduledTasksPane(path: $taskPath, taskNeedsInput: $taskNeedsInput)
             } else {
                 sessionsBody
             }
         }
-        // AppKit centers the destination picker only with room on both sides.
-        // Native resize audits establish 760pt as the minimum that stays centered.
-        .frame(minWidth: 760, minHeight: 420)
+        // Let the system overflow toolbar controls when the user wants a slim list.
+        .frame(minWidth: 180, minHeight: 420)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            if width != windowWidth { windowWidth = width }
+        }
+        .toolbar(removing: .title)
+        .background(CompactWindowControls(compact: windowWidth < 350))
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("View", selection: $store.showingScheduledTasks) {
-                    Text("Sessions").tag(false)
-                    Text("Tasks").tag(true)
+            if !(store.showingScheduledTasks && !taskPath.isEmpty) {
+                ToolbarItem(placement: .principal) {
+                    destinationPicker
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .accessibilityIdentifier("list_destination_picker")
+                // The badged switcher draws its own track (dA2 board); the icon picker keeps the glass.
+                .sharedBackgroundVisibility(windowWidth >= 280 ? .hidden : .automatic)
             }
         }
     }
@@ -5986,13 +6225,7 @@ struct ContentView: View {
             DesktopConnectionWarning()
         }
         .listStyle(.inset)
-        // Leave room for the centered Sessions / Tasks picker at every width.
-        .frame(minWidth: 760, minHeight: 420)
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width
-        } action: { width in
-            if width != windowWidth { windowWidth = width }
-        }
+        .frame(minWidth: 180, minHeight: 420)
         // Hand every keystroke to the store, which debounces and asks the hosts.
         // Filtering `store.items` alone can't answer "search all my sessions" —
         // it only ever sees each host's newest 100 closed rows.
@@ -6001,20 +6234,24 @@ struct ContentView: View {
         // HIG "Toolbars" item groupings: common view controls in the center
         // area, search + actions on the trailing edge.
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                DesktopConnectionStatusBar(compact: !showsHostLabels)
+            if windowWidth >= 500 {
+            // Refresh the native item when labels collapse; otherwise AppKit
+            // retains the labelled width after narrowing the window.
+            ToolbarItem(id: usesCompactHostStatus ? "compact_connection" : "labelled_connection", placement: .navigation) {
+                DesktopConnectionStatusBar(compact: usesCompactHostStatus)
             }
             .sharedBackgroundVisibility(.hidden)
+            }
             ToolbarItem(placement: .primaryAction) {
                 groupPicker
             }
             .sharedBackgroundVisibility(.hidden)
-            if isCompactToolbar {
+            if windowWidth >= 500, isCompactToolbar {
                 ToolbarItem(placement: .primaryAction) {
                     compactSearchButton
                 }
                 .sharedBackgroundVisibility(.hidden)
-            } else {
+            } else if windowWidth >= 500 {
                 ToolbarItem(placement: .primaryAction) {
                     HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass")
@@ -6030,10 +6267,12 @@ struct ContentView: View {
                     .frame(width: 150, height: 30)
                 }
             }
+            if windowWidth >= 500 {
             ToolbarItem(placement: .primaryAction) {
                 createSessionButton
             }
             .sharedBackgroundVisibility(.hidden)
+            }
         }
         // One presentation site for both routes into the panel — the toolbar
         // button when there's room, the grouping menu when there isn't. Anchored
@@ -6277,6 +6516,47 @@ enum OpenSessionCLI {
     }
 }
 
+/// `lfg --fork-session <sessionId> [plan]`: refresh against every host, take
+/// the row the list would show for this session, and do exactly what its "Fork
+/// session" item does (`SessionStore.fork`: fork on the row's host, then open
+/// the branch's window). `plan` stops before the fork and prints the host the
+/// row belongs to and the URL the fork would go to — ownership with no side
+/// effects, so it can run on a Mac someone is using.
+enum ForkSessionCLI {
+    static func runIfRequested() {
+        let args = CommandLine.arguments
+        guard args.dropFirst().first == "--fork-session", args.count >= 3 else { return }
+        let id = args[2]
+        let planOnly = args.dropFirst(3).first == "plan"
+        let done = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var line = "{\"ok\":false,\"error\":\"no row for \(id)\"}"
+        Task { @MainActor in
+            let store = SessionStore()
+            await store.refresh()
+            guard let item = store.items.first(where: { $0.session.sessionId == id }) else {
+                done.signal(); return
+            }
+            let forkURL = (try? DesktopSessionCreator.forkRequest(item: item))?.url?.absoluteString ?? ""
+            let row = "\"host\":\"\(item.hostLabel)\",\"closed\":\(item.session.closed),\"forkURL\":\"\(forkURL)\""
+            guard !planOnly else {
+                line = "{\"ok\":true,\(row)}"
+                done.signal(); return
+            }
+            let error = await store.fork(item)
+            let quoted = (error ?? "forked").replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"").replacingOccurrences(of: "\n", with: " ")
+            line = "{\"ok\":\(error == nil),\(row),\"result\":\"\(quoted)\"}"
+            done.signal()
+        }
+        while done.wait(timeout: .now() + 0.05) == .timedOut {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+        }
+        print(line)
+        fflush(stdout)
+        Darwin.exit(0)
+    }
+}
+
 /// `lfg --resume-check <sessionId>`: what clicking a closed row would do, from
 /// the real hosts and the real synced lease, without opening a window. Also
 /// prints the agent binaries as THIS process resolved them — run the installed
@@ -6300,6 +6580,23 @@ enum ResumeCheckCLI {
     }
 }
 
+private struct CompactWindowControls: NSViewRepresentable {
+    var compact: Bool
+    func makeNSView(context: Context) -> Probe { Probe() }
+    func updateNSView(_ view: Probe, context: Context) {
+        view.compact = compact
+        view.apply()
+    }
+    final class Probe: NSView {
+        var compact = false
+        override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); apply() }
+        func apply() {
+            window?.standardWindowButton(.miniaturizeButton)?.isHidden = compact
+            window?.standardWindowButton(.zoomButton)?.isHidden = compact
+        }
+    }
+}
+
 /// Off-screen window harness: proves the main window actually accepts a narrow
 /// size and that its toolbar still fits every item there (no » overflow).
 /// Runs without a visible screen, so it works over ssh / on a locked login.
@@ -6310,10 +6607,10 @@ enum WindowFitCLI {
         guard args.dropFirst().first == "--window-fit" else { return }
         let widths = args.dropFirst(2).compactMap { Double($0) }.map { CGFloat($0) }
         guard !widths.isEmpty else {
-            print("{\"ok\":false,\"error\":\"usage: lfg --window-fit <width> [width…]\"}")
+            print("{\"ok\":false,\"error\":\"usage: lfg --window-fit <width> [width…] [--tasks]\"}")
             Darwin.exit(1)
         }
-        let window = makeWindow()
+        let window = makeWindow(tasks: args.contains("--tasks"))
         settle(0.6)
 
         var rows: [String] = []
@@ -6364,13 +6661,43 @@ enum WindowFitCLI {
         let args = CommandLine.arguments
         guard args.dropFirst().first == "--window-shot" else { return }
         guard args.count >= 4, let width = Double(args[2]) else {
-            print("{\"ok\":false,\"error\":\"usage: lfg --window-shot <width> <output.png> [--search]\"}")
+            print("{\"ok\":false,\"error\":\"usage: lfg --window-shot <width> <output.png> [--search] [--tasks]\"}")
             Darwin.exit(1)
         }
         let output = URL(fileURLWithPath: args[3])
-        let window = makeWindow(sessions: true, compactSearchShown: args.contains("--search"))
-        window.setContentSize(NSSize(width: CGFloat(width), height: 560))
-        settle(1.2)
+        // Tasks screens against a real (or stand-in) host:
+        //   --tasks-host <url>  load tasks from that host instead of the hardcoded fixtures
+        //   --task <taskId>     open that task's view; add --edit for its edit page
+        //   --height <points>   window height (default 560)
+        func value(_ flag: String) -> String? { args.firstIndex(of: flag).flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil } }
+        let tasksHost = value("--tasks-host")
+        if let tasksHost, let taskID = value("--task") {
+            let id = "\(tasksHost):\(taskID)"
+            ScheduledTasksPane.launchPath = [.task(id)] + (args.contains("--edit") ? [.edit(id)] : [])
+        }
+        let height = value("--height").flatMap(Double.init) ?? 560
+        let window = makeWindow(sessions: tasksHost == nil, compactSearchShown: args.contains("--search"),
+                                tasks: args.contains("--tasks") || tasksHost != nil, tasksHost: tasksHost)
+        window.setContentSize(NSSize(width: CGFloat(width), height: CGFloat(height)))
+        // --onscreen: cacheDisplay draws Liquid Glass toolbar items as blank capsules, so
+        // show the window for real and let screencapture grab it (needs an unlocked screen).
+        if args.contains("--onscreen") {
+            window.setFrameOrigin(NSPoint(x: 80, y: 80))
+            // A shell-launched process cannot activate, so the window draws inactive (grey controls).
+            window.orderFrontRegardless()
+            settle(tasksHost == nil ? 1.5 : 4.5)
+            let capture = Process()
+            capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            capture.arguments = ["-x", "-o", "-l\(window.windowNumber)", output.path]
+            try? capture.run(); capture.waitUntilExit()
+            window.orderOut(nil)
+            let ok = capture.terminationStatus == 0 && FileManager.default.fileExists(atPath: output.path)
+            print(ok ? "{\"ok\":true,\"width\":\(Int(width)),\"shot\":\"\(output.path)\",\"onscreen\":true}"
+                     : "{\"ok\":false,\"error\":\"screencapture failed (is the screen locked?)\"}")
+            fflush(stdout)
+            Darwin.exit(ok ? 0 : 1)
+        }
+        settle(tasksHost == nil ? 1.2 : 4)
         guard let frameView = window.contentView?.superview,
               let rep = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds) else {
             print("{\"ok\":false,\"error\":\"no frame view to draw\"}")
@@ -6394,16 +6721,23 @@ enum WindowFitCLI {
     }
 
     @MainActor
-    private static func makeWindow(sessions: Bool = false, compactSearchShown: Bool = false) -> NSWindow {
+    private static func makeWindow(sessions: Bool = false, compactSearchShown: Bool = false,
+                                   tasks: Bool = false, tasksHost: String? = nil) -> NSWindow {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
 
         let store = SessionStore()
-        store.configuredHosts = [
+        store.showingScheduledTasks = tasks
+        store.configuredHosts = tasksHost.map { [Config.HostEntry(url: $0, displayName: "Pro")] } ?? [
             Config.HostEntry(url: "http://studio:8766", displayName: "Creative Studio"),
             Config.HostEntry(url: "http://air:8766", displayName: "Travel Mac"),
         ]
         store.lastRefreshed = Date()
+        if let tasksHost {
+            store.hosts = [HostState(url: tasksHost, sshTarget: nil, displayName: "Pro",
+                                     info: HostInfoResponse(hostId: "fixture-pro", hostName: "fixture"),
+                                     sessions: [], needsInputSessionIds: [], isLocal: true)]
+        }
         if sessions {
             store.hosts = [
                 HostState(
@@ -6430,6 +6764,8 @@ enum WindowFitCLI {
         let host = NSHostingController(
             rootView: ContentView(compactSearchShown: compactSearchShown).environmentObject(store)
         )
+        // A task page's ideal height would otherwise pin the window to its content and ignore --height.
+        if tasksHost != nil { host.sizingOptions = [.minSize] }
         let window = NSWindow(contentViewController: host)
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.title = "lfg"
@@ -6782,6 +7118,7 @@ struct LFGSessionsApp: App {
         AttachCommandCLI.runIfRequested()
         ResumeCheckCLI.runIfRequested()
         OpenSessionCLI.runIfRequested()
+        ForkSessionCLI.runIfRequested()
         Opener.warmTransportProbe()
     }
 

@@ -1,16 +1,21 @@
 import SwiftUI
 
 struct ScheduledTasksPane: View {
+    /// Where the pane opens. The `--window-shot` harness sets it to show a task or its edit page.
+    @MainActor static var launchPath: [ScheduledTaskRoute] = []
     @EnvironmentObject private var store: SessionStore
     @State private var error: String?
     @State private var openingSession = false
+    @Binding var path: [ScheduledTaskRoute]
+    /// Reported up for the switcher's Tasks badge.
+    @Binding var taskNeedsInput: Int
     var body: some View {
         ScheduledTasksView(hosts: store.hosts.compactMap { host in
             guard let url = URL(string: host.url) else { return nil }
             return ScheduledTaskHost(id: host.id, name: host.label, baseURL: url,
                                      headers: DesktopAPI.request(url).allHTTPHeaderFields ?? [:])
-        }, connectionHeader: { width in
-            let compact = !ContentView.hostLabelsFit(
+        }, navigationPath: $path, connectionHeader: { width in
+            let compact = width < 700 || !ContentView.hostLabelsFit(
                 clusterWidth: DesktopConnectionStatusBar.labelledWidth(of: DesktopConnectionStatusBar.chips(store: store)),
                 windowWidth: width)
             return AnyView(DesktopConnectionStatusBar(compact: compact))
@@ -23,7 +28,8 @@ struct ScheduledTasksPane: View {
                 defer { openingSession = false }
                 await store.refresh()
                 // Prefer a live copy, even when the transcript has moved to another host.
-                if let item = store.items.first(where: { !$0.session.closed && $0.session.sessionId == sessionID }) {
+                // Unfiltered: a task's edit chat is hidden from Sessions but must still open here.
+                if let item = store.liveItem(sessionId: sessionID) {
                     error = await Task.detached { Opener.open(item) }.value
                     return
                 }
@@ -41,6 +47,8 @@ struct ScheduledTasksPane: View {
                 }
                 error = await Task.detached { Opener.open(item) }.value
             }
+        } onNeedsInputCountChange: { count in
+            taskNeedsInput = count
         }
         .task { await store.refresh() }
         .overlay(alignment: .bottom) {

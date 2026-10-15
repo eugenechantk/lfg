@@ -17,6 +17,8 @@ struct RootView: View {
     @State private var showNewTask = false
     @State private var focusNewTaskComposer = false
     @State private var taskPath: [ScheduledTaskRoute] = []
+    /// Tasks waiting for an answer or with a failed latest run; the Tasks tab badge.
+    @State private var taskNeedsInputCount = 0
     @State private var taskSessionID: String?
     @State private var showSettings = false
     @State private var showNewSession = false
@@ -242,8 +244,9 @@ struct RootView: View {
         GlassChromeContainer(spacing: 12) {
             HStack(spacing: 12) {
                 HStack(spacing: 0) {
-                    dockTab(.sessions, title: "Sessions", icon: "bubble.left.and.bubble.right", id: "sessions_tab")
-                    dockTab(.scheduledTasks, title: "Tasks", icon: "calendar.badge.clock", id: "scheduled_tasks_tab")
+                    dockTab(.sessions, title: "Sessions", icon: "bubble.left.and.bubble.right.fill", id: "sessions_tab")
+                    dockTab(.scheduledTasks, title: "Tasks", icon: "calendar.badge.clock", id: "scheduled_tasks_tab",
+                            badge: taskNeedsInputCount)
                 }
                 .padding(4)
                 .glassOrRaised(in: Capsule(), interactive: true)
@@ -277,19 +280,31 @@ struct RootView: View {
         .accessibilityIdentifier("list_dock")
     }
 
-    private func dockTab(_ tab: AppTab, title: String, icon: String, id: String) -> some View {
+    private func dockTab(_ tab: AppTab, title: String, icon: String, id: String, badge: Int = 0) -> some View {
         Button { selectedTab = tab } label: {
             VStack(spacing: 3) {
                 Image(systemName: icon).font(.system(size: 20))
-                Text(title).font(.system(size: 10, weight: .medium))
+                Text(title).font(.system(size: 10, weight: .semibold))
             }
-            .foregroundStyle(selectedTab == tab ? Color.accentColor : .primary)
+            .foregroundStyle(selectedTab == tab ? TaskColors.accent : .primary)
             .frame(width: 88, height: 48)
-            .background(selectedTab == tab ? Color.primary.opacity(0.07) : .clear, in: Capsule())
+            .background(selectedTab == tab ? Color.primary.opacity(0.1) : .clear, in: Capsule())
+            .overlay(alignment: .topTrailing) {
+                if badge > 0 {
+                    Text("\(badge)")
+                        .font(.system(size: 11, weight: .bold).monospacedDigit())
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .background(TaskColors.warning, in: Capsule())
+                        .padding(.top, 2).padding(.trailing, 20)
+                        .accessibilityIdentifier("\(id)_badge")
+                }
+            }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(title)
+        .accessibilityLabel(badge > 0 ? "\(title), \(badge) need input" : title)
         .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
         .accessibilityIdentifier(id)
     }
@@ -313,10 +328,10 @@ struct RootView: View {
            onSearch: { beginSearch(.scheduledTasks) },
            onCreate: beginTaskCreation,
            sessionSelection: $taskSessionID,
-           sessionDestination: { AnyView(taskSessionView($0)) }) { hostID, id in
+           sessionDestination: { AnyView(taskSessionView($0)) }, openSession: { hostID, id in
             taskSessionID = store.navID(id)
             Task { await store.prepareSessionForDisplay(id, sourceHostID: hostID) }
-        }
+        }, onNeedsInputCountChange: { taskNeedsInputCount = $0 })
     }
 
     private func beginTaskCreation() {

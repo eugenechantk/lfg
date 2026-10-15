@@ -5,10 +5,18 @@ public struct ScheduledTaskSchedule: Codable, Hashable, Sendable {
     public var timezone = "Asia/Hong_Kong"
     public var at: String?
     public var everyMinutes: Int?
+    public var occurrences: Int?
     public var expression: String?
-    public init(kind: String = "once", timezone: String = "Asia/Hong_Kong", at: String? = nil, everyMinutes: Int? = nil, expression: String? = nil) {
-        self.kind = kind; self.timezone = timezone; self.at = at; self.everyMinutes = everyMinutes; self.expression = expression
+    /// Cron only: stop after this many scheduled runs.
+    public var maxRuns: Int?
+    /// Cron or interval: no runs after this ISO time.
+    public var endsAt: String?
+    public init(kind: String = "once", timezone: String = "Asia/Hong_Kong", at: String? = nil, everyMinutes: Int? = nil, occurrences: Int? = nil, expression: String? = nil, maxRuns: Int? = nil, endsAt: String? = nil) {
+        self.kind = kind; self.timezone = timezone; self.at = at; self.everyMinutes = everyMinutes; self.occurrences = occurrences; self.expression = expression
+        self.maxRuns = maxRuns; self.endsAt = endsAt
     }
+    /// A schedule that stops on its own.
+    public var isFinite: Bool { kind == "repeat" || maxRuns != nil || endsAt != nil }
     public var label: String { description() }
 
     /// Presentation only. The host remains the authority for cron execution.
@@ -18,6 +26,13 @@ public struct ScheduledTaskSchedule: Codable, Hashable, Sendable {
         let formatter = TaskScheduleDescription(locale: locale, timezone: timezone,
             displayTimeZone: displayTimeZone, referenceDate: nextRun ?? Date())
         switch kind {
+        case "repeat":
+            guard let count = occurrences, count > 0, let minutes = everyMinutes, minutes > 0 else { return "Repeat schedule" }
+            let interval: String
+            if minutes.isMultiple(of: 1440) { interval = minutes == 1440 ? "every day" : "every \(minutes / 1440) days" }
+            else if minutes.isMultiple(of: 60) { interval = minutes == 60 ? "every hour" : "every \(minutes / 60) hours" }
+            else { interval = minutes == 1 ? "every minute" : "every \(minutes) minutes" }
+            return "\(count) \(count == 1 ? "occurrence" : "occurrences") · \(interval)"
         case "interval":
             guard let minutes = everyMinutes, minutes > 0 else { return "Interval schedule" }
             if minutes == 1 { return "Every minute" }
@@ -207,6 +222,29 @@ private struct TaskScheduleDescription {
     }
 }
 
+/// A waiting run's question. The session's own prompt type lives in Models.swift, which the
+/// Mac app does not compile, so tasks carry this small copy of the fields they show.
+public struct ScheduledTaskPrompt: Codable, Hashable, Sendable {
+    public struct Option: Codable, Hashable, Sendable, Identifiable {
+        public var index: Int
+        public var label: String
+        public var description: String?
+        public var id: Int { index }
+        public init(index: Int, label: String, description: String? = nil) { self.index = index; self.label = label; self.description = description }
+    }
+    public var question: String
+    public var options: [Option]
+    public var context: String?
+    public init(question: String, options: [Option] = [], context: String? = nil) { self.question = question; self.options = options; self.context = context }
+    enum CodingKeys: String, CodingKey { case question, options, context }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        question = try c.decodeIfPresent(String.self, forKey: .question) ?? ""
+        options = (try? c.decodeIfPresent([Option].self, forKey: .options)) ?? []
+        context = try c.decodeIfPresent(String.self, forKey: .context)
+    }
+}
+
 public struct ScheduledTaskRun: Codable, Identifiable, Hashable, Sendable {
     public var id: String
     public var taskId: String?
@@ -219,6 +257,10 @@ public struct ScheduledTaskRun: Codable, Identifiable, Hashable, Sendable {
     public var sessionId: String?
     public var summary: String?
     public var error: String?
+    /// When the run started waiting for an answer.
+    public var needsInputAt: Double?
+    /// The waiting run's question, embedded by the host from its session.
+    public var prompt: ScheduledTaskPrompt?
     public var statusLabel: String {
         switch status {
         case "starting": "Starting"
@@ -248,7 +290,16 @@ public struct ScheduledTaskRecord: Decodable, Identifiable, Hashable, Sendable {
     public var lastRun: ScheduledTaskRun?
     public var recentRuns: [ScheduledTaskRun]
     public var runCount: Int
-    enum CodingKeys: String, CodingKey { case id, name, prompt, cwd, agent, model, schedule, enabled, nextRunAt, lastRunAt, cancelledAt, currentRun, lastRun, recentRuns, runCount }
+    /// The next few run times; for a paused task, when it would run if resumed.
+    public var upcomingRuns: [Double]
+    public var consecutiveFailures: Int
+    public var succeededCount: Int?
+    public var pausedAt: Double?
+    public var scheduledRunCount: Int?
+    public var updatedAt: Double?
+    /// The task's edit chat, reused while it is alive.
+    public var editSessionId: String?
+    enum CodingKeys: String, CodingKey { case id, name, prompt, cwd, agent, model, schedule, enabled, nextRunAt, lastRunAt, cancelledAt, currentRun, lastRun, recentRuns, runCount, upcomingRuns, consecutiveFailures, succeededCount, pausedAt, scheduledRunCount, updatedAt, editSessionId }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
@@ -266,12 +317,22 @@ public struct ScheduledTaskRecord: Decodable, Identifiable, Hashable, Sendable {
         lastRun = try c.decodeIfPresent(ScheduledTaskRun.self, forKey: .lastRun)
         recentRuns = try c.decodeIfPresent([ScheduledTaskRun].self, forKey: .recentRuns) ?? lastRun.map { [$0] } ?? []
         runCount = try c.decodeIfPresent(Int.self, forKey: .runCount) ?? recentRuns.count
+        upcomingRuns = try c.decodeIfPresent([Double].self, forKey: .upcomingRuns) ?? nextRunAt.map { [$0] } ?? []
+        consecutiveFailures = try c.decodeIfPresent(Int.self, forKey: .consecutiveFailures) ?? 0
+        succeededCount = try c.decodeIfPresent(Int.self, forKey: .succeededCount)
+        pausedAt = try c.decodeIfPresent(Double.self, forKey: .pausedAt)
+        scheduledRunCount = try c.decodeIfPresent(Int.self, forKey: .scheduledRunCount)
+        updatedAt = try c.decodeIfPresent(Double.self, forKey: .updatedAt)
+        editSessionId = try c.decodeIfPresent(String.self, forKey: .editSessionId)
     }
     public var modelLabel: String {
         let chosen = model?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return chosen.isEmpty ? "\(agent == "codex" ? "Codex" : "Claude") default" : chosen
     }
-    public var canResume: Bool { cancelledAt == nil && !(schedule.kind == "once" && lastRunAt != nil && nextRunAt == nil) }
+    public var canResume: Bool {
+        cancelledAt == nil && !(schedule.kind == "once" && lastRunAt != nil && nextRunAt == nil)
+            && !(schedule.isFinite && nextRunAt == nil)
+    }
     public var isScheduleActive: Bool { enabled && canResume }
     public var listGroup: ScheduledTaskGroup {
         let running = ["starting", "running", "needs_input"].contains(currentRun?.status ?? "")
@@ -343,6 +404,14 @@ public enum ScheduledTaskCronField: Int, CaseIterable, Identifiable, Sendable {
     }
 }
 
+public enum ScheduledTaskRepeatUnit: Int, CaseIterable, Identifiable, Sendable {
+    case minutes = 1, hours = 60, days = 1440
+    public var id: Int { rawValue }
+    public var title: String {
+        switch self { case .minutes: "Minutes"; case .hours: "Hours"; case .days: "Days" }
+    }
+}
+
 public struct ScheduledTaskDraft: Sendable {
     public var name = ""
     public var prompt = ""
@@ -353,6 +422,14 @@ public struct ScheduledTaskDraft: Sendable {
     public var timezone = TimeZone.current.identifier
     public var date = Date().addingTimeInterval(3600)
     public var intervalMinutes = "60"
+    public var repeatEvery = "1"
+    public var repeatUnit: ScheduledTaskRepeatUnit = .days
+    public var repeatOccurrences = "3"
+    public var repeatIntervalMinutes: Int? {
+        guard let amount = Int(repeatEvery), amount > 0 else { return nil }
+        let (minutes, overflow) = amount.multipliedReportingOverflow(by: repeatUnit.rawValue)
+        return !overflow && (1...525600).contains(minutes) ? minutes : nil
+    }
     private var cronValues = ["0", "9", "*", "*", "*"]
     public var expression: String {
         get { cronValues.joined(separator: " ") }
@@ -370,6 +447,11 @@ public struct ScheduledTaskDraft: Sendable {
             date = ISO8601DateFormatter().date(from: at) ?? fractional.date(from: at) ?? Date(timeIntervalSince1970: (task.nextRunAt ?? 0) / 1000)
         }
         intervalMinutes = String(task.schedule.everyMinutes ?? 60)
+        if kind == "repeat", let minutes = task.schedule.everyMinutes, minutes > 0 {
+            repeatUnit = minutes.isMultiple(of: 1440) ? .days : (minutes.isMultiple(of: 60) ? .hours : .minutes)
+            repeatEvery = String(minutes / repeatUnit.rawValue)
+        }
+        repeatOccurrences = String(task.schedule.occurrences ?? 3)
         expression = (task.schedule.expression ?? expression).split(whereSeparator: \.isWhitespace).joined(separator: " ")
         savedCronValues = expression.components(separatedBy: " ")
     }
@@ -388,11 +470,24 @@ public struct ScheduledTaskDraft: Sendable {
             && !value.isEmpty && value == savedCronValues[field.rawValue])
     }
     public var isValid: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && cwd.hasPrefix("/") && TimeZone(identifier: timezone) != nil && (kind != "interval" || (Int(intervalMinutes) ?? 0) > 0) && (kind != "cron" || (cronValues.count == 5 && ScheduledTaskCronField.allCases.allSatisfy(isCronFieldValid)))
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && cwd.hasPrefix("/") && TimeZone(identifier: timezone) != nil && ["once", "interval", "repeat", "cron"].contains(kind)
+            && (kind != "interval" || (1...525600).contains(Int(intervalMinutes) ?? 0))
+            && (kind != "repeat" || (repeatIntervalMinutes != nil && (1...1000).contains(Int(repeatOccurrences) ?? 0)))
+            && (kind != "cron" || (cronValues.count == 5 && ScheduledTaskCronField.allCases.allSatisfy(isCronFieldValid)))
+    }
+    /// Name, instructions and folder are filled in (the schedule is checked by `ScheduleDraft`).
+    public var hasValidDetails: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && cwd.hasPrefix("/")
+    }
+    /// The A2 form's payload: these details with the schedule `ScheduleDraft` built.
+    public func payload(schedule: ScheduledTaskSchedule) -> ScheduledTaskPayload {
+        .init(name: name, prompt: prompt, cwd: cwd, agent: agent, model: model.isEmpty ? nil : model, schedule: schedule, enabled: enabled)
     }
     public var payload: ScheduledTaskPayload {
         .init(name: name, prompt: prompt, cwd: cwd, agent: agent, model: model.isEmpty ? nil : model,
-              schedule: .init(kind: kind, timezone: timezone, at: kind == "once" ? ISO8601DateFormatter().string(from: date) : nil, everyMinutes: kind == "interval" ? Int(intervalMinutes) : nil, expression: kind == "cron" ? expression : nil), enabled: enabled)
+              schedule: .init(kind: kind, timezone: timezone, at: ["once", "repeat"].contains(kind) ? ISO8601DateFormatter().string(from: date) : nil,
+                              everyMinutes: kind == "repeat" ? repeatIntervalMinutes : (kind == "interval" ? Int(intervalMinutes) : nil),
+                              occurrences: kind == "repeat" ? Int(repeatOccurrences) : nil, expression: kind == "cron" ? expression : nil), enabled: enabled)
     }
 }
 
@@ -450,12 +545,30 @@ public struct ScheduledTasksClient: Sendable {
         guard let task = result.task else { throw ScheduledTaskClientError(message: "Task not found.") }
         return task
     }
-    public func save(_ draft: ScheduledTaskDraft, id: String? = nil) async throws { let _: ScheduledTaskMutation = try await call("/api/scheduled-tasks" + (id.map { "/\($0)" } ?? ""), body: JSONEncoder().encode(draft.payload)) }
+    public func save(_ draft: ScheduledTaskDraft, id: String? = nil) async throws { try await save(draft.payload, id: id) }
+    public func save(_ payload: ScheduledTaskPayload, id: String? = nil) async throws { let _: ScheduledTaskMutation = try await call("/api/scheduled-tasks" + (id.map { "/\($0)" } ?? ""), body: JSONEncoder().encode(payload)) }
     public func action(_ id: String, _ action: String, enabled: Bool? = nil) async throws {
         let data = try JSONEncoder().encode(ScheduledTaskToggle(enabled: enabled))
         let _: ScheduledTaskMutation = try await call("/api/scheduled-tasks/\(id)" + (action.isEmpty ? "" : "/\(action)"), body: data)
     }
     public func runs(_ id: String, offset: Int = 0) async throws -> ScheduledTaskRuns { try await call("/api/scheduled-tasks/\(id)/runs?offset=\(offset)") }
+    /// Sends a change request to the task's edit chat; the host reuses a live chat or starts one.
+    public func startChat(_ id: String, prompt: String) async throws -> String {
+        let result: ScheduledTaskChatSession = try await call(ScheduledTaskChatContext(taskID: id).endpoint,
+                                                              body: JSONEncoder().encode(["prompt": prompt]))
+        guard let sessionID = result.sessionId?.trimmingCharacters(in: .whitespacesAndNewlines), !sessionID.isEmpty else {
+            throw ScheduledTaskClientError(message: "The conversation started without an ID. Check Sessions before starting again.")
+        }
+        return sessionID
+    }
+    /// Answers a waiting run's question with one of its options (the session's own answer route).
+    public func answer(sessionID: String, index: Int) async throws {
+        let _: ScheduledTaskAck = try await call("/api/sessions/\(sessionID)/answer", body: JSONEncoder().encode(["index": index]))
+    }
+    /// Sends a typed answer to a waiting run.
+    public func send(sessionID: String, text: String) async throws {
+        let _: ScheduledTaskAck = try await call("/api/sessions/\(sessionID)/send", body: JSONEncoder().encode(["text": text]))
+    }
     public func startEditingChat(_ id: String) async throws -> String {
         let body = try JSONEncoder().encode([
             "prompt": "I want to edit this task. Ask me what I would like to change before making any updates."
@@ -468,6 +581,7 @@ public struct ScheduledTasksClient: Sendable {
     }
 }
 private struct ScheduledTaskChatSession: Decodable, Sendable { let sessionId: String? }
+private struct ScheduledTaskAck: Decodable, Sendable {}
 public struct ScheduledTaskList: Decodable, Sendable { public let tasks: [ScheduledTaskRecord] }
 public struct ScheduledTaskRuns: Decodable, Sendable { public let runs: [ScheduledTaskRun]; public let total: Int }
 public struct ScheduledTaskMutation: Decodable, Sendable { public let task: ScheduledTaskRecord?; public let run: ScheduledTaskRun? }

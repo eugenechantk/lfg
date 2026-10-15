@@ -4,6 +4,8 @@
 import { readFileSync, writeFileSync, existsSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { ppidOf as procPpidOf, ttyOf, normalizeTty } from "./procinfo";
+import { spawnTmuxLaunch, tmuxLaunchArgv, type TmuxLaunch } from "./tmux-launch";
+export { tmuxLiteral } from "./tmux-launch";
 
 // Known-good Claude model to launch with when a caller doesn't specify one.
 // Never launch a managed `claude` bare — see spawnManagedSession. Pin the
@@ -637,7 +639,7 @@ export function spawnAgentSession(opts: {
 // Build the `tmux new-session … claude …` argv for a managed session. Pure and
 // side-effect-free (no spawn, no trust prompt) so the flag wiring — resume,
 // fork, model, prompt terminator — is unit-testable without launching anything.
-export function managedSessionArgv(opts: {
+type ManagedSessionOptions = {
   name: string;
   cwd: string;
   prompt?: string;
@@ -645,9 +647,10 @@ export function managedSessionArgv(opts: {
   useConfiguredModelDefault?: boolean;
   resume?: string;
   fork?: boolean;
-}): string[] {
-  const argv = ["tmux", "new-session", "-d", ...paneSizeArgs(), "-s", opts.name, "-c", opts.cwd,
-    claudeBin(), "--dangerously-skip-permissions", "--add-dir", reposRoot()];
+};
+function managedSessionLaunch(opts: ManagedSessionOptions): TmuxLaunch {
+  const prefix = ["tmux", "new-session", "-d", ...paneSizeArgs(), "-s", opts.name, "-c", opts.cwd];
+  const argv = [claudeBin(), "--dangerously-skip-permissions", "--add-dir", reposRoot()];
   // Resume the prior conversation when asked. Placed before --model so the flags
   // read like relaunchSessionWithModel's argv; order is irrelevant to claude.
   if (opts.resume && opts.resume.trim()) {
@@ -666,8 +669,12 @@ export function managedSessionArgv(opts: {
   // `--` terminates option parsing so the variadic --add-dir can't swallow the
   // positional prompt as a second directory (which strands the new session at
   // an empty composer — the first message never gets submitted).
-  if (opts.prompt && opts.prompt.trim()) argv.push("--", tmuxLiteral(opts.prompt));
-  return argv;
+  if (opts.prompt && opts.prompt.trim()) argv.push("--", opts.prompt);
+  return { prefix, command: argv };
+}
+
+export function managedSessionArgv(opts: ManagedSessionOptions): string[] {
+  return tmuxLaunchArgv(managedSessionLaunch(opts));
 }
 
 export function spawnManagedSession(opts: {
@@ -689,12 +696,8 @@ export function spawnManagedSession(opts: {
   // source session (live or closed) is unaffected. Ignored without `resume`.
   fork?: boolean;
 }): { ok: boolean; error?: string } {
-  const dec = new TextDecoder();
   ensureFolderTrusted(opts.cwd);
-  const create = Bun.spawnSync(managedSessionArgv(opts));
-  if (create.exitCode !== 0)
-    return { ok: false, error: dec.decode(create.stderr) || "new-session failed" };
-  return { ok: true };
+  return spawnTmuxLaunch(managedSessionLaunch(opts));
 }
 
 // Switch a running Claude session's model by RELAUNCHING its pane on the new
@@ -741,15 +744,16 @@ export function relaunchSessionWithModel(opts: {
   return { ok: true };
 }
 
-export function managedCodexSessionArgv(opts: {
+type ManagedCodexSessionOptions = {
   name: string;
   cwd: string;
   prompt?: string;
   model?: string;
   resume?: string;
   fork?: boolean;
-}): string[] {
-  const argv = [
+};
+function managedCodexSessionLaunch(opts: ManagedCodexSessionOptions): TmuxLaunch {
+  const prefix = [
     "tmux",
     "new-session",
     "-d",
@@ -758,6 +762,8 @@ export function managedCodexSessionArgv(opts: {
     opts.name,
     "-c",
     opts.cwd,
+  ];
+  const argv = [
     codexBin(),
     "--cd",
     opts.cwd,
@@ -782,21 +788,18 @@ export function managedCodexSessionArgv(opts: {
   if (opts.model && !(opts.resume && !opts.fork)) argv.push("--model", opts.model);
   if (opts.resume && opts.resume.trim()) {
     argv.push(opts.fork ? "fork" : "resume", opts.resume.trim());
-    if (opts.prompt && opts.prompt.trim()) argv.push(tmuxLiteral(opts.prompt));
+    if (opts.prompt && opts.prompt.trim()) argv.push(opts.prompt);
   } else if (opts.prompt && opts.prompt.trim()) {
-    argv.push("--", tmuxLiteral(opts.prompt));
+    argv.push("--", opts.prompt);
   }
   // Same tmux command queue as new-session, so the style exists before codex
   // sends its colour probes. spawnManagedCodexSession removes it afterwards.
-  argv.push(";", "set-option", "-w", "-t", `=${opts.name}:`, "window-style", codexPaneStyle());
-  return argv;
+  const suffix = [";", "set-option", "-w", "-t", `=${opts.name}:`, "window-style", codexPaneStyle()];
+  return { prefix, command: argv, suffix };
 }
 
-// tmux reads ANY argv element that ends in `;` as a command separator, so a
-// prompt like "fix the bug;" loses its `;` — or, with a command chained after
-// it, splits the queue. `\;` reaches the program as a literal `;`.
-export function tmuxLiteral(arg: string): string {
-  return arg.endsWith(";") ? `${arg.slice(0, -1)}\\;` : arg;
+export function managedCodexSessionArgv(opts: ManagedCodexSessionOptions): string[] {
+  return tmuxLaunchArgv(managedCodexSessionLaunch(opts));
 }
 
 // codex asks the terminal for its colours (OSC 10 and 11) once, at startup,
@@ -844,11 +847,9 @@ export function spawnManagedCodexSession(opts: {
   resume?: string;
   fork?: boolean;
 }): { ok: boolean; error?: string } {
-  const dec = new TextDecoder();
   ensureCodexFolderTrusted(opts.cwd);
-  const create = Bun.spawnSync(managedCodexSessionArgv(opts));
-  if (create.exitCode !== 0)
-    return { ok: false, error: dec.decode(create.stderr) || "new-session failed" };
+  const create = spawnTmuxLaunch(managedCodexSessionLaunch(opts));
+  if (!create.ok) return create;
   setTimeout(() => {
     try {
       Bun.spawn(["tmux", "set-option", "-u", "-w", "-t", `=${opts.name}:`, "window-style"], {

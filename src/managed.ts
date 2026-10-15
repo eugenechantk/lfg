@@ -19,6 +19,9 @@ export type ManagedSession = {
   // tolerant and simply never match them.
   agent?: "claude" | "codex";
   parentSessionId?: string;
+  // A scheduled task's edit chat, and the task it edits. Clients keep these out of Sessions.
+  purpose?: "task-edit";
+  taskId?: string;
   // Authoritative live binding for lfg-managed panes. Claude fills this after
   // the pidfile appears; Codex resume knows it before spawn because resume is
   // id-stable, and Codex fork fills it once the forked rollout is discovered.

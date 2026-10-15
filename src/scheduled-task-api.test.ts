@@ -3,9 +3,54 @@ import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { TaskStore, TaskScheduler } from "./scheduled-tasks.ts";
-import { scheduledTaskRoutes } from "./scheduled-task-api.ts";
+import { scheduledTaskRoutes, taskAuthoringPrompt, taskEditingPrompt, taskRuntime } from "./scheduled-task-api.ts";
 import { scheduledTaskTools } from "./scheduled-task-tools.ts";
 import { lfgApi } from "./mcp-lfg-tools.ts";
+
+test("finite repeat setup is exposed by chat and MCP and round-trips through the API", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "lfg-repeat-api-"));
+  try {
+    const store = new TaskStore(join(dir, "tasks.json"));
+    const runtime = new TaskScheduler(store, { launch: async () => { throw Error("Do not execute setup"); }, inspect: async () => ({ state: "working" }) });
+    const route = scheduledTaskRoutes(store, runtime, async () => ({} as any), { root: dir, port: 8897, defaultCwd: dir });
+    const tools = scheduledTaskTools(lfgApi("http://test", (async (url: any, init: any) => route(new Request(url, init))) as any));
+    const create = tools.find(t => t.name === "create_scheduled_task")!;
+    const schema = create.inputSchema as any;
+    expect(schema.properties.schedule.properties.kind.enum).toContain("repeat");
+    expect(schema.properties.schedule.properties.occurrences.maximum).toBe(1000);
+    const schedule = { kind: "repeat", at: new Date(Date.now() + 86400_000).toISOString(), everyMinutes: 1440, occurrences: 3, timezone: "Asia/Hong_Kong" };
+    const result = await create.run({ name: "Repeat", prompt: "Do the work", cwd: dir, agent: "codex", schedule });
+    const task = JSON.parse((result.content[0] as any).text).task;
+    expect(task.schedule).toEqual(schedule);
+    expect((await store.read()).runs).toHaveLength(0);
+    for (const prompt of [taskAuthoringPrompt({ prompt: "3 occurrences, every day", cwd: dir, agent: "codex", timezone: "UTC", root: dir, port: 8897 }), taskEditingPrompt(task, "Repeat three times", { root: dir, port: 8897 })]) {
+      expect(prompt).toContain('"kind":"repeat"');
+      expect(prompt).toContain('"occurrences":3');
+      expect(prompt).toContain("including the first");
+      expect(prompt).toContain("Do not ask the execution agent to reschedule");
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("repeat execution gives the agent host-owned recurrence instructions", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "lfg-repeat-runtime-"));
+  try {
+    const store = new TaskStore(join(dir, "tasks.json"));
+    const now = Date.now();
+    const task = await store.save({ name: "Repeat", prompt: "Review changes", cwd: dir, agent: "codex",
+      schedule: { kind: "repeat", at: new Date(now - 1000).toISOString(), everyMinutes: 1440, occurrences: 3, timezone: "UTC" } }, now - 2000);
+    let sent: any;
+    const runtime = taskRuntime(store, async (path, body) => {
+      if (path === "/api/sessions/new") { sent = body; return { sessionId: "repeat-run" } as any; }
+      return { sessions: [] } as any;
+    });
+    await runtime.tick();
+    expect(sent.prompt).toContain("Occurrence 1 of 3.");
+    expect(sent.prompt).toContain("The host manages this finite repeat.");
+    expect(sent.prompt).toContain("Do not create, re-arm, or modify this task's schedule.");
+    expect((await store.read()).tasks.find(t => t.id === task.id)!.nextRunAt).toBe(now - 1000 + 86400_000);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
 
 test("task list includes three newest runs and total without mixing task histories", async () => {
   const dir = await mkdtemp(join(tmpdir(), "lfg-task-rows-"));
@@ -111,7 +156,12 @@ test("edit chat targets the saved task with current settings and leaves task and
     expect(sent.prompt).toContain("LFG_TASK_BASE=http://127.0.0.1:8897");
     expect(sent.prompt).toContain("Do not create a replacement task");
     expect(sent.prompt).toContain("Move it to 10 AM");
-    expect(await store.read()).toEqual(before);
+    // The task remembers its edit chat (so the next request reuses it); nothing else changes.
+    const afterChat = await store.read();
+    expect(afterChat.tasks.find(t => t.id === task.id)!.editSessionId).toBe("edit-chat");
+    expect(afterChat.tasks.find(t => t.id === task.id)!.editSessionIds).toEqual(["edit-chat"]);
+    for (const t of afterChat.tasks) { delete t.editSessionId; delete t.editSessionIds; }
+    expect(afterChat).toEqual(before);
     const edited = await route(new Request(`http://test/api/scheduled-tasks/${task.id}`, { method: "POST", body: JSON.stringify({
       schedule: { ...task.schedule, expression: "0 10 * * 1-5" }
     }) }));

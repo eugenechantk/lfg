@@ -20,6 +20,8 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     public var statusDetail: String?
     public var assignedUser: String?
     public var parentSessionId: String?
+    /// "task-edit" for a scheduled task's edit chat, which the Sessions list leaves out.
+    public var purpose: String? = nil
     public var lastUserText: String?
     public var startedAt: Double?
     public var lastActivityAt: Double?
@@ -179,6 +181,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         statusDetail = try c.decodeIfPresent(String.self, forKey: .statusDetail)
         assignedUser = try c.decodeIfPresent(String.self, forKey: .assignedUser)
         parentSessionId = try c.decodeIfPresent(String.self, forKey: .parentSessionId)
+        purpose = try c.decodeIfPresent(String.self, forKey: .purpose)
         lastUserText = try c.decodeIfPresent(String.self, forKey: .lastUserText)
         startedAt = try c.decodeIfPresent(Double.self, forKey: .startedAt)
         lastActivityAt = try c.decodeIfPresent(Double.self, forKey: .lastActivityAt)
@@ -461,6 +464,8 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
     /// running session as closed-here. `MultiHost.reconcileResumable` drops that
     /// phantom using the live ids from every host.
     public var closed: Bool
+    /// "task-edit" for a scheduled task's edit chat; Sessions leaves it out, closed or not.
+    public var purpose: String? = nil
     public var id: String { sessionId }
 
     public init(sessionId: String, title: String? = nil, project: String? = nil,
@@ -475,7 +480,7 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case sessionId, title, project, cwd, mtime, agent, lastActivityAt, lastUserText
-        case model, closed, searchMatched, rank
+        case model, closed, searchMatched, rank, purpose
     }
 
     public init(from decoder: Decoder) throws {
@@ -495,6 +500,7 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
         model = try c.decodeIfPresent(String.self, forKey: .model)
         searchMatched = try c.decodeIfPresent(Bool.self, forKey: .searchMatched)
         rank = try c.decodeIfPresent(Double.self, forKey: .rank)
+        purpose = try? c.decodeIfPresent(String.self, forKey: .purpose)
     }
 
     // Manual encode: an explicit CodingKeys enum with an extra `lastActivityAt`
@@ -511,6 +517,7 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
         try c.encodeIfPresent(model, forKey: .model)
         try c.encodeIfPresent(searchMatched, forKey: .searchMatched)
         try c.encodeIfPresent(rank, forKey: .rank)
+        try c.encodeIfPresent(purpose, forKey: .purpose)
     }
 }
 

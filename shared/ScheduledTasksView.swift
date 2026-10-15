@@ -57,6 +57,16 @@ import LFGCore
 enum ScheduledTaskRoute: Hashable {
     case task(String)
     case session(String)
+    /// The Mac pushes the edit form as a page; iOS presents it as a sheet.
+    case edit(String)
+}
+
+private var scheduledTaskActionPlacement: ToolbarItemPlacement {
+    #if os(macOS)
+    .automatic
+    #else
+    .primaryAction
+    #endif
 }
 
 struct ScheduledTasksView: View {
@@ -79,11 +89,19 @@ struct ScheduledTasksView: View {
     var sessionSelection: Binding<String?>? = nil
     var sessionDestination: ((String) -> AnyView)? = nil
     var openSession: (String, String) -> Void
+    /// Reports the Needs input count for the Tasks tab badge.
+    var onNeedsInputCountChange: ((Int) -> Void)? = nil
     @State private var model = ScheduledTasksModel()
     @State private var path: [ScheduledTaskRoute] = []
-    @State private var collapsedGroups: Set<ScheduledTaskGroup> = [.completed]
+    /// The task whose edit chat is starting (Mac), so its button can show progress.
+    @State private var chatOpeningTaskID: String?
+    @State private var collapsedGroups: Set<TaskListSection> = [.closed]
+    /// nil shows every host.
+    @State private var hostFilter: String?
     @State private var localSearch = ""
     @State private var listWidth: CGFloat = 320
+    @State private var desktopSearchShown = false
+    @FocusState private var desktopSearchFocused: Bool
     @State private var pendingSession: (hostID: String, sessionID: String)?
     private var search: String { searchQuery?.wrappedValue ?? localSearch }
     private var searchBinding: Binding<String> { searchQuery ?? $localSearch }
@@ -91,17 +109,21 @@ struct ScheduledTasksView: View {
     @State private var sheet: TaskSheet?
     private enum TaskSheet: Identifiable {
         case manual(ScheduledTaskHost), edit(HostedScheduledTask), chat
+        /// The task's "Change task" chat, with an optional first message (Ask to fix).
+        case taskChat(HostedScheduledTask, String?)
         var id: String {
             switch self {
             case .manual(let h): "manual-\(h.id)"
             case .edit(let t): "edit-\(t.id)"
             case .chat: "chat"
+            case .taskChat(let t, _): "taskchat-\(t.id)"
             }
         }
     }
     private var filtered: [HostedScheduledTask] {
         model.tasks.filter { item in
             let task = item.task
+            guard hostFilter == nil || item.host.id == hostFilter else { return false }
             return (search.isEmpty || task.name.localizedCaseInsensitiveContains(search)
                     || task.prompt.localizedCaseInsensitiveContains(search)
                     || item.host.name.localizedCaseInsensitiveContains(search)
@@ -137,7 +159,11 @@ struct ScheduledTasksView: View {
         }
         .task(id: hosts.map(\.id)) {
             model.hosts = hosts
+            if let hostFilter, !hosts.contains(where: { $0.id == hostFilter }) { self.hostFilter = nil }
             while !Task.isCancelled { await model.refresh(); try? await Task.sleep(for: .seconds(5)) }
+        }
+        .onChange(of: TaskListGrouping.needsInputCount(model.tasks.map(\.task)), initial: true) { _, count in
+            onNeedsInputCountChange?(count)
         }
         .sheet(item: $sheet, onDismiss: {
             if let pending = pendingSession {
@@ -148,18 +174,31 @@ struct ScheduledTasksView: View {
                 }
             }
             Task { await model.refresh() }
-        }) { destination in
-            switch destination {
-            case .manual(let host): ScheduledTaskEditor(client: .init(host: host), task: nil)
-            case .edit(let item):
-                ScheduledTaskEditor(client: .init(host: item.host), task: item.task) { hostID, sessionID in
+        }, content: sheetContent)
+    }
+
+    @ViewBuilder
+    private func sheetContent(_ destination: TaskSheet) -> some View {
+        switch destination {
+        case .manual(let host): ScheduledTaskEditor(client: .init(host: host), task: nil)
+        case .edit(let item):
+            ScheduledTaskEditor(client: .init(host: item.host), task: item.task, openSession: { hostID, sessionID in
+                pendingSession = (hostID, sessionID); sheet = nil
+            })
+        case .taskChat(let item, let first):
+            #if os(iOS)
+            TaskChatSheet(client: .init(host: item.host),
+                          task: { model.tasks.first(where: { $0.id == item.id })?.task },
+                          refresh: { await model.refresh() },
+                          firstMessage: first)
+                .presentationDetents([.large])
+            #else
+            EmptyView()
+            #endif
+        case .chat:
+            if let host = hosts.first {
+                ScheduledTaskChat(hosts: hosts, initialHost: host) { hostID, sessionID in
                     pendingSession = (hostID, sessionID); sheet = nil
-                }
-            case .chat:
-                if let host = hosts.first {
-                    ScheduledTaskChat(hosts: hosts, initialHost: host) { hostID, sessionID in
-                        pendingSession = (hostID, sessionID); sheet = nil
-                    }
                 }
             }
         }
@@ -215,7 +254,7 @@ struct ScheduledTasksView: View {
 
     private var sidebarDetailPath: Binding<[ScheduledTaskRoute]> {
         Binding(get: {
-            pathBinding.wrappedValue.filter { if case .session = $0 { return true }; return false }
+            pathBinding.wrappedValue.filter { if case .task = $0 { return false }; return true }
         }, set: { routes in
             let taskRoute: [ScheduledTaskRoute] = selectedTaskID.map { [.task($0)] } ?? []
             pathBinding.wrappedValue = taskRoute + routes
@@ -230,11 +269,31 @@ struct ScheduledTasksView: View {
                 if let sessionDestination { sessionDestination(id) }
             case .task(let id):
                 if let item = model.tasks.first(where: { $0.id == id }) {
-                    ScheduledTaskDetail(task: item.task, client: .init(host: item.host), changing: model.changing,
-                        edit: { sheet = .edit(item) },
+                    ScheduledTaskDetail(task: item.task, hostName: item.host.name, client: .init(host: item.host), changing: model.changing,
+                        edit: {
+                            #if os(macOS)
+                            pathBinding.wrappedValue.append(.edit(item.id))
+                            #else
+                            sheet = .edit(item)
+                            #endif
+                        },
                         action: { action, enabled in Task { await model.act(item, action, enabled: enabled) } },
-                        openSession: { openSession(item.host.id, $0) })
+                        openSession: { openSession(item.host.id, $0) },
+                        askToChange: { first in openTaskChat(item, first: first) },
+                        refresh: { await model.refresh() },
+                        chatOpening: chatOpeningTaskID == item.id)
                         .id(item.id)
+                } else {
+                    ContentUnavailableView("Task unavailable", systemImage: "calendar.badge.exclamationmark",
+                        description: Text("Return to Scheduled Tasks and refresh the list."))
+                }
+            case .edit(let id):
+                if let item = model.tasks.first(where: { $0.id == id }) {
+                    ScheduledTaskEditor(client: .init(host: item.host), task: item.task, embedded: true, onClose: {
+                        if pathBinding.wrappedValue.last == .edit(id) { pathBinding.wrappedValue.removeLast() }
+                        Task { await model.refresh() }
+                    }) { hostID, sessionID in openSession(hostID, sessionID) }
+                    .id("edit-\(item.id)")
                 } else {
                     ContentUnavailableView("Task unavailable", systemImage: "calendar.badge.exclamationmark",
                         description: Text("Return to Scheduled Tasks and refresh the list."))
@@ -259,15 +318,19 @@ struct ScheduledTasksView: View {
                     if showsListActions, sidebarVisibility != nil || pathBinding.wrappedValue.isEmpty {
                         connectionToolbar
                     }
+                    #if os(macOS)
+                    if showsListActions { desktopListActions }
+                    #else
                     if let onSearch {
-                        ToolbarItem(placement: .primaryAction) {
+                        ToolbarItem(placement: scheduledTaskActionPlacement) {
                             Button("Search tasks", systemImage: "magnifyingglass", action: onSearch)
                                 .accessibilityIdentifier("tasks_search")
                         }
                     }
                     if showsListActions {
-                    ToolbarItem(placement: .primaryAction) {
+                    ToolbarItem(placement: scheduledTaskActionPlacement) {
                         Menu {
+                            hostFilterMenu
                             ForEach(hosts) { host in
                                 Button("Set up manually on \(host.name)") { sheet = .manual(host) }
                                     .accessibilityIdentifier("tasks_create_manual_\(host.id)")
@@ -277,13 +340,169 @@ struct ScheduledTasksView: View {
                     }
                     }
                     if showsListActions, !usesBottomCreate {
-                    ToolbarItem(placement: .primaryAction) {
+                    ToolbarItem(placement: scheduledTaskActionPlacement) {
                         Button(action: createTask) { Label("New scheduled task", systemImage: "plus") }
                             .disabled(hosts.isEmpty).accessibilityIdentifier("tasks_add")
                     }
                     }
+                    #endif
                 }
     }
+
+    /// Shows one host's tasks, or every host's. Only offered when there is more than one host.
+    @ViewBuilder
+    private var hostFilterMenu: some View {
+        if hosts.count > 1 {
+            Picker("Show tasks on", selection: $hostFilter) {
+                Text("All hosts").tag(String?.none)
+                ForEach(hosts) { host in Text(host.name).tag(Optional(host.id)) }
+            }
+            .accessibilityIdentifier("tasks_host_filter")
+            Divider()
+        }
+    }
+
+    #if os(macOS)
+    /// "● Pro ○ Air offline · 1 running        All hosts ⌄" under the toolbar.
+    private var desktopHostStrip: some View {
+        let running = model.tasks.filter { ["starting", "running"].contains($0.task.currentRun?.status ?? "") }.count
+        return HStack(spacing: 6) {
+            // Wide enough to keep host names: the strip has the whole width, unlike the toolbar.
+            connectionHeader?(700)
+            if running > 0 {
+                Text("· \(running) running").foregroundStyle(.secondary).lineLimit(1).fixedSize()
+            }
+            Spacer(minLength: 8)
+            if hosts.count > 1 {
+                Menu {
+                    Picker("Show tasks on", selection: $hostFilter) {
+                        Text("All hosts").tag(String?.none)
+                        ForEach(hosts) { host in Text(host.name).tag(Optional(host.id)) }
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(hosts.first(where: { $0.id == hostFilter })?.name ?? "All hosts")
+                        Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .padding(.horizontal, 9).frame(height: 22)
+                    .background(TaskPalette.control, in: Capsule())
+                }
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                .accessibilityIdentifier("tasks_host_strip_filter")
+            }
+        }
+        .font(.system(size: 12))
+        .padding(.leading, 16).padding(.trailing, 14)
+        .frame(height: 30)
+        .background(TaskColors.page)
+        .overlay(alignment: .bottom) { Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 1) }
+        .accessibilityIdentifier("tasks_host_strip")
+    }
+
+    /// The dA2 board's narrow band: search and + as their own buttons and no •••. The host filter
+    /// lives in the host strip and manual setup on the + button's menu. Narrower or wider keeps the
+    /// verified fold behavior.
+    private var boardToolbarBand: Bool { listWidth >= 360 && listWidth < 500 }
+
+    @ToolbarContentBuilder
+    private var desktopListActions: some ToolbarContent {
+        if boardToolbarBand {
+            ToolbarItem(placement: scheduledTaskActionPlacement) {
+                Button(action: toggleDesktopSearch) { Label("Search tasks", systemImage: "magnifyingglass") }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .accessibilityIdentifier("tasks_search")
+            }
+            .sharedBackgroundVisibility(.hidden)
+            ToolbarItem(placement: scheduledTaskActionPlacement) {
+                // A Menu ignores the glass button style, so + is a button and manual setup is its context menu.
+                Button(action: createTask) { Label("New scheduled task", systemImage: "plus") }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .contextMenu {
+                        ForEach(hosts) { host in
+                            Button("Set up manually on \(host.name)") { sheet = .manual(host) }
+                                .accessibilityIdentifier("tasks_create_manual_\(host.id)")
+                        }
+                    }
+                    .disabled(hosts.isEmpty).accessibilityIdentifier("tasks_add")
+            }
+            .sharedBackgroundVisibility(.hidden)
+        } else {
+            desktopFoldedListActions
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var desktopFoldedListActions: some ToolbarContent {
+        ToolbarItem(placement: scheduledTaskActionPlacement) {
+            Menu {
+                if listWidth < 500 {
+                    Button("New scheduled task", systemImage: "plus", action: createTask)
+                        .accessibilityIdentifier("tasks_add")
+                    Button("Search tasks", systemImage: "magnifyingglass") { toggleDesktopSearch() }
+                        .accessibilityIdentifier("tasks_search")
+                    Divider()
+                }
+                hostFilterMenu
+                ForEach(hosts) { host in
+                    Button("Set up manually on \(host.name)") { sheet = .manual(host) }
+                        .accessibilityIdentifier("tasks_create_manual_\(host.id)")
+                }
+            } label: { Label("More task options", systemImage: "ellipsis") }
+            .menuIndicator(.hidden)
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .labelStyle(.iconOnly)
+            .disabled(hosts.isEmpty).accessibilityIdentifier("tasks_more")
+        }
+        .sharedBackgroundVisibility(.hidden)
+        if listWidth >= 500 {
+        ToolbarItem(placement: scheduledTaskActionPlacement) {
+            if listWidth < 1200 {
+                Button(action: toggleDesktopSearch) { Label("Search tasks", systemImage: "magnifyingglass") }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .accessibilityIdentifier("tasks_search")
+            } else {
+                desktopSearchField.frame(width: 150, height: 30)
+            }
+        }
+        .sharedBackgroundVisibility(.hidden)
+        ToolbarItem(placement: scheduledTaskActionPlacement) {
+            Button(action: createTask) { Label("New scheduled task", systemImage: "plus") }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .disabled(hosts.isEmpty).accessibilityIdentifier("tasks_add")
+        }
+        .sharedBackgroundVisibility(.hidden)
+        }
+    }
+
+    private func toggleDesktopSearch() {
+        desktopSearchShown.toggle()
+        desktopSearchFocused = desktopSearchShown
+        if !desktopSearchShown { searchBinding.wrappedValue = "" }
+    }
+
+    private var desktopSearchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("Search tasks", text: searchBinding)
+                .textFieldStyle(.plain)
+                .focused($desktopSearchFocused)
+                .accessibilityIdentifier("tasks_search_field")
+                .onSubmit { desktopSearchFocused = false }
+        }
+        .padding(.horizontal, 12)
+    }
+    #endif
 
     @ToolbarContentBuilder
     private var connectionToolbar: some ToolbarContent {
@@ -296,8 +515,12 @@ struct ScheduledTasksView: View {
             ToolbarItem(placement: .topBarLeading) { connectionHeader(listWidth) }
         }
         #else
-        ToolbarItem(placement: .navigation) { connectionHeader(listWidth) }
+        if listWidth >= 500 {
+        ToolbarItem(id: listWidth < 700 ? "compact_task_connection" : "labelled_task_connection", placement: .navigation) {
+            connectionHeader(listWidth)
+        }
             .sharedBackgroundVisibility(.hidden)
+        }
         #endif
         }
     }
@@ -305,7 +528,15 @@ struct ScheduledTasksView: View {
     @ViewBuilder
     private var searchableTaskList: some View {
         if showsSearchField {
+            #if os(macOS)
+            taskList.safeAreaInset(edge: .top, spacing: 0) {
+                if desktopSearchShown, listWidth < 1200 {
+                    desktopSearchField.padding(.vertical, 7).background(.bar)
+                }
+            }
+            #else
             taskList.searchable(text: searchBinding, prompt: "Search tasks")
+            #endif
         } else {
             #if os(iOS)
             taskList.scopedBottomSearch(text: searchBinding, active: bottomSearchActive ?? .constant(false),
@@ -313,6 +544,30 @@ struct ScheduledTasksView: View {
             #else
             taskList
             #endif
+        }
+    }
+
+    /// The phone opens the task's chat sheet; the Mac opens the chat in iTerm (desktop scope).
+    private func openTaskChat(_ item: HostedScheduledTask, first: String?) {
+        #if os(iOS)
+        sheet = .taskChat(item, first)
+        #else
+        startTaskChat(item, first: first)
+        #endif
+    }
+
+    /// Starts (or reuses) the task's edit chat and opens it as a session.
+    private func startTaskChat(_ item: HostedScheduledTask, first: String? = nil) {
+        guard chatOpeningTaskID == nil else { return }
+        chatOpeningTaskID = item.id
+        Task {
+            defer { chatOpeningTaskID = nil }
+            do {
+                let client = ScheduledTasksClient(host: item.host)
+                let sessionID = if let first { try await client.startChat(item.task.id, prompt: first) }
+                    else { try await client.startEditingChat(item.task.id) }
+                openSession(item.host.id, sessionID)
+            } catch { model.error = error.localizedDescription }
         }
     }
 
@@ -330,6 +585,8 @@ struct ScheduledTasksView: View {
     private var taskList: some View {
         VStack(spacing: 0) {
             #if os(macOS)
+            // Below 500pt the toolbar has no room for host status; the board puts it in a strip instead.
+            if listWidth < 500, connectionHeader != nil { desktopHostStrip }
             taskFeedback
             #else
             if model.loading || filtered.isEmpty { taskFeedback }
@@ -352,37 +609,42 @@ struct ScheduledTasksView: View {
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets())
                     #endif
-                    ForEach(ScheduledTaskGroup.allCases, id: \.self) { group in
-                        let items = filtered.filter { $0.task.listGroup == group }
-                        if !items.isEmpty {
-                            Section {
-                                groupHeader(group, count: items.count)
-                                if !collapsedGroups.contains(group) {
-                                    ForEach(items) { item in
-                                        taskRow(item)
-                                            .accessibilityIdentifier("task_row_\(item.task.id)")
-                                            #if os(iOS)
-                                            .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-                                            #endif
-                                    }
+                    ForEach(taskGroups) { group in
+                        Section {
+                            sectionHeader(group.section, count: group.items.count)
+                            if !collapsedGroups.contains(group.section) {
+                                ForEach(group.items) { item in
+                                    taskRow(item)
+                                        .accessibilityIdentifier("task_row_\(item.task.id)")
+                                        #if os(iOS)
+                                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                                        // The board's hairline runs to the screen edge.
+                                        .alignmentGuide(.listRowSeparatorTrailing) { $0[.trailing] + 16 }
+                                        #else
+                                        // AppKit's table adds its own 8pt on each side of these insets.
+                                        .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 9))
+                                        .alignmentGuide(.listRowSeparatorTrailing) { $0[.trailing] + 40 }
+                                        .listRowBackground(Color.clear)
+                                        #endif
                                 }
                             }
                         }
                     }
-                    #if os(iOS)
-                    taskHostRequirement
-                        .padding(.vertical, 12)
-                        .listRowSeparator(.hidden)
-                    #endif
                 }
                 .listStyle(.plain)
+                // Group headers are rows; the default row minimum made each one taller than the board.
+                #if os(macOS)
+                .environment(\.defaultMinListRowHeight, 1) // AppKit rejects 0
+                #else
+                .environment(\.defaultMinListRowHeight, 0)
+                #endif
+                #if os(macOS)
+                .scrollContentBackground(.hidden)
+                .background(TaskColors.page)
+                #endif
                 .accessibilityIdentifier("tasks_list")
             }
-            #if os(macOS)
-            taskHostRequirement.padding()
-            #else
             if model.loading || filtered.isEmpty { taskHostRequirement.padding() }
-            #endif
         }
         #if os(iOS)
         .listScrollChrome(footer: listFooter)
@@ -408,55 +670,42 @@ struct ScheduledTasksView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private struct TaskGroup: Identifiable {
+        let section: TaskListSection
+        let items: [HostedScheduledTask]
+        var id: TaskListSection { section }
+    }
+
+    private var taskGroups: [TaskGroup] {
+        TaskListGrouping.sections(filtered) { $0.task }.map { TaskGroup(section: $0.section, items: $0.items) }
+    }
+
     @ViewBuilder
     private func taskRow(_ item: HostedScheduledTask) -> some View {
+        let row = TaskRowView(model: TaskRowModel.make(task: item.task, hostName: item.host.name))
         if sidebarVisibility != nil {
             Button {
                 bottomSearchActive?.wrappedValue = false
                 pathBinding.wrappedValue = [.task(item.id)]
-            } label: { TaskListSummary(item: item) }
+            } label: { row }
             .buttonStyle(.plain)
             .listRowBackground(selectedTaskID == item.id ? Color.accentColor.opacity(0.12) : Color.clear)
             .accessibilityAddTraits(selectedTaskID == item.id ? .isSelected : [])
         } else {
-            NavigationLink(value: ScheduledTaskRoute.task(item.id)) { TaskListSummary(item: item) }
+            NavigationLink(value: ScheduledTaskRoute.task(item.id)) { row }
+                #if os(iOS)
+                .navigationLinkIndicatorVisibility(.hidden)
+                #endif
         }
     }
 
-    private func groupHeader(_ group: ScheduledTaskGroup, count: Int) -> some View {
-        let collapsed = collapsedGroups.contains(group)
-        return Button {
+    private func sectionHeader(_ section: TaskListSection, count: Int) -> some View {
+        let collapsed = collapsedGroups.contains(section)
+        return TaskSectionHeader(section: section, count: count, collapsed: collapsed) {
             withAnimation(.easeInOut(duration: 0.2)) {
-                if collapsed { collapsedGroups.remove(group) }
-                else { collapsedGroups.insert(group) }
+                if collapsed { collapsedGroups.remove(section) } else { collapsedGroups.insert(section) }
             }
-        } label: {
-            HStack(spacing: 9) {
-                Image(systemName: collapsed ? "chevron.right" : "chevron.down")
-                    .font(.system(size: 13, weight: .bold))
-                    .frame(width: 13)
-                Text(group.title)
-                if collapsed { Spacer(minLength: 0) }
-                Text("\(count)").foregroundStyle(.tertiary)
-                if !collapsed { Spacer(minLength: 0) }
-            }
-            .foregroundStyle(collapsed ? .primary : .secondary)
-            .contentShape(Rectangle())
-            #if os(iOS)
-            .font(.system(size: collapsed ? 17 : 15))
-            .padding(.horizontal, 20)
-            .padding(.top, collapsed ? 18 : 20)
-            .padding(.bottom, collapsed ? 18 : 8)
-            #else
-            .font(.system(size: 12))
-            .padding(.vertical, 6)
-            #endif
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("task_group_\(group.rawValue)")
-        .accessibilityLabel("\(group.title), \(count) tasks")
-        .accessibilityValue(collapsed ? "Collapsed" : "Expanded")
-        .accessibilityHint("Double tap to \(collapsed ? "expand" : "collapse") this group")
         .listRowSeparator(.hidden)
         #if os(iOS)
         .listRowInsets(EdgeInsets())
@@ -523,30 +772,25 @@ private struct ScheduledSessionRow: View {
     }
 }
 
-private struct TaskListSummary: View {
-    let item: HostedScheduledTask
-    var body: some View {
-        ScheduledSessionRow(title: item.task.name,
-            subtitle: item.task.schedule.description(nextRunAt: item.task.nextRunAt),
-            status: item.task.statusLabel,
-            metadata: "\(item.host.name) · \(item.task.modelLabel)")
-    }
-}
-
 private struct TaskInstructions: View {
     let text: String
+    /// Lines shown while collapsed; nil shows everything.
+    var clamp: Int? = 3
+    /// Whether "Show more" appears when the text is longer than the clamp.
+    var expandable = true
     @State private var isExpanded = false
     @State private var fullHeight: CGFloat = 0
     @State private var collapsedHeight: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            instructions(lineLimit: isExpanded ? nil : 3)
-                .foregroundStyle(.secondary)
+            instructions(lineLimit: isExpanded ? nil : clamp)
+                .font(.system(size: TaskDetailMetrics.body))
+                .foregroundStyle(.primary.opacity(0.95))
                 .textSelection(.enabled)
                 .accessibilityIdentifier("task_instructions")
                 .background(alignment: .topLeading) {
-                    instructions(lineLimit: 3)
+                    instructions(lineLimit: clamp)
                         .hidden()
                         .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { collapsedHeight = $0 }
                         .accessibilityHidden(true)
@@ -557,13 +801,14 @@ private struct TaskInstructions: View {
                         .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { fullHeight = $0 }
                         .accessibilityHidden(true)
                 }
-            if fullHeight > collapsedHeight + 0.5 {
+            // Only when a whole line is hidden: equal texts can measure a point apart.
+            if expandable, fullHeight > collapsedHeight + 8 {
                 Button(isExpanded ? "Show less" : "Show more") {
                     isExpanded.toggle()
                 }
                 .buttonStyle(.plain)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
+                .font(.system(size: TaskDetailMetrics.section))
+                .foregroundStyle(TaskColors.accent)
                 .accessibilityIdentifier("task_instructions_toggle")
                 .accessibilityLabel(isExpanded ? "Show fewer instructions" : "Show all instructions")
                 .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
@@ -574,6 +819,7 @@ private struct TaskInstructions: View {
 
     private func instructions(lineLimit: Int?) -> some View {
         Text(text)
+            .lineSpacing(3)
             .lineLimit(lineLimit)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -581,109 +827,188 @@ private struct TaskInstructions: View {
 }
 
 private struct ScheduledTaskDetail: View {
+    @Environment(\.dismiss) private var dismiss
+    #if os(macOS)
+    /// Starts wide: hiding Back on the first frame (width 0) keeps AppKit from showing it again.
+    @State private var detailWidth: CGFloat = .greatestFiniteMagnitude
+    #endif
     let task: ScheduledTaskRecord
+    let hostName: String
     let client: ScheduledTasksClient
     let changing: Bool
     let edit: () -> Void
     let action: (String, Bool?) -> Void
     let openSession: (String) -> Void
+    /// Opens the task's chat; the text, when set, is the first message.
+    let askToChange: (String?) -> Void
+    let refresh: () async -> Void
+    var chatOpening = false
     @State private var runs: [ScheduledTaskRun] = []
     @State private var total = 0
     @State private var historyLoaded = false
     @State private var error: String?
     @State private var confirmCancel = false
     @State private var selectedRun: ScheduledTaskRun?
+    /// The answer just sent, kept until the host reports the run moving on.
+    @State private var answered: (runID: String, label: String)?
+    @State private var answering = false
+    @State private var showsOlderRuns = false
+    private static let visiblePastRuns = 6
+    /// The Mac hides the switcher on task pages, so Back fits the toolbar down to this width; below it Back moves into •••.
+    private static let backInMenuBelow: CGFloat = 300
+    #if os(macOS)
+    private static let runsHeaderGap: CGFloat = 12
+    #else
+    private static let runsHeaderGap: CGFloat = 8
+    #endif
+
+    private var answeredLabel: String? {
+        guard let answered, task.currentRun?.id == answered.runID, task.currentRun?.status == "needs_input" else { return nil }
+        return answered.label
+    }
+
     var body: some View {
-        List {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(task.name)
-                    .font(.title2.weight(.semibold))
-                    .textSelection(.enabled)
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityIdentifier("task_title")
-                Text(task.schedule.description(nextRunAt: task.nextRunAt))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("task_schedule")
-                TaskInstructions(text: task.prompt)
-                    .id(task.id)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 8)
-            .listRowSeparator(.hidden)
-            #if os(iOS)
-            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-            #endif
-            Text("SESSIONS")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("task_sessions_heading")
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 4, trailing: 20))
-            if let error { Text(error).foregroundStyle(.orange).accessibilityIdentifier("task_history_error") }
-            if !historyLoaded, error == nil { ProgressView("Loading run history…").accessibilityIdentifier("task_history_loading") }
-            else if runs.isEmpty, error == nil { Text("Sessions will appear here when this task runs.").foregroundStyle(.secondary).accessibilityIdentifier("task_history_empty") }
-            ForEach(runs) { run in
-                Button {
-                    if let sessionID = run.sessionId { openSession(sessionID) }
-                    else { selectedRun = run }
-                } label: {
-                    HStack(spacing: 8) {
-                        ScheduledSessionRow(title: run.summary ?? run.error ?? run.taskName ?? task.name,
-                            subtitle: runSubtitle(run), status: run.statusLabel)
-                        Image(systemName: run.sessionId == nil ? "info.circle" : "arrow.up.forward.square")
-                            .foregroundStyle(.secondary)
+        let card = TaskStatusCardModel.make(task: task)
+        let entries = RunTimelineEntry.entries(task: task, runs: runs)
+        let upcoming = entries.filter { $0.node == .upcoming }
+        let past = entries.filter { $0.node != .upcoming }
+        let hidden = showsOlderRuns ? 0 : max(0, past.count - Self.visiblePastRuns)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                TaskDetailHeader(task: task, hostName: hostName)
+                TaskStatusCard(model: card, prompt: task.currentRun?.prompt, busy: changing || answering,
+                               answered: answeredLabel, hostName: hostName, perform: perform)
+                    .padding(.top, 10)
+                if task.schedule.kind == "once", card.kind == .waiting || card.kind == .running {
+                    Label("One-time task. It moves to Closed when this run ends.", systemImage: "exclamationmark.circle")
+                        .font(.system(size: 13)).foregroundStyle(.secondary)
+                        .labelStyle(TaskIconLabelStyle(spacing: 6))
+                        .padding(.horizontal, 2)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Instructions")
+                        .font(.system(size: TaskDetailMetrics.section, weight: .semibold)).foregroundStyle(.secondary)
+                    // When a run needs attention (failed, waiting, retrying) the card leads; the instructions shrink to two fixed lines.
+                    let attention = card.kind == .failed || card.kind == .waiting
+                        || (card.kind == .running && task.consecutiveFailures > 0)
+                    // Keyed on the clamp too, so a state change re-measures instead of comparing against stale heights.
+                    // The Mac boards show the whole text in these states; the phone boards cut it to two lines.
+                    #if os(macOS)
+                    TaskInstructions(text: task.prompt, clamp: attention ? nil : 3, expandable: !attention).id("\(task.id)-\(attention)")
+                    #else
+                    TaskInstructions(text: task.prompt, clamp: attention ? 2 : 3, expandable: !attention).id("\(task.id)-\(attention)")
+                    #endif
+                }
+                .padding(.top, 12)
+                // A waiting run lives in the card; with nothing else to list, the section is left out.
+                let runsHidden = historyLoaded && error == nil && entries.isEmpty && task.currentRun != nil
+                if !runsHidden {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Runs").font(.system(size: TaskDetailMetrics.section, weight: .semibold)).foregroundStyle(.secondary)
+                            .accessibilityAddTraits(.isHeader).accessibilityIdentifier("task_sessions_heading")
+                        Spacer()
+                        Text(RunTimelineEntry.countLine(task)).font(.system(size: 13)).foregroundStyle(.secondary)
                     }
+                    .padding(.top, Self.runsHeaderGap)
                 }
-                .buttonStyle(.plain)
-                #if os(iOS)
-                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-                #endif
-                .accessibilityIdentifier("task_run_\(run.id)")
-                .accessibilityHint(run.sessionId == nil ? "Shows why no session started" :
-                    "Opens this session")
-                .contextMenu {
-                    Button("Run details") { selectedRun = run }
-                        .accessibilityIdentifier("task_run_details_\(run.id)")
+                if let error { Text(error).foregroundStyle(TaskColors.warning).accessibilityIdentifier("task_history_error") }
+                if !historyLoaded, error == nil {
+                    ProgressView("Loading run history…").accessibilityIdentifier("task_history_loading")
+                } else if entries.isEmpty, error == nil, !runsHidden {
+                    Text("Runs will appear here when this task runs.").foregroundStyle(.secondary).accessibilityIdentifier("task_history_empty")
+                }
+                RunTimelineView(entries: upcoming + past.dropLast(hidden), open: open)
+                if hidden > 0 || runs.count < total {
+                    Button(hidden > 0 ? "Show \(hidden) older run\(hidden == 1 ? "" : "s")" : "Load older runs") {
+                        if hidden > 0 { showsOlderRuns = true } else { Task { await load(more: true) } }
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 13)).foregroundStyle(TaskColors.accent)
+                    .padding(.leading, 28)
+                    .accessibilityIdentifier("task_runs_more")
                 }
             }
-            if runs.count < total { Button("Load older runs") { Task { await load(more: true) } }.accessibilityIdentifier("task_runs_more") }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .listStyle(.plain)
-        #if os(iOS)
-        .environment(\.defaultMinListRowHeight, 0)
-        #endif
         .accessibilityIdentifier("task_detail")
         #if os(iOS)
-        .navigationTitle("Scheduled Task")
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if task.cancelledAt == nil {
+                // A retry after a failure keeps the failure wording.
+                let afterFailure = card.kind == .failed || (card.kind == .running && task.consecutiveFailures > 0)
+                TaskAskBar(placeholder: afterFailure ? "Ask why it failed, or change it…" : "Ask to change this task…") { askToChange(nil) }
+                    .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 6)
+                    // The board fades content over 130pt above the bar, not just behind it.
+                    .background(alignment: .bottom) {
+                        LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: Color(.systemBackground).opacity(0.96), location: 0.55)],
+                                       startPoint: .top, endPoint: .bottom)
+                            .frame(height: 130)
+                            .ignoresSafeArea()
+                            .allowsHitTesting(false)
+                    }
+            }
+        }
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         #else
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if task.cancelledAt == nil {
+                TaskChatButton(title: card.kind == .failed ? "Fix or change with chat" : "Change with chat", busy: chatOpening) { askToChange(nil) }
+                    .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 16)
+                    .background(TaskColors.page)
+            }
+        }
+        .background(TaskColors.page)
         .navigationTitle("")
+        // AppKit's own Back never appears for this stack, so the page draws its own.
+        .navigationBarBackButtonHidden(true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { detailWidth = $0 }
         #endif
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            #if os(macOS)
+            if detailWidth >= Self.backInMenuBelow {
+                ToolbarItem(placement: .navigation) {
+                    Button { dismiss() } label: { Label("Back to tasks", systemImage: "chevron.left") }
+                        .labelStyle(.iconOnly).help("Back to tasks")
+                        .accessibilityIdentifier("task_back_button")
+                }
+            }
+            ToolbarSpacer(.flexible)
+            #endif
+            ToolbarItemGroup(placement: scheduledTaskActionPlacement) {
+                Button(action: edit) { Label("Edit task", systemImage: "pencil") }
+                    .disabled(task.cancelledAt != nil).accessibilityIdentifier("task_edit")
                 Menu {
-                    Button("Task settings", systemImage: "slider.horizontal.3", action: edit)
-                        .disabled(task.cancelledAt != nil).accessibilityIdentifier("task_edit")
-                    if task.cancelledAt == nil {
+                    #if os(macOS)
+                    if detailWidth < Self.backInMenuBelow {
+                        Button("Back to tasks", systemImage: "chevron.left") { dismiss() }
+                            .accessibilityIdentifier("task_back")
                         Divider()
+                    }
+                    #endif
+                    if task.cancelledAt == nil {
                         Button("Run now", systemImage: "play.fill") { action("run", nil) }
-                            .disabled(changing || task.currentRun != nil).accessibilityIdentifier("task_run_now")
+                            .disabled(changing || task.currentRun != nil).accessibilityIdentifier("task_menu_run_now")
                         if task.canResume {
-                            Button(task.enabled ? "Pause schedule" : "Resume schedule", systemImage: task.enabled ? "pause" : "play") { action("", !task.enabled) }
-                                .disabled(changing).accessibilityIdentifier("task_pause_resume")
+                            Button(task.enabled ? "Pause" : "Resume", systemImage: task.enabled ? "pause" : "play") { action("", !task.enabled) }
+                                .disabled(changing).accessibilityIdentifier("task_menu_pause_resume")
                         }
-                        Button("Cancel future runs", systemImage: "xmark.circle", role: .destructive) { confirmCancel = true }
+                        Divider()
+                        Button("Stop future runs", systemImage: "xmark.circle", role: .destructive) { confirmCancel = true }
                             .disabled(changing).accessibilityIdentifier("task_cancel")
                     }
                 } label: { Label("Task options", systemImage: "ellipsis") }
                 .accessibilityIdentifier("task_options")
+                #if os(macOS)
+                .menuIndicator(.hidden)
+                #endif
             }
         }
-        .confirmationDialog("Cancel future runs?", isPresented: $confirmCancel, titleVisibility: .visible) {
-            Button("Cancel future runs", role: .destructive) { action("cancel", nil) }
+        .confirmationDialog("Stop future runs?", isPresented: $confirmCancel, titleVisibility: .visible) {
+            Button("Stop future runs", role: .destructive) { action("cancel", nil) }
         } message: { Text("Previous runs stay in history. Any running session will continue.") }
         .sheet(item: $selectedRun) { run in
             NavigationStack {
@@ -700,14 +1025,35 @@ private struct ScheduledTaskDetail: View {
         }
         .task(id: task.id) { runs = []; historyLoaded = false; while !Task.isCancelled { await load(); try? await Task.sleep(for: .seconds(5)) } }
     }
-    private func runSubtitle(_ run: ScheduledTaskRun) -> String {
-        var parts = [run.statusLabel]
-        if let at = run.startedAt ?? run.scheduledFor {
-            parts.append(Date(timeIntervalSince1970: at / 1000).formatted(.dateTime.month(.abbreviated).day().hour().minute()))
+
+    private func perform(_ intent: TaskCardIntent) {
+        switch intent {
+        case .action(.runNow), .action(.retry): action("run", nil)
+        case .action(.pause): action("", false)
+        case .action(.resume): action("", true)
+        case .action(.askToFix): askToChange("Why did the last run fail? Fix the task if you can.")
+        case .openSession(let id): openSession(id)
+        case .answer(let sid, let option): reply(sid) { try await client.answer(sessionID: sid, index: option.index); return option.label }
+        case .reply(let sid, let text): reply(sid) { try await client.send(sessionID: sid, text: text); return text }
         }
-        if run.sessionId == nil { parts.append("No session started") }
-        return parts.joined(separator: " · ")
     }
+
+    private func reply(_ sessionID: String, _ send: @escaping () async throws -> String) {
+        guard !answering, let runID = task.currentRun?.id else { return }
+        answering = true; error = nil
+        Task {
+            defer { answering = false }
+            do { answered = (runID, try await send()); await refresh() }
+            catch { self.error = error.localizedDescription }
+        }
+    }
+
+    private func open(_ entry: RunTimelineEntry) {
+        if entry.tailIsAction { action("run", nil) }
+        else if let sid = entry.sessionID { openSession(sid) }
+        else if let id = entry.runID, let run = runs.first(where: { $0.id == id }) { selectedRun = run }
+    }
+
     private func load(more: Bool = false) async {
         do {
             let page = try await client.runs(task.id, offset: more ? runs.count : 0)
@@ -890,8 +1236,11 @@ private struct ScheduledTaskEditor: View {
     let openSession: (String, String) -> Void
     @State private var currentTask: ScheduledTaskRecord?
     @State private var draft: ScheduledTaskDraft
-    @State private var startingChat = false
-    @State private var chatError: String?
+    /// The schedule part of the form (Once / Repeat); `draft` keeps the other details.
+    @State private var schedule: ScheduleDraft
+    /// The host's next runs for `schedule`, refreshed as it changes.
+    @State private var preview: SchedulePreview?
+    private let startingChat = false
     @State private var directories: [TaskDirectory] = []
     @State private var catalog = ModelCatalogResponse.fallback
     @State private var activePicker: TaskEditorPicker?
@@ -902,17 +1251,38 @@ private struct ScheduledTaskEditor: View {
     @State private var saving = false
     @State private var refreshing = false
     @State private var refreshFailed = false
+    /// The Mac editor's instructions height, measured from the text.
+    @State private var instructionsHeight: CGFloat = 60
     @State private var error: String?
     @Environment(\.dismiss) private var dismiss
 
-    init(client: ScheduledTasksClient, task: ScheduledTaskRecord?, openSession: @escaping (String, String) -> Void = { _, _ in }) {
+    /// Pushed as a page (the Mac's narrow window) instead of presented as a sheet.
+    let embedded: Bool
+    /// Leaves the page when embedded; a sheet dismisses itself.
+    let onClose: (() -> Void)?
+
+    init(client: ScheduledTasksClient, task: ScheduledTaskRecord?, embedded: Bool = false, onClose: (() -> Void)? = nil,
+         openSession: @escaping (String, String) -> Void = { _, _ in }) {
         self.client = client; self.task = task; self.openSession = openSession
+        self.embedded = embedded; self.onClose = onClose
         _currentTask = State(initialValue: task)
         _draft = State(initialValue: .init(task: task))
+        _schedule = State(initialValue: ScheduleDraft(schedule: task?.schedule, nextRunAt: task?.nextRunAt))
     }
 
+    private func close() { if let onClose { onClose() } else { dismiss() } }
+
     var body: some View {
-        NavigationStack {
+        Group {
+            if embedded { content } else { NavigationStack { content } }
+        }
+        .interactiveDismissDisabled(saving || startingChat)
+        #if os(macOS)
+        .frame(width: embedded ? nil : 650, height: embedded ? nil : 720)
+        #endif
+    }
+
+    private var content: some View {
             VStack(spacing: 0) {
                 if refreshing {
                     ProgressView("Loading task settings…")
@@ -923,24 +1293,33 @@ private struct ScheduledTaskEditor: View {
                 }
             }
             .navigationTitle(task == nil ? "New task" : "Edit task")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .disabled(saving || startingChat).accessibilityIdentifier("task_editor_cancel")
-                }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(saving ? "Saving…" : "Save") {
-                            saving = true
-                            Task {
-                                do { try await client.save(draft, id: task?.id); dismiss() }
-                                catch { self.error = error.localizedDescription }
-                                saving = false
-                            }
-                        }
-                        .disabled(saving || startingChat || refreshing || refreshFailed || !draft.isValid || currentTask?.cancelledAt != nil)
-                        .accessibilityIdentifier("task_save")
+                #if os(macOS)
+                if embedded {
+                    // Plain title text centred between Cancel and Save, as on the board (not a glass capsule).
+                    ToolbarItem(placement: .navigation) { cancelButton }
+                    ToolbarSpacer(.flexible)
+                    ToolbarItem(placement: .automatic) {
+                        Text(task == nil ? "New task" : "Edit task").font(.system(size: 13, weight: .semibold))
                     }
+                    .sharedBackgroundVisibility(.hidden)
+                    ToolbarSpacer(.flexible)
+                    ToolbarItem(placement: .automatic) { saveButton }
+                } else {
+                    ToolbarItem(placement: .cancellationAction) { cancelButton }
+                    ToolbarItem(placement: .confirmationAction) { saveButton }
+                }
+                #else
+                ToolbarItem(placement: .cancellationAction) { cancelButton }
+                ToolbarItem(placement: .confirmationAction) { saveButton }
+                #endif
             }
+            #if os(macOS)
+            .navigationBarBackButtonHidden(embedded)
+            #endif
             .task { await loadChoices() }
             .sheet(item: $activePicker) { picker in
                 switch picker {
@@ -950,83 +1329,228 @@ private struct ScheduledTaskEditor: View {
                         activePicker = nil
                     }
                 case .timezone:
-                    TaskTimezonePicker(selection: $draft.timezone)
+                    TaskTimezonePicker(selection: $schedule.timezone)
                 }
+            }
+            .task(id: schedule.schedule) {
+                // Debounce typing, then ask the host what this schedule will do.
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                if let result = try? await client.preview(schedule.schedule) { preview = result }
             }
             .task(id: task?.id) {
                 guard let task else { return }
                 await reloadTask(task.id)
             }
+    }
+
+    private var cancelButton: some View {
+        Button("Cancel") { close() }
+            .disabled(saving || startingChat).accessibilityIdentifier("task_editor_cancel")
+    }
+
+    private var saveButton: some View {
+        Button {
+            saving = true
+            Task {
+                do { try await client.save(draft.payload(schedule: schedule.schedule), id: task?.id); close() }
+                catch { self.error = error.localizedDescription }
+                saving = false
+            }
+        } label: {
+            // An explicit white label: the prominent style's own label colour read black on the board's blue.
+            Text(saving ? "Saving…" : "Save").foregroundStyle(.white)
         }
-        .interactiveDismissDisabled(saving || startingChat)
+        .disabled(saving || refreshing || refreshFailed || !draft.hasValidDetails || schedule.problem() != nil
+                  || preview?.error != nil || currentTask?.cancelledAt != nil)
+        .accessibilityIdentifier("task_save")
+        .prominentSaveStyle()
+    }
+
+    @ViewBuilder
+    private var taskForm: some View {
         #if os(macOS)
-        .frame(width: 650, height: 720)
+        macTaskForm
+        #else
+        phoneTaskForm
         #endif
     }
 
-    private var taskForm: some View {
+    #if os(macOS)
+    /// The Mac edit page: cards on a scroll view, sized to the dA2 boards.
+    private var macTaskForm: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Name").font(.system(size: 11)).foregroundStyle(.secondary)
+                        TextField("Task name", text: $draft.name)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 15, weight: .semibold))
+                            .accessibilityIdentifier("task_name")
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Instructions").font(.system(size: 11)).foregroundStyle(.secondary)
+                        // A text field ignores line spacing, so this is an editor sized to its own text.
+                        TextEditor(text: $draft.prompt)
+                            .font(.system(size: 14))
+                            .lineSpacing(3)
+                            .scrollContentBackground(.hidden)
+                            .scrollDisabled(true)
+                            .padding(.horizontal, -5)
+                            .frame(height: max(instructionsHeight + 4, 40))
+                            .background(alignment: .topLeading) {
+                                Text(draft.prompt.isEmpty ? " " : draft.prompt)
+                                    .font(.system(size: 14)).lineSpacing(3)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .hidden()
+                                    .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { instructionsHeight = $0 }
+                                    .accessibilityHidden(true)
+                            }
+                            .accessibilityIdentifier("task_prompt")
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .overlay(alignment: .top) { Rectangle().fill(Color.primary.opacity(0.07)).frame(height: 1) }
+                }
+                .background(TaskPalette.card, in: RoundedRectangle(cornerRadius: 14))
+                macSectionHeader("When")
+                ScheduleEditorSection(draft: $schedule, preview: preview) { activePicker = .timezone }
+                if let problem = schedule.problem() ?? preview?.error {
+                    Text(problem).font(.system(size: 12)).foregroundStyle(.red)
+                        .padding(.horizontal, 4).padding(.top, 8)
+                        .accessibilityIdentifier("task_schedule_problem")
+                }
+                macSectionHeader("Runs on")
+                VStack(spacing: 0) {
+                    macRunsOnRow("Host", first: true) {
+                        HStack(spacing: 6) {
+                            Circle().fill(preview == nil ? Color.secondary : Color.green).frame(width: 7, height: 7)
+                            Text(client.host.name).foregroundStyle(.secondary)
+                        }
+                    }
+                    macRunsOnRow("Folder") {
+                        Button { activePicker = .directory } label: {
+                            HStack(spacing: 6) {
+                                Text(draft.cwd.isEmpty ? "Choose a folder" : TaskDetailHeader.shortPath(draft.cwd))
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .lineLimit(1).truncationMode(.middle)
+                                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain).accessibilityIdentifier("task_directory")
+                    }
+                    macRunsOnRow("Agent") {
+                        TaskSegmentedPicker(selection: Binding(get: { draft.agent }, set: { agent in
+                            guard agent != draft.agent else { return }
+                            draft.agent = agent; draft.model = ""
+                        }), options: [(AgentKind.claude.rawValue, "Claude Code"), (AgentKind.codex.rawValue, "Codex")],
+                            identifier: "task_agent")
+                        .fixedSize()
+                    }
+                    macRunsOnRow("Model") { macModelMenu }
+                }
+                .background(TaskPalette.card, in: RoundedRectangle(cornerRadius: 14))
+                if let error {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(error).font(.system(size: 12)).foregroundStyle(.red).accessibilityIdentifier("task_editor_error")
+                        if refreshFailed, let task {
+                            Button("Try again") { Task { await reloadTask(task.id) } }
+                                .accessibilityIdentifier("task_editor_retry")
+                        }
+                    }
+                    .padding(.horizontal, 4).padding(.top, 10)
+                }
+            }
+            .font(.system(size: 13))
+            .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 24)
+        }
+        .background(TaskColors.page)
+        .disabled(saving || startingChat)
+    }
+
+    private func macSectionHeader(_ title: String) -> some View {
+        Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+            .padding(.horizontal, 4).padding(.top, 19).padding(.bottom, 10)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private func macRunsOnRow<Value: View>(_ label: String, first: Bool = false, @ViewBuilder value: () -> Value) -> some View {
+        HStack {
+            Text(label).foregroundStyle(.primary.opacity(0.82))
+            Spacer(minLength: 8)
+            value()
+        }
+        .frame(minHeight: 40.5)
+        .padding(.horizontal, 14)
+        .overlay(alignment: .top) {
+            if !first { Rectangle().fill(Color.primary.opacity(0.07)).frame(height: 1) }
+        }
+    }
+
+    private var macModelMenu: some View {
+        let agent = AgentKind(rawValue: draft.agent) ?? .claude
+        let models = catalog.models(for: agent)
+        return Menu {
+            Button("\(agent.displayName) default") { draft.model = "" }
+            ForEach(models, id: \.self) { model in Button(model) { draft.model = model } }
+            if !draft.model.isEmpty, !models.contains(draft.model) {
+                Button("\(draft.model) (saved)") {}
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(draft.model.isEmpty ? "\(agent.displayName) default" : draft.model)
+                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        .accessibilityIdentifier("task_model")
+    }
+    #endif
+
+    private var phoneTaskForm: some View {
             Form {
-                if currentTask != nil {
-                    Section {
-                        Button(action: startEditingChat) {
-                            HStack {
-                                Label(startingChat ? "Starting chat…" : "Edit with chat", systemImage: "bubble.left.and.bubble.right")
-                                if startingChat { Spacer(); ProgressView() }
-                            }
-                        }
-                        .disabled(refreshFailed || currentTask?.cancelledAt != nil)
-                        .accessibilityIdentifier("task_edit_chat")
-                        if let chatError {
-                            Text(chatError).foregroundStyle(.red).accessibilityIdentifier("task_edit_chat_error")
-                        }
-                    } footer: {
-                        Text("Start a new Claude Code session using the saved task settings.")
+                Section {
+                    HStack(spacing: 10) {
+                        Text("Name").font(.system(size: 15)).foregroundStyle(.secondary)
+                        TextField("Task name", text: $draft.name)
+                            .multilineTextAlignment(.trailing)
+                            .font(.body.weight(.semibold))
+                            .accessibilityIdentifier("task_name")
                     }
-                }
-                Section("Task") {
-                    TextField("Name", text: $draft.name).accessibilityIdentifier("task_name")
-                    TextField("What should the agent do?", text: $draft.prompt, axis: .vertical).lineLimit(4...10).accessibilityIdentifier("task_prompt")
-                }
-                Section("When") {
-                    Picker("Schedule", selection: $draft.kind) { Text("One time").tag("once"); Text("Repeating interval").tag("interval"); Text("Custom cron").tag("cron") }.accessibilityIdentifier("task_schedule_kind")
-                    if draft.kind == "once" {
-                        DatePicker("Run at", selection: $draft.date, displayedComponents: [.date, .hourAndMinute])
-                            .environment(\.timeZone, TimeZone(identifier: draft.timezone) ?? .current).accessibilityIdentifier("task_date")
-                    } else if draft.kind == "interval" {
-                        TextField("Every (minutes)", text: $draft.intervalMinutes).accessibilityIdentifier("task_interval")
-                    } else {
-                        ForEach(ScheduledTaskCronField.allCases) { field in
-                            cronField(field)
+                    NavigationLink {
+                        TaskInstructionsEditor(text: $draft.prompt)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Text("Instructions").font(.system(size: 15)).foregroundStyle(.secondary)
+                            Spacer(minLength: 8)
+                            Text(draft.prompt.isEmpty ? "What should the agent do?" : draft.prompt)
+                                .lineLimit(1).foregroundStyle(.primary.opacity(0.82))
                         }
-                        Text("* means every value. Weekdays: 0 or 7 is Sunday, 1 is Monday. Existing ranges and steps stay unchanged until you replace them.")
-                            .font(.caption).foregroundStyle(.secondary)
                     }
-                    Button { activePicker = .timezone } label: {
-                        LabeledContent("Timezone") {
-                            HStack(spacing: 6) {
-                                Text(draft.timezone.replacingOccurrences(of: "_", with: " "))
-                                    .foregroundStyle(.secondary)
-                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-                            }
-                        }
-                    }.buttonStyle(.plain).accessibilityIdentifier("task_timezone")
-                    if currentTask == nil || currentTask?.canResume == true { Toggle("Enabled", isOn: $draft.enabled).accessibilityIdentifier("task_enabled") }
+                    .accessibilityIdentifier("task_instructions_row")
                 }
-                Section("Where and how") {
+                ScheduleEditorSection(draft: $schedule, preview: preview) { activePicker = .timezone }
+                if let problem = schedule.problem() ?? preview?.error {
+                    Section { Text(problem).foregroundStyle(.red).accessibilityIdentifier("task_schedule_problem") }
+                }
+                Section("Runs on") {
                     LabeledContent("Host", value: client.host.name)
-                    modelPicker
                     Button { activePicker = .directory } label: {
-                        LabeledContent("Directory") {
+                        LabeledContent("Folder") {
                             HStack(spacing: 6) {
-                                Text(draft.cwd.isEmpty ? "Choose a directory" : draft.cwd)
-                                    .font(.body.monospaced()).foregroundStyle(.secondary)
+                                Text(draft.cwd.isEmpty ? "Choose a folder" : TaskDetailHeader.shortPath(draft.cwd))
+                                    .foregroundStyle(.secondary)
                                     .lineLimit(1).truncationMode(.middle)
                                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
                             }
                         }
                     }.buttonStyle(.plain).accessibilityIdentifier("task_directory")
+                    modelPicker
                 }
-                Section { Text("Each run starts a new conversation. If the host is offline, the task runs when it returns. Missed repeating runs are combined into one.").font(.footnote).foregroundStyle(.secondary) }
                 if let error {
                     Section {
                         Text(error).foregroundStyle(.red).accessibilityIdentifier("task_editor_error")
@@ -1037,6 +1561,12 @@ private struct ScheduledTaskEditor: View {
                     }
                 }
             }.formStyle(.grouped)
+            #if os(iOS)
+            // The board's first card starts close under the toolbar.
+            .contentMargins(.top, 8, for: .scrollContent)
+            // Rows size to their content and padding (the time zone row is 33pt on the board).
+            .environment(\.defaultMinListRowHeight, 0)
+            #endif
             .disabled(saving || startingChat)
     }
 
@@ -1062,43 +1592,6 @@ private struct ScheduledTaskEditor: View {
                 }
             }
         }.pickerStyle(.menu).accessibilityIdentifier("task_model")
-    }
-
-    private func cronField(_ field: ScheduledTaskCronField) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(field.title)
-                    Text("\(field.range.lowerBound)–\(field.range.upperBound), or *")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                TextField("*", text: Binding(
-                    get: { draft.cronValue(for: field) },
-                    set: { draft.setCronValue($0, for: field) }
-                ))
-                .labelsHidden()
-                .font(.body.monospaced()).multilineTextAlignment(.trailing)
-                .frame(width: 90)
-                #if os(iOS)
-                .keyboardType(.numberPad)
-                #endif
-                .autocorrectionDisabled()
-                .accessibilityLabel(field.title)
-                .accessibilityIdentifier("task_cron_\(field.rawValue)")
-                Button { draft.setCronValue("*", for: field) } label: {
-                    Text("*").font(.body.monospaced()).frame(minWidth: 32, minHeight: 32)
-                }
-                .buttonStyle(.bordered)
-                .accessibilityLabel("Every value for \(field.title.lowercased())")
-                .accessibilityIdentifier("task_cron_every_\(field.rawValue)")
-            }
-            if !draft.isCronFieldValid(field) {
-                Text("Enter \(field.range.lowerBound)–\(field.range.upperBound), or choose *.")
-                    .font(.caption).foregroundStyle(.red)
-                    .accessibilityIdentifier("task_cron_error_\(field.rawValue)")
-            }
-        }
     }
 
     private var directoryChoices: [TaskDirectory] {
@@ -1146,25 +1639,12 @@ private struct ScheduledTaskEditor: View {
         directories = choices
     }
 
-    private func startEditingChat() {
-        guard let currentTask, !startingChat, !saving, !refreshing, !refreshFailed,
-              currentTask.cancelledAt == nil else { return }
-        startingChat = true; chatError = nil
-        Task {
-            defer { startingChat = false }
-            do {
-                let sessionID = try await client.startEditingChat(currentTask.id)
-                openSession(client.host.id, sessionID)
-            } catch { chatError = error.localizedDescription }
-        }
-    }
-
     private func reloadTask(_ id: String) async {
         refreshing = true; refreshFailed = true; error = nil
         defer { refreshing = false }
         do {
             let saved = try await client.task(id)
-            currentTask = saved; draft = .init(task: saved); refreshFailed = false
+            currentTask = saved; draft = .init(task: saved); schedule = ScheduleDraft(schedule: saved.schedule, nextRunAt: saved.nextRunAt); refreshFailed = false
         } catch is CancellationError {} catch { self.error = error.localizedDescription }
     }
 }
