@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A2 dark · Task view</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #000000; color: #FFFFFF; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; -webkit-font-smoothing: antialiased;">
+
+  <div style="position: absolute; top: 54px; left: 16px; right: 16px; height: 52px; display: flex; align-items: center; gap: 10px;">
+    <a href="tA2d-list.dc.html" aria-label="Back to tasks" style="width: 44px; height: 44px; flex: 0 0 44px; border-radius: 22px; background: rgba(44,44,46,0.92); box-shadow: 0 2px 12px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; justify-content: center;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+    </a>
+    <span style="flex: 1 1 auto;"></span>
+    <div role="group" aria-label="Task actions" style="height: 48px; border-radius: 24px; background: rgba(44,44,46,0.92); box-shadow: 0 2px 12px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; padding: 0 4px;">
+      <a href="tA2d-edit.dc.html" aria-label="Edit task" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"></path><path d="M13.5 6.5l4 4"></path></svg>
+      </a>
+      <button aria-label="More task options" style="width: 44px; height: 44px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; padding: 0;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="#FFFFFF" aria-hidden="true"><circle cx="5" cy="12" r="1.9"></circle><circle cx="12" cy="12" r="1.9"></circle><circle cx="19" cy="12" r="1.9"></circle></svg>
+      </button>
+    </div>
+  </div>
+
+  <div style="position: absolute; top: 116px; left: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px;">
+    <h1 style="margin: 0; font-size: 28px; line-height: 34px; font-weight: 700;">Daily repo review</h1>
+    <div style="display: flex; align-items: center; gap: 7px; font-size: 17px; line-height: 22px; color: #D1D1D6;">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2.5l3 3-3 3"></path><path d="M4 11.5v-1a5 5 0 0 1 5-5h11"></path><path d="M7 21.5l-3-3 3-3"></path><path d="M20 12.5v1a5 5 0 0 1-5 5H4"></path></svg>
+      <span>Every weekday at 9:00 AM</span>
+    </div>
+    <div style="display: flex; gap: 6px; flex-wrap: wrap; padding-top: 2px;">
+      <span style="height: 26px; padding: 0 9px; border-radius: 8px; background: #1C1C1E; display: flex; align-items: center; gap: 5px; font-size: 13px; color: #D1D1D6;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.5"></rect><path d="M9 20h6M12 16v4"></path></svg>Pro</span>
+      <span style="height: 26px; padding: 0 9px 0 4px; border-radius: 8px; background: #1C1C1E; display: flex; align-items: center; gap: 6px; font-size: 13px; color: #D1D1D6;">
+        <span style="width: 18px; height: 18px; border-radius: 5px; background: #D97757; color: #FFFFFF; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;">C</span>Opus 5.5</span>
+      <span style="height: 26px; padding: 0 9px; border-radius: 8px; background: #1C1C1E; display: flex; align-items: center; gap: 5px; font-size: 13px; color: #D1D1D6;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"></path></svg>~/dev/personal/lfg</span>
+    </div>
+
+    <div style="margin-top: 10px; background: #1C1C1E; border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: {{cardLabelColor}};">{{cardLabel}}</span>
+        <span style="font-size: 22px; line-height: 28px; font-weight: 600;">{{cardMain}}</span>
+        <span style="font-size: 15px; line-height: 20px; color: #A1A1A6;">{{cardSub}}</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;">
+        <button style="height: 44px; border: 0; border-radius: 22px; background: #0A6EE0; color: #FFFFFF; font: inherit; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"></path></svg>Run now</button>
+        <button onClick="{{togglePause}}" style="height: 44px; border: 0; border-radius: 22px; background: #2C2C2E; color: #409CFF; font: inherit; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer;">
+          <sc-if value="{{active}}" hint-placeholder-val="{{true}}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4.5" width="4" height="15" rx="1"></rect><rect x="14" y="4.5" width="4" height="15" rx="1"></rect></svg>
+          </sc-if>
+          <sc-if value="{{paused}}" hint-placeholder-val="{{false}}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"></path></svg>
+          </sc-if>
+          {{pauseLabel}}</button>
+      </div>
+    </div>
+
+    <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 4px;">
+      <span style="font-size: 15px; font-weight: 600; color: #A1A1A6;">Instructions</span>
+      <p style="margin: 0; font-size: 16px; line-height: 22px; color: #F2F2F7; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: {{clamp}}; overflow: hidden;">Review yesterday’s changes in LFG. Summarize the important fixes, flag anything that looks like a regression, and suggest the next most useful task. Keep it under 200 words and link each commit you mention.</p>
+      <button onClick="{{toggleMore}}" style="align-self: flex-start; border: 0; background: transparent; padding: 2px 0; font: inherit; font-size: 15px; color: #409CFF; cursor: pointer;">{{moreLabel}}</button>
+    </div>
+
+    <div style="margin-top: 8px; display: flex; align-items: baseline; justify-content: space-between;">
+      <span style="font-size: 15px; font-weight: 600; color: #A1A1A6;">Runs</span>
+      <span style="font-size: 13px; color: #A1A1A6;">23 runs · 22 completed</span>
+    </div>
+    <div style="display: flex; flex-direction: column;">
+      <sc-for list="{{runs}}" as="r" hint-placeholder-count="5">
+        <a href="{{r.href}}" style="display: flex; gap: 12px; align-items: stretch;">
+          <span style="width: 16px; flex: 0 0 16px; display: flex; flex-direction: column; align-items: center;">
+            <span style="width: 2px; height: 10px; background: {{r.lineTop}};"></span>
+            <span style="width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; border: 2px solid {{r.node}}; background: {{r.fill}}; flex: 0 0 12px;"></span>
+            <span style="width: 2px; flex: 1 1 auto; background: {{r.lineBottom}};"></span>
+          </span>
+          <span style="flex: 1 1 auto; min-width: 0; padding: 5px 0 12px; display: flex; flex-direction: column; gap: 2px;">
+            <span style="display: flex; align-items: center; gap: 8px;">
+              <span style="flex: 1 1 auto; font-size: 15px; line-height: 20px; font-weight: 600; color: {{r.headColor}};">{{r.head}}</span>
+              <span style="font-size: 13px; color: {{r.tailColor}}; font-weight: 600;">{{r.tail}}</span>
+            </span>
+            <sc-if value="{{r.hasBody}}" hint-placeholder-val="{{true}}">
+              <span style="font-size: 15px; line-height: 20px; color: {{r.bodyColor}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.body}}</span>
+            </sc-if>
+          </span>
+        </a>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 130px; background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.96) 50%);"></div>
+  <a href="tA2d-chat.dc.html" style="position: absolute; left: 16px; right: 16px; bottom: 28px; height: 52px; border-radius: 26px; background: rgba(44,44,46,0.92); box-shadow: 0 4px 24px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; gap: 10px; padding: 0 8px 0 18px; box-sizing: border-box;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#409CFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"></path><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"></path></svg>
+    <span style="flex: 1 1 auto; font-size: 17px; color: #8E8E93;">Ask to change this task…</span>
+    <span style="width: 36px; height: 36px; border-radius: 18px; background: #3A3A3C; display: flex; align-items: center; justify-content: center;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg>
+    </span>
+  </a>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { paused: false, more: false }; }
+  renderVals() {
+    const p = this.state.paused;
+    const line = '#48484A', none = 'transparent', green = '#30D158', red = '#FF453A', grey = '#A1A1A6', ink = '#FFFFFF';
+    return {
+      active: !p, paused: p,
+      cardLabel: p ? 'Paused' : 'Next run',
+      cardLabelColor: p ? '#FF9F0A' : '#A1A1A6',
+      cardMain: p ? 'No runs scheduled' : 'Tomorrow, 9:00 AM',
+      cardSub: p ? 'Resume to run again on weekdays at 9:00 AM' : 'Friday, Oct 16 · in 22 h 48 min',
+      pauseLabel: p ? 'Resume' : 'Pause',
+      togglePause: () => this.setState({ paused: !p }),
+      clamp: this.state.more ? 'unset' : '3',
+      moreLabel: this.state.more ? 'Show less' : 'Show more',
+      toggleMore: () => this.setState({ more: !this.state.more }),
+      runs: [
+        { href: '#', lineTop: none, lineBottom: line, node: '#636366', fill: '#000000', head: p ? 'Fri, Oct 16 · skipped while paused' : 'Fri, Oct 16 · 9:00 AM', headColor: grey, tail: p ? '' : 'Next', tailColor: '#409CFF', hasBody: false, body: '', bodyColor: grey },
+        { href: '#', lineTop: line, lineBottom: line, node: '#636366', fill: '#000000', head: 'Mon, Oct 19 · 9:00 AM', headColor: grey, tail: '', tailColor: grey, hasBody: false, body: '', bodyColor: grey },
+        { href: 'phone-chat.dc.html', lineTop: line, lineBottom: line, node: green, fill: green, head: 'Today · 9:00 AM', headColor: ink, tail: '6 min ›', tailColor: grey, hasBody: true, body: 'Reviewed 14 commits; flagged a send-queue regression', bodyColor: '#D1D1D6' },
+        { href: 'phone-chat.dc.html', lineTop: line, lineBottom: line, node: green, fill: green, head: 'Wed, Oct 14 · 9:00 AM', headColor: ink, tail: '5 min ›', tailColor: grey, hasBody: true, body: 'Reviewed 9 commits; no regressions', bodyColor: '#D1D1D6' },
+        { href: '#', lineTop: line, lineBottom: none, node: red, fill: red, head: 'Tue, Oct 13 · 9:00 AM', headColor: ink, tail: 'Retry', tailColor: '#409CFF', hasBody: true, body: 'Failed · model unavailable · no session started', bodyColor: red }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

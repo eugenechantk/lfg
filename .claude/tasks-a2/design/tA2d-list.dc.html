@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A2 dark · Tasks by state</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #000000; color: #FFFFFF; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; -webkit-font-smoothing: antialiased;">
+
+  <div style="position: absolute; top: 54px; left: 16px; right: 16px; height: 52px; display: flex; align-items: center; gap: 10px;">
+    <div style="flex: 1 1 auto; display: flex; align-items: center; gap: 7px; font-size: 16px; font-weight: 600;">
+      <span style="width: 8px; height: 8px; border-radius: 50%; background: #30D158;"></span>
+      <span>Connected</span>
+      <span style="font-weight: 400; color: #A1A1A6;">· 1 running</span>
+    </div>
+    <div style="height: 48px; border-radius: 24px; background: rgba(44,44,46,0.92); box-shadow: 0 2px 12px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; padding: 0 4px;">
+      <button aria-label="Search tasks" style="width: 44px; height: 44px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; padding: 0;">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg>
+      </button>
+      <button aria-label="Filter by host" style="width: 44px; height: 44px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; padding: 0;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="#FFFFFF" aria-hidden="true"><circle cx="5" cy="12" r="1.9"></circle><circle cx="12" cy="12" r="1.9"></circle><circle cx="19" cy="12" r="1.9"></circle></svg>
+      </button>
+    </div>
+  </div>
+
+  <div style="position: absolute; top: 112px; left: 0; right: 0; bottom: 0; overflow: hidden;">
+    <sc-for list="{{sections}}" as="sec" hint-placeholder-count="3">
+      <button onClick="{{sec.toggle}}" aria-expanded="{{sec.expanded}}" style="width: 100%; border: 0; background: transparent; font: inherit; display: flex; align-items: center; gap: 8px; padding: 14px 16px 6px 20px; font-size: 15px; color: #A1A1A6; text-align: left; cursor: pointer;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{sec.chevron}}"></path></svg>
+        <span style="font-weight: 600; color: {{sec.color}};">{{sec.label}}</span>
+        <span style="color: #8E8E93;">{{sec.count}}</span>
+        <span style="flex: 1 1 auto;"></span>
+        <span style="font-size: 13px; color: #A1A1A6;">{{sec.hint}}</span>
+      </button>
+      <sc-for list="{{sec.rows}}" as="r" hint-placeholder-count="2">
+        <a href="{{r.href}}" style="display: flex; align-items: stretch; padding-left: 16px; opacity: {{r.opacity}};">
+          <span style="width: 62px; flex: 0 0 62px; padding-top: 12px; display: flex; flex-direction: column; align-items: flex-start;">
+            <span style="font-size: 17px; line-height: 22px; font-weight: 600; font-variant-numeric: tabular-nums; color: {{r.timeColor}};">{{r.time}}</span>
+            <span style="font-size: 12px; line-height: 16px; color: #A1A1A6;">{{r.timeSub}}</span>
+          </span>
+          <span style="flex: 1 1 auto; min-width: 0; padding: 11px 16px 12px 0; border-bottom: 0.5px solid #38383A; display: flex; align-items: center; gap: 10px;">
+            <span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 17px; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.title}}</span>
+              <span style="font-size: 15px; line-height: 20px; color: #A1A1A6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.when}}</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 13px; line-height: 18px; color: {{r.resultColor}}; min-width: 0;">
+                <sc-if value="{{r.ok}}" hint-placeholder-val="{{true}}">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#30D158" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+                </sc-if>
+                <sc-if value="{{r.fail}}" hint-placeholder-val="{{false}}">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF453A" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+                </sc-if>
+                <sc-if value="{{r.ask}}" hint-placeholder-val="{{false}}">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF9F0A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path><path d="M10 9a2 2 0 1 1 3 1.7c-.6.4-1 .8-1 1.5"></path><circle cx="12" cy="14.2" r="0.5" fill="#FF9F0A"></circle></svg>
+                </sc-if>
+                <sc-if value="{{r.run}}" hint-placeholder-val="{{false}}">
+                  <span style="width: 8px; height: 8px; border-radius: 50%; background: #30D158; box-shadow: 0 0 0 3px rgba(48,209,88,0.25);"></span>
+                </sc-if>
+                <sc-if value="{{r.pause}}" hint-placeholder-val="{{false}}">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="#A1A1A6" aria-hidden="true"><rect x="6" y="4.5" width="4" height="15" rx="1"></rect><rect x="14" y="4.5" width="4" height="15" rx="1"></rect></svg>
+                </sc-if>
+                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.result}}</span>
+              </span>
+            </span>
+            <sc-if value="{{r.chevron}}" hint-placeholder-val="{{true}}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#48484A" stroke-width="2.8" stroke-linecap="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+            </sc-if>
+          </span>
+        </a>
+      </sc-for>
+    </sc-for>
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 150px; background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.96) 55%);"></div>
+
+  <nav aria-label="Tabs" style="position: absolute; left: 20px; bottom: 28px; height: 56px; border-radius: 28px; background: rgba(44,44,46,0.92); box-shadow: 0 4px 24px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; padding: 4px; box-sizing: border-box;">
+    <a href="s2-list.dc.html" style="width: 88px; height: 48px; border-radius: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #F2F2F7;">
+      <svg width="24" height="20" viewBox="0 0 26 22" fill="currentColor" aria-hidden="true"><path d="M3 1h12a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 15 13H8.5L4 16.5V13H3A2.5 2.5 0 0 1 .5 10.5v-7A2.5 2.5 0 0 1 3 1z"></path><path d="M19.5 6H23a2.5 2.5 0 0 1 2.5 2.5V15A2.5 2.5 0 0 1 23 17.5h-1V21l-4-3.5h-6A2.5 2.5 0 0 1 9.6 15.2h5.9a4 4 0 0 0 4-4z"></path></svg>
+      <span style="font-size: 10px; font-weight: 600;">Sessions</span>
+    </a>
+    <a href="tA2d-list.dc.html" aria-current="page" style="width: 88px; height: 48px; border-radius: 24px; background: #3A3A3C; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #409CFF; position: relative;">
+      <svg width="22" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="14" rx="2"></rect><path d="M2.5 9h15M6.5 2.5v4M13.5 2.5v4"></path><circle cx="18" cy="17" r="4.2" fill="#3A3A3C"></circle><path d="M18 15.3V17l1.2 1"></path></svg>
+      <span style="font-size: 10px; font-weight: 600;">Tasks</span>
+      <span style="position: absolute; top: 4px; right: 22px; min-width: 18px; height: 18px; border-radius: 9px; background: #FF9F0A; color: #1C1C1E; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;">2</span>
+    </a>
+  </nav>
+  <a href="tA2d-edit.dc.html" aria-label="New task" style="position: absolute; right: 20px; bottom: 28px; width: 56px; height: 56px; border-radius: 28px; background: rgba(44,44,46,0.92); box-shadow: 0 4px 24px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; justify-content: center; color: #FFFFFF;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+  </a>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { collapsed: { needs: false, active: false, closed: true } }; }
+  renderVals() {
+    const c = this.state.collapsed;
+    const open = 'M6 9l6 6 6-6', shut = 'M9 6l6 6-6 6';
+    const ink = '#FFFFFF', grey = '#A1A1A6', green = '#30D158', red = '#FF453A', amber = '#FF9F0A';
+    const row = (o) => Object.assign({ href: 'tA2d-detail.dc.html', timeColor: ink, ok: false, fail: false, ask: false, run: false, pause: false, hasAction: false, action: '', actionBg: 'rgba(10,110,224,0.10)', actionFg: '#0A6EE0', chevron: true, resultColor: grey, opacity: '1' }, o);
+    const defs = [
+      { id: 'needs', label: 'Needs input', color: amber, hint: '', rows: [
+        row({ href: 'tA2d-detail-input.dc.html', time: '10:00', timeSub: 'AM', timeColor: amber, title: 'Release verification', when: 'Once · Air · Claude', ask: true, result: 'Asks: verify build 1.3.0 or 1.3.1?', resultColor: amber, hasAction: false, action: 'Answer', chevron: true }),
+        row({ href: 'tA2d-detail-failed.dc.html', time: '2:00', timeSub: 'AM', timeColor: red, title: 'Nightly dependency audit', when: 'Every day at 2:00 AM · Pro', fail: true, result: 'Failed · model unavailable', resultColor: red, hasAction: false, action: 'Retry', chevron: true })
+      ]},
+      { id: 'active', label: 'Active', color: grey, hint: 'by next run', rows: [
+        row({ time: 'Now', timeSub: '12 min', timeColor: green, title: 'Readwise sync check', when: 'Every hour · Pro · Codex', run: true, result: 'Running · started 10:00 AM', resultColor: green }),
+        row({ time: '8:30', timeSub: 'AM Fri', title: 'Morning standup notes', when: 'Daily · run 4 of 5 · Pro', ok: true, result: 'Today · Notes for 4 repos' }),
+        row({ time: '9:00', timeSub: 'AM Fri', title: 'Daily repo review', when: 'Weekdays at 9:00 AM · Pro', ok: true, result: 'Today · Reviewed 14 commits, 1 regression' })
+      ]},
+      { id: 'paused', label: 'Paused', color: grey, hint: '', rows: [
+        row({ time: '8:00', timeSub: 'AM Mon', timeColor: grey, title: 'Weekly app-review digest', when: 'Mondays at 8:00 AM · Air', pause: true, result: 'Paused by you · Oct 12' }),
+        row({ time: '5:00', timeSub: 'PM Fri', timeColor: grey, title: 'Dependency PR sweep', when: 'Fridays at 5:00 PM · Pro', pause: true, result: 'Paused by you · Oct 6' }),
+        row({ time: '', timeSub: '', timeColor: grey, title: 'Tag release 1.3.2', when: 'Once · Pro', pause: true, result: 'Paused by you · Oct 8 · its run time has passed' })
+      ]},
+      { id: 'closed', label: 'Closed', color: grey, hint: '', rows: [
+        row({ time: 'Oct 12', timeSub: 'Done', timeColor: grey, title: 'GRDB schema check', when: 'Once · Pro', ok: true, result: 'Schema matches; no migration needed' }),
+        row({ time: 'Oct 9', timeSub: '5 of 5', timeColor: grey, title: 'Sprint standup notes', when: 'Daily · 5 runs · Pro', ok: true, result: 'Finished all 5 runs' }),
+        row({ time: 'Oct 3', timeSub: 'Stopped', timeColor: grey, title: 'Competitor pricing scan', when: 'Weekly · Air', result: 'Stopped by you' })
+      ]}
+    ];
+    return {
+      sections: defs.map((d) => ({
+        label: d.label, color: d.color, count: String(d.rows.length), hint: c[d.id] ? '' : d.hint,
+        chevron: c[d.id] ? shut : open, expanded: c[d.id] ? 'false' : 'true',
+        rows: c[d.id] ? [] : d.rows,
+        toggle: () => { const n = Object.assign({}, c); n[d.id] = !c[d.id]; this.setState({ collapsed: n }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

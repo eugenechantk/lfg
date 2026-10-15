@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A2 dark · Edit task, weekly on chosen days</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+input::placeholder{color:#8E8E93}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #000000; color: #FFFFFF; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; -webkit-font-smoothing: antialiased;">
+  <div style="position: absolute; top: 54px; left: 0; right: 0; bottom: 0; background: #1C1C1E; border-radius: 38px 38px 0 0; overflow: hidden;">
+    <div style="position: absolute; top: 6px; left: 50%; width: 36px; height: 5px; margin-left: -18px; border-radius: 3px; background: #48484A;"></div>
+    <div style="position: absolute; top: 16px; left: 16px; right: 16px; height: 48px; display: flex; align-items: center; justify-content: space-between;">
+      <a href="tA2d-detail.dc.html" style="height: 44px; padding: 0 16px; border-radius: 22px; background: #2C2C2E; display: flex; align-items: center; font-size: 17px;">Cancel</a>
+      <span style="font-size: 17px; font-weight: 600;">Edit task</span>
+      <a href="tA2d-detail.dc.html" style="height: 44px; padding: 0 18px; border-radius: 22px; background: #0A6EE0; color: #FFFFFF; display: flex; align-items: center; font-size: 17px; font-weight: 600;">Save</a>
+    </div>
+
+    <div style="position: absolute; top: 76px; left: 16px; right: 16px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="background: #2C2C2E; border-radius: 20px; overflow: hidden;">
+        <label style="display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-bottom: 0.5px solid #38383A;">
+          <span style="font-size: 15px; color: #A1A1A6;">Name</span>
+          <input value="Daily repo review" style="flex: 1 1 auto; min-width: 0; border: 0; outline: none; padding: 0; font: inherit; font-size: 17px; font-weight: 600; text-align: right; background: transparent; color: #FFFFFF;">
+        </label>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 11px 16px;">
+          <span style="font-size: 15px; color: #A1A1A6;">Instructions</span>
+          <span style="flex: 1 1 auto; min-width: 0; text-align: right; font-size: 15px; color: #D1D1D6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Review yesterday’s changes in LFG…</span>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#636366" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+        </div>
+      </div>
+
+      <span style="padding: 10px 16px 0; font-size: 13px; color: #A1A1A6; text-transform: uppercase; letter-spacing: 0.3px;">When</span>
+      <div style="background: #2C2C2E; border-radius: 20px; padding: 12px 0 8px; display: flex; flex-direction: column;">
+        <div role="tablist" aria-label="Schedule type" style="margin: 0 12px 12px; height: 34px; border-radius: 10px; background: #3A3A3C; padding: 2px; box-sizing: border-box; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));"><a href="tA2d-edit-once.dc.html" style="border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: #D1D1D6;">Once</a><span aria-current="true" style="border-radius: 8px; background: #636366; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #FFFFFF;">Repeat</span></div>
+        <div style="padding: 0 16px 10px; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 21px; line-height: 26px; font-weight: 600;">{{sentence}}</span>
+          <span style="font-size: 14px; line-height: 19px; color: #A1A1A6;">{{subline}}</span>
+        </div>
+        <div style="display: flex; gap: 6px; overflow-x: auto; padding: 0 16px 10px; scrollbar-width: none;">
+          <sc-for list="{{presets}}" as="p" hint-placeholder-count="7">
+            <button onClick="{{p.pick}}" style="flex: 0 0 auto; height: 32px; padding: 0 12px; border: 0; border-radius: 16px; background: {{p.bg}}; color: {{p.fg}}; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;">{{p.label}}</button>
+          </sc-for>
+        </div>
+        <sc-if value="{{showEvery}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 16px; border-top: 0.5px solid #38383A; font-size: 17px;">
+            <label for="every-n">Every</label>
+            <span style="display: flex; align-items: center; gap: 8px;">
+              <input id="every-n" inputmode="numeric" value="{{everyValue}}" onInput="{{onEvery}}" style="width: 64px; height: 34px; box-sizing: border-box; border-radius: 9px; border: 1px solid #0A84FF; background: #1C1C1E; text-align: center; font: inherit; font-size: 17px; font-weight: 600; color: #FFFFFF; outline: none; font-variant-numeric: tabular-nums;">
+              <span style="min-width: 64px; color: #D1D1D6;">{{everyUnit}}</span>
+            </span>
+          </div>
+        </sc-if>
+        <sc-if value="{{showDays}}" hint-placeholder-val="{{true}}">
+          <div style="display: flex; justify-content: space-between; padding: 0 16px 10px;">
+            <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+              <button onClick="{{d.toggle}}" aria-label="{{d.name}}" aria-pressed="{{d.on}}" style="width: 38px; height: 38px; border-radius: 19px; border: 0; background: {{d.bg}}; color: {{d.fg}}; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;">{{d.letter}}</button>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{showStarts}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 16px; border-top: 0.5px solid #38383A; font-size: 17px;">
+            <span>Starts</span>
+            <span style="display: flex; gap: 6px;"><span style="height: 34px; padding: 0 11px; border-radius: 9px; background: #3A3A3C; display: flex; align-items: center; color: #409CFF; font-variant-numeric: tabular-nums;">Fri, Oct 16</span><span style="height: 34px; padding: 0 11px; border-radius: 9px; background: #3A3A3C; display: flex; align-items: center; color: #409CFF; font-variant-numeric: tabular-nums;">9:00 AM</span></span>
+          </div>
+        </sc-if>
+        <sc-if value="{{showAt}}" hint-placeholder-val="{{true}}">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 16px; border-top: 0.5px solid #38383A; font-size: 17px;">
+            <span>{{atLabel}}</span>
+            <span style="height: 34px; padding: 0 11px; border-radius: 9px; background: #3A3A3C; display: flex; align-items: center; color: #409CFF; font-variant-numeric: tabular-nums;">{{atValue}}</span>
+          </div>
+        </sc-if>
+        <sc-if value="{{showCustom}}" hint-placeholder-val="{{false}}">
+          <label style="display: block; padding: 10px 16px; border-top: 0.5px solid #38383A;">
+            <span style="display: block; font-size: 13px; color: #A1A1A6; padding-bottom: 6px;">Cron expression</span>
+            <input value="{{customExpr}}" style="width: 100%; box-sizing: border-box; height: 40px; border-radius: 9px; border: 1px solid #0A84FF; background: #1C1C1E; padding: 0 12px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 17px; color: #FFFFFF; outline: none;">
+          </label>
+        </sc-if>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 16px; border-top: 0.5px solid #38383A; font-size: 17px;">
+          <span>Ends</span>
+          <span style="height: 32px; border-radius: 9px; background: #3A3A3C; padding: 2px; box-sizing: border-box; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 222px;">
+            <sc-for list="{{ends}}" as="e" hint-placeholder-count="3">
+              <button onClick="{{e.pick}}" style="border: 0; border-radius: 7px; background: {{e.bg}}; font: inherit; font-size: 13px; font-weight: 500; color: #FFFFFF; cursor: pointer;">{{e.label}}</button>
+            </sc-for>
+          </span>
+        </div>
+        <sc-if value="{{showCount}}" hint-placeholder-val="{{false}}">
+          <div style="padding: 0 16px 10px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 10px; font-size: 17px;">
+              <label for="runs-count" style="flex: 1 1 auto;">Number of runs</label>
+              <input id="runs-count" inputmode="numeric" value="{{count}}" onInput="{{onCount}}" style="width: 64px; height: 34px; box-sizing: border-box; border-radius: 9px; border: 1px solid #0A84FF; background: #1C1C1E; text-align: center; font: inherit; font-size: 17px; font-weight: 600; color: #FFFFFF; outline: none; font-variant-numeric: tabular-nums;">
+            </div>
+            <span style="font-size: 13px; color: #A1A1A6; text-align: right;">{{lastRun}}</span>
+          </div>
+        </sc-if>
+        <sc-if value="{{showEndDate}}" hint-placeholder-val="{{false}}">
+          <div style="padding: 0 16px 10px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 17px;">
+              <span>End date</span>
+              <span style="height: 34px; padding: 0 11px; border-radius: 9px; background: #3A3A3C; display: flex; align-items: center; color: #409CFF; font-variant-numeric: tabular-nums;">Thu, Dec 31, 2026</span>
+            </div>
+            <span style="font-size: 13px; color: #A1A1A6; text-align: right;">{{endNote}}</span>
+          </div>
+        </sc-if>
+        <div style="padding: 8px 16px 8px; border-top: 0.5px solid #38383A; display: flex; flex-direction: column; gap: 6px;">
+          <span style="font-size: 13px; color: #A1A1A6;">Next runs</span>
+          <span style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <sc-for list="{{nextRuns}}" as="n" hint-placeholder-count="3">
+              <span style="height: 26px; padding: 0 9px; border-radius: 8px; background: rgba(10,132,255,0.20); color: #64B0FF; font-size: 13px; display: flex; align-items: center; font-variant-numeric: tabular-nums;">{{n.t}}</span>
+            </sc-for>
+          </span>
+        </div>
+
+        <div style="padding: 8px 16px 2px; border-top: 0.5px solid #38383A; font-size: 12px; color: #A1A1A6;">Hong Kong time (GMT+8) · <span style="color: #409CFF;">Change</span></div>
+      </div>
+
+      <span style="padding: 10px 16px 0; font-size: 13px; color: #A1A1A6; text-transform: uppercase; letter-spacing: 0.3px;">Runs on</span>
+      <div style="background: #2C2C2E; border-radius: 20px; overflow: hidden; font-size: 17px;">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 11px 16px; border-bottom: 0.5px solid #38383A;"><span style="flex: 1 1 auto;">Host</span><span style="color: #A1A1A6;">Eugenes-MacBook-Pro</span></div>
+        <div style="display: flex; align-items: center; gap: 8px; padding: 11px 16px;"><span style="flex: 1 1 auto;">Folder</span><span style="color: #A1A1A6;">~/dev/personal/lfg</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#636366" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { preset: 'weekly', n: { minutes: 5, hourly: 1, daily: 1 }, days: [false, true, false, true, false, true, false], ends: 'never', count: 10 }; }
+  renderVals() {
+    const s = this.state, p = s.preset, CUSTOM = {"expr": "0 9 * * 1-5", "sentence": "Every weekday at 9:00 AM", "runs": ["Fri 9:00", "Mon 9:00", "Tue 9:00"], "last": null};
+    const steps = { minutes: [1, 2, 3, 5, 10, 15, 20, 30, 45, 90], hourly: [1, 2, 3, 4, 5, 6, 8, 12], daily: [1, 2, 3, 4, 5, 6, 7, 10, 14] };
+    const N = s.n[p] || 1;
+    const names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const shorts = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const order = [1, 2, 3, 4, 5, 6, 0];
+    const picked = order.filter((i) => s.days[i]);
+    const list = picked.map((i) => shorts[i]);
+    const joined = list.length > 1 ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1] : (list[0] || 'no days');
+    const nowMin = 10 * 60 + 12;
+    const clock = (m, ampm) => { const h = Math.floor(m / 60) % 24, mm = m % 60, ap = h < 12 ? 'AM' : 'PM', h12 = h % 12 === 0 ? 12 : h % 12; return h12 + ':' + String(mm).padStart(2, '0') + (ampm ? ' ' + ap : ''); };
+    const aligned = (p === 'minutes' && 60 % N === 0) || (p === 'hourly' && 24 % N === 0) || (p === 'daily' && N === 1) || ['weekdays', 'weekly', 'monthly', 'custom'].includes(p);
+    let expr = null, sentence, runs, everyLabel = '';
+    if (p === 'minutes') {
+      sentence = N === 1 ? 'Every minute' : 'Every ' + N + ' minutes';
+      everyLabel = N + ' min';
+      if (aligned) { expr = [N === 1 ? '*' : '*/' + N, '*', '*', '*', '*']; const f = Math.ceil((nowMin + 1) / N) * N; runs = [0, 1, 2, 3].map((i) => clock(f + i * N, false)); }
+      else { const st = 16 * 1440 + 540; runs = [0, 1, 2].map((i) => { const m = st + i * N; return (Math.floor(m / 1440) === 16 ? 'Fri ' : 'Sat ') + clock(m % 1440, true); }); }
+    } else if (p === 'hourly') {
+      sentence = N === 1 ? 'Every hour' : 'Every ' + N + ' hours';
+      everyLabel = N === 1 ? '1 hour' : N + ' hours';
+      if (aligned) { expr = ['0', N === 1 ? '*' : '*/' + N, '*', '*', '*']; let h = Math.floor(nowMin / 60) + 1; while (h % N !== 0) h++; runs = [0, 1, 2].map((i) => clock(((h + i * N) % 24) * 60, true)); }
+      else { runs = [0, 1, 2].map((i) => { const m = 540 + i * N * 60; return (m >= 1440 ? 'Sat ' : 'Fri ') + clock(m % 1440, true); }); }
+    } else if (p === 'daily') {
+      sentence = N === 1 ? 'Every day at 9:00 AM' : 'Every ' + N + ' days at 9:00 AM';
+      everyLabel = N === 1 ? '1 day' : N + ' days';
+      if (aligned) { expr = ['0', '9', '*', '*', '*']; runs = ['Fri 9:00', 'Sat 9:00', 'Sun 9:00']; }
+      else { runs = [0, 1, 2, 3].map((i) => { const d = new Date(2026, 9, 16 + i * N); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }); }
+    } else if (p === 'custom') {
+      expr = CUSTOM.expr.split(' '); sentence = CUSTOM.sentence; runs = CUSTOM.runs;
+    } else {
+      const dow = p === 'weekdays' ? '1-5' : (picked.join(',') || '1');
+      expr = p === 'monthly' ? ['0', '9', '1', '*', '*'] : ['0', '9', '*', '*', dow];
+      sentence = { weekdays: 'Every weekday at 9:00 AM', weekly: 'Every ' + joined + ' at 9:00 AM', monthly: 'On the 1st of every month at 9:00 AM' }[p];
+      runs = { weekdays: ['Fri 9:00', 'Mon 9:00', 'Tue 9:00'], weekly: ['Fri 9:00', 'Mon 9:00', 'Wed 9:00'], monthly: ['Nov 1 · 9:00', 'Dec 1 · 9:00', 'Jan 1 · 9:00'] }[p];
+    }
+    const endText = { never: '', after: ', ' + s.count + ' times', date: ', until Dec 31' }[s.ends];
+    const C = Math.max(1, s.count || 1);
+    const dfmt = (d) => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    let last;
+    if (p === 'custom' && CUSTOM.last) { last = CUSTOM.last; }
+    else if (p === 'weekdays' || p === 'weekly' || p === 'custom') {
+      const ok = p === 'weekly' ? s.days : [false, true, true, true, true, true, false];
+      let d = new Date(2026, 9, 16, 9, 0), k = 0, guard = 0;
+      while (guard++ < 5000) { if (ok[d.getDay()]) { k++; if (k === C) break; } d = new Date(d.getTime() + 86400000); }
+      last = dfmt(d) + ' at 9:00 AM';
+    } else if (p === 'monthly') { last = new Date(2026, 10 + C - 1, 1).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at 9:00 AM'; }
+    else if (p === 'daily') { last = dfmt(new Date(2026, 9, 16 + (C - 1) * N, 9, 0)) + ' at 9:00 AM'; }
+    else { const stepMin = p === 'hourly' ? N * 60 : N; const startMin = aligned ? (p === 'hourly' ? (Math.floor(nowMin / 60) + 1) * 60 : Math.ceil((nowMin + 1) / N) * N) : 9 * 60 + 1440; const t = new Date(2026, 9, 15, 0, startMin + (C - 1) * stepMin); last = dfmt(t) + ' at ' + t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); }
+    const how = expr ? 'Runs at fixed clock times' : 'Exact gap from Fri, Oct 16 at 9:00 AM';
+    const bump = (dir) => () => { const arr = steps[p]; if (!arr) return; const i = Math.max(0, Math.min(arr.length - 1, arr.indexOf(N) + dir)); const nn = Object.assign({}, s.n); nn[p] = arr[i]; this.setState({ n: nn }); };
+    const presetDefs = [['minutes', 'Minutes'], ['hourly', 'Hourly'], ['daily', 'Daily'], ['weekdays', 'Weekdays'], ['weekly', 'Weekly'], ['monthly', 'Monthly'], ['custom', 'Custom']];
+    const weekdaysOnly = [false, true, true, true, true, true, false];
+    return {
+      sentence: sentence + endText,
+      subline: how,
+      presets: presetDefs.map(([id, label]) => ({ label, bg: id === p ? '#0A6EE0' : '#3A3A3C', fg: id === p ? '#FFFFFF' : '#F2F2F7', pick: () => this.setState({ preset: id, days: id === 'weekdays' ? weekdaysOnly : s.days }) })),
+      showEvery: p === 'minutes' || p === 'hourly' || p === 'daily', everyLabel, dec: bump(-1), inc: bump(1),
+      everyValue: String(N),
+      everyUnit: p === 'minutes' ? (N === 1 ? 'minute' : 'minutes') : p === 'hourly' ? (N === 1 ? 'hour' : 'hours') : (N === 1 ? 'day' : 'days'),
+      onEvery: (e) => { const v = parseInt(e.target.value, 10); const max = { minutes: 1440, hourly: 168, daily: 365 }[p]; const nn = Object.assign({}, s.n); nn[p] = isNaN(v) ? 1 : Math.max(1, Math.min(max, v)); this.setState({ n: nn }); },
+      showCronFields: !!expr, showExactNote: !expr,
+      cronCaption: p === 'custom' ? 'Custom cron. Next runs come from the server.' : 'Edit a field to make a custom schedule.',
+      exactNote: 'There is no cron for ' + sentence.charAt(0).toLowerCase() + sentence.slice(1) + '. It runs on an exact ' + N + '-' + ({ minutes: 'minute', hourly: 'hour', daily: 'day' }[p] || 'day') + ' gap from the start time.',
+      showDays: p === 'weekly' || p === 'weekdays',
+      showStarts: !aligned,
+      showAt: aligned && p !== 'minutes' && p !== 'custom',
+      atLabel: p === 'hourly' ? 'At minute' : (p === 'monthly' ? 'On the 1st at' : 'Time'), atValue: p === 'hourly' ? ':00' : '9:00 AM',
+      showCustom: p === 'custom', customExpr: CUSTOM.expr,
+      showEndDate: s.ends === 'date', endNote: p === 'weekdays' ? 'Last run: Thu, Dec 31 at 9:00 AM' : 'Runs until the end of that day',
+      days: order.map((i) => ({ letter: shorts[i][0], name: names[i], on: s.days[i] ? 'true' : 'false', bg: s.days[i] ? '#F2F2F7' : '#3A3A3C', fg: s.days[i] ? '#000000' : '#A1A1A6', toggle: () => { const d = s.days.slice(); d[i] = !d[i]; this.setState({ days: d, preset: 'weekly' }); } })),
+      fields: ['minute', 'hour', 'day', 'month', 'weekday'].map((k, i) => ({ k, v: (expr || ['', '', '', '', ''])[i], edit: () => this.setState({ preset: 'custom' }) })),
+      ends: [['never', 'Never'], ['after', 'After N'], ['date', 'On date']].map(([id, label]) => ({ label, bg: s.ends === id ? '#636366' : 'transparent', pick: () => this.setState({ ends: id }) })),
+      showCount: s.ends === 'after', count: String(s.count), lastRun: 'Last run: ' + last,
+      onCount: (e) => { const v = parseInt(e.target.value, 10); this.setState({ count: isNaN(v) ? 1 : Math.max(1, Math.min(1000, v)) }); },
+      decEnd: () => this.setState({ count: Math.max(1, s.count - 1) }), incEnd: () => this.setState({ count: Math.min(1000, s.count + 1) }),
+      nextRuns: runs.map((t) => ({ t }))
+    };
+  }
+}
+</script>
+</body>
+</html>
