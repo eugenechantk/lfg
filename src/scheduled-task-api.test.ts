@@ -145,8 +145,8 @@ test("edit chat targets the saved task with current settings and leaves task and
     expect(await response!.json()).toEqual({ sessionId: "edit-chat" });
     expect(calledPath).toBe("/api/sessions/new");
     expect(sent.cwd).toBe(dir);
-    expect(sent.agent).toBe("claude");
-    expect(sent.model).toBeUndefined();
+    expect(sent.agent).toBe("codex");
+    expect(sent.model).toBe("gpt-6.1-sol");
     expect(sent.prompt).toContain(`update ${task.id}`);
     expect(sent.prompt).toContain("Review changes and tests");
     expect(sent.prompt).toContain('"agent":"codex"');
@@ -160,7 +160,8 @@ test("edit chat targets the saved task with current settings and leaves task and
     const afterChat = await store.read();
     expect(afterChat.tasks.find(t => t.id === task.id)!.editSessionId).toBe("edit-chat");
     expect(afterChat.tasks.find(t => t.id === task.id)!.editSessionIds).toEqual(["edit-chat"]);
-    for (const t of afterChat.tasks) { delete t.editSessionId; delete t.editSessionIds; }
+    expect(afterChat.tasks.find(t => t.id === task.id)!.editSessionConfig).toEqual({ agent: "codex", model: "gpt-6.1-sol" });
+    for (const t of afterChat.tasks) { delete t.editSessionId; delete t.editSessionIds; delete t.editSessionConfig; }
     expect(afterChat).toEqual(before);
     const edited = await route(new Request(`http://test/api/scheduled-tasks/${task.id}`, { method: "POST", body: JSON.stringify({
       schedule: { ...task.schedule, expression: "0 10 * * 1-5" }

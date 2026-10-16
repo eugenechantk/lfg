@@ -7,9 +7,10 @@ import { randomUUID } from "node:crypto";
  * `maxRuns` (cron) and `endsAt` (cron, interval) end an otherwise open schedule. */
 export type TaskSchedule = { kind: "once" | "interval" | "repeat" | "cron"; timezone: string; at?: string; everyMinutes?: number; occurrences?: number; expression?: string; maxRuns?: number; endsAt?: string };
 export type TaskInput = { name: string; prompt: string; cwd: string; agent: "claude" | "codex"; model?: string | null; schedule: TaskSchedule; enabled?: boolean; sourceSessionId?: string };
+export type TaskEditSessionConfig = Pick<TaskInput, "agent" | "model">;
 /** `scheduledRunCount` counts scheduled (not manual) runs since the schedule last changed; cron `maxRuns` reads it.
  * `pausedAt` is set when the user switches a task off and cleared on resume. */
-export type ScheduledTask = TaskInput & { id: string; enabled: boolean; createdAt: number; updatedAt: number; nextRunAt: number | null; lastRunAt?: number; cancelledAt?: number; pausedAt?: number; scheduledRunCount?: number; editSessionId?: string; editSessionIds?: string[] };
+export type ScheduledTask = TaskInput & { id: string; enabled: boolean; createdAt: number; updatedAt: number; nextRunAt: number | null; lastRunAt?: number; cancelledAt?: number; pausedAt?: number; scheduledRunCount?: number; editSessionId?: string; editSessionIds?: string[]; editSessionConfig?: TaskEditSessionConfig };
 export type TaskRun = { id: string; taskId: string; taskName: string; agent: string; trigger: "scheduled" | "manual"; scheduledFor: number; startedAt: number; finishedAt?: number; status: "starting" | "running" | "needs_input" | "succeeded" | "failed" | "interrupted"; sessionId?: string; tmuxName?: string; summary?: string; error?: string; needsInputAt?: number };
 type State = { version: 1; tasks: ScheduledTask[]; runs: TaskRun[] };
 export const activeRun = (r: TaskRun) => ["starting", "running", "needs_input"].includes(r.status);
@@ -191,13 +192,17 @@ export class TaskStore {
     });
   }
   /** Remembers the task's edit chat so the next request reuses it. */
-  async setEditSession(id: string, sessionId: string): Promise<void> {
+  async setEditSession(id: string, sessionId: string, config?: TaskEditSessionConfig): Promise<void> {
     // The id history outlives the chat: once a chat closes, its listing has no managed record left,
     // so clients find it here to keep it out of Sessions.
     await this.transaction(s => {
       const t = s.tasks.find(t => t.id === id); if (!t) return;
       t.editSessionId = sessionId;
       t.editSessionIds = [...(t.editSessionIds ?? []).filter(x => x !== sessionId), sessionId].slice(-20);
+      // Capture the launch settings, not whatever the task may have changed to
+      // while the provider was starting. Legacy callers leave them unknown.
+      if (config) t.editSessionConfig = { agent: config.agent, ...(config.model ? { model: config.model } : {}) };
+      else delete t.editSessionConfig;
     });
   }
   /** Every edit chat any task has used, live or closed. */

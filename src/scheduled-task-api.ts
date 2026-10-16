@@ -168,8 +168,11 @@ export function scheduledTaskRoutes(store: TaskStore, scheduler: TaskScheduler, 
         if (typeof body?.prompt !== "string" || !body.prompt.trim()) throw new TaskError("Describe what you want to change.");
         if (body.prompt.length > 50_000) throw new TaskError("The change request is too long.");
         const request = body.prompt.trim();
-        // One chat per task: while it is alive, a new request is its next message.
-        if (task.editSessionId) {
+        // Reuse only a chat launched with the task's current settings. Older
+        // chats were always Claude; missing metadata must not preserve that.
+        const config = { agent: task.agent, model: task.model ?? undefined };
+        if (task.editSessionId && task.editSessionConfig?.agent === config.agent
+          && (task.editSessionConfig.model ?? undefined) === config.model) {
           const { sessions } = await call("/api/sessions").catch(() => ({ sessions: [] }));
           if ((sessions ?? []).some((x: any) => x.sessionId === task.editSessionId && !x.closed)) {
             await call(`/api/sessions/${task.editSessionId}/send`, { text: request });
@@ -177,8 +180,8 @@ export function scheduledTaskRoutes(store: TaskStore, scheduler: TaskScheduler, 
           }
         }
         const prompt = taskEditingPrompt(task, request, context);
-        const created = await call("/api/sessions/new", { cwd: task.cwd, agent: "claude", prompt, purpose: "task-edit", taskId: task.id });
-        if (typeof created?.sessionId === "string" && created.sessionId) await store.setEditSession(task.id, created.sessionId);
+        const created = await call("/api/sessions/new", { cwd: task.cwd, ...config, prompt, purpose: "task-edit", taskId: task.id });
+        if (typeof created?.sessionId === "string" && created.sessionId) await store.setEditSession(task.id, created.sessionId, config);
         return reply(created);
       }
       if (action === "runs" && req.method === "GET") {
