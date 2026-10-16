@@ -297,7 +297,7 @@ struct SessionDetailView: View {
             if let cwd = session.cwd, !cwd.isEmpty { hf?.cwd = cwd }
         }
         // Keep native controls, but let transcript rows remain visible behind
-        // the bar. Its transition is an app-owned color fade without blur.
+        // the bar. Its transition is an app-owned gradient of system material.
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar { toolbarMenu }
         .task(id: sid) {
@@ -489,8 +489,8 @@ struct SessionDetailView: View {
                         // The 180-degree transcript transform confuses SwiftUI's
                         // automatic edge detector, expanding its blur through the
                         // viewport instead of confining it to a bar boundary
-                        // (re-checked on iOS 26.3). Use only a translucent color
-                        // ramp at the header; there is no full-width blur.
+                        // (re-checked on iOS 26.3). A local, masked material
+                        // supplies the header blur without that automatic effect.
                         .scrollEdgeEffectHidden(true, for: [.top, .bottom])
                         .overlay(alignment: .top) {
                             TranscriptTopFade(barHeight: topChromeHeight)

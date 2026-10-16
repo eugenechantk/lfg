@@ -146,22 +146,32 @@ extension Glass {
     }
 }
 
-/// A clear session-header transition. Every stop is translucent, so transcript
-/// text remains visible as it moves through the bar. This contains no material
-/// or blur effect; the navigation bar's own background is hidden separately.
+/// A soft backdrop behind session chrome. Transcript content continues beneath
+/// the header, gaining blur gradually as it approaches the navigation controls.
 struct TranscriptTopFade: View {
     let barHeight: CGFloat
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         let bar = max(barHeight, 1)
-        let height = bar + 28
+        let height = bar + 36
         let base = Color(.systemBackground)
-        LinearGradient(stops: [
-            .init(color: base.opacity(0.78), location: 0),
-            .init(color: base.opacity(0.55), location: max(bar - 52, 0) / height),
-            .init(color: base.opacity(0.22), location: bar / height),
-            .init(color: base.opacity(0), location: 1),
-        ], startPoint: .top, endPoint: .bottom)
+        let stops: [(location: CGFloat, strength: Double)] = [
+            (0, 1), (max(bar - 36, 0) / height, 1),
+            (bar / height, 0.8), ((bar + 16) / height, 0.3), (1, 0),
+        ]
+        let mask = LinearGradient(
+            stops: stops.map { .init(color: .black.opacity($0.strength), location: $0.location) },
+            startPoint: .top, endPoint: .bottom)
+        ZStack {
+            if !reduceTransparency {
+                Rectangle().fill(.regularMaterial).mask(mask)
+            }
+            LinearGradient(
+                stops: stops.map {
+                    .init(color: base.opacity($0.strength * (reduceTransparency ? 1 : 0.16)), location: $0.location)
+                }, startPoint: .top, endPoint: .bottom)
+        }
         .frame(height: height)
         .allowsHitTesting(false)
         .accessibilityHidden(true)

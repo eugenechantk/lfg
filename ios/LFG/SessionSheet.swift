@@ -229,45 +229,42 @@ struct SessionSheet: View {
             closed: session.closed,
             catalog: store.modelCatalog(forSession: sid)
         )
-        return Menu {
-            ForEach(sections, id: \.title) { section in
-                Section(section.title) {
-                    ForEach(section.models, id: \.self) { name in
-                        Button {
-                            Task {
-                                if let id = await store.switchModel(sid, to: AgentModelSelection(agent: section.agent, model: name)) {
-                                    store.requestSelection(id)
+        let value = session.model.map(ModelChipLabel.model) ?? "Default"
+        return row(height: 44) {
+            fieldTitle(switching ? "Switching model…" : "Model")
+            Menu {
+                ForEach(sections, id: \.title) { section in
+                    Section(section.title) {
+                        ForEach(section.models, id: \.self) { name in
+                            Button {
+                                Task {
+                                    if let id = await store.switchModel(sid, to: AgentModelSelection(agent: section.agent, model: name)) {
+                                        store.requestSelection(id)
+                                    }
+                                }
+                            } label: {
+                                if session.agent == section.agent.rawValue && session.model == name {
+                                    Label(name, systemImage: "checkmark")
+                                } else {
+                                    Text(name)
                                 }
                             }
-                        } label: {
-                            if session.agent == section.agent.rawValue && session.model == name {
-                                Label(name, systemImage: "checkmark")
-                            } else {
-                                Text(name)
-                            }
+                            .disabled(switching || sid.hasPrefix("local-"))
                         }
-                        .disabled(switching || sid.hasPrefix("local-"))
                     }
                 }
+            } label: {
+                dropdownValue {
+                    AgentMark(agent: session.agent)
+                    Text(value).lineLimit(1)
+                }
             }
-        } label: {
-            row(height: 42) {
-                Text(switching ? "Switching model…" : "Model")
-                    .font(.system(size: 17))
-                    .foregroundStyle(S2.white)
-                    .fixedSize()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                AgentMark(agent: session.agent)
-                Text(session.model.map(ModelChipLabel.model) ?? "Default")
-                    .font(.system(size: 17))
-                    .foregroundStyle(S2.secondaryInk)
-                    .lineLimit(1)
-                    .layoutPriority(1)
-                chevron
-            }
+            .menuOrder(.fixed)
+            .disabled(switching || sid.hasPrefix("local-"))
+            .accessibilityLabel("Model")
+            .accessibilityValue(value)
+            .accessibilityIdentifier("sessionSheetModel")
         }
-        .menuOrder(.fixed)
-        .accessibilityIdentifier("sessionSheetModel")
     }
 
     /// Effort levels for this live session's model; nil hides the row (closed
@@ -289,111 +286,73 @@ struct SessionSheet: View {
         #else
         let current = session.effort
         #endif
-        return row(height: 48) {
-            Text("Effort")
-                .font(.system(size: 17))
-                .foregroundStyle(S2.white)
-                .fixedSize()
-                .frame(maxWidth: .infinity, alignment: .leading)
-            // Effort names follow the CLIs ("Medium"), as on the model chip; a
-            // model with more levels than fit falls back to the short names.
-            ViewThatFits(in: .horizontal) {
-                effortControl(levels, current: current, changing: changing, label: SessionEffort.displayName)
-                effortControl(levels, current: current, changing: changing, label: SessionSheetModel.effortLabel)
-            }
-            .layoutPriority(1)
-        }
-    }
-
-    private func effortControl(_ levels: [String], current: String?, changing: Bool,
-                               label: @escaping (String) -> String) -> some View {
-        HStack(spacing: 0) {
-            ForEach(levels, id: \.self) { level in
-                Button {
-                    Task { await store.setEffort(sid, to: level) }
-                } label: {
-                    Text(label(level))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(S2.white)
-                        .lineLimit(1)
-                        .fixedSize()
-                        .padding(.horizontal, 6)
-                        .frame(minWidth: 49, minHeight: 28)
-                        .background {
-                            if level == current {
-                                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                    .fill(Self.segmentSelected)
-                                    .shadow(color: .black.opacity(0.12), radius: 1.5, y: 1)
-                            }
+        let value = current.map(SessionEffort.displayName) ?? "Default"
+        return row(height: 44) {
+            fieldTitle("Effort")
+            Menu {
+                ForEach(levels, id: \.self) { level in
+                    Button {
+                        Task { await store.setEffort(sid, to: level) }
+                    } label: {
+                        if level == current {
+                            Label(SessionEffort.displayName(level), systemImage: "checkmark")
+                        } else {
+                            Text(SessionEffort.displayName(level))
                         }
-                        .contentShape(Rectangle())
+                    }
+                    .accessibilityIdentifier("sessionSheetEffort-\(level)")
                 }
-                .buttonStyle(.plain)
-                .disabled(changing)
-                .accessibilityIdentifier("sessionSheetEffort-\(level)")
+            } label: {
+                dropdownValue { Text(value) }
             }
+            .menuOrder(.fixed)
+            .disabled(changing)
+            .accessibilityLabel("Effort")
+            .accessibilityValue(value)
+            .accessibilityIdentifier("sessionSheetEffort")
         }
-        .padding(2)
-        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Self.chromeFill))
-        .opacity(changing ? 0.5 : 1)
-        .fixedSize()
     }
 
     @ViewBuilder
     private func hostRow(_ host: SessionSheetModel.HostRow) -> some View {
         switch host {
         case .choose(let current):
-            Menu {
-                Label(current, systemImage: "checkmark")
-                ForEach(transferTargets, id: \.id) { t in
-                    Button(t.label) { requestMove(to: t) }
-                        .accessibilityIdentifier("sessionSheetHostOption-\(t.id)")
+            HStack(spacing: 10) {
+                fieldTitle("Host")
+                Menu {
+                    Label(current, systemImage: "checkmark")
+                    ForEach(transferTargets, id: \.id) { t in
+                        Button(t.label) { requestMove(to: t) }
+                            .accessibilityIdentifier("sessionSheetHostOption-\(t.id)")
+                    }
+                } label: {
+                    dropdownValue {
+                        Text(checkingMove ? "Checking…" : current)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.trailing)
+                    }
                 }
-            } label: {
-                hostLabel(value: checkingMove ? "Checking…" : current, showsChevron: true)
+                .menuOrder(.fixed)
+                .disabled(checkingMove)
+                .accessibilityLabel("Host")
+                .accessibilityValue(current)
+                .accessibilityIdentifier("sessionSheetHost")
             }
-            .menuOrder(.fixed)
-            .disabled(checkingMove)
-            .accessibilityIdentifier("sessionSheetHost")
+            .padding(.horizontal, 16)
+            .frame(minHeight: 44)
         case .info(let current):
-            hostLabel(value: current, showsChevron: false)
-        }
-    }
-
-    private func hostLabel(value: String, showsChevron: Bool) -> some View {
-        // As the board's CSS lays it out: a value that fits sits at the right;
-        // a long one wraps, starting 10pt after "Host", and the row grows.
-        ViewThatFits(in: .horizontal) {
             HStack(spacing: 10) {
-                hostTitle.frame(maxWidth: .infinity, alignment: .leading)
-                hostValue(value).lineLimit(1).fixedSize()
-                if showsChevron { chevron }
-            }
-            HStack(spacing: 10) {
-                hostTitle
-                hostValue(value)
+                fieldTitle("Host")
+                Text(current)
+                    .font(.system(size: 17))
+                    .foregroundStyle(S2.secondaryInk)
+                    .multilineTextAlignment(.trailing)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if showsChevron { chevron }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .frame(minHeight: 44)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 11)
-        .frame(minHeight: 42)
-        .contentShape(Rectangle())
-    }
-
-    private var hostTitle: some View {
-        Text("Host")
-            .font(.system(size: 17))
-            .foregroundStyle(S2.white)
-            .fixedSize()
-    }
-
-    private func hostValue(_ value: String) -> Text {
-        Text(value)
-            .font(.system(size: 17))
-            .foregroundStyle(S2.secondaryInk)
     }
 
     private var forkRow: some View {
@@ -526,6 +485,29 @@ struct SessionSheet: View {
 
     // MARK: Pieces
 
+    private func fieldTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 17))
+            .foregroundStyle(S2.white)
+            .fixedSize()
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Only the trailing control is the Menu label, so its native popup is
+    /// attached to the field's right edge rather than the center of the row.
+    private func dropdownValue<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: 6) {
+            content()
+            BoardGlyph(kind: .chevronDown, lineWidth: 3)
+                .foregroundStyle(Self.chevronInk)
+                .frame(width: 11, height: 11)
+        }
+        .font(.system(size: 17))
+        .foregroundStyle(S2.secondaryInk)
+        .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
+        .contentShape(Rectangle())
+    }
+
     private func card(_ rows: [AnyView]) -> some View {
         VStack(spacing: 0) {
             ForEach(rows.indices, id: \.self) { i in
@@ -544,12 +526,6 @@ struct SessionSheet: View {
             .padding(.horizontal, 16)
             .frame(height: height)
             .contentShape(Rectangle())
-    }
-
-    private var chevron: some View {
-        BoardGlyph(kind: .chevronRight, lineWidth: 3)
-            .foregroundStyle(Self.chevronInk)
-            .frame(width: 11, height: 11)
     }
 
     private func finish(_ action: SessionSheetAction) {
