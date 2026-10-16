@@ -1226,13 +1226,15 @@ struct SessionDetailView: View {
             // transition and accessibility. Keep one visible native source;
             // layering app-owned glass above it caused sheet/menu lifecycle
             // glitches and an opaque double background.
-            SessionOptionsButton { presentedSheet = .session }
+            Button { presentedSheet = .session } label: {
+                Image(uiImage: SessionOptionsGlyph.image)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
                 // Keep the same native 44-point toolbar footprint as Back while
                 // letting the system provide the actual material and shape.
                 .frame(width: 44, height: 44)
-                .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Session")
-                .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("sessionOptionsMenu")
         }
     }
@@ -1627,16 +1629,11 @@ private struct UserMessageScrubberAccessibilityProxy: UIViewRepresentable {
     }
 }
 
-/// The top bar's session button (board `s2-view`: the tools glyph). It opens
-/// the S2 session sheet; the old pull-down menu's actions all live there now.
-private struct SessionOptionsButton: UIViewRepresentable {
-    let onTap: () -> Void
-
-    func makeCoordinator() -> Coordinator { Coordinator(onTap: onTap) }
-
+/// The top bar's tools glyph. Its SwiftUI button owns the full toolbar hit area.
+private enum SessionOptionsGlyph {
     /// The board's tools glyph (`s2-view`): two sliders, drawn from its SVG
     /// (24-unit box, 1.9 stroke) at 20pt as a template image.
-    static let toolsGlyph: UIImage = {
+    static let image: UIImage = {
         let size: CGFloat = 20, k = size / 24
         let image = UIGraphicsImageRenderer(size: CGSize(width: size, height: size)).image { _ in
             let path = UIBezierPath()
@@ -1656,32 +1653,6 @@ private struct SessionOptionsButton: UIViewRepresentable {
         return image.withRenderingMode(.alwaysTemplate)
     }()
 
-    func makeUIView(context: Context) -> UIButton {
-        let button = UIButton(type: .system)
-        button.setImage(Self.toolsGlyph, for: .normal)
-        button.tintColor = .label
-        button.contentHorizontalAlignment = .center
-        button.contentVerticalAlignment = .center
-        button.setContentHuggingPriority(.required, for: .horizontal)
-        button.setContentHuggingPriority(.required, for: .vertical)
-        button.isAccessibilityElement = true
-        button.accessibilityLabel = "Session"
-        button.accessibilityIdentifier = "sessionOptionsMenu"
-        button.addAction(UIAction { [weak coordinator = context.coordinator] _ in
-            Task { @MainActor in coordinator?.onTap() }
-        }, for: .primaryActionTriggered)
-        return button
-    }
-
-    func updateUIView(_ button: UIButton, context: Context) {
-        context.coordinator.onTap = onTap
-    }
-
-    @MainActor
-    final class Coordinator {
-        var onTap: () -> Void
-        init(onTap: @escaping () -> Void) { self.onTap = onTap }
-    }
 }
 
 /// The 180° flip that makes the transcript an inverted list.
