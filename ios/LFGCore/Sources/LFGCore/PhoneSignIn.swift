@@ -4,6 +4,10 @@ public struct PhoneSignInTarget: Codable, Sendable, Identifiable, Hashable {
     public var id: String
     public var name: String
     public var kind: String
+
+    public init(id: String, name: String, kind: String) {
+        self.id = id; self.name = name; self.kind = kind
+    }
 }
 public struct PhoneSignInTargets: Decodable, Sendable { public var targets: [PhoneSignInTarget] }
 public struct PhoneSignInCookie: Codable, Sendable {

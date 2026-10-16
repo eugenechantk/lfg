@@ -242,8 +242,10 @@ struct RootView: View {
         GlassChromeContainer(spacing: 12) {
             HStack(spacing: 12) {
                 HStack(spacing: 0) {
-                    dockTab(.sessions, title: "Sessions", icon: "bubble.left.and.bubble.right", id: "sessions_tab")
-                    dockTab(.scheduledTasks, title: "Tasks", icon: "calendar.badge.clock", id: "scheduled_tasks_tab")
+                    dockTab(.sessions, title: "Sessions", icon: "bubble.left.and.bubble.right.fill", id: "sessions_tab",
+                            badge: needsInputCounts.sessions)
+                    dockTab(.scheduledTasks, title: "Tasks", icon: "calendar.badge.clock", id: "scheduled_tasks_tab",
+                            badge: needsInputCounts.tasks)
                 }
                 .padding(4)
                 .glassOrRaised(in: Capsule(), interactive: true)
@@ -257,7 +259,7 @@ struct RootView: View {
                     }
                 } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 22, weight: .medium))
+                        .font(.system(size: 18, weight: .medium))
                         .frame(width: 56, height: 56)
                         .contentShape(Circle())
                 }
@@ -270,26 +272,67 @@ struct RootView: View {
                 .accessibilityIdentifier("list_create")
             }
         }
-        .padding(.horizontal, usesSidebarDock ? 12 : 16)
+        // S2 board `s2-list`: the dock and plus sit 20 pt from the sides and
+        // 28 pt from the bottom edge of the screen.
+        .padding(.horizontal, usesSidebarDock ? 12 : 20)
         .padding(.top, 8)
-        .padding(.bottom, 4)
+        .padding(.bottom, 10)
         .frame(maxWidth: .infinity)
         .accessibilityIdentifier("list_dock")
     }
 
-    private func dockTab(_ tab: AppTab, title: String, icon: String, id: String) -> some View {
+    /// Amber tab badges (S2, canvas board `s2-list`): how many sessions need you.
+    /// Sessions counts every live session in Needs input (paused ones included);
+    /// Tasks counts the ones a scheduled task started. A task whose last run
+    /// FAILED is not counted yet — that needs the task list, which the Tasks
+    /// redesign owns.
+    private var needsInputCounts: (sessions: Int, tasks: Int) {
+        let waiting = store.filteredSessions.filter {
+            !$0.closed && SessionListSection(store.group(for: $0).rowGroup) == .needsInput
+        }
+        return (waiting.count, waiting.filter { $0.task != nil }.count)
+    }
+
+    private static let selectedTabInk = Color(UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(red: 0x40 / 255, green: 0x9C / 255, blue: 0xFF / 255, alpha: 1)
+        : UIColor(red: 0, green: 0x7A / 255, blue: 1, alpha: 1) })
+
+    private func dockTab(_ tab: AppTab, title: String, icon: String, id: String, badge: Int = 0) -> some View {
         Button { selectedTab = tab } label: {
             VStack(spacing: 3) {
-                Image(systemName: icon).font(.system(size: 20))
-                Text(title).font(.system(size: 10, weight: .medium))
+                if tab == .scheduledTasks {
+                    TasksTabGlyph().frame(width: 22, height: 20)
+                } else if tab == .sessions {
+                    SessionsTabGlyph().frame(width: 24, height: 20)
+                } else {
+                    Image(systemName: icon).font(.system(size: 20))
+                }
+                Text(title).font(.system(size: 10, weight: .semibold))
             }
-            .foregroundStyle(selectedTab == tab ? Color.accentColor : .primary)
+            // The board's selected blue (#409CFF), the same ink as "Mark all
+            // read". accentColor resolves to iOS 26's #0091FF, a second blue.
+            .foregroundStyle(selectedTab == tab ? Self.selectedTabInk : .primary)
             .frame(width: 88, height: 48)
-            .background(selectedTab == tab ? Color.primary.opacity(0.07) : .clear, in: Capsule())
+            // The board's solid selected fill (#3A3A3C), not a tint on the glass.
+            .background(selectedTab == tab ? S2.color(dark: 0x3A3A3C, light: 0xE5E5EA) : .clear, in: Capsule())
+            .overlay(alignment: .topTrailing) {
+                if badge > 0 {
+                    Text("\(badge)")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color(red: 0x1C / 255, green: 0x1C / 255, blue: 0x1E / 255))
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .background(Capsule().fill(Color(red: 1, green: 0x9F / 255, blue: 0x0A / 255)))
+                        .padding(.top, 4)
+                        .padding(.trailing, 20)
+                        .accessibilityHidden(true)
+                }
+            }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
+        .accessibilityValue(badge > 0 ? "\(badge) need input" : "")
         .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
         .accessibilityIdentifier(id)
     }
@@ -702,5 +745,88 @@ struct ConnectionBanner: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal)
         .accessibilityIdentifier("hostConnectionWarning")
+    }
+}
+
+/// The Tasks tab icon, drawn from the S2 board's own SVG (outline calendar with
+/// rings and a clock). SF Symbols' `calendar.badge.clock` is a solid calendar
+/// with a dot grid, which the board does not use.
+private struct TasksTabGlyph: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        GeometryReader { geo in
+            // The SVG is 24×24 drawn into a 22×20 box: scale to fit the height
+            // and center it horizontally, as the browser does.
+            let k = geo.size.height / 24
+            let dx = (geo.size.width - 24 * k) / 2
+            let pt = { (x: CGFloat, y: CGFloat) in CGPoint(x: dx + x * k, y: y * k) }
+            let stroke = StrokeStyle(lineWidth: 1.8 * k, lineCap: .round, lineJoin: .round)
+            ZStack {
+                Path { p in
+                    p.addRoundedRect(in: CGRect(origin: pt(2.5, 4.5), size: CGSize(width: 15 * k, height: 14 * k)),
+                                     cornerSize: CGSize(width: 2 * k, height: 2 * k))
+                    p.move(to: pt(2.5, 9)); p.addLine(to: pt(17.5, 9))
+                    p.move(to: pt(6.5, 2.5)); p.addLine(to: pt(6.5, 6.5))
+                    p.move(to: pt(13.5, 2.5)); p.addLine(to: pt(13.5, 6.5))
+                }
+                .stroke(style: stroke)
+                // The clock knocks out the calendar corner it overlaps.
+                Circle()
+                    .fill(colorScheme == .dark ? Color(red: 0x24 / 255, green: 0x24 / 255, blue: 0x26 / 255) : Color(.systemBackground))
+                    .frame(width: 8.4 * k, height: 8.4 * k)
+                    .position(pt(18, 17))
+                Path { p in
+                    p.addEllipse(in: CGRect(origin: pt(13.8, 12.8), size: CGSize(width: 8.4 * k, height: 8.4 * k)))
+                    p.move(to: pt(18, 15.3)); p.addLine(to: pt(18, 17)); p.addLine(to: pt(19.2, 18))
+                }
+                .stroke(style: stroke)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// The board's Sessions tab glyph (`s2-list`): two filled speech bubbles, the
+/// left one in front. Drawn from its SVG (26×22 box, fit into 24×20).
+private struct SessionsTabGlyph: View {
+    var body: some View {
+        GeometryReader { geo in
+            let k = min(geo.size.width / 26, geo.size.height / 22)
+            let ox = (geo.size.width - 26 * k) / 2, oy = (geo.size.height - 22 * k) / 2
+            let pt = { (x: CGFloat, y: CGFloat) in CGPoint(x: ox + x * k, y: oy + y * k) }
+            Path { p in
+                // Left bubble, tail at the bottom left.
+                p.move(to: pt(3, 1))
+                p.addLine(to: pt(15, 1))
+                p.addArc(center: pt(15, 3.5), radius: 2.5 * k, startAngle: .degrees(270), endAngle: .degrees(360), clockwise: false)
+                p.addLine(to: pt(17.5, 10.5))
+                p.addArc(center: pt(15, 10.5), radius: 2.5 * k, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+                p.addLine(to: pt(8.5, 13))
+                p.addLine(to: pt(4, 16.5))
+                p.addLine(to: pt(4, 13))
+                p.addLine(to: pt(3, 13))
+                p.addArc(center: pt(3, 10.5), radius: 2.5 * k, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+                p.addLine(to: pt(0.5, 3.5))
+                p.addArc(center: pt(3, 3.5), radius: 2.5 * k, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+                p.closeSubpath()
+                // Right bubble, notched around the left one's corner.
+                p.move(to: pt(19.5, 6))
+                p.addLine(to: pt(23, 6))
+                p.addArc(center: pt(23, 8.5), radius: 2.5 * k, startAngle: .degrees(270), endAngle: .degrees(360), clockwise: false)
+                p.addLine(to: pt(25.5, 15))
+                p.addArc(center: pt(23, 15), radius: 2.5 * k, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+                p.addLine(to: pt(22, 17.5))
+                p.addLine(to: pt(22, 21))
+                p.addLine(to: pt(18, 17.5))
+                p.addLine(to: pt(12, 17.5))
+                p.addQuadCurve(to: pt(9.6, 15.2), control: pt(9.6, 17.5))
+                p.addLine(to: pt(15.5, 15.2))
+                p.addArc(center: pt(15.5, 11.2), radius: 4 * k, startAngle: .degrees(90), endAngle: .degrees(0), clockwise: true)
+                p.closeSubpath()
+            }
+            .fill()
+        }
+        .accessibilityHidden(true)
     }
 }

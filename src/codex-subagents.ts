@@ -119,6 +119,7 @@ export async function listCodexSubagentSessions(
       finishedAt: status === "completed" || status === "failed" || status === "stopped"
         ? state.at
         : null,
+      result: null,
     } satisfies SubagentSession;
   }));
   return agents.sort((a, b) =>

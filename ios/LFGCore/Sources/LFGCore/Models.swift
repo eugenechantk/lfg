@@ -23,6 +23,9 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     public var lastUserText: String?
     public var startedAt: Double?
     public var lastActivityAt: Double?
+    /// When the newest genuine user turn was sent (epoch ms): the start of the
+    /// running turn. Messages absorbed mid-turn don't move it.
+    public var lastUserAt: Double?
     public var tmuxTarget: String?
     public var tmuxName: String?
     public var managed: Bool?
@@ -77,6 +80,9 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     /// answered, the explanation the user needs to answer was nowhere on screen.
     /// `SessionStore.refresh` seeds `prompts[sid]` from this.
     public var prompt: AgentPrompt?
+    /// The scheduled task that started this session, when one did. The list
+    /// shows a repeat icon on those rows. Older hosts omit it.
+    public var task: TaskOrigin?
 
     public var id: String { sessionId ?? tmuxName ?? title }
 
@@ -141,21 +147,21 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         model: String? = nil, effort: String? = nil, project: String? = nil, cwd: String? = nil,
         status: String? = nil, statusReason: String? = nil, statusDetail: String? = nil,
         assignedUser: String? = nil, parentSessionId: String? = nil, lastUserText: String? = nil,
-        startedAt: Double? = nil, lastActivityAt: Double? = nil,
+        startedAt: Double? = nil, lastActivityAt: Double? = nil, lastUserAt: Double? = nil,
         tmuxTarget: String? = nil, tmuxName: String? = nil, managed: Bool? = nil,
         control: String? = nil, source: String? = nil,
         busy: Bool? = nil, runningChildAgentCount: Int = 0,
         childAgents: [ChildAgentSession] = [],
         runningBackgroundProcessCount: Int = 0,
         last: SessionMessage? = nil, closed: Bool = false,
-        prompt: AgentPrompt? = nil
+        prompt: AgentPrompt? = nil, task: TaskOrigin? = nil
     ) {
         self.sessionId = sessionId; self.title = title; self.agent = agent
         self.model = model; self.effort = effort; self.project = project; self.cwd = cwd
         self.status = status; self.statusReason = statusReason; self.statusDetail = statusDetail
         self.assignedUser = assignedUser; self.parentSessionId = parentSessionId
         self.lastUserText = lastUserText
-        self.startedAt = startedAt; self.lastActivityAt = lastActivityAt
+        self.startedAt = startedAt; self.lastActivityAt = lastActivityAt; self.lastUserAt = lastUserAt
         self.tmuxTarget = tmuxTarget; self.tmuxName = tmuxName; self.managed = managed
         self.control = control; self.source = source
         self.busy = busy; self.runningChildAgentCount = max(0, runningChildAgentCount)
@@ -163,6 +169,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         self.runningBackgroundProcessCount = max(0, runningBackgroundProcessCount)
         self.last = last; self.closed = closed
         self.prompt = prompt
+        self.task = task
     }
 
     public init(from decoder: Decoder) throws {
@@ -182,6 +189,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         lastUserText = try c.decodeIfPresent(String.self, forKey: .lastUserText)
         startedAt = try c.decodeIfPresent(Double.self, forKey: .startedAt)
         lastActivityAt = try c.decodeIfPresent(Double.self, forKey: .lastActivityAt)
+        lastUserAt = try? c.decodeIfPresent(Double.self, forKey: .lastUserAt)
         tmuxTarget = try c.decodeIfPresent(String.self, forKey: .tmuxTarget)
         tmuxName = try c.decodeIfPresent(String.self, forKey: .tmuxName)
         managed = try c.decodeIfPresent(Bool.self, forKey: .managed)
@@ -205,6 +213,8 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         // Same tolerance as `last`: a malformed prompt must not fail the whole
         // session decode and blank the list.
         prompt = (try? c.decodeIfPresent(AgentPrompt.self, forKey: .prompt)) ?? nil
+        // A decoration: a malformed value must never fail the row.
+        task = (try? c.decodeIfPresent(TaskOrigin.self, forKey: .task)) ?? nil
     }
 }
 
@@ -223,6 +233,13 @@ public struct SessionMessage: Codable, Sendable, Identifiable, Hashable {
     public var ts: Double?
     public var apiError: Bool?
     public var html: String?
+    /// Tool rows (B11): the call id, on both the call and its result, so the
+    /// two can be paired. nil on older hosts and on non-tool rows.
+    public var toolUseId: String?
+    /// A Claude call's tool name and what it acts on (command, file, pattern…).
+    public var tool: ToolCallInfo?
+    /// A Claude result that failed.
+    public var isError: Bool?
 
     /// Stable identity for SwiftUI lists even when `id` is null.
     public var stableID: String {
@@ -232,10 +249,12 @@ public struct SessionMessage: Codable, Sendable, Identifiable, Hashable {
 
     public init(
         id: String? = nil, role: String = "assistant", kind: String = "text",
-        text: String = "", ts: Double? = nil, apiError: Bool? = nil, html: String? = nil
+        text: String = "", ts: Double? = nil, apiError: Bool? = nil, html: String? = nil,
+        toolUseId: String? = nil, tool: ToolCallInfo? = nil, isError: Bool? = nil
     ) {
         self.id = id; self.role = role; self.kind = kind; self.text = text
         self.ts = ts; self.apiError = apiError; self.html = html
+        self.toolUseId = toolUseId; self.tool = tool; self.isError = isError
     }
 
     public init(from decoder: Decoder) throws {
@@ -247,7 +266,18 @@ public struct SessionMessage: Codable, Sendable, Identifiable, Hashable {
         ts = try c.decodeIfPresent(Double.self, forKey: .ts)
         apiError = try c.decodeIfPresent(Bool.self, forKey: .apiError)
         html = try c.decodeIfPresent(String.self, forKey: .html)
+        // Decorations: a malformed value must never fail the message.
+        toolUseId = try? c.decodeIfPresent(String.self, forKey: .toolUseId)
+        tool = (try? c.decodeIfPresent(ToolCallInfo.self, forKey: .tool)) ?? nil
+        isError = try? c.decodeIfPresent(Bool.self, forKey: .isError)
     }
+}
+
+/// A tool call's name and what it acts on, as the host reports it (B11).
+public struct ToolCallInfo: Codable, Sendable, Hashable {
+    public var name: String
+    public var target: String?
+    public init(name: String, target: String? = nil) { self.name = name; self.target = target }
 }
 
 public struct MessagesResponse: Codable, Sendable {
@@ -298,6 +328,17 @@ public struct AgentPrompt: Codable, Sendable, Hashable {
     /// answers, and must NOT offer Dismiss — Escape would interrupt the agent's
     /// waiting command. Nil for every other prompt.
     public var signIn: PromptSignIn?
+    /// When the agent started waiting (epoch ms), so the top bar can say
+    /// "Needs input · 2m". Nil from servers that predate it.
+    public var askedAt: Double?
+    /// What the agent is waiting on: "question", "permission", "plan", "trust"
+    /// or "signIn" (server B4). Nil from older servers; the panel then treats it
+    /// as a question.
+    public var kind: String?
+    /// For a permission: the tool and the command (or file) it wants to run.
+    public var permission: PromptPermission?
+    /// For a plan approval: the plan text and the file Claude wrote it to.
+    public var plan: PromptPlan?
 
     public init(
         question: String,
@@ -306,11 +347,49 @@ public struct AgentPrompt: Codable, Sendable, Hashable {
         header: String? = nil,
         multiSelect: Bool? = nil,
         context: String? = nil,
-        signIn: PromptSignIn? = nil
+        signIn: PromptSignIn? = nil,
+        askedAt: Double? = nil,
+        kind: String? = nil,
+        permission: PromptPermission? = nil,
+        plan: PromptPlan? = nil
     ) {
         self.question = question; self.options = options; self.detail = detail
         self.header = header; self.multiSelect = multiSelect; self.context = context
-        self.signIn = signIn
+        self.signIn = signIn; self.askedAt = askedAt
+        self.kind = kind; self.permission = permission; self.plan = plan
+    }
+}
+
+/// The call a permission prompt asks about (server B4). Lenient: a partial
+/// object decodes with empty strings rather than failing the whole prompt.
+public struct PromptPermission: Codable, Sendable, Hashable {
+    public var tool: String
+    public var command: String
+    public var detail: String?
+
+    public init(tool: String, command: String, detail: String? = nil) {
+        self.tool = tool; self.command = command; self.detail = detail
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        tool = (try? c.decodeIfPresent(String.self, forKey: .tool)) ?? ""
+        command = (try? c.decodeIfPresent(String.self, forKey: .command)) ?? ""
+        detail = try? c.decodeIfPresent(String.self, forKey: .detail)
+    }
+}
+
+/// The plan behind a plan-approval prompt (server B4).
+public struct PromptPlan: Codable, Sendable, Hashable {
+    public var text: String
+    public var file: String?
+
+    public init(text: String, file: String? = nil) { self.text = text; self.file = file }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        text = (try? c.decodeIfPresent(String.self, forKey: .text)) ?? ""
+        file = try? c.decodeIfPresent(String.self, forKey: .file)
     }
 }
 
@@ -461,21 +540,24 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
     /// running session as closed-here. `MultiHost.reconcileResumable` drops that
     /// phantom using the live ids from every host.
     public var closed: Bool
+    /// The scheduled task that started this conversation, when one did.
+    public var task: TaskOrigin?
     public var id: String { sessionId }
 
     public init(sessionId: String, title: String? = nil, project: String? = nil,
                 cwd: String? = nil, mtime: Double? = nil, agent: String? = nil,
                 lastUserText: String? = nil, model: String? = nil, closed: Bool = true,
-                searchMatched: Bool? = nil, rank: Double? = nil) {
+                searchMatched: Bool? = nil, rank: Double? = nil, task: TaskOrigin? = nil) {
         self.sessionId = sessionId; self.title = title; self.project = project
         self.cwd = cwd; self.mtime = mtime; self.agent = agent
         self.lastUserText = lastUserText; self.model = model; self.closed = closed
         self.searchMatched = searchMatched; self.rank = rank
+        self.task = task
     }
 
     enum CodingKeys: String, CodingKey {
         case sessionId, title, project, cwd, mtime, agent, lastActivityAt, lastUserText
-        case model, closed, searchMatched, rank
+        case model, closed, searchMatched, rank, task
     }
 
     public init(from decoder: Decoder) throws {
@@ -495,6 +577,7 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
         model = try c.decodeIfPresent(String.self, forKey: .model)
         searchMatched = try c.decodeIfPresent(Bool.self, forKey: .searchMatched)
         rank = try c.decodeIfPresent(Double.self, forKey: .rank)
+        task = (try? c.decodeIfPresent(TaskOrigin.self, forKey: .task)) ?? nil
     }
 
     // Manual encode: an explicit CodingKeys enum with an extra `lastActivityAt`
@@ -511,6 +594,7 @@ public struct ResumableSession: Codable, Sendable, Hashable, Identifiable {
         try c.encodeIfPresent(model, forKey: .model)
         try c.encodeIfPresent(searchMatched, forKey: .searchMatched)
         try c.encodeIfPresent(rank, forKey: .rank)
+        try c.encodeIfPresent(task, forKey: .task)
     }
 }
 

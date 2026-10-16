@@ -727,6 +727,12 @@ public struct LFGClient: Sendable {
         _ = try await send("POST", "api/sessions/\(id)/answer", json: ["index": index])
     }
 
+    /// Answer a question with typed text (server B5): the host picks the
+    /// question's "Type something." option and types it there.
+    public func answer(_ id: String, text: String) async throws {
+        _ = try await send("POST", "api/sessions/\(id)/answer", json: ["text": text])
+    }
+
     public func dismiss(_ id: String) async throws {
         _ = try await send("POST", "api/sessions/\(id)/dismiss")
     }

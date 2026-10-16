@@ -34,6 +34,8 @@ public struct ChildAgentSession: Codable, Sendable, Identifiable, Hashable {
     public var startedAt: Double?
     public var lastActivityAt: Double?
     public var finishedAt: Double?
+    /// The first line of a finished subagent's final report (server B8).
+    public var result: String?
 
     public init(
         id: String,
@@ -43,7 +45,8 @@ public struct ChildAgentSession: Codable, Sendable, Identifiable, Hashable {
         status: ChildAgentStatus = .unknown,
         startedAt: Double? = nil,
         lastActivityAt: Double? = nil,
-        finishedAt: Double? = nil
+        finishedAt: Double? = nil,
+        result: String? = nil
     ) {
         self.id = id
         self.description = description
@@ -53,6 +56,7 @@ public struct ChildAgentSession: Codable, Sendable, Identifiable, Hashable {
         self.startedAt = startedAt
         self.lastActivityAt = lastActivityAt
         self.finishedAt = finishedAt
+        self.result = result
     }
 
     public init(from decoder: Decoder) throws {
@@ -65,6 +69,7 @@ public struct ChildAgentSession: Codable, Sendable, Identifiable, Hashable {
         startedAt = try container.decodeIfPresent(Double.self, forKey: .startedAt)
         lastActivityAt = try container.decodeIfPresent(Double.self, forKey: .lastActivityAt)
         finishedAt = try container.decodeIfPresent(Double.self, forKey: .finishedAt)
+        result = try? container.decodeIfPresent(String.self, forKey: .result)
     }
 }
 

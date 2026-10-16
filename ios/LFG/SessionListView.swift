@@ -49,6 +49,46 @@ private enum Tokens {
     static let separator = Color(UIColor { $0.userInterfaceStyle == .dark
         ? UIColor(white: 1, alpha: 0.07)
         : UIColor(white: 0, alpha: 0.07) })
+
+    // S2 list (canvas board `s2-list`). The dark values are the design's exact
+    // hexes; the light ones are the matching system shades, derived rather than
+    // designed (decision D6 in .claude/feature/sessions-redesign-s2.md).
+    private static func hex(dark: UInt32, light: UInt32) -> Color {
+        func ui(_ v: UInt32) -> UIColor {
+            UIColor(red: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255,
+                    blue: CGFloat(v & 0xFF) / 255, alpha: 1)
+        }
+        return Color(UIColor { $0.userInterfaceStyle == .dark ? ui(dark) : ui(light) })
+    }
+    /// Needs-input amber: the header, the question line and its icon.
+    static let attention = hex(dark: 0xFF9F0A, light: 0xC93400)
+    /// Working green: the live dot and the "Working · 3m" line.
+    static let live = hex(dark: 0x30D158, light: 0x248A3D)
+    /// Near-white ink for an unread row's line.
+    static let ink = hex(dark: 0xD1D1D6, light: 0x3A3A3C)
+    /// Group titles and the idle/closed line.
+    static let secondaryInk = hex(dark: 0xA1A1A6, light: 0x6C6C70)
+    /// Counts and the meta line.
+    static let metaInk = hex(dark: 0x8E8E93, light: 0x8E8E93)
+    /// The hairline under each row's text.
+    static let rowSeparator = hex(dark: 0x2C2C2E, light: 0xD1D1D6)
+    /// "Mark all read".
+    static let headerAction = hex(dark: 0x409CFF, light: 0x007AFF)
+}
+
+extension SessionStore.Group {
+    /// The LFGCore twin the S2 list rules are written against.
+    var rowGroup: SessionRowGroup {
+        switch self {
+        case .needsInput: return .needsInput
+        case .blocked: return .paused
+        case .restarting: return .restarting
+        case .working: return .working
+        case .unread: return .unread
+        case .idle: return .idle
+        case .closed: return .closed
+        }
+    }
 }
 
 struct SessionListView: View {
@@ -76,10 +116,16 @@ struct SessionListView: View {
     /// Full-screen shell on the default host (`TerminalScreen`).
     @State private var showTerminal = false
 
-    /// Collapsible UI state is in-memory per the current run. Sections default
-    /// expanded, and only store their id here after the user collapses them.
+    /// Directory and host sections fold in memory for the current run. Status
+    /// sections fold persistently (below): Idle and Closed start folded, and the
+    /// user's own choice survives a relaunch.
     @State private var collapsedSections: Set<String> = []
+    @AppStorage("sessionList.collapsedStatusSections") private var collapsedStatusStored = ""
     @State private var expandedAgentParents: Set<String> = []
+
+    private var statusCollapse: SessionListCollapse {
+        SessionListCollapse(stored: collapsedStatusStored.isEmpty ? nil : collapsedStatusStored)
+    }
 
     /// One rendered section of the list: a header title + its sessions, plus the
     /// running/idle tallies shown on a directory section's collapsible header.
@@ -88,6 +134,8 @@ struct SessionListView: View {
         let title: String
         let items: [Session]
         var group: SessionStore.Group? = nil
+        /// Set for the S2 status sections (Needs input · Working · Unread · Idle · Closed).
+        var statusSection: SessionListSection? = nil
         var isAgents = false
         var childrenByParentId: [String: [Session]] = [:]
         var running = 0
@@ -146,17 +194,10 @@ struct SessionListView: View {
         let base = matchingSessions
         switch effectiveGroupMode {
         case .status:
-            if isSearching {
-                return statusSections(for: base)
-            }
-            let grouped = statusAgentGrouping(for: base)
-            var sections = statusSections(for: grouped.regular,
-                                          childrenByParentId: grouped.childrenByParentId)
-            if !grouped.orphanAgents.isEmpty {
-                sections.append(ListSection(id: "status-agents", title: "Agents",
-                                            items: grouped.orphanAgents, isAgents: true))
-            }
-            return sections
+            // Child agents live inside their session (the Subagents pill and
+            // sheet), not as list rows. A child that needs input stays: its
+            // question must be answerable from the list.
+            return statusSections(for: base.filter { statusAgentParentId(for: $0) == nil })
         case .directory:
             let byDir = Dictionary(grouping: base) { Self.dirKey(for: $0) }
             return byDir.map { key, items in
@@ -189,6 +230,13 @@ struct SessionListView: View {
             }
             return sections
         }
+    }
+
+    /// The Closed group is folded (status mode only). Its pager stays hidden
+    /// then: the board shows nothing under a folded group, and auto-paging
+    /// sessions nobody can see is wasted host work.
+    private var closedFolded: Bool {
+        effectiveGroupMode == .status && statusCollapse.isCollapsed(.closed)
     }
 
     private var effectiveGroupMode: GroupMode {
@@ -234,43 +282,16 @@ struct SessionListView: View {
         session.title.isEmpty ? "Untitled session" : session.title
     }
 
-    private func statusSections(
-        for sessions: [Session],
-        childrenByParentId: [String: [Session]] = [:]
-    ) -> [ListSection] {
-        SessionStore.Group.allCases.compactMap { g in
-            let items = sessions.filter { store.group(for: $0) == g }
-            let sorted = sortedSessions(items)
+    /// The S2 sections, in design order. Paused folds into Needs input and
+    /// Restarting into Working (`SessionListSection`).
+    private func statusSections(for sessions: [Session]) -> [ListSection] {
+        let bySection = Dictionary(grouping: sessions) { SessionListSection(store.group(for: $0).rowGroup) }
+        return SessionListSection.allCases.compactMap { section in
+            let sorted = sortedSessions(bySection[section] ?? [])
             return sorted.isEmpty ? nil
-                : ListSection(id: "status-\(g.rawValue)", title: g.title, items: sorted,
-                              group: g, childrenByParentId: childrenByParentId)
+                : ListSection(id: "status-\(section.rawValue)", title: section.title, items: sorted,
+                              statusSection: section)
         }
-    }
-
-    private func statusAgentGrouping(
-        for sessions: [Session]
-    ) -> (regular: [Session], childrenByParentId: [String: [Session]], orphanAgents: [Session]) {
-        let visibleParentIds = Set(sessions.compactMap { normalizedId($0.sessionId) })
-        let agentCandidates = sessions.filter { statusAgentParentId(for: $0) != nil }
-        let candidateIds = Set(agentCandidates.map(\.id))
-        let childAgents = agentCandidates.filter { session in
-            guard let parentId = statusAgentParentId(for: session) else { return false }
-            return visibleParentIds.contains(parentId)
-        }
-        let orphanAgents = agentCandidates.filter { session in
-            guard let parentId = statusAgentParentId(for: session) else { return false }
-            return !visibleParentIds.contains(parentId)
-        }
-        let childrenByParentId = Dictionary(grouping: childAgents) { session in
-            statusAgentParentId(for: session) ?? ""
-        }
-        .mapValues { items in
-            sortedSessions(items)
-        }
-        let regular = sessions.filter { !candidateIds.contains($0.id) }
-        return (regular,
-                childrenByParentId,
-                sortedSessions(orphanAgents))
     }
 
     private func statusAgentParentId(for session: Session) -> String? {
@@ -305,39 +326,46 @@ struct SessionListView: View {
         return "No directory"
     }
 
+    /// Search shows every match: Idle and Closed start folded, and most search
+    /// hits are closed sessions, so honouring the fold there hid the results.
     private func isCollapsed(_ section: ListSection) -> Bool {
-        collapsedSections.contains(section.id)
+        if isSearching { return false }
+        if let status = section.statusSection { return statusCollapse.isCollapsed(status) }
+        return collapsedSections.contains(section.id)
     }
 
-    private func toggleSection(_ id: String) {
+    private func toggleSection(_ section: ListSection) {
         withAnimation(.easeInOut(duration: 0.2)) {
-            if collapsedSections.contains(id) {
-                collapsedSections.remove(id)
+            if let status = section.statusSection {
+                var collapse = statusCollapse
+                collapse.toggle(status)
+                collapsedStatusStored = collapse.stored
+            } else if collapsedSections.contains(section.id) {
+                collapsedSections.remove(section.id)
             } else {
-                collapsedSections.insert(id)
+                collapsedSections.insert(section.id)
             }
         }
     }
 
-    /// Section headers are collapsible in every grouping mode. The Unread
-    /// section keeps its mark-all-read action because the design mock lacked
-    /// unread data, not because the workflow should disappear.
-    @ViewBuilder
-    private func expandedSectionHeader(_ section: ListSection) -> some View {
-        HStack(spacing: 0) {
-            Button { toggleSection(section.id) } label: {
-                HStack(spacing: 9) {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Tokens.host)
+    /// One header for every section, folded or open (canvas board `s2-list`):
+    /// chevron, title (amber for Needs input), count, and "Mark all read" on an
+    /// open Unread section. A folded section keeps the same header with a right
+    /// chevron instead of switching to a different row style.
+    private func sectionHeader(_ section: ListSection, collapsed: Bool) -> some View {
+        HStack(spacing: 8) {
+            Button { toggleSection(section) } label: {
+                HStack(spacing: 8) {
+                    BoardGlyph(kind: collapsed ? .chevronRight : .chevronDown, lineWidth: 3)
+                        .foregroundStyle(Tokens.secondaryInk)
                         .frame(width: 13, height: 13)
                     Text(section.title)
-                        .font(.system(size: 15))
-                        .foregroundStyle(Tokens.labelSecondary)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(section.statusSection == .needsInput ? Tokens.attention : Tokens.secondaryInk)
                         .lineLimit(1)
                     Text("\(section.items.count)")
                         .font(.system(size: 15))
-                        .foregroundStyle(Tokens.tertiary)
+                        .foregroundStyle(Tokens.metaInk)
                     // The trailing spacer lives INSIDE the button's label so the
                     // whole header row toggles, not just the text. With the
                     // spacer outside, the row's accessibility frame spans the
@@ -349,58 +377,26 @@ struct SessionListView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            if section.group == .unread {
+            .accessibilityValue(collapsed ? "Collapsed" : "Expanded")
+            if section.statusSection == .unread, !collapsed {
                 Button("Mark all read") { store.markAllRead() }
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 15))
                     .buttonStyle(.plain)
-                    .foregroundStyle(Tokens.accent)
+                    .foregroundStyle(Tokens.headerAction)
+                    .accessibilityIdentifier("markAllReadButton")
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
-        .padding(.bottom, 8)
+        .padding(.leading, 20)
+        .padding(.trailing, 16)
+        .padding(.top, 14)
+        .padding(.bottom, 6)
         .textCase(nil)
         .listRowSeparator(.hidden)
-        .listRowBackground(Tokens.screen)
         // Section headers do NOT inherit the zero row insets the rows get, so
         // without this the header sits ~15pt further right than its own rows
-        // (measured: chevron at x=36.7 against the design's x=22) and carries
-        // extra vertical padding of its own.
+        // and carries extra vertical padding of its own.
         .accessibilityIdentifier("sessionGroupHeader-\(section.id)")
         .listRowInsets(EdgeInsets())
-        .listRowBackground(Tokens.screen)
-    }
-
-    private func collapsedSectionRow(_ section: ListSection) -> some View {
-        Button { toggleSection(section.id) } label: {
-            VStack(spacing: 0) {
-                HStack(spacing: 9) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Tokens.host)
-                        .frame(width: 13, height: 13)
-                    Text(section.title)
-                        .font(.system(size: 17))
-                        .foregroundStyle(Tokens.label)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    Text("\(section.items.count)")
-                        .font(.system(size: 17))
-                        .foregroundStyle(Tokens.tertiary)
-                }
-                .frame(height: 54)
-                .padding(.horizontal, 20)
-                Rectangle()
-                    .fill(Tokens.separator)
-                    .frame(height: 1)
-                    .padding(.leading, 20)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("sessionGroupHeader-\(section.id)")
-        .listRowInsets(EdgeInsets())
-        .listRowSeparator(.hidden)
         .listRowBackground(Tokens.screen)
     }
 
@@ -498,9 +494,9 @@ struct SessionListView: View {
             // The hairline would cut across the bottom of the selection pill and
             // undo its rounded corners, so the selected row drops it.
             Rectangle()
-                .fill(isSelected(row) ? Color.clear : Tokens.separator)
-                .frame(height: 1)
-                .padding(.leading, row.indent + 39)
+                .fill(isSelected(row) ? Color.clear : Tokens.rowSeparator)
+                .frame(height: 0.5)
+                .padding(.leading, row.indent + 40)
         }
         .contentShape(Rectangle())
         // Tagged by NAV id, not session id: a session created in this run keeps
@@ -630,7 +626,7 @@ struct SessionListView: View {
                 Text(loading ? "Loading more" : title)
                 Spacer()
             }
-            .foregroundStyle(.tint)
+            .foregroundStyle(Tokens.headerAction)
             .padding(.horizontal, 20)
             .padding(.vertical, 15)
             // Hit-test the whole row, Spacer included: a plain button's default
@@ -703,21 +699,18 @@ struct SessionListView: View {
                 }
             } else {
                 ForEach(sections) { section in
-                    if isCollapsed(section) {
-                        Section {
-                            collapsedSectionRow(section)
-                        }
-                    } else {
-                        Section {
-                            // The group header is a normal ROW, not a
-                            // `Section(header:)`. A plain List pins section
-                            // headers, and these headers are transparent —
-                            // so rows scrolled underneath drew straight
-                            // through the header text. The design shows
-                            // groups scrolling away as a unit, so making it
-                            // a row fixes the collision and the header's
-                            // extra built-in top padding at the same time.
-                            expandedSectionHeader(section)
+                    let collapsed = isCollapsed(section)
+                    Section {
+                        // The group header is a normal ROW, not a
+                        // `Section(header:)`. A plain List pins section
+                        // headers, and these headers are transparent —
+                        // so rows scrolled underneath drew straight
+                        // through the header text. The design shows
+                        // groups scrolling away as a unit, so making it
+                        // a row fixes the collision and the header's
+                        // extra built-in top padding at the same time.
+                        sectionHeader(section, collapsed: collapsed)
+                        if !collapsed {
                             ForEach(renderedRows(for: section)) { row in
                                 sessionRow(row)
                             }
@@ -728,7 +721,7 @@ struct SessionListView: View {
                 // status section. Directory/host grouping does not mark any
                 // section `.closed`, so nesting either footer inside that
                 // section silently disabled paging in those modes.
-                if !isSearching, store.canLoadMoreClosed {
+                if !isSearching, store.canLoadMoreClosed, !closedFolded {
                     loadMoreRow(title: "Load more",
                                 loading: store.isLoadingMoreClosed,
                                 identifier: "loadMoreClosedButton") {
@@ -750,6 +743,7 @@ struct SessionListView: View {
             }
         }
         .listStyle(.plain)
+        .environment(\.defaultMinListRowHeight, 0)
         .scrollContentBackground(.hidden)
         .background(Tokens.screen)
         .refreshable { await store.refresh() }
@@ -765,8 +759,12 @@ struct SessionListView: View {
                 statusToolbar
                 if let onSearch {
                     ToolbarItem(placement: .primaryAction) {
-                        Button("Search sessions", systemImage: "magnifyingglass", action: onSearch)
-                            .accessibilityIdentifier("sessions_search")
+                        // The board's glyph (21pt box), not the larger SF symbol.
+                        Button(action: onSearch) {
+                            BoardGlyph(kind: .search, lineWidth: 2).frame(width: 21, height: 21)
+                        }
+                        .accessibilityLabel("Search sessions")
+                        .accessibilityIdentifier("sessions_search")
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -818,7 +816,10 @@ struct SessionListView: View {
     }
 
     private var headerStatus: some View {
+        // The system puts a leading toolbar item at x=20; the board's first
+        // host dot sits at x=16.
         HostConnectionHeader(listWidth: listWidth)
+            .padding(.leading, -4)
             .accessibilityIdentifier("sessionListHeader")
     }
 
@@ -868,8 +869,11 @@ struct SessionListView: View {
                 }
             }
         } label: {
-            Label("More session options", systemImage: "ellipsis")
+            BoardGlyph(kind: .more).frame(width: 20, height: 20)
+                .foregroundStyle(Tokens.label)
+                .accessibilityLabel("More session options")
         }
+        .tint(Tokens.label)
         .accessibilityIdentifier("sessions_more")
     }
 
@@ -890,58 +894,26 @@ private struct HeaderStatusLine: View {
     @Environment(SessionStore.self) private var store
     @Environment(AppSettings.self) private var settings
 
+    /// S2 (canvas board `s2-list`): "● Pro  ● Air" — every host as a dot and its
+    /// label, one host included. Working counts live on the rows now, so the
+    /// header no longer says "Connected · N running". When the labels don't fit,
+    /// it falls back to one summary dot.
     var body: some View {
-        HStack(spacing: 6) {
-            if settings.hosts.count > 1 {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 6) {
-                        // Iterate the ELEMENTS, keyed by host id — never `hosts.indices`
-                        // with a `hosts[index]` lookup inside. SwiftUI evaluates a row's
-                        // body against the identity it already has, so when the array
-                        // shrinks (removing a host in Settings) an index-keyed ForEach
-                        // re-runs the body for the departing index and subscripts past
-                        // the end: `Array._checkSubscript` trap, app gone. Removing the
-                        // second of two hosts crashed reliably this way. Carrying the
-                        // host in the tuple means there is no lookup left to go stale.
-                        ForEach(Array(settings.hosts.enumerated()), id: \.element.id) { index, host in
-                            if index > 0 {
-                                Text("·")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(Tokens.labelSecondary)
-                                    .fixedSize()
-                                    .accessibilityHidden(true)
-                            }
-                            HostHeaderToken(host: host,
-                                            status: store.connectionStatus(forHost: host.id))
-                        }
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
-                    compactHostStatus
-                }
-            } else {
-                let status = store.connectionStatus
-                Circle()
-                    .fill(status.dotColor)
-                    .frame(width: 7, height: 7)
-                    .fixedSize()
-                Text(status.label)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(status.textColor(connected: Tokens.label,
-                                                      reconnecting: Tokens.labelSecondary))
-                    .lineLimit(1)
-                if store.runningCount > 0 {
-                    Text("·")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Tokens.labelSecondary)
-                        .fixedSize()
-                        .accessibilityHidden(true)
-                    Text("\(store.runningCount) running")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Tokens.label)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                // Iterate the ELEMENTS, keyed by host id — never `hosts.indices`
+                // with a `hosts[index]` lookup inside. SwiftUI evaluates a row's
+                // body against the identity it already has, so when the array
+                // shrinks (removing a host in Settings) an index-keyed ForEach
+                // re-runs the body for the departing index and subscripts past
+                // the end: `Array._checkSubscript` trap, app gone. Removing the
+                // second of two hosts crashed reliably this way.
+                ForEach(settings.hosts, id: \.id) { host in
+                    HostHeaderToken(host: host, status: store.connectionStatus(forHost: host.id))
                 }
             }
+            .fixedSize(horizontal: true, vertical: false)
+            compactHostStatus
         }
         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         .lineLimit(1)
@@ -955,9 +927,9 @@ private struct HeaderStatusLine: View {
         return HStack(spacing: 6) {
             Circle()
                 .fill(allConnected ? Color(.systemGreen) : Color(.systemOrange))
-                .frame(width: 7, height: 7)
-            Text(allConnected ? "\(total) hosts online" : "\(connected)/\(total) hosts online")
-                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 8, height: 8)
+            Text(allConnected ? "\(total) hosts" : "\(connected)/\(total) hosts")
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Tokens.label)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -974,14 +946,14 @@ private struct HostHeaderToken: View {
     let status: HostConnectionPresentation
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             Circle()
                 .fill(status.dotColor)
-                .frame(width: 7, height: 7)
+                .frame(width: 8, height: 8)
                 .fixedSize()
                 .accessibilityHidden(true)
             Text(host.label)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(status.textColor(connected: Tokens.label,
                                                    reconnecting: Tokens.labelSecondary))
                 .lineLimit(1)
@@ -1144,137 +1116,268 @@ private extension View {
     }
 }
 
+/// One S2 list row (canvas board `s2-list`): status dot, then three lines —
+/// title (bold when it needs you or is unread), what state the session is in,
+/// and project · model · subagents · time · host. No buttons: the row is the
+/// tap target.
 struct SessionRow: View {
     @Environment(SessionStore.self) private var store
-    @Environment(AppSettings.self) private var settings
     let session: Session
     let group: SessionStore.Group
 
-    /// Owning host's short label, shown only in multi-host setups for live
-    /// sessions (closed sessions are host-agnostic).
-    private var hostLabel: String? {
-        guard settings.hosts.count > 1 else { return nil }
-        return store.host(forSession: session.id)?.label
-    }
+    /// The owning host's label, when known. Shown on every row (the design puts
+    /// the host in the meta line even with one host).
+    private var hostLabel: String? { store.host(forSession: session.id)?.label }
 
     /// Live on a host that is currently down — the session's agent is unreachable,
-    /// so the row is dimmed and its host chip goes orange. Without this the row
-    /// renders as a healthy Running session and tapping it opens a composer whose
-    /// sends can never land.
+    /// so the row is dimmed and its host label goes orange. Without this the row
+    /// renders as a healthy session and tapping it opens a composer whose sends
+    /// can never land.
     private var isOffline: Bool { store.isOffline(session.id) }
 
+    private var isEmphasized: Bool {
+        group == .needsInput || group == .blocked || group == .unread
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 11) {
+        HStack(alignment: .top, spacing: 0) {
             Circle()
                 .fill(Theme.statusColor(group))
                 .frame(width: 8, height: 8)
-                .padding(.top, 6)
-                .frame(width: 8)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                    .font(.system(size: 17))
-                    .foregroundStyle(Tokens.label)
-                    .lineSpacing(0)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(height: 22, alignment: .leading)
-                HStack(spacing: 7) {
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        metaText
-                            .font(.system(size: 15))
-                            .foregroundStyle(Tokens.meta)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .frame(height: 20, alignment: .leading)
-                            .accessibilityLabel(metaAccessibilityText)
-                    }
-                    if let hostLabel {
-                        HStack(spacing: 4) {
-                            Image(systemName: "desktopcomputer")
-                                .font(.system(size: 12))
-                            Text(hostLabel).lineLimit(1)
-                        }
-                        .font(.system(size: 13))
-                        .foregroundStyle(isOffline ? Color(.systemOrange) : Tokens.host)
-                        .frame(height: 20)
-                    }
+                .padding(.top, 18)
+                .frame(width: 20, alignment: .leading)
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let nowMs = context.date.timeIntervalSince1970 * 1_000
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 17, weight: isEmphasized ? .semibold : .regular))
+                        .foregroundStyle(Tokens.label)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(height: 22, alignment: .leading)
+                    stateLine(SessionRowLine.resolve(lineState, nowMs: nowMs))
+                    metaLine(nowMs: nowMs)
                 }
-                .padding(.top, 4)
+                .padding(.top, 11)
+                .padding(.bottom, 12)
+                .padding(.trailing, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.top, 15)
-        .padding(.horizontal, 20)
-        .padding(.bottom, 16)
+        .padding(.leading, 20)
         // Dim the row so a stale (unreachable) session doesn't compete with live
         // ones. The orange host label dims with it, but stays the only warm-colored
         // element in the row, so it still reads as the reason for the dimming.
         .opacity(isOffline ? 0.55 : 1)
+        .accessibilityElement(children: .combine)
     }
 
     private var title: String {
         session.title.isEmpty ? "Untitled session" : session.title
     }
 
-    private var listTime: SessionListTime? {
-        SessionListTime.resolve(session: session, isWorking: group == .working)
+    private var lineState: SessionRowLine.State {
+        switch group {
+        case .needsInput:
+            let prompt = session.sessionId.flatMap { store.prompts[$0] }
+            return .needsInput(question: prompt?.question, signInSite: prompt?.signIn?.website)
+        case .blocked: return .paused(reason: session.statusReason)
+        case .restarting: return .restarting
+        case .working:
+            // Timed from the turn's start (the newest genuine user turn), the
+            // same anchor as the session view's status line. Hosts without
+            // `lastUserAt` fall back to the process start.
+            if let since = store.turnStartedAt(session) { return .working(runningSinceMs: since) }
+            if case .runningSince(let since) = SessionListTime.resolve(session: session, isWorking: true) {
+                return .working(runningSinceMs: since)
+            }
+            return .working(runningSinceMs: nil)
+        case .unread: return .unread
+        case .idle: return .idle
+        case .closed: return .closed(lastActivityMs: session.lastActivityAt)
+        }
     }
 
-    private var metaText: Text {
-        var text = Text(directoryText)
-        if !session.closed, let model = session.model, !model.isEmpty {
-            text = text + Text(" · \(model)")
+    private func stateLine(_ line: SessionRowLine) -> some View {
+        HStack(spacing: 5) {
+            switch line.icon {
+            case .question:
+                BoardGlyph(kind: .question).frame(width: 14, height: 14)
+            case .signIn:
+                BoardGlyph(kind: .key).frame(width: 14, height: 14)
+            case .liveDot:
+                Circle()
+                    .fill(Tokens.live)
+                    .frame(width: 7, height: 7)
+                    .background(Circle().fill(Tokens.live.opacity(0.25)).frame(width: 13, height: 13))
+            case .none:
+                EmptyView()
+            }
+            Text(line.text)
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
-        if session.runningChildAgentCount > 0 {
-            text = text
-                + Text(" · ")
-                + Text(Image(systemName: "person.2.fill"))
-                + Text(" \(session.runningChildAgentCount)")
-        }
-        if session.runningBackgroundProcessCount > 0 {
-            text = text
-                + Text(" · ")
-                + Text(Image(systemName: "terminal"))
-                + Text(" \(session.runningBackgroundProcessCount)")
-        }
-        if let listTime {
-            text = text + Text(" · \(listTime.timestamp.asCompactRelativeFromMillis)")
-        }
-        return text
+        .font(.system(size: 15))
+        .foregroundStyle(color(for: line.tone))
+        .frame(height: 20, alignment: .leading)
     }
 
-    private var metaAccessibilityText: String {
-        var parts = [directoryText]
-        if !session.closed, let model = session.model, !model.isEmpty {
-            parts.append(model)
+    private func color(for tone: SessionRowLine.Tone) -> Color {
+        switch tone {
+        case .attention: return Tokens.attention
+        case .live: return Tokens.live
+        case .primary: return Tokens.ink
+        case .secondary: return Tokens.secondaryInk
         }
-        if let childActivity = SessionWorkListPresentation.childAgentLabel(
-            count: session.runningChildAgentCount
-        ) {
-            parts.append(childActivity)
-        }
-        if let processActivity = SessionWorkListPresentation.backgroundProcessLabel(
-            count: session.runningBackgroundProcessCount
-        ) {
-            parts.append(processActivity)
-        }
-        if let listTime {
-            let time = listTime.timestamp.asCompactRelativeFromMillis
-            switch listTime {
-            case .runningSince: parts.append("Running for \(time)")
-            case .lastActivity: parts.append("Last activity \(time) ago")
+    }
+
+    private func metaLine(nowMs: Double) -> some View {
+        // Working rows carry their time on line 2; every other row shows the
+        // age of its last activity here.
+        let showsTime = group != .working && group != .restarting
+        let time = showsTime ? session.lastActivityAt.map {
+            SessionRowLine.compactDuration(from: $0, to: nowMs)
+        } : nil
+        let meta = SessionRowMeta.text(
+            project: SessionRowMeta.projectLabel(cwd: session.cwd, project: session.project),
+            model: session.model,
+            subagents: session.runningChildAgentCount,
+            backgroundProcesses: session.runningBackgroundProcessCount,
+            time: time)
+        return HStack(spacing: 5) {
+            if session.task != nil {
+                BoardGlyph(kind: .repeat).frame(width: 13, height: 13)
+                    .accessibilityHidden(false)
+                    .accessibilityLabel("Started by a scheduled task")
+            }
+            Text(hostLabel == nil ? meta : meta + " ·")
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .layoutPriority(1)
+            if let hostLabel {
+                HStack(spacing: 4) {
+                    BoardGlyph(kind: .monitor, lineWidth: 1.8).frame(width: 13, height: 13)
+                    Text(hostLabel).lineLimit(1)
+                }
+                .foregroundStyle(isOffline ? Color(.systemOrange) : Tokens.metaInk)
+                .fixedSize()
             }
         }
-        return parts.joined(separator: ", ")
+        .font(.system(size: 13))
+        .foregroundStyle(Tokens.metaInk)
+        .frame(height: 18, alignment: .leading)
     }
+}
 
-    private var directoryText: String {
-        if let cwd = session.cwd, !cwd.isEmpty,
-           let leaf = cwd.split(separator: "/").last {
-            return String(leaf)
+/// Small glyphs drawn from the board's own 24×24 SVG paths (canvas board
+/// `s2-list`). The nearest SF Symbols were filled, rounded or mirrored, and
+/// their wider footprint pushed the text after them 3–4 pt to the right.
+struct BoardGlyph: View {
+    enum Kind { case question, key, monitor, `repeat`, search, more, chevronDown, chevronRight }
+    let kind: Kind
+    var lineWidth: CGFloat = 2.2
+
+    var body: some View {
+        GeometryReader { geo in
+            let k = geo.size.width / 24
+            let stroke = StrokeStyle(lineWidth: lineWidth * k, lineCap: .round, lineJoin: .round)
+            ZStack {
+                switch kind {
+                case .question:
+                    Path { p in
+                        p.move(to: CGPoint(x: 4 * k, y: 5 * k))
+                        p.addLine(to: CGPoint(x: 20 * k, y: 5 * k))
+                        p.addLine(to: CGPoint(x: 20 * k, y: 16 * k))
+                        p.addLine(to: CGPoint(x: 9 * k, y: 16 * k))
+                        p.addLine(to: CGPoint(x: 4 * k, y: 20 * k))
+                        p.closeSubpath()
+                        // "M10 9 a2 2 0 1 1 3 1.7 c-.6.4-1 .8-1 1.5"
+                        p.move(to: CGPoint(x: 10 * k, y: 9 * k))
+                        p.addArc(center: CGPoint(x: 12 * k, y: 9 * k), radius: 2 * k,
+                                 startAngle: .degrees(180), endAngle: .degrees(59.5), clockwise: false)
+                        p.addCurve(to: CGPoint(x: 12 * k, y: 12.2 * k),
+                                   control1: CGPoint(x: 12.4 * k, y: 11.1 * k),
+                                   control2: CGPoint(x: 12 * k, y: 11.5 * k))
+                    }
+                    .stroke(style: stroke)
+                    Circle()
+                        .frame(width: 1.6 * k, height: 1.6 * k)
+                        .position(x: 12 * k, y: 14.4 * k)
+                case .key:
+                    Path { p in
+                        p.addEllipse(in: CGRect(x: 4 * k, y: 11 * k, width: 8 * k, height: 8 * k))
+                        p.move(to: CGPoint(x: 11 * k, y: 12 * k))
+                        p.addLine(to: CGPoint(x: 20 * k, y: 3 * k))
+                        p.move(to: CGPoint(x: 16 * k, y: 7 * k))
+                        p.addLine(to: CGPoint(x: 19 * k, y: 10 * k))
+                    }
+                    .stroke(style: stroke)
+                case .repeat:
+                    // "M17 2.5l3 3-3 3 M4 11.5v-1a5 5 0 0 1 5-5h11
+                    //  M7 21.5l-3-3 3-3 M20 12.5v1a5 5 0 0 1-5 5H4"
+                    Path { p in
+                        p.move(to: CGPoint(x: 17 * k, y: 2.5 * k))
+                        p.addLine(to: CGPoint(x: 20 * k, y: 5.5 * k))
+                        p.addLine(to: CGPoint(x: 17 * k, y: 8.5 * k))
+                        p.move(to: CGPoint(x: 4 * k, y: 11.5 * k))
+                        p.addLine(to: CGPoint(x: 4 * k, y: 10.5 * k))
+                        p.addArc(center: CGPoint(x: 9 * k, y: 10.5 * k), radius: 5 * k,
+                                 startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+                        p.addLine(to: CGPoint(x: 20 * k, y: 5.5 * k))
+                        p.move(to: CGPoint(x: 7 * k, y: 21.5 * k))
+                        p.addLine(to: CGPoint(x: 4 * k, y: 18.5 * k))
+                        p.addLine(to: CGPoint(x: 7 * k, y: 15.5 * k))
+                        p.move(to: CGPoint(x: 20 * k, y: 12.5 * k))
+                        p.addLine(to: CGPoint(x: 20 * k, y: 13.5 * k))
+                        p.addArc(center: CGPoint(x: 15 * k, y: 13.5 * k), radius: 5 * k,
+                                 startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+                        p.addLine(to: CGPoint(x: 4 * k, y: 18.5 * k))
+                    }
+                    .stroke(style: stroke)
+                case .search:
+                    // "circle 11,11 r6.5; M16 16l4.5 4.5"
+                    Path { p in
+                        p.addEllipse(in: CGRect(x: 4.5 * k, y: 4.5 * k, width: 13 * k, height: 13 * k))
+                        p.move(to: CGPoint(x: 16 * k, y: 16 * k))
+                        p.addLine(to: CGPoint(x: 20.5 * k, y: 20.5 * k))
+                    }
+                    .stroke(style: stroke)
+                case .more:
+                    // Three filled dots, r1.9 at x 5 / 12 / 19.
+                    Path { p in
+                        for x in [5.0, 12.0, 19.0] {
+                            p.addEllipse(in: CGRect(x: (x - 1.9) * k, y: (12 - 1.9) * k, width: 3.8 * k, height: 3.8 * k))
+                        }
+                    }
+                    .fill()
+                case .chevronDown:
+                    Path { p in
+                        p.move(to: CGPoint(x: 6 * k, y: 9 * k))
+                        p.addLine(to: CGPoint(x: 12 * k, y: 15 * k))
+                        p.addLine(to: CGPoint(x: 18 * k, y: 9 * k))
+                    }
+                    .stroke(style: stroke)
+                case .chevronRight:
+                    Path { p in
+                        p.move(to: CGPoint(x: 9 * k, y: 6 * k))
+                        p.addLine(to: CGPoint(x: 15 * k, y: 12 * k))
+                        p.addLine(to: CGPoint(x: 9 * k, y: 18 * k))
+                    }
+                    .stroke(style: stroke)
+                case .monitor:
+                    Path { p in
+                        p.addRoundedRect(in: CGRect(x: 3 * k, y: 4 * k, width: 18 * k, height: 12 * k),
+                                         cornerSize: CGSize(width: 1.5 * k, height: 1.5 * k))
+                        p.move(to: CGPoint(x: 9 * k, y: 20 * k))
+                        p.addLine(to: CGPoint(x: 15 * k, y: 20 * k))
+                        p.move(to: CGPoint(x: 12 * k, y: 16 * k))
+                        p.addLine(to: CGPoint(x: 12 * k, y: 20 * k))
+                    }
+                    .stroke(style: stroke)
+                }
+            }
         }
-        if let project = session.project, !project.isEmpty { return project }
-        return "No directory"
+        .accessibilityHidden(true)
     }
 }
 

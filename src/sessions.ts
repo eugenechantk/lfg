@@ -106,7 +106,41 @@ export type SessionMsg = {
   // those are not blocks. Prefer these over reading the English.
   errorCode?: string;
   apiErrorStatus?: number;
+  // Tool rows (B11, sessions-redesign-s2). `toolUseId` is the call id and sits
+  // on BOTH the call and its result, so a client can pair them; `tool` names a
+  // Claude call and what it acts on; `isError` marks a Claude result that
+  // failed. Display text is unchanged — older clients ignore these.
+  toolUseId?: string;
+  tool?: { name: string; target?: string };
+  isError?: boolean;
 };
+
+const TOOL_TARGET_MAX = 240;
+
+/** What a Claude tool call acts on, in one line: the command, file, pattern,
+ *  URL, query or agent description. Undefined when there is nothing to name. */
+export function toolTarget(name: string, input: unknown): string | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const o = input as Record<string, unknown>;
+  const pick = (...keys: string[]) => {
+    for (const k of keys) if (typeof o[k] === "string") return o[k] as string;
+    return undefined;
+  };
+  let raw: string | undefined;
+  switch (name) {
+    case "Bash": raw = pick("command"); break;
+    case "Read": case "Edit": case "Write": case "MultiEdit": case "NotebookRead": case "NotebookEdit":
+      raw = pick("file_path", "notebook_path"); break;
+    case "Grep": case "Glob": raw = pick("pattern"); break;
+    case "WebFetch": raw = pick("url"); break;
+    case "WebSearch": raw = pick("query"); break;
+    case "Agent": case "Task": raw = pick("description"); break;
+    default: raw = undefined;
+  }
+  const line = raw?.split("\n").map((l) => l.trim()).find((l) => l.length > 0);
+  if (!line) return undefined;
+  return line.length > TOOL_TARGET_MAX ? `${line.slice(0, TOOL_TARGET_MAX - 1)}…` : line;
+}
 
 export type Session = {
   agent: "claude" | "codex";
@@ -123,6 +157,9 @@ export type Session = {
   project: string;
   title: string;
   lastUserText: string | null;
+  // When the newest genuine user turn was sent (epoch ms). Clients time
+  // "Working · 4m" from it; absorbed mid-turn messages don't reset it.
+  lastUserAt?: number | null;
   sessionId: string | null;
   startedAt: number | null;
   transcriptPath: string | null;
@@ -1621,7 +1658,12 @@ function codexMessage(
   suffix?: number,
 ): SessionMsg {
   const id = codexLineId(x, text);
-  return { id: suffix && id ? `${id}#${suffix}` : id, role, kind, text, ts };
+  const message: SessionMsg = { id: suffix && id ? `${id}#${suffix}` : id, role, kind, text, ts };
+  const callId = x.payload?.call_id;
+  if ((kind === "tool_use" || kind === "tool_result") && typeof callId === "string" && callId) {
+    message.toolUseId = callId;
+  }
+  return message;
 }
 
 type UserTextSegment =
@@ -2433,6 +2475,10 @@ function normalizeLineUnsafe(line: string, codexState: CodexNormalizationState):
       name?: string;
       input?: unknown;
       content?: unknown;
+      // tool_use id, and the id a tool_result answers (B11 pairing).
+      id?: unknown;
+      tool_use_id?: unknown;
+      is_error?: unknown;
     }>;
     const msgs: SessionMsg[] = [];
     // If a text block in this turn already references a file path (e.g. a client
@@ -2485,16 +2531,22 @@ function normalizeLineUnsafe(line: string, codexState: CodexNormalizationState):
             kind: "tool_use",
             text: description ? `Started agent · ${description}` : "Started child agent",
             ts,
+            ...(typeof c.id === "string" ? { toolUseId: c.id } : {}),
+            tool: description ? { name: "Agent", target: description } : { name: "Agent" },
           });
           return;
         }
         const input = describeInput(c.input);
+        const name = c.name ?? "tool";
+        const target = toolTarget(name, c.input);
         msgs.push({
           id: blockId(id, idx),
           role,
           kind: "tool_use",
-          text: input ? `${c.name ?? "tool"}: ${input}` : `${c.name ?? "tool"}`,
+          text: input ? `${name}: ${input}` : `${name}`,
           ts,
+          ...(typeof c.id === "string" ? { toolUseId: c.id } : {}),
+          tool: target ? { name, target } : { name },
         });
         return;
       }
@@ -2515,6 +2567,8 @@ function normalizeLineUnsafe(line: string, codexState: CodexNormalizationState):
           kind: "tool_result",
           text: resultText || "(result)",
           ts,
+          ...(typeof c.tool_use_id === "string" ? { toolUseId: c.tool_use_id } : {}),
+          isError: c.is_error === true,
         });
         return;
       }
@@ -2580,9 +2634,21 @@ const LAST_USER_TEXT_SCAN_BYTES = 32 * 1024 * 1024;
 // Last genuine user prompt — scan the tail backwards, skipping meta rows and
 // command/caveat wrappers (lines starting with "<"). Truncated for the card.
 async function lastUserText(path: string): Promise<string | null> {
-  return scanBack(path, (line) => {
+  return (await lastUserTurn(path))?.text ?? null;
+}
+
+export interface LastUserTurn {
+  text: string;
+  ts: number | null;
+}
+
+// The same turn with its timestamp. Absorbed mid-turn messages live only in
+// `queue-operation` lines, which this skips, so they never reset a turn's start.
+async function lastUserTurn(path: string): Promise<LastUserTurn | null> {
+  return scanBack(path, (line): LastUserTurn | null => {
     let x: {
       type?: string;
+      timestamp?: string;
       isMeta?: boolean;
       isCompactSummary?: boolean;
       message?: { content?: unknown };
@@ -2597,20 +2663,24 @@ async function lastUserText(path: string): Promise<string | null> {
       ?.filter((message) => message.role === "user" && message.kind === "text")
       .map((message) => message.text)
       .join("\n\n");
+    const parsed = x.timestamp ? Date.parse(x.timestamp) : NaN;
+    const ts = Number.isFinite(parsed) ? parsed : null;
     if (codexHuman) {
       const t = stripConversationPrefix(codexHuman).trim().replace(/\s+/g, " ");
-      if (t && !t.startsWith("<")) return t.length > 140 ? t.slice(0, 139) + "…" : t;
+      if (t && !t.startsWith("<")) return { text: t.length > 140 ? t.slice(0, 139) + "…" : t, ts };
     }
     if (x.type !== "user" || x.isMeta || x.isCompactSummary) return null;
     let t = extractText(x.message?.content);
     if (!t) return null;
     t = stripHumanPrefix(t.trim().replace(/\s+/g, " "));
-    if (!t || t.startsWith("<")) return null;
-    return t.length > 140 ? t.slice(0, 139) + "…" : t;
+    // "[Request interrupted by user…]" is Claude Code's marker, not a turn.
+    if (!t || t.startsWith("<") || INTERRUPT_MARKER.test(t)) return null;
+    return { text: t.length > 140 ? t.slice(0, 139) + "…" : t, ts };
   }, { maxScanBytes: LAST_USER_TEXT_SCAN_BYTES });
 }
 
 export const lastUserTextForTest = (path: string) => lastUserText(path);
+export const lastUserTurnForTest = (path: string) => lastUserTurn(path);
 
 /**
  * The last `n` genuine user turns, oldest-first, each truncated to `maxChars`.
@@ -3222,6 +3292,7 @@ async function listSessionsUncached(
     let lastAssistant: SessionMsg | null = null;
     let lastActivityAt: number | null = null;
     let lastUser: string | null = null;
+    let lastUserAt: number | null = null;
     let liveModel: string | null = null;
     let lastTurn: AssistantSettings | null = null;
     if (transcriptPath) {
@@ -3237,7 +3308,9 @@ async function listSessionsUncached(
       } catch {}
       last = await previewLast(transcriptPath).catch(() => null);
       lastActivityAt = last?.ts ?? mtimeMs;
-      lastUser = await lastUserText(transcriptPath).catch(() => null);
+      const userTurn = await lastUserTurn(transcriptPath).catch(() => null);
+      lastUser = userTurn?.text ?? null;
+      lastUserAt = userTurn?.ts ?? null;
       lastTurn = await lastAssistantSettings(transcriptPath).catch(() => null);
       liveModel = lastTurn?.model ?? null;
       lastAssistant = await lastAssistantMsg(transcriptPath).catch(() => null);
@@ -3303,6 +3376,7 @@ async function listSessionsUncached(
       project,
       title,
       lastUserText: lastUser,
+      lastUserAt,
       sessionId,
       startedAt: e.startedAt,
       transcriptPath,
@@ -3410,6 +3484,7 @@ async function listSessionsUncached(
     let lastAssistant: SessionMsg | null = null;
     let lastActivityAt: number | null = null;
     let lastUser: string | null = null;
+    let lastUserAt: number | null = null;
     let liveModel: string | null = null;
     let liveEffort: string | null = null;
     if (transcriptPath) {
@@ -3421,7 +3496,9 @@ async function listSessionsUncached(
       } catch {}
       last = await previewLast(transcriptPath).catch(() => null);
       lastActivityAt = last?.ts ?? mtimeMs;
-      lastUser = await lastUserText(transcriptPath).catch(() => null);
+      const userTurn = await lastUserTurn(transcriptPath).catch(() => null);
+      lastUser = userTurn?.text ?? null;
+      lastUserAt = userTurn?.ts ?? null;
       const turnSettings = await lastCodexTurnSettings(transcriptPath).catch(() => null);
       liveModel = turnSettings?.model ?? null;
       liveEffort = turnSettings?.effort ?? null;
@@ -3464,6 +3541,7 @@ async function listSessionsUncached(
       project,
       title,
       lastUserText: lastUser,
+      lastUserAt,
       sessionId,
       startedAt,
       transcriptPath,
@@ -3499,9 +3577,9 @@ async function listSessionsUncached(
   for (const { pid, cmd, thread } of externalCodexClaims) {
     claimedCodex.add(thread.id);
     const transcriptPath = thread.path;
-    const [last, lastUser, turnSettings, lastAssistant] = await Promise.all([
+    const [last, userTurn, turnSettings, lastAssistant] = await Promise.all([
       previewLast(transcriptPath).catch(() => null),
-      lastUserText(transcriptPath).catch(() => null),
+      lastUserTurn(transcriptPath).catch(() => null),
       lastCodexTurnSettings(transcriptPath).catch(() => null),
       lastAssistantMsg(transcriptPath).catch(() => null),
     ]);
@@ -3526,7 +3604,8 @@ async function listSessionsUncached(
       cwd,
       project,
       title,
-      lastUserText: lastUser,
+      lastUserText: userTurn?.text ?? null,
+      lastUserAt: userTurn?.ts ?? null,
       sessionId: thread.id,
       startedAt: thread.createdAt,
       transcriptPath,
@@ -4560,6 +4639,36 @@ export async function pendingToolPrompt(
       description: typeof o?.description === "string" ? o.description : undefined,
     })),
   };
+}
+
+// The newest tool call in the transcript that has no result yet: while Claude
+// shows a permission dialog, this is the call it is asking about (B4). Unlike
+// AskUserQuestion and ExitPlanMode, an ordinary tool call IS written before the
+// dialog appears, so its exact input is on disk.
+export async function pendingToolUse(
+  path: string,
+): Promise<{ name: string; input: Record<string, unknown> } | null> {
+  const { lines } = await tail(path, 128 * 1024);
+  const open = new Map<string, { name: string; input: Record<string, unknown> }>();
+  for (const l of lines) {
+    let x: { message?: { content?: unknown } };
+    try {
+      x = JSON.parse(l);
+    } catch {
+      continue;
+    }
+    const content = x?.message?.content;
+    if (!Array.isArray(content)) continue;
+    for (const c of content as Array<Record<string, unknown>>) {
+      if (c?.type === "tool_use" && typeof c.id === "string" && typeof c.name === "string") {
+        const input = c.input && typeof c.input === "object" ? (c.input as Record<string, unknown>) : {};
+        open.set(c.id, { name: c.name, input });
+      } else if (c?.type === "tool_result" && typeof c?.tool_use_id === "string") {
+        open.delete(c.tool_use_id);
+      }
+    }
+  }
+  return [...open.values()].pop() ?? null;
 }
 
 export function byteBoundedPageStart<T>(

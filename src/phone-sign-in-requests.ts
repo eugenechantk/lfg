@@ -137,6 +137,9 @@ export class PhoneSignInRequests {
  */
 export type SignInPrompt = {
   source: "phone-sign-in";
+  kind: "signIn";
+  /** When the agent asked (the request's creation time), for "Needs sign-in · 5m". */
+  askedAt: number;
   question: string;
   header: string;
   options: never[];
@@ -149,6 +152,8 @@ export function phoneSignInPrompt(requests: Pick<PhoneSignInRequests, "list">, s
   const website = loginURL(r.url).host;
   return {
     source: "phone-sign-in",
+    kind: "signIn",
+    askedAt: r.createdAt,
     question: `Sign in to ${website} on your iPhone`,
     header: "Sign in",
     options: [],

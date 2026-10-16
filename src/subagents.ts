@@ -13,6 +13,10 @@ export type SubagentSession = {
   startedAt: number | null;
   lastActivityAt: number | null;
   finishedAt: number | null;
+  // The first line of a finished child's final report, for its row ("Found 6
+  // callers in 4 files"). Null while it runs. One line only: the full report
+  // stays behind the child's messages endpoint.
+  result: string | null;
 };
 
 type ParentWithBusy = { busy: boolean };
@@ -292,7 +296,7 @@ async function parentEvents(path: string): Promise<ParentEvents> {
   return entry.events;
 }
 
-type TranscriptTimes = { first: number | null; last: number | null };
+type TranscriptTimes = { first: number | null; last: number | null; lastText: string | null };
 
 // Cached per (size, mtime): a parent's signature changes on every scan while
 // it is busy, and the sidecar cache miss used to re-stream EVERY child
@@ -301,7 +305,8 @@ type TranscriptTimes = { first: number | null; last: number | null };
 async function transcriptTimes(path: string): Promise<TranscriptTimes> {
   let first: number | null = null;
   let last: number | null = null;
-  if (!existsSync(path)) return { first, last };
+  let lastText: string | null = null;
+  if (!existsSync(path)) return { first, last, lastText };
   const signature = fileSignature(path);
   const cached = transcriptTimesCache.get(path);
   if (cached?.signature === signature) return cached.times;
@@ -309,15 +314,45 @@ async function transcriptTimes(path: string): Promise<TranscriptTimes> {
   for await (const line of lines) {
     if (!line.includes('"timestamp"')) continue;
     try {
-      const at = timestamp((JSON.parse(line) as Record<string, unknown>).timestamp);
+      const row = JSON.parse(line) as Record<string, unknown>;
+      if (row.type === "assistant") lastText = assistantText(row) ?? lastText;
+      const at = timestamp(row.timestamp);
       if (at == null) continue;
       first = first == null ? at : Math.min(first, at);
       last = last == null ? at : Math.max(last, at);
     } catch {}
   }
-  const times = { first, last };
+  const times = { first, last, lastText };
   transcriptTimesCache.set(path, { signature, times });
   return times;
+}
+
+function assistantText(row: Record<string, unknown>): string | null {
+  const content = (row.message as { content?: unknown } | undefined)?.content;
+  if (!Array.isArray(content)) return null;
+  const text = (content as Array<Record<string, unknown>>)
+    .filter((block) => block.type === "text" && typeof block.text === "string")
+    .map((block) => block.text as string)
+    .join("\n")
+    .trim();
+  return text || null;
+}
+
+const RESULT_MAX = 140;
+
+/** The first non-empty line of a report, without markdown marks, capped. */
+export function resultLine(text: string | null): string | null {
+  if (!text) return null;
+  for (const raw of text.split("\n")) {
+    const line = raw
+      .replace(/^\s*(#{1,6}\s+|[-*+]\s+|>\s*)/, "")
+      .replace(/(\*\*|__|`)/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!line) continue;
+    return line.length > RESULT_MAX ? line.slice(0, RESULT_MAX - 1) + "…" : line;
+  }
+  return null;
 }
 
 function directorySignature(parentTranscript: string, sidecars: string): string {
@@ -410,6 +445,7 @@ export async function listSubagentSessions(
       startedAt,
       lastActivityAt,
       finishedAt: lifecycle && isTerminal(status) ? lifecycle.timestamp : null,
+      result: isTerminal(status) ? resultLine(times.lastText) : null,
     });
   }
   sessions.sort((a, b) =>

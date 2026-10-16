@@ -9,6 +9,7 @@ import LFGCore
     var error: String?
     var loading = false
     var canGoBack = false
+    var canGoForward = false
 
     func start(_ url: URL) {
         destroy()
@@ -37,11 +38,23 @@ import LFGCore
         let values = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
         return values.map(PhoneSignInCookie.init(cookie:))
     }
+    #if DEBUG
+    /// The S2 sign-in fixture: two harmless cookies on two domains, so the
+    /// review step has something to list without signing in anywhere.
+    func seedFixtureCookies() async {
+        guard let store = webView?.configuration.websiteDataStore.httpCookieStore else { return }
+        for (name, domain) in [("s2fx_session", "example.com"), ("s2fx_pref", "example.org")] {
+            if let cookie = HTTPCookie(properties: [.name: name, .value: "1", .domain: domain, .path: "/", .secure: "TRUE"]) {
+                await store.setCookie(cookie)
+            }
+        }
+    }
+    #endif
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         loading = true; error = nil
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        currentURL = webView.url; loading = false; canGoBack = webView.canGoBack
+        currentURL = webView.url; loading = false; canGoBack = webView.canGoBack; canGoForward = webView.canGoForward
     }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { failed(error) }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { failed(error) }
@@ -105,7 +118,10 @@ struct PhoneSignInView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if let error { Text(error).font(.callout).foregroundStyle(.red).padding().accessibilityIdentifier("phone_sign_in_error") }
+                // The login phase shows its error under its own top bar.
+                if let error, phase != .login {
+                    Text(error).font(.callout).foregroundStyle(.red).padding().accessibilityIdentifier("phone_sign_in_error")
+                }
                 switch phase {
                 case .setup:
                     if agentRequestID != nil { ProgressView("Opening sign-in…").frame(maxWidth: .infinity, maxHeight: .infinity) } else { setup }
@@ -123,18 +139,8 @@ struct PhoneSignInView: View {
                         .accessibilityLabel(phase == .result ? "Close" : "Cancel")
                         .accessibilityIdentifier("phone_sign_in_close")
                 }
-                if phase == .login {
-                    // Done is always available for an agent request: it sends whatever
-                    // cookies the browser holds right now and lets the agent judge.
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(agentRequestID == nil ? "Review" : (busy ? "Sending…" : "Done")) { Task {
-                            if agentRequestID != nil { await completeRequestedSignIn() } else { await reviewCookies() }
-                        } }
-                            .disabled(busy)
-                            .accessibilityIdentifier(agentRequestID == nil ? "phone_sign_in_review" : "phone_sign_in_done")
-                    }
-                }
             }
+            .toolbar(phase == .login ? .hidden : .visible, for: .navigationBar)
             .overlay {
                 if scenePhase != .active && phase != .setup {
                     Color(uiColor: .systemBackground).overlay(Label("Sign-in hidden", systemImage: "lock.fill"))
@@ -149,6 +155,17 @@ struct PhoneSignInView: View {
             }
             client = resolved; hostName = resolved.logLabel
             if let requestID = agentRequestID {
+                #if DEBUG
+                // The S2 sign-in fixture (`LFG_S2_VIEW_FIXTURE=signin`) has no host
+                // request behind it: open a harmless page in its browser instead.
+                if requestID == "s2fx" {
+                    targets = [PhoneSignInTarget(id: "s2fx", name: "Chrome", kind: "extension")]
+                    targetID = "s2fx"; address = "https://example.com"
+                    openLogin()
+                    await browser.seedFixtureCookies()
+                    return
+                }
+                #endif
                 do {
                     let current = try await resolved.phoneSignInRequestStatus(requestID)
                     guard current.sessionId == sessionID, current.isWaiting else {
@@ -192,30 +209,142 @@ struct PhoneSignInView: View {
             } footer: { Text("The login goes to the selected browser profile. Pause any automation using that site before replacing its login.") }
         }
     }
+    /// Board `s2-signin`: close · an address pill naming the site, why the
+    /// agent asked and where the sign-in goes · reload; the website; then back,
+    /// forward and "I'm signed in".
     private var login: some View {
         VStack(spacing: 0) {
-            HStack {
-                Button { browser.webView?.goBack() } label: { Image(systemName: "chevron.left") }
-                    .disabled(!browser.canGoBack).accessibilityLabel("Back")
-                    .accessibilityIdentifier("phone_sign_in_back")
-                Text(browser.currentURL?.host ?? "").font(.footnote).lineLimit(1).textSelection(.enabled)
-                    .accessibilityIdentifier("phone_sign_in_current_host")
-                // Inline so a page load never adds a row and shifts the web view.
-                ProgressView().controlSize(.small)
-                    .opacity(browser.loading ? 1 : 0)
-                    .accessibilityHidden(!browser.loading)
-                    .accessibilityIdentifier("phone_sign_in_loading")
-                Spacer()
-                Button { browser.webView?.reload() } label: { Image(systemName: "arrow.clockwise") }
-                    .accessibilityLabel("Reload").accessibilityIdentifier("phone_sign_in_reload")
-            }.padding()
-            if let message = browser.error { Text(message).font(.callout).padding().accessibilityIdentifier("phone_sign_in_browser_error") }
-            if let webView = browser.webView { PhoneLoginWebView(webView: webView) }
+            HStack(spacing: 8) {
+                SignInRoundButton(size: 40, label: "Close", identifier: "phone_sign_in_close") {
+                    Task { await closeSignIn() }
+                } glyph: {
+                    SheetGlyph(kind: .close)
+                        .stroke(SessionSheet.chromeInk, style: StrokeStyle(lineWidth: 2.8 * 14 / 24, lineCap: .round))
+                        .frame(width: 14, height: 14)
+                }
+                .disabled(busy)
+                addressPill
+                SignInRoundButton(size: 40, label: "Reload", identifier: "phone_sign_in_reload") {
+                    browser.webView?.reload()
+                } glyph: {
+                    SignInGlyph(kind: .reload)
+                        .stroke(SessionSheet.chromeInk, style: StrokeStyle(lineWidth: 2.4 * 16 / 24, lineCap: .round, lineJoin: .round))
+                        .frame(width: 16, height: 16)
+                }
+            }
+            // Board: a 46pt bar 10pt below the sheet's top, 8pt above the page.
+            .frame(height: 46)
+            .padding(.horizontal, 10)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
+            if let error {
+                Text(error).font(.callout).foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16).padding(.bottom, 8)
+                    .accessibilityIdentifier("phone_sign_in_error")
+            }
+            if let message = browser.error {
+                Text(message).font(.callout).foregroundStyle(S2.ink).padding()
+                    .accessibilityIdentifier("phone_sign_in_browser_error")
+            }
+            if let webView = browser.webView {
+                PhoneLoginWebView(webView: webView)
+            } else {
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 8) {
+                SignInRoundButton(size: 44, label: "Back", identifier: "phone_sign_in_back") {
+                    browser.webView?.goBack()
+                } glyph: {
+                    SignInGlyph(kind: .back)
+                        .stroke(browser.canGoBack ? SessionSheet.chromeInk : signInDisabledInk,
+                                style: StrokeStyle(lineWidth: 2.4 * 18 / 24, lineCap: .round, lineJoin: .round))
+                        .frame(width: 18, height: 18)
+                }
+                .disabled(!browser.canGoBack)
+                SignInRoundButton(size: 44, label: "Forward", identifier: "phone_sign_in_forward") {
+                    browser.webView?.goForward()
+                } glyph: {
+                    SignInGlyph(kind: .forward)
+                        .stroke(browser.canGoForward ? SessionSheet.chromeInk : signInDisabledInk,
+                                style: StrokeStyle(lineWidth: 2.4 * 18 / 24, lineCap: .round, lineJoin: .round))
+                        .frame(width: 18, height: 18)
+                }
+                .disabled(!browser.canGoForward)
+                Button { Task { await reviewCookies() } } label: {
+                    Text(agentRequestID == nil ? "Review" : "I’m signed in")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Capsule().fill(S2.send))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(busy)
+                .accessibilityIdentifier(agentRequestID == nil ? "phone_sign_in_review" : "phone_sign_in_done")
+            }
+            // Board: a 56pt bar 8pt below the page, whose bottom sits 28pt above
+            // the screen's edge, 6pt into the home-indicator inset.
+            .frame(height: 56)
+            .padding(.horizontal, 10)
+            .padding(.top, 8)
+            .padding(.bottom, -6)
         }
+        .background(S2.surface.ignoresSafeArea())
+    }
+
+    /// "accounts.google.com" with a lock, over "For Search Console audit · goes
+    /// to Air" (the session it is for, and the host that receives it).
+    private var addressPill: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 5) {
+                SignInGlyph(kind: .lock)
+                    .stroke(S2.secondaryInk, style: StrokeStyle(lineWidth: 2.8 * 11 / 24, lineCap: .round, lineJoin: .round))
+                    .frame(width: 11, height: 11)
+                Text(browser.currentURL?.host ?? loginURL?.host ?? "")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(S2.ink)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .accessibilityIdentifier("phone_sign_in_current_host")
+                if browser.loading {
+                    ProgressView().controlSize(.mini)
+                        .accessibilityIdentifier("phone_sign_in_loading")
+                }
+            }
+            // Board: the host's line box is 16pt and the purpose line follows
+            // with no gap.
+            .frame(height: 16)
+            Text(purposeLine)
+                .font(.system(size: 11))
+                .foregroundStyle(S2.color(dark: 0xFFB340, light: 0xC93400))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .cssLineBox(size: 11, lineHeight: 13)
+        }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity)
+        .frame(height: 40)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(S2.chip))
+    }
+
+    /// The host that receives the sign-in, by the name the app shows for it.
+    private var destination: String {
+        store.host(forSession: sessionID)?.label ?? (hostName.isEmpty ? "your Mac" : hostName)
+    }
+    private var purposeLine: String {
+        let title = store.session(sessionID)?.title ?? ""
+        return title.isEmpty ? "Goes to \(destination)" : "For \(title) · goes to \(destination)"
     }
     private var review: some View {
         Form {
             Section {
+                if agentRequestID != nil {
+                    Text("Send this sign-in to \(destination)?")
+                        .font(.headline)
+                        .accessibilityIdentifier("phone_sign_in_review_title")
+                }
                 LabeledContent("Browser", value: target?.name ?? "Unavailable")
                 LabeledContent("Website", value: loginURL?.host ?? "")
                 Text("This replaces matching login cookies in that browser. Your password is not included in the transfer.")
@@ -228,7 +357,9 @@ struct PhoneSignInView: View {
                 }
             }
             Section {
-                Button(busy ? "Sending…" : "Send sign-in (\(selectedCookies.count) cookies)") { Task { await transfer() } }
+                Button(busy ? "Sending…" : sendLabel) { Task {
+                    if agentRequestID != nil { await completeRequestedSignIn() } else { await transfer() }
+                } }
                     .disabled(busy || selectedCookies.isEmpty || target == nil)
                     .accessibilityIdentifier("phone_sign_in_send")
                 Button("Back to website") { cookies = []; domains = []; phase = .login }
@@ -257,12 +388,17 @@ struct PhoneSignInView: View {
         }
         dismiss()
     }
+    private var sendLabel: String {
+        let n = selectedCookies.count
+        return agentRequestID != nil ? "Send \(n) \(n == 1 ? "cookie" : "cookies")" : "Send sign-in (\(n) cookies)"
+    }
+
+    /// Sends only the cookies for the domains switched on in the review step.
     private func completeRequestedSignIn() async {
         guard let requestID = agentRequestID, let client, !busy else { return }
+        let cookies = selectedCookies
+        guard !cookies.isEmpty else { error = "Switch on at least one domain to send."; return }
         busy = true; error = nil
-        let all = await browser.cookies()
-        let cookies = PhoneSignInPolicy.selectedCookies(all, domains: Set(all.map { PhoneSignInPolicy.domain($0.domain) }))
-        guard !cookies.isEmpty else { busy = false; error = "Finish signing in before pressing Done."; return }
         defer { busy = false }
         do {
             let completed = try await client.completePhoneSignInRequest(requestID, cookies: cookies)
@@ -301,7 +437,11 @@ struct PhoneSignInView: View {
         busy = true; defer { busy = false }
         cookies = await browser.cookies()
         cookies = PhoneSignInPolicy.selectedCookies(cookies, domains: Set(cookies.map { PhoneSignInPolicy.domain($0.domain) }))
-        guard !cookies.isEmpty else { error = "No login cookies yet. Finish signing in, then tap Review."; return }
+        guard !cookies.isEmpty else {
+            error = agentRequestID == nil ? "No login cookies yet. Finish signing in, then tap Review."
+                : "No login cookies yet. Finish signing in, then tap I’m signed in."
+            return
+        }
         let host = loginURL?.host?.lowercased() ?? ""
         domains = Set(availableDomains.filter { host == $0 || host.hasSuffix("." + $0) })
         error = nil; phase = .review
@@ -465,3 +605,67 @@ private extension PhoneSignInAgentRequest {
         }
     }
 }
+
+/// A round chrome button of the sign-in browser (board `s2-signin`: #2C2C2E).
+/// A disabled back or forward arrow (board `s2-signin`: #636366).
+private let signInDisabledInk = S2.color(dark: 0x636366, light: 0xC7C7CC)
+
+private struct SignInRoundButton<Glyph: View>: View {
+    let size: CGFloat
+    let label: String
+    let identifier: String
+    let action: () -> Void
+    @ViewBuilder let glyph: () -> Glyph
+
+    var body: some View {
+        Button(action: action) {
+            glyph()
+                .frame(width: size, height: size)
+                .background(Circle().fill(S2.chip))
+                .contentShape(Circle())
+        }
+        // Board: a disabled arrow only greys its ink (the caller's colour). The
+        // plain style would also fade the fill; this one leaves the label alone,
+        // and `.disabled` still tells VoiceOver the button is dimmed.
+        .buttonStyle(SignInRoundStyle())
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+private struct SignInRoundStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.opacity(configuration.isPressed ? 0.6 : 1)
+    }
+}
+
+/// The sign-in browser's icons, from the board's SVGs (24-unit box).
+private struct SignInGlyph: Shape {
+    enum Kind { case back, forward, reload, lock }
+    let kind: Kind
+
+    func path(in rect: CGRect) -> Path {
+        let k = min(rect.width, rect.height) / 24
+        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: rect.minX + x * k, y: rect.minY + y * k) }
+        var path = Path()
+        switch kind {
+        case .back:
+            path.move(to: p(15, 5)); path.addLine(to: p(8, 12)); path.addLine(to: p(15, 19))
+        case .forward:
+            path.move(to: p(9, 5)); path.addLine(to: p(16, 12)); path.addLine(to: p(9, 19))
+        case .reload:
+            // M20 12a8 8 0 1 1-2.3-5.6 (clockwise most of the way round), M20 4v5h-5.
+            path.addArc(center: p(12, 12), radius: 8 * k, startAngle: .degrees(0), endAngle: .degrees(315),
+                        clockwise: false)
+            path.move(to: p(20, 4)); path.addLine(to: p(20, 9)); path.addLine(to: p(15, 9))
+        case .lock:
+            path.addRoundedRect(in: CGRect(x: rect.minX + 5 * k, y: rect.minY + 11 * k, width: 14 * k, height: 10 * k),
+                                cornerSize: CGSize(width: 2 * k, height: 2 * k))
+            path.move(to: p(8, 11)); path.addLine(to: p(8, 8))
+            path.addArc(center: p(12, 8), radius: 4 * k, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
+            path.addLine(to: p(16, 11))
+        }
+        return path
+    }
+}
+

@@ -42,3 +42,27 @@ through `/api/term` (`TerminalScreen.swift`, `src/term-scroll.ts`).
 The hand button toggled `allowMouseReporting`. lfg sets it to `false` permanently: with tmux
 `mouse on`, touches became tmux mouse events, and a swipe pasted a tmux buffer (lfg's queued
 agent messages) into the shell. The button is still built, but it is no longer added to the bar.
+
+### 4. The S2 key row (`iOS/iOSAccessoryView.swift`, `iOS/iOSTerminalView.swift`)
+
+lfg's design (board `s2-terminal`) puts every extra key in one horizontally scrolling 50pt row:
+esc, tab, ctrl, ⌥, ↑ ↓ ← →, | / ~, ⌘V and the keyboard switch, in 40×36pt keys (#3A3A3C,
+8pt corners, 14pt monospaced semibold) on #1C1C1E with a 1px #2C2C2E top border. `setupUI`
+and `layoutSubviews` are replaced; the function keys are no longer offered. ⌥ toggles
+`TerminalView.metaModifier` (the next key is ESC-prefixed; the key un-latches on the
+`metaModifierReset` notification), ⌘V calls `TerminalView.paste`, and a latched ctrl or ⌥
+key turns white with black text. The keyboard key hides and shows the keyboard (board icon,
+"Hide keyboard" / "Show keyboard") instead of swapping in SwiftTerm's alternate key panel:
+hidden keeps the terminal first responder with an empty, clear `HiddenKeyboardView`, so the key
+row stays on screen 34pt up as on the board (iOS 26 puts 16pt of keyboard backdrop above any
+non-empty input view, so the view is the home-indicator inset minus 16). The row's top border is 0.5pt. The row is a `KeyRowScrollView` that delays key delivery and lets a drag cancel it, so a swipe that starts on a key scrolls the row instead of pressing the key.
+
+### 5. CSS line height (`iOS/iOSTerminalView.swift`, `Apple/AppleTerminalView.swift`)
+
+Board `s2-terminal` sets the output in 12pt (Wide: 10.5pt) monospace with `line-height: 1.45`.
+SwiftTerm sizes a row as ascent + descent + leading and has no line-spacing option.
+`TerminalView.lineHeightMultiple` (iOS only, nil by default) makes each row
+`pointSize × multiple` tall; `drawTerminalContents` moves the baseline up by half the extra
+height (CSS half-leading), and the caret is the text's ascent + descent tall at the same
+inset instead of filling the row (`caretHeight()`, `caretContentInset()`).
+

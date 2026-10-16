@@ -14,6 +14,13 @@ struct TerminalScreen: View {
     /// One shared shell name across iOS devices, so the iPad picks up where the
     /// phone left off.
     static let sessionName = "phone"
+    /// Board `s2-terminal`: the screen behind the terminal.
+    static let background = SwiftUI.Color(red: 11 / 255, green: 11 / 255, blue: 13 / 255)
+    /// The close button and the Fit / Wide track. The board writes
+    /// `rgba(255,255,255,0.12)` over the page; the canvas draws that as #313132,
+    /// brighter than SwiftUI's blend of the same values (#28282A), so this uses
+    /// the colour the design shows.
+    static let chromeFill = SwiftUI.Color(red: 49 / 255, green: 49 / 255, blue: 50 / 255)
 
     @State private var hostURL: String?
     @State private var controller: TerminalController?
@@ -39,13 +46,17 @@ struct TerminalScreen: View {
                 disconnectedBanner(reason, controller: controller)
             }
             ZStack(alignment: .top) {
-                Color.black
+                Self.background
                 if let controller {
                     TerminalHostingView(controller: controller)
                         // A new controller (host switch) must get a new UIView:
                         // makeUIView runs once per identity, so without this the
                         // old host's dead terminal stayed on screen.
                         .id(ObjectIdentifier(controller))
+                        // Board: the output sits 10pt below the header, 12pt in
+                        // from each side and 10pt above the key row.
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
                     if controller.phase == .connecting {
                         ProgressView()
                             .tint(.white)
@@ -59,7 +70,7 @@ struct TerminalScreen: View {
                 }
             }
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(Self.background.ignoresSafeArea())
         .preferredColorScheme(.dark)
         .task(id: host?.url) { openController() }
         .onChange(of: scenePhase) { _, phase in
@@ -74,84 +85,96 @@ struct TerminalScreen: View {
 
     /// A plain header instead of a navigation bar, as in the session list: system
     /// toolbar items never reach the accessibility tree here, so automation (and
-    /// VoiceOver) couldn't find Close.
+    /// VoiceOver) couldn't find Close. Board `s2-terminal`: close, "Terminal ·
+    /// Shell on Pro", and a Fit / Wide switch.
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Button {
                 controller?.detach()
                 dismiss()
             } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 36, height: 36)
-                    .glassOrRaised(in: Circle(), fallback: Color(white: 0.16), interactive: true)
+                SheetGlyph(kind: .close)
+                    .stroke(SwiftUI.Color.white, style: StrokeStyle(lineWidth: 2.6 * 15 / 24, lineCap: .round))
+                    .frame(width: 15, height: 15)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Self.chromeFill))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close")
             .accessibilityIdentifier("terminalCloseButton")
 
-            Spacer(minLength: 8)
-            // Two lines, not "Terminal · name (host:port)": at iPhone width that
-            // truncated away exactly the part that tells two hosts apart.
-            VStack(spacing: 1) {
-                Text(host?.label ?? "Terminal")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                if let detail = host?.disambiguator(among: settings.hosts) {
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.6))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("terminalTitle")
-            Spacer(minLength: 8)
+            title
+                .frame(maxWidth: .infinity)
 
-            Button {
-                wideTerminal.toggle()
-                controller?.setWideMode(wideTerminal)
-            } label: {
-                Text(wideTerminal ? "Fit" : "Wide")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(minWidth: 36, minHeight: 36)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(wideTerminal ? "Fit terminal to screen" : "Show wide terminal")
-            .accessibilityIdentifier("terminalWidthButton")
-
-            if settings.hosts.count > 1 {
-                Menu {
-                    ForEach(settings.hosts) { h in
-                        Button {
-                            hostURL = h.url
-                        } label: {
-                            Label(h.disambiguatedLabel(among: settings.hosts),
-                                  systemImage: h.url == host?.url ? "checkmark" : "")
-                        }
-                    }
-                } label: {
-                    Image(systemName: "server.rack")
-                        .font(.system(size: 15))
-                        .foregroundStyle(.white)
-                        .frame(width: 36, height: 36)
-                        .glassOrRaised(in: Circle(), fallback: Color(white: 0.16), interactive: true)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Host")
-                .accessibilityIdentifier("terminalHostMenu")
-            } else {
-                // Same width as the close button, so the title stays centred.
-                Color.clear.frame(width: 36, height: 36)
-            }
+            widthSwitch
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .frame(height: 52)
+    }
+
+    /// "Terminal" over "Shell on Pro". With several hosts it is also the host
+    /// switch (the old separate host button).
+    @ViewBuilder
+    private var title: some View {
+        let label = VStack(spacing: 1) {
+            Text("Terminal")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(S2.ink)
+            Text("Shell on \(host?.label ?? "the host")")
+                .font(.system(size: 12))
+                .foregroundStyle(S2.secondaryInk)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("terminalTitle")
+        if settings.hosts.count > 1 {
+            Menu {
+                ForEach(settings.hosts) { h in
+                    Button {
+                        hostURL = h.url
+                    } label: {
+                        Label(h.disambiguatedLabel(among: settings.hosts),
+                              systemImage: h.url == host?.url ? "checkmark" : "")
+                    }
+                }
+            } label: { label }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("terminalHostMenu")
+        } else {
+            label
+        }
+    }
+
+    /// Fit / Wide (board: a 92×32 pill, the chosen half white).
+    private var widthSwitch: some View {
+        HStack(spacing: 0) {
+            widthOption("Fit", selected: !wideTerminal) { setWide(false) }
+            widthOption("Wide", selected: wideTerminal) { setWide(true) }
+        }
+        .padding(2)
+        .background(Capsule().fill(Self.chromeFill))
+        .accessibilityIdentifier("terminalWidthButton")
+    }
+
+    private func widthOption(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(selected ? SwiftUI.Color.black : SwiftUI.Color.white)
+                .frame(width: 44, height: 28)
+                .background { if selected { Capsule().fill(SwiftUI.Color.white) } }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label == "Fit" ? "Fit terminal to screen" : "Show wide terminal")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func setWide(_ wide: Bool) {
+        guard wideTerminal != wide else { return }
+        wideTerminal = wide
+        controller?.setWideMode(wide)
     }
 
     private func openController() {
@@ -214,10 +237,16 @@ final class TerminalController: NSObject {
         self.client = client
         self.sessionName = sessionName
         let view = SwiftTerm.TerminalView(frame: CGRect(x: 0, y: 0, width: 390, height: 600))
-        view.font = UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-        view.nativeBackgroundColor = .black
-        view.nativeForegroundColor = UIColor(white: 0.92, alpha: 1)
-        view.backgroundColor = .black
+        // Board `s2-terminal`: 12pt monospace on a 1.45 line, #D1D1D6 on #0B0B0D,
+        // with a steady block caret in the text colour.
+        view.font = Self.font(wide: false)
+        view.lineHeightMultiple = 1.45
+        let background = UIColor(red: 11 / 255, green: 11 / 255, blue: 13 / 255, alpha: 1)
+        let ink = UIColor(red: 209 / 255, green: 209 / 255, blue: 214 / 255, alpha: 1)
+        view.nativeBackgroundColor = background
+        view.nativeForegroundColor = ink
+        view.backgroundColor = background
+        view.getTerminal().setCursorStyle(.steadyBlock)
         view.accessibilityIdentifier = "terminalView"
         // Never forward touches as mouse events. tmux here runs with `mouse on`,
         // so a swipe became clicks and drags inside tmux, and one pasted a tmux
@@ -227,6 +256,8 @@ final class TerminalController: NSObject {
         viewport = TerminalViewportView(terminalView: view)
         super.init()
         view.terminalDelegate = self
+        view.caretColor = ink
+        view.caretTextColor = background
 
         // Vertical drags scroll the transcript. The shell runs in tmux, so history
         // lives on the server; this view only ever holds the visible screen, and
@@ -241,12 +272,19 @@ final class TerminalController: NSObject {
 
     @ObservationIgnored private var scrollRemainder: CGFloat = 0
     @ObservationIgnored private var flingTask: Task<Void, Never>?
-    @ObservationIgnored private var panAxis: PanAxis = .vertical
 
-    private enum PanAxis { case horizontal, vertical }
+    /// Board: Fit is 12pt, Wide is 10.5pt, both on a 1.45 line and both fitted
+    /// to the screen's width (Wide gains columns by shrinking the type).
+    static func font(wide: Bool) -> UIFont {
+        UIFont.monospacedSystemFont(ofSize: wide ? 10.5 : 12, weight: .regular)
+    }
 
     func setWideMode(_ wide: Bool) {
-        viewport.isWide = wide
+        let font = Self.font(wide: wide)
+        guard terminalView.font.pointSize != font.pointSize else { return }
+        terminalView.font = font
+        // The row height changed, so the whole-row frame does too.
+        viewport.setNeedsLayout()
     }
 
     private var rowHeight: CGFloat {
@@ -259,19 +297,13 @@ final class TerminalController: NSObject {
         case .began:
             flingTask?.cancel()
             scrollRemainder = 0
-            let velocity = pan.velocity(in: terminalView)
-            panAxis = abs(velocity.x) > abs(velocity.y) ? .horizontal : .vertical
         case .changed:
             let delta = pan.translation(in: terminalView)
             pan.setTranslation(.zero, in: terminalView)
-            if panAxis == .horizontal {
-                viewport.scrollHorizontally(by: -delta.x)
-            } else {
-                // Finger down reveals older output, as in any scroll view.
-                scrollBy(points: delta.y)
-            }
+            // Finger down reveals older output, as in any scroll view.
+            scrollBy(points: delta.y)
         case .ended:
-            if panAxis == .vertical { fling(velocity: pan.velocity(in: terminalView).y) }
+            fling(velocity: pan.velocity(in: terminalView).y)
         default:
             break
         }
@@ -348,12 +380,12 @@ final class TerminalController: NSObject {
 }
 
 extension TerminalController: UIGestureRecognizerDelegate {
-    /// A wide grid accepts sideways drags; both axes leave text selection alone.
+    /// Vertical drags only, and never while text is selected.
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
         let v = pan.velocity(in: terminalView)
         guard !terminalView.selectionActive else { return false }
-        return abs(v.y) > abs(v.x) || viewport.hasHorizontalOverflow
+        return abs(v.y) > abs(v.x)
     }
 
     /// SwiftTerm's own recognizers on the same view (the scroll view's pan, tap and
@@ -388,22 +420,11 @@ extension TerminalController: @preconcurrency TerminalViewDelegate {
     func rangeChanged(source: SwiftTerm.TerminalView, startY: Int, endY: Int) {}
 }
 
-/// Keeps the terminal grid wide enough for desktop-oriented TUIs while clipping
-/// it to the phone viewport. The terminal's actual bounds drive PTY resize.
+/// Holds the terminal at the viewport's size and clips it. The terminal's
+/// bounds drive the PTY resize.
 @MainActor
 final class TerminalViewportView: UIView {
     let terminalView: SwiftTerm.TerminalView
-    var isWide = false {
-        didSet {
-            horizontalOffset = 0
-            setNeedsLayout()
-            layoutIfNeeded()
-        }
-    }
-
-    private var horizontalOffset: CGFloat = 0
-    private var gridWidth: CGFloat = 0
-    var hasHorizontalOverflow: Bool { gridWidth > bounds.width + 1 }
 
     init(terminalView: SwiftTerm.TerminalView) {
         self.terminalView = terminalView
@@ -414,22 +435,17 @@ final class TerminalViewportView: UIView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func scrollHorizontally(by points: CGFloat) {
-        guard hasHorizontalOverflow else { return }
-        horizontalOffset = min(max(0, horizontalOffset + points), gridWidth - bounds.width)
-        layoutTerminal()
-    }
-
     override func layoutSubviews() {
         super.layoutSubviews()
-        let cellWidth = "W".size(withAttributes: [.font: terminalView.font]).width
-        gridWidth = isWide ? max(bounds.width, ceil(120 * cellWidth)) : bounds.width
-        horizontalOffset = min(horizontalOffset, max(0, gridWidth - bounds.width))
-        layoutTerminal()
-    }
-
-    private func layoutTerminal() {
-        let frame = CGRect(x: -horizontalOffset, y: 0, width: gridWidth, height: bounds.height)
+        // Whole rows only, sitting on the bottom edge: the part of a row that does
+        // not fit goes above the first row, so the last row keeps the board's 10pt
+        // above the key row. (+0.5 keeps float error from dropping a row.)
+        var frame = bounds
+        if let multiple = terminalView.lineHeightMultiple {
+            let row = terminalView.font.pointSize * multiple
+            let height = min(bounds.height, (bounds.height / row).rounded(.down) * row + 0.5)
+            frame = CGRect(x: 0, y: bounds.height - height, width: bounds.width, height: height)
+        }
         if terminalView.frame != frame { terminalView.frame = frame }
     }
 }

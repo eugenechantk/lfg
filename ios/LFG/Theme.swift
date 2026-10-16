@@ -48,7 +48,9 @@ enum Theme {
         case .working:    return dot(dark: 0x30D158, light: 0x34C759)
         case .unread:     return dot(dark: 0xBF5AF0, light: 0xAF52DE)
         case .idle:       return dot(dark: 0x0A84FF, light: 0x007AFF)
-        case .closed:     return Color(.tertiaryLabel)
+        // S2 board `s2-list`: an opaque grey. tertiaryLabel is translucent and
+        // read #464649 on black, too dark against the board's #636366.
+        case .closed:     return dot(dark: 0x636366, light: 0xAEAEB2)
         }
     }
 }
@@ -161,6 +163,10 @@ extension Glass {
 struct ChromeFade: View {
     var edge: VerticalEdge = .top
     let barHeight: CGFloat
+    /// S2 session view: an opaque scrim down to the bar's bottom edge (the
+    /// board clips the transcript there), then the tail of its gradient over
+    /// the next 12pt, with no glass.
+    var solid = false
     @Environment(\.colorScheme) private var colorScheme
 
     /// How far past the bar's border the ramp runs out, per edge.
@@ -169,6 +175,12 @@ struct ChromeFade: View {
     /// Strength (0…1) at points measured from the screen edge.
     private var curve: [(point: CGFloat, strength: Double)] {
         let b = barHeight
+        if solid {
+            switch edge {
+            case .top: return [(0, 1), (b, 1), (b + 0.5, 0.34), (b + 12, 0)]
+            case .bottom: return [(0, 1), (b + 10, 1), (b + 10.5, 0.37), (b + 26, 0)]
+            }
+        }
         switch edge {
         case .top:
             return [(0, 0.95), (max(b - 54, 0), 0.9), (b - 32, 0.78), (b - 16, 0.6),
@@ -192,18 +204,23 @@ struct ChromeFade: View {
             startPoint: start, endPoint: end
         )
         let scrim = LinearGradient(
-            stops: points.map { .init(color: base.opacity(0.85 * $0.strength), location: $0.location) },
+            stops: points.map { .init(color: base.opacity((solid ? 1 : 0.85) * $0.strength), location: $0.location) },
             startPoint: start, endPoint: end
         )
-
-        // The glass shape is inset negatively so its specular perimeter is
-        // rendered outside this field; the mask clips that rim away.
-        ZStack {
-            Rectangle()
-                .fill(.clear)
-                .glassEffect(.chrome(colorScheme), in: Rectangle().inset(by: -48))
-                .mask(glassMask)
-            scrim
+        Group {
+            if solid {
+                scrim
+            } else {
+                // The glass shape is inset negatively so its specular perimeter
+                // is rendered outside this field; the mask clips that rim away.
+                ZStack {
+                    Rectangle()
+                        .fill(.clear)
+                        .glassEffect(.chrome(colorScheme), in: Rectangle().inset(by: -48))
+                        .mask(glassMask)
+                    scrim
+                }
+            }
         }
         .frame(height: total)
         .allowsHitTesting(false)
@@ -298,5 +315,56 @@ extension View {
         } else {
             self.buttonStyle(.plain)
         }
+    }
+}
+
+/// S2 session-view palette (canvas boards `s2-view`, `s2-queued`, `s2-tools-*`).
+/// Dark values are the boards' hexes; light values are their counterparts.
+enum S2 {
+    static func color(dark: UInt32, light: UInt32) -> Color {
+        func ui(_ hex: UInt32) -> UIColor {
+            UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255,
+                    green: CGFloat((hex >> 8) & 0xFF) / 255,
+                    blue: CGFloat(hex & 0xFF) / 255,
+                    alpha: 1)
+        }
+        return Color(UIColor { $0.userInterfaceStyle == .dark ? ui(dark) : ui(light) })
+    }
+
+    static let live = color(dark: 0x30D158, light: 0x248A3D)
+    static let attention = color(dark: 0xFF9F0A, light: 0xC93400)
+    static let failed = color(dark: 0xFF453A, light: 0xD70015)
+    static let ink = color(dark: 0xF2F2F7, light: 0x1C1C1E)
+    /// Pure white on dark: titles, menu labels, panel titles and options
+    /// (prose, pills and secondary buttons use `ink`).
+    static let white = color(dark: 0xFFFFFF, light: 0x000000)
+    static let secondaryInk = color(dark: 0xA1A1A6, light: 0x6C6C70)
+    static let metaInk = color(dark: 0x8E8E93, light: 0x8E8E93)
+    /// Composer and pill surfaces.
+    static let surface = color(dark: 0x1C1C1E, light: 0xFFFFFF)
+    static let surfaceBorder = color(dark: 0x38383A, light: 0xD1D1D6)
+    static let chip = color(dark: 0x2C2C2E, light: 0xF2F2F7)
+    static let chipInk = color(dark: 0xD1D1D6, light: 0x3A3A3C)
+    static let ringTrack = color(dark: 0x3A3A3C, light: 0xE5E5EA)
+    static let send = color(dark: 0x0A6EE0, light: 0x0A6EE0)
+    /// The Stop button inverts the surface: a light disc with a dark square.
+    static let stopDisc = color(dark: 0xF2F2F7, light: 0x1C1C1E)
+    static let stopSquare = color(dark: 0x000000, light: 0xFFFFFF)
+}
+
+extension View {
+    /// Lays text out in the boards' CSS line box (`font-size` / `line-height`).
+    /// SwiftUI `Text` has no line-height: its line is the font's natural height
+    /// (~1.19x the size for SF), so a CSS box taller than that needs the extra
+    /// split as half-leading above and below the text, plus the same extra
+    /// between lines. Use the board's two numbers as they are.
+    func cssLineBox(size: CGFloat, lineHeight: CGFloat, weight: UIFont.Weight = .regular,
+                    monospaced: Bool = false) -> some View {
+        let natural = (monospaced ? UIFont.monospacedSystemFont(ofSize: size, weight: weight)
+                                  : UIFont.systemFont(ofSize: size, weight: weight)).lineHeight
+        let extra = max(0, lineHeight - natural)
+        return self
+            .lineSpacing(extra)
+            .padding(.vertical, extra / 2)
     }
 }

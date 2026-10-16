@@ -258,6 +258,11 @@ import LFGCore
     /// text), so the optimistic bubble hands off seamlessly to the real message.
     /// Keyed by sessionId, in send order.
     private(set) var pendingSends: [String: [PendingSend]] = [:]
+    #if DEBUG
+    private var s2FixtureOfflineSince: [String: Double] = [:]
+    private var s2FixtureFileCount: [String: Int] = [:]
+    private var s2ViewFixtureSelected = false
+    #endif
 
     struct PendingSend: Identifiable, Equatable {
         let id: String            // client-generated UUID
@@ -598,6 +603,9 @@ import LFGCore
 
     func refreshChildAgents(_ sessionId: String) async {
         guard !sessionId.isEmpty else { return }
+        #if DEBUG
+        if Self.s2ViewFixtureMode != nil, sessionId.hasPrefix("s2fx-") { return }
+        #endif
         // SEND routing, not read routing: sidecars are only guaranteed on the
         // owner. `readClient` sends a live session's read to a peer whenever the
         // owner is merely connecting/degraded, and the peer's synced copy of
@@ -674,7 +682,33 @@ import LFGCore
     /// that is down. Drives the list's dimmed row treatment and the disabled
     /// composer, so no steering action silently fails.
     func isOffline(_ id: String) -> Bool {
-        MultiHost.isOffline(owner: host(forSession: id), isClosed: isClosed(id), reachable: isNotKnownDown)
+        #if DEBUG
+        if let since = s2FixtureOfflineSince[id] { return since > 0 }
+        #endif
+        return MultiHost.isOffline(owner: host(forSession: id), isClosed: isClosed(id), reachable: isNotKnownDown)
+    }
+
+    /// When the running turn started (epoch ms), for "Working · 4m" on the list
+    /// row and the session's top bar: the newest genuine user turn, from the
+    /// host's `lastUserAt` or a newer one the journal has already streamed (the
+    /// REST list only refreshes every 60s). Messages absorbed mid-turn
+    /// (`queued:` ids) and Claude's interrupt marker don't start a turn.
+    func turnStartedAt(_ session: Session) -> Double? {
+        let streamed = session.sessionId.flatMap { transcripts[$0] }?.last { m in
+            m.rendersAsUserBubble && !(m.id?.hasPrefix("queued:") ?? false)
+                && !m.text.hasPrefix("[Request interrupted by user")
+        }?.ts
+        return [session.lastUserAt, streamed].compactMap { $0 }.max()
+    }
+
+    /// When this session's host went unreachable (epoch ms), for the top bar's
+    /// "Air offline · 2m". Nil when it is reachable or the time is unknown.
+    func offlineSinceMs(_ id: String) -> Double? {
+        #if DEBUG
+        if let since = s2FixtureOfflineSince[id] { return since }
+        #endif
+        guard isOffline(id), let host = host(forSession: id) else { return nil }
+        return hostStateByHost[host.id]?.failingSince.map { $0.timeIntervalSince1970 * 1_000 }
     }
 
     /// Ask the UI to open a session (driven by a tapped push notification).
@@ -1293,15 +1327,9 @@ import LFGCore
             $0.failed = terminal.failed
             $0.queuedOffline = terminal.queuedOffline
         }
-        // Prefer the host's own sentence, which the send site already stored on
-        // the row, over a generic "not sent".
-        let reason = pendingSends[location.sid]?
-            .first { $0.id == location.pid }?
-            .failureReason
-        recordError(
-            SendFailurePolicy.bannerMessage(reason: reason),
-            audience: .pendingSend(sessionID: location.sid, clientID: clientId)
-        )
+        // No banner (S2, board `s2-queued-failed`): the strip row's "Not sent"
+        // is the one signal, and Eugene asked for no failure reason. The old
+        // banner showed only while this same failed row was on screen.
     }
 
     private func replayPendingOutboxOnStart() async {
@@ -1320,6 +1348,13 @@ import LFGCore
 
         let now = Date().timeIntervalSince1970 * 1000
         for row in rows {
+            #if DEBUG
+            // Rows a fixture session left behind are noise: drop them.
+            if row.sessionId.hasPrefix("s2fx-") {
+                await deleteOutbox(row.clientId)
+                continue
+            }
+            #endif
             if hasPendingSend(clientId: row.clientId) { continue }
             if replayingOutbox.contains(row.clientId) { continue }
 
@@ -2851,7 +2886,327 @@ import LFGCore
         if let dl = deepLinkSession, fresh.contains(where: { $0.sessionId == dl.sessionId }) {
             deepLinkSession = nil
         }
+        #if DEBUG
+        applyS2ListFixtureIfRequested()
+        #endif
     }
+
+    #if DEBUG
+    /// S2 list fixture (canvas board `s2-list`): replaces the merged list with the
+    /// board's own sample sessions while the real host connections stay up, so
+    /// the visual verifier compares like with like and the states live data
+    /// rarely has at once (a question, a sign-in, a task run) are all on screen.
+    /// Launch with `LFG_S2_LIST_FIXTURE=1`. Debug builds only.
+    private func applyS2ListFixtureIfRequested() {
+        // "1" = the board as drawn; "taskbadge" also makes the first waiting row a
+        // task run, so the Tasks tab badge has something to count.
+        let mode = ProcessInfo.processInfo.environment["LFG_S2_LIST_FIXTURE"]
+        let viewMode = Self.s2ViewFixtureMode
+        guard mode == "1" || mode == "taskbadge" || viewMode != nil else { return }
+        let now = Date().timeIntervalSince1970 * 1_000
+        let pro = settings.hosts.first { $0.label == "Pro" }?.id ?? settings.hosts.first?.id
+        let air = settings.hosts.first { $0.label == "Air" }?.id ?? settings.hosts.last?.id
+        struct Row {
+            let id: String, title: String, cwd: String, model: String, agent: String
+            let host: String?, agoMin: Double
+            var busyMin: Double? = nil, subagents = 0, task = false, closed = false
+            var unread = false, question: String? = nil, signIn: String? = nil
+        }
+        let rows: [Row] = [
+            Row(id: "s2fx-ship", title: "Ship lfg 1.3.1 to TestFlight", cwd: "/Users/eugene/dev/personal/lfg",
+                model: "Opus 5.5", agent: "claude", host: pro, agoMin: 2, task: mode == "taskbadge",
+                question: "upload build 205 now?"),
+            Row(id: "s2fx-console", title: "Search Console audit", cwd: "/Users/eugene/inbox",
+                model: "GPT-6 Astra", agent: "codex", host: air, agoMin: 5, signIn: "search.google.com"),
+            Row(id: "s2fx-fork", title: "Fork session feature", cwd: "/Users/eugene/dev/personal/lfg",
+                model: "Opus 5.5", agent: "claude", host: pro, agoMin: 1, busyMin: 3, subagents: 2),
+            Row(id: "s2fx-readwise", title: "Readwise sync check", cwd: "/Users/eugene/dev/readwise-sync",
+                model: "Codex", agent: "codex", host: pro, agoMin: 1, busyMin: 12, task: true),
+            Row(id: "s2fx-glass", title: "Liquid Glass tab bar", cwd: "/Users/eugene/dev/personal/lfg",
+                model: "GPT-5.6 Sol", agent: "codex", host: pro, agoMin: 12, unread: true),
+            Row(id: "s2fx-review", title: "Daily repo review", cwd: "/Users/eugene/dev/personal/lfg",
+                model: "Opus 5.5", agent: "claude", host: pro, agoMin: 300, task: true, unread: true),
+            Row(id: "s2fx-iphone", title: "Enhance iPhone control skill", cwd: "/Users/eugene/inbox",
+                model: "GPT-6 Astra", agent: "codex", host: pro, agoMin: 300, unread: true),
+            Row(id: "s2fx-shinkai", title: "Shinkai room decorator", cwd: "/Users/eugene/dev/SleepingBeauty",
+                model: "Opus 5.5", agent: "claude", host: pro, agoMin: 1_440),
+            Row(id: "s2fx-import", title: "Readwise import fix", cwd: "/Users/eugene/dev/readwise-sync",
+                model: "Codex", agent: "codex", host: air, agoMin: 1_440, closed: true),
+        ]
+        sessions = rows.map { r in
+            Session(sessionId: r.id, title: r.title, agent: r.agent, model: r.model, cwd: r.cwd,
+                    startedAt: r.busyMin.map { now - $0 * 60_000 }, lastActivityAt: now - r.agoMin * 60_000,
+                    busy: r.busyMin != nil, runningChildAgentCount: r.subagents,
+                    last: SessionMessage(id: "\(r.id)-last", role: "assistant", kind: "text", text: "fixture", ts: 1),
+                    closed: r.closed,
+                    task: r.task ? TaskOrigin(id: "s2fx-task", name: r.title) : nil)
+        }
+        for r in rows {
+            hostBySession[r.id] = r.closed ? nil : r.host
+            busy[r.id] = r.busyMin != nil
+            if let q = r.question {
+                prompts[r.id] = AgentPrompt(question: q, options: [])
+            } else if let site = r.signIn {
+                prompts[r.id] = AgentPrompt(question: "Sign in to \(site)", options: [],
+                                            signIn: PromptSignIn(requestId: "s2fx", url: "https://\(site)",
+                                                                 website: site, targetName: "Chrome"))
+            } else {
+                prompts[r.id] = nil
+            }
+            lastSeenMessageID[r.id] = r.unread ? nil : "\(r.id)-last"
+            manualUnread.remove(r.id)
+        }
+        if let viewMode { applyS2ViewFixtureState(viewMode, now: now) }
+    }
+
+    /// S2 session-view fixture (boards `s2-view`, `s2-queued`, `s2-queued-failed`):
+    /// opens one of the list fixture's sessions with the board's transcript,
+    /// subagents and queued messages. `LFG_S2_VIEW_FIXTURE=working|queued|failed`.
+    static let s2ViewFixtureMode: String? = {
+        let mode = ProcessInfo.processInfo.environment["LFG_S2_VIEW_FIXTURE"]
+        return ["working", "queued", "failed", "question", "permission", "plan", "signin", "menu", "subagents", "files"]
+            .contains(mode ?? "") ? mode : nil
+    }()
+
+    private static var s2ViewFixtureTarget: String {
+        switch s2ViewFixtureMode {
+        case "failed", "signin": return "s2fx-console"
+        case "question", "permission", "plan": return "s2fx-ship"
+        default: return "s2fx-fork"
+        }
+    }
+
+    private func applyS2ViewFixtureState(_ rawMode: String, now: Double) {
+        let target = Self.s2ViewFixtureTarget
+        // `menu` and `subagents` (boards `s2-menu`, `s2-subagents`) are the
+        // working session with a sheet open.
+        let mode = ["menu", "subagents", "files"].contains(rawMode) ? "working" : rawMode
+        // The model chip reads the session's effort.
+        let waiting = ["question", "permission", "plan", "signin"].contains(mode)
+        if let i = sessions.firstIndex(where: { $0.sessionId == target }) {
+            sessions[i].effort = (mode == "failed" || mode == "signin") ? "medium" : "high"
+            if mode == "working" || mode == "queued" {
+                sessions[i].busy = true
+                sessions[i].runningChildAgentCount = mode == "working" ? 1 : 0
+            }
+            if rawMode == "menu" {
+                sessions[i].startedAt = now - 125 * 60_000
+                sessions[i].tmuxName = "lfg-fork-3"
+            }
+        }
+        if waiting {
+            busy[target] = false
+            prompts[target] = Self.s2FixturePrompt(mode, now: now)
+        }
+        if mode == "failed" {
+            // Air is down and the session is idle: no sign-in prompt on screen.
+            prompts[target] = nil
+            busy[target] = false
+            if s2FixtureOfflineSince[target] == nil { s2FixtureOfflineSince[target] = now - 120_000 }
+        }
+        if !s2ViewFixtureSelected {
+            s2ViewFixtureSelected = true
+            Task { @MainActor in self.requestSelection(target) }
+        }
+    }
+
+    /// The prompt each panel board shows (`s2-question` kinds, `s2-signin-prompt`).
+    private static func s2FixturePrompt(_ mode: String, now: Double) -> AgentPrompt {
+        func opts(_ labels: [String]) -> [PromptOption] {
+            labels.enumerated().map { PromptOption(index: $0.offset + 1, label: $0.element, selected: $0.offset == 0) }
+        }
+        switch mode {
+        case "permission":
+            return AgentPrompt(question: "Do you want to proceed?",
+                               options: opts(["Yes", "Yes, and don't ask again for fastlane commands in /Users/eugene/dev/personal/lfg", "No"]),
+                               askedAt: now - 120_000, kind: "permission",
+                               permission: PromptPermission(tool: "Bash", command: "bundle exec fastlane beta upload:true",
+                                                            detail: "Upload build 205 to TestFlight"))
+        case "plan":
+            return AgentPrompt(question: "Claude has written up a plan and is ready to execute. Would you like to proceed?",
+                               options: opts(["Yes, auto-accept edits", "Yes, manually approve edits", "No, keep planning"]),
+                               askedAt: now - 120_000, kind: "plan",
+                               plan: PromptPlan(text: """
+                               # Ship lfg 1.3.1
+
+                               1. Bump the build to 205 and archive
+                               2. Run the release checklist on the simulator
+                               3. Upload with fastlane, then post the notes
+
+                               ## Notes
+                               - The fork fix and the glass tab bar are in this build.
+                               """, file: "/Users/eugene/.claude/plans/ship-lfg-1-3-1.md"))
+        case "signin":
+            return AgentPrompt(question: "Sign in to search.google.com on your iPhone", options: [], header: "Sign in",
+                               signIn: PromptSignIn(requestId: "s2fx", url: "https://search.google.com",
+                                                    website: "search.google.com", targetName: "Chrome on Eugenes-MacBook-Air"),
+                               askedAt: now - 300_000, kind: "signIn")
+        default:
+            return AgentPrompt(question: "Upload build 205 to TestFlight now?",
+                               options: opts(["Yes, upload now", "Internal testers only", "No, wait for my review",
+                                              "Type something.", "Chat about this"]),
+                               detail: "It has the fork fix and the glass tab bar. Upload takes about 4 minutes.",
+                               askedAt: now - 120_000, kind: "question")
+        }
+    }
+
+    /// Seeds the board's transcript for the fixture session. True when it did.
+    private func seedS2ViewFixture(_ id: String) -> Bool {
+        guard let rawMode = Self.s2ViewFixtureMode, id.hasPrefix("s2fx-") else { return false }
+        let mode = ["menu", "subagents", "files"].contains(rawMode) ? "working" : rawMode
+        guard id == Self.s2ViewFixtureTarget, transcripts[id] == nil else { return true }
+        let now = Date().timeIntervalSince1970 * 1_000
+        var seq = 0
+        var out: [SessionMessage] = []
+        func at(_ ms: Double) -> Double { now + ms }
+        func user(_ text: String, _ ts: Double) {
+            seq += 1
+            out.append(SessionMessage(id: "s2fx-m\(seq)", role: "user", kind: "text", text: text, ts: ts))
+        }
+        func prose(_ text: String, _ ts: Double) {
+            seq += 1
+            out.append(SessionMessage(id: "s2fx-m\(seq)", role: "assistant", kind: "text", text: text, ts: ts))
+        }
+        func call(_ name: String, _ target: String, _ result: String, _ ts: Double, ms: Double = 400,
+                  input: String = "{}") {
+            seq += 1
+            let uid = "s2fx-t\(seq)"
+            out.append(SessionMessage(id: "s2fx-m\(seq)", role: "assistant", kind: "tool_use",
+                                      text: "\(name): \(input)", ts: ts, toolUseId: uid,
+                                      tool: ToolCallInfo(name: name, target: target)))
+            seq += 1
+            out.append(SessionMessage(id: "s2fx-m\(seq)", role: "user", kind: "tool_result",
+                                      text: result, ts: ts + ms, toolUseId: uid))
+        }
+        let repo = "/Users/eugene/dev/personal/lfg"
+        switch mode {
+        case "question", "permission", "plan":
+            let turn = at(-400_000)
+            user("ship 1.3.1 to testflight", turn)
+            for (i, cmd) in ["git status --short", "bun test", "swift test --package-path ios/LFGCore",
+                             "xcodegen generate", "bundle exec fastlane bump build:205",
+                             "bundle exec fastlane archive", "bundle exec fastlane checklist"].enumerated() {
+                call("Bash", cmd, "ok", turn + 5_000 + Double(i) * 20_000, ms: 4_000)
+            }
+            call("Edit", "\(repo)/ios/project.yml", "The file has been updated.", turn + 160_000, ms: 150)
+            prose("Build 205 passed all tests and is archived. Before I upload it, one check.", turn + 170_000)
+        case "signin":
+            let turn = at(-420_000)
+            user("audit search console for lfg.app and list the top crawl errors", turn)
+            call("Bash", "open -a \"Google Chrome\" https://search.google.com/search-console", "", turn + 8_000, ms: 900)
+            prose("Search Console wants a login. I’ll wait here until you sign in.", turn + 12_000)
+        case "failed":
+            user("list the top crawl errors for lfg.app", at(-600_000))
+            prose("There are 3 crawl errors. Two are 404s from old release notes, and one is a redirect loop on /download.",
+                  at(-590_000))
+        default:
+            let turn = mode == "queued" ? at(-220_000) : at(-192_000)
+            user("when i tap fork on desktop or phone, it should open the fork right away", turn)
+            prose("I’ll trace how fork works on both clients first.", turn + 4_000)
+            call("Bash", "rg -n \"forkSession\" ios src desktop",
+                 "ios/LFG/SessionStore.swift:4120:    func fork(_ request: ForkRequest) async -> String? {\nsrc/sessions.ts:2210:export async function forkSession(\ndesktop/LFGSessions.swift:880:    func forkSession(_ id: String) {",
+                 turn + 6_000, ms: 300)
+            for (i, file) in ["ios/LFG/SessionStore.swift", "desktop/LFGSessions.swift", "src/sessions.ts",
+                              "src/commands/serve.ts", "ios/LFG/SessionDetailView.swift", "src/fork.ts"].enumerated() {
+                let start = 1_600 + i * 200
+                let body = (0..<61).map { "\(start + $0)  // \(file)" }.joined(separator: "\n")
+                call("Read", "\(repo)/\(file)", body, turn + 8_000 + Double(i) * 1_000, ms: 120,
+                     input: "{\"file_path\": \"\(repo)/\(file)\", \"offset\": \(start), \"limit\": 61}")
+            }
+            call("Bash", "bun test src/sessions.test.ts", "bun test v1.3.1\n\nsrc/sessions.test.ts:\n✓ forkSession returns the new id\n✓ small fork defers the transcript\n\n 12 pass\n 0 fail",
+                 turn + 16_000, ms: 4_200)
+            call("Bash", "git log --oneline -5 -- src/fork.ts", "8b0be91 ios: show \"Forking…\" while a fork runs\n0e9cea0 feat: refine task navigation",
+                 turn + 21_000, ms: 200)
+            prose("Small forks wait for a transcript that is only written on the first turn. I’ll open the fork as soon as the host returns its id.",
+                  turn + 24_000)
+            call("Edit", "\(repo)/ios/LFG/SessionStore.swift", "The file has been updated.", turn + 30_000, ms: 150)
+            call("Edit", "\(repo)/desktop/LFGSessions.swift", "The file has been updated.", turn + 34_000, ms: 150)
+            if mode == "queued" {
+                // 46 lines ending like the board (`s2-tools-single`), so the card
+                // shows "last 8 of 46" and "Show all 46 lines".
+                var lines = ["bun test v1.3.1", "", "src/sessions.test.ts:"]
+                lines += (1...35).map { "✓ sessions case \($0) [0.\($0 % 9 + 1)ms]" }
+                lines += ["✓ forkSession opens before the transcript [3.1ms]",
+                          "✓ forkSession keeps the parent's model [0.8ms]",
+                          "✓ listSessions maps a fork to its own id [1.2ms]",
+                          "", " 42 pass", " 0 fail", " 118 expect() calls",
+                          "Ran 42 tests across 1 file. [1.80s]"]
+                call("Bash", "bun test src/sessions.test.ts", lines.joined(separator: "\n"),
+                     turn + 40_000, ms: 1_800)
+            }
+        }
+        transcripts[id] = out
+        bumpTranscript(id)
+        // Pending sends persist across launches; each mode starts from its own.
+        pendingSends[id] = []
+        switch mode {
+        case "working":
+            childAgentsBySession[id] = [
+                ChildAgentSession(id: "s2fx-c1", description: "Trace fork on desktop", status: .running),
+                ChildAgentSession(id: "s2fx-c2", description: "Read the fork tests", status: .completed),
+                ChildAgentSession(id: "s2fx-c3", description: "Check transcript writes", status: .completed),
+                ChildAgentSession(id: "s2fx-c4", description: "Probe the Air host", status: .failed),
+            ]
+            s2FixtureFileCount[id] = 4
+        case "question", "permission", "plan", "signin":
+            childAgentsBySession[id] = []
+        case "queued":
+            childAgentsBySession[id] = []
+            s2FixtureFileCount[id] = 4
+            pendingSends[id] = [PendingSend(id: "s2fx-q1", displayText: "also open the fork in a new window on desktop, not a tab",
+                                            matchText: "also open the fork in a new window on desktop, not a tab",
+                                            ts: now - 20_000, queuedBehindTurn: true, confirmed: false)]
+        default:
+            childAgentsBySession[id] = []
+            pendingSends[id] = [PendingSend(id: "s2fx-f1", displayText: "fix the redirect loop first, then the 404s",
+                                            matchText: "fix the redirect loop first, then the 404s",
+                                            ts: now - 60_000, failed: true, confirmed: false)]
+        }
+        if rawMode == "menu" {
+            // Board `s2-menu`: Files & links 6, Subagents 2.
+            childAgentsBySession[id] = Array(childAgentsBySession[id]?.prefix(2) ?? [])
+            s2FixtureFileCount[id] = 6
+        }
+        if rawMode == "files" {
+            // Board `s2-files`: five files in three sections, and two links.
+            let evidence = "\(repo)/.claude/evidence"
+            let mentions: [(String, Double)] = [
+                ("Before: \(evidence)/fork-before.png", 6), ("After: \(evidence)/fork-after.png", 4),
+                ("Recording: \(evidence)/fork-opens-right-away.mp4", 3), ("Notes: \(evidence)/fork-latency.md", 4),
+                ("Draft: \(repo)/.claude/release-notes.md", 60),
+                ("See [PR #412 · Fork opens right away](https://github.com/eugenechantk/lfg/pull/412) and [TestFlight build 205](https://appstoreconnect.apple.com/apps/lfg/testflight)", 2),
+            ]
+            var extra: [SessionMessage] = []
+            for (i, (text, minutes)) in mentions.enumerated() {
+                extra.append(SessionMessage(id: "s2fx-files-\(i)", role: "assistant", kind: "text",
+                                            text: text, ts: now - minutes * 60_000))
+            }
+            transcripts[id] = extra + (transcripts[id] ?? [])
+            bumpTranscript(id)
+            s2FixtureFileCount[id] = 5
+        }
+        if rawMode == "subagents" {
+            // Board `s2-subagents`: one running, two done with results, one failed.
+            childAgentsBySession[id] = [
+                ChildAgentSession(id: "s2fx-c1", description: "Check the desktop fork menu", agentType: "general-purpose",
+                                  status: .running, startedAt: now - 72_000),
+                ChildAgentSession(id: "s2fx-c2", description: "Find every fork caller", agentType: "Explore",
+                                  status: .completed, startedAt: now - 400_000, finishedAt: now - 352_000,
+                                  result: "Found 6 callers in 4 files"),
+                ChildAgentSession(id: "s2fx-c3", description: "Audit the fork tests", agentType: "general-purpose",
+                                  status: .completed, startedAt: now - 600_000, finishedAt: now - 475_000,
+                                  result: "All 12 fork tests pass"),
+                ChildAgentSession(id: "s2fx-c4", description: "Measure fork latency on Air", agentType: "general-purpose",
+                                  status: .failed, startedAt: now - 700_000, finishedAt: now - 670_000,
+                                  result: "Host Air was unreachable"),
+            ]
+        }
+        return true
+    }
+
+    /// The Files pill's count for fixture sessions whose transcript names no files.
+    func s2FixtureFiles(_ id: String) -> Int? { s2FixtureFileCount[id] }
+    #endif
 
     /// Resolve `/api/info` for any host missing its friendly name, folding the
     /// identity back into settings (used for the host chip + dedupe).
@@ -3344,6 +3699,9 @@ import LFGCore
     /// mid-load (a view-bound `.task` would cancel the in-flight request,
     /// leaving only the live-stream backfill — i.e. "only a few messages").
     func loadHistory(_ id: String) {
+        #if DEBUG
+        if seedS2ViewFixture(id) { return }
+        #endif
         // Placeholder sessions have no server-side transcript yet — skip the
         // fetch (it would 404) until the create reconciles to a real id.
         guard !id.isEmpty, !id.hasPrefix("local-"), historyTasks[id] == nil else { return }
@@ -3359,6 +3717,9 @@ import LFGCore
     /// prompts show even in long, tool-heavy sessions where they'd otherwise be
     /// older than the live-stream backfill window.
     func ensureHistory(_ id: String) async {
+        #if DEBUG
+        if Self.s2ViewFixtureMode != nil, id.hasPrefix("s2fx-") { return }
+        #endif
         beginHistoryLoad(id)
         defer { endHistoryLoad(id) }
 
@@ -3469,7 +3830,8 @@ import LFGCore
             cwd: r.cwd,
             lastUserText: r.lastUserText,
             lastActivityAt: r.mtime,
-            closed: r.closed)
+            closed: r.closed,
+            task: r.task)
     }
 
     /// Remove optimistic bubbles whose text now appears as a real user turn in the
@@ -3767,6 +4129,10 @@ import LFGCore
             return
         }
         let clientId = pending.clientId ?? pending.id
+        #if DEBUG
+        // Fixture sessions (`s2fx-*`) do not exist on any host: never send them.
+        if sid.hasPrefix("s2fx-") { return }
+        #endif
         // Boundary check — before any state is mutated, so a refused row keeps
         // its failed/Retry chrome exactly as the user left it.
         guard await outboxSendPermitted(clientId: clientId, trigger: trigger) else { return }
@@ -4373,6 +4739,8 @@ import LFGCore
         await run("Send now", for: sid) { try await $0.sendQueuedNow(sid, qid) }
     }
     func answer(_ id: String, _ index: Int) async { await run("Answer", for: id) { try await $0.answer(id, index: index) } }
+    /// A typed answer to a question (server B5).
+    func answer(_ id: String, text: String) async { await run("Answer", for: id) { try await $0.answer(id, text: text) } }
     func dismissPrompt(_ id: String) async { await run("Dismiss", for: id) { try await $0.dismiss(id) } }
     /// Stop the current turn, and say so when it didn't stop.
     ///

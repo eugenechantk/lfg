@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		01D2127AA39DD150F677DC70 /* SessionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDD2A04018D23E60236BFB5B /* SessionSheet.swift */; };
 		02F689F65D6FDF5099FADF31 /* ConnectionLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D48FAC07EBFC6249487EAEB9 /* ConnectionLogView.swift */; };
 		037A25ADA39F6E527D36B73D /* BrowserPreviewCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B465BA01F1A3FC7DAF7ADF56 /* BrowserPreviewCard.swift */; };
 		042B67FEFC81B19353989F4A /* NewSessionAtoms.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4FDFAEC4C595AA92D818A8C /* NewSessionAtoms.swift */; };
@@ -140,6 +141,7 @@
 		EAECB64072CE4F5286C7591E /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
 		EB0F37496A85B98C8E3D9867 /* NewSessionComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionComposer.swift; sourceTree = "<group>"; };
 		EB9F7C4ADF1BED07B550BD99 /* NewSessionSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionSheets.swift; sourceTree = "<group>"; };
+		EDD2A04018D23E60236BFB5B /* SessionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSheet.swift; sourceTree = "<group>"; };
 		F13AC9330D0FCC5623AF2347 /* PrivateResources */ = {isa = PBXFileReference; lastKnownFileType = folder; path = PrivateResources; sourceTree = SOURCE_ROOT; };
 		F3F09549B24327F312F73AEA /* IPhonePreviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPhonePreviewSheet.swift; sourceTree = "<group>"; };
 		F4C23B1D7493D21B0344531F /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
@@ -237,6 +239,7 @@
 				512247CB20DB703CAE731727 /* SessionDetailView.swift */,
 				2641AAFED0A103CF2409D79C /* SessionListView.swift */,
 				DD5ED2523205ABC71E4CAFB8 /* SessionSendFollowFixture.swift */,
+				EDD2A04018D23E60236BFB5B /* SessionSheet.swift */,
 				20B34D8A3106C01BA13F2DC2 /* SessionStore.swift */,
 				847BA9F87A178565C0EEC901 /* SettingsView.swift */,
 				210FE0F59E5CE42AA932EF9E /* TerminalScreen.swift */,
@@ -454,6 +457,7 @@
 				D9DD48F43B87E8793C27102F /* SessionDetailView.swift in Sources */,
 				D34242B9518E03AED793C989 /* SessionListView.swift in Sources */,
 				20A5B356DC3393D9F80883A9 /* SessionSendFollowFixture.swift in Sources */,
+				01D2127AA39DD150F677DC70 /* SessionSheet.swift in Sources */,
 				55469BC6D5744CDBA92DC030 /* SessionStore.swift in Sources */,
 				0B5E6EC8D0198C245E872599 /* SettingsView.swift in Sources */,
 				B681D6E26243704896087BB9 /* StartSessionIntent.swift in Sources */,

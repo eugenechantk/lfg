@@ -1,5 +1,6 @@
 import { BrowserSignInHub, signInHTTP, allowsSignInAdapter } from "../browser-sign-in.ts";
 import { phoneSignInPrompt, type SignInPrompt } from "../phone-sign-in-requests.ts";
+import { classifyPanePrompt, permissionFromToolUse, type PromptDetails } from "../prompt-kind.ts";
 import { readdir, realpath, stat } from "node:fs/promises";
 import { statSync, mkdirSync, type Dirent, existsSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
@@ -42,6 +43,7 @@ import {
 import { runAutoAgent } from "../auto/runner.ts";
 import { startAutoScheduler } from "../auto/scheduler.ts";
 import { TaskStore } from "../scheduled-tasks.ts";
+import { cachedTaskOrigins, withTaskOrigin } from "../task-origin.ts";
 import { scheduledTaskRoutes, taskRuntime, type TaskApiCall } from "../scheduled-task-api.ts";
 import { startAutopilot } from "../autopilot/tick.ts";
 import {
@@ -62,6 +64,7 @@ import {
   setSessionTitle,
   sessionIdForPid,
   pendingToolPrompt,
+  pendingToolUse,
   lastUserPromptText,
   listResumable,
   searchResumable,
@@ -79,6 +82,7 @@ import {
   parsePrompt,
   type PanePrompt,
   answerPrompt,
+  answerPromptWithText,
   dismissPrompt,
   tmuxInterrupt,
   tmuxKillPane,
@@ -1182,19 +1186,42 @@ async function resolveSessionPrompt(
   // agent's waiting `browser-sign-in request` call is itself sitting on a
   // permission dialog, that dialog is what needs answering first.
   signIn: SignInPrompt | null = null,
-): Promise<PanePrompt | PendingPrompt | SignInPrompt | null> {
+): Promise<(PanePrompt & PromptDetails) | (PendingPrompt & { kind: "question" }) | SignInPrompt | null> {
   if (tp) {
     const pending = await pendingToolPrompt(tp);
-    if (pending) return pending;
+    if (pending) return { ...pending, kind: "question" };
   }
   if (pane) {
     // Pass the last user turn so the pane scraper can tell a scrolled-off assistant
     // preamble apart from the user's own scrolled-off prompt when surfacing context.
     const lastUser = tp ? await lastUserPromptText(tp).catch(() => null) : null;
     const scraped = parsePrompt(pane, lastUser ?? undefined);
-    if (scraped) return scraped;
+    if (scraped) return { ...scraped, ...(await promptDetails(pane, scraped, tp)) };
   }
   return signIn;
+}
+
+// B4: what the needs-input panel shows for this selector. The pane says what
+// kind it is; the transcript's pending call gives a permission's exact command,
+// and the plan file Claude wrote gives the whole plan (a long plan is taller
+// than the pane).
+async function promptDetails(pane: string, scraped: PanePrompt, tp: string | null): Promise<PromptDetails> {
+  const details = classifyPanePrompt(pane, scraped);
+  if (details.kind === "permission" && tp) {
+    const call = await pendingToolUse(tp).catch(() => null);
+    if (call) {
+      const fromTranscript = permissionFromToolUse(call.name, call.input);
+      if (fromTranscript.command) details.permission = fromTranscript;
+    }
+  }
+  if (details.kind === "plan" && details.plan?.file) {
+    const path = details.plan.file.replace(/^~(?=\/)/, homedir());
+    if (path.startsWith(join(homedir(), ".claude", "plans") + "/")) {
+      const text = await Bun.file(path).text().catch(() => null);
+      if (text?.trim()) details.plan = { text: text.trim().slice(0, 32 * 1024), file: path };
+    }
+  }
+  return details;
 }
 
 function sseHeaders(): Record<string, string> {
@@ -1263,6 +1290,8 @@ export async function cmdServe(options: {
 } = {}) {
   const backgroundTasks = options.backgroundTasks !== false;
   const taskStore = new TaskStore(join(PATHS.data, "scheduled-tasks.json"));
+  // Which task started a session, for the repeat icon on list rows.
+  const taskOrigins = cachedTaskOrigins(() => taskStore.read());
   const taskCall: TaskApiCall = async (path, body) => {
     const response = await handleHttp(new Request(`http://127.0.0.1:${PORT}${path}`, {
       method: body === undefined ? "GET" : "POST",
@@ -2214,9 +2243,10 @@ export async function cmdServe(options: {
         // Reading the pump's last durable statement costs one indexed row per
         // session; re-scraping panes here would not be affordable.
         const sessions = await listSessions();
+        const origins = await taskOrigins();
         return json({
           sessions: sessions.map((s) =>
-            s.sessionId ? { ...s, prompt: journal.latestPrompt(s.sessionId) } : s,
+            withTaskOrigin(s.sessionId ? { ...s, prompt: journal.latestPrompt(s.sessionId) } : s, origins),
           ),
         });
       }
@@ -2433,7 +2463,8 @@ export async function cmdServe(options: {
         const page = q
           ? await searchResumable({ q, limit, before: cursor, exclude })
           : await listResumable({ limit, before: cursor, exclude });
-        return json(page);
+        const origins = await taskOrigins();
+        return json({ ...page, sessions: page.sessions.map((s) => withTaskOrigin(s, origins)) });
       }
 
       if (path === "/api/sessions/search" && req.method === "GET") {
@@ -2973,14 +3004,19 @@ export async function cmdServe(options: {
         if (m && req.method === "POST") {
           const body = (await req.json().catch(() => null)) as {
             index?: number;
+            // B5: a typed answer, sent through the question's "Type something." option.
+            text?: string;
           } | null;
-          if (typeof body?.index !== "number")
-            return err(400, "missing option index");
+          const text = typeof body?.text === "string" && body.text.trim() ? body.text : null;
+          if (typeof body?.index !== "number" && !text)
+            return err(400, "missing option index or text");
           const sess = (await listSessions()).find((s) => s.sessionId === m[1]);
           if (!sess) return err(404, "session not found");
           if (!sess.tmuxTarget)
             return err(409, "session is not in a tmux pane — cannot answer");
-          const r = await answerPrompt(sess.tmuxTarget, body.index);
+          const r = text
+            ? await answerPromptWithText(sess.tmuxTarget, text)
+            : await answerPrompt(sess.tmuxTarget, body!.index!);
           if (!r.ok) return err(502, r.error || "answer failed");
           return json({ ok: true });
         }

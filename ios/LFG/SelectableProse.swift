@@ -360,7 +360,12 @@ enum SelectableTextRenderer {
 
         /// Assistant prose on the page background.
         static let standard = Palette(
-            id: "standard", text: .label, secondary: .secondaryLabel, link: .tintColor,
+            // S2 boards: assistant prose in #F2F2F7 on dark (one step off white).
+            id: "standard",
+            text: UIColor { $0.userInterfaceStyle == .dark
+                ? UIColor(red: 0xF2 / 255, green: 0xF2 / 255, blue: 0xF7 / 255, alpha: 1)
+                : UIColor(red: 0x1C / 255, green: 0x1C / 255, blue: 0x1E / 255, alpha: 1) },
+            secondary: .secondaryLabel, link: .tintColor,
             linkUnderline: false, tint: nil, inlineCodeBackground: .secondarySystemBackground, rule: .tertiaryLabel
         )
         /// White text on the accent-coloured user bubble.
@@ -406,7 +411,8 @@ enum SelectableTextRenderer {
 
     // MARK: Fonts — sized to match `Theme.gitHub` (16pt body, 0.85em code).
 
-    private static let bodyPointSize: CGFloat = 16
+    // S2 boards: 17pt body on a 24pt line (was the GitHub theme's 16pt).
+    private static let bodyPointSize: CGFloat = 17
 
     /// Height of one body line in a `ProseTextView` (zero insets), so a list
     /// marker can be centred on the first line of a paragraph it sits beside.
@@ -490,8 +496,9 @@ enum SelectableTextRenderer {
         _ spans: [Span], depth: Int, marker: String?, quoted: Bool, previous: Block?, next: Block?, palette: Palette, base: UIFont
     ) -> NSAttributedString {
         let style = NSMutableParagraphStyle()
-        // GitHub theme: relativeLineSpacing(.em(0.25)).
-        style.lineSpacing = bodyPointSize * 0.25
+        // 17pt SF has a ~20.3pt line; 3.7pt more gives the boards' 24pt for
+        // prose, 1.7pt their 22pt inside the user bubble.
+        style.lineSpacing = bodyPointSize * (palette.id == "onAccent" ? 0.1 : 0.22)
         let color: UIColor = quoted ? palette.secondary : palette.text
         let result = NSMutableAttributedString()
 

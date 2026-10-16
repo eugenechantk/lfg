@@ -440,7 +440,9 @@ export function claudeInterruptResolution(
     const at = row.timestamp ? Date.parse(row.timestamp) : NaN;
     if (Number.isFinite(at) && at < notBefore) continue;
     const userText = row.type === "user" ? claudeUserText(row.message?.content) : null;
-    if (userText?.trim().startsWith("[Request interrupted by user]")) {
+    // "[Request interrupted by user]" or, when Escape stopped a tool call,
+    // "[Request interrupted by user for tool use]".
+    if (userText && /^\[Request interrupted by user/.test(userText.trim())) {
       interruptIndex = i;
       lastMatchingQueueOpBeforeInterrupt = null;
       for (let j = 0; j < i; j++) {

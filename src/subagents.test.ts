@@ -584,8 +584,51 @@ describe("Claude subagent discovery", () => {
     expect(encoded).not.toContain("/private/tmp");
     expect(Object.keys(sessions[0]).sort()).toEqual([
       "agentType", "description", "finishedAt", "id", "lastActivityAt",
-      "spawnDepth", "startedAt", "status",
+      "result", "spawnDepth", "startedAt", "status",
     ]);
+  });
+
+  // S2 Subagents sheet (B8): a finished subagent's row shows the first line of
+  // its final report ("Found 6 callers in 4 files"). The report is the child's
+  // last assistant text; markdown marks go, and the line is capped.
+  test("a finished child carries the first line of its final report as its result", async () => {
+    const f = fixture();
+    const transcript = child(f.sidecars, {
+      id: "done",
+      toolUseId: "tool-done",
+      description: "Find every fork caller",
+      lastTimestamp: "2026-08-20T04:02:00.000Z",
+    });
+    writeFileSync(transcript, readFileSync(transcript, "utf8") + line({
+      type: "assistant",
+      timestamp: "2026-08-20T04:03:00.000Z",
+      message: { role: "assistant", content: [{ type: "text", text: "## **Found 6 callers** in 4 files\n\nDetails follow." }] },
+    }));
+    writeFileSync(f.parent, [
+      launch("tool-done", "Find every fork caller", "2026-08-20T04:01:00.000Z"),
+      notification("done", "tool-done", "completed", "2026-08-20T04:04:00.000Z"),
+    ].join(""));
+
+    const [session] = await listSubagentSessions(f.parent);
+
+    expect(session.result).toBe("Found 6 callers in 4 files");
+    expect(JSON.stringify(session)).not.toContain("Details follow");
+  });
+
+  test("a running child has no result yet", async () => {
+    const f = fixture();
+    child(f.sidecars, {
+      id: "live",
+      toolUseId: "tool-live",
+      description: "Check the desktop fork menu",
+      lastTimestamp: new Date().toISOString(),
+    });
+    writeFileSync(f.parent, launch("tool-live", "Check the desktop fork menu", "2026-08-20T04:01:00.000Z"));
+
+    const [session] = await listSubagentSessions(f.parent);
+
+    expect(session.status).toBe("running");
+    expect(session.result).toBeNull();
   });
 
   test("resolves only transcripts that belong to the requested parent", () => {

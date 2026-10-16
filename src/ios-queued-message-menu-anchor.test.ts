@@ -11,7 +11,8 @@ describe("iOS queued-message action menu anchoring", () => {
     expect(end).toBeGreaterThan(start);
 
     const pendingStrip = source.slice(start, end);
-    expect(pendingStrip).toContain("Menu {");
+    // S2 draws the menu itself, as an overlay on the row it belongs to.
+    expect(pendingStrip).toContain(".overlay(alignment: .bottomTrailing)");
     expect(pendingStrip).toContain("queuedMessageActions(for: item)");
     expect(pendingStrip).not.toContain("onTapGesture");
     expect(pendingStrip).toContain('"pendingStripRow');

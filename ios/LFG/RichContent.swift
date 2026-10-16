@@ -1134,3 +1134,24 @@ struct QuickLookView: UIViewControllerRepresentable {
         }
     }
 }
+
+/// The whole plan behind the needs-input panel's "Read the full plan ›".
+struct PlanTextSheet: View {
+    let text: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                Markdown(text).markdownTheme(.lfgFlat).padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .navigationTitle("Plan")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
+            }
+        }
+        .accessibilityIdentifier("planTextSheet")
+    }
+}

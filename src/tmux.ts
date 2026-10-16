@@ -1507,6 +1507,41 @@ export async function answerPrompt(
   return { ok: true };
 }
 
+// Answer a question with free text (B5, the panel's "Type something else…").
+// AskUserQuestion always offers a "Type something." option; typing while the
+// cursor is on it replaces its label with the text, and Enter submits that as
+// the answer (probed live on Claude Code 2.1.280). Newlines would submit early,
+// so the text goes in as one line. As in sendq, nothing read back from the pane
+// gates the Enter: the transcript records the answer.
+export async function answerPromptWithText(
+  target: string,
+  text: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const answer = text.replace(/\s+/g, " ").trim();
+  if (!answer) return { ok: false, error: "empty answer" };
+  const pane = capturePane(target);
+  const p = pane ? parsePrompt(pane) : null;
+  if (!p) return { ok: false, error: "no active prompt in pane" };
+  const free = p.options.find((o) => /^Type something/i.test(o.label));
+  if (!free) return { ok: false, error: "this question takes no typed answer" };
+  const order = p.options.map((o) => o.index);
+  const cur = p.options.find((o) => o.selected)?.index ?? order[0];
+  const delta = order.indexOf(free.index) - order.indexOf(cur);
+  const key = delta > 0 ? "Down" : "Up";
+  for (let i = 0; i < Math.abs(delta); i++) {
+    Bun.spawnSync(["tmux", "send-keys", "-t", target, key]);
+    await Bun.sleep(60);
+  }
+  await Bun.sleep(120);
+  if (Bun.spawnSync(["tmux", "send-keys", "-t", target, "-l", answer]).exitCode !== 0)
+    return { ok: false, error: "typing failed" };
+  await Bun.sleep(200);
+  const r = Bun.spawnSync(["tmux", "send-keys", "-t", target, "Enter"]);
+  if (r.exitCode !== 0)
+    return { ok: false, error: new TextDecoder().decode(r.stderr) || "Enter failed" };
+  return { ok: true };
+}
+
 // Dismiss an open interactive selector (AskUserQuestion / permission / plan) by
 // sending Escape — Claude cancels the selector and returns to the composer (for
 // AskUserQuestion it records that the user declined to answer). Guarded on a live

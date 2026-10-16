@@ -206,6 +206,16 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     /// The font to use to render the terminal, this attempts to derive the bold, italic and italic/bold variants from
     /// the original font, using the iOS UIFontDescriptor APIs.   For full control use the `setFonts(normal:bold:italic:boldItalic)`
     /// API instead
+    // LFG PATCH 5: a CSS-style line height, as a multiple of the font size.
+    // nil keeps SwiftTerm's ascent + descent + leading. With a value, each row is
+    // `pointSize * lineHeightMultiple` tall and the text (and the caret) sit
+    // centred in it, as CSS half-leading does.
+    public var lineHeightMultiple: CGFloat? {
+        didSet {
+            if oldValue != lineHeightMultiple { resetFont() }
+        }
+    }
+
     public var font: UIFont {
         get {
             return fontSet.normal
@@ -924,7 +934,8 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     func setupAccessoryView ()
     {
         let short = UIDevice.current.userInterfaceIdiom == .phone
-        let ta = TerminalAccessory(frame: CGRect(x: 0, y: 0, width: frame.width, height: short ? 36 : 48),
+        // LFG PATCH 4: the S2 key row is 50pt tall at every width.
+        let ta = TerminalAccessory(frame: CGRect(x: 0, y: 0, width: frame.width, height: TerminalAccessory.rowHeight),
                                    inputViewStyle: .keyboard, container: self)
         #if !os(visionOS)
         inputAssistantItem.leadingBarButtonGroups = []

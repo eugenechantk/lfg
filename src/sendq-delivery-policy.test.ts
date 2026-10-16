@@ -88,6 +88,32 @@ describe("Claude queued-message interrupt resolution", () => {
       .toEqual({ kind: "started", userTurnId: "fresh-turn" });
   });
 
+  // Live Claude Code 2.1.280 transcript (2026-10-15): Send now on a message
+  // Claude already held, while a Bash call ran. Escape interrupts a TOOL, so
+  // the marker reads "…for tool use]"; matching only "[Request interrupted by
+  // user]" left this "waiting-interrupt" for 5s and lfg typed the message again.
+  test("a tool interrupt's marker counts, so a native dequeue is not retyped", () => {
+    const toolText = "Then say menu-ok.";
+    const lines = [
+      line({ type: "queue-operation", operation: "enqueue", timestamp: "2026-10-15T21:00:26.627Z", content: toolText }),
+      line({ type: "queue-operation", operation: "dequeue", timestamp: "2026-10-15T21:01:03.876Z" }),
+      line({
+        type: "user", timestamp: "2026-10-15T21:01:03.900Z",
+        message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: "The user doesn't want to proceed with this tool use." }] },
+      }),
+      line({
+        type: "user", timestamp: "2026-10-15T21:01:03.901Z",
+        message: { role: "user", content: [{ type: "text", text: "[Request interrupted by user for tool use]" }] },
+      }),
+      line({
+        type: "user", uuid: "fresh-turn", timestamp: "2026-10-15T21:01:03.913Z",
+        message: { role: "user", content: toolText },
+      }),
+    ];
+    expect(claudeInterruptResolution(lines, toolText, Date.parse("2026-10-15T21:00:26.309Z")))
+      .toEqual({ kind: "started", userTurnId: "fresh-turn" });
+  });
+
   test("waits when the interrupt marker landed but Claude has not resolved its native queue yet", () => {
     const lines = [
       line({ type: "queue-operation", operation: "enqueue", timestamp: "2026-09-30T06:38:01.499Z", content: text }),

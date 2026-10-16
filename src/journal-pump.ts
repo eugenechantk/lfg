@@ -16,6 +16,7 @@
 // would double-deliver).
 
 import { Journal, PumpDeltas } from "./journal.ts";
+import { PromptClock } from "./prompt-kind.ts";
 import {
   listSessions,
   resolveTranscript,
@@ -358,6 +359,7 @@ export function appendDisappearanceRetractions(
 
 export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
   const deltas = new PumpDeltas();
+  const promptClock = new PromptClock();
   const watched = new Map<string, Watched>();
   let bootSids: Set<string> | null = null; // sessions alive at pump boot: may trust pump_state
   let stopped = false;
@@ -441,6 +443,7 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
         forgetHookState(sid, watched.get(sid)!.tp);
         watched.delete(sid);
         deltas.forget(sid); // if it comes back, it re-states its baseline
+        promptClock.forget(sid);
         tailStep.forget(sid);
         pollStep.forget(sid);
         lastResizeAttempt.delete(sid);
@@ -517,7 +520,10 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       w.stitcher.consume(styled);
       // A selector lfg itself is driving (model/effort change) is not a question.
       const promptPane = panePromptSuppressed(w.target) ? null : pane;
-      const prompt = withStitchedPreamble(await deps.resolvePrompt(w.tp, promptPane, w.sid), w);
+      // B3: `askedAt` rides on the prompt, so the journal delta and the REST
+      // snapshot (`journal.latestPrompt`) carry the same time.
+      const prompt = promptClock.stamp(
+        w.sid, withStitchedPreamble(await deps.resolvePrompt(w.tp, promptPane, w.sid), w), Date.now());
       if (deltas.promptChanged(w.sid, prompt))
         j.append(w.sid, "prompt", { sid: w.sid, prompt });
       const paneBusy = pane ? isBusy(pane) : false;

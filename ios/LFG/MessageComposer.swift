@@ -28,6 +28,15 @@ struct MessageComposer: View {
     var autofocus = false
     /// Increment to focus the input after an external action fills its binding.
     var focusRequest = 0
+    /// The S2 session-view layout (board `s2-view`): a solid surface, a chip
+    /// after the paperclip, and Stop in place of Send while the agent works.
+    var s2 = false
+    /// Shown after the paperclip in S2 mode (the model + effort chip).
+    var accessory: AnyView? = nil
+    /// When set and nothing is typed or attached, the send button is Stop.
+    var onStop: (() -> Void)? = nil
+    /// Space under the bar. S2 sits lower while the keyboard is down.
+    var bottomPadding: CGFloat = 8
     var onFocusChange: (Bool) -> Void = { _ in }
     /// Receives the trimmed text and any picked attachments.
     let onSend: (String, [ComposerAttachment]) -> Void
@@ -39,7 +48,120 @@ struct MessageComposer: View {
         OutgoingAttachmentMessage.canSend(text: text, attachmentCount: tray.items.count)
     }
 
+    private var showsStop: Bool {
+        onStop != nil && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && tray.isEmpty
+    }
+
     var body: some View {
+        Group {
+            if s2 { s2Bar } else { classicBar }
+        }
+        .attachmentPickers(tray)
+        .task(id: autofocus) {
+            guard autofocus else { return }
+            await Task.yield()
+            focused = true
+        }
+        .onChange(of: focusRequest) { _, _ in
+            focused = true
+        }
+    }
+
+    private var s2Bar: some View {
+        // Fixed gaps, no Spacer: inside a safe-area inset a Spacer takes every
+        // point it is offered and the bar fills the screen. Board: 11 + 22-pt
+        // line + 19 + 34-pt buttons + 10 = 96pt for one line of text.
+        VStack(alignment: .leading, spacing: 0) {
+            if !tray.isEmpty { AttachmentChips(tray: tray).padding(.bottom, 8) }
+
+            TextField(text: $text, prompt: Text(placeholder).foregroundStyle(S2.metaInk), axis: .vertical) {
+                Text(placeholder)
+            }
+            .lineLimit(1...8)
+            .focused($focused)
+            .font(.system(size: 17))
+            .foregroundStyle(S2.ink)
+            .accessibilityIdentifier("composer.message")
+            .onChange(of: focused) { _, isFocused in
+                onFocusChange(isFocused)
+            }
+
+            HStack(spacing: 8) {
+                Menu {
+                    AttachmentMenuItems(tray: tray)
+                } label: {
+                    Group {
+                        if tray.isLoading {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            PaperclipGlyph()
+                                .frame(width: 22, height: 22)
+                                .foregroundStyle(S2.secondaryInk)
+                        }
+                    }
+                    .frame(width: 22, height: 34)
+                    // A finger-sized target around a 22pt glyph.
+                    .contentShape(Rectangle().inset(by: -8))
+                }
+                .accessibilityLabel("Attach")
+                .accessibilityIdentifier("composer.attach")
+                .disabled(tray.isLoading)
+
+                if let accessory { accessory }
+
+                Spacer(minLength: 0)
+
+                if showsStop, let onStop {
+                    Button(action: onStop) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(S2.stopSquare)
+                            .frame(width: 11, height: 11)
+                            .frame(width: 34, height: 34)
+                            .background(S2.stopDisc, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Stop the current turn")
+                    .accessibilityIdentifier("composer.stop")
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                } else {
+                    Button(action: submit) {
+                        Group {
+                            if sending {
+                                ProgressView().controlSize(.small).tint(.white)
+                            } else {
+                                SendArrowGlyph()
+                                    .frame(width: 16, height: 16)
+                                    .foregroundStyle(canSend ? Color.white : S2.metaInk)
+                            }
+                        }
+                        .frame(width: 34, height: 34)
+                        .background(canSend ? S2.send : S2.color(dark: 0x3A3A3C, light: 0xE5E5EA), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    // Not `.disabled`: that dims the board's #3A3A3C to half strength.
+                    .allowsHitTesting(canSend && !sending)
+                    .accessibilityAddTraits(canSend && !sending ? [] : .isStaticText)
+                    .accessibilityLabel("Send")
+                    .accessibilityIdentifier("composer.send")
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                }
+            }
+            .animation(.snappy(duration: 0.18), value: showsStop)
+            .padding(.top, 18)
+        }
+        // SwiftUI's 17pt line is ~2pt shorter than the board's 22pt, so the
+        // text starts 2pt lower to sit where the board's does.
+        .padding(EdgeInsets(top: 13, leading: 16, bottom: 10, trailing: 10))
+        .background(S2.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(S2.surfaceBorder, lineWidth: 0.5)
+        )
+        .padding(.horizontal, 12)
+        .padding(.bottom, bottomPadding)
+    }
+
+    private var classicBar: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !tray.isEmpty { AttachmentChips(tray: tray) }
 
@@ -99,16 +221,7 @@ struct MessageComposer: View {
         .padding(12)
         .modifier(GlassPanel(cornerRadius: 24))
         .padding(.horizontal, 12)
-        .padding(.bottom, 8)
-        .attachmentPickers(tray)
-        .task(id: autofocus) {
-            guard autofocus else { return }
-            await Task.yield()
-            focused = true
-        }
-        .onChange(of: focusRequest) { _, _ in
-            focused = true
-        }
+        .padding(.bottom, bottomPadding)
     }
 
     private func submit() {
@@ -238,5 +351,48 @@ struct GlassPanel: ViewModifier {
                 in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             )
         }
+    }
+}
+
+/// The boards' send arrow: "M12 19V5M5 12l7-7 7 7" in a 24-unit box, 3pt stroke.
+struct SendArrowGlyph: View {
+    var body: some View {
+        GeometryReader { geo in
+            let k = geo.size.width / 24
+            Path { p in
+                p.move(to: CGPoint(x: 12 * k, y: 19 * k)); p.addLine(to: CGPoint(x: 12 * k, y: 5 * k))
+                p.move(to: CGPoint(x: 5 * k, y: 12 * k)); p.addLine(to: CGPoint(x: 12 * k, y: 5 * k))
+                p.addLine(to: CGPoint(x: 19 * k, y: 12 * k))
+            }
+            .stroke(style: StrokeStyle(lineWidth: 3 * k, lineCap: .round, lineJoin: .round))
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// The boards' paperclip (`s2-view`): "M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1
+/// l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9",
+/// 24-unit box, 1.7 stroke. Each arc is a half circle.
+struct PaperclipGlyph: View {
+    var body: some View {
+        GeometryReader { geo in
+            let k = geo.size.width / 24
+            let pt = { (x: CGFloat, y: CGFloat) in CGPoint(x: x * k, y: y * k) }
+            Path { p in
+                p.move(to: pt(20.5, 11.5))
+                p.addLine(to: pt(12.3, 19.7))
+                p.addArc(center: pt(8.75, 16.15), radius: 5.02 * k,
+                         startAngle: .degrees(45), endAngle: .degrees(225), clockwise: false)
+                p.addLine(to: pt(13.8, 4.0))
+                p.addArc(center: pt(16.2, 6.4), radius: 3.39 * k,
+                         startAngle: .degrees(225), endAngle: .degrees(405), clockwise: false)
+                p.addLine(to: pt(10.0, 17.4))
+                p.addArc(center: pt(8.8, 16.2), radius: 1.7 * k,
+                         startAngle: .degrees(45), endAngle: .degrees(225), clockwise: false)
+                p.addLine(to: pt(15.5, 7.1))
+            }
+            .stroke(style: StrokeStyle(lineWidth: 1.7 * k, lineCap: .round, lineJoin: .round))
+        }
+        .accessibilityHidden(true)
     }
 }

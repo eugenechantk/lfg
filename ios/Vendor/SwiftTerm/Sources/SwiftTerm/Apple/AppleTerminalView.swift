@@ -81,10 +81,25 @@ extension TerminalView {
     func updateCaretView ()
     {
         guard let caretView else { return }
-        caretView.frame.size = CGSize(width: cellDimension.width, height: cellDimension.height)
+        caretView.frame.size = CGSize(width: cellDimension.width, height: caretHeight())
         caretView.updateCursorStyle()
     }
     
+    // LFG PATCH 5: with a CSS line height the caret is the text's ascent +
+    // descent tall, inset by half the extra row height.
+    func caretHeight () -> CGFloat {
+        #if os(iOS) || os(visionOS)
+        if lineHeightMultiple != nil {
+            return min(cellDimension.height, CTFontGetAscent(fontSet.normal) + CTFontGetDescent(fontSet.normal))
+        }
+        #endif
+        return cellDimension.height
+    }
+
+    func caretContentInset () -> CGFloat {
+        return max(0, (cellDimension.height - caretHeight()) / 2)
+    }
+
     /// The frame used by the caretView
     public var caretFrame: CGRect {
         return caretView?.frame ?? CGRect.zero
@@ -164,7 +179,13 @@ extension TerminalView {
         let lineAscent = CTFontGetAscent (fontSet.normal)
         let lineDescent = CTFontGetDescent (fontSet.normal)
         let lineLeading = CTFontGetLeading (fontSet.normal)
-        let cellHeight = ceil(lineAscent + lineDescent + lineLeading)
+        var cellHeight = ceil(lineAscent + lineDescent + lineLeading)
+        #if os(iOS) || os(visionOS)
+        // LFG PATCH 5
+        if let multiple = lineHeightMultiple {
+            cellHeight = fontSet.normal.pointSize * multiple
+        }
+        #endif
         #if os(macOS)
         // The following is a more robust way of getting the largest ascii character width, but comes with a performance hit.
         // See: https://github.com/migueldeicaza/SwiftTerm/issues/286
@@ -884,7 +905,14 @@ extension TerminalView {
     {
         let lineDescent = CTFontGetDescent(fontSet.normal)
         let lineLeading = CTFontGetLeading(fontSet.normal)
-        let yOffset = ceil(lineDescent+lineLeading)
+        var yOffset = ceil(lineDescent+lineLeading)
+        #if os(iOS) || os(visionOS)
+        // LFG PATCH 5: CSS half-leading puts the baseline (row - ascent - descent) / 2
+        // above the descent.
+        if lineHeightMultiple != nil {
+            yOffset = caretContentInset() + lineDescent
+        }
+        #endif
         let displayBuffer = terminal.displayBuffer
 
         func calcLineOffset (forRow: Int) -> CGFloat {
@@ -1378,7 +1406,13 @@ extension TerminalView {
         let offset = (cellDimension.height * (CGFloat(buffer.y-(buffer.yDisp-buffer.yBase)+1)))
         let lineOrigin = CGPoint(x: 0, y: frame.height - offset)
         #endif
+        #if os(iOS) || os(visionOS)
+        // LFG PATCH 5: the caret covers the text's ascent + descent, not the whole row.
+        caretView.frame.size.height = caretHeight()
+        caretView.frame.origin = CGPoint(x: lineOrigin.x + (cellDimension.width * doublePosition * CGFloat(buffer.x)), y: lineOrigin.y + caretContentInset())
+        #else
         caretView.frame.origin = CGPoint(x: lineOrigin.x + (cellDimension.width * doublePosition * CGFloat(buffer.x)), y: lineOrigin.y)
+        #endif
         caretView.setText (ch: buffer.lines [vy][buffer.x])
     }
     

@@ -147,26 +147,63 @@ public class TerminalAccessory: UIInputView, UIInputViewAudioFeedback {
     }
 
 
+    // LFG PATCH 4: the keyboard key hides and shows the keyboard (board
+    // `s2-terminal`), instead of swapping in SwiftTerm's alternate key panel.
+    // Hidden keeps the terminal first responder with an empty input view, so this
+    // row stays on screen above the home indicator (board: 34pt up). iOS 26 sets
+    // any non-empty input view on its keyboard backdrop with 16pt above it
+    // (measured), so the view is the inset minus that; clear, so the backdrop
+    // reads as one panel.
     @objc func toggleInputKeyboard (_ sender: UIButton) {
         guard let tv = terminalView else { return }
 
-        if tv.inputView == nil {
-            #if os(visionOS)
-            tv.inputView = KeyboardView (frame: CGRect (origin: CGPoint.zero,
-                                                        size: CGSize (width: 300,
-                                                                      height: 400)),
-                                         terminalView: terminalView)
-            #else
-            tv.inputView = KeyboardView (frame: CGRect (origin: CGPoint.zero,
-                                                        size: CGSize (width: UIScreen.main.bounds.width,
-                                                                      height: max((UIScreen.main.bounds.height / 5),140))),
-                                         terminalView: terminalView)
-            #endif
-        } else {
+        if tv.inputView is HiddenKeyboardView {
             tv.inputView = nil
+        } else {
+            let inset = window?.safeAreaInsets.bottom ?? 34
+            let hidden = HiddenKeyboardView (frame: CGRect (x: 0, y: 0, width: UIScreen.main.bounds.width,
+                                                            height: max (1, inset - 16)))
+            hidden.backgroundColor = .clear
+            tv.inputView = hidden
         }
         UIView.performWithoutAnimation {
             tv.reloadInputViews()
+        }
+        updateKeyboardKey ()
+    }
+
+    func updateKeyboardKey () {
+        let open = !(terminalView?.inputView is HiddenKeyboardView)
+        keyboardButton?.setImage (Self.keyboardGlyph (open: open), for: .normal)
+        keyboardButton?.accessibilityLabel = open ? "Hide keyboard" : "Show keyboard"
+    }
+
+    // LFG PATCH 4: the board's keyboard icon (20×16pt, a 26×20 box): the keyboard,
+    // then a chevron down while it is up, or up while it is hidden.
+    static func keyboardGlyph (open: Bool) -> UIImage {
+        let size = CGSize (width: 20, height: 16)
+        let k: CGFloat = 20.0 / 26.0
+        let dy = (size.height - 20 * k) / 2
+        return UIGraphicsImageRenderer (size: size).image { ctx in
+            let c = ctx.cgContext
+            func p (_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint (x: x * k, y: dy + y * k) }
+            c.setStrokeColor (UIColor.white.cgColor)
+            c.setLineWidth (1.6 * k)
+            c.setLineCap (.round)
+            c.addPath (UIBezierPath (roundedRect: CGRect (origin: p (1, 1), size: CGSize (width: 24 * k, height: 12 * k)),
+                                     cornerRadius: 2 * k).cgPath)
+            for x: CGFloat in [5, 9, 13, 17, 21] {
+                c.move (to: p (x, 5))
+                c.addLine (to: p (x + 0.01, 5))
+            }
+            c.move (to: p (7, 9))
+            c.addLine (to: p (19, 9))
+            if open {
+                c.move (to: p (10, 16)); c.addLine (to: p (13, 19)); c.addLine (to: p (16, 16))
+            } else {
+                c.move (to: p (10, 19)); c.addLine (to: p (13, 16)); c.addLine (to: p (16, 19))
+            }
+            c.strokePath ()
         }
     }
 
@@ -178,7 +215,43 @@ public class TerminalAccessory: UIInputView, UIInputViewAudioFeedback {
     var leftViews: [UIView] = []
     var floatViews: [UIView] = []
     var rightViews: [UIView] = []
-    
+
+    // LFG PATCH (see PATCHES.md, patch 4): the S2 key row (lfg board
+    // `s2-terminal`). One horizontally scrolling row — esc, tab, ctrl, ⌥, the
+    // arrows, | / ~ -, ⌘V and the keyboard switch — instead of upstream's fixed
+    // left/right groups and function keys. ctrl and ⌥ are sticky: ⌥ is
+    // `TerminalView.metaModifier` (ESC-prefixes the next key), ⌘V is
+    // `TerminalView.paste` (bracketed when the app asks for it).
+    let keyScroll = KeyRowScrollView()
+    let keyBorder = UIView()
+    var metaButton: UIButton?
+    var keyRow: [UIView] = []
+
+    static let rowHeight: CGFloat = 50
+    static let keyHeight: CGFloat = 36
+    static let keyGap: CGFloat = 6
+    static let rowInset: CGFloat = 8
+
+    @objc func meta (_ sender: UIButton)
+    {
+        guard let tv = terminalView else { return }
+        tv.metaModifier.toggle()
+        metaButton?.isSelected = tv.metaModifier
+    }
+
+    @objc func pasteFromKey (_ sender: UIButton)
+    {
+        #if os(iOS)
+        UIDevice.current.playInputClick()
+        #endif
+        terminalView?.paste (nil)
+    }
+
+    @objc func metaModifierReset (_ note: Notification)
+    {
+        metaButton?.isSelected = false
+    }
+
     /**
      * This method setups the internal data structures to setup the UI shown on the accessory view,
      * if you provide your own implementation, you are responsible for adding all the elements to the
@@ -193,121 +266,81 @@ public class TerminalAccessory: UIInputView, UIInputViewAudioFeedback {
         leftViews = []
         rightViews = []
         floatViews = []
+        keyRow.forEach { $0.removeFromSuperview() }
+        keyRow = []
         terminalView?.setupKeyboardButtonColors ()
-        let useSmall = self._useSmall
-        if useSmall {
-            leftViews.append(makeButton("", #selector(esc), icon: "escape", isNormal: false))
-            let controlButton = makeButton("", #selector(ctrl), icon: "control", isNormal: false)
-            leftViews.append(controlButton)
-            self.controlButton = controlButton
-            leftViews.append(makeButton("", #selector(tab), icon: "arrow.right.to.line.compact"))
-        } else {
-            leftViews.append(makeButton ("esc", #selector(esc), isNormal: false))
-            let controlButton = makeButton ("ctrl", #selector(ctrl), isNormal: false)
-            leftViews.append(controlButton)
-            self.controlButton = controlButton
-            leftViews.append(makeButton("", #selector(tab), icon: "arrow.right.to.line.compact", isNormal: false))
-            //leftViews.append(makeButton ("tab", #selector(tab)))
-        }
-        rightViews.append(makeAutoRepeatButton ("arrow.left", #selector(left)))
-        rightViews.append(makeAutoRepeatButton ("arrow.down", #selector(down)))
-        rightViews.append(makeAutoRepeatButton ("arrow.up", #selector(up)))
-        rightViews.append(makeAutoRepeatButton ("arrow.right", #selector(right)))
+
+        backgroundColor = UIColor (red: 28/255.0, green: 28/255.0, blue: 30/255.0, alpha: 1)
+        keyBorder.backgroundColor = UIColor (red: 44/255.0, green: 44/255.0, blue: 46/255.0, alpha: 1)
+        keyScroll.showsHorizontalScrollIndicator = false
+        keyScroll.showsVerticalScrollIndicator = false
+        keyScroll.alwaysBounceHorizontal = true
+        // Keys fire on touch-down; holding their delivery briefly lets a drag
+        // scroll the row instead of pressing the key under the finger.
+        keyScroll.delaysContentTouches = true
+        keyScroll.canCancelContentTouches = true
+
+        keyRow.append (makeS2Key ("esc", #selector(esc)))
+        keyRow.append (makeS2Key ("tab", #selector(tab)))
+        let controlButton = makeS2Key ("ctrl", #selector(ctrl))
+        self.controlButton = controlButton
+        keyRow.append (controlButton)
+        let metaButton = makeS2Key ("⌥", #selector(meta))
+        metaButton.isSelected = terminalView?.metaModifier ?? false
+        self.metaButton = metaButton
+        keyRow.append (metaButton)
+        keyRow.append (makeS2Key ("↑", #selector(up), repeats: true))
+        keyRow.append (makeS2Key ("↓", #selector(down), repeats: true))
+        keyRow.append (makeS2Key ("←", #selector(left), repeats: true))
+        keyRow.append (makeS2Key ("→", #selector(right), repeats: true))
+        keyRow.append (makeS2Key ("|", #selector(pipe)))
+        keyRow.append (makeS2Key ("/", #selector(slash)))
+        keyRow.append (makeS2Key ("~", #selector(tilde)))
+        keyRow.append (makeS2Key ("⌘V", #selector(pasteFromKey)))
         touchButton = makeButton ("", #selector(toggleTouch), icon: "hand.draw", isNormal: false)
-        touchButton.isSelected = terminalView?.allowMouseReporting ?? false
-        // LFG PATCH (see PATCHES.md): the mouse-reporting toggle is not offered.
-        // lfg keeps mouse reporting off; on, a swipe became tmux mouse events
-        // that could paste a tmux buffer into the shell.
-        // rightViews.append (touchButton)
-        keyboardButton = makeButton ("", #selector(toggleInputKeyboard), icon: "keyboard.chevron.compact.down", isNormal: false)
-        rightViews.append (keyboardButton)
+        // LFG PATCH 3: the mouse-reporting toggle is not offered.
+        let keyboardButton = makeS2Key ("", #selector(toggleInputKeyboard), minWidth: 44)
+        self.keyboardButton = keyboardButton
+        updateKeyboardKey ()
+        keyRow.append (keyboardButton)
 
-        // calculate aditional space we can give to keys we want to be bigger (all top level except function keys)
-        let minWidth: CGFloat = useSmall ? 20.0 : (UIDevice.current.userInterfaceIdiom == .phone) ? 22 : 32
-        let maxFuncKeyWidth = (minWidth + buttonPad) * 10
-        let importantKeysCount: Double = useSmall ? 11 : 13
-        let maxSpaceForImportantKeys = frame.width - maxFuncKeyWidth - buttonPad
-        var aditionalSpaceForImportantKeys: CGFloat = 0
-        if maxSpaceForImportantKeys > 0 {
-            aditionalSpaceForImportantKeys =  maxSpaceForImportantKeys / importantKeysCount
-        }
-        func setMinWidth (_ view: UIView, isImportantKey: Bool = false) {
-            view.sizeToFit()
-            if useSmall {
-                view.frame = CGRect (origin: CGPoint.zero, size: CGSize (width: 20, height: view.frame.height))
-            }
-            var calculatedMinWidth = minWidth
-            
-            // if key we want to be bigger calculate bigger width
-            if isImportantKey {
-                calculatedMinWidth = max(aditionalSpaceForImportantKeys, minWidth)
-            }
-          
-            if view.frame.width < calculatedMinWidth {
-                let r = CGRect (origin: view.frame.origin, size: CGSize (width: calculatedMinWidth, height: frame.height-8))
-                view.frame = r
-            }
-        }
-        
-        func buttonizeView (_ view: UIView, isImportantKey: Bool = false) {
-            setMinWidth (view, isImportantKey: isImportantKey)
-        }
-        leftViews.forEach { buttonizeView($0, isImportantKey: true) }
-        rightViews.forEach { buttonizeView($0, isImportantKey: true) }
-        let fixedUsedSpace = (leftViews + rightViews).reduce(0) { $0 + $1.frame.width + buttonPad }
+        NotificationCenter.default.removeObserver (self, name: .terminalViewMetaModifierReset, object: nil)
+        NotificationCenter.default.addObserver (self, selector: #selector(metaModifierReset(_:)),
+                                                name: .terminalViewMetaModifierReset, object: terminalView)
 
-        if useSmall && false {
-            floatViews.append (makeDouble ("~", "|"))
-            floatViews.append (makeDouble ("/", "-"))
-        } else {
-            floatViews.append(makeButton ("~", #selector(tilde)))
-            floatViews.append(makeButton ("|", #selector(pipe)))
-            floatViews.append(makeButton ("/", #selector(slash)))
-            floatViews.append(makeButton ("-", #selector(dash)))
-        }
-        floatViews.forEach {
-            setMinWidth ($0, isImportantKey: true)
-        }
-        let usedSpace = (floatViews).reduce(fixedUsedSpace) { $0 + $1.frame.width + buttonPad }
-        var additionalUsedSpaceToAdd = 0.0
-        
-        if UIDevice.current.userInterfaceIdiom == .phone && frame.width > 500 {
-            additionalUsedSpaceToAdd = 50.0
-        }
-        var left = frame.width - usedSpace - additionalUsedSpaceToAdd
-        func addOptional (_ text: String, _ selector: Selector) {
-            left -= minWidth + buttonPad
-            
-            if left > 0 {
-                floatViews.append(makeButton(text, selector))
-            }
-        }
-        addOptional("F1", #selector(f1))
-        addOptional("F2", #selector(f2))
-        addOptional("F3", #selector(f3))
-        addOptional("F4", #selector(f4))
-        addOptional("F5", #selector(f5))
-        addOptional("F6", #selector(f6))
-        addOptional("F7", #selector(f7))
-        addOptional("F8", #selector(f8))
-        addOptional("F9", #selector(f9))
-        addOptional("F10", #selector(f10))
-        let smallerFloatViews = useSmall ? floatViews.suffix(floatViews.count - 2) : floatViews.suffix(floatViews.count - 4)
-        smallerFloatViews.forEach {
-            setMinWidth($0)
-        }
-
-        views.append(contentsOf: leftViews)
-        views.append(contentsOf: floatViews)
-        views.append(contentsOf: rightViews)
-        
-
+        keyRow.forEach { keyScroll.addSubview ($0) }
+        views = [keyScroll, keyBorder]
         for view in views {
-            addSubview(view)
+            addSubview (view)
         }
         layoutSubviews ()
     }
-    
+
+    func makeS2Key (_ title: String, _ action: Selector, repeats: Bool = false, minWidth: CGFloat = 40) -> UIButton
+    {
+        let b = BackgroundSelectedButton (type: .custom)
+        let fill = UIColor (red: 58/255.0, green: 58/255.0, blue: 60/255.0, alpha: 1)
+        b.color = fill
+        b.backgroundColor = fill
+        b.layer.cornerRadius = 8
+        b.layer.masksToBounds = true
+        b.setTitle (title, for: .normal)
+        b.setTitleColor (.white, for: .normal)
+        b.setTitleColor (.black, for: .selected)
+        b.titleLabel?.font = UIFont.monospacedSystemFont (ofSize: 14, weight: .semibold)
+        b.contentEdgeInsets = UIEdgeInsets (top: 0, left: 9, bottom: 0, right: 9)
+        b.addTarget (self, action: action, for: .touchDown)
+        if repeats {
+            b.addTarget (self, action: #selector(cancelTimer), for: .touchUpOutside)
+            b.addTarget (self, action: #selector(cancelTimer), for: .touchCancel)
+            b.addTarget (self, action: #selector(cancelTimer), for: .touchUpInside)
+        }
+        b.sizeToFit ()
+        b.frame.size = CGSize (width: max (minWidth, b.frame.width), height: TerminalAccessory.keyHeight)
+        b.accessibilityLabel = title.isEmpty ? "Keyboard" : title
+        return b
+    }
+
     public override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
             super.traitCollectionDidChange(previousTraitCollection)
 return
@@ -319,26 +352,21 @@ return
             frame.width < 380
         }
     }
-    
+
     var buttonPad = 4.0
     public override func layoutSubviews() {
-        var x: CGFloat = 2
-        let dh = views.reduce (0) { max ($0, $1.frame.size.height )}
-        
-        for view in leftViews + floatViews {
-            let size = view.frame.size
-            view.frame = CGRect(x: x, y: 4, width: size.width, height: dh)
-            x += size.width + buttonPad
+        keyBorder.frame = CGRect (x: 0, y: 0, width: bounds.width, height: 0.5)
+        keyScroll.frame = bounds
+        var x = TerminalAccessory.rowInset
+        let y = (bounds.height - TerminalAccessory.keyHeight) / 2
+        for key in keyRow {
+            key.frame.origin = CGPoint (x: x, y: y)
+            x += key.frame.width + TerminalAccessory.keyGap
         }
-        
-        var right = frame.width - 2
-        for view in rightViews.reversed() {
-            let size = view.frame.size
-            view.frame = CGRect (x: right-size.width, y: 4, width: size.width, height: dh)
-            right -= size.width + buttonPad
-        }
+        keyScroll.contentSize = CGSize (width: x - TerminalAccessory.keyGap + TerminalAccessory.rowInset,
+                                        height: bounds.height)
     }
-    
+
     func makeAutoRepeatButton (_ iconName: String, _ action: Selector) -> UIButton
     {
         let b = makeButton ("", action, icon: iconName)
@@ -394,13 +422,22 @@ return
 }
 
 
+/// LFG PATCH 4: the key row scrolls even when a drag starts on a key.
+/// LFG PATCH 4: the empty input view that stands for "keyboard hidden".
+final class HiddenKeyboardView: UIView {}
+
+class KeyRowScrollView: UIScrollView {
+    override func touchesShouldCancel(in view: UIView) -> Bool { true }
+}
+
 class BackgroundSelectedButton: UIButton {
     
     var color: UIColor?
     
     override var isSelected: Bool {
         didSet {
-            self.backgroundColor = isSelected ? UIView().tintColor : color
+            // LFG PATCH 4: a latched ctrl/⌥ key turns white (S2 key row).
+            self.backgroundColor = isSelected ? .white : color
         }
     }
 }

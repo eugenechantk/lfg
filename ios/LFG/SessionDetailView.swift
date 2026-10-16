@@ -3,7 +3,10 @@ import LFGCore
 import UIKit
 
 struct SessionDetailView: View {
-    private static let bottomTranscriptClearance: CGFloat = 16
+    /// The 1pt newest-edge anchor and the stack's 14pt spacing already give
+    /// more than the boards' gap; `calculatedTranscriptBottomContentMargin`
+    /// trims the rest.
+    private static let bottomTranscriptClearance: CGFloat = 0
 
     private enum PresentedSheet: Identifiable {
         case attachments
@@ -12,6 +15,12 @@ struct SessionDetailView: View {
         case requestedSignIn(requestID: String)
         case childSessions(selectedID: String?)
         case iPhonePreview
+        /// The full result behind a tool card's "Show all N lines".
+        case toolOutput(title: String, text: String)
+        /// The whole plan behind the panel's "Read the full plan ›".
+        case planText(String)
+        /// The S2 session sheet (board `s2-menu`), from the top-right button.
+        case session
 
         var id: String {
             switch self {
@@ -21,6 +30,9 @@ struct SessionDetailView: View {
             case .filePreview(let selected, _): "file-preview-\(selected.id)"
             case .childSessions(let selectedID): "child-sessions-\(selectedID ?? "all")"
             case .iPhonePreview: "iphone-preview"
+            case .toolOutput(let title, let text): "tool-output-\(title.hashValue)-\(text.count)"
+            case .planText(let text): "plan-\(text.count)"
+            case .session: "session"
             }
         }
     }
@@ -46,6 +58,8 @@ struct SessionDetailView: View {
     @State private var renaming = false
     /// Tapping the (truncated) nav-bar title reveals the full one in a card below it.
     @State private var showFullTitle = false
+    /// The queued-strip row whose menu is open (S2: drawn at the row).
+    @State private var openStripMenuID: String?
     @State private var newTitle = ""
     @State private var confirmEnd = false
     @State private var isAtBottom = true
@@ -64,6 +78,8 @@ struct SessionDetailView: View {
     @State private var presentedSheet: PresentedSheet?
     /// The shell on this session's host (`TerminalScreen`), from the ••• menu.
     @State private var showTerminal = false
+    /// What the session sheet asked for; runs once the sheet has dismissed.
+    @State private var afterSheet: SessionSheetAction?
     @State private var continuingInLFG = false
     /// How many of the newest messages the transcript actually renders. The store
     /// still holds the whole conversation — this bounds only what SwiftUI has to
@@ -103,7 +119,16 @@ struct SessionDetailView: View {
             bottomSafeAreaInset: Double(windowBottomSafeAreaInset),
             bottomTranscriptClearance: Double(Self.bottomTranscriptClearance),
             bottomContainerInset: Double(bottomContainerInset)
-        ))
+        )) - bottomMarginTrim
+    }
+
+    /// What the anchor row + stack spacing overshoot the boards' gap by, per
+    /// chrome: above the pills, above a needs-input panel, and above the strip
+    /// or composer when no pill applies (measured, boards `s2-view`,
+    /// `s2-question`, `s2-queued-failed`).
+    private var bottomMarginTrim: CGFloat {
+        if prompt != nil && !session.isExternallyOwned { return 3 }
+        return hasPills ? 1.7 : 1.3
     }
     private var transcriptBottomContentMargin: CGFloat {
         CGFloat(TranscriptWindow.effectiveBottomContentMargin(
@@ -341,11 +366,42 @@ struct SessionDetailView: View {
                 do { try await Task.sleep(for: .seconds(3)) } catch { break }
             }
         }
+        #if DEBUG
+        .task(id: sid) {
+            // `LFG_S2_VIEW_FIXTURE=menu|subagents` (boards `s2-menu`,
+            // `s2-subagents`): open that sheet.
+            guard sid.hasPrefix("s2fx-") else { return }
+            switch SessionStore.s2ViewFixtureMode {
+            case "menu":
+                try? await Task.sleep(for: .seconds(1))
+                presentedSheet = .session
+            case "subagents":
+                try? await Task.sleep(for: .seconds(1))
+                presentedSheet = .childSessions(selectedID: nil)
+            case "files":
+                try? await Task.sleep(for: .seconds(1))
+                presentedSheet = .attachments
+            default: break
+            }
+        }
+        #endif
         .fullScreenCover(isPresented: $showTerminal) {
             TerminalScreen(initialHostURL: store.host(forSession: sid)?.url)
         }
-        .sheet(item: $presentedSheet) { sheet in
+        .sheet(item: $presentedSheet, onDismiss: runAfterSheet) { sheet in
             switch sheet {
+            case .session:
+                SessionSheet(
+                    session: session,
+                    sid: sid,
+                    isBusy: isBusy,
+                    subagentCount: childAgents.count,
+                    waitingSignIns: signInRequests.filter(\.isWaiting).count,
+                    messages: messages
+                ) { action in
+                    afterSheet = action
+                    presentedSheet = nil
+                }
             case .requestedSignIn(let requestID):
                 PhoneSignInView(sessionID: sid, agentRequestID: requestID)
                     .presentationDetents([.large])
@@ -354,7 +410,12 @@ struct SessionDetailView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             case .attachments:
-                AttachmentsSheet(messages: messages)
+                AttachmentsSheet(messages: messages, cwd: session.cwd)
+                    // Board `s2-files`: the sheet's top sits 644pt above the bottom.
+                    .presentationDetents([.height(644), .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(S2.surface)
+                    .presentationCornerRadius(38)
             case .filePreview(let selected, let rowFiles):
                 FileViewerSheet(
                     sequence: FilePreviewSequence.forInlinePreview(
@@ -367,10 +428,19 @@ struct SessionDetailView: View {
             case .iPhonePreview:
                 IPhonePreviewSheet(sessionID: sid)
                     .presentationDetents([.large])
+            case .toolOutput(let title, let text):
+                ToolOutputSheet(title: title, text: text)
+                    .presentationDetents([.medium, .large])
+            case .planText(let text):
+                PlanTextSheet(text: text)
+                    .presentationDetents([.large])
             case .childSessions(let selectedID):
                 ChildAgentSessionsSheet(parentSessionID: sid, initialChildID: selectedID)
-                    .presentationDetents([.medium, .large])
+                    // Board `s2-subagents`: the sheet's top sits 644pt above the bottom.
+                    .presentationDetents([.height(644), .large])
                     .presentationDragIndicator(.visible)
+                    .presentationBackground(S2.surface)
+                    .presentationCornerRadius(38)
             }
         }
         .alert("Rename session", isPresented: $renaming) {
@@ -422,9 +492,19 @@ struct SessionDetailView: View {
                         // edge the lists use instead.
                         .scrollEdgeEffectHidden(true, for: [.top, .bottom])
                         .overlay(alignment: .top) {
-                            ChromeFade(barHeight: topChromeHeight)
+                            ChromeFade(barHeight: topChromeHeight, solid: true)
                                 .offset(y: -topChromeHeight)
                         }
+
+                    // An open strip menu closes on a tap anywhere outside it.
+                    if openStripMenuID != nil {
+                        Color.black.opacity(0.001)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                withAnimation(.easeOut(duration: 0.15)) { openStripMenuID = nil }
+                            }
+                            .accessibilityHidden(true)
+                    }
 
                     // This sibling intentionally still respects `.keyboard`.
                     // Its safe-area padding lifts the glass composer above the
@@ -436,7 +516,8 @@ struct SessionDetailView: View {
                         .background(alignment: .top) {
                             GeometryReader { proxy in
                                 ChromeFade(edge: .bottom,
-                                           barHeight: proxy.size.height + windowBottomSafeAreaInset)
+                                           barHeight: proxy.size.height + windowBottomSafeAreaInset,
+                                           solid: true)
                                     .offset(y: -ChromeFade.tail(.bottom))
                             }
                         }
@@ -463,28 +544,34 @@ struct SessionDetailView: View {
     }
 
     private var bottomChrome: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 0) {
+            // S2: Subagents, Files and Terminal sit above the composer as pills.
+            // An unreachable host is said once, in the status line under the
+            // title; the draft stays editable and the store queues the send.
+            if (prompt == nil || session.isExternallyOwned) && hasPills {
+            ComposerPillRow(
+                agents: childAgents,
+                fileCount: pillFileCount,
+                // A shell needs the host; an offline one cannot connect.
+                showsTerminal: !session.isExternallyOwned && !store.isOffline(sid),
+                onSubagents: { presentedSheet = .childSessions(selectedID: nil) },
+                onFiles: { presentedSheet = .attachments },
+                onTerminal: { showTerminal = true }
+            )
+            .padding(.bottom, 10)
+            }
+
             // A send the backend hasn't taken yet (queued behind a running
             // turn, offline, or failed) waits here as a one-line bar — not
             // as a transcript bubble. It becomes a blue bubble only when
             // the real user turn comes back from the host, so "queued" and
             // "received" never look the same.
-            PendingStripView(sessionID: sid, items: pendingBars) { editable in
+            PendingStripView(sessionID: sid, items: pendingBars, agent: session.agent,
+                             openMenuID: $openStripMenuID) { editable in
                 draft = editable
             }
-            .padding(.horizontal, 16)
-
-            // Keep the draft editable while its owning host is unreachable;
-            // the store queues sends durably until the host comes back.
-            if store.isOffline(sid) {
-                OfflineComposerNotice(hostLabel: store.host(forSession: sid)?.label ?? "This host")
-            }
-
-            if store.showsChildSessionsBar(sid) {
-                ChildSessionsComposerBar(agents: childAgents) {
-                    presentedSheet = .childSessions(selectedID: nil)
-                }
-            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, pendingBars.isEmpty ? 0 : 6)
 
             // A waiting request the prompt panel is already showing (the server
             // surfaces it as the session's prompt) gets one entry point, not two.
@@ -520,10 +607,23 @@ struct SessionDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, 16)
+                .padding(.bottom, 8)
                 .accessibilityIdentifier("phone_sign_in_request_button")
             }
 
-            if session.isExternallyOwned {
+            if let prompt, !session.isExternallyOwned {
+                NeedsInputPanel(
+                    sessionID: sid, prompt: prompt, agent: session.agent, cwd: session.cwd,
+                    hostLabel: store.host(forSession: sid)?.label,
+                    onSignIn: { signIn in
+                        // Straight to the browser: the login sheet fetches the
+                        // request by id itself, so it never needs the polled list
+                        // (which lags the prompt by up to 3s) or the history sheet.
+                        presentedSheet = .requestedSignIn(requestID: signIn.requestId)
+                    },
+                    onReadPlan: { text in presentedSheet = .planText(text) }
+                )
+            } else if session.isExternallyOwned {
                 ExternalSessionComposerNotice(
                     ownerName: session.externalOwnerName ?? "another desktop client",
                     continuing: continuingInLFG,
@@ -532,8 +632,21 @@ struct SessionDetailView: View {
             } else {
                 MessageComposer(
                     text: $draft,
+                    placeholder: composerPlaceholder,
                     sending: isMovingHost,
                     focusRequest: followupFocusRequest,
+                    s2: true,
+                    accessory: AnyView(ComposerModelChip(
+                        sid: sid,
+                        agent: session.agent,
+                        closed: session.closed,
+                        // The host refuses a model or effort change mid-turn.
+                        locked: isBusy || prompt != nil || !pendingBars.isEmpty
+                    )),
+                    onStop: isBusy ? { Task { await store.interrupt(sid) } } : nil,
+                    // The board's bar sits 28pt off the bottom edge, inside the
+                    // home-indicator inset; above the keyboard it keeps a gap.
+                    bottomPadding: composerFocused ? 8 : -6,
                     onFocusChange: { isFocused in
                         composerFocused = isFocused
                         applyKeyboardTransition(
@@ -584,7 +697,12 @@ struct SessionDetailView: View {
                     )
                 }
             }
-            .safeAreaPadding(.bottom)
+            // A length-less `safeAreaPadding` adds the system's default 16pt on
+            // top of the safe area the view already respects. The S2 boards
+            // measure the composer from the screen edge, so that margin only
+            // applies above the keyboard. Same modifier either way (a value,
+            // not a branch), so the focused field keeps its identity.
+            .safeAreaPadding(.bottom, keyboardOcclusionHeight > 0 ? nil : 0)
             .onPreferenceChange(SessionBottomChromeHeightKey.self) {
                 // UIWindow's inset is the stable device inset; it
                 // does not grow with SwiftUI's keyboard safe-area region.
@@ -634,18 +752,11 @@ struct SessionDetailView: View {
             // loop and no keyboard re-pin below: the machinery existed only to
             // re-assert a position the layout now holds by itself.
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
+                // 14pt between items, the boards' gap (`s2-view`).
+                LazyVStack(alignment: .leading, spacing: 14) {
                     // ---- visual BOTTOM (newest) ----
                     Color.clear.frame(height: 1).id(Self.newestAnchor).flippedRow()
 
-                    if let prompt {
-                        PromptPanelView(sessionID: sid, prompt: prompt, onSignIn: { signIn in
-                            // Straight to the browser: the login sheet fetches the
-                            // request by id itself, so it never needs the polled list
-                            // (which lags the prompt by up to 3s) or the history sheet.
-                            presentedSheet = .requestedSignIn(requestID: signIn.requestId)
-                        }).flippedRow()
-                    }
                     // What the model said just before asking. Held out of the
                     // transcript by Claude Code until answered, so it arrives
                     // scraped from the pane and renders as an ordinary assistant
@@ -674,21 +785,31 @@ struct SessionDetailView: View {
                             .frame(maxWidth: .infinity).padding(.top, 40)
                             .flippedRow()
                     } else {
-                        // Newest first. `idx` still indexes `messages`, so the
-                        // back-to-back user-turn rule reads the message ABOVE
-                        // this one exactly as before.
-                        ForEach(Array(renderedWindow.indices.reversed()), id: \.self) { idx in
-                            TranscriptMessageView(
-                                message: renderedMessages[idx],
-                                followsUserBubble: idx > 0 && renderedMessages[idx - 1].rendersAsUserBubble,
-                                onFollowup: { prompt in
-                                    draft = FollowupDraft.adding(prompt, to: draft)
-                                    followupFocusRequest += 1
-                                },
-                                onOpenFile: openInlineFile
-                            )
-                            .id(renderedMessages[idx].stableID)
-                            .flippedRow()
+                        // Newest first. Consecutive tool rows fold into one S2
+                        // step (`TranscriptStepGrouper`); every other row keeps
+                        // its index into `messages`, so the back-to-back
+                        // user-turn rule reads the message ABOVE it as before.
+                        ForEach(Self.transcriptItems(renderedMessages, from: renderedStart).reversed(), id: \.id) { item in
+                            switch item.item {
+                            case .message(let idx):
+                                TranscriptMessageView(
+                                    message: renderedMessages[idx],
+                                    followsUserBubble: idx > 0 && renderedMessages[idx - 1].rendersAsUserBubble,
+                                    onFollowup: { prompt in
+                                        draft = FollowupDraft.adding(prompt, to: draft)
+                                        followupFocusRequest += 1
+                                    },
+                                    onOpenFile: openInlineFile
+                                )
+                                .id(renderedMessages[idx].stableID)
+                                .flippedRow()
+                            case .steps(let group):
+                                ToolStepGroupView(group: group, cwd: session.cwd, followsStep: item.followsStep) { title, text in
+                                    presentedSheet = .toolOutput(title: title, text: text)
+                                }
+                                .id(group.id)
+                                .flippedRow()
+                            }
                         }
                         // Visually the TOP of the transcript; structurally the
                         // END of the array. Appending here is what makes a
@@ -831,9 +952,55 @@ struct SessionDetailView: View {
       }
     }
 
+    /// The rendered window as S2 transcript items, with indices into the FULL
+    /// message array (the grouper sees only the window, so its indices are
+    /// shifted back by `start`).
+    private struct IdentifiedItem: Identifiable {
+        let id: String
+        let item: TranscriptItem
+        /// A step directly under another step (board `s2-queued`: the pair
+        /// keeps the full 14pt gap between rows).
+        var followsStep = false
+    }
+
+    private static func transcriptItems(_ messages: [SessionMessage], from start: Int) -> [IdentifiedItem] {
+        let window = Array(messages[start...])
+        var previousWasStep = false
+        return TranscriptStepGrouper.items(for: window).map { item in
+            switch item {
+            case .message(let i):
+                previousWasStep = false
+                return IdentifiedItem(id: messages[start + i].stableID, item: .message(start + i))
+            case .steps(let group):
+                defer { previousWasStep = true }
+                return IdentifiedItem(id: "steps-\(group.id)", item: .steps(group), followsStep: previousWasStep)
+            }
+        }
+    }
+
     /// Inline rows live inside a lazy transcript and can be recreated while the
     /// session-wide file index refreshes. Keep sheet ownership on this stable
     /// session view so a row update cannot discard an in-flight presentation.
+    /// Runs what the session sheet asked for, after it has dismissed: the
+    /// terminal, an alert or another sheet cannot present over it.
+    private func runAfterSheet() {
+        guard let action = afterSheet else { return }
+        afterSheet = nil
+        switch action {
+        case .rename:
+            newTitle = session.title
+            renaming = true
+        case .terminal: showTerminal = true
+        case .files: presentedSheet = .attachments
+        case .subagents: presentedSheet = .childSessions(selectedID: nil)
+        case .signIn: presentedSheet = .phoneSignIn(requestID: nil)
+        case .browserPreview: dismissedBrowserFrameID = nil
+        case .iPhonePreview: presentedSheet = .iPhonePreview
+        case .confirmEnd: confirmEnd = true
+        case .markedUnread: onMarkedUnread()
+        }
+    }
+
     private func openInlineFile(_ selected: MediaRef, rowFiles: [MediaRef]) {
         presentedSheet = .filePreview(selected: selected, rowFiles: rowFiles)
     }
@@ -1056,14 +1223,11 @@ struct SessionDetailView: View {
         ToolbarItem(placement: .principal) {
             SessionTitleBarContent(
                 title: displayTitle,
+                status: statusLineState,
+                // An unsent message is "Not sent", not queued.
+                queued: pendingBars.filter { !$0.failed }.count,
                 hostLabel: hostLabel,
-                activity: SessionTitleActivity.resolve(
-                    modelSwitchStatus: crossProviderSwitchStatus,
-                    forking: store.isForking(sid),
-                    movingHost: isMovingHost,
-                    busy: isBusy
-                ),
-                path: headerPath
+                project: SessionRowMeta.projectLabel(cwd: session.cwd, project: session.project)
             ) {
                 withAnimation(.easeOut(duration: 0.18)) { showFullTitle.toggle() }
             }
@@ -1079,29 +1243,62 @@ struct SessionDetailView: View {
             // transition and accessibility. Keep one visible native source;
             // layering app-owned glass above it caused sheet/menu lifecycle
             // glitches and an opaque double background.
-            SessionOptionsMenu(
-                sid: sid,
-                agent: session.agent,
-                closed: session.closed,
-                externallyOwned: session.isExternallyOwned,
-                tmuxIdentifier: session.tmuxName ?? session.tmuxTarget,
-                isBusy: isBusy,
-                childAgents: childAgents,
-                signInRequests: signInRequests,
-                dismissedBrowserFrameID: dismissedBrowserFrameID,
-                onShowAttachments: { presentedSheet = .attachments },
-                onOpenTerminal: { showTerminal = true },
-                onShowPhoneSignIn: { requestID in presentedSheet = .phoneSignIn(requestID: requestID) },
-                onShowIPhonePreview: { presentedSheet = .iPhonePreview },
-                onShowChildSessions: { selectedID in
-                    presentedSheet = .childSessions(selectedID: selectedID)
-                },
-                onRename: { newTitle = session.title; renaming = true },
-                onRestoreBrowserPreview: { dismissedBrowserFrameID = nil },
-                onConfirmEnd: { confirmEnd = true },
-                onMarkedUnread: onMarkedUnread
-            )
+            SessionOptionsButton { presentedSheet = .session }
+                // Keep the same native 44-point toolbar footprint as Back while
+                // letting the system provide the actual material and shape.
+                .frame(width: 44, height: 44)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Session")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("sessionOptionsMenu")
         }
+    }
+
+    /// Whether any pill applies: subagents, files, or a reachable shell.
+    private var hasPills: Bool {
+        !childAgents.isEmpty || pillFileCount > 0 || (!session.isExternallyOwned && !store.isOffline(sid))
+    }
+
+    private var pillFileCount: Int {
+        #if DEBUG
+        if let n = store.s2FixtureFiles(sid) { return n }
+        #endif
+        return transcriptPreviewFiles?.count ?? 0
+    }
+
+    /// S2 boards: "Add to this turn…" while working (`s2-view`), and "Message ·
+    /// sends when Air is back" while the host is unreachable (`s2-queued-failed`).
+    private var composerPlaceholder: String {
+        if store.isOffline(sid) {
+            return "Message · sends when \(store.host(forSession: sid)?.label ?? "the host") is back"
+        }
+        return isBusy ? "Add to this turn…" : "Message"
+    }
+
+    /// What the line under the title says (S2): a transient action wins, then
+    /// an unreachable host, a waiting question or sign-in, an API pause, the
+    /// running turn, else idle.
+    private var statusLineState: SessionStatusLine.State {
+        if let activity = SessionTitleActivity.resolve(
+            modelSwitchStatus: crossProviderSwitchStatus,
+            forking: store.isForking(sid),
+            movingHost: isMovingHost,
+            busy: false
+        ) {
+            return .activity(activity.label)
+        }
+        if store.isOffline(sid) {
+            return .hostOffline(sinceMs: store.offlineSinceMs(sid))
+        }
+        if let prompt {
+            return prompt.signIn != nil ? .needsSignIn(sinceMs: prompt.askedAt) : .needsInput(sinceMs: prompt.askedAt)
+        }
+        if session.isBlocked { return .paused(reason: session.statusReason) }
+        if isBusy {
+            // Same anchor as the list row (`SessionStore.turnStartedAt`).
+            return .working(sinceMs: store.turnStartedAt(session))
+        }
+        return .idle
     }
 
     /// Nav-bar title text, shared by the truncated bar label and the full-title card.
@@ -1160,80 +1357,80 @@ struct SessionDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// The working path shown under the title when the session is idle (no
-    /// "Running" status text). Prefers the real working dir, falling back to the
-    /// friendly project name; nil when neither is known.
-    private var headerPath: String? {
-        if let cwd = session.cwd, !cwd.isEmpty { return cwd }
-        if let project = session.project, !project.isEmpty { return project }
-        return nil
-    }
-
 }
 
-/// The navigation bar's principal content, kept independent of transcript state
-/// so activity transitions remain stable and can be verified in isolation.
+/// The navigation bar's principal content (S2, canvas board `s2-view`): the
+/// title, and under it the session's state — "● Working · 3m 12s · Pro · lfg",
+/// "● Needs input · 2m", "● Air offline · 2m" — so status lives in the top bar
+/// instead of as banners in the transcript.
 struct SessionTitleBarContent: View {
     let title: String
+    let status: SessionStatusLine.State
+    let queued: Int
     let hostLabel: String?
-    let activity: SessionTitleActivity?
-    let path: String?
+    let project: String?
     let onTitleTapped: () -> Void
 
+    private static let live = Color(UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(red: 0x30 / 255, green: 0xD1 / 255, blue: 0x58 / 255, alpha: 1)
+        : UIColor(red: 0x24 / 255, green: 0x8A / 255, blue: 0x3D / 255, alpha: 1) })
+    private static let attention = Color(UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(red: 1, green: 0x9F / 255, blue: 0x0A / 255, alpha: 1)
+        : UIColor(red: 0xC9 / 255, green: 0x34 / 255, blue: 0, alpha: 1) })
+    private static let grey = Color(UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(red: 0xA1 / 255, green: 0xA1 / 255, blue: 0xA6 / 255, alpha: 1)
+        : UIColor(red: 0x6C / 255, green: 0x6C / 255, blue: 0x70 / 255, alpha: 1) })
+
     var body: some View {
-        VStack(spacing: 1) {
+        VStack(spacing: 3) {
             // Titles are whole sentences, so keep the bar to one line and let
             // SessionDetailView reveal the full title when this is tapped.
             Text(title)
-                .font(.headline)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(S2.white)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onTitleTapped)
                 .accessibilityIdentifier("sessionTitle")
                 .accessibilityHint("Shows the full session title")
-            HStack(spacing: 5) {
-                if let hostLabel {
-                    Text(hostLabel)
-                        .font(.caption2)
-                        .padding(.horizontal, 6).padding(.vertical, 1)
-                        .background(Color(.tertiarySystemFill), in: Capsule())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .accessibilityIdentifier("sessionHostPill")
-                }
-                if let activity {
-                    ProgressView().controlSize(.mini)
-                    Text(activity.label)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier(activity.accessibilityIdentifier)
-                } else if let path {
-                    Text(path)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.head)
-                }
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let line = SessionStatusLine.resolve(status, queued: queued, host: hostLabel, project: project,
+                                                     nowMs: context.date.timeIntervalSince1970 * 1_000)
+                statusRow(line)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: activity)
+        .animation(.easeInOut(duration: 0.2), value: status)
     }
-}
 
-private extension SessionTitleActivity {
-    var accessibilityIdentifier: String {
-        switch self {
-        case .modelSwitch: "sessionModelSwitchStatus"
-        case .forking: "sessionForkingStatus"
-        case .movingHost, .running: "sessionActivityStatus"
+    private func statusRow(_ line: SessionStatusLine) -> some View {
+        HStack(spacing: 6) {
+            if line.tone != .none {
+                let tint = line.tone == .live ? Self.live : Self.attention
+                Circle()
+                    .fill(tint)
+                    .frame(width: 7, height: 7)
+                    .background(Circle().fill(tint.opacity(0.25)).frame(width: 13, height: 13)
+                                    .opacity(line.tone == .live ? 1 : 0))
+                if let label = line.label {
+                    Text(label)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(tint)
+                        .accessibilityIdentifier("sessionStatusLabel")
+                }
+            }
+            if !line.detail.isEmpty {
+                Text(line.detail)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Self.grey)
+            }
         }
+        .lineLimit(1)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("sessionStatusLine")
     }
 }
 
-/// A transparent 44-point activation zone backed by a real `UIScrollView`.
-/// Its own content never renders; only UIKit's native vertical scroll indicator
-/// appears, flashes while the long-press moves, and fades on the system's timing.
 private struct SessionBottomChromeHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
 
@@ -1454,380 +1651,60 @@ private struct UserMessageScrubberAccessibilityProxy: UIViewRepresentable {
     }
 }
 
-/// Apple's native pull-down menu, backed by a stable UIKit menu object.
-///
-/// A SwiftUI `Menu` directly inside this transcript-observing toolbar is rebuilt
-/// for every streaming delta, which makes UIKit recreate the presented menu at
-/// offset zero. `NativeSessionOptionsButton` assigns its root `UIMenu` only once;
-/// the deferred child reads the latest actions when a presentation begins.
-private struct SessionOptionsMenu: View {
-    let sid: String
-    let agent: String
-    let closed: Bool
-    let externallyOwned: Bool
-    let tmuxIdentifier: String?
-    let isBusy: Bool
-    let childAgents: [ChildAgentSession]
-    let signInRequests: [PhoneSignInAgentRequest]
-    let dismissedBrowserFrameID: String?
-    let onShowAttachments: () -> Void
-    let onOpenTerminal: () -> Void
-    let onShowPhoneSignIn: (String?) -> Void
-    let onShowIPhonePreview: () -> Void
-    let onShowChildSessions: (String?) -> Void
-    let onRename: () -> Void
-    let onRestoreBrowserPreview: () -> Void
-    let onConfirmEnd: () -> Void
-    let onMarkedUnread: () -> Void
+/// The top bar's session button (board `s2-view`: the tools glyph). It opens
+/// the S2 session sheet; the old pull-down menu's actions all live there now.
+private struct SessionOptionsButton: UIViewRepresentable {
+    let onTap: () -> Void
 
-    @Environment(SessionStore.self) private var store
-    @Environment(AppSettings.self) private var settings
-    @State private var forking = false
-    @State private var transferring = false
-    /// A move the target's pre-flight said would resume from an older copy.
-    /// Held until the user confirms or cancels — never moved silently.
-    @State private var staleMove: StaleMove?
+    func makeCoordinator() -> Coordinator { Coordinator(onTap: onTap) }
 
-    struct StaleMove: Identifiable {
-        let target: Host
-        let behindSeconds: TimeInterval
-        var id: String { target.id }
-    }
-
-    var body: some View {
-        NativeSessionOptionsButton { menuElements }
-            // Keep the same native 44-point toolbar footprint as Back while
-            // letting the system provide the actual material and shape.
-            .frame(width: 44, height: 44)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("More")
-            .accessibilityIdentifier("sessionOptionsMenu")
-            .confirmationDialog(
-                "Move anyway?",
-                isPresented: Binding(get: { staleMove != nil }, set: { if !$0 { staleMove = nil } }),
-                titleVisibility: .visible,
-                presenting: staleMove
-            ) { move in
-                Button("Move to \(move.target.label)") {
-                    Task {
-                        transferring = true
-                        defer { transferring = false }
-                        _ = await store.transfer(sid, to: move.target, preflight: .ready)
-                    }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: { move in
-                let source = store.host(forSession: sid)?.label ?? "the current host"
-                Text("\(move.target.label)'s copy of this conversation is \(SessionTransfer.behindLabel(move.behindSeconds)) behind \(source). Moving now continues from that older copy; the newer turns stay only on \(source).")
+    /// The board's tools glyph (`s2-view`): two sliders, drawn from its SVG
+    /// (24-unit box, 1.9 stroke) at 20pt as a template image.
+    static let toolsGlyph: UIImage = {
+        let size: CGFloat = 20, k = size / 24
+        let image = UIGraphicsImageRenderer(size: CGSize(width: size, height: size)).image { _ in
+            let path = UIBezierPath()
+            for (x0, x1, y) in [(4.0, 13.0, 7.0), (17.0, 20.0, 7.0), (4.0, 7.0, 17.0), (11.0, 20.0, 17.0)] {
+                path.move(to: CGPoint(x: x0 * k, y: y * k))
+                path.addLine(to: CGPoint(x: x1 * k, y: y * k))
             }
-    }
-
-    private var menuElements: [UIMenuElement] {
-        var lifecycle: [UIMenuElement] = []
-        var sessionOptions: [UIMenuElement] = []
-        var tools: [UIMenuElement] = []
-
-        if isBusy && !externallyOwned {
-            lifecycle.append(action("Stop", systemImage: "stop.circle", attributes: .destructive) {
-                Task { await store.interrupt(sid) }
-            })
-        }
-
-
-        if !externallyOwned {
-            tools.append(action(
-                signInRequests.isEmpty ? "Sign in on iPhone" : "Sign in on iPhone (\(signInRequests.count))",
-                systemImage: "key"
-            ) { onShowPhoneSignIn(nil) })
-        }
-        tools.append(action("Files & Links", systemImage: "paperclip", handler: onShowAttachments))
-        if !externallyOwned {
-            tools.append(action("Open Terminal", systemImage: "apple.terminal", handler: onOpenTerminal))
-        }
-        tools.append(action("iPhone Preview", systemImage: "iphone",
-                            identifier: "session_iphone_preview", handler: onShowIPhonePreview))
-
-        if !childAgents.isEmpty {
-            let childActions: [UIMenuElement] = [
-                action("View all", systemImage: "list.bullet") {
-                    onShowChildSessions(nil)
-                },
-            ] + childAgents.map { child in
-                action(
-                    child.description,
-                    systemImage: child.status.menuSystemImage
-                ) {
-                    onShowChildSessions(child.id)
-                }
+            for (cx, cy) in [(15.0, 7.0), (9.0, 17.0)] {
+                path.append(UIBezierPath(arcCenter: CGPoint(x: cx * k, y: cy * k), radius: 2.2 * k,
+                                         startAngle: 0, endAngle: .pi * 2, clockwise: true))
             }
-            tools.append(UIMenu(
-                title: "Child sessions (\(childAgents.count))",
-                image: UIImage(systemName: "person.2"),
-                children: childActions
-            ))
+            path.lineWidth = 1.9 * k
+            path.lineCapStyle = .round
+            UIColor.black.setStroke()
+            path.stroke()
         }
-
-        let switching = store.switchingModelSessionIds.contains(sid)
-        let models = SessionHandoff.modelSections(
-            current: AgentKind(rawValue: agent) ?? .claude,
-            closed: closed,
-            catalog: store.modelCatalog(forSession: sid)
-        ).map { section in
-            let target = section.agent
-            return UIMenu(title: section.title, options: .displayInline,
-                children: section.models.map { model in
-                    action(model, identifier: "switch_model_\(target.rawValue)_\(model)",
-                        attributes: switching || sid.hasPrefix("local-") ? .disabled : [],
-                        state: agent == target.rawValue && store.session(sid)?.model == model ? .on : .off) {
-                        Task {
-                            if let id = await store.switchModel(sid, to: AgentModelSelection(agent: target, model: model)) {
-                                store.requestSelection(id)
-                            }
-                        }
-                    }
-                })
-        }
-        if !externallyOwned {
-            sessionOptions.append(UIMenu(
-                title: switching ? "Switching model…" : "Model",
-                image: UIImage(systemName: "cpu"),
-                children: models
-            ))
-        }
-        if let effort = effortMenu(modelSwitching: switching) {
-            sessionOptions.append(effort)
-        }
-
-        sessionOptions.append(action("Rename", systemImage: "pencil", handler: onRename))
-
-        if let frame = store.browserFrames[sid],
-           frame.frameId == dismissedBrowserFrameID {
-            tools.append(action(
-                "Show Browser Preview",
-                systemImage: "safari",
-                handler: onRestoreBrowserPreview
-            ))
-        }
-
-        if canFork {
-            sessionOptions.append(action(
-                forking ? "Continuing…" : (externallyOwned ? "Continue in LFG" : "Fork session"),
-                systemImage: "arrow.triangle.branch",
-                attributes: forking ? .disabled : []
-            ) {
-                Task { await forkSession() }
-            })
-        }
-
-        if canTransfer {
-            let targets = transferTargets.map { target in
-                action(
-                    target.label,
-                    systemImage: "desktopcomputer",
-                    attributes: transferring ? .disabled : []
-                ) {
-                    Task { await transfer(to: target) }
-                }
-            }
-            sessionOptions.append(UIMenu(
-                title: transferring ? "Moving…" : "Host",
-                image: UIImage(systemName: "arrow.left.arrow.right"),
-                children: targets
-            ))
-        }
-
-        if ManualUnread.canMarkUnread(sid) {
-            if store.isManuallyUnread(sid) {
-                lifecycle.append(action("Mark as read", systemImage: "envelope.open") {
-                    store.markRead(sid)
-                })
-            } else {
-                lifecycle.append(action("Mark as unread", systemImage: "envelope.badge") {
-                    markUnreadAndExit()
-                })
-            }
-        }
-
-        var debug: [UIMenuElement] = []
-        if let tmuxIdentifier, !tmuxIdentifier.isEmpty {
-            debug.append(action("tmux · \(tmuxIdentifier)", systemImage: "terminal") {
-                copyToClipboard(tmuxIdentifier)
-            })
-        }
-        if !sid.isEmpty {
-            debug.append(action("\(agentIdLabel) · \(sid)", systemImage: "number") {
-                copyToClipboard(sid)
-            })
-        }
-
-        var sections: [UIMenuElement] = [
-            UIMenu(title: "Session options", options: .displayInline, children: sessionOptions),
-            UIMenu(title: "Tools", options: .displayInline, children: tools),
-            UIMenu(title: "Debug — tap to copy", options: .displayInline, children: debug)
-        ]
-        if !externallyOwned {
-            lifecycle.append(action("End session", systemImage: "xmark.circle", attributes: .destructive,
-                                   handler: onConfirmEnd))
-        }
-        if !lifecycle.isEmpty { sections.append(UIMenu(options: .displayInline, children: lifecycle)) }
-        return sections
-    }
-
-    private func action(
-        _ title: String,
-        systemImage: String? = nil,
-        identifier: String? = nil,
-        attributes: UIMenuElement.Attributes = [],
-        state: UIMenuElement.State = .off,
-        handler: @escaping @MainActor () -> Void
-    ) -> UIAction {
-        UIAction(
-            title: title,
-            image: systemImage.flatMap(UIImage.init(systemName:)),
-            identifier: identifier.map(UIAction.Identifier.init(rawValue:)),
-            attributes: attributes,
-            state: state
-        ) { _ in
-            // UIKit normally invokes actions on the main thread, but this is a
-            // runtime callback rather than a compiler-proven actor boundary.
-            // Hop instead of asserting so an off-main delivery cannot trap.
-            Task { @MainActor in handler() }
-        }
-    }
-
-    /// Reasoning effort for this live session, per the host's catalog for its
-    /// current model. Hidden where it cannot apply: closed or externally owned
-    /// sessions, and models without effort control (Claude Haiku).
-    private func effortMenu(modelSwitching: Bool) -> UIMenu? {
-        guard !externallyOwned, !closed, let kind = AgentKind(rawValue: agent) else { return nil }
-        let session = store.session(sid)
-        let levels = store.modelCatalog(forSession: sid).efforts(for: kind, model: session?.model)
-        guard !levels.isEmpty else { return nil }
-        let changing = store.changingEffortSessionIds.contains(sid)
-        let current = session?.effort
-        return UIMenu(
-            title: changing ? "Changing effort…" : "Effort",
-            subtitle: current.map(SessionEffort.displayName),
-            image: UIImage(systemName: "gauge.with.dots.needle.50percent"),
-            identifier: UIMenu.Identifier("session_effort_menu"),
-            children: levels.map { level in
-                action(SessionEffort.displayName(level), identifier: "set_effort_\(level)",
-                    attributes: changing || modelSwitching || sid.hasPrefix("local-") ? .disabled : [],
-                    state: current == level ? .on : .off) {
-                        Task { await store.setEffort(sid, to: level) }
-                    }
-            }
-        )
-    }
-
-    private var canFork: Bool {
-        !sid.isEmpty && (agent == "claude" || agent == "codex")
-    }
-
-    private var transferTargets: [Host] {
-        let current = store.host(forSession: sid)?.id
-        return settings.hosts.filter { $0.id != current }
-    }
-
-    private var canTransfer: Bool {
-        !sid.isEmpty && !closed
-            && store.host(forSession: sid) != nil
-            && !transferTargets.isEmpty
-    }
-
-    private var agentIdLabel: String {
-        switch agent {
-        case "claude": return "Claude id"
-        case "codex": return "Codex id"
-        default: return "Session id"
-        }
-    }
-
-    private func forkSession() async {
-        guard !forking else { return }
-        forking = true
-        defer { forking = false }
-        let newID = await store.fork(ForkRequest(sessionId: sid))
-        if let newID { store.requestSelection(newID) }
-    }
-
-    private func transfer(to target: Host) async {
-        guard !transferring else { return }
-        transferring = true
-        defer { transferring = false }
-        // Ask the target first; the source is untouched until this says go.
-        let check = await store.transferPreflight(sid, to: target)
-        if case .behind(let seconds) = check {
-            staleMove = StaleMove(target: target, behindSeconds: seconds)
-            return
-        }
-        _ = await store.transfer(sid, to: target, preflight: check)
-    }
-
-    private func markUnreadAndExit() {
-        store.markUnread(sid)
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-        onMarkedUnread()
-    }
-
-    private func copyToClipboard(_ value: String) {
-        UIPasteboard.general.string = value
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-    }
-
-}
-
-/// A UIKit pull-down button whose root menu identity never changes after mount.
-/// `updateUIView` only replaces the deferred builder, so a live SwiftUI update can
-/// affect the next presentation without disturbing the one the user is scrolling.
-private struct NativeSessionOptionsButton: UIViewRepresentable {
-    let makeElements: @MainActor () -> [UIMenuElement]
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(makeElements: makeElements)
-    }
+        return image.withRenderingMode(.alwaysTemplate)
+    }()
 
     func makeUIView(context: Context) -> UIButton {
         let button = UIButton(type: .system)
-        button.setImage(UIImage(systemName: "ellipsis"), for: .normal)
+        button.setImage(Self.toolsGlyph, for: .normal)
         button.tintColor = .label
         button.contentHorizontalAlignment = .center
         button.contentVerticalAlignment = .center
         button.setContentHuggingPriority(.required, for: .horizontal)
         button.setContentHuggingPriority(.required, for: .vertical)
         button.isAccessibilityElement = true
-        button.accessibilityLabel = "More"
+        button.accessibilityLabel = "Session"
         button.accessibilityIdentifier = "sessionOptionsMenu"
-        button.showsMenuAsPrimaryAction = true
-        button.menu = UIMenu(children: [
-            UIDeferredMenuElement.uncached { [weak coordinator = context.coordinator] completion in
-                // Deferred menu providers may be resolved asynchronously. The
-                // builder reads MainActor-owned SwiftUI/store state, so always
-                // hop rather than using MainActor.assumeIsolated (which traps if
-                // UIKit calls this closure from a worker queue).
-                Task { @MainActor in
-                    guard let coordinator else {
-                        completion([])
-                        return
-                    }
-                    completion(coordinator.makeElements())
-                }
-            }
-        ])
+        button.addAction(UIAction { [weak coordinator = context.coordinator] _ in
+            Task { @MainActor in coordinator?.onTap() }
+        }, for: .primaryActionTriggered)
         return button
     }
 
     func updateUIView(_ button: UIButton, context: Context) {
-        context.coordinator.makeElements = makeElements
+        context.coordinator.onTap = onTap
     }
 
     @MainActor
     final class Coordinator {
-        var makeElements: @MainActor () -> [UIMenuElement]
-
-        init(makeElements: @escaping @MainActor () -> [UIMenuElement]) {
-            self.makeElements = makeElements
-        }
+        var onTap: () -> Void
+        init(onTap: @escaping () -> Void) { self.onTap = onTap }
     }
 }
 
@@ -1917,26 +1794,6 @@ struct SessionErrorBanner: View {
 
 /// Compact banner shown above the composer when the open session is live on an
 /// unreachable host.
-struct OfflineComposerNotice: View {
-    let hostLabel: String
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Image(systemName: "wifi.exclamationmark")
-                .foregroundStyle(.orange)
-            Text("\(hostLabel) is unreachable — messages will send when it's back.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
-        .padding(.horizontal, 16)
-    }
-}
-
 /// A live transcript whose writer belongs to another desktop frontend. Reading
 /// remains live; continuing creates a lineage-preserving LFG branch instead of
 /// racing the owner's writer lock or interrupting the desktop app.
@@ -1974,64 +1831,188 @@ struct ExternalSessionComposerNotice: View {
     }
 }
 
-private struct ChildSessionsComposerBar: View {
+/// The pills above the composer (S2, board `s2-view`): Subagents with a ring,
+/// Files with a count, Terminal. Scrolls sideways when they do not fit.
+private struct ComposerPillRow: View {
     let agents: [ChildAgentSession]
-    let action: () -> Void
-
-    private var presentation: ChildAgentCollectionPresentation {
-        ChildAgentCollectionPresentation(agents: agents)
-    }
+    let fileCount: Int
+    let showsTerminal: Bool
+    let onSubagents: () -> Void
+    let onFiles: () -> Void
+    let onTerminal: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                ZStack {
-                    Image(systemName: "person.2.fill")
-                        .font(.subheadline)
-                        .foregroundStyle(.tint)
-                    if presentation.runningCount > 0 {
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 7, height: 7)
-                            .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
-                            .offset(x: 11, y: -9)
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                let pill = SubagentPill(agents: agents)
+                if !pill.isEmpty {
+                    Button(action: onSubagents) {
+                        HStack(spacing: 8) {
+                            SubagentRing(done: pill.doneFraction, failed: pill.failedFraction)
+                            Text("Subagents")
+                            if let running = pill.running {
+                                Text(running).foregroundStyle(S2.live)
+                            }
+                            Text(pill.progress).foregroundStyle(S2.metaInk)
+                        }
+                        .padding(.leading, 8)
+                        .padding(.trailing, 12)
+                        .modifier(ComposerPillChrome())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(pill.accessibilityLabel)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityIdentifier("composerPill.subagents")
+                }
+                if fileCount > 0 {
+                    Button(action: onFiles) {
+                        HStack(spacing: 6) {
+                            StepGlyph(kind: .doc, lineWidth: 1.9).frame(width: 15, height: 15)
+                            Text("Files")
+                            Text("\(fileCount)").foregroundStyle(S2.metaInk)
+                        }
+                        .padding(.horizontal, 12)
+                        .modifier(ComposerPillChrome())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("composerPill.files")
+                }
+                if showsTerminal {
+                    Button(action: onTerminal) {
+                        HStack(spacing: 6) {
+                            StepGlyph(kind: .terminal, lineWidth: 1.9).frame(width: 15, height: 15)
+                            Text("Terminal")
+                        }
+                        .padding(.horizontal, 12)
+                        .modifier(ComposerPillChrome())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("composerPill.terminal")
+                }
+            }
+            .padding(.horizontal, 4)
+        }
+        .scrollIndicators(.hidden)
+        // Board `s2-view`: the row clips 12pt from each side, in line with the
+        // composer, not at the screen edge.
+        .padding(.horizontal, 12)
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+    }
+}
+
+private struct ComposerPillChrome: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(S2.ink)
+            .frame(height: 36)
+            .background(S2.surface, in: Capsule())
+            .overlay(Capsule().strokeBorder(S2.surfaceBorder, lineWidth: 0.5))
+            .contentShape(Capsule())
+    }
+}
+
+/// Done work in green, failed in red, the rest (still running) as the track.
+private struct SubagentRing: View {
+    let done: Double
+    let failed: Double
+
+    var body: some View {
+        // A small gap keeps the red arc visibly separate from the green one.
+        let gap = done > 0 && failed > 0 ? 0.07 : 0
+        ZStack {
+            Circle().stroke(S2.ringTrack, lineWidth: 3)
+            if done > 0 {
+                Circle().trim(from: 0, to: done)
+                    .stroke(S2.live, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+            }
+            if failed > 0 {
+                Circle().trim(from: done + gap, to: min(1, done + failed))
+                    .stroke(S2.failed, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+            }
+        }
+        .rotationEffect(.degrees(-90))
+        .frame(width: 16, height: 16)
+        .frame(width: 22, height: 22)
+    }
+}
+
+/// The composer's model chip, "Opus 5.5 · High" (S2, board `s2-view`). It opens
+/// the model and effort pickers. While the agent works or asks, the host refuses
+/// a change, so the menu says so and its items are disabled.
+private struct ComposerModelChip: View {
+    let sid: String
+    let agent: String
+    let closed: Bool
+    let locked: Bool
+    @Environment(SessionStore.self) private var store
+
+    var body: some View {
+        let session = store.session(sid)
+        let switching = store.switchingModelSessionIds.contains(sid)
+        let changing = store.changingEffortSessionIds.contains(sid)
+        let kind = AgentKind(rawValue: agent) ?? .claude
+        let unavailable = locked || switching || sid.hasPrefix("local-")
+        let sections = SessionHandoff.modelSections(current: kind, closed: closed,
+                                                    catalog: store.modelCatalog(forSession: sid))
+        let efforts = closed ? [] : store.modelCatalog(forSession: sid).efforts(for: kind, model: session?.model)
+        Menu {
+            if locked {
+                Text("Change the model when this turn ends")
+            }
+            ForEach(sections.indices, id: \.self) { i in
+                let section = sections[i]
+                Section(section.title) {
+                    ForEach(section.models, id: \.self) { model in
+                        let isCurrent = agent == section.agent.rawValue && session?.model == model
+                        Button {
+                            Task {
+                                if let id = await store.switchModel(sid, to: AgentModelSelection(agent: section.agent, model: model)) {
+                                    store.requestSelection(id)
+                                }
+                            }
+                        } label: {
+                            if isCurrent {
+                                Label(ModelChipLabel.model(model), systemImage: "checkmark")
+                            } else {
+                                Text(ModelChipLabel.model(model))
+                            }
+                        }
+                        .disabled(unavailable)
                     }
                 }
-                .frame(width: 28)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(presentation.title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Text(presentation.compactStatus)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 8)
-                if presentation.runningCount > 0 {
-                    ProgressView()
-                        .controlSize(.mini)
-                        .accessibilityHidden(true)
-                }
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 11))
-            .overlay(
-                RoundedRectangle(cornerRadius: 11)
-                    .stroke(Color(.separator).opacity(0.55), lineWidth: 0.5)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 11))
+            if !efforts.isEmpty {
+                Section(changing ? "Changing effort…" : "Effort") {
+                    ForEach(efforts, id: \.self) { level in
+                        Button {
+                            Task { await store.setEffort(sid, to: level) }
+                        } label: {
+                            if session?.effort == level {
+                                Label(SessionEffort.displayName(level), systemImage: "checkmark")
+                            } else {
+                                Text(SessionEffort.displayName(level))
+                            }
+                        }
+                        .disabled(unavailable || changing)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text(switching ? "Switching…" : ModelChipLabel.text(model: session?.model, effort: session?.effort))
+                    .lineLimit(1)
+                BoardGlyph(kind: .chevronDown, lineWidth: 3).frame(width: 9, height: 9)
+            }
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(S2.chipInk)
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(S2.chip, in: Capsule())
+            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 16)
-        .accessibilityIdentifier("childSessionsComposerBar")
-        .accessibilityLabel("\(presentation.title), \(presentation.compactStatus)")
-        .accessibilityHint("Shows child sessions")
+        .accessibilityIdentifier("composer.modelChip")
     }
 }
 
@@ -2052,27 +2033,37 @@ private struct ChildAgentSessionsSheet: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            Group {
-                if agents.isEmpty {
-                    ContentUnavailableView(
-                        "No child sessions",
-                        systemImage: "person.2",
-                        description: Text("This session has not spawned a child agent.")
-                    )
-                    .accessibilityIdentifier("childSessionsSheet")
-                } else {
-                    List(agents) { child in
-                        NavigationLink(value: child.id) {
-                            ChildAgentSessionRow(child: child)
+            // Board `s2-subagents`: a title with the tally, then one row per
+            // subagent; a row opens its transcript.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    header
+                        .padding(.leading, 20)
+                        .padding(.trailing, 16)
+                        .padding(.top, 20)
+                        .padding(.bottom, 22)
+                    if agents.isEmpty {
+                        Text("This session has not started a subagent.")
+                            .font(.system(size: 15))
+                            .foregroundStyle(S2.secondaryInk)
+                            .padding(.horizontal, 20)
+                    } else {
+                        let now = Date().timeIntervalSince1970 * 1_000
+                        ForEach(agents) { child in
+                            NavigationLink(value: child.id) {
+                                SubagentRowView(row: SubagentRow(child, nowMs: now))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("childSessionRow_\(child.id)")
                         }
-                        .accessibilityIdentifier("childSessionRow_\(child.id)")
                     }
-                    .listStyle(.insetGrouped)
-                    .accessibilityIdentifier("childSessionsSheet")
                 }
             }
-            .navigationTitle("Child sessions")
-            .navigationBarTitleDisplayMode(.inline)
+            .scrollBounceBehavior(.basedOnSize)
+            // A NavigationStack paints its own background over the sheet's.
+            .background(S2.surface.ignoresSafeArea())
+            .accessibilityIdentifier("childSessionsSheet")
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: String.self) { childID in
                 if let child = agents.first(where: { $0.id == childID }) {
                     ChildAgentTranscriptView(parentSessionID: parentSessionID, child: child)
@@ -2080,43 +2071,138 @@ private struct ChildAgentSessionsSheet: View {
                     ContentUnavailableView("Child session unavailable", systemImage: "person.crop.circle.badge.xmark")
                 }
             }
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .accessibilityIdentifier("childSessionsDoneButton")
-                }
-            }
         }
         .task { await store.refreshChildAgents(parentSessionID) }
     }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Subagents")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(S2.white)
+                    .cssLineBox(size: 22, lineHeight: 28)
+                let summary = SubagentPill(agents: agents).sheetSummary
+                if !summary.isEmpty {
+                    Text(summary)
+                        .font(.system(size: 14))
+                        .foregroundStyle(S2.secondaryInk)
+                        .frame(height: 16)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button { dismiss() } label: {
+                SheetGlyph(kind: .close)
+                    .stroke(SessionSheet.chromeInk, style: StrokeStyle(lineWidth: 2.8 * 14 / 24, lineCap: .round))
+                    .frame(width: 14, height: 14)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(S2.chip))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close")
+            .accessibilityIdentifier("childSessionsDoneButton")
+        }
+    }
 }
 
-private struct ChildAgentSessionRow: View {
-    let child: ChildAgentSession
+/// One subagent (board `s2-subagents`): status mark, task, "Running" or the
+/// result, then "general-purpose · 1m 12s", and a chevron to its transcript.
+private struct SubagentRowView: View {
+    let row: SubagentRow
 
     var body: some View {
-        HStack(alignment: .top, spacing: 11) {
-            child.status.statusView
-                .frame(width: 22, height: 22)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(child.description)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 5) {
-                    Text(child.agentType)
-                    Text("·")
-                    Text(child.status.label)
-                        .foregroundStyle(child.status.tint)
+        HStack(alignment: .top, spacing: 12) {
+            mark
+                .frame(width: 22, alignment: .center)
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.title)
+                        .font(.system(size: 17))
+                        .foregroundStyle(S2.white)
+                        .lineLimit(1)
+                        .cssLineBox(size: 17, lineHeight: 22)
+                    Text(row.line)
+                        .font(.system(size: 15))
+                        .foregroundStyle(lineColor)
+                        .lineLimit(1)
+                        .cssLineBox(size: 15, lineHeight: 20)
+                    Text(row.meta)
+                        .font(.system(size: 13))
+                        .foregroundStyle(S2.secondaryInk)
+                        .lineLimit(1)
+                        .cssLineBox(size: 13, lineHeight: 18)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                BoardGlyph(kind: .chevronRight, lineWidth: 2.8)
+                    .foregroundStyle(SessionSheet.chevronInk)
+                    .frame(width: 12, height: 12)
+            }
+            .padding(.top, 11)
+            .padding(.bottom, 12)
+            .padding(.trailing, 16)
+            .overlay(alignment: .bottom) {
+                // Board: `border-bottom: 0.5px solid #38383A`.
+                Rectangle().fill(S2.surfaceBorder).frame(height: 0.5)
             }
         }
-        .padding(.vertical, 3)
+        .padding(.leading, 20)
+        .frame(height: 88, alignment: .top)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(child.description), \(child.agentType), \(child.status.label)")
+    }
+
+    private var lineColor: Color {
+        switch row.tone {
+        case .live: return S2.live
+        case .result: return S2.chipInk
+        case .failed: return S2.failed
+        case .secondary: return S2.secondaryInk
+        }
+    }
+
+    @ViewBuilder
+    private var mark: some View {
+        switch row.mark {
+        case .running:
+            Circle()
+                .fill(S2.live)
+                .frame(width: 9, height: 9)
+                .background(Circle().fill(S2.live.opacity(0.25)).frame(width: 15, height: 15))
+                .padding(.top, 17)
+        case .done:
+            SubagentMarkGlyph(failed: false)
+                .stroke(S2.live, style: StrokeStyle(lineWidth: 2.4 * 17 / 24, lineCap: .round, lineJoin: .round))
+                .frame(width: 17, height: 17)
+                .padding(.top, 14)
+        case .failed:
+            SubagentMarkGlyph(failed: true)
+                .stroke(S2.failed, style: StrokeStyle(lineWidth: 2.4 * 17 / 24, lineCap: .round, lineJoin: .round))
+                .frame(width: 17, height: 17)
+                .padding(.top, 14)
+        case .stopped:
+            Circle()
+                .stroke(S2.secondaryInk, lineWidth: 2.4 * 17 / 24)
+                .frame(width: 15, height: 15)
+                .padding(.top, 15)
+        }
+    }
+}
+
+/// A done check or a failed cross in a circle (board SVGs, 24-unit box).
+private struct SubagentMarkGlyph: Shape {
+    let failed: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let k = min(rect.width, rect.height) / 24
+        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: rect.minX + x * k, y: rect.minY + y * k) }
+        var path = Path(ellipseIn: CGRect(x: rect.minX + 3 * k, y: rect.minY + 3 * k, width: 18 * k, height: 18 * k))
+        if failed {
+            path.move(to: p(9, 9)); path.addLine(to: p(15, 15))
+            path.move(to: p(15, 9)); path.addLine(to: p(9, 15))
+        } else {
+            path.move(to: p(8, 12.5)); path.addLine(to: p(10.8, 15.3)); path.addLine(to: p(16.5, 9.5))
+        }
+        return path
     }
 }
 

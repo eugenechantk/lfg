@@ -82,6 +82,22 @@ private enum TranscriptRowTextCache {
     }
 }
 
+/// Offers its content at most `maxWidth` and takes the content's own size, so
+/// short content hugs (unlike `.frame(maxWidth:)`, which expands to the cap).
+struct CappedWidth: Layout {
+    let maxWidth: CGFloat
+    init(_ maxWidth: CGFloat) { self.maxWidth = maxWidth }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = min(proposal.width ?? maxWidth, maxWidth)
+        return subviews.first?.sizeThatFits(ProposedViewSize(width: width, height: proposal.height)) ?? .zero
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
+    }
+}
+
 private struct TextBubble: View {
     let message: SessionMessage
     var followsUserBubble: Bool = false
@@ -109,13 +125,20 @@ private struct TextBubble: View {
                         // highlight, system Copy — in place. The tap that
                         // reveals the sent time comes back through `onTap`
                         // because the text view sees touches first.
-                        SelectableProseView(plain: displayText, palette: .onAccent, hugsContent: true) {
-                            withAnimation(.easeInOut(duration: 0.15)) { showTimestamp.toggle() }
+                        // S2 bubble (board `s2-view`): #0A6EE0, 20pt corners,
+                        // at most 290pt of text. A cap on the offered width, not
+                        // a `maxWidth` frame, which would stretch short bubbles.
+                        CappedWidth(290) {
+                            SelectableProseView(plain: displayText, palette: .onAccent, hugsContent: true) {
+                                withAnimation(.easeInOut(duration: 0.15)) { showTimestamp.toggle() }
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
                         }
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
-                        .contentShape(RoundedRectangle(cornerRadius: 14))
+                        // 9pt + the board's 22pt line + 9pt = 40; the text view's
+                        // line is ~21pt, so the extra point goes above and below.
+                        .padding(.horizontal, 14).padding(.vertical, 9.5)
+                        .background(S2.send, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
                     // Narrower than assistant attachments so the cards read as
                     // part of the trailing bubble run.
@@ -132,8 +155,9 @@ private struct TextBubble: View {
                     }
                 }
             }
-            .padding(.top, followsUserBubble ? 0 : 10)
-            .padding(.bottom, 10)
+            // Measured on boards `s2-view`, `s2-queued-failed`, `s2-signin-prompt`:
+            // the next item's text starts 1.67pt lower under a bubble there.
+            .padding(.bottom, 1.67)
         } else {
             // Assistant turns are full-width markdown — no bubble.
             VStack(alignment: .leading, spacing: 6) {
@@ -356,143 +380,315 @@ private struct ToolLineView: View {
 
 // MARK: - Interactive prompt panel
 
-struct PromptPanelView: View {
+/// The panel docked at the bottom while the agent waits on you (S2, boards
+/// `s2-question` — question, permission, plan — and `s2-signin-prompt`). It
+/// takes the composer's place; the model's preamble stays in the transcript.
+struct NeedsInputPanel: View {
     let sessionID: String
     let prompt: AgentPrompt
-    /// Opens the phone sign-in sheet for a request id. Only used when
-    /// `prompt.signIn` is set; the detail view owns the sheet.
-    var onSignIn: ((PromptSignIn) -> Void)? = nil
+    let agent: String
+    let cwd: String?
+    let hostLabel: String?
+    /// Opens the phone sign-in sheet for a request id (sign-in prompts only).
+    var onSignIn: (PromptSignIn) -> Void = { _ in }
+    /// Opens the whole plan.
+    var onReadPlan: (String) -> Void = { _ in }
     @Environment(SessionStore.self) private var store
     @State private var answering: Int?
+    @State private var typed = ""
+    @State private var sendingTyped = false
+    @FocusState private var typedFocused: Bool
+
+    private static let tag = S2.color(dark: 0xFFB340, light: 0xC93400)
+    private static let field = S2.color(dark: 0x2C2C2E, light: 0xF2F2F7)
+    private static let fieldInk = S2.color(dark: 0xD1D1D6, light: 0x3A3A3C)
+    private static let rule = S2.color(dark: 0x48484A, light: 0xC7C7CC)
+    private static let link = S2.color(dark: 0x409CFF, light: 0x007AFF)
+
+    private var model: NeedsInputPanelModel {
+        NeedsInputPanelModel(prompt: prompt, agent: agent, cwd: cwd, host: hostLabel)
+    }
 
     var body: some View {
-        if let signIn = prompt.signIn {
-            signInPanel(signIn)
-        } else {
-            questionPanel
-        }
-    }
-
-    /// An agent-requested phone sign-in. Same chrome as a question so the
-    /// session reads "needs input" the same way, but the one action is opening
-    /// the sign-in sheet — there are no numbered answers to type into the pane,
-    /// and no Dismiss: Escape would interrupt the agent's waiting command.
-    /// Cancelling lives in the sheet, which cancels the request server-side.
-    private func signInPanel(_ signIn: PromptSignIn) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Label("Needs your input", systemImage: "key.fill")
-                    .font(.caption.weight(.semibold)).foregroundStyle(.blue)
-                Text((prompt.header ?? "Sign in").uppercased())
-                    .font(.caption2.weight(.bold)).foregroundStyle(.blue)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(.blue.opacity(0.15), in: Capsule())
-            }
-            Text(prompt.question)
-                .font(.subheadline.weight(.semibold))
-                .fixedSize(horizontal: false, vertical: true)
-            if let target = signIn.targetName, !target.isEmpty {
-                Text("The login is sent to \(target) on your Mac. The agent is waiting.")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Button {
-                onSignIn?(signIn)
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "iphone")
-                        .font(.subheadline)
-                        .frame(width: 22, height: 22)
-                        .background(.blue.opacity(0.15), in: Circle())
-                    Text("Sign in to \(signIn.website)")
-                        .font(.subheadline.weight(.medium))
+        let model = model
+        VStack(alignment: .leading, spacing: isSignIn(model) ? 14 : 12) {
+            header(model)
+            switch model.layout {
+            case let .question(choices, allowsTypedAnswer):
+                titleBlock(model, gap: 5)
+                VStack(spacing: 8) {
+                    ForEach(choices, id: \.index) { choice in optionRow(choice) }
+                }
+                .padding(.top, 2)
+                if allowsTypedAnswer { typedAnswerField }
+            case let .permission(command, place, allow, deny, always):
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(model.title)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(S2.white)
                         .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
-                        .accessibilityHidden(true)
+                    Text(command)
+                        .font(.system(size: 13, design: .monospaced))
+                        .lineSpacing(5)
+                        .foregroundStyle(S2.ink)
+                        .frame(minHeight: 18)
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(S2.color(dark: 0x000000, light: 0xF2F2F7), in: RoundedRectangle(cornerRadius: 12))
+                        .textSelection(.enabled)
+                    if let place {
+                        Text(place).font(.system(size: 13)).foregroundStyle(S2.secondaryInk)
+                    }
                 }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("prompt_sign_in_\(signIn.requestId)")
-        }
-        .padding(14)
-        .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(.blue.opacity(0.25)))
-    }
-
-    private var questionPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Label("Needs your input", systemImage: "questionmark.bubble.fill")
-                    .font(.caption.weight(.semibold)).foregroundStyle(.blue)
-                if let header = prompt.header, !header.isEmpty {
-                    Text(header.uppercased())
-                        .font(.caption2.weight(.bold)).foregroundStyle(.blue)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(.blue.opacity(0.15), in: Capsule())
+                pairButtons(primary: ("Allow once", allow), secondary: ("Deny", deny))
+                if let always {
+                    Button { answer(always.index) } label: {
+                        Text(always.label)
+                            .font(.system(size: 15))
+                            .foregroundStyle(Self.link)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, minHeight: 40)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(answering != nil)
+                    .accessibilityIdentifier("needsInput.always")
                 }
-            }
-            // NOTE: `prompt.context` — the model's explanation, written right
-            // before it asked — is deliberately NOT rendered here. It is the
-            // model answering, so it renders as a normal assistant bubble
-            // immediately above this panel (see `PromptPreamble`), where it gets
-            // markdown, real typography, and reads as part of the conversation
-            // instead of as a caption on a form. Re-adding it here would show it
-            // twice.
-            Text(prompt.question)
-                .font(.subheadline.weight(.semibold))
-                .fixedSize(horizontal: false, vertical: true)
-            if let detail = prompt.detail, !detail.isEmpty {
-                Text(detail).font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if prompt.multiSelect == true {
-                Text("Multiple answers allowed — tap the one to send back")
-                    .font(.caption2).foregroundStyle(.tertiary)
-            }
-            ForEach(prompt.options) { option in
-                Button {
-                    answering = option.index
-                    Task { await store.answer(sessionID, option.index); answering = nil }
-                } label: {
-                    HStack(alignment: .top, spacing: 10) {
-                        Text("\(option.index)")
-                            .font(.caption.monospacedDigit().weight(.bold))
-                            .frame(width: 22, height: 22)
-                            .background(.blue.opacity(0.15), in: Circle())
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(option.label).font(.subheadline.weight(.medium))
-                                .fixedSize(horizontal: false, vertical: true)
-                            if let d = option.description, !d.isEmpty {
-                                Text(d).font(.caption).foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+            case let .plan(summary, fullText, approve, keepPlanning):
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(model.title)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(S2.white)
+                    if !summary.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(summary, id: \.self) {
+                                Text($0).frame(minHeight: 21, alignment: .leading)
                             }
                         }
-                        .multilineTextAlignment(.leading)
-                        Spacer(minLength: 0)
-                        if option.selected == true {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.caption).foregroundStyle(.blue)
-                        }
-                        if answering == option.index { ProgressView().controlSize(.small) }
+                        .font(.system(size: 15))
+                        .lineSpacing(3)
+                        .foregroundStyle(S2.ink)
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Self.field, in: RoundedRectangle(cornerRadius: 14))
                     }
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+                    if !fullText.isEmpty {
+                        Button { onReadPlan(fullText) } label: {
+                            Text("Read the full plan ›").font(.system(size: 14)).foregroundStyle(Self.link)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("needsInput.readPlan")
+                    }
+                }
+                pairButtons(primary: ("Approve", approve), secondary: ("Keep planning", keepPlanning))
+            case let .signIn(website, target, initial):
+                titleBlock(model, gap: 5, titleMinHeight: 25)
+                HStack(spacing: 12) {
+                    Text(initial)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(S2.ink)
+                        .frame(width: 32, height: 32)
+                        .background(S2.color(dark: 0x3A3A3C, light: 0xE5E5EA), in: RoundedRectangle(cornerRadius: 8))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(website).font(.system(size: 16, weight: .medium)).foregroundStyle(S2.white)
+                        if let target {
+                            Text(target).font(.system(size: 13)).foregroundStyle(S2.secondaryInk)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 11.8)
+                .background(Self.field, in: RoundedRectangle(cornerRadius: 14))
+                if let signIn = prompt.signIn {
+                    Button { onSignIn(signIn) } label: {
+                        HStack(spacing: 8) {
+                            BoardGlyph(kind: .key).frame(width: 17, height: 17)
+                            Text("Sign in on iPhone").font(.system(size: 17, weight: .semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .background(S2.send, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("prompt_sign_in_\(signIn.requestId)")
+                }
+                Text("There is no Dismiss here. The agent stays paused on this step until the sign-in arrives.")
+                    .font(.system(size: 13))
+                    .lineSpacing(2.5)
+                    .foregroundStyle(S2.metaInk)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 1.7)
+                    .padding(.bottom, 2.7)
+            }
+        }
+        .padding(EdgeInsets(top: 16, leading: 16, bottom: 26, trailing: 16))
+        .background {
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .fill(S2.surface)
+                .shadow(color: .black.opacity(0.4), radius: 15, y: -2)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .strokeBorder(S2.color(dark: 0x38383A, light: 0xD1D1D6), lineWidth: 0.5)
+        )
+        .padding(.horizontal, 8)
+        // The board docks the panel 8pt off the screen's bottom edge, inside
+        // the home-indicator inset; above the keyboard it keeps a gap instead.
+        .padding(.bottom, typedFocused ? 8 : -26)
+        .accessibilityIdentifier("needsInputPanel")
+    }
+
+    private func isSignIn(_ model: NeedsInputPanelModel) -> Bool {
+        if case .signIn = model.layout { return true } else { return false }
+    }
+
+    private func header(_ model: NeedsInputPanelModel) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(S2.attention)
+                .frame(width: 8, height: 8)
+                .background(Circle().fill(S2.attention.opacity(0.28)).frame(width: 14, height: 14))
+            Text(model.label.uppercased())
+                .font(.system(size: 12, weight: .bold))
+                .tracking(0.4)
+                .foregroundStyle(Self.tag)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if model.canDismiss {
+                Button { Task { await store.dismissPrompt(sessionID) } } label: {
+                    Text("Dismiss")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Self.fieldInk)
+                        .padding(.horizontal, 12)
+                        .frame(height: 30)
+                        .background(Self.field, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .disabled(answering != nil)
+                .accessibilityIdentifier("needsInput.dismiss")
             }
-            Button("Dismiss") { Task { await store.dismissPrompt(sessionID) } }
-                .font(.caption).foregroundStyle(.secondary)
         }
-        .padding(14)
-        .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(.blue.opacity(0.25)))
+    }
+
+    private func titleBlock(_ model: NeedsInputPanelModel, gap: CGFloat = 4,
+                            titleMinHeight: CGFloat? = nil) -> some View {
+        VStack(alignment: .leading, spacing: gap) {
+            Text(model.title)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(S2.white)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(minHeight: titleMinHeight, alignment: .leading)
+            if let body = model.body {
+                Text(body)
+                    .font(.system(size: 15))
+                    .lineSpacing(2)
+                    .foregroundStyle(Self.fieldInk)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func optionRow(_ choice: NeedsInputPanelModel.Choice) -> some View {
+        Button { answer(choice.index) } label: {
+            HStack(spacing: 12) {
+                Text("\(choice.index)")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Self.fieldInk)
+                    .frame(width: 24, height: 24)
+                    .background(Self.field, in: Circle())
+                Text(choice.label)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(S2.white)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                if answering == choice.index { ProgressView().controlSize(.small) }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+            .background(Self.field, in: RoundedRectangle(cornerRadius: 14))
+            .contentShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .disabled(answering != nil)
+        .accessibilityIdentifier("needsInput.option.\(choice.index)")
+    }
+
+    private var typedAnswerField: some View {
+        let canSend = !typed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sendingTyped
+        return HStack(spacing: 8) {
+            TextField(text: $typed, prompt: Text("Type something else…").foregroundStyle(S2.metaInk)) {
+                Text("Type something else…")
+            }
+            .font(.system(size: 16))
+            .foregroundStyle(S2.ink)
+            .submitLabel(.send)
+            .focused($typedFocused)
+            .onSubmit(sendTyped)
+            .accessibilityIdentifier("needsInput.typedAnswer")
+            Button(action: sendTyped) {
+                Group {
+                    if sendingTyped {
+                        ProgressView().controlSize(.small).tint(.white)
+                    } else {
+                        SendArrowGlyph().frame(width: 14, height: 14).foregroundStyle(.white)
+                    }
+                }
+                .frame(width: 32, height: 32)
+                .background(canSend ? S2.send : Self.rule, in: Circle())
+            }
+            .buttonStyle(.plain)
+            // Not `.disabled`: that dims the board's grey to half strength.
+            .allowsHitTesting(canSend)
+            .accessibilityLabel("Send answer")
+            .accessibilityIdentifier("needsInput.sendTyped")
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 6)
+        .frame(height: 46)
+        .overlay(Capsule().strokeBorder(Self.rule, lineWidth: 0.5))
+    }
+
+    private func pairButtons(primary: (String, Int?), secondary: (String, Int?)) -> some View {
+        HStack(spacing: 8) {
+            Button { if let i = primary.1 { answer(i) } } label: {
+                Text(primary.0)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(S2.send, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(primary.1 == nil || answering != nil)
+            .accessibilityIdentifier("needsInput.primary")
+            Button { if let i = secondary.1 { answer(i) } } label: {
+                Text(secondary.0)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(S2.ink)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(Self.field, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(secondary.1 == nil || answering != nil)
+            .accessibilityIdentifier("needsInput.secondary")
+        }
+    }
+
+    private func answer(_ index: Int) {
+        answering = index
+        Task { await store.answer(sessionID, index); answering = nil }
+    }
+
+    private func sendTyped() {
+        let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !sendingTyped else { return }
+        sendingTyped = true
+        Task {
+            await store.answer(sessionID, text: text)
+            sendingTyped = false
+            typed = ""
+        }
     }
 }
 
@@ -561,6 +757,11 @@ struct PausedBannerView: View {
 struct PendingStripView: View {
     let sessionID: String
     let items: [SessionStore.PendingSend]
+    /// Names who holds a message once it is in the agent's own queue.
+    var agent: String = "claude"
+    /// The row whose menu is open. Owned by the session view, which also
+    /// closes it on a tap anywhere else.
+    var openMenuID: Binding<String?> = .constant(nil)
     /// Returns an edited queued message to the owning composer.
     var onEdit: (String) -> Void = { _ in }
     @Environment(SessionStore.self) private var store
@@ -569,93 +770,293 @@ struct PendingStripView: View {
         if !items.isEmpty {
             VStack(spacing: 6) {
                 ForEach(items) { item in
-                    if item.failed {
-                        pendingRow(item)
-                    } else {
-                        // A Menu is presented from its label's own bounds. Keeping
-                        // it inside each ForEach row gives UIKit the tapped row as
-                        // the source rect instead of the session screen's origin.
-                        Menu {
-                            queuedMessageActions(for: item)
-                        } label: {
-                            pendingRow(item)
+                    let row = presentation(for: item)
+                    let isOpen = openMenuID.wrappedValue == item.id
+                    Button {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            openMenuID.wrappedValue = isOpen ? nil : item.id
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Queued message options")
-                        .accessibilityHint("Shows actions for this queued message")
-                        .accessibilityIdentifier(rowAccessibilityIdentifier(for: item))
+                    } label: {
+                        pendingRow(item, row, highlighted: isOpen)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(row.accessibilityLabel)
+                    .accessibilityValue(item.displayText)
+                    .accessibilityHint("Shows actions for this message")
+                    .accessibilityIdentifier(rowAccessibilityIdentifier(for: item))
+                    // Each row owns its menu, drawn 8pt above the row and flush
+                    // with its right edge (boards `s2-queued`, `s2-queued-failed`),
+                    // so the message stays visible. The system menu centred over
+                    // the row and covered it.
+                    .overlay(alignment: .bottomTrailing) {
+                        if isOpen {
+                            // The row is 32pt: lift the card's bottom 8pt clear of its top.
+                            queuedMessageActions(for: item)
+                                .fixedSize()
+                                .offset(y: -(32 + 8))
+                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)))
+                        }
+                    }
+                    .zIndex(isOpen ? 1 : 0)
                 }
             }
         }
     }
 
-    private func pendingRow(_ item: SessionStore.PendingSend) -> some View {
+    private func presentation(for item: SessionStore.PendingSend) -> QueuedStripRow {
+        let serverStatus = item.serverQueueID.flatMap { qid in
+            store.queues[sessionID]?.first { $0.id == qid }?.status
+        }
+        return QueuedStripRow(failed: item.failed, queuedOffline: item.queuedOffline,
+                              queuedForResume: item.queuedForResume,
+                              serverStatus: serverStatus, agent: agent)
+    }
+
+    private static let rowFill = S2.color(dark: 0x1A1A1C, light: 0xEDEDF0)
+    /// rgba(118,118,128,0.40) on black: the row while its menu is open.
+    private static let rowFillOpen = S2.color(dark: 0x2F2F33, light: 0xE0E0E5)
+
+    private func pendingRow(_ item: SessionStore.PendingSend, _ row: QueuedStripRow, highlighted: Bool) -> some View {
         HStack(spacing: 8) {
-            if item.queuedOffline {
-                Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
-            } else if item.failed {
-                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red)
-            } else {
-                ProgressView().controlSize(.mini)
+            switch row.icon {
+            case .spinner: QueuedSpinner().frame(width: 13, height: 13)
+            case .clock: QueuedClock().frame(width: 14, height: 14)
+            case .failed: NotSentMark().frame(width: 15, height: 15)
             }
             Text(item.displayText)
-                .font(.caption).lineLimit(1).foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-            if item.queuedOffline {
-                Text("Queued")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Image(systemName: "ellipsis.circle").font(.caption).foregroundStyle(.tertiary)
-            } else if item.failed {
-                Button("Retry") { Task { await store.retryPending(sessionID, item) } }
-                    .font(.caption2).buttonStyle(.bordered).controlSize(.mini)
-            } else if item.queuedForResume {
-                Text("Queued")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Image(systemName: "ellipsis.circle").font(.caption).foregroundStyle(.tertiary)
-            } else {
-                Image(systemName: "ellipsis.circle").font(.caption).foregroundStyle(.tertiary)
+                .font(.system(size: 13))
+                .foregroundStyle(S2.secondaryInk)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let tag = row.tag {
+                Text(tag)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(row.tagIsError ? S2.color(dark: 0xFF6961, light: 0xD70015) : S2.metaInk)
+                    .fixedSize()
             }
+            RowMenuMark().frame(width: 16, height: 16)
         }
-        .padding(.horizontal, 10).padding(.vertical, 5)
-        .background(.quaternary.opacity(0.4), in: Capsule())
+        .padding(.leading, 12)
+        .padding(.trailing, 10)
+        .frame(height: 32)
+        // rgba(118,118,128,0.22) over the black chrome behind the strip.
+        .background(highlighted ? Self.rowFillOpen : Self.rowFill, in: Capsule())
         .contentShape(Capsule())
-        .accessibilityIdentifier(rowAccessibilityIdentifier(for: item))
     }
 
-    @ViewBuilder
     private func queuedMessageActions(for item: SessionStore.PendingSend) -> some View {
-        // A resume kickoff is not a server queue entry, so only removal is honest.
-        if item.queuedForResume && !item.queuedOffline {
-            Button("Remove", role: .destructive) {
-                Task { await store.removeQueued(sessionID, item) }
-            }
-            .accessibilityIdentifier("queuedMessageRemoveButton")
-        } else {
-            Button(item.queuedOffline ? "Try sending now" : "Send now (interrupt)") {
-                Task { await store.sendQueuedNow(sessionID, item) }
-            }
-            .accessibilityIdentifier("queuedMessageSendNowButton")
-            Button("Edit") {
-                Task {
-                    if let editable = await store.editQueued(sessionID, item) {
-                        onEdit(editable)
-                    }
-                }
-            }
-            .accessibilityIdentifier("queuedMessageEditButton")
-            Button("Remove", role: .destructive) {
-                Task { await store.removeQueued(sessionID, item) }
-            }
-            .accessibilityIdentifier("queuedMessageRemoveButton")
+        let row = presentation(for: item)
+        return StripMenuCard(row: row) { action in
+            withAnimation(.easeOut(duration: 0.15)) { openMenuID.wrappedValue = nil }
+            perform(action, item)
         }
-        Button("Cancel", role: .cancel) {}
+    }
+
+    private func perform(_ action: QueuedStripRow.Action, _ item: SessionStore.PendingSend) {
+        Task {
+            switch action {
+            case .sendNow, .trySendingNow: await store.sendQueuedNow(sessionID, item)
+            case .retry: await store.retryPending(sessionID, item)
+            case .edit:
+                if let editable = await store.editQueued(sessionID, item) { onEdit(editable) }
+            case .remove, .delete: await store.removeQueued(sessionID, item)
+            }
+        }
     }
 
     private func rowAccessibilityIdentifier(for item: SessionStore.PendingSend) -> String {
         item.queuedForResume ? "pendingStripRowResuming" : "pendingStripRow"
+    }
+}
+
+/// The strip row's menu as the boards draw it: a dark rounded card, one row
+/// per action with its icon on the right, Send now's subtitle, destructive in red.
+private struct StripMenuCard: View {
+    let row: QueuedStripRow
+    let onPick: (QueuedStripRow.Action) -> Void
+
+    private static let card = S2.color(dark: 0x2C2C2E, light: 0xFFFFFF)
+    private static let rule = S2.color(dark: 0x48484A, light: 0xC6C6C8)
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if let note = row.menuNote {
+                Text(note)
+                    .font(.system(size: 13))
+                    .foregroundStyle(S2.secondaryInk)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                Rectangle().fill(Self.rule).frame(height: 0.5)
+            }
+            ForEach(Array(row.actions.enumerated()), id: \.offset) { index, action in
+                Button { onPick(action) } label: {
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(action.title).font(.system(size: 17))
+                            if let subtitle = action.subtitle {
+                                Text(subtitle).font(.system(size: 13)).foregroundStyle(S2.secondaryInk)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        StripMenuGlyph(action: action)
+                            .frame(width: action == .sendNow || action == .trySendingNow ? 18 : 17,
+                                   height: action == .sendNow || action == .trySendingNow ? 18 : 17)
+                    }
+                    .foregroundStyle(action.isDestructive ? S2.failed : S2.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, action.subtitle == nil ? 11 : 10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier(StripMenuCard.identifier(for: action))
+                if index < row.actions.count - 1 {
+                    Rectangle().fill(Self.rule).frame(height: 0.5)
+                }
+            }
+        }
+        .frame(width: row.actions.contains(.sendNow) ? 250 : 230)
+        // No clip on the card: it would cut off the shadow (board: 0 12 40 at
+        // 60% black, which darkens the strip under the menu). Rows are clear,
+        // so the rounded background alone gives the shape.
+        .background {
+            // The board's shadow (0 12 40, 60% black): measured on the strip
+            // under the menu it darkens 16 levels at the top, as on the board.
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Self.card.opacity(0.97))
+                .shadow(color: .black.opacity(0.6), radius: 20, y: 12)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("queuedMessageMenu")
+    }
+
+    static func identifier(for action: QueuedStripRow.Action) -> String {
+        switch action {
+        case .sendNow, .trySendingNow: "queuedMessageSendNowButton"
+        case .retry: "queuedMessageRetryButton"
+        case .edit: "queuedMessageEditButton"
+        case .remove, .delete: "queuedMessageRemoveButton"
+        }
+    }
+}
+
+/// The menu's icons, from the boards' SVGs (24-unit box).
+private struct StripMenuGlyph: View {
+    let action: QueuedStripRow.Action
+
+    var body: some View {
+        GeometryReader { geo in
+            let k = geo.size.width / 24
+            let pt = { (x: CGFloat, y: CGFloat) in CGPoint(x: x * k, y: y * k) }
+            Path { p in
+                switch action {
+                case .sendNow, .trySendingNow:
+                    // "M12 19V5M5 12l7-7 7 7"
+                    p.move(to: pt(12, 19)); p.addLine(to: pt(12, 5))
+                    p.move(to: pt(5, 12)); p.addLine(to: pt(12, 5)); p.addLine(to: pt(19, 12))
+                case .retry:
+                    // "M20 12a8 8 0 1 1-2.3-5.6 M20 4v5h-5"
+                    p.move(to: pt(20, 12))
+                    p.addArc(center: pt(12, 12), radius: 8 * k, startAngle: .degrees(0),
+                             endAngle: .degrees(315.5), clockwise: false)
+                    p.move(to: pt(20, 4)); p.addLine(to: pt(20, 9)); p.addLine(to: pt(15, 9))
+                case .edit:
+                    // "M4 20h4L19 9l-4-4L4 16z"
+                    p.move(to: pt(4, 20)); p.addLine(to: pt(8, 20)); p.addLine(to: pt(19, 9))
+                    p.addLine(to: pt(15, 5)); p.addLine(to: pt(4, 16)); p.closeSubpath()
+                case .remove, .delete:
+                    // "M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"
+                    p.move(to: pt(5, 7)); p.addLine(to: pt(19, 7))
+                    p.move(to: pt(10, 7)); p.addLine(to: pt(10, 4)); p.addLine(to: pt(14, 4)); p.addLine(to: pt(14, 7))
+                    p.move(to: pt(7, 7)); p.addLine(to: pt(8, 20)); p.addLine(to: pt(16, 20)); p.addLine(to: pt(17, 7))
+                }
+            }
+            .stroke(style: StrokeStyle(lineWidth: (action == .retry ? 2.2 : 2) * k, lineCap: .round, lineJoin: .round))
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// A quarter arc turning on a grey ring (board `s2-queued`, 13pt).
+private struct QueuedSpinner: View {
+    // Driven by the clock, not `withAnimation(.repeatForever)` in `onAppear`:
+    // a repeat-forever transaction can capture the layout changes made in the
+    // same update (the strip row appearing, the bottom chrome growing) and
+    // replay them forever over the whole transcript.
+    var body: some View {
+        TimelineView(.animation) { context in
+            let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1)
+            GeometryReader { geo in
+                let w = geo.size.width * 3 / 24
+                ZStack {
+                    Circle().inset(by: geo.size.width * 3 / 24)
+                        .stroke(S2.color(dark: 0x48484A, light: 0xD1D1D6), lineWidth: w)
+                    Circle().inset(by: geo.size.width * 3 / 24)
+                        .trim(from: 0, to: 0.25)
+                        .stroke(S2.secondaryInk, style: StrokeStyle(lineWidth: w, lineCap: .round))
+                        .rotationEffect(.degrees(-90 + turn * 360))
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// "Queued" while the host is offline (board `s2-queued-failed`, 14pt).
+private struct QueuedClock: View {
+    var body: some View {
+        GeometryReader { geo in
+            let k = geo.size.width / 24
+            Path { p in
+                p.addEllipse(in: CGRect(x: 3.5 * k, y: 3.5 * k, width: 17 * k, height: 17 * k))
+                p.move(to: CGPoint(x: 12 * k, y: 7.5 * k))
+                p.addLine(to: CGPoint(x: 12 * k, y: 12 * k))
+                p.addLine(to: CGPoint(x: 15 * k, y: 14 * k))
+            }
+            .stroke(S2.secondaryInk, style: StrokeStyle(lineWidth: 2.2 * k, lineCap: .round, lineJoin: .round))
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// A red disc with a white "!" (board `s2-queued-failed`, 15pt).
+private struct NotSentMark: View {
+    var body: some View {
+        GeometryReader { geo in
+            let k = geo.size.width / 24
+            ZStack {
+                Circle().fill(S2.failed).frame(width: 20 * k, height: 20 * k)
+                Path { p in
+                    p.move(to: CGPoint(x: 12 * k, y: 7 * k))
+                    p.addLine(to: CGPoint(x: 12 * k, y: 13 * k))
+                }
+                .stroke(.white, style: StrokeStyle(lineWidth: 2.6 * k, lineCap: .round))
+                Circle().fill(.white).frame(width: 2.8 * k, height: 2.8 * k)
+                    .position(x: 12 * k, y: 16.8 * k)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// The row's "more" mark: three dots in a ring (16pt).
+private struct RowMenuMark: View {
+    var body: some View {
+        GeometryReader { geo in
+            let k = geo.size.width / 24
+            ZStack {
+                Circle().inset(by: 3 * k).stroke(S2.metaInk, lineWidth: 1.8 * k)
+                // r0.9 dots that also take the icon's 1.8 stroke: 3.6 units wide.
+                ForEach([8.0, 12.0, 16.0], id: \.self) { x in
+                    Circle().fill(S2.metaInk).frame(width: 3.6 * k, height: 3.6 * k)
+                        .position(x: x * k, y: 12 * k)
+                }
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 
@@ -785,6 +1186,445 @@ struct UsageView: View {
         HStack(spacing: 4) {
             Text(label).foregroundStyle(.tertiary)
             Text("\(Int(pct))%")
+        }
+    }
+}
+
+// MARK: - S2 tool steps (canvas boards `s2-view`, `s2-tools-group`, `s2-tools-single`)
+
+/// S2 ink for tool steps: the board's exact dark hexes, matching system shades
+/// in light mode.
+private enum StepInk {
+    static func hex(_ dark: UInt32, _ light: UInt32) -> Color {
+        func ui(_ v: UInt32) -> UIColor {
+            UIColor(red: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255,
+                    blue: CGFloat(v & 0xFF) / 255, alpha: 1)
+        }
+        return Color(UIColor { $0.userInterfaceStyle == .dark ? ui(dark) : ui(light) })
+    }
+    static let header = hex(0xA1A1A6, 0x6C6C70)
+    static let chevron = hex(0x636366, 0xAEAEB2)
+    static let meta = hex(0x8E8E93, 0x8E8E93)
+    static let rowVerb = hex(0xD1D1D6, 0x3A3A3C)
+    static let rule = hex(0x38383A, 0xD1D1D6)
+    static let card = hex(0x1C1C1E, 0xF2F2F7)
+    static let cardStroke = hex(0x38383A, 0xD1D1D6)
+    static let inputInk = hex(0xF2F2F7, 0x1C1C1E)
+    static let outputBox = hex(0x000000, 0xFFFFFF)
+    static let outputInk = hex(0xD1D1D6, 0x3A3A3C)
+    static let link = hex(0x409CFF, 0x007AFF)
+    static let error = hex(0xFF6961, 0xD70015)
+}
+
+extension ToolKind {
+    /// The step header's icon (board: magnifier for reading, pencil for edits,
+    /// terminal for commands).
+    var stepSymbol: String {
+        switch self {
+        case .read, .explore, .search: return "magnifyingglass"
+        case .edit: return "pencil"
+        case .command: return "terminal"
+        case .web: return "globe"
+        case .agent: return "person.2"
+        case .ask: return "questionmark.circle"
+        case .other: return "wrench.and.screwdriver"
+        }
+    }
+
+    /// A call row's icon inside an expanded step.
+    var callSymbol: String {
+        switch self {
+        case .read: return "doc"
+        case .explore, .search: return "magnifyingglass"
+        case .edit: return "pencil"
+        case .command: return "terminal"
+        case .web: return "globe"
+        case .agent: return "person.2"
+        case .ask: return "questionmark.circle"
+        case .other: return "wrench.and.screwdriver"
+        }
+    }
+
+    /// The card's input label.
+    var inputLabel: String {
+        switch self {
+        case .command: return "Command"
+        case .read, .edit: return "File"
+        case .search: return "Pattern"
+        case .web: return "Address"
+        case .agent: return "Task"
+        case .ask: return "Question"
+        case .explore, .other: return "Input"
+        }
+    }
+}
+
+enum StepFormat {
+    /// "0.4s", "1.8s", "9s", "1m 5s".
+    static func duration(_ ms: Double) -> String {
+        let s = ms / 1000
+        if s < 10 { return String(format: "%.1fs", s) }
+        if s < 60 { return "\(Int(s.rounded()))s" }
+        let m = Int(s) / 60
+        return "\(m)m \(Int(s) % 60)s"
+    }
+
+    /// Paths inside the session's folder read relative to it, as on the board.
+    static func display(_ target: String, cwd: String?) -> String {
+        guard let cwd, !cwd.isEmpty else { return target }
+        let base = cwd.hasSuffix("/") ? cwd : cwd + "/"
+        return target.hasPrefix(base) ? String(target.dropFirst(base.count)) : target
+    }
+
+    /// "/Users/eugene/dev/lfg" -> "~/dev/lfg".
+    static func abbreviatingHome(_ path: String) -> String {
+        if let range = path.range(of: #"^/Users/[^/]+"#, options: .regularExpression) {
+            return "~" + path[range.upperBound...]
+        }
+        return path
+    }
+}
+
+/// Step and call icons drawn from the boards' SVGs (24-unit box).
+struct StepGlyph: View {
+    enum Kind: Equatable {
+        case magnifier, pencil, terminal, lines, doc
+        case symbol(String)
+
+        static func call(_ kind: ToolKind) -> Kind {
+            switch kind {
+            case .read: return .doc
+            case .explore, .search: return .magnifier
+            case .edit: return .pencil
+            case .command: return .terminal
+            case .web: return .symbol("globe")
+            case .agent: return .symbol("person.2")
+            case .ask: return .symbol("questionmark.circle")
+            case .other: return .symbol("wrench.and.screwdriver")
+            }
+        }
+    }
+    let kind: Kind
+    var lineWidth: CGFloat = 1.9
+
+    var body: some View {
+        if case let .symbol(name) = kind {
+            Image(systemName: name).resizable().scaledToFit().padding(1)
+        } else {
+            GeometryReader { geo in
+                let k = geo.size.width / 24
+                let pt = { (x: CGFloat, y: CGFloat) in CGPoint(x: x * k, y: y * k) }
+                Path { p in
+                    switch kind {
+                    case .magnifier:
+                        p.addEllipse(in: CGRect(x: 4.5 * k, y: 4.5 * k, width: 13 * k, height: 13 * k))
+                        p.move(to: pt(16, 16)); p.addLine(to: pt(20.5, 20.5))
+                    case .pencil:
+                        // "M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4"
+                        p.move(to: pt(4, 20)); p.addLine(to: pt(8, 20)); p.addLine(to: pt(19, 9))
+                        p.addLine(to: pt(15, 5)); p.addLine(to: pt(4, 16)); p.closeSubpath()
+                        p.move(to: pt(13.5, 6.5)); p.addLine(to: pt(17.5, 10.5))
+                    case .terminal:
+                        // "M4 5h16v14H4z M8 10l3 2-3 2 M13 15h3"
+                        p.addRect(CGRect(x: 4 * k, y: 5 * k, width: 16 * k, height: 14 * k))
+                        p.move(to: pt(8, 10)); p.addLine(to: pt(11, 12)); p.addLine(to: pt(8, 14))
+                        p.move(to: pt(13, 15)); p.addLine(to: pt(16, 15))
+                    case .lines:
+                        // "M4 6h10M4 12h16M4 18h12"
+                        p.move(to: pt(4, 6)); p.addLine(to: pt(14, 6))
+                        p.move(to: pt(4, 12)); p.addLine(to: pt(20, 12))
+                        p.move(to: pt(4, 18)); p.addLine(to: pt(16, 18))
+                    case .doc:
+                        // "M6 2.5h8l4.5 4.5v14.5H6z M14 2.5V7h4.5"
+                        p.move(to: pt(6, 2.5)); p.addLine(to: pt(14, 2.5)); p.addLine(to: pt(18.5, 7))
+                        p.addLine(to: pt(18.5, 21.5)); p.addLine(to: pt(6, 21.5)); p.closeSubpath()
+                        p.move(to: pt(14, 2.5)); p.addLine(to: pt(14, 7)); p.addLine(to: pt(18.5, 7))
+                    case .symbol:
+                        break
+                    }
+                }
+                .stroke(style: StrokeStyle(lineWidth: lineWidth * k, lineCap: .round, lineJoin: .round))
+            }
+        }
+    }
+}
+
+/// One folded run of tool rows. Collapsed it reads "Read 6 files, ran 3
+/// commands"; tapped, it lists every call, and a call opens a card with its
+/// input and result. A run of one call opens straight to its card.
+struct ToolStepGroupView: View {
+    let group: ToolStepGroup
+    let cwd: String?
+    /// Directly under another step: no prose above to compensate for.
+    var followsStep = false
+    var onShowAll: (_ title: String, _ text: String) -> Void = { _, _ in }
+
+    @State private var expanded = false
+    @State private var openCallID: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            header
+            if expanded {
+                if group.isSingleCall {
+                    ToolCallCard(call: group.calls[0], cwd: cwd, showsCwd: true, onShowAll: onShowAll)
+                } else {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(group.calls) { call in
+                            callRow(call)
+                            if openCallID == call.id {
+                                ToolCallCard(call: call, cwd: cwd, showsCwd: false, onShowAll: onShowAll)
+                                    .padding(.top, 2)
+                                    .padding(.bottom, 6)
+                            }
+                        }
+                    }
+                    .padding(.leading, 15.5)
+                    .overlay(alignment: .leading) {
+                        Rectangle().fill(StepInk.rule).frame(width: 1.5)
+                    }
+                    .padding(.leading, 8)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var header: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+        } label: {
+            HStack(spacing: 8) {
+                StepGlyph(kind: headerGlyph, lineWidth: 1.9)
+                    .frame(width: 17, height: 17)
+                if group.isSingleCall {
+                    singleCallLabel(group.calls[0])
+                } else {
+                    Text(group.summary)
+                        .font(.system(size: 15))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if expanded {
+                        Text(stepMeta)
+                            .font(.system(size: 12))
+                            .foregroundStyle(StepInk.meta)
+                    }
+                }
+                BoardGlyph(kind: expanded ? .chevronDown : .chevronRight, lineWidth: 2.8)
+                    .foregroundStyle(expanded ? StepInk.meta : StepInk.chevron)
+                    .frame(width: 12, height: 12)
+            }
+            .foregroundStyle(StepInk.header)
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // Measured against the boards: SwiftUI's 15pt line box sits ~4pt lower
+        // than the board's after prose, and ~2pt tighter before the next row.
+        // Under another step only the 2pt below that step needs taking back.
+        .padding(.top, followsStep ? -2 : -4)
+        .padding(.bottom, expanded ? 0 : 2)
+        .accessibilityLabel(group.summary)
+        .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+        .accessibilityIdentifier("toolStep-\(group.id)")
+    }
+
+    /// Boards: magnifier for reading, pencil for edits, a terminal for one
+    /// command, three lines for a run of commands.
+    private var headerGlyph: StepGlyph.Kind {
+        if group.isSingleCall { return StepGlyph.Kind.call(group.calls[0].kind) }
+        switch group.dominantKind {
+        case .read, .explore, .search: return .magnifier
+        case .edit: return .pencil
+        case .command: return .lines
+        default: return StepGlyph.Kind.call(group.dominantKind)
+        }
+    }
+
+    private var stepMeta: String {
+        let steps = "\(group.calls.count) steps"
+        guard let ms = group.durationMs else { return steps }
+        return "\(steps) · \(StepFormat.duration(ms))"
+    }
+
+    private func singleCallLabel(_ call: ToolCall) -> some View {
+        HStack(spacing: 8) {
+            Text(call.verb.replacingOccurrences(of: " ·", with: ""))
+                .font(.system(size: 15))
+                .fixedSize()
+            Text(StepFormat.display(call.target, cwd: cwd))
+                // A question is prose; commands, paths and patterns are code.
+                .font(call.kind == .ask ? .system(size: 15) : .system(size: 13, design: .monospaced))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let ms = call.durationMs {
+                Text(StepFormat.duration(ms))
+                    .font(.system(size: 12))
+                    .foregroundStyle(StepInk.meta)
+                    .fixedSize()
+            }
+        }
+    }
+
+    private func callRow(_ call: ToolCall) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                openCallID = openCallID == call.id ? nil : call.id
+            }
+        } label: {
+            HStack(spacing: 8) {
+                StepGlyph(kind: .call(call.kind), lineWidth: 2)
+                    .foregroundStyle(call.isError ? StepInk.error : StepInk.header)
+                    .frame(width: 14, height: 14)
+                Text(call.verb.replacingOccurrences(of: " ·", with: ""))
+                    .font(.system(size: 14))
+                    .foregroundStyle(StepInk.rowVerb)
+                    .fixedSize()
+                Text(StepFormat.display(call.target, cwd: cwd))
+                    .font(call.kind == .ask ? .system(size: 14) : .system(size: 12.5, design: .monospaced))
+                    .foregroundStyle(StepInk.header)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let ms = call.durationMs {
+                    Text(StepFormat.duration(ms))
+                        .font(.system(size: 12))
+                        .foregroundStyle(StepInk.meta)
+                        .fixedSize()
+                }
+                BoardGlyph(kind: openCallID == call.id ? .chevronDown : .chevronRight, lineWidth: 3)
+                    .foregroundStyle(StepInk.chevron)
+                    .frame(width: 10, height: 10)
+            }
+            .padding(.vertical, 4.83)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("toolCall-\(call.id)")
+    }
+}
+
+/// A call's input and result (board: Command / Output, File / Result).
+struct ToolCallCard: View {
+    let call: ToolCall
+    let cwd: String?
+    let showsCwd: Bool
+    var onShowAll: (_ title: String, _ text: String) -> Void
+
+    private static let previewLimit = 8
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            sectionLabel(call.kind.inputLabel)
+            Text(inputText)
+                .font(.system(size: 12.5, design: .monospaced))
+                .cssLineBox(size: 12.5, lineHeight: 17, monospaced: true)
+                .foregroundStyle(StepInk.inputInk)
+                .lineLimit(6)
+                .textSelection(.enabled)
+            if showsCwd, call.kind == .command, let cwd, !cwd.isEmpty {
+                Text("In \(StepFormat.abbreviatingHome(cwd))")
+                    .font(.system(size: 12))
+                    .foregroundStyle(StepInk.meta)
+            }
+            if let result = call.result {
+                // Commands show their last 8 lines, everything else its first 6.
+                let preview = ToolCallPreview.lines(of: result, kind: call.kind,
+                                                    limit: call.kind == .command ? Self.previewLimit : 6)
+                sectionLabel(resultLabel(preview), tint: call.isError ? StepInk.error : StepInk.meta)
+                    .padding(.top, 4)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(preview.lines.enumerated()), id: \.offset) { index, line in
+                        // Board `s2-tools-group`: when more lines follow, the last
+                        // shown line of a head preview is dimmed (#636366).
+                        let fades = !preview.fromEnd && preview.total > preview.lines.count
+                            && index == preview.lines.count - 1
+                        Text(line.isEmpty ? " " : line)
+                            .font(.system(size: 11.5, design: .monospaced))
+                            // Test tallies read at a glance (board: " 42 pass" in green).
+                            .foregroundStyle(fades ? S2.color(dark: 0x636366, light: 0xAEAEB2)
+                                             : Self.isPassLine(line) ? S2.live : StepInk.outputInk)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .frame(height: 16, alignment: .leading)
+                    }
+                }
+                // minWidth 0 makes the box take the offered width, not its
+                // widest line, so long lines clip at the box.
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(StepInk.outputBox)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                if preview.total > preview.lines.count {
+                    Button("Show all \(preview.total) lines") {
+                        onShowAll(call.label, result)
+                    }
+                    .font(.system(size: 13))
+                    .foregroundStyle(StepInk.link)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("toolCallShowAll-\(call.id)")
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(StepInk.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(StepInk.cardStroke, lineWidth: 0.5))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("toolCallCard-\(call.id)")
+    }
+
+    private var inputText: String {
+        if !call.target.isEmpty {
+            let target = StepFormat.display(call.target, cwd: cwd)
+            return call.inputDetail.map { "\(target) · \($0)" } ?? target
+        }
+        return call.input
+    }
+
+    private static func isPassLine(_ line: String) -> Bool {
+        line.range(of: #"^\s*\d+ pass(ed)?\b"#, options: .regularExpression) != nil
+    }
+
+    private func resultLabel(_ p: ToolCallPreview.Lines) -> String {
+        let noun = call.kind == .command ? "Output" : "Result"
+        let head = call.isError ? "Error" : noun
+        let count = "\(p.total) line\(p.total == 1 ? "" : "s")"
+        if p.total > p.lines.count, p.fromEnd { return "\(head) · last \(p.lines.count) of \(count)" }
+        return "\(head) · \(count)"
+    }
+
+    private func sectionLabel(_ text: String, tint: Color = StepInk.meta) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 11, weight: .semibold))
+            .tracking(0.4)
+            .foregroundStyle(tint)
+    }
+}
+
+/// The full result behind "Show all N lines".
+struct ToolOutputSheet: View {
+    let title: String
+    let text: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                Text(text)
+                    .font(.system(size: 12, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
         }
     }
 }
