@@ -2,7 +2,7 @@
 
 Design: canvas "LFG UI Map", page **Tasks redesign** → row **A2 dark** (`tA2d-*`), and page **A2 build plan** (annotated copies of the same six screens). Desktop design: row **Desktop · A2** (`dA2-*`), matched to the mobile screens on 2026-10-15, with its own build-plan boards (`plan-desk-*`) on the A2 build plan page.
 
-Status: **shipped to the servers and TestFlight** (2026-10-15). Commits `371f82d` (code) and `58f9f3d` (docs); `lfg serve` restarted on the Pro and the Air; TestFlight build 202610151935 (1.3.0, VALID, in beta testing). Follow-up 2026-10-16 (runs fold, logos, host move): commits `887e00d` and `30688b2`, both servers restarted, TestFlight build 202610161149 (1.3.0, VALID, in beta testing), Mac app installed on the Pro and the Air. Every phone and Mac screen passed `claude-design-verifier` against its board. Progress is in the Implementation log at the end; summary page: `.claude/tasks-a2/summary-page.md`.
+Status: **shipped to the servers and TestFlight** (2026-10-15). Commits `371f82d` (code) and `58f9f3d` (docs); `lfg serve` restarted on the Pro and the Air; TestFlight build 202610151935 (1.3.0, VALID, in beta testing). Follow-up 2026-10-16 (runs fold, logos, host move): commits `887e00d` and `30688b2`, both servers restarted, TestFlight build 202610161149 (1.3.0, VALID, in beta testing), Mac app installed on the Pro and the Air. Follow-up 2026-10-16 (failed-run Retry button, Retry opens the new session): commit `8b92d8b`, Mac app installed on both Macs, TestFlight build 202610161249 (1.3.0, VALID, in beta testing). Every phone and Mac screen passed `claude-design-verifier` against its board. Progress is in the Implementation log at the end; summary page: `.claude/tasks-a2/summary-page.md`.
 
 ## User Story
 
