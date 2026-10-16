@@ -297,7 +297,7 @@ struct SessionDetailView: View {
             if let cwd = session.cwd, !cwd.isEmpty { hf?.cwd = cwd }
         }
         // Keep native controls, but let transcript rows remain visible behind
-        // the bar. Its transition is an app-owned gradient of system material.
+        // the bar. Its transition uses the same edge fade as Sessions and Tasks.
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar { toolbarMenu }
         .task(id: sid) {
@@ -489,11 +489,11 @@ struct SessionDetailView: View {
                         // The 180-degree transcript transform confuses SwiftUI's
                         // automatic edge detector, expanding its blur through the
                         // viewport instead of confining it to a bar boundary
-                        // (re-checked on iOS 26.3). A local, masked material
-                        // supplies the header blur without that automatic effect.
+                        // (re-checked on iOS 26.3). Reuse the lists' local fade
+                        // without enabling that automatic effect.
                         .scrollEdgeEffectHidden(true, for: [.top, .bottom])
                         .overlay(alignment: .top) {
-                            TranscriptTopFade(barHeight: topChromeHeight)
+                            ChromeFade(edge: .top, barHeight: topChromeHeight)
                                 .offset(y: -topChromeHeight)
                         }
 
@@ -531,11 +531,12 @@ struct SessionDetailView: View {
                 transcript
                     .ignoresSafeArea(.container, edges: .top)
                     .overlay(alignment: .top) {
-                        TranscriptTopFade(barHeight: topChromeHeight)
+                        ChromeFade(edge: .top, barHeight: topChromeHeight)
                             .offset(y: -topChromeHeight)
                     }
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         bottomChrome
+                            .background { bottomChromeFade }
                     }
             }
         }
@@ -711,6 +712,20 @@ struct SessionDetailView: View {
                     scheduleJumpToNewest()
                 }
             }
+            // Draw behind the controls, outside their measurement. Extending
+            // through the device inset reaches the screen edge; when the
+            // keyboard lifts the composer this backdrop follows it as a sibling
+            // of the transcript, leaving the scroll viewport unchanged.
+            .background { bottomChromeFade }
+    }
+
+    private var bottomChromeFade: some View {
+        GeometryReader { proxy in
+            ChromeFade(edge: .bottom, barHeight: proxy.size.height + windowBottomSafeAreaInset)
+                .offset(y: -ChromeFade.tail(.bottom))
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private var windowBottomSafeAreaInset: CGFloat {

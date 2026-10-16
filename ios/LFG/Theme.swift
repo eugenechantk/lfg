@@ -139,46 +139,14 @@ extension Theme {
 
 @available(iOS 26.0, *)
 extension Glass {
-    /// Regular glass for session chrome (top fade, composer), dimmed in dark mode.
+    /// Regular glass for shared edge fades and the composer, dimmed in dark mode.
     static func chrome(_ scheme: ColorScheme) -> Glass {
         if let tint = Theme.glassDim(scheme) { return .regular.tint(tint) }
         return .regular
     }
 }
 
-/// A soft backdrop behind session chrome. Transcript content continues beneath
-/// the header, gaining blur gradually as it approaches the navigation controls.
-struct TranscriptTopFade: View {
-    let barHeight: CGFloat
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
-    var body: some View {
-        let bar = max(barHeight, 1)
-        let height = bar + 36
-        let base = Color(.systemBackground)
-        let stops: [(location: CGFloat, strength: Double)] = [
-            (0, 1), (max(bar - 36, 0) / height, 1),
-            (bar / height, 0.8), ((bar + 16) / height, 0.3), (1, 0),
-        ]
-        let mask = LinearGradient(
-            stops: stops.map { .init(color: .black.opacity($0.strength), location: $0.location) },
-            startPoint: .top, endPoint: .bottom)
-        ZStack {
-            if !reduceTransparency {
-                Rectangle().fill(.regularMaterial).mask(mask)
-            }
-            LinearGradient(
-                stops: stops.map {
-                    .init(color: base.opacity($0.strength * (reduceTransparency ? 1 : 0.16)), location: $0.location)
-                }, startPoint: .top, endPoint: .bottom)
-        }
-        .frame(height: height)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
-
-/// The scroll edge treatment for the lists, drawn by the
+/// The scroll edge treatment for lists and transcripts, drawn by the
 /// app instead of the system. Apple's default effect darkens hard when bare text
 /// sits in a bar (our host-status line), turning near-black and then clearing
 /// within a few points of the bar's edge. The session view's flipped transcript
@@ -191,7 +159,6 @@ struct TranscriptTopFade: View {
 /// background-coloured scrim for the fade. `barHeight` is the distance from the
 /// screen edge to the bar's inner border; the caller places this view against
 /// the screen edge named by `edge`.
-@available(iOS 26.0, *)
 struct ChromeFade: View {
     var edge: VerticalEdge = .top
     let barHeight: CGFloat
@@ -242,7 +209,7 @@ struct ChromeFade: View {
         Group {
             if solid {
                 scrim
-            } else {
+            } else if #available(iOS 26.0, *) {
                 // The glass shape is inset negatively so its specular perimeter
                 // is rendered outside this field; the mask clips that rim away.
                 ZStack {
@@ -252,6 +219,8 @@ struct ChromeFade: View {
                         .mask(glassMask)
                     scrim
                 }
+            } else {
+                scrim
             }
         }
         .frame(height: total)
