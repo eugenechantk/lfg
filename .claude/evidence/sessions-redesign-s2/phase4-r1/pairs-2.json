@@ -1,0 +1,10 @@
+{
+  "sources": {
+    "design": {"path": "board-zoomcapture-438x942.png", "pixels_per_unit": 1, "viewport": [438, 942]},
+    "app": {"path": "app-board-400x860-srgb.png", "pixels_per_unit": 1, "viewport": [400, 912]}
+  },
+  "pairs": [
+    {"id": "24-time-column", "state": "all-groups", "design": {"source": "design", "rect": [10, 125, 34, 650]}, "app": {"source": "app", "rect": [10, 125, 34, 650]}},
+    {"id": "25-host-working-count", "state": "host-offline", "design": {"source": "design", "rect": [125, 52, 90, 24]}, "app": {"source": "app", "rect": [125, 52, 90, 24]}}
+  ]
+}

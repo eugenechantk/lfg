@@ -1,0 +1,15 @@
+state	text	board_ink(x,y,wxh)	app_ink	d_left	d_top	d_right	d_bottom	d_w	d_h	match	board_ink_col	app_ink_col	bg
+fold-all	Sessions	136,20,52x11	136,21,53x10	0	1	1	0	1	-1	match dx=0 dy=1 mad=6.5	#F4F4F6	#F4F4F6	bg #555558/#555558
+fold-all	2	197,18,11x15	195,18,16x16	-2	0	3	1	5	1	match dx=0 dy=1 mad=11.3	#1A1206	#FF9F0B	bg #FF9F0B/#555558
+fold-all	Tasks	233,20,33x11	233,21,33x10	0	1	0	0	0	-1	match dx=0 dy=1 mad=9.1	#C9CBD3	#C9CBD3	bg #2E2E32/#2F2E32
+fold-all	2	274,18,12x15	273,18,16x16	-1	0	3	1	4	1	match dx=1 dy=0 mad=12.3	#1C1406	#ED9414	bg #EC9514/#2F2E32
+fold-all	Pro	32,58,18x9	32,59,18x9	0	1	0	1	0	0	match dx=0 dy=1 mad=4.2	#A8A8B0	#A7A7AE	bg #1A1A1E/#1A1C1E
+fold-all	Air offline	77,57,55x10	78,58,54x10	1	1	0	1	-1	0	match dx=1 dy=1 mad=13.1	#FFB33F	#FAAF3F	bg #1A1A1E/#1A1C1E
+fold-all	· 3 working	140,57,62x13	142,58,61x12	2	1	1	0	-1	-1	match dx=1 dy=1 mad=5.2	#898992	#898992	bg #1A1A1E/#1A1C1E
+fold-all	By status	315,59,48x10	315,59,47x10	0	0	-1	0	-1	0	match dx=0 dy=0 mad=12.2	#C8CAD2	#C6C8D0	bg #2C2C2F/#2C2C2F
+fold-all	Needs input	38,100,75x13	38,101,75x13	0	1	0	1	0	0	match dx=0 dy=1 mad=9.1	#FFB33F	#FFB33F	bg #1A1A1E/#1A1C1E
+fold-all	2	122,101,6x9	123,101,6x9	1	0	1	0	0	0	match dx=1 dy=0 mad=7.4	#8A8A93	#8A8A93	bg #1A1A1E/#1A1C1E
+fold-all	Working	37,138,52x13	37,138,52x13	0	0	0	0	0	0	match dx=0 dy=0 mad=6.1	#8A8A93	#8A8A93	bg #1A1A1E/#1A1C1E
+fold-all	3	98,138,7x9	99,139,6x9	1	1	0	1	-1	0	match dx=1 dy=1 mad=14.0	#8A8A93	#87878F	bg #1A1A1E/#1A1C1E
+fold-all	Recent	38,175,43x10	38,176,43x10	0	1	0	1	0	0	match dx=0 dy=1 mad=5.4	#8A8A93	#8A8A93	bg #1A1A1E/#1A1C1E
+fold-all	43	90,176,14x9	90,176,15x9	0	0	1	0	1	0	match dx=1 dy=0 mad=9.9	#8A8A93	#898992	bg #1A1A1E/#1A1C1E

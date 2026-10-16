@@ -1,0 +1,3049 @@
+{
+  "manifest_sha256": "5c12e617b9b640162b3bfca0078d3bcf93643b16a26e9234ce912bb8c00b30af",
+  "sources": {
+    "board-open": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase4-r3/board-open.png",
+      "sha256": "0fc1ea9b77bd5c1b085bd39e23b341b578629757ccea24330a622530cb2c57cb",
+      "pixels_per_unit": 1,
+      "viewport": [
+        400,
+        860
+      ],
+      "pixel_size": [
+        400,
+        860
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        400,
+        860
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "app-open": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase4-r3/app-open-srgb.png",
+      "sha256": "0fe974853210d160409ca83484cc44b66595600c0aef867d83d2745f7e050659",
+      "pixels_per_unit": 1,
+      "viewport": [
+        400,
+        912
+      ],
+      "pixel_size": [
+        400,
+        912
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        400,
+        912
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": "9fcb84c03eb561e331fbc0343ce40b009e5a6e2c2cdb9afa4360134c4bcb6397",
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "board-fold-needs": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase4-r3/board-fold-needs.png",
+      "sha256": "0243aa0793026c233f9ad5045e4bf1dc452d6e636de371f68ef5a1e1162330b8",
+      "pixels_per_unit": 1,
+      "viewport": [
+        400,
+        860
+      ],
+      "pixel_size": [
+        400,
+        860
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        400,
+        860
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "app-fold-needs": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase4-r3/app-fold-needs-srgb.png",
+      "sha256": "a7e5e99b2157432783efa9e932e6cf2834815bf17c9dc9d104bb13b39118f0ce",
+      "pixels_per_unit": 1,
+      "viewport": [
+        400,
+        912
+      ],
+      "pixel_size": [
+        400,
+        912
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        400,
+        912
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": "9fcb84c03eb561e331fbc0343ce40b009e5a6e2c2cdb9afa4360134c4bcb6397",
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "board-fold-working": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase4-r3/board-fold-working.png",
+      "sha256": "84dc70d4ef78a43b5b5ee57d85c43c0b918a317ca2d5b1ec8abd1fe86249a56f",
+      "pixels_per_unit": 1,
+      "viewport": [
+        400,
+        860
+      ],
+      "pixel_size": [
+        400,
+        860
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        400,
+        860
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "app-fold-working": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase4-r3/app-fold-working-srgb.png",
+      "sha256": "775b6016987338da723be9a7a05645f81ea2771567d0dd3591d303f5e27b5594",
+      "pixels_per_unit": 1,
+      "viewport": [
+        400,
+        912
+      ],
+      "pixel_size": [
+        400,
+        912
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        400,
+        912
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": "9fcb84c03eb561e331fbc0343ce40b009e5a6e2c2cdb9afa4360134c4bcb6397",
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "board-fold-recent": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase4-r3/board-fold-recent.png",
+      "sha256": "b11f9d57b61421fdcc2830567510f02930f76cf7670b34abcd749b04cde41b89",
+      "pixels_per_unit": 1,
+      "viewport": [
+        400,
+        860
+      ],
+      "pixel_size": [
+        400,
+        860
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        400,
+        860
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "app-fold-recent": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase4-r3/app-fold-recent-srgb.png",
+      "sha256": "bfa6eabf743c8bc57c3bedb485d390d90760f3f2367ced11ee1155564b3e6beb",
+      "pixels_per_unit": 1,
+      "viewport": [
+        400,
+        912
+      ],
+      "pixel_size": [
+        400,
+        912
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        400,
+        912
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": "9fcb84c03eb561e331fbc0343ce40b009e5a6e2c2cdb9afa4360134c4bcb6397",
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "board-fold-all": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase4-r3/board-fold-all.png",
+      "sha256": "5a2040e975431c6d99b933df2c9d1913ef369febe1dd99d54c9bb6b5cd126488",
+      "pixels_per_unit": 1,
+      "viewport": [
+        400,
+        860
+      ],
+      "pixel_size": [
+        400,
+        860
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        400,
+        860
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "app-fold-all": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase4-r3/app-fold-all-srgb.png",
+      "sha256": "30b0260ee62a21c4af3f8254420658e6203c507742f26a6c2a579b03a0560fa2",
+      "pixels_per_unit": 1,
+      "viewport": [
+        400,
+        912
+      ],
+      "pixel_size": [
+        400,
+        912
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        400,
+        912
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": "9fcb84c03eb561e331fbc0343ce40b009e5a6e2c2cdb9afa4360134c4bcb6397",
+      "capture_kind": "unspecified; confirm before measuring colors"
+    }
+  },
+  "pairs": [
+    {
+      "id": "open-title-bar",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "pixel_box": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "crop": "open-title-bar-design.png",
+        "sha256": "1cb33f915b5e2301414a9ef8d36b18c4aa116289c85ec94d0501436598a6ba32"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "pixel_box": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "crop": "open-title-bar-app.png",
+        "sha256": "f5283f18b467c246a014c1a4c157fceb3b139307dd3a470b70ddf96930270441"
+      }
+    },
+    {
+      "id": "open-native-window-controls-exception",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          0,
+          8,
+          80,
+          36
+        ],
+        "pixel_box": [
+          0,
+          8,
+          80,
+          44
+        ],
+        "crop": "open-native-window-controls-exception-design.png",
+        "sha256": "fff30874555195117b86e1d4604a7389056a85bce6d63790754ecc8f481c76f2"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          0,
+          8,
+          80,
+          36
+        ],
+        "pixel_box": [
+          0,
+          8,
+          80,
+          44
+        ],
+        "crop": "open-native-window-controls-exception-app.png",
+        "sha256": "c239af616bc5aef5eeb10f110d52ffe0f3ad4aa9ac1fa52283d360f6365569bd"
+      }
+    },
+    {
+      "id": "open-segmented-control",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          118,
+          7,
+          188,
+          38
+        ],
+        "pixel_box": [
+          118,
+          7,
+          306,
+          45
+        ],
+        "crop": "open-segmented-control-design.png",
+        "sha256": "65a5b426b8445458cec786594f003dab86adafb36e74b031c04290a68be3d727"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          118,
+          7,
+          188,
+          38
+        ],
+        "pixel_box": [
+          118,
+          7,
+          306,
+          45
+        ],
+        "crop": "open-segmented-control-app.png",
+        "sha256": "5ea39ce2771a73db051e90f3c86505ad6f1dcd690f09bc9b2d3e993cae0d4049"
+      }
+    },
+    {
+      "id": "open-search-button",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          354,
+          7,
+          38,
+          38
+        ],
+        "pixel_box": [
+          354,
+          7,
+          392,
+          45
+        ],
+        "crop": "open-search-button-design.png",
+        "sha256": "f798e5348aefd327b96c458f11651240f0e48b272b47d29c94349f2eb5d08df3"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          354,
+          7,
+          38,
+          38
+        ],
+        "pixel_box": [
+          354,
+          7,
+          392,
+          45
+        ],
+        "crop": "open-search-button-app.png",
+        "sha256": "d1dc2aa0032ee3030efc34550ad0c5257a142ca840c6acd2697b17bfeadbbd21"
+      }
+    },
+    {
+      "id": "open-host-strip",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          0,
+          50,
+          400,
+          32
+        ],
+        "pixel_box": [
+          0,
+          50,
+          400,
+          82
+        ],
+        "crop": "open-host-strip-design.png",
+        "sha256": "cf36470bf8a133d8530b4ef4b4967d3822264d3e8846a9380b8e9115b592fe26"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          0,
+          50,
+          400,
+          32
+        ],
+        "pixel_box": [
+          0,
+          50,
+          400,
+          82
+        ],
+        "crop": "open-host-strip-app.png",
+        "sha256": "85283e5b1c87d815289b0484d275dc4c57664b7aed6d68da2285e48cec95516f"
+      }
+    },
+    {
+      "id": "open-by-status-pill",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          302,
+          49,
+          86,
+          28
+        ],
+        "pixel_box": [
+          302,
+          49,
+          388,
+          77
+        ],
+        "crop": "open-by-status-pill-design.png",
+        "sha256": "feea362615be476711e56dee6d6cbbeb7e210c25dab45572e0612bc6a11a0658"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          302,
+          49,
+          86,
+          28
+        ],
+        "pixel_box": [
+          302,
+          49,
+          388,
+          77
+        ],
+        "crop": "open-by-status-pill-app.png",
+        "sha256": "6dfd0fe9fa16f7efa23fc6c18e04f54d6ab0120e9c95be263e3f402763635a34"
+      }
+    },
+    {
+      "id": "open-list-top-border",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          0,
+          76,
+          400,
+          12
+        ],
+        "pixel_box": [
+          0,
+          76,
+          400,
+          88
+        ],
+        "crop": "open-list-top-border-design.png",
+        "sha256": "5381497dbe2b817a13eec4c01604f4d55f81d31f0714c65e7d5dd7c801fdb506"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          0,
+          76,
+          400,
+          12
+        ],
+        "pixel_box": [
+          0,
+          76,
+          400,
+          88
+        ],
+        "crop": "open-list-top-border-app.png",
+        "sha256": "cc6053a2a6ec7528a971ab0bb0c0fb2742ab391384572bc7891170380328fe6a"
+      }
+    },
+    {
+      "id": "open-header-needs",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          0,
+          81,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          81,
+          400,
+          123
+        ],
+        "crop": "open-header-needs-design.png",
+        "sha256": "ad4ece357ba67e96f1a72d70e24c3b4ee3ae4b844ac57f41eba01071388f7b3b"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          0,
+          82,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          82,
+          400,
+          124
+        ],
+        "crop": "open-header-needs-app.png",
+        "sha256": "c5ff485aa14e9d332c72ec2d5bcd1f38504acc25856b8767fe2681fb6c792af9"
+      }
+    },
+    {
+      "id": "open-row-01-choose-the-launch-direction",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          0,
+          118,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          118,
+          400,
+          198
+        ],
+        "crop": "open-row-01-choose-the-launch-direction-design.png",
+        "sha256": "3a47ae4d65e42f559769b7495094240362ab022a93da4bd9ae452516ab661d01"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          0,
+          118,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          118,
+          400,
+          198
+        ],
+        "crop": "open-row-01-choose-the-launch-direction-app.png",
+        "sha256": "f001d34f9ef7170a3bb1980fcded88582e2c453eba4aa89bef9b06c9c9c1d54b"
+      }
+    },
+    {
+      "id": "open-row-02-restore-remote-authenticatio",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          0,
+          193,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          193,
+          400,
+          273
+        ],
+        "crop": "open-row-02-restore-remote-authenticatio-design.png",
+        "sha256": "eb234cd2728ab220307243964b00641530cbc2443befa26441cb0a0fef12d187"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          0,
+          194,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          194,
+          400,
+          274
+        ],
+        "crop": "open-row-02-restore-remote-authenticatio-app.png",
+        "sha256": "6065dffe13f7dead3de025d9db9a709b11dab6ffd24bd334c43b74cb9cbe9acf"
+      }
+    },
+    {
+      "id": "open-header-working",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          0,
+          269,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          269,
+          400,
+          311
+        ],
+        "crop": "open-header-working-design.png",
+        "sha256": "7f2acb68a3ac68df8eb3baaac4b54c0dcca81733b98bccb25ad337651981fe66"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          0,
+          270,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          270,
+          400,
+          312
+        ],
+        "crop": "open-header-working-app.png",
+        "sha256": "55091290e133a7fff7fc3d135ab0d23076f77e22a3d322c8a27feeede7306e49"
+      }
+    },
+    {
+      "id": "open-row-03-make-the-desktop-window-narr",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          0,
+          306,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          306,
+          400,
+          386
+        ],
+        "crop": "open-row-03-make-the-desktop-window-narr-design.png",
+        "sha256": "7fe7c61c7c1f3a18b0e9ff41e7a5f4ccde71cc248c6005695eb2eb3240692628"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          0,
+          307,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          307,
+          400,
+          387
+        ],
+        "crop": "open-row-03-make-the-desktop-window-narr-app.png",
+        "sha256": "616f79237299ca89e58a7796372c402ad7ff34abd154420b79ba5500284a4d61"
+      }
+    },
+    {
+      "id": "open-row-04-nightly-testflight-crash-swe",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          0,
+          381,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          381,
+          400,
+          461
+        ],
+        "crop": "open-row-04-nightly-testflight-crash-swe-design.png",
+        "sha256": "e9e9788fc34bebf49ef88727f0991bb1bbee243add53de7accbfe1042d34a2d1"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          0,
+          382,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          382,
+          400,
+          462
+        ],
+        "crop": "open-row-04-nightly-testflight-crash-swe-app.png",
+        "sha256": "b0cf71cf86cccc20788b0aace9446b8c279fd280c3064f54013b10793b3e288a"
+      }
+    },
+    {
+      "id": "open-row-05-reelly-creative-fatigue-chec",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          0,
+          457,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          457,
+          400,
+          537
+        ],
+        "crop": "open-row-05-reelly-creative-fatigue-chec-design.png",
+        "sha256": "c890fd508532fe4ae7207202528cff5a72be947fbb80b6822c1148fcff55a0d3"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          0,
+          458,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          458,
+          400,
+          538
+        ],
+        "crop": "open-row-05-reelly-creative-fatigue-chec-app.png",
+        "sha256": "80209d8d53ae960f363b7f5311e9c29abfb5ccd28668ac56c2ea193e375a0ac8"
+      }
+    },
+    {
+      "id": "open-header-recent",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          0,
+          532,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          532,
+          400,
+          574
+        ],
+        "crop": "open-header-recent-design.png",
+        "sha256": "fa89822fa9c101c8ce522e26ae32e1573c557273bb303a78390242397160d4cc"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          0,
+          533,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          533,
+          400,
+          575
+        ],
+        "crop": "open-header-recent-app.png",
+        "sha256": "0592829c03d97a388628fecbd374518f4619c3fee9e1e132fa7bec42a92366d9"
+      }
+    },
+    {
+      "id": "open-row-06-polish-onboarding-copy",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          0,
+          569,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          569,
+          400,
+          649
+        ],
+        "crop": "open-row-06-polish-onboarding-copy-design.png",
+        "sha256": "7ee951fb04ea0f6fa60e51bfc2176863222d05b8b7d102236a83fe24e23db7dd"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          0,
+          570,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          570,
+          400,
+          650
+        ],
+        "crop": "open-row-06-polish-onboarding-copy-app.png",
+        "sha256": "28fdef39e2099067ce126cbb8f545eaddcadf46603c80e48aef8f71a00d60d4a"
+      }
+    },
+    {
+      "id": "open-row-07-fix-queued-message-reconcili",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          0,
+          645,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          645,
+          400,
+          725
+        ],
+        "crop": "open-row-07-fix-queued-message-reconcili-design.png",
+        "sha256": "59d61781356bad51fa86c8ea1401cfdbb9421ca40fb57dd6646a43f9a7e4345b"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          0,
+          646,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          646,
+          400,
+          726
+        ],
+        "crop": "open-row-07-fix-queued-message-reconcili-app.png",
+        "sha256": "e1afcba20d55f99cb12579bcb718f75d4e7aa1423fb011f9ae92fa9dcfc5edc0"
+      }
+    },
+    {
+      "id": "open-row-08-weekly-dependency-audit",
+      "state": "open",
+      "design": {
+        "source": "board-open",
+        "rect": [
+          0,
+          720,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          720,
+          400,
+          800
+        ],
+        "crop": "open-row-08-weekly-dependency-audit-design.png",
+        "sha256": "4d8138f53249f5f9598d14a68e01792e5fe9a95b651a1831e7adc445253cbe46"
+      },
+      "app": {
+        "source": "app-open",
+        "rect": [
+          0,
+          721,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          721,
+          400,
+          801
+        ],
+        "crop": "open-row-08-weekly-dependency-audit-app.png",
+        "sha256": "e6636849d201d8516f5a7f8edfe09eacc8618afd679dbb3390aed813a2b9b63a"
+      }
+    },
+    {
+      "id": "fold-needs-title-bar",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "pixel_box": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "crop": "fold-needs-title-bar-design.png",
+        "sha256": "1cb33f915b5e2301414a9ef8d36b18c4aa116289c85ec94d0501436598a6ba32"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "pixel_box": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "crop": "fold-needs-title-bar-app.png",
+        "sha256": "f5283f18b467c246a014c1a4c157fceb3b139307dd3a470b70ddf96930270441"
+      }
+    },
+    {
+      "id": "fold-needs-native-window-controls-exception",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          0,
+          8,
+          80,
+          36
+        ],
+        "pixel_box": [
+          0,
+          8,
+          80,
+          44
+        ],
+        "crop": "fold-needs-native-window-controls-exception-design.png",
+        "sha256": "fff30874555195117b86e1d4604a7389056a85bce6d63790754ecc8f481c76f2"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          0,
+          8,
+          80,
+          36
+        ],
+        "pixel_box": [
+          0,
+          8,
+          80,
+          44
+        ],
+        "crop": "fold-needs-native-window-controls-exception-app.png",
+        "sha256": "c239af616bc5aef5eeb10f110d52ffe0f3ad4aa9ac1fa52283d360f6365569bd"
+      }
+    },
+    {
+      "id": "fold-needs-segmented-control",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          118,
+          7,
+          188,
+          38
+        ],
+        "pixel_box": [
+          118,
+          7,
+          306,
+          45
+        ],
+        "crop": "fold-needs-segmented-control-design.png",
+        "sha256": "65a5b426b8445458cec786594f003dab86adafb36e74b031c04290a68be3d727"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          118,
+          7,
+          188,
+          38
+        ],
+        "pixel_box": [
+          118,
+          7,
+          306,
+          45
+        ],
+        "crop": "fold-needs-segmented-control-app.png",
+        "sha256": "5ea39ce2771a73db051e90f3c86505ad6f1dcd690f09bc9b2d3e993cae0d4049"
+      }
+    },
+    {
+      "id": "fold-needs-search-button",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          354,
+          7,
+          38,
+          38
+        ],
+        "pixel_box": [
+          354,
+          7,
+          392,
+          45
+        ],
+        "crop": "fold-needs-search-button-design.png",
+        "sha256": "f798e5348aefd327b96c458f11651240f0e48b272b47d29c94349f2eb5d08df3"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          354,
+          7,
+          38,
+          38
+        ],
+        "pixel_box": [
+          354,
+          7,
+          392,
+          45
+        ],
+        "crop": "fold-needs-search-button-app.png",
+        "sha256": "d1dc2aa0032ee3030efc34550ad0c5257a142ca840c6acd2697b17bfeadbbd21"
+      }
+    },
+    {
+      "id": "fold-needs-host-strip",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          0,
+          50,
+          400,
+          32
+        ],
+        "pixel_box": [
+          0,
+          50,
+          400,
+          82
+        ],
+        "crop": "fold-needs-host-strip-design.png",
+        "sha256": "cf36470bf8a133d8530b4ef4b4967d3822264d3e8846a9380b8e9115b592fe26"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          0,
+          50,
+          400,
+          32
+        ],
+        "pixel_box": [
+          0,
+          50,
+          400,
+          82
+        ],
+        "crop": "fold-needs-host-strip-app.png",
+        "sha256": "85283e5b1c87d815289b0484d275dc4c57664b7aed6d68da2285e48cec95516f"
+      }
+    },
+    {
+      "id": "fold-needs-by-status-pill",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          302,
+          49,
+          86,
+          28
+        ],
+        "pixel_box": [
+          302,
+          49,
+          388,
+          77
+        ],
+        "crop": "fold-needs-by-status-pill-design.png",
+        "sha256": "feea362615be476711e56dee6d6cbbeb7e210c25dab45572e0612bc6a11a0658"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          302,
+          49,
+          86,
+          28
+        ],
+        "pixel_box": [
+          302,
+          49,
+          388,
+          77
+        ],
+        "crop": "fold-needs-by-status-pill-app.png",
+        "sha256": "6dfd0fe9fa16f7efa23fc6c18e04f54d6ab0120e9c95be263e3f402763635a34"
+      }
+    },
+    {
+      "id": "fold-needs-list-top-border",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          0,
+          76,
+          400,
+          12
+        ],
+        "pixel_box": [
+          0,
+          76,
+          400,
+          88
+        ],
+        "crop": "fold-needs-list-top-border-design.png",
+        "sha256": "5381497dbe2b817a13eec4c01604f4d55f81d31f0714c65e7d5dd7c801fdb506"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          0,
+          76,
+          400,
+          12
+        ],
+        "pixel_box": [
+          0,
+          76,
+          400,
+          88
+        ],
+        "crop": "fold-needs-list-top-border-app.png",
+        "sha256": "cc6053a2a6ec7528a971ab0bb0c0fb2742ab391384572bc7891170380328fe6a"
+      }
+    },
+    {
+      "id": "fold-needs-header-needs",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          0,
+          81,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          81,
+          400,
+          123
+        ],
+        "crop": "fold-needs-header-needs-design.png",
+        "sha256": "a0dee816c6a2c5d5b4777aa9bef150d58a30b2d1cbcde9bf65cfcee9331d7485"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          0,
+          82,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          82,
+          400,
+          124
+        ],
+        "crop": "fold-needs-header-needs-app.png",
+        "sha256": "115dfe39ccb3ae8fe5085ac12d967ca4f90eda01427a408cc0c59ec2eedca781"
+      }
+    },
+    {
+      "id": "fold-needs-header-working",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          0,
+          118,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          118,
+          400,
+          160
+        ],
+        "crop": "fold-needs-header-working-design.png",
+        "sha256": "d6fa3e474c8d735ae04e58ca7d916f04eacd921f089cda68348c49db8af8aa3f"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          0,
+          118,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          118,
+          400,
+          160
+        ],
+        "crop": "fold-needs-header-working-app.png",
+        "sha256": "ecfde29c6f3e00ad550cdaccef03b5ce346a0df5610e7533c28d9ee4d8f15ff8"
+      }
+    },
+    {
+      "id": "fold-needs-row-01-make-the-desktop-window-narr",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          0,
+          156,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          156,
+          400,
+          236
+        ],
+        "crop": "fold-needs-row-01-make-the-desktop-window-narr-design.png",
+        "sha256": "92c5b1a09a8433fcba64e599165a7b9bd93cbbb1944220fe335009a190cfd7bf"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          0,
+          157,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          157,
+          400,
+          237
+        ],
+        "crop": "fold-needs-row-01-make-the-desktop-window-narr-app.png",
+        "sha256": "18561cc7a6c83abe9ae7bf3ab2463ff0a4a2735209bb0e71c366e12bf75652a0"
+      }
+    },
+    {
+      "id": "fold-needs-row-02-nightly-testflight-crash-swe",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          0,
+          231,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          231,
+          400,
+          311
+        ],
+        "crop": "fold-needs-row-02-nightly-testflight-crash-swe-design.png",
+        "sha256": "67499ace113c0b7ff1bac98c697229611700d49b754829816ee74c825e7e2818"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          0,
+          232,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          232,
+          400,
+          312
+        ],
+        "crop": "fold-needs-row-02-nightly-testflight-crash-swe-app.png",
+        "sha256": "dbafce286a39edffc2735651f65f6d64302461fc11accc7e768a5cb426441635"
+      }
+    },
+    {
+      "id": "fold-needs-row-03-reelly-creative-fatigue-chec",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          0,
+          306,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          306,
+          400,
+          386
+        ],
+        "crop": "fold-needs-row-03-reelly-creative-fatigue-chec-design.png",
+        "sha256": "560f034934225a9dd7936ff267861259e817c76e3c0290554b648bff5a9ce4c3"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          0,
+          307,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          307,
+          400,
+          387
+        ],
+        "crop": "fold-needs-row-03-reelly-creative-fatigue-chec-app.png",
+        "sha256": "d7d205be4e69db9d31b2bda080838efeeb055dfa251f8d6102f4c7f573f22cca"
+      }
+    },
+    {
+      "id": "fold-needs-header-recent",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          0,
+          381,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          381,
+          400,
+          423
+        ],
+        "crop": "fold-needs-header-recent-design.png",
+        "sha256": "d6a8923df546e0b782c71a9f401ff64aebfa1b057eb89ef37e9bdc1742f5dec0"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          0,
+          382,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          382,
+          400,
+          424
+        ],
+        "crop": "fold-needs-header-recent-app.png",
+        "sha256": "64ff7e0e9e1e0e4605e4670e3f677f700b68bdcb329de5fb373cc7887baa12b4"
+      }
+    },
+    {
+      "id": "fold-needs-row-04-polish-onboarding-copy",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          0,
+          419,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          419,
+          400,
+          499
+        ],
+        "crop": "fold-needs-row-04-polish-onboarding-copy-design.png",
+        "sha256": "2186439d296bf163d7eff8b94902b2897a0db81fd8f4e1c8aaf75731d5e6b747"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          0,
+          421,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          421,
+          400,
+          501
+        ],
+        "crop": "fold-needs-row-04-polish-onboarding-copy-app.png",
+        "sha256": "874e4ff4130e07c5222fb99002277ddee55a7c3d14bb057bfe264bcaa7f5df74"
+      }
+    },
+    {
+      "id": "fold-needs-row-05-fix-queued-message-reconcili",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          0,
+          494,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          494,
+          400,
+          574
+        ],
+        "crop": "fold-needs-row-05-fix-queued-message-reconcili-design.png",
+        "sha256": "a95a07ee7ee36e1a7fc49a89b0431e530e425938d16f41847ea909911781bade"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          0,
+          495,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          495,
+          400,
+          575
+        ],
+        "crop": "fold-needs-row-05-fix-queued-message-reconcili-app.png",
+        "sha256": "d02faa7363a0dfaf7950c8c899dc633dabdd41c3296f357d073ee55579e0001c"
+      }
+    },
+    {
+      "id": "fold-needs-row-06-weekly-dependency-audit",
+      "state": "fold-needs",
+      "design": {
+        "source": "board-fold-needs",
+        "rect": [
+          0,
+          569,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          569,
+          400,
+          649
+        ],
+        "crop": "fold-needs-row-06-weekly-dependency-audit-design.png",
+        "sha256": "b94712323163e4662475ab6534732a8e7c33feca2909a7ec1b1f98a28f7ee891"
+      },
+      "app": {
+        "source": "app-fold-needs",
+        "rect": [
+          0,
+          570,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          570,
+          400,
+          650
+        ],
+        "crop": "fold-needs-row-06-weekly-dependency-audit-app.png",
+        "sha256": "753fbbf8cab9d6e2153299b280e0e0d9c6a38288069a1744a8723869ec87d806"
+      }
+    },
+    {
+      "id": "fold-working-title-bar",
+      "state": "fold-working",
+      "design": {
+        "source": "board-fold-working",
+        "rect": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "pixel_box": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "crop": "fold-working-title-bar-design.png",
+        "sha256": "1cb33f915b5e2301414a9ef8d36b18c4aa116289c85ec94d0501436598a6ba32"
+      },
+      "app": {
+        "source": "app-fold-working",
+        "rect": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "pixel_box": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "crop": "fold-working-title-bar-app.png",
+        "sha256": "f5283f18b467c246a014c1a4c157fceb3b139307dd3a470b70ddf96930270441"
+      }
+    },
+    {
+      "id": "fold-working-native-window-controls-exception",
+      "state": "fold-working",
+      "design": {
+        "source": "board-fold-working",
+        "rect": [
+          0,
+          8,
+          80,
+          36
+        ],
+        "pixel_box": [
+          0,
+          8,
+          80,
+          44
+        ],
+        "crop": "fold-working-native-window-controls-exception-design.png",
+        "sha256": "fff30874555195117b86e1d4604a7389056a85bce6d63790754ecc8f481c76f2"
+      },
+      "app": {
+        "source": "app-fold-working",
+        "rect": [
+          0,
+          8,
+          80,
+          36
+        ],
+        "pixel_box": [
+          0,
+          8,
+          80,
+          44
+        ],
+        "crop": "fold-working-native-window-controls-exception-app.png",
+        "sha256": "c239af616bc5aef5eeb10f110d52ffe0f3ad4aa9ac1fa52283d360f6365569bd"
+      }
+    },
+    {
+      "id": "fold-working-segmented-control",
+      "state": "fold-working",
+      "design": {
+        "source": "board-fold-working",
+        "rect": [
+          118,
+          7,
+          188,
+          38
+        ],
+        "pixel_box": [
+          118,
+          7,
+          306,
+          45
+        ],
+        "crop": "fold-working-segmented-control-design.png",
+        "sha256": "65a5b426b8445458cec786594f003dab86adafb36e74b031c04290a68be3d727"
+      },
+      "app": {
+        "source": "app-fold-working",
+        "rect": [
+          118,
+          7,
+          188,
+          38
+        ],
+        "pixel_box": [
+          118,
+          7,
+          306,
+          45
+        ],
+        "crop": "fold-working-segmented-control-app.png",
+        "sha256": "5ea39ce2771a73db051e90f3c86505ad6f1dcd690f09bc9b2d3e993cae0d4049"
+      }
+    },
+    {
+      "id": "fold-working-search-button",
+      "state": "fold-working",
+      "design": {
+        "source": "board-fold-working",
+        "rect": [
+          354,
+          7,
+          38,
+          38
+        ],
+        "pixel_box": [
+          354,
+          7,
+          392,
+          45
+        ],
+        "crop": "fold-working-search-button-design.png",
+        "sha256": "f798e5348aefd327b96c458f11651240f0e48b272b47d29c94349f2eb5d08df3"
+      },
+      "app": {
+        "source": "app-fold-working",
+        "rect": [
+          354,
+          7,
+          38,
+          38
+        ],
+        "pixel_box": [
+          354,
+          7,
+          392,
+          45
+        ],
+        "crop": "fold-working-search-button-app.png",
+        "sha256": "d1dc2aa0032ee3030efc34550ad0c5257a142ca840c6acd2697b17bfeadbbd21"
+      }
+    },
+    {
+      "id": "fold-working-host-strip",
+      "state": "fold-working",
+      "design": {
+        "source": "board-fold-working",
+        "rect": [
+          0,
+          50,
+          400,
+          32
+        ],
+        "pixel_box": [
+          0,
+          50,
+          400,
+          82
+        ],
+        "crop": "fold-working-host-strip-design.png",
+        "sha256": "cf36470bf8a133d8530b4ef4b4967d3822264d3e8846a9380b8e9115b592fe26"
+      },
+      "app": {
+        "source": "app-fold-working",
+        "rect": [
+          0,
+          50,
+          400,
+          32
+        ],
+        "pixel_box": [
+          0,
+          50,
+          400,
+          82
+        ],
+        "crop": "fold-working-host-strip-app.png",
+        "sha256": "85283e5b1c87d815289b0484d275dc4c57664b7aed6d68da2285e48cec95516f"
+      }
+    },
+    {
+      "id": "fold-working-by-status-pill",
+      "state": "fold-working",
+      "design": {
+        "source": "board-fold-working",
+        "rect": [
+          302,
+          49,
+          86,
+          28
+        ],
+        "pixel_box": [
+          302,
+          49,
+          388,
+          77
+        ],
+        "crop": "fold-working-by-status-pill-design.png",
+        "sha256": "feea362615be476711e56dee6d6cbbeb7e210c25dab45572e0612bc6a11a0658"
+      },
+      "app": {
+        "source": "app-fold-working",
+        "rect": [
+          302,
+          49,
+          86,
+          28
+        ],
+        "pixel_box": [
+          302,
+          49,
+          388,
+          77
+        ],
+        "crop": "fold-working-by-status-pill-app.png",
+        "sha256": "6dfd0fe9fa16f7efa23fc6c18e04f54d6ab0120e9c95be263e3f402763635a34"
+      }
+    },
+    {
+      "id": "fold-working-list-top-border",
+      "state": "fold-working",
+      "design": {
+        "source": "board-fold-working",
+        "rect": [
+          0,
+          76,
+          400,
+          12
+        ],
+        "pixel_box": [
+          0,
+          76,
+          400,
+          88
+        ],
+        "crop": "fold-working-list-top-border-design.png",
+        "sha256": "5381497dbe2b817a13eec4c01604f4d55f81d31f0714c65e7d5dd7c801fdb506"
+      },
+      "app": {
+        "source": "app-fold-working",
+        "rect": [
+          0,
+          76,
+          400,
+          12
+        ],
+        "pixel_box": [
+          0,
+          76,
+          400,
+          88
+        ],
+        "crop": "fold-working-list-top-border-app.png",
+        "sha256": "cc6053a2a6ec7528a971ab0bb0c0fb2742ab391384572bc7891170380328fe6a"
+      }
+    },
+    {
+      "id": "fold-working-header-needs",
+      "state": "fold-working",
+      "design": {
+        "source": "board-fold-working",
+        "rect": [
+          0,
+          81,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          81,
+          400,
+          123
+        ],
+        "crop": "fold-working-header-needs-design.png",
+        "sha256": "ad4ece357ba67e96f1a72d70e24c3b4ee3ae4b844ac57f41eba01071388f7b3b"
+      },
+      "app": {
+        "source": "app-fold-working",
+        "rect": [
+          0,
+          82,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          82,
+          400,
+          124
+        ],
+        "crop": "fold-working-header-needs-app.png",
+        "sha256": "c5ff485aa14e9d332c72ec2d5bcd1f38504acc25856b8767fe2681fb6c792af9"
+      }
+    },
+    {
+      "id": "fold-working-row-01-choose-the-launch-direction",
+      "state": "fold-working",
+      "design": {
+        "source": "board-fold-working",
+        "rect": [
+          0,
+          118,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          118,
+          400,
+          198
+        ],
+        "crop": "fold-working-row-01-choose-the-launch-direction-design.png",
+        "sha256": "3a47ae4d65e42f559769b7495094240362ab022a93da4bd9ae452516ab661d01"
+      },
+      "app": {
+        "source": "app-fold-working",
+        "rect": [
+          0,
+          118,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          118,
+          400,
+          198
+        ],
+        "crop": "fold-working-row-01-choose-the-launch-direction-app.png",
+        "sha256": "f001d34f9ef7170a3bb1980fcded88582e2c453eba4aa89bef9b06c9c9c1d54b"
+      }
+    },
+    {
+      "id": "fold-working-row-02-restore-remote-authenticatio",
+      "state": "fold-working",
+      "design": {
+        "source": "board-fold-working",
+        "rect": [
+          0,
+          193,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          193,
+          400,
+          273
+        ],
+        "crop": "fold-working-row-02-restore-remote-authenticatio-design.png",
+        "sha256": "eb234cd2728ab220307243964b00641530cbc2443befa26441cb0a0fef12d187"
+      },
+      "app": {
+        "source": "app-fold-working",
+        "rect": [
+          0,
+          194,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          194,
+          400,
+          274
+        ],
+        "crop": "fold-working-row-02-restore-remote-authenticatio-app.png",
+        "sha256": "6065dffe13f7dead3de025d9db9a709b11dab6ffd24bd334c43b74cb9cbe9acf"
+      }
+    },
+    {
+      "id": "fold-working-header-working",
+      "state": "fold-working",
+      "design": {
+        "source": "board-fold-working",
+        "rect": [
+          0,
+          269,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          269,
+          400,
+          311
+        ],
+        "crop": "fold-working-header-working-design.png",
+        "sha256": "a6062ba18c81b9a7c91ec2d7ffba3f75e9258d871a22788b49ea33ea57870838"
+      },
+      "app": {
+        "source": "app-fold-working",
+        "rect": [
+          0,
+          270,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          270,
+          400,
+          312
+        ],
+        "crop": "fold-working-header-working-app.png",
+        "sha256": "754e167f7da202c7f6fa49641994cb6ff258bc2e0a68f6614768402492347058"
+      }
+    },
+    {
+      "id": "fold-working-header-recent",
+      "state": "fold-working",
+      "design": {
+        "source": "board-fold-working",
+        "rect": [
+          0,
+          306,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          306,
+          400,
+          348
+        ],
+        "crop": "fold-working-header-recent-design.png",
+        "sha256": "a20b559d82e41e0f15aaadca18efaf7ef155fba8840e5eb4b0fc592e1e4de8f5"
+      },
+      "app": {
+        "source": "app-fold-working",
+        "rect": [
+          0,
+          306,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          306,
+          400,
+          348
+        ],
+        "crop": "fold-working-header-recent-app.png",
+        "sha256": "8cc9aff3b1b0c4cf21312312e2bd4b78d1f2c90416f2e7b4eaa6852b6fdaa2b3"
+      }
+    },
+    {
+      "id": "fold-working-row-03-polish-onboarding-copy",
+      "state": "fold-working",
+      "design": {
+        "source": "board-fold-working",
+        "rect": [
+          0,
+          344,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          344,
+          400,
+          424
+        ],
+        "crop": "fold-working-row-03-polish-onboarding-copy-design.png",
+        "sha256": "1a346e69d8144be994229b8d84da67950e3c2a66de4b7398c25e8718e4fd3d0f"
+      },
+      "app": {
+        "source": "app-fold-working",
+        "rect": [
+          0,
+          345,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          345,
+          400,
+          425
+        ],
+        "crop": "fold-working-row-03-polish-onboarding-copy-app.png",
+        "sha256": "dc3217b989992faf3804418480febaeea7880c03ed5e1382a744723f2900707a"
+      }
+    },
+    {
+      "id": "fold-working-row-04-fix-queued-message-reconcili",
+      "state": "fold-working",
+      "design": {
+        "source": "board-fold-working",
+        "rect": [
+          0,
+          419,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          419,
+          400,
+          499
+        ],
+        "crop": "fold-working-row-04-fix-queued-message-reconcili-design.png",
+        "sha256": "b60640dda538850a456c91359dfa3890c4528d823e6c30e876e961ac72b1f6aa"
+      },
+      "app": {
+        "source": "app-fold-working",
+        "rect": [
+          0,
+          421,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          421,
+          400,
+          501
+        ],
+        "crop": "fold-working-row-04-fix-queued-message-reconcili-app.png",
+        "sha256": "d7a4247ce1a32dca4a57dfc8788a65e242ed1d7eeeef64d7217fa6d1cff66990"
+      }
+    },
+    {
+      "id": "fold-working-row-05-weekly-dependency-audit",
+      "state": "fold-working",
+      "design": {
+        "source": "board-fold-working",
+        "rect": [
+          0,
+          494,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          494,
+          400,
+          574
+        ],
+        "crop": "fold-working-row-05-weekly-dependency-audit-design.png",
+        "sha256": "b94712323163e4662475ab6534732a8e7c33feca2909a7ec1b1f98a28f7ee891"
+      },
+      "app": {
+        "source": "app-fold-working",
+        "rect": [
+          0,
+          495,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          495,
+          400,
+          575
+        ],
+        "crop": "fold-working-row-05-weekly-dependency-audit-app.png",
+        "sha256": "a931353b26625b581f48714baba327d3541cc0af866c588fb88e895ed3c359a8"
+      }
+    },
+    {
+      "id": "fold-recent-title-bar",
+      "state": "fold-recent",
+      "design": {
+        "source": "board-fold-recent",
+        "rect": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "pixel_box": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "crop": "fold-recent-title-bar-design.png",
+        "sha256": "1cb33f915b5e2301414a9ef8d36b18c4aa116289c85ec94d0501436598a6ba32"
+      },
+      "app": {
+        "source": "app-fold-recent",
+        "rect": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "pixel_box": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "crop": "fold-recent-title-bar-app.png",
+        "sha256": "f5283f18b467c246a014c1a4c157fceb3b139307dd3a470b70ddf96930270441"
+      }
+    },
+    {
+      "id": "fold-recent-native-window-controls-exception",
+      "state": "fold-recent",
+      "design": {
+        "source": "board-fold-recent",
+        "rect": [
+          0,
+          8,
+          80,
+          36
+        ],
+        "pixel_box": [
+          0,
+          8,
+          80,
+          44
+        ],
+        "crop": "fold-recent-native-window-controls-exception-design.png",
+        "sha256": "fff30874555195117b86e1d4604a7389056a85bce6d63790754ecc8f481c76f2"
+      },
+      "app": {
+        "source": "app-fold-recent",
+        "rect": [
+          0,
+          8,
+          80,
+          36
+        ],
+        "pixel_box": [
+          0,
+          8,
+          80,
+          44
+        ],
+        "crop": "fold-recent-native-window-controls-exception-app.png",
+        "sha256": "c239af616bc5aef5eeb10f110d52ffe0f3ad4aa9ac1fa52283d360f6365569bd"
+      }
+    },
+    {
+      "id": "fold-recent-segmented-control",
+      "state": "fold-recent",
+      "design": {
+        "source": "board-fold-recent",
+        "rect": [
+          118,
+          7,
+          188,
+          38
+        ],
+        "pixel_box": [
+          118,
+          7,
+          306,
+          45
+        ],
+        "crop": "fold-recent-segmented-control-design.png",
+        "sha256": "65a5b426b8445458cec786594f003dab86adafb36e74b031c04290a68be3d727"
+      },
+      "app": {
+        "source": "app-fold-recent",
+        "rect": [
+          118,
+          7,
+          188,
+          38
+        ],
+        "pixel_box": [
+          118,
+          7,
+          306,
+          45
+        ],
+        "crop": "fold-recent-segmented-control-app.png",
+        "sha256": "5ea39ce2771a73db051e90f3c86505ad6f1dcd690f09bc9b2d3e993cae0d4049"
+      }
+    },
+    {
+      "id": "fold-recent-search-button",
+      "state": "fold-recent",
+      "design": {
+        "source": "board-fold-recent",
+        "rect": [
+          354,
+          7,
+          38,
+          38
+        ],
+        "pixel_box": [
+          354,
+          7,
+          392,
+          45
+        ],
+        "crop": "fold-recent-search-button-design.png",
+        "sha256": "f798e5348aefd327b96c458f11651240f0e48b272b47d29c94349f2eb5d08df3"
+      },
+      "app": {
+        "source": "app-fold-recent",
+        "rect": [
+          354,
+          7,
+          38,
+          38
+        ],
+        "pixel_box": [
+          354,
+          7,
+          392,
+          45
+        ],
+        "crop": "fold-recent-search-button-app.png",
+        "sha256": "d1dc2aa0032ee3030efc34550ad0c5257a142ca840c6acd2697b17bfeadbbd21"
+      }
+    },
+    {
+      "id": "fold-recent-host-strip",
+      "state": "fold-recent",
+      "design": {
+        "source": "board-fold-recent",
+        "rect": [
+          0,
+          50,
+          400,
+          32
+        ],
+        "pixel_box": [
+          0,
+          50,
+          400,
+          82
+        ],
+        "crop": "fold-recent-host-strip-design.png",
+        "sha256": "cf36470bf8a133d8530b4ef4b4967d3822264d3e8846a9380b8e9115b592fe26"
+      },
+      "app": {
+        "source": "app-fold-recent",
+        "rect": [
+          0,
+          50,
+          400,
+          32
+        ],
+        "pixel_box": [
+          0,
+          50,
+          400,
+          82
+        ],
+        "crop": "fold-recent-host-strip-app.png",
+        "sha256": "85283e5b1c87d815289b0484d275dc4c57664b7aed6d68da2285e48cec95516f"
+      }
+    },
+    {
+      "id": "fold-recent-by-status-pill",
+      "state": "fold-recent",
+      "design": {
+        "source": "board-fold-recent",
+        "rect": [
+          302,
+          49,
+          86,
+          28
+        ],
+        "pixel_box": [
+          302,
+          49,
+          388,
+          77
+        ],
+        "crop": "fold-recent-by-status-pill-design.png",
+        "sha256": "feea362615be476711e56dee6d6cbbeb7e210c25dab45572e0612bc6a11a0658"
+      },
+      "app": {
+        "source": "app-fold-recent",
+        "rect": [
+          302,
+          49,
+          86,
+          28
+        ],
+        "pixel_box": [
+          302,
+          49,
+          388,
+          77
+        ],
+        "crop": "fold-recent-by-status-pill-app.png",
+        "sha256": "6dfd0fe9fa16f7efa23fc6c18e04f54d6ab0120e9c95be263e3f402763635a34"
+      }
+    },
+    {
+      "id": "fold-recent-list-top-border",
+      "state": "fold-recent",
+      "design": {
+        "source": "board-fold-recent",
+        "rect": [
+          0,
+          76,
+          400,
+          12
+        ],
+        "pixel_box": [
+          0,
+          76,
+          400,
+          88
+        ],
+        "crop": "fold-recent-list-top-border-design.png",
+        "sha256": "5381497dbe2b817a13eec4c01604f4d55f81d31f0714c65e7d5dd7c801fdb506"
+      },
+      "app": {
+        "source": "app-fold-recent",
+        "rect": [
+          0,
+          76,
+          400,
+          12
+        ],
+        "pixel_box": [
+          0,
+          76,
+          400,
+          88
+        ],
+        "crop": "fold-recent-list-top-border-app.png",
+        "sha256": "cc6053a2a6ec7528a971ab0bb0c0fb2742ab391384572bc7891170380328fe6a"
+      }
+    },
+    {
+      "id": "fold-recent-header-needs",
+      "state": "fold-recent",
+      "design": {
+        "source": "board-fold-recent",
+        "rect": [
+          0,
+          81,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          81,
+          400,
+          123
+        ],
+        "crop": "fold-recent-header-needs-design.png",
+        "sha256": "ad4ece357ba67e96f1a72d70e24c3b4ee3ae4b844ac57f41eba01071388f7b3b"
+      },
+      "app": {
+        "source": "app-fold-recent",
+        "rect": [
+          0,
+          82,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          82,
+          400,
+          124
+        ],
+        "crop": "fold-recent-header-needs-app.png",
+        "sha256": "c5ff485aa14e9d332c72ec2d5bcd1f38504acc25856b8767fe2681fb6c792af9"
+      }
+    },
+    {
+      "id": "fold-recent-row-01-choose-the-launch-direction",
+      "state": "fold-recent",
+      "design": {
+        "source": "board-fold-recent",
+        "rect": [
+          0,
+          118,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          118,
+          400,
+          198
+        ],
+        "crop": "fold-recent-row-01-choose-the-launch-direction-design.png",
+        "sha256": "3a47ae4d65e42f559769b7495094240362ab022a93da4bd9ae452516ab661d01"
+      },
+      "app": {
+        "source": "app-fold-recent",
+        "rect": [
+          0,
+          118,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          118,
+          400,
+          198
+        ],
+        "crop": "fold-recent-row-01-choose-the-launch-direction-app.png",
+        "sha256": "f001d34f9ef7170a3bb1980fcded88582e2c453eba4aa89bef9b06c9c9c1d54b"
+      }
+    },
+    {
+      "id": "fold-recent-row-02-restore-remote-authenticatio",
+      "state": "fold-recent",
+      "design": {
+        "source": "board-fold-recent",
+        "rect": [
+          0,
+          193,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          193,
+          400,
+          273
+        ],
+        "crop": "fold-recent-row-02-restore-remote-authenticatio-design.png",
+        "sha256": "eb234cd2728ab220307243964b00641530cbc2443befa26441cb0a0fef12d187"
+      },
+      "app": {
+        "source": "app-fold-recent",
+        "rect": [
+          0,
+          194,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          194,
+          400,
+          274
+        ],
+        "crop": "fold-recent-row-02-restore-remote-authenticatio-app.png",
+        "sha256": "6065dffe13f7dead3de025d9db9a709b11dab6ffd24bd334c43b74cb9cbe9acf"
+      }
+    },
+    {
+      "id": "fold-recent-header-working",
+      "state": "fold-recent",
+      "design": {
+        "source": "board-fold-recent",
+        "rect": [
+          0,
+          269,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          269,
+          400,
+          311
+        ],
+        "crop": "fold-recent-header-working-design.png",
+        "sha256": "7f2acb68a3ac68df8eb3baaac4b54c0dcca81733b98bccb25ad337651981fe66"
+      },
+      "app": {
+        "source": "app-fold-recent",
+        "rect": [
+          0,
+          270,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          270,
+          400,
+          312
+        ],
+        "crop": "fold-recent-header-working-app.png",
+        "sha256": "55091290e133a7fff7fc3d135ab0d23076f77e22a3d322c8a27feeede7306e49"
+      }
+    },
+    {
+      "id": "fold-recent-row-03-make-the-desktop-window-narr",
+      "state": "fold-recent",
+      "design": {
+        "source": "board-fold-recent",
+        "rect": [
+          0,
+          306,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          306,
+          400,
+          386
+        ],
+        "crop": "fold-recent-row-03-make-the-desktop-window-narr-design.png",
+        "sha256": "7fe7c61c7c1f3a18b0e9ff41e7a5f4ccde71cc248c6005695eb2eb3240692628"
+      },
+      "app": {
+        "source": "app-fold-recent",
+        "rect": [
+          0,
+          307,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          307,
+          400,
+          387
+        ],
+        "crop": "fold-recent-row-03-make-the-desktop-window-narr-app.png",
+        "sha256": "616f79237299ca89e58a7796372c402ad7ff34abd154420b79ba5500284a4d61"
+      }
+    },
+    {
+      "id": "fold-recent-row-04-nightly-testflight-crash-swe",
+      "state": "fold-recent",
+      "design": {
+        "source": "board-fold-recent",
+        "rect": [
+          0,
+          381,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          381,
+          400,
+          461
+        ],
+        "crop": "fold-recent-row-04-nightly-testflight-crash-swe-design.png",
+        "sha256": "e9e9788fc34bebf49ef88727f0991bb1bbee243add53de7accbfe1042d34a2d1"
+      },
+      "app": {
+        "source": "app-fold-recent",
+        "rect": [
+          0,
+          382,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          382,
+          400,
+          462
+        ],
+        "crop": "fold-recent-row-04-nightly-testflight-crash-swe-app.png",
+        "sha256": "b0cf71cf86cccc20788b0aace9446b8c279fd280c3064f54013b10793b3e288a"
+      }
+    },
+    {
+      "id": "fold-recent-row-05-reelly-creative-fatigue-chec",
+      "state": "fold-recent",
+      "design": {
+        "source": "board-fold-recent",
+        "rect": [
+          0,
+          457,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          457,
+          400,
+          537
+        ],
+        "crop": "fold-recent-row-05-reelly-creative-fatigue-chec-design.png",
+        "sha256": "c890fd508532fe4ae7207202528cff5a72be947fbb80b6822c1148fcff55a0d3"
+      },
+      "app": {
+        "source": "app-fold-recent",
+        "rect": [
+          0,
+          458,
+          400,
+          80
+        ],
+        "pixel_box": [
+          0,
+          458,
+          400,
+          538
+        ],
+        "crop": "fold-recent-row-05-reelly-creative-fatigue-chec-app.png",
+        "sha256": "80209d8d53ae960f363b7f5311e9c29abfb5ccd28668ac56c2ea193e375a0ac8"
+      }
+    },
+    {
+      "id": "fold-recent-header-recent",
+      "state": "fold-recent",
+      "design": {
+        "source": "board-fold-recent",
+        "rect": [
+          0,
+          532,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          532,
+          400,
+          574
+        ],
+        "crop": "fold-recent-header-recent-design.png",
+        "sha256": "90670286b0b6fd8dc8f74e83cf20cba8da90a64684d962c90b25f34acc704984"
+      },
+      "app": {
+        "source": "app-fold-recent",
+        "rect": [
+          0,
+          533,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          533,
+          400,
+          575
+        ],
+        "crop": "fold-recent-header-recent-app.png",
+        "sha256": "5b42a3e326a505d2ffa1047d971c880f4544a6a8e7a112a4a50da9bfaafe1322"
+      }
+    },
+    {
+      "id": "fold-all-title-bar",
+      "state": "fold-all",
+      "design": {
+        "source": "board-fold-all",
+        "rect": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "pixel_box": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "crop": "fold-all-title-bar-design.png",
+        "sha256": "1cb33f915b5e2301414a9ef8d36b18c4aa116289c85ec94d0501436598a6ba32"
+      },
+      "app": {
+        "source": "app-fold-all",
+        "rect": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "pixel_box": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "crop": "fold-all-title-bar-app.png",
+        "sha256": "f5283f18b467c246a014c1a4c157fceb3b139307dd3a470b70ddf96930270441"
+      }
+    },
+    {
+      "id": "fold-all-native-window-controls-exception",
+      "state": "fold-all",
+      "design": {
+        "source": "board-fold-all",
+        "rect": [
+          0,
+          8,
+          80,
+          36
+        ],
+        "pixel_box": [
+          0,
+          8,
+          80,
+          44
+        ],
+        "crop": "fold-all-native-window-controls-exception-design.png",
+        "sha256": "fff30874555195117b86e1d4604a7389056a85bce6d63790754ecc8f481c76f2"
+      },
+      "app": {
+        "source": "app-fold-all",
+        "rect": [
+          0,
+          8,
+          80,
+          36
+        ],
+        "pixel_box": [
+          0,
+          8,
+          80,
+          44
+        ],
+        "crop": "fold-all-native-window-controls-exception-app.png",
+        "sha256": "c239af616bc5aef5eeb10f110d52ffe0f3ad4aa9ac1fa52283d360f6365569bd"
+      }
+    },
+    {
+      "id": "fold-all-segmented-control",
+      "state": "fold-all",
+      "design": {
+        "source": "board-fold-all",
+        "rect": [
+          118,
+          7,
+          188,
+          38
+        ],
+        "pixel_box": [
+          118,
+          7,
+          306,
+          45
+        ],
+        "crop": "fold-all-segmented-control-design.png",
+        "sha256": "65a5b426b8445458cec786594f003dab86adafb36e74b031c04290a68be3d727"
+      },
+      "app": {
+        "source": "app-fold-all",
+        "rect": [
+          118,
+          7,
+          188,
+          38
+        ],
+        "pixel_box": [
+          118,
+          7,
+          306,
+          45
+        ],
+        "crop": "fold-all-segmented-control-app.png",
+        "sha256": "5ea39ce2771a73db051e90f3c86505ad6f1dcd690f09bc9b2d3e993cae0d4049"
+      }
+    },
+    {
+      "id": "fold-all-search-button",
+      "state": "fold-all",
+      "design": {
+        "source": "board-fold-all",
+        "rect": [
+          354,
+          7,
+          38,
+          38
+        ],
+        "pixel_box": [
+          354,
+          7,
+          392,
+          45
+        ],
+        "crop": "fold-all-search-button-design.png",
+        "sha256": "f798e5348aefd327b96c458f11651240f0e48b272b47d29c94349f2eb5d08df3"
+      },
+      "app": {
+        "source": "app-fold-all",
+        "rect": [
+          354,
+          7,
+          38,
+          38
+        ],
+        "pixel_box": [
+          354,
+          7,
+          392,
+          45
+        ],
+        "crop": "fold-all-search-button-app.png",
+        "sha256": "d1dc2aa0032ee3030efc34550ad0c5257a142ca840c6acd2697b17bfeadbbd21"
+      }
+    },
+    {
+      "id": "fold-all-host-strip",
+      "state": "fold-all",
+      "design": {
+        "source": "board-fold-all",
+        "rect": [
+          0,
+          50,
+          400,
+          32
+        ],
+        "pixel_box": [
+          0,
+          50,
+          400,
+          82
+        ],
+        "crop": "fold-all-host-strip-design.png",
+        "sha256": "cf36470bf8a133d8530b4ef4b4967d3822264d3e8846a9380b8e9115b592fe26"
+      },
+      "app": {
+        "source": "app-fold-all",
+        "rect": [
+          0,
+          50,
+          400,
+          32
+        ],
+        "pixel_box": [
+          0,
+          50,
+          400,
+          82
+        ],
+        "crop": "fold-all-host-strip-app.png",
+        "sha256": "85283e5b1c87d815289b0484d275dc4c57664b7aed6d68da2285e48cec95516f"
+      }
+    },
+    {
+      "id": "fold-all-by-status-pill",
+      "state": "fold-all",
+      "design": {
+        "source": "board-fold-all",
+        "rect": [
+          302,
+          49,
+          86,
+          28
+        ],
+        "pixel_box": [
+          302,
+          49,
+          388,
+          77
+        ],
+        "crop": "fold-all-by-status-pill-design.png",
+        "sha256": "feea362615be476711e56dee6d6cbbeb7e210c25dab45572e0612bc6a11a0658"
+      },
+      "app": {
+        "source": "app-fold-all",
+        "rect": [
+          302,
+          49,
+          86,
+          28
+        ],
+        "pixel_box": [
+          302,
+          49,
+          388,
+          77
+        ],
+        "crop": "fold-all-by-status-pill-app.png",
+        "sha256": "6dfd0fe9fa16f7efa23fc6c18e04f54d6ab0120e9c95be263e3f402763635a34"
+      }
+    },
+    {
+      "id": "fold-all-list-top-border",
+      "state": "fold-all",
+      "design": {
+        "source": "board-fold-all",
+        "rect": [
+          0,
+          76,
+          400,
+          12
+        ],
+        "pixel_box": [
+          0,
+          76,
+          400,
+          88
+        ],
+        "crop": "fold-all-list-top-border-design.png",
+        "sha256": "5381497dbe2b817a13eec4c01604f4d55f81d31f0714c65e7d5dd7c801fdb506"
+      },
+      "app": {
+        "source": "app-fold-all",
+        "rect": [
+          0,
+          76,
+          400,
+          12
+        ],
+        "pixel_box": [
+          0,
+          76,
+          400,
+          88
+        ],
+        "crop": "fold-all-list-top-border-app.png",
+        "sha256": "cc6053a2a6ec7528a971ab0bb0c0fb2742ab391384572bc7891170380328fe6a"
+      }
+    },
+    {
+      "id": "fold-all-header-needs",
+      "state": "fold-all",
+      "design": {
+        "source": "board-fold-all",
+        "rect": [
+          0,
+          81,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          81,
+          400,
+          123
+        ],
+        "crop": "fold-all-header-needs-design.png",
+        "sha256": "a0dee816c6a2c5d5b4777aa9bef150d58a30b2d1cbcde9bf65cfcee9331d7485"
+      },
+      "app": {
+        "source": "app-fold-all",
+        "rect": [
+          0,
+          82,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          82,
+          400,
+          124
+        ],
+        "crop": "fold-all-header-needs-app.png",
+        "sha256": "115dfe39ccb3ae8fe5085ac12d967ca4f90eda01427a408cc0c59ec2eedca781"
+      }
+    },
+    {
+      "id": "fold-all-header-working",
+      "state": "fold-all",
+      "design": {
+        "source": "board-fold-all",
+        "rect": [
+          0,
+          118,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          118,
+          400,
+          160
+        ],
+        "crop": "fold-all-header-working-design.png",
+        "sha256": "77334f8d7567629792a998335854469119903d4c23735861943410202cf56dab"
+      },
+      "app": {
+        "source": "app-fold-all",
+        "rect": [
+          0,
+          118,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          118,
+          400,
+          160
+        ],
+        "crop": "fold-all-header-working-app.png",
+        "sha256": "78185424635a25e1443b12d05239adbe29b990473a2369a4449647108a12f1f1"
+      }
+    },
+    {
+      "id": "fold-all-header-recent",
+      "state": "fold-all",
+      "design": {
+        "source": "board-fold-all",
+        "rect": [
+          0,
+          156,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          156,
+          400,
+          198
+        ],
+        "crop": "fold-all-header-recent-design.png",
+        "sha256": "8a4052d322e164dc5049a58c36eb3b21d3b04473fdf53892ac435b5edab6ee82"
+      },
+      "app": {
+        "source": "app-fold-all",
+        "rect": [
+          0,
+          157,
+          400,
+          42
+        ],
+        "pixel_box": [
+          0,
+          157,
+          400,
+          199
+        ],
+        "crop": "fold-all-header-recent-app.png",
+        "sha256": "409d8a07bfe86d0155d718dbe19cd69c44157a70cd3ec5a7c572151ffc3b68e7"
+      }
+    }
+  ],
+  "review_sheets": [
+    "review-01.png",
+    "review-02.png",
+    "review-03.png",
+    "review-04.png",
+    "review-05.png",
+    "review-06.png"
+  ],
+  "review_sheet_scale": "1 pixel per logical unit; browsing only; measure raw crops",
+  "elapsed_seconds": 0.2391
+}

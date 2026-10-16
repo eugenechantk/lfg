@@ -1,0 +1,102 @@
+text	Sessions	135.83	17.91	52.77	15	12px	600	16.2px	rgb(244, 244, 246)				op=1
+text	2	199.25	19.25	6.69	12	10px	800	13.5px	rgb(26, 18, 6)				op=1
+text	Tasks	232.59	17.91	33.58	15	12px	600	16.2px	rgb(201, 203, 211)				op=1
+text	2	276.83	19.25	6.69	12	10px	800	13.5px	rgb(26, 18, 6)				op=1
+text	Pro	31	54.91	19.11	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	Air offline	77.11	54.91	54.64	15	12px	400	16.2px	rgb(255, 179, 64)				op=1
+text	· 3 working	139.75	54.91	62.36	15	12px	400	16.2px	rgb(138, 138, 147)				op=1
+text	By status	314.17	55.58	48.83	13	11px	400	14.85px	rgb(201, 203, 211)				op=1
+text	Needs input	37	97	76.23	16	13px	600	17.55px	rgb(255, 179, 64)				op=1
+text	2	121.23	97.67	7.25	15	12px	400	16.2px	rgb(138, 138, 147)				op=1
+text	Working	37	134.55	52.38	16	13px	600	17.55px	rgb(138, 138, 147)				op=1
+text	3	97.38	135.22	7.53	15	12px	400	16.2px	rgb(138, 138, 147)				op=1
+text	by last activity	308.02	135.89	75.98	13	11px	400	14.85px	rgb(138, 138, 147)				op=1
+text	1m	16	169.09	21.92	17	14px	650	19px	rgb(91, 227, 122)				op=1
+text	ago	16	188.09	19.47	13	11px	400	15px	rgb(138, 138, 147)				op=1
+text	Make the desktop window narrower	62	167.09	239.53	17	14px	600	18.9px	rgb(244, 244, 246)				op=1
+text	lfg · Pro · Claude Code opus	62	187.98	158	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	Working	74	206.17	46.48	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	4m	16	244.36	21.92	17	14px	650	19px	rgb(91, 227, 122)				op=1
+text	ago	16	263.36	19.47	13	11px	400	15px	rgb(138, 138, 147)				op=1
+text	Nightly TestFlight crash sweep	62	242.36	207.06	17	14px	600	18.9px	rgb(244, 244, 246)				op=1
+text	lfg · Pro · Codex · from a task	62	263.25	163.86	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	Working	74	281.44	46.48	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	9m	16	319.63	21.92	17	14px	650	19px	rgb(91, 227, 122)				op=1
+text	ago	16	338.63	19.47	13	11px	400	15px	rgb(138, 138, 147)				op=1
+text	Reelly creative fatigue check	62	317.63	193.73	17	14px	600	18.9px	rgb(244, 244, 246)				op=1
+text	reelly · Pro · Claude Code sonnet	62	338.52	185.16	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	Working	74	356.7	46.48	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	Recent	37	397.89	44.17	16	13px	600	17.55px	rgb(138, 138, 147)				op=1
+text	43	89.17	398.56	15.25	15	12px	400	16.2px	rgb(138, 138, 147)				op=1
+text	3h	16	432.44	17.77	17	14px	650	19px	rgb(138, 138, 147)				op=1
+text	ago	16	451.44	19.47	13	11px	400	15px	rgb(138, 138, 147)				op=1
+text	Polish onboarding copy	62	430.44	157.77	17	14px	600	18.9px	rgb(244, 244, 246)				op=1
+text	fiftystrong · Pro · Claude Code	62	451.33	171.22	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	Closed	62	469.52	39.23	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	1d	16	507.7	18.05	17	14px	650	19px	rgb(138, 138, 147)				op=1
+text	ago	16	526.7	19.47	13	11px	400	15px	rgb(138, 138, 147)				op=1
+text	Fix queued message reconciliation	62	505.7	232.67	17	14px	600	18.9px	rgb(244, 244, 246)				op=1
+text	lfg · Pro · Codex	62	526.59	90.13	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	Closed	62	544.78	39.23	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	2d	16	582.97	18.05	17	14px	650	19px	rgb(138, 138, 147)				op=0.5
+text	ago	16	601.97	19.47	13	11px	400	15px	rgb(138, 138, 147)				op=0.5
+text	Weekly dependency audit	62	580.97	173.83	17	14px	600	18.9px	rgb(244, 244, 246)				op=0.5
+text	lfg · Air · Codex · from a task	62	601.86	160.38	15	12px	400	16.2px	rgb(168, 168, 176)				op=0.5
+text	Air is offline	62	620.05	67.25	15	12px	400	16.2px	rgb(168, 168, 176)				op=0.5
+box	span 	14	20	12	12				rgb(244, 244, 246)	rgb(255, 95, 87)		6px	
+box	span 	34	20	12	12				rgb(244, 244, 246)	rgb(254, 188, 46)		6px	
+box	span 	54	20	12	12				rgb(244, 244, 246)	rgb(40, 200, 64)		6px	
+box	div[View] Sessions2
+        Tasks2	121.83	10	180.34	32				rgb(244, 244, 246)	rgba(255, 255, 255, 0.07)		16px	
+box	span Sessions2	124.83	13	96.77	26				rgb(244, 244, 246)	rgba(255, 255, 255, 0.16)		13px	
+box	span 2	194.59	18	16	16				rgb(26, 18, 6)	rgb(255, 159, 10)		8px	
+box	a Tasks2	221.59	13	77.58	26				rgb(201, 203, 211)			13px	
+box	span 2	272.17	18	16	16				rgb(26, 18, 6)	rgba(255, 159, 10, 0.9)		8px	
+box	button[Search sessions] 	358	11	30	30				rgb(214, 215, 221)	rgba(255, 255, 255, 0.07)		15px	
+box	svg[currentColor sw=1.7 circle r=4.5|M10.5 10.5 14 14] 	366	19	14	14				rgb(214, 215, 221)			0px	
+box	span 	16	59.5	7	7				rgb(168, 168, 176)	rgb(50, 215, 75)		4px	
+box	span 	62.11	59.5	7	7				rgb(168, 168, 176)		T1px rgb(255, 159, 10) B1px rgb(255, 159, 10)	4px	
+box	button By status	306.17	52	77.83	22				rgb(201, 203, 211)	rgba(255, 255, 255, 0.06)		11px	
+box	svg[currentColor sw=2 M4 6l4 4 4-4] 	367	58.5	9	9				rgb(201, 203, 211)			0px	
+box	div Needs input
+        2
+  	0	82	400	778				rgb(244, 244, 246)		T1px rgba(255, 255, 255, 0.06) B0px rgb(244, 244, 246)	0px	
+box	button[expanded=false] Needs input
+        2	0	83	400	37.55				rgb(244, 244, 246)			0px	
+box	svg[#8A8A93 sw=2.4 M6 4l4 4-4 4] 	18	100.27	11	11				rgb(244, 244, 246)			0px	
+box	button[expanded=true] Working
+        3
+      	0	120.55	400	37.55				rgb(244, 244, 246)			0px	
+box	svg[#8A8A93 sw=2.4 M4 6l4 4 4-4] 	18	137.81	11	11				rgb(244, 244, 246)			0px	
+box	a 1m
+            ago
+     	0	158.09	400	75.27				rgb(244, 244, 246)			0px	
+box	span Make the desktop window 	62	158.09	338	75.27				rgb(244, 244, 246)		T0px rgb(244, 244, 246) B1px rgba(255, 255, 255, 0.06)	0px	
+box	span 	62	210.77	7	7				rgb(168, 168, 176)	rgb(50, 215, 75)		4px	shadow=rgba(50, 215, 75, 0.22) 0px 0px 0px 3px
+box	a 4m
+            ago
+     	0	233.36	400	75.27				rgb(244, 244, 246)			0px	
+box	span Nightly TestFlight crash	62	233.36	338	75.27				rgb(244, 244, 246)		T0px rgb(244, 244, 246) B1px rgba(255, 255, 255, 0.06)	0px	
+box	span 	62	286.03	7	7				rgb(168, 168, 176)	rgb(50, 215, 75)		4px	shadow=rgba(50, 215, 75, 0.22) 0px 0px 0px 3px
+box	a 9m
+            ago
+     	0	308.63	400	75.27				rgb(244, 244, 246)			0px	
+box	span Reelly creative fatigue 	62	308.63	338	75.27				rgb(244, 244, 246)		T0px rgb(244, 244, 246) B1px rgba(255, 255, 255, 0.06)	0px	
+box	span 	62	361.3	7	7				rgb(168, 168, 176)	rgb(50, 215, 75)		4px	shadow=rgba(50, 215, 75, 0.22) 0px 0px 0px 3px
+box	button[expanded=true] Recent
+        43	0	383.89	400	37.55				rgb(244, 244, 246)			0px	
+box	svg[#8A8A93 sw=2.4 M4 6l4 4 4-4] 	18	401.16	11	11				rgb(244, 244, 246)			0px	
+box	a 3h
+            ago
+     	0	421.44	400	75.27				rgb(244, 244, 246)			0px	
+box	span Polish onboarding copy
+ 	62	421.44	338	75.27				rgb(244, 244, 246)		T0px rgb(244, 244, 246) B1px rgba(255, 255, 255, 0.06)	0px	
+box	a 1d
+            ago
+     	0	496.7	400	75.27				rgb(244, 244, 246)			0px	
+box	span Fix queued message recon	62	496.7	338	75.27				rgb(244, 244, 246)		T0px rgb(244, 244, 246) B1px rgba(255, 255, 255, 0.06)	0px	
+box	a 2d
+            ago
+     	0	571.97	400	75.27				rgb(244, 244, 246)			0px	
+box	span Weekly dependency audit
+	62	571.97	338	75.27				rgb(244, 244, 246)		T0px rgb(244, 244, 246) B1px rgba(255, 255, 255, 0.06)	0px	

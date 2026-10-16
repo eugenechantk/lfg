@@ -1,0 +1,132 @@
+{
+  "manifest_sha256": "829dd349431082996e348d30e9359c17e432035db452b5082cdd7332f2a9ce73",
+  "sources": {
+    "design": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase4-r1/board-zoomcapture-438x942.png",
+      "sha256": "ad80760b312cf2e6e9b0a9341e4be145435037140ce389e7069a04cb92555447",
+      "pixels_per_unit": 1,
+      "viewport": [
+        438,
+        942
+      ],
+      "pixel_size": [
+        438,
+        942
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        438,
+        942
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "app": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase4-r1/app-board-400x860-srgb.png",
+      "sha256": "a8f7885d3a162af1213093827d9f1e7deb24e26f15dd52ae3a7b55d3aa63fd0c",
+      "pixels_per_unit": 1,
+      "viewport": [
+        400,
+        912
+      ],
+      "pixel_size": [
+        400,
+        912
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        400,
+        912
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": "3b684200acaa8313e6ae8e1231d805769898cb74d6ab124c3fc220757e46faef",
+      "capture_kind": "unspecified; confirm before measuring colors"
+    }
+  },
+  "pairs": [
+    {
+      "id": "24-time-column",
+      "state": "all-groups",
+      "design": {
+        "source": "design",
+        "rect": [
+          10,
+          125,
+          34,
+          650
+        ],
+        "pixel_box": [
+          10,
+          125,
+          44,
+          775
+        ],
+        "crop": "24-time-column-design.png",
+        "sha256": "0243930e5162e1748fbda6f1e9c8bb9155d9b1c155e56ea200aa13f694f41ce3"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          10,
+          125,
+          34,
+          650
+        ],
+        "pixel_box": [
+          10,
+          125,
+          44,
+          775
+        ],
+        "crop": "24-time-column-app.png",
+        "sha256": "2f65a9406fe916f30e90efa68653ad8ced5bfbf738923c50b01298415d545d5a"
+      }
+    },
+    {
+      "id": "25-host-working-count",
+      "state": "host-offline",
+      "design": {
+        "source": "design",
+        "rect": [
+          125,
+          52,
+          90,
+          24
+        ],
+        "pixel_box": [
+          125,
+          52,
+          215,
+          76
+        ],
+        "crop": "25-host-working-count-design.png",
+        "sha256": "6aa853750af4f3577cdd05c9ca2f53267b7cf7b58fb295713050cee904c3f244"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          125,
+          52,
+          90,
+          24
+        ],
+        "pixel_box": [
+          125,
+          52,
+          215,
+          76
+        ],
+        "crop": "25-host-working-count-app.png",
+        "sha256": "006510f1a0ec7df3b2dedd9eee9beb4c3ed393a68fc641f39406b72c8e67482d"
+      }
+    }
+  ],
+  "review_sheets": [
+    "review-01.png"
+  ],
+  "review_sheet_scale": "1 pixel per logical unit; browsing only; measure raw crops",
+  "elapsed_seconds": 0.0296
+}

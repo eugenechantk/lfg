@@ -1,0 +1,20 @@
+== open
+app-only: 0 regions (>=3px)
+board-only: 0 regions (>=3px)
+app rows 860..912: max |lum-bg| = 0.5
+== fold-needs
+app-only: 0 regions (>=3px)
+board-only: 0 regions (>=3px)
+app rows 860..912: max |lum-bg| = 0.5
+== fold-working
+app-only: 0 regions (>=3px)
+board-only: 0 regions (>=3px)
+app rows 860..912: max |lum-bg| = 0.5
+== fold-recent
+app-only: 0 regions (>=3px)
+board-only: 0 regions (>=3px)
+app rows 860..912: max |lum-bg| = 0.5
+== fold-all
+app-only: 0 regions (>=3px)
+board-only: 0 regions (>=3px)
+app rows 860..912: max |lum-bg| = 0.5

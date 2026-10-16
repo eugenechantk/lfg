@@ -1,0 +1,93 @@
+text	Sessions	135.83	17.91	52.77	15	12px	600	16.2px	rgb(244, 244, 246)				op=1
+text	2	199.25	19.25	6.69	12	10px	800	13.5px	rgb(26, 18, 6)				op=1
+text	Tasks	232.59	17.91	33.58	15	12px	600	16.2px	rgb(201, 203, 211)				op=1
+text	2	276.83	19.25	6.69	12	10px	800	13.5px	rgb(26, 18, 6)				op=1
+text	Pro	31	54.91	19.11	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	Air offline	77.11	54.91	54.64	15	12px	400	16.2px	rgb(255, 179, 64)				op=1
+text	· 3 working	139.75	54.91	62.36	15	12px	400	16.2px	rgb(138, 138, 147)				op=1
+text	By status	314.17	55.58	48.83	13	11px	400	14.85px	rgb(201, 203, 211)				op=1
+text	Needs input	37	97	76.23	16	13px	600	17.55px	rgb(255, 179, 64)				op=1
+text	2	121.23	97.67	7.25	15	12px	400	16.2px	rgb(138, 138, 147)				op=1
+text	2m	16	131.55	21.92	17	14px	650	19px	rgb(255, 179, 64)				op=1
+text	ago	16	150.55	19.47	13	11px	400	15px	rgb(138, 138, 147)				op=1
+text	Choose the launch direction	62	129.55	188.86	17	14px	600	18.9px	rgb(244, 244, 246)				op=1
+text	fiftystrong · Pro · Claude Code opus	62	150.44	202.3	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	Asks: which launch page direction first?	80	168.63	224.23	15	12px	400	16.2px	rgb(255, 179, 64)				op=1
+text	6m	16	206.81	21.92	17	14px	650	19px	rgb(255, 179, 64)				op=1
+text	ago	16	225.81	19.47	13	11px	400	15px	rgb(138, 138, 147)				op=1
+text	Restore remote authentication	62	204.81	205.02	17	14px	600	18.9px	rgb(244, 244, 246)				op=1
+text	lfg · Pro · Codex gpt-6.1	62	225.7	133.94	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	Asks to run launchctl	80	243.89	118.55	15	12px	400	16.2px	rgb(255, 179, 64)				op=1
+text	Working	37	285.08	52.38	16	13px	600	17.55px	rgb(138, 138, 147)				op=1
+text	3	97.38	285.75	7.53	15	12px	400	16.2px	rgb(138, 138, 147)				op=1
+text	by last activity	308.02	286.42	75.98	13	11px	400	14.85px	rgb(138, 138, 147)				op=1
+text	1m	16	319.63	21.92	17	14px	650	19px	rgb(91, 227, 122)				op=1
+text	ago	16	338.63	19.47	13	11px	400	15px	rgb(138, 138, 147)				op=1
+text	Make the desktop window narrower	62	317.63	239.53	17	14px	600	18.9px	rgb(244, 244, 246)				op=1
+text	lfg · Pro · Claude Code opus	62	338.52	158	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	Working	74	356.7	46.48	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	4m	16	394.89	21.92	17	14px	650	19px	rgb(91, 227, 122)				op=1
+text	ago	16	413.89	19.47	13	11px	400	15px	rgb(138, 138, 147)				op=1
+text	Nightly TestFlight crash sweep	62	392.89	207.06	17	14px	600	18.9px	rgb(244, 244, 246)				op=1
+text	lfg · Pro · Codex · from a task	62	413.78	163.86	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	Working	74	431.97	46.48	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	9m	16	470.16	21.92	17	14px	650	19px	rgb(91, 227, 122)				op=1
+text	ago	16	489.16	19.47	13	11px	400	15px	rgb(138, 138, 147)				op=1
+text	Reelly creative fatigue check	62	468.16	193.73	17	14px	600	18.9px	rgb(244, 244, 246)				op=1
+text	reelly · Pro · Claude Code sonnet	62	489.05	185.16	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	Working	74	507.23	46.48	15	12px	400	16.2px	rgb(168, 168, 176)				op=1
+text	Recent	37	548.42	44.17	16	13px	600	17.55px	rgb(138, 138, 147)				op=1
+text	43	89.17	549.09	15.25	15	12px	400	16.2px	rgb(138, 138, 147)				op=1
+box	span 	14	20	12	12				rgb(244, 244, 246)	rgb(255, 95, 87)		6px	
+box	span 	34	20	12	12				rgb(244, 244, 246)	rgb(254, 188, 46)		6px	
+box	span 	54	20	12	12				rgb(244, 244, 246)	rgb(40, 200, 64)		6px	
+box	div[View] Sessions2
+        Tasks2	121.83	10	180.34	32				rgb(244, 244, 246)	rgba(255, 255, 255, 0.07)		16px	
+box	span Sessions2	124.83	13	96.77	26				rgb(244, 244, 246)	rgba(255, 255, 255, 0.16)		13px	
+box	span 2	194.59	18	16	16				rgb(26, 18, 6)	rgb(255, 159, 10)		8px	
+box	a Tasks2	221.59	13	77.58	26				rgb(201, 203, 211)			13px	
+box	span 2	272.17	18	16	16				rgb(26, 18, 6)	rgba(255, 159, 10, 0.9)		8px	
+box	button[Search sessions] 	358	11	30	30				rgb(214, 215, 221)	rgba(255, 255, 255, 0.07)		15px	
+box	svg[currentColor sw=1.7 circle r=4.5|M10.5 10.5 14 14] 	366	19	14	14				rgb(214, 215, 221)			0px	
+box	span 	16	59.5	7	7				rgb(168, 168, 176)	rgb(50, 215, 75)		4px	
+box	span 	62.11	59.5	7	7				rgb(168, 168, 176)		T1px rgb(255, 159, 10) B1px rgb(255, 159, 10)	4px	
+box	button By status	306.17	52	77.83	22				rgb(201, 203, 211)	rgba(255, 255, 255, 0.06)		11px	
+box	svg[currentColor sw=2 M4 6l4 4 4-4] 	367	58.5	9	9				rgb(201, 203, 211)			0px	
+box	div Needs input
+        2
+  	0	82	400	778				rgb(244, 244, 246)		T1px rgba(255, 255, 255, 0.06) B0px rgb(244, 244, 246)	0px	
+box	button[expanded=true] Needs input
+        2	0	83	400	37.55				rgb(244, 244, 246)			0px	
+box	svg[#8A8A93 sw=2.4 M4 6l4 4 4-4] 	18	100.27	11	11				rgb(244, 244, 246)			0px	
+box	a 2m
+            ago
+     	0	120.55	400	75.27				rgb(244, 244, 246)			0px	
+box	span Choose the launch direct	62	120.55	338	75.27				rgb(244, 244, 246)		T0px rgb(244, 244, 246) B1px rgba(255, 255, 255, 0.06)	0px	
+box	svg[#FFB340 sw=1.6 M3 4.5A1.5 1.5 0 0 1 4.5 3h7A1.5 1.5 0 0 1 13 4.5v5a1.5 1.5 0 0 1-1.5 1.5H7l-3 2.5V11A1.5 1.5 0 0 1 3 9.5z] 	62	170.22	13	13				rgb(255, 179, 64)			0px	
+box	a 6m
+            ago
+     	0	195.81	400	75.27				rgb(244, 244, 246)			0px	
+box	span Restore remote authentic	62	195.81	338	75.27				rgb(244, 244, 246)		T0px rgb(244, 244, 246) B1px rgba(255, 255, 255, 0.06)	0px	
+box	svg[#FFB340 sw=1.6 M3 4.5A1.5 1.5 0 0 1 4.5 3h7A1.5 1.5 0 0 1 13 4.5v5a1.5 1.5 0 0 1-1.5 1.5H7l-3 2.5V11A1.5 1.5 0 0 1 3 9.5z] 	62	245.48	13	13				rgb(255, 179, 64)			0px	
+box	button[expanded=true] Working
+        3
+      	0	271.08	400	37.55				rgb(244, 244, 246)			0px	
+box	svg[#8A8A93 sw=2.4 M4 6l4 4 4-4] 	18	288.34	11	11				rgb(244, 244, 246)			0px	
+box	a 1m
+            ago
+     	0	308.63	400	75.27				rgb(244, 244, 246)			0px	
+box	span Make the desktop window 	62	308.63	338	75.27				rgb(244, 244, 246)		T0px rgb(244, 244, 246) B1px rgba(255, 255, 255, 0.06)	0px	
+box	span 	62	361.3	7	7				rgb(168, 168, 176)	rgb(50, 215, 75)		4px	shadow=rgba(50, 215, 75, 0.22) 0px 0px 0px 3px
+box	a 4m
+            ago
+     	0	383.89	400	75.27				rgb(244, 244, 246)			0px	
+box	span Nightly TestFlight crash	62	383.89	338	75.27				rgb(244, 244, 246)		T0px rgb(244, 244, 246) B1px rgba(255, 255, 255, 0.06)	0px	
+box	span 	62	436.56	7	7				rgb(168, 168, 176)	rgb(50, 215, 75)		4px	shadow=rgba(50, 215, 75, 0.22) 0px 0px 0px 3px
+box	a 9m
+            ago
+     	0	459.16	400	75.27				rgb(244, 244, 246)			0px	
+box	span Reelly creative fatigue 	62	459.16	338	75.27				rgb(244, 244, 246)		T0px rgb(244, 244, 246) B1px rgba(255, 255, 255, 0.06)	0px	
+box	span 	62	511.83	7	7				rgb(168, 168, 176)	rgb(50, 215, 75)		4px	shadow=rgba(50, 215, 75, 0.22) 0px 0px 0px 3px
+box	button[expanded=false] Recent
+        43	0	534.42	400	37.55				rgb(244, 244, 246)			0px	
+box	svg[#8A8A93 sw=2.4 M6 4l4 4-4 4] 	18	551.69	11	11				rgb(244, 244, 246)			0px	

@@ -1,0 +1,56 @@
+state	text	board_ink(x,y,wxh)	app_ink	d_left	d_top	d_right	d_bottom	d_w	d_h	match	board_ink_col	app_ink_col	bg
+open	Sessions	136,20,52x11	136,21,53x10	0	1	1	0	1	-1	match dx=0 dy=1 mad=6.5	#F4F4F6	#F4F4F6	bg #555558/#555558
+open	2	197,18,11x15	195,18,16x16	-2	0	3	1	5	1	match dx=0 dy=1 mad=11.3	#1A1206	#FF9F0B	bg #FF9F0B/#555558
+open	Tasks	233,20,33x11	233,21,33x10	0	1	0	0	0	-1	match dx=0 dy=1 mad=9.1	#C9CBD3	#C9CBD3	bg #2E2E32/#2F2E32
+open	2	274,18,12x15	273,18,16x16	-1	0	3	1	4	1	match dx=1 dy=0 mad=12.3	#1C1406	#ED9414	bg #EC9514/#2F2E32
+open	Pro	32,58,18x9	32,59,18x9	0	1	0	1	0	0	match dx=0 dy=1 mad=4.2	#A8A8B0	#A7A7AE	bg #1A1A1E/#1A1C1E
+open	Air offline	77,57,55x10	78,58,54x10	1	1	0	1	-1	0	match dx=1 dy=1 mad=13.1	#FFB33F	#FAAF3F	bg #1A1A1E/#1A1C1E
+open	· 3 working	140,57,62x13	142,58,61x12	2	1	1	0	-1	-1	match dx=1 dy=1 mad=5.2	#898992	#898992	bg #1A1A1E/#1A1C1E
+open	By status	315,59,48x10	315,59,47x10	0	0	-1	0	-1	0	match dx=0 dy=0 mad=12.2	#C8CAD2	#C6C8D0	bg #2C2C2F/#2C2C2F
+open	Needs input	38,100,75x13	38,101,75x13	0	1	0	1	0	0	match dx=0 dy=1 mad=9.1	#FFB33F	#FFB33F	bg #1A1A1E/#1A1C1E
+open	2	122,101,6x9	123,101,6x9	1	0	1	0	0	0	match dx=1 dy=0 mad=7.4	#8A8A93	#8A8A93	bg #1A1A1E/#1A1C1E
+open	2m	17,135,21x11	17,135,21x11	0	0	0	0	0	0	match dx=0 dy=0 mad=6.3	#FFB33F	#FFB33F	bg #1A1A1E/#1A1C1E
+open	ago	16,156,19x8	16,155,19x8	0	-1	0	-1	0	0	match dx=0 dy=-1 mad=7.8	#8A8A92	#85858D	bg #1A1A1E/#1A1C1E
+open	Choose the launch direction	62,133,189x12	62,133,188x12	0	0	-1	0	-1	0	match dx=0 dy=0 mad=17.3	#F4F4F6	#F4F4F6	bg #1A1A1E/#1A1C1E
+open	fiftystrong · Pro · Claude Code opus	62,152,202x13	62,153,202x13	0	1	0	1	0	0	match dx=0 dy=1 mad=5.7	#A8A8B0	#A6A6AE	bg #1A1A1E/#1A1C1E
+open	Asks: which launch page direction first?	80,171,224x13	80,171,224x13	0	0	0	0	0	0	match dx=0 dy=0 mad=7.1	#FFB33F	#FDB23F	bg #1A1A1E/#1A1C1E
+open	6m	16,210,22x12	16,210,22x12	0	0	0	0	0	0	match dx=0 dy=0 mad=6.2	#FFB33F	#FFB33F	bg #1A1A1E/#1A1C1E
+open	ago	16,231,19x8	16,230,19x8	0	-1	0	-1	0	0	match dx=0 dy=-1 mad=7.8	#8A8A92	#85858D	bg #1A1A1E/#1A1C1E
+open	Restore remote authentication	63,208,204x12	63,209,203x11	0	1	-1	0	-1	-1	match dx=0 dy=1 mad=18.0	#F4F4F6	#F4F4F6	bg #1A1A1E/#1A1C1E
+open	lfg · Pro · Codex gpt-6.1	63,228,132x13	63,228,132x13	0	0	0	0	0	0	match dx=0 dy=0 mad=5.0	#A7A7AF	#A6A6AE	bg #1A1A1E/#1A1C1E
+open	Asks to run launchctl	80,246,118x10	80,247,118x10	0	1	0	1	0	0	match dx=0 dy=1 mad=9.5	#FCB13F	#F9AF3F	bg #1A1A1E/#1A1C1E
+open	Working	37,288,52x13	37,289,52x13	0	1	0	1	0	0	match dx=0 dy=1 mad=6.1	#8A8A93	#8A8A93	bg #1A1A1E/#1A1C1E
+open	3	98,289,7x9	99,289,6x9	1	0	0	0	-1	0	match dx=1 dy=0 mad=14.0	#8A8A93	#87878F	bg #1A1A1E/#1A1C1E
+open	by last activity	309,288,75x11	309,289,75x11	0	1	0	1	0	0	match dx=0 dy=1 mad=4.6	#898992	#87878F	bg #1A1A1E/#1A1C1E
+open	1m	17,324,21x10	17,324,21x10	0	0	0	0	0	0	match dx=0 dy=0 mad=5.9	#5AE37A	#5AE37A	bg #1A1A1E/#1A1C1E
+open	ago	16,344,19x8	16,343,19x8	0	-1	0	-1	0	0	match dx=0 dy=-1 mad=7.8	#8A8A92	#85858D	bg #1A1A1E/#1A1C1E
+open	Make the desktop window narrower	63,321,239x14	63,322,238x14	0	1	-1	1	-1	0	match dx=0 dy=1 mad=17.9	#F4F4F6	#F4F4F6	bg #1A1A1E/#1A1C1E
+open	lfg · Pro · Claude Code opus	63,341,157x13	63,341,157x13	0	0	0	0	0	0	match dx=0 dy=0 mad=4.5	#A8A8B0	#A6A6AE	bg #1A1A1E/#1A1C1E
+open	Working	74,359,46x13	71,359,49x13	-3	0	0	0	3	0	match dx=0 dy=0 mad=6.0	#A7A7AF	#A7A7AF	bg #1A1A1E/#1A1C1E
+open	4m	16,399,22x10	16,399,22x10	0	0	0	0	0	0	match dx=0 dy=0 mad=6.1	#5AE37A	#5AE37A	bg #1A1A1E/#1A1C1E
+open	ago	16,419,19x8	16,419,19x8	0	0	0	0	0	0	match dx=0 dy=0 mad=7.8	#8A8A92	#85858D	bg #1A1A1E/#1A1C1E
+open	Nightly TestFlight crash sweep	63,396,206x14	63,397,205x14	0	1	-1	1	-1	0	match dx=0 dy=1 mad=19.0	#F4F4F6	#F4F4F6	bg #1A1A1E/#1A1C1E
+open	lfg · Pro · Codex · from a task	63,416,163x13	63,417,163x13	0	1	0	1	0	0	match dx=0 dy=1 mad=4.7	#A8A8B0	#A6A6AE	bg #1A1A1E/#1A1C1E
+open	Working	74,434,46x13	71,435,49x13	-3	1	0	1	3	0	match dx=0 dy=1 mad=6.0	#A7A7AF	#A7A7AF	bg #1A1A1E/#1A1C1E
+open	9m	16,473,22x12	16,473,22x12	0	0	0	0	0	0	match dx=0 dy=0 mad=5.9	#5AE37A	#5AE37A	bg #1A1A1E/#1A1C1E
+open	ago	16,494,19x8	16,494,19x8	0	0	0	0	0	0	match dx=0 dy=0 mad=7.8	#8A8A92	#85858D	bg #1A1A1E/#1A1C1E
+open	Reelly creative fatigue check	63,471,193x14	63,472,192x14	0	1	-1	1	-1	0	match dx=0 dy=1 mad=17.2	#F4F4F6	#F4F4F6	bg #1A1A1E/#1A1C1E
+open	reelly · Pro · Claude Code sonnet	63,491,184x13	62,492,185x13	-1	1	0	1	1	0	match dx=0 dy=1 mad=6.2	#A8A8B0	#A7A7AF	bg #1A1A1E/#1A1C1E
+open	Working	74,509,46x13	71,510,49x13	-3	1	0	1	3	0	match dx=0 dy=1 mad=6.0	#A7A7AF	#A7A7AF	bg #1A1A1E/#1A1C1E
+open	Recent	38,551,43x10	38,552,43x10	0	1	0	1	0	0	match dx=0 dy=1 mad=5.4	#8A8A93	#8A8A93	bg #1A1A1E/#1A1C1E
+open	43	90,552,14x9	90,553,15x9	0	1	1	1	1	0	match dx=1 dy=1 mad=9.9	#8A8A93	#898992	bg #1A1A1E/#1A1C1E
+open	3h	17,586,16x12	17,586,16x11	0	0	0	-1	0	-1	match dx=0 dy=0 mad=4.6	#8A8A93	#8A8A93	bg #1A1A1E/#1A1C1E
+open	ago	16,607,19x8	16,607,19x8	0	0	0	0	0	0	match dx=0 dy=0 mad=7.8	#8A8A92	#85858D	bg #1A1A1E/#1A1C1E
+open	Polish onboarding copy	63,584,157x14	63,585,157x14	0	1	0	1	0	0	match dx=0 dy=1 mad=14.8	#F4F4F6	#F4F4F6	bg #1A1A1E/#1A1C1E
+open	fiftystrong · Pro · Claude Code	62,604,171x13	62,605,171x13	0	1	0	1	0	0	match dx=0 dy=1 mad=6.0	#A8A8B0	#A6A6AE	bg #1A1A1E/#1A1C1E
+open	Closed	62,622,39x11	62,623,38x10	0	1	-1	0	-1	-1	match dx=0 dy=1 mad=7.7	#A8A8B0	#A7A7AF	bg #1A1A1E/#1A1C1E
+open	1d	17,661,17x11	17,661,16x11	0	0	-1	0	-1	0	match dx=0 dy=0 mad=4.4	#8A8A93	#8A8A93	bg #1A1A1E/#1A1C1E
+open	ago	16,682,19x8	16,682,19x8	0	0	0	0	0	0	match dx=0 dy=0 mad=7.8	#8A8A92	#85858D	bg #1A1A1E/#1A1C1E
+open	Fix queued message reconciliation	63,659,231x14	63,660,231x14	0	1	0	1	0	0	match dx=0 dy=1 mad=16.9	#F4F4F6	#F4F4F6	bg #1A1A1E/#1A1C1E
+open	lfg · Pro · Codex	63,679,89x13	63,680,89x13	0	1	0	1	0	0	match dx=0 dy=1 mad=4.3	#A8A8B0	#A7A7AF	bg #1A1A1E/#1A1C1E
+open	Closed	62,697,39x11	62,698,38x10	0	1	-1	0	-1	-1	match dx=0 dy=1 mad=7.7	#A8A8B0	#A7A7AF	bg #1A1A1E/#1A1C1E
+open	2d	17,737,16x11	17,737,16x11	0	0	0	0	0	0	match dx=0 dy=0 mad=3.1	#56565D	#56575D	bg #1A1A1E/#1A1C1E
+open	ago	16,758,19x8	16,757,19x8	0	-1	0	-1	0	0	match dx=0 dy=-1 mad=4.3	#56565D	#54545A	bg #1A1A1E/#1A1C1E
+open	Weekly dependency audit	62,735,174x14	62,736,173x14	0	1	-1	1	-1	0	match dx=0 dy=1 mad=8.7	#909093	#909193	bg #1A1A1E/#1A1C1E
+open	lfg · Air · Codex · from a task	63,754,159x12	63,755,159x12	0	1	0	1	0	0	match dx=0 dy=1 mad=3.1	#67676C	#66666B	bg #1A1A1E/#1A1C1E
+open	Air is offline	62,773,67x10	62,773,67x10	0	0	0	0	0	0	match dx=0 dy=0 mad=4.1	#67676C	#66666B	bg #1A1A1E/#1A1C1E

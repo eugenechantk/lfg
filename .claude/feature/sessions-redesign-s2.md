@@ -9,7 +9,7 @@ https://claude.ai/artifact/F2B1MNbv5oxuscm237M9sD
 
 **Review surface:** the canvas page **S2 build plan (Oct 15)**. It has 13 boards, each showing a live S2 design with numbered pins and the FE/BE work for every pin. This file is the working copy of the same plan.
 
-Status (2026-10-16): **Phases 1–3 verified and committed** (`7dd6046`, docs `2a29201`), **`main` merged** at `2672dad` (Tasks A2, desktop narrow window, runs fold). Phase 4 (desktop list) is next. Worktree `worktree-sessions-redesign-s2`, based on local `main` at `8b0be91`.
+Status (2026-10-16): **Phases 1–4 verified.** Phases 1–3 committed (`7dd6046`, docs `2a29201`), `main` merged at `2672dad`; Phase 4 (desktop list + B12) verified, not yet committed. Phase 5 (ship) waits for Eugene's go-ahead. Worktree `worktree-sessions-redesign-s2`, based on local `main` at `8b0be91`.
 
 Tier: **product** (lfg ships to TestFlight and both Macs).
 
@@ -252,7 +252,7 @@ Dropped 2026-10-15: **B7**, the failure code behind "Not sent · Air is offline"
 
 ## Success criteria
 
-- [ ] SC1: `GET /api/sessions` returns `task` for sessions a scheduled task started, and `GET /api/sessions/resumable` returns `total`. — **Verify by:** curl on the live host after restart; one task session shows its task, and the total matches a count of closed transcripts.
+- [ ] SC1: `GET /api/sessions` returns `task` for sessions a scheduled task started, and `GET /api/sessions/resumable` returns `total`. *(2026-10-16: `total` measured in-process on the Pro's real transcripts (null, then 3,982); `task` covered by `src/task-origin.test.ts`. The live-host curl waits for the Phase 5 server restart.)* — **Verify by:** curl on the live host after restart; one task session shows its task, and the total matches a count of closed transcripts.
 - [x] SC2: Working rows show "Working" and the running time, with no new server field or journal event for it. — **Verify by:** `SessionRowLine` test for a working session; the diff adds no journal event type.
 - [x] SC3: The phone list shows the five groups with the right members: Paused sessions in Needs input, Restarting in Working, no child-agent rows. Collapse state survives a relaunch. — **Verify by:** LFGCore tests on the group rules; simulator screenshot against the live server; relaunch check.
 - [x] SC4: Each row's line 2 matches its state (question, sign-in, Working + time, New reply, idle copy, closed copy). — **Verify by:** `SessionRowLine` tests, one per state; screenshot.
@@ -264,7 +264,7 @@ Dropped 2026-10-15: **B7**, the failure code behind "Not sent · Air is offline"
 - [x] SC10: "Type something else…" answers a question with free text. — **Verify by:** live AskUserQuestion in a test session; the answer lands in the transcript.
 - [ ] SC11: The sign-in flow has a review step on the agent path, and only the switched-on domains are sent. — **Verify by:** live request; server log shows the domain list. *(2026-10-16: review step and per-domain send count checked on the fixture; the delivery leg needs a connected Chrome target and is not yet exercised live.)*
 - [x] SC12: The session sheet holds every action of the old ••• menu, and each one works. — **Verify by:** checklist walk on the simulator, one tap per item. *(2026-10-16: 15/15 walked on a throwaway session; fork's refusal was the rig's two-host claim, `phase3-live/live-checks.md`.)*
-- [ ] SC13: The desktop list at 400pt shows Needs input / Working / Recent with the time column and status lines from live data; offline-host rows stay visible and dimmed. — **Verify by:** `--window-shot 400` for layout plus a live-data probe (memory: window shots render fixtures); stop the Air's server briefly or use the stub host.
+- [x] SC13: The desktop list at 400pt shows Needs input / Working / Recent with the time column and status lines from live data; offline-host rows stay visible and dimmed. — **Verify by:** `--window-shot 400` for layout plus a live-data probe (memory: window shots render fixtures); stop the Air's server briefly or use the stub host.
 - [ ] SC14: No regression in send delivery, prompt answering or the Live Activity. — **Verify by:** existing `bun test` and LFGCore suites green; one end-to-end send + answer on a real session.
 
 ## Steps to verify
@@ -352,6 +352,7 @@ The app follows the system appearance today. **Decision: S2 tokens become the da
 - 2026-10-16 — Terminal Wide follows the board: it shrinks the type to 10.5pt and fits the width (about 58 columns on the iPhone 17 Pro). The old Wide kept 13pt type and scrolled a 120-column grid sideways; that is gone. Alternative: keep the 120-column scroll and deviate from the board. Chosen because the canvas is the reference; easy to restore if 120 columns matter more.
 - 2026-10-16 — Terminal header fills use the colour the canvas draws (#313132) rather than SwiftUI's blend of the CSS `rgba(255,255,255,0.12)` (#28282A).
 - 2026-10-16 — The terminal's keyboard key hides and shows the keyboard, as the board's does ("Hide keyboard" / "Show keyboard"), instead of swapping in SwiftTerm's F-key and symbol panel, which is no longer reachable. Hidden keeps the key row on screen at the board's height; iOS draws its keyboard backdrop below it.
+- 2026-10-16 — Desktop: the window keeps the native macOS window buttons (14pt, macOS 26 spacing) rather than moving them to the board's drawn 12pt traffic lights; system chrome, like the phone's sheets and glass buttons. The switcher's 24pt centring offset is from the board's numbers.
 
 ## Phase 1 — phone list (implementation notes) — VERIFIED 2026-10-15 (verifier round 5 PASS)
 
@@ -441,6 +442,25 @@ Decisions (Phase 3):
 - Terminal: the output sits 12pt in from each side and 10pt under the header; the header fills use the colour the canvas draws (#313132), because Chrome renders the board's white-at-12% brighter than SwiftUI blends it. Key labels stay SF Mono Semibold as the CSS declares (Chrome draws them in Menlo Bold).
 - Terminal key row: one scrolling row; it scrolls when a swipe starts on a key (`KeyRowScrollView` cancels the key's touch).
 
+## Phase 4 — desktop sessions list — VERIFIED 2026-10-16 (verifier round 3 PASS, all five fold states)
+
+Reference: board `dA2-sessions` (400 × 860 window content), spec dumped to the scratchpad `specs/dA2-sessions.txt`.
+
+Scope (DF1–DF5 + B12), in this order:
+1. **B12 server:** `total` on the first page of `GET /api/sessions/resumable`. Counting closed rows needs a lease read per transcript (~3,000 on the Pro), so a background count runs at most once a minute per hidden-folder set and the request returns the cached number (null until the first count lands; old hosts omit it). Pure counting function, tested with injected inputs.
+2. **Data (desktop):** decode `prompt` (question, kind) and `task` on live rows; `total` on resumable pages; keep each host's last good snapshot when a fetch fails (DF5) and mark its rows offline.
+3. **Window chrome (DF1):** traffic lights, the centred Sessions/Tasks switcher with badges (exists; restyle to the board), a round search button on the right. Gone from the toolbar: the connection bar, the inline search field, the group picker and the "+" (desktop does not create sessions).
+4. **Host strip (DF2):** a 30pt row under the toolbar: a dot and name per host (offline: hollow amber ring + "<name> offline"), "· N working", and a "By status" menu on the right (By status / By directory, plus Hidden directories…).
+5. **List (DF3):** three collapsible groups: Needs input (paused folds in; oldest first), Working ("by last activity"; newest first), Recent (idle + closed; newest first; count = idle + the hosts' closed total). Child-agent rows leave the list, as on the phone. Directory mode keeps its groups in the same style.
+6. **Rows (DF4):** time column ("2m" / "ago", amber / green / grey), title, meta "project · host · agent model · from a task", status line ("Asks: …" with a chat icon, "● Working", "Closed", "Ready for your next message" for idle, "<host> is offline" on a dimmed row). No buttons in rows; click opens (Opener), the context menu keeps every action.
+7. **Fixture:** `--window-shot` gets the board's sample (8 rows, Air offline, task badge) so the shot compares 1:1.
+
+Verification: tests (LFGCore, bun incl. the B12 count), desktop build, `--window-shot 400` measured against a board render, a live-data probe on the real hosts, then the visual verifier against `dA2-sessions`.
+
+Implementation notes (2026-10-16):
+- Files: `src/resumable-total.ts` (+ test; B12 count and cache) wired into `listResumable`; LFGCore `DesktopSessionList.swift` (+ `DesktopSessionListTests`, groups / lines / ages / meta) and `SessionListRow.swift` are compiled into the Mac app by `desktop/build.sh`; `desktop/SessionsListS2.swift` (colours, glyphs, search button, host strip, group header, row, `SessionItem` facts); `desktop/LFGSessions.swift` (prompt / task / total decoding, DF5 carry-over, `SessionItem.hostOffline`, the S2 list in place of `List`, title bar, `--window-shot --board` and `--live [--refresh-twice s]`).
+- Decisions: every group sorts newest first (the board shows 2m above 6m; the menu-bar projection's oldest-first was not carried over). Idle rows say "Ready for your next message" (the phone's copy; the board shows no idle row). An offline host's rows are idle for every count and sit in Recent. Child-agent rows leave the list (as on the phone). "· N working" hides at 0. Hidden directories moved into the "By status" menu. The "Unreachable: …" footer is gone (the host strip says it). The window-shot colours are read after converting its Display P3 profile to sRGB.
+
 ## Method from Phase 3 on (after Eugene's correction, 2026-10-16)
 
 Phase 2 took 10 verifier rounds because the verifier was my measuring tool. From Phase 3:
@@ -509,6 +529,12 @@ Phase 2 took 10 verifier rounds because the verifier was my measuring tool. From
 | P3 | **Visual verifier round 5 (terminal Fit/Wide × keyboard up/hidden, sign-in)** | **PASS** — nothing above 1.5pt. Observations: SF Mono vs Menlo widths and arrows (accepted), hidden key row 1.0pt high, "I'm signed in" label 6pt narrower (SF Pro). Not exercised: ctrl latch, review and result sheets (do-not-tap). With rounds 2–4 every Phase 3 board has passed | `…/phase3-r5/evidence.md` |
 | P3 | Tests after Phase 3 fixes | LFGCore 348 Swift Testing + 644 XCTest pass; bun subagents / sessions-last-user-at / sendq-delivery-policy 48 pass | — |
 | Merge | `main` (`2672dad`) into this branch | 5 conflicts, all additive (Models/SessionStore `task` + `purpose`; serve.ts origins then edit-chat tags; RootView: S2 dock + Sessions badge, main's Tasks badge count; improvement log). tsc clean; LFGCore 408 Swift Testing + 644 XCTest; iOS build green; bun 1230 pass after rewriting the 2 menu-safety tests for the S2 options button (`src/ios-session-menu-threading.test.ts`); remaining failures: 2 known resumable-closed timeouts, codexBin (a newer Homebrew/npm codex 0.159.2 is installed on this Mac). Smoke on the simulator against the real hosts: list, Tasks tab (main's A2) in the S2 dock, a real Codex session view | — |
+| P4 | Self-check (`dA2-sessions`, board fixture, 1x) | Separators identical; every element within 1pt except two 1x rounding cases (≤2pt); colours within 2 levels in sRGB; B12 total 3,982 live; DF5 probe keeps Air's row offline; a live click collapses and expands Recent; LFGCore 414 + 644, desktop feature tests 183, bun 1234 (2 known timeouts), iOS build green | `…/phase4-selfcheck/selfcheck.md` |
+| P4 | Visual verifier round 1 (`dA2-sessions`) | FAIL on one fix: the time column lacked tabular digits ("1m", "1d" 3pt off the column). Raised: a hairline under the title bar (off-screen inactive render only), native window buttons vs the board's drawn ones, collapsed state not checkable | `…/phase4-r1/evidence.md` |
+| P4 | Round 1 fixes | Tabular digits (every unit letter at x=26, as on the board); title-bar separator off (on screen, active and inactive: one surface, no line); `--window-shot --collapse <groups>` (Working collapsed: separators 421/496 vs board 420/496); native window buttons kept | `…/phase4-r1-fixes/checks.txt` |
+| P4 | Visual verifier round 2 (open + every fold state) | FAIL on one delta: the Working hint "by last activity" stayed when the group folded (the board hides it). Round-1 fixes confirmed; title-bar line only in the off-screen render | `…/phase4-r2/evidence.md` |
+| P4 | Round 2 fix | The hint shows only while Working is open (open: ink 290–299 vs board 289–299; folded and all-folded: none) | — |
+| P4 | **Visual verifier round 3 (open + each fold + all folded)** | **PASS** after closing two gaps with captures of the current build: on screen the title bar is the board's #1A1A1E with no line (active and inactive); a real click folds Working (chevron ›, hint and rows gone) and a second click restores it byte-identically. Remaining observations ≤1.5pt (1x rounding, SF widths) | `…/phase4-r3/evidence.md`, `…/phase4-r3-gaps/` |
 
 ## Bugs
 

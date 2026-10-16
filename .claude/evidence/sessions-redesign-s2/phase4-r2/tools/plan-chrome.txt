@@ -1,0 +1,39 @@
+# title bar, switcher, search, host strip, pill, dots, separators
+titlebar_bg px 100 5
+titlebar_bg2 px 330 46
+capsule_row26 row 26 112 312 3
+capsule_col128 col 128 4 48 3
+segment_col215 col 215 4 48 3
+tasks_col225 col 225 4 48 3
+capsule_col300 col 300 4 48 3
+badge1_row26 row 26 190 214 3
+badge1_col197 col 197 14 38 3
+badge2_row26 row 26 268 292 3
+badge2_col275 col 275 14 38 3
+search_col362 col 362 4 48 3
+search_row15 row 15 350 396 3
+search_row26 row 26 350 396 6
+search_glyph_x xruns 362 15 384 36
+search_glyph_y yruns 362 15 384 36
+hoststrip_bg px 250 63
+pro_dot_row63 row 63 12 28 3
+pro_dot_col19 col 19 55 71 3
+ring_row63 row 63 58 74 3
+ring_col65 col 65 54 72 3
+pill_row55 row 55 300 390 3
+pill_col310 col 310 47 78 3
+pill_col380 col 380 47 78 3
+chevron_x xruns 364 56 380 70
+chevron_y yruns 364 56 380 70
+list_top_row82 row 82 0 400 3
+sep195_row row 195 0 400 3
+sep270_row row 270 0 400 3
+sep533_row row 533 0 400 3
+sep534_row row 534 0 400 3
+sep797_row row 797 0 400 3
+workdot_row365 row 365 54 76 3
+workdot_col65 col 65 352 378 3
+askicon_x xruns 60 168 78 186
+askicon_y yruns 60 168 78 186
+list_bg px 200 840
+list_bg2 px 5 400

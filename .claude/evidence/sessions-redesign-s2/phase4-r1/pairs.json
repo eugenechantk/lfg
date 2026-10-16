@@ -1,0 +1,31 @@
+{
+  "sources": {
+    "design": {"path": "board-zoomcapture-438x942.png", "pixels_per_unit": 1, "viewport": [438, 942]},
+    "app": {"path": "app-board-400x860-srgb.png", "pixels_per_unit": 1, "viewport": [400, 912]}
+  },
+  "pairs": [
+    {"id": "01-full-window", "state": "board-default", "design": {"source": "design", "rect": [0, 0, 400, 860]}, "app": {"source": "app", "rect": [0, 0, 400, 860]}},
+    {"id": "02-titlebar", "state": "board-default", "design": {"source": "design", "rect": [0, 0, 400, 52]}, "app": {"source": "app", "rect": [0, 0, 400, 52]}},
+    {"id": "03-traffic-lights", "state": "board-default", "design": {"source": "design", "rect": [0, 8, 90, 36]}, "app": {"source": "app", "rect": [0, 8, 90, 36]}},
+    {"id": "04-switcher", "state": "board-default", "design": {"source": "design", "rect": [116, 6, 192, 40]}, "app": {"source": "app", "rect": [116, 6, 192, 40]}},
+    {"id": "05-search-button", "state": "board-default", "design": {"source": "design", "rect": [352, 6, 42, 40]}, "app": {"source": "app", "rect": [352, 6, 42, 40]}},
+    {"id": "06-host-strip", "state": "board-default", "design": {"source": "design", "rect": [0, 52, 400, 31]}, "app": {"source": "app", "rect": [0, 52, 400, 31]}},
+    {"id": "07-host-left", "state": "board-default", "design": {"source": "design", "rect": [8, 52, 210, 24]}, "app": {"source": "app", "rect": [8, 52, 210, 24]}},
+    {"id": "08-by-status", "state": "board-default", "design": {"source": "design", "rect": [300, 50, 90, 26]}, "app": {"source": "app", "rect": [300, 50, 90, 26]}},
+    {"id": "09-header-needs", "state": "expanded", "design": {"source": "design", "rect": [0, 83, 400, 38]}, "app": {"source": "app", "rect": [0, 83, 400, 38]}},
+    {"id": "10-row-needs-question", "state": "needs-input", "design": {"source": "design", "rect": [0, 120, 400, 76]}, "app": {"source": "app", "rect": [0, 120, 400, 76]}},
+    {"id": "11-row-needs-permission", "state": "needs-input", "design": {"source": "design", "rect": [0, 195, 400, 76]}, "app": {"source": "app", "rect": [0, 195, 400, 76]}},
+    {"id": "12-header-working", "state": "expanded-hint", "design": {"source": "design", "rect": [0, 271, 400, 38]}, "app": {"source": "app", "rect": [0, 271, 400, 38]}},
+    {"id": "13-row-working-1", "state": "working", "design": {"source": "design", "rect": [0, 308, 400, 76]}, "app": {"source": "app", "rect": [0, 308, 400, 76]}},
+    {"id": "14-row-working-2-task", "state": "working-from-task", "design": {"source": "design", "rect": [0, 383, 400, 76]}, "app": {"source": "app", "rect": [0, 383, 400, 76]}},
+    {"id": "15-row-working-3", "state": "working", "design": {"source": "design", "rect": [0, 459, 400, 76]}, "app": {"source": "app", "rect": [0, 459, 400, 76]}},
+    {"id": "16-header-recent", "state": "expanded-total", "design": {"source": "design", "rect": [0, 534, 400, 38]}, "app": {"source": "app", "rect": [0, 534, 400, 38]}},
+    {"id": "17-row-recent-closed-1", "state": "closed", "design": {"source": "design", "rect": [0, 572, 400, 76]}, "app": {"source": "app", "rect": [0, 572, 400, 76]}},
+    {"id": "18-row-recent-closed-2", "state": "closed", "design": {"source": "design", "rect": [0, 647, 400, 76]}, "app": {"source": "app", "rect": [0, 647, 400, 76]}},
+    {"id": "19-row-recent-offline", "state": "offline-dimmed", "design": {"source": "design", "rect": [0, 722, 400, 77]}, "app": {"source": "app", "rect": [0, 722, 400, 77]}},
+    {"id": "20-time-1m", "state": "working", "design": {"source": "design", "rect": [12, 316, 32, 40]}, "app": {"source": "app", "rect": [12, 316, 32, 40]}},
+    {"id": "21-time-1d", "state": "closed", "design": {"source": "design", "rect": [12, 655, 32, 40]}, "app": {"source": "app", "rect": [12, 655, 32, 40]}},
+    {"id": "22-by-status-chevron", "state": "board-default", "design": {"source": "design", "rect": [362, 54, 20, 18]}, "app": {"source": "app", "rect": [362, 54, 20, 18]}},
+    {"id": "23-titlebar-bottom-edge", "state": "board-default", "design": {"source": "design", "rect": [100, 44, 200, 14]}, "app": {"source": "app", "rect": [100, 44, 200, 14]}}
+  ]
+}

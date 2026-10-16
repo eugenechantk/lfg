@@ -1,0 +1,1714 @@
+{
+ "sources": {
+  "board-open": {
+   "path": "../board-open.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    400,
+    860
+   ]
+  },
+  "app-open": {
+   "path": "../app-open-srgb.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    400,
+    912
+   ]
+  },
+  "board-fold-needs": {
+   "path": "../board-fold-needs.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    400,
+    860
+   ]
+  },
+  "app-fold-needs": {
+   "path": "../app-fold-needs-srgb.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    400,
+    912
+   ]
+  },
+  "board-fold-working": {
+   "path": "../board-fold-working.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    400,
+    860
+   ]
+  },
+  "app-fold-working": {
+   "path": "../app-fold-working-srgb.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    400,
+    912
+   ]
+  },
+  "board-fold-recent": {
+   "path": "../board-fold-recent.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    400,
+    860
+   ]
+  },
+  "app-fold-recent": {
+   "path": "../app-fold-recent-srgb.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    400,
+    912
+   ]
+  },
+  "board-fold-all": {
+   "path": "../board-fold-all.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    400,
+    860
+   ]
+  },
+  "app-fold-all": {
+   "path": "../app-fold-all-srgb.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    400,
+    912
+   ]
+  }
+ },
+ "pairs": [
+  {
+   "id": "open-title-bar",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     0,
+     0,
+     400,
+     52
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     0,
+     0,
+     400,
+     52
+    ]
+   }
+  },
+  {
+   "id": "open-native-window-controls-exception",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     0,
+     8,
+     80,
+     36
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     0,
+     8,
+     80,
+     36
+    ]
+   }
+  },
+  {
+   "id": "open-segmented-control",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     118,
+     7,
+     188,
+     38
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     118,
+     7,
+     188,
+     38
+    ]
+   }
+  },
+  {
+   "id": "open-search-button",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     354,
+     7,
+     38,
+     38
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     354,
+     7,
+     38,
+     38
+    ]
+   }
+  },
+  {
+   "id": "open-host-strip",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     0,
+     50,
+     400,
+     32
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     0,
+     50,
+     400,
+     32
+    ]
+   }
+  },
+  {
+   "id": "open-by-status-pill",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     302,
+     49,
+     86,
+     28
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     302,
+     49,
+     86,
+     28
+    ]
+   }
+  },
+  {
+   "id": "open-list-top-border",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     0,
+     76,
+     400,
+     12
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     0,
+     76,
+     400,
+     12
+    ]
+   }
+  },
+  {
+   "id": "open-header-needs",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     0,
+     81,
+     400,
+     42
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     0,
+     82,
+     400,
+     42
+    ]
+   }
+  },
+  {
+   "id": "open-row-01-choose-the-launch-direction",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     0,
+     118,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     0,
+     118,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "open-row-02-restore-remote-authenticatio",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     0,
+     193,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     0,
+     194,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "open-header-working",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     0,
+     269,
+     400,
+     42
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     0,
+     270,
+     400,
+     42
+    ]
+   }
+  },
+  {
+   "id": "open-row-03-make-the-desktop-window-narr",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     0,
+     306,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     0,
+     307,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "open-row-04-nightly-testflight-crash-swe",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     0,
+     381,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     0,
+     382,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "open-row-05-reelly-creative-fatigue-chec",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     0,
+     457,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     0,
+     458,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "open-header-recent",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     0,
+     532,
+     400,
+     42
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     0,
+     533,
+     400,
+     42
+    ]
+   }
+  },
+  {
+   "id": "open-row-06-polish-onboarding-copy",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     0,
+     569,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     0,
+     570,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "open-row-07-fix-queued-message-reconcili",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     0,
+     645,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     0,
+     646,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "open-row-08-weekly-dependency-audit",
+   "state": "open",
+   "design": {
+    "source": "board-open",
+    "rect": [
+     0,
+     720,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-open",
+    "rect": [
+     0,
+     721,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-title-bar",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     0,
+     0,
+     400,
+     52
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     0,
+     0,
+     400,
+     52
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-native-window-controls-exception",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     0,
+     8,
+     80,
+     36
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     0,
+     8,
+     80,
+     36
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-segmented-control",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     118,
+     7,
+     188,
+     38
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     118,
+     7,
+     188,
+     38
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-search-button",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     354,
+     7,
+     38,
+     38
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     354,
+     7,
+     38,
+     38
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-host-strip",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     0,
+     50,
+     400,
+     32
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     0,
+     50,
+     400,
+     32
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-by-status-pill",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     302,
+     49,
+     86,
+     28
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     302,
+     49,
+     86,
+     28
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-list-top-border",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     0,
+     76,
+     400,
+     12
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     0,
+     76,
+     400,
+     12
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-header-needs",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     0,
+     81,
+     400,
+     42
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     0,
+     82,
+     400,
+     42
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-header-working",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     0,
+     118,
+     400,
+     42
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     0,
+     118,
+     400,
+     42
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-row-01-make-the-desktop-window-narr",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     0,
+     156,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     0,
+     157,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-row-02-nightly-testflight-crash-swe",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     0,
+     231,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     0,
+     232,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-row-03-reelly-creative-fatigue-chec",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     0,
+     306,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     0,
+     307,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-header-recent",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     0,
+     381,
+     400,
+     42
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     0,
+     382,
+     400,
+     42
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-row-04-polish-onboarding-copy",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     0,
+     419,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     0,
+     421,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-row-05-fix-queued-message-reconcili",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     0,
+     494,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     0,
+     495,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-needs-row-06-weekly-dependency-audit",
+   "state": "fold-needs",
+   "design": {
+    "source": "board-fold-needs",
+    "rect": [
+     0,
+     569,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-needs",
+    "rect": [
+     0,
+     570,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-working-title-bar",
+   "state": "fold-working",
+   "design": {
+    "source": "board-fold-working",
+    "rect": [
+     0,
+     0,
+     400,
+     52
+    ]
+   },
+   "app": {
+    "source": "app-fold-working",
+    "rect": [
+     0,
+     0,
+     400,
+     52
+    ]
+   }
+  },
+  {
+   "id": "fold-working-native-window-controls-exception",
+   "state": "fold-working",
+   "design": {
+    "source": "board-fold-working",
+    "rect": [
+     0,
+     8,
+     80,
+     36
+    ]
+   },
+   "app": {
+    "source": "app-fold-working",
+    "rect": [
+     0,
+     8,
+     80,
+     36
+    ]
+   }
+  },
+  {
+   "id": "fold-working-segmented-control",
+   "state": "fold-working",
+   "design": {
+    "source": "board-fold-working",
+    "rect": [
+     118,
+     7,
+     188,
+     38
+    ]
+   },
+   "app": {
+    "source": "app-fold-working",
+    "rect": [
+     118,
+     7,
+     188,
+     38
+    ]
+   }
+  },
+  {
+   "id": "fold-working-search-button",
+   "state": "fold-working",
+   "design": {
+    "source": "board-fold-working",
+    "rect": [
+     354,
+     7,
+     38,
+     38
+    ]
+   },
+   "app": {
+    "source": "app-fold-working",
+    "rect": [
+     354,
+     7,
+     38,
+     38
+    ]
+   }
+  },
+  {
+   "id": "fold-working-host-strip",
+   "state": "fold-working",
+   "design": {
+    "source": "board-fold-working",
+    "rect": [
+     0,
+     50,
+     400,
+     32
+    ]
+   },
+   "app": {
+    "source": "app-fold-working",
+    "rect": [
+     0,
+     50,
+     400,
+     32
+    ]
+   }
+  },
+  {
+   "id": "fold-working-by-status-pill",
+   "state": "fold-working",
+   "design": {
+    "source": "board-fold-working",
+    "rect": [
+     302,
+     49,
+     86,
+     28
+    ]
+   },
+   "app": {
+    "source": "app-fold-working",
+    "rect": [
+     302,
+     49,
+     86,
+     28
+    ]
+   }
+  },
+  {
+   "id": "fold-working-list-top-border",
+   "state": "fold-working",
+   "design": {
+    "source": "board-fold-working",
+    "rect": [
+     0,
+     76,
+     400,
+     12
+    ]
+   },
+   "app": {
+    "source": "app-fold-working",
+    "rect": [
+     0,
+     76,
+     400,
+     12
+    ]
+   }
+  },
+  {
+   "id": "fold-working-header-needs",
+   "state": "fold-working",
+   "design": {
+    "source": "board-fold-working",
+    "rect": [
+     0,
+     81,
+     400,
+     42
+    ]
+   },
+   "app": {
+    "source": "app-fold-working",
+    "rect": [
+     0,
+     82,
+     400,
+     42
+    ]
+   }
+  },
+  {
+   "id": "fold-working-row-01-choose-the-launch-direction",
+   "state": "fold-working",
+   "design": {
+    "source": "board-fold-working",
+    "rect": [
+     0,
+     118,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-working",
+    "rect": [
+     0,
+     118,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-working-row-02-restore-remote-authenticatio",
+   "state": "fold-working",
+   "design": {
+    "source": "board-fold-working",
+    "rect": [
+     0,
+     193,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-working",
+    "rect": [
+     0,
+     194,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-working-header-working",
+   "state": "fold-working",
+   "design": {
+    "source": "board-fold-working",
+    "rect": [
+     0,
+     269,
+     400,
+     42
+    ]
+   },
+   "app": {
+    "source": "app-fold-working",
+    "rect": [
+     0,
+     270,
+     400,
+     42
+    ]
+   }
+  },
+  {
+   "id": "fold-working-header-recent",
+   "state": "fold-working",
+   "design": {
+    "source": "board-fold-working",
+    "rect": [
+     0,
+     306,
+     400,
+     42
+    ]
+   },
+   "app": {
+    "source": "app-fold-working",
+    "rect": [
+     0,
+     306,
+     400,
+     42
+    ]
+   }
+  },
+  {
+   "id": "fold-working-row-03-polish-onboarding-copy",
+   "state": "fold-working",
+   "design": {
+    "source": "board-fold-working",
+    "rect": [
+     0,
+     344,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-working",
+    "rect": [
+     0,
+     345,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-working-row-04-fix-queued-message-reconcili",
+   "state": "fold-working",
+   "design": {
+    "source": "board-fold-working",
+    "rect": [
+     0,
+     419,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-working",
+    "rect": [
+     0,
+     421,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-working-row-05-weekly-dependency-audit",
+   "state": "fold-working",
+   "design": {
+    "source": "board-fold-working",
+    "rect": [
+     0,
+     494,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-working",
+    "rect": [
+     0,
+     495,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-recent-title-bar",
+   "state": "fold-recent",
+   "design": {
+    "source": "board-fold-recent",
+    "rect": [
+     0,
+     0,
+     400,
+     52
+    ]
+   },
+   "app": {
+    "source": "app-fold-recent",
+    "rect": [
+     0,
+     0,
+     400,
+     52
+    ]
+   }
+  },
+  {
+   "id": "fold-recent-native-window-controls-exception",
+   "state": "fold-recent",
+   "design": {
+    "source": "board-fold-recent",
+    "rect": [
+     0,
+     8,
+     80,
+     36
+    ]
+   },
+   "app": {
+    "source": "app-fold-recent",
+    "rect": [
+     0,
+     8,
+     80,
+     36
+    ]
+   }
+  },
+  {
+   "id": "fold-recent-segmented-control",
+   "state": "fold-recent",
+   "design": {
+    "source": "board-fold-recent",
+    "rect": [
+     118,
+     7,
+     188,
+     38
+    ]
+   },
+   "app": {
+    "source": "app-fold-recent",
+    "rect": [
+     118,
+     7,
+     188,
+     38
+    ]
+   }
+  },
+  {
+   "id": "fold-recent-search-button",
+   "state": "fold-recent",
+   "design": {
+    "source": "board-fold-recent",
+    "rect": [
+     354,
+     7,
+     38,
+     38
+    ]
+   },
+   "app": {
+    "source": "app-fold-recent",
+    "rect": [
+     354,
+     7,
+     38,
+     38
+    ]
+   }
+  },
+  {
+   "id": "fold-recent-host-strip",
+   "state": "fold-recent",
+   "design": {
+    "source": "board-fold-recent",
+    "rect": [
+     0,
+     50,
+     400,
+     32
+    ]
+   },
+   "app": {
+    "source": "app-fold-recent",
+    "rect": [
+     0,
+     50,
+     400,
+     32
+    ]
+   }
+  },
+  {
+   "id": "fold-recent-by-status-pill",
+   "state": "fold-recent",
+   "design": {
+    "source": "board-fold-recent",
+    "rect": [
+     302,
+     49,
+     86,
+     28
+    ]
+   },
+   "app": {
+    "source": "app-fold-recent",
+    "rect": [
+     302,
+     49,
+     86,
+     28
+    ]
+   }
+  },
+  {
+   "id": "fold-recent-list-top-border",
+   "state": "fold-recent",
+   "design": {
+    "source": "board-fold-recent",
+    "rect": [
+     0,
+     76,
+     400,
+     12
+    ]
+   },
+   "app": {
+    "source": "app-fold-recent",
+    "rect": [
+     0,
+     76,
+     400,
+     12
+    ]
+   }
+  },
+  {
+   "id": "fold-recent-header-needs",
+   "state": "fold-recent",
+   "design": {
+    "source": "board-fold-recent",
+    "rect": [
+     0,
+     81,
+     400,
+     42
+    ]
+   },
+   "app": {
+    "source": "app-fold-recent",
+    "rect": [
+     0,
+     82,
+     400,
+     42
+    ]
+   }
+  },
+  {
+   "id": "fold-recent-row-01-choose-the-launch-direction",
+   "state": "fold-recent",
+   "design": {
+    "source": "board-fold-recent",
+    "rect": [
+     0,
+     118,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-recent",
+    "rect": [
+     0,
+     118,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-recent-row-02-restore-remote-authenticatio",
+   "state": "fold-recent",
+   "design": {
+    "source": "board-fold-recent",
+    "rect": [
+     0,
+     193,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-recent",
+    "rect": [
+     0,
+     194,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-recent-header-working",
+   "state": "fold-recent",
+   "design": {
+    "source": "board-fold-recent",
+    "rect": [
+     0,
+     269,
+     400,
+     42
+    ]
+   },
+   "app": {
+    "source": "app-fold-recent",
+    "rect": [
+     0,
+     270,
+     400,
+     42
+    ]
+   }
+  },
+  {
+   "id": "fold-recent-row-03-make-the-desktop-window-narr",
+   "state": "fold-recent",
+   "design": {
+    "source": "board-fold-recent",
+    "rect": [
+     0,
+     306,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-recent",
+    "rect": [
+     0,
+     307,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-recent-row-04-nightly-testflight-crash-swe",
+   "state": "fold-recent",
+   "design": {
+    "source": "board-fold-recent",
+    "rect": [
+     0,
+     381,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-recent",
+    "rect": [
+     0,
+     382,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-recent-row-05-reelly-creative-fatigue-chec",
+   "state": "fold-recent",
+   "design": {
+    "source": "board-fold-recent",
+    "rect": [
+     0,
+     457,
+     400,
+     80
+    ]
+   },
+   "app": {
+    "source": "app-fold-recent",
+    "rect": [
+     0,
+     458,
+     400,
+     80
+    ]
+   }
+  },
+  {
+   "id": "fold-recent-header-recent",
+   "state": "fold-recent",
+   "design": {
+    "source": "board-fold-recent",
+    "rect": [
+     0,
+     532,
+     400,
+     42
+    ]
+   },
+   "app": {
+    "source": "app-fold-recent",
+    "rect": [
+     0,
+     533,
+     400,
+     42
+    ]
+   }
+  },
+  {
+   "id": "fold-all-title-bar",
+   "state": "fold-all",
+   "design": {
+    "source": "board-fold-all",
+    "rect": [
+     0,
+     0,
+     400,
+     52
+    ]
+   },
+   "app": {
+    "source": "app-fold-all",
+    "rect": [
+     0,
+     0,
+     400,
+     52
+    ]
+   }
+  },
+  {
+   "id": "fold-all-native-window-controls-exception",
+   "state": "fold-all",
+   "design": {
+    "source": "board-fold-all",
+    "rect": [
+     0,
+     8,
+     80,
+     36
+    ]
+   },
+   "app": {
+    "source": "app-fold-all",
+    "rect": [
+     0,
+     8,
+     80,
+     36
+    ]
+   }
+  },
+  {
+   "id": "fold-all-segmented-control",
+   "state": "fold-all",
+   "design": {
+    "source": "board-fold-all",
+    "rect": [
+     118,
+     7,
+     188,
+     38
+    ]
+   },
+   "app": {
+    "source": "app-fold-all",
+    "rect": [
+     118,
+     7,
+     188,
+     38
+    ]
+   }
+  },
+  {
+   "id": "fold-all-search-button",
+   "state": "fold-all",
+   "design": {
+    "source": "board-fold-all",
+    "rect": [
+     354,
+     7,
+     38,
+     38
+    ]
+   },
+   "app": {
+    "source": "app-fold-all",
+    "rect": [
+     354,
+     7,
+     38,
+     38
+    ]
+   }
+  },
+  {
+   "id": "fold-all-host-strip",
+   "state": "fold-all",
+   "design": {
+    "source": "board-fold-all",
+    "rect": [
+     0,
+     50,
+     400,
+     32
+    ]
+   },
+   "app": {
+    "source": "app-fold-all",
+    "rect": [
+     0,
+     50,
+     400,
+     32
+    ]
+   }
+  },
+  {
+   "id": "fold-all-by-status-pill",
+   "state": "fold-all",
+   "design": {
+    "source": "board-fold-all",
+    "rect": [
+     302,
+     49,
+     86,
+     28
+    ]
+   },
+   "app": {
+    "source": "app-fold-all",
+    "rect": [
+     302,
+     49,
+     86,
+     28
+    ]
+   }
+  },
+  {
+   "id": "fold-all-list-top-border",
+   "state": "fold-all",
+   "design": {
+    "source": "board-fold-all",
+    "rect": [
+     0,
+     76,
+     400,
+     12
+    ]
+   },
+   "app": {
+    "source": "app-fold-all",
+    "rect": [
+     0,
+     76,
+     400,
+     12
+    ]
+   }
+  },
+  {
+   "id": "fold-all-header-needs",
+   "state": "fold-all",
+   "design": {
+    "source": "board-fold-all",
+    "rect": [
+     0,
+     81,
+     400,
+     42
+    ]
+   },
+   "app": {
+    "source": "app-fold-all",
+    "rect": [
+     0,
+     82,
+     400,
+     42
+    ]
+   }
+  },
+  {
+   "id": "fold-all-header-working",
+   "state": "fold-all",
+   "design": {
+    "source": "board-fold-all",
+    "rect": [
+     0,
+     118,
+     400,
+     42
+    ]
+   },
+   "app": {
+    "source": "app-fold-all",
+    "rect": [
+     0,
+     118,
+     400,
+     42
+    ]
+   }
+  },
+  {
+   "id": "fold-all-header-recent",
+   "state": "fold-all",
+   "design": {
+    "source": "board-fold-all",
+    "rect": [
+     0,
+     156,
+     400,
+     42
+    ]
+   },
+   "app": {
+    "source": "app-fold-all",
+    "rect": [
+     0,
+     157,
+     400,
+     42
+    ]
+   }
+  }
+ ]
+}

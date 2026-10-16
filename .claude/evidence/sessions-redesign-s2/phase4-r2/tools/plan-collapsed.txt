@@ -1,0 +1,8 @@
+# separators / list structure (column x=380 avoids all text except hints; x=10 for header-only ink)
+seps_col380 col 380 76 860 3
+hint_area_working xruns 290 280 395 306
+hint_area_working_y yruns 290 280 395 306
+hint_area_needs xruns 290 92 395 118
+hint_area_recent xruns 290 92 395 118
+chevrons_x10_40 yruns 14 90 34 860
+headers_x36_120 yruns 36 90 120 860

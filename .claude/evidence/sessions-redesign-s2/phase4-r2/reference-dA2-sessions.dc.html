@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LFG narrow — Sessions</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#1B1B1E}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 400px; height: 860px; box-sizing: border-box; display: flex; flex-direction: column; background: #1B1B1E; color: #F4F4F6; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif; font-size: 13px; line-height: 1.35">
+
+  <div style="display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 12px 0 14px; flex: none">
+    <div style="display: flex; gap: 8px; flex: none" aria-hidden="true">
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #FF5F57"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #FEBC2E"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #28C840"></span>
+    </div>
+    <div style="flex: 1; display: flex; justify-content: center">
+      <div role="tablist" aria-label="View" style="display: flex; padding: 3px; border-radius: 16px; background: rgba(255,255,255,0.07)">
+        <span role="tab" aria-selected="true" style="height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 11px; border-radius: 13px; background: rgba(255,255,255,0.16); font-size: 12px; font-weight: 600">Sessions<span style="min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: #FF9F0A; color: #1A1206; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center">2</span></span>
+        <a href="dA2-list.dc.html" role="tab" aria-selected="false" style="height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 11px; border-radius: 13px; color: #C9CBD3; font-size: 12px; font-weight: 600">Tasks<span style="min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: rgba(255,159,10,0.9); color: #1A1206; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center">2</span></a>
+      </div>
+    </div>
+    <button aria-label="Search sessions" style="flex: none; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 15px; background: rgba(255,255,255,0.07); color: #D6D7DD">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+    </button>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 8px; padding: 0 16px 8px; font-size: 12px; color: #A8A8B0; flex: none">
+    <span style="width: 7px; height: 7px; border-radius: 4px; background: #32D74B"></span><span>Pro</span>
+    <span style="width: 7px; height: 7px; border-radius: 4px; border: 1.5px solid #FF9F0A; box-sizing: border-box; margin-left: 4px"></span><span style="color: #FFB340">Air offline</span>
+    <span style="color: #8A8A93">· 3 working</span>
+    <span style="flex: 1"></span>
+    <button style="height: 22px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border: 0; border-radius: 11px; background: rgba(255,255,255,0.06); font-size: 11px; color: #C9CBD3">By status
+      <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg>
+    </button>
+  </div>
+
+  <div style="flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; padding-bottom: 12px; border-top: 1px solid rgba(255,255,255,0.06)">
+    <sc-for list="{{sections}}" as="sec" hint-placeholder-count="3">
+      <button onClick="{{sec.toggle}}" aria-expanded="{{sec.expanded}}" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 14px 16px 6px 18px; border: 0; background: transparent; text-align: left; cursor: pointer">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#8A8A93" stroke-width="2.4" aria-hidden="true"><path d="{{sec.chevron}}"></path></svg>
+        <span style="font-size: 13px; font-weight: 600; color: {{sec.color}}">{{sec.label}}</span>
+        <span style="font-size: 12px; color: #8A8A93">{{sec.count}}</span>
+        <span style="flex: 1"></span>
+        <span style="font-size: 11px; color: #8A8A93">{{sec.hint}}</span>
+      </button>
+      <sc-for list="{{sec.rows}}" as="r" hint-placeholder-count="2">
+        <a href="#" style="display: flex; align-items: stretch; padding-left: 16px; opacity: {{r.opacity}}">
+          <span style="flex: 0 0 46px; padding-top: 10px; display: flex; flex-direction: column">
+            <span style="font-size: 14px; line-height: 19px; font-weight: 650; font-variant-numeric: tabular-nums; color: {{r.timeColor}}">{{r.time}}</span>
+            <span style="font-size: 11px; line-height: 15px; color: #8A8A93">{{r.timeSub}}</span>
+          </span>
+          <span style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 9px 14px 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06)">
+            <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+              <span style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.title}}</span>
+              <span style="font-size: 12px; color: #A8A8B0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.meta}}</span>
+              <span style="display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 12px; color: {{r.lineColor}}">
+                <sc-if value="{{r.ask}}" hint-placeholder-val="{{false}}"><svg style="flex: none" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#FFB340" stroke-width="1.6" aria-hidden="true"><path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h7A1.5 1.5 0 0 1 13 4.5v5a1.5 1.5 0 0 1-1.5 1.5H7l-3 2.5V11A1.5 1.5 0 0 1 3 9.5z"></path></svg></sc-if>
+                <sc-if value="{{r.work}}" hint-placeholder-val="{{true}}"><span style="flex: none; width: 7px; height: 7px; border-radius: 4px; background: #32D74B; box-shadow: 0 0 0 3px rgba(50,215,75,0.22)"></span></sc-if>
+                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.line}}</span>
+              </span>
+            </span>
+          </span>
+        </a>
+      </sc-for>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":400,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const c = st.collapsed || { needs: false, working: false, recent: false };
+    const open = 'M4 6l4 4 4-4', shut = 'M6 4l4 4-4 4';
+    const ink = '#F4F4F6', grey = '#8A8A93', green = '#5BE37A', amber = '#FFB340';
+    const row = (o) => Object.assign({ timeColor: ink, ask: false, work: false, lineColor: '#A8A8B0', opacity: 1 }, o);
+    const defs = [
+      { id: 'needs', label: 'Needs input', color: amber, hint: '', rows: [
+        row({ time: '2m', timeSub: 'ago', timeColor: amber, title: 'Choose the launch direction', meta: 'fiftystrong · Pro · Claude Code opus', ask: true, line: 'Asks: which launch page direction first?', lineColor: amber }),
+        row({ time: '6m', timeSub: 'ago', timeColor: amber, title: 'Restore remote authentication', meta: 'lfg · Pro · Codex gpt-6.1', ask: true, line: 'Asks to run launchctl', lineColor: amber })
+      ]},
+      { id: 'working', label: 'Working', color: grey, hint: 'by last activity', rows: [
+        row({ time: '1m', timeSub: 'ago', timeColor: green, title: 'Make the desktop window narrower', meta: 'lfg · Pro · Claude Code opus', work: true, line: 'Working' }),
+        row({ time: '4m', timeSub: 'ago', timeColor: green, title: 'Nightly TestFlight crash sweep', meta: 'lfg · Pro · Codex · from a task', work: true, line: 'Working' }),
+        row({ time: '9m', timeSub: 'ago', timeColor: green, title: 'Reelly creative fatigue check', meta: 'reelly · Pro · Claude Code sonnet', work: true, line: 'Working' })
+      ]},
+      { id: 'recent', label: 'Recent', color: grey, hint: '', rows: [
+        row({ time: '3h', timeSub: 'ago', timeColor: grey, title: 'Polish onboarding copy', meta: 'fiftystrong · Pro · Claude Code', line: 'Closed' }),
+        row({ time: '1d', timeSub: 'ago', timeColor: grey, title: 'Fix queued message reconciliation', meta: 'lfg · Pro · Codex', line: 'Closed' }),
+        row({ time: '2d', timeSub: 'ago', timeColor: grey, title: 'Weekly dependency audit', meta: 'lfg · Air · Codex · from a task', line: 'Air is offline', opacity: 0.5 })
+      ]}
+    ];
+    return {
+      sections: defs.map((d) => ({
+        label: d.label, color: d.color, count: d.id === 'recent' ? '43' : String(d.rows.length), hint: c[d.id] ? '' : d.hint,
+        chevron: c[d.id] ? shut : open, expanded: c[d.id] ? 'false' : 'true',
+        rows: c[d.id] ? [] : d.rows,
+        toggle: () => { const n = Object.assign({}, c); n[d.id] = !c[d.id]; this.setState({ collapsed: n }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

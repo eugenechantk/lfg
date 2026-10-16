@@ -1,0 +1,932 @@
+{
+  "manifest_sha256": "9b1c2db10680173bd77b0ca44c850983b6dc99a171ddec44d909e6ee447dbdab",
+  "sources": {
+    "design": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase4-r1/board-zoomcapture-438x942.png",
+      "sha256": "ad80760b312cf2e6e9b0a9341e4be145435037140ce389e7069a04cb92555447",
+      "pixels_per_unit": 1,
+      "viewport": [
+        438,
+        942
+      ],
+      "pixel_size": [
+        438,
+        942
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        438,
+        942
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "app": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase4-r1/app-board-400x860-srgb.png",
+      "sha256": "a8f7885d3a162af1213093827d9f1e7deb24e26f15dd52ae3a7b55d3aa63fd0c",
+      "pixels_per_unit": 1,
+      "viewport": [
+        400,
+        912
+      ],
+      "pixel_size": [
+        400,
+        912
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        400,
+        912
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": "3b684200acaa8313e6ae8e1231d805769898cb74d6ab124c3fc220757e46faef",
+      "capture_kind": "unspecified; confirm before measuring colors"
+    }
+  },
+  "pairs": [
+    {
+      "id": "01-full-window",
+      "state": "board-default",
+      "design": {
+        "source": "design",
+        "rect": [
+          0,
+          0,
+          400,
+          860
+        ],
+        "pixel_box": [
+          0,
+          0,
+          400,
+          860
+        ],
+        "crop": "01-full-window-design.png",
+        "sha256": "662014e52ccefebb2bcd994d9013129f540c9dd9a36be922359668a0bc9b089a"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          0,
+          0,
+          400,
+          860
+        ],
+        "pixel_box": [
+          0,
+          0,
+          400,
+          860
+        ],
+        "crop": "01-full-window-app.png",
+        "sha256": "4a6e79aa55cf4cf91ab3aa001ac6241381bcab3ed113439ca6e2f1193b5c1e17"
+      }
+    },
+    {
+      "id": "02-titlebar",
+      "state": "board-default",
+      "design": {
+        "source": "design",
+        "rect": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "pixel_box": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "crop": "02-titlebar-design.png",
+        "sha256": "1cb33f915b5e2301414a9ef8d36b18c4aa116289c85ec94d0501436598a6ba32"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "pixel_box": [
+          0,
+          0,
+          400,
+          52
+        ],
+        "crop": "02-titlebar-app.png",
+        "sha256": "6e7092cd86b59051fc051a3f3c9c769b365cdb78beae35648eed807476faa917"
+      }
+    },
+    {
+      "id": "03-traffic-lights",
+      "state": "board-default",
+      "design": {
+        "source": "design",
+        "rect": [
+          0,
+          8,
+          90,
+          36
+        ],
+        "pixel_box": [
+          0,
+          8,
+          90,
+          44
+        ],
+        "crop": "03-traffic-lights-design.png",
+        "sha256": "9d15d8688891c385d98ba9f739d02821fdd1f174e51a5e5093195f4c64fb0cbd"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          0,
+          8,
+          90,
+          36
+        ],
+        "pixel_box": [
+          0,
+          8,
+          90,
+          44
+        ],
+        "crop": "03-traffic-lights-app.png",
+        "sha256": "56663b19ace0d75aed6fa711186ef2cf5c3c6756175697cf321c190d0ccb8b55"
+      }
+    },
+    {
+      "id": "04-switcher",
+      "state": "board-default",
+      "design": {
+        "source": "design",
+        "rect": [
+          116,
+          6,
+          192,
+          40
+        ],
+        "pixel_box": [
+          116,
+          6,
+          308,
+          46
+        ],
+        "crop": "04-switcher-design.png",
+        "sha256": "e346566378d18554827e5b7a7c878e68460413f34125533275d79722ed8f05de"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          116,
+          6,
+          192,
+          40
+        ],
+        "pixel_box": [
+          116,
+          6,
+          308,
+          46
+        ],
+        "crop": "04-switcher-app.png",
+        "sha256": "e1c12f6a186f347197db04f4f5184479b368d2512c8fa5f7aeddb4c794537d9f"
+      }
+    },
+    {
+      "id": "05-search-button",
+      "state": "board-default",
+      "design": {
+        "source": "design",
+        "rect": [
+          352,
+          6,
+          42,
+          40
+        ],
+        "pixel_box": [
+          352,
+          6,
+          394,
+          46
+        ],
+        "crop": "05-search-button-design.png",
+        "sha256": "be16d1a09b47c52ad86ccac291fa0722d1927992df822ad80af779fc803ef227"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          352,
+          6,
+          42,
+          40
+        ],
+        "pixel_box": [
+          352,
+          6,
+          394,
+          46
+        ],
+        "crop": "05-search-button-app.png",
+        "sha256": "b2c14ab9469611f10d6f5c1f5283563bf803d674203367034d7eeb3b3f2383e1"
+      }
+    },
+    {
+      "id": "06-host-strip",
+      "state": "board-default",
+      "design": {
+        "source": "design",
+        "rect": [
+          0,
+          52,
+          400,
+          31
+        ],
+        "pixel_box": [
+          0,
+          52,
+          400,
+          83
+        ],
+        "crop": "06-host-strip-design.png",
+        "sha256": "8f20833eaeb2e89a7bbea28d7948e5ccba9f3fbc6599be1c15d314045c83901b"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          0,
+          52,
+          400,
+          31
+        ],
+        "pixel_box": [
+          0,
+          52,
+          400,
+          83
+        ],
+        "crop": "06-host-strip-app.png",
+        "sha256": "f26758d42db012fffb0c9f54dc46b09d56d72eee5a38ce038bbc79b720dc76ab"
+      }
+    },
+    {
+      "id": "07-host-left",
+      "state": "board-default",
+      "design": {
+        "source": "design",
+        "rect": [
+          8,
+          52,
+          210,
+          24
+        ],
+        "pixel_box": [
+          8,
+          52,
+          218,
+          76
+        ],
+        "crop": "07-host-left-design.png",
+        "sha256": "64a4387b59416fdcd2f30d566487e0d2ebb44e5d900a40526ea3dc55037a93a9"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          8,
+          52,
+          210,
+          24
+        ],
+        "pixel_box": [
+          8,
+          52,
+          218,
+          76
+        ],
+        "crop": "07-host-left-app.png",
+        "sha256": "d0338a629930232715bd52466c1d3f672718d2b17d5a571dc851e16ff0c42727"
+      }
+    },
+    {
+      "id": "08-by-status",
+      "state": "board-default",
+      "design": {
+        "source": "design",
+        "rect": [
+          300,
+          50,
+          90,
+          26
+        ],
+        "pixel_box": [
+          300,
+          50,
+          390,
+          76
+        ],
+        "crop": "08-by-status-design.png",
+        "sha256": "8c1b7e95d62ca965c3322fc24bba1d9df1bc8ce198b46d4c1b99784901ae0227"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          300,
+          50,
+          90,
+          26
+        ],
+        "pixel_box": [
+          300,
+          50,
+          390,
+          76
+        ],
+        "crop": "08-by-status-app.png",
+        "sha256": "e4b7176a658e794051e6dd03e817de94fb65ff3304da4dbcdbf6e1f24d228bd5"
+      }
+    },
+    {
+      "id": "09-header-needs",
+      "state": "expanded",
+      "design": {
+        "source": "design",
+        "rect": [
+          0,
+          83,
+          400,
+          38
+        ],
+        "pixel_box": [
+          0,
+          83,
+          400,
+          121
+        ],
+        "crop": "09-header-needs-design.png",
+        "sha256": "8babfd956a6734427e32a9943e60353bc6d06c3984a2a281f08a1f85cb5f7fd9"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          0,
+          83,
+          400,
+          38
+        ],
+        "pixel_box": [
+          0,
+          83,
+          400,
+          121
+        ],
+        "crop": "09-header-needs-app.png",
+        "sha256": "0eb8ad7d95f9f43d42c9ef0101571bd778fd188387fe494b064eddf05de7546c"
+      }
+    },
+    {
+      "id": "10-row-needs-question",
+      "state": "needs-input",
+      "design": {
+        "source": "design",
+        "rect": [
+          0,
+          120,
+          400,
+          76
+        ],
+        "pixel_box": [
+          0,
+          120,
+          400,
+          196
+        ],
+        "crop": "10-row-needs-question-design.png",
+        "sha256": "ef31e72ae8e9c63ce28c3101cda69e4244ad944a8f6290a2a8fa8ba07d69013d"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          0,
+          120,
+          400,
+          76
+        ],
+        "pixel_box": [
+          0,
+          120,
+          400,
+          196
+        ],
+        "crop": "10-row-needs-question-app.png",
+        "sha256": "8df828ee67571cf6b9edd678139ea40ead8781b59c6a491fb3f1e42247061e07"
+      }
+    },
+    {
+      "id": "11-row-needs-permission",
+      "state": "needs-input",
+      "design": {
+        "source": "design",
+        "rect": [
+          0,
+          195,
+          400,
+          76
+        ],
+        "pixel_box": [
+          0,
+          195,
+          400,
+          271
+        ],
+        "crop": "11-row-needs-permission-design.png",
+        "sha256": "9ef087b016f3ceceb48a2eb27bdb0110f96b332cd34e695f60271f09b5eca621"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          0,
+          195,
+          400,
+          76
+        ],
+        "pixel_box": [
+          0,
+          195,
+          400,
+          271
+        ],
+        "crop": "11-row-needs-permission-app.png",
+        "sha256": "545444814b68b71e40391722aa60aba237ef55d3f1b20c9497ba804078095194"
+      }
+    },
+    {
+      "id": "12-header-working",
+      "state": "expanded-hint",
+      "design": {
+        "source": "design",
+        "rect": [
+          0,
+          271,
+          400,
+          38
+        ],
+        "pixel_box": [
+          0,
+          271,
+          400,
+          309
+        ],
+        "crop": "12-header-working-design.png",
+        "sha256": "843333f234d31ffbf71307f3b5b299506e4c324754adf5e4b432760316e7d609"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          0,
+          271,
+          400,
+          38
+        ],
+        "pixel_box": [
+          0,
+          271,
+          400,
+          309
+        ],
+        "crop": "12-header-working-app.png",
+        "sha256": "0461bab4bbcde7db9c94ecf42b6e148f3b382bf641cb442d377104db99b0b421"
+      }
+    },
+    {
+      "id": "13-row-working-1",
+      "state": "working",
+      "design": {
+        "source": "design",
+        "rect": [
+          0,
+          308,
+          400,
+          76
+        ],
+        "pixel_box": [
+          0,
+          308,
+          400,
+          384
+        ],
+        "crop": "13-row-working-1-design.png",
+        "sha256": "6d78716e4844c78813bd2c7c6f555ba854a8d4d6194dc1c33c3b57975b1ef93b"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          0,
+          308,
+          400,
+          76
+        ],
+        "pixel_box": [
+          0,
+          308,
+          400,
+          384
+        ],
+        "crop": "13-row-working-1-app.png",
+        "sha256": "9aebca810f29fe4db41e0ef04832dd4810962852bc62302348cd34a55a6428a3"
+      }
+    },
+    {
+      "id": "14-row-working-2-task",
+      "state": "working-from-task",
+      "design": {
+        "source": "design",
+        "rect": [
+          0,
+          383,
+          400,
+          76
+        ],
+        "pixel_box": [
+          0,
+          383,
+          400,
+          459
+        ],
+        "crop": "14-row-working-2-task-design.png",
+        "sha256": "c3d5aca1549adccb6b5e4a093e738fb2f3ea732939db4b6114be54dd4c88b83a"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          0,
+          383,
+          400,
+          76
+        ],
+        "pixel_box": [
+          0,
+          383,
+          400,
+          459
+        ],
+        "crop": "14-row-working-2-task-app.png",
+        "sha256": "2c521bddd28be592288f8f883d90e3b5f6b3c604089d9ffbe9d811b367bac44f"
+      }
+    },
+    {
+      "id": "15-row-working-3",
+      "state": "working",
+      "design": {
+        "source": "design",
+        "rect": [
+          0,
+          459,
+          400,
+          76
+        ],
+        "pixel_box": [
+          0,
+          459,
+          400,
+          535
+        ],
+        "crop": "15-row-working-3-design.png",
+        "sha256": "21943f8020b68b9fc18565f1a0e56b4cacc03e2af1d9165d50bbddbfa0c62940"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          0,
+          459,
+          400,
+          76
+        ],
+        "pixel_box": [
+          0,
+          459,
+          400,
+          535
+        ],
+        "crop": "15-row-working-3-app.png",
+        "sha256": "03729d16882cf9af5307d60afa4d9e98a0944605e22f7367229718c891fb4639"
+      }
+    },
+    {
+      "id": "16-header-recent",
+      "state": "expanded-total",
+      "design": {
+        "source": "design",
+        "rect": [
+          0,
+          534,
+          400,
+          38
+        ],
+        "pixel_box": [
+          0,
+          534,
+          400,
+          572
+        ],
+        "crop": "16-header-recent-design.png",
+        "sha256": "7b140e18f484ae47d5c5a8807c998af0623e545256204577a44042e70f3cfa36"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          0,
+          534,
+          400,
+          38
+        ],
+        "pixel_box": [
+          0,
+          534,
+          400,
+          572
+        ],
+        "crop": "16-header-recent-app.png",
+        "sha256": "f1fd13cad79629c7621af5b139e9c70f08adefe187d948708320e245e7360c69"
+      }
+    },
+    {
+      "id": "17-row-recent-closed-1",
+      "state": "closed",
+      "design": {
+        "source": "design",
+        "rect": [
+          0,
+          572,
+          400,
+          76
+        ],
+        "pixel_box": [
+          0,
+          572,
+          400,
+          648
+        ],
+        "crop": "17-row-recent-closed-1-design.png",
+        "sha256": "9f3c3c2511ed05666c3eff5f44f61cb8ac9bfa3e60bf5fb2f3c34e59b427488e"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          0,
+          572,
+          400,
+          76
+        ],
+        "pixel_box": [
+          0,
+          572,
+          400,
+          648
+        ],
+        "crop": "17-row-recent-closed-1-app.png",
+        "sha256": "ff6184eafc1487f8fe1f5a167732d686e4fd5c10f5d6c6ecd94125ca3f29b75e"
+      }
+    },
+    {
+      "id": "18-row-recent-closed-2",
+      "state": "closed",
+      "design": {
+        "source": "design",
+        "rect": [
+          0,
+          647,
+          400,
+          76
+        ],
+        "pixel_box": [
+          0,
+          647,
+          400,
+          723
+        ],
+        "crop": "18-row-recent-closed-2-design.png",
+        "sha256": "36a5036680247745e07e96202e36dc2aebd1a2fd8f9d1a809253b737d63a3191"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          0,
+          647,
+          400,
+          76
+        ],
+        "pixel_box": [
+          0,
+          647,
+          400,
+          723
+        ],
+        "crop": "18-row-recent-closed-2-app.png",
+        "sha256": "674197c32a91b17d41529a8cdef89db56e23553e6a2a265a74c823a8b8e8815e"
+      }
+    },
+    {
+      "id": "19-row-recent-offline",
+      "state": "offline-dimmed",
+      "design": {
+        "source": "design",
+        "rect": [
+          0,
+          722,
+          400,
+          77
+        ],
+        "pixel_box": [
+          0,
+          722,
+          400,
+          799
+        ],
+        "crop": "19-row-recent-offline-design.png",
+        "sha256": "8d90996abf4507bc88a8126a2f3efc02de8a65c83de045e8faa9b908a6048082"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          0,
+          722,
+          400,
+          77
+        ],
+        "pixel_box": [
+          0,
+          722,
+          400,
+          799
+        ],
+        "crop": "19-row-recent-offline-app.png",
+        "sha256": "5fc583abb914fea7bdb7387bbc014644c16f89272924128bb2eac7dab85c3622"
+      }
+    },
+    {
+      "id": "20-time-1m",
+      "state": "working",
+      "design": {
+        "source": "design",
+        "rect": [
+          12,
+          316,
+          32,
+          40
+        ],
+        "pixel_box": [
+          12,
+          316,
+          44,
+          356
+        ],
+        "crop": "20-time-1m-design.png",
+        "sha256": "199c3b0c39275826e6cb4f6a1093d31156b40ad5b9f8f5fe4fd2b9c5d61aafab"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          12,
+          316,
+          32,
+          40
+        ],
+        "pixel_box": [
+          12,
+          316,
+          44,
+          356
+        ],
+        "crop": "20-time-1m-app.png",
+        "sha256": "713009b5e70d45c18107fd1ddc4fdec53fb911290548ea9609197c9d84cd31a0"
+      }
+    },
+    {
+      "id": "21-time-1d",
+      "state": "closed",
+      "design": {
+        "source": "design",
+        "rect": [
+          12,
+          655,
+          32,
+          40
+        ],
+        "pixel_box": [
+          12,
+          655,
+          44,
+          695
+        ],
+        "crop": "21-time-1d-design.png",
+        "sha256": "b115f790fa33eb16f73a0db08616bc283b5afa8e30b5a7701d912a4ec49e4100"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          12,
+          655,
+          32,
+          40
+        ],
+        "pixel_box": [
+          12,
+          655,
+          44,
+          695
+        ],
+        "crop": "21-time-1d-app.png",
+        "sha256": "081d0b12320ed0a97f394fff9187e7020b143419475167f4b0151a2dcb646c15"
+      }
+    },
+    {
+      "id": "22-by-status-chevron",
+      "state": "board-default",
+      "design": {
+        "source": "design",
+        "rect": [
+          362,
+          54,
+          20,
+          18
+        ],
+        "pixel_box": [
+          362,
+          54,
+          382,
+          72
+        ],
+        "crop": "22-by-status-chevron-design.png",
+        "sha256": "3136c236b67c7338da8451fd265aad7747b6debe7eaa6c172b1e7fc80153fcb3"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          362,
+          54,
+          20,
+          18
+        ],
+        "pixel_box": [
+          362,
+          54,
+          382,
+          72
+        ],
+        "crop": "22-by-status-chevron-app.png",
+        "sha256": "ffb0dd6c336257b7ec35f92d297fa153e1391d58c39ec42421e5edf8c2946425"
+      }
+    },
+    {
+      "id": "23-titlebar-bottom-edge",
+      "state": "board-default",
+      "design": {
+        "source": "design",
+        "rect": [
+          100,
+          44,
+          200,
+          14
+        ],
+        "pixel_box": [
+          100,
+          44,
+          300,
+          58
+        ],
+        "crop": "23-titlebar-bottom-edge-design.png",
+        "sha256": "8d2b11fa0806493acdc014fc620547b83a3edb9692094bee294cbbe6261f8991"
+      },
+      "app": {
+        "source": "app",
+        "rect": [
+          100,
+          44,
+          200,
+          14
+        ],
+        "pixel_box": [
+          100,
+          44,
+          300,
+          58
+        ],
+        "crop": "23-titlebar-bottom-edge-app.png",
+        "sha256": "f3a3e89d5769cf0b606ec74c893146e04d30bbecef80786051ba6cf21d7d97cf"
+      }
+    }
+  ],
+  "review_sheets": [
+    "review-01.png",
+    "review-02.png",
+    "review-03.png"
+  ],
+  "review_sheet_scale": "1 pixel per logical unit; browsing only; measure raw crops",
+  "elapsed_seconds": 0.1229
+}

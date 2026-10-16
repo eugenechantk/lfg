@@ -1,0 +1,21 @@
+# host strip glyph runs
+hoststrip_x xruns 10 55 300 71
+# time column glyph runs per row (expanded state)
+t2m xruns 12 131 44 147
+t6m xruns 12 206 44 222
+t1m xruns 12 319 44 335
+t4m xruns 12 394 44 410
+t9m xruns 12 469 44 485
+t3h xruns 12 582 44 598
+t1d xruns 12 657 44 673
+t2d xruns 12 733 44 749 10
+# header label + count runs
+h_needs xruns 30 96 140 116
+h_working xruns 30 284 140 304
+h_recent xruns 30 547 140 566
+# status line runs (icon/dot + text)
+st_ask1 xruns 58 168 320 185
+st_ask2 xruns 58 243 320 260
+st_work1 xruns 56 357 130 373
+st_closed xruns 58 620 120 636
+st_offline xruns 58 770 140 786 10

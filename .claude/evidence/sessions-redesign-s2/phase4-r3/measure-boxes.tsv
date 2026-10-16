@@ -1,0 +1,127 @@
+open	edge	segmented track	left	H@26	dom=121.83	board=121.50	app=121.58	delta=+0.08
+open	edge	segmented track	right	H@26	dom=302.17	board=301.50	app=302.42	delta=+0.92
+open	edge	segmented track	top	V@228	dom=10	board=9.50	app=9.50	delta=+0.00
+open	edge	segmented track	bottom	V@228	dom=42	board=41.50	app=41.50	delta=+0.00
+open	edge	selected pill	left	H@26	dom=124.83	board=124.50	app=124.58	delta=+0.08
+open	edge	selected pill	right	H@26	dom=221.6	board=221.50	app=221.42	delta=-0.08
+open	edge	selected pill	top	V@130	dom=13	board=11.30	app=11.45	delta=+0.15
+open	edge	selected pill	bottom	V@130	dom=39	board=39.70	app=39.55	delta=-0.15
+open	edge	Sessions badge	left	H@26	dom=194.59	board=194.50	app=194.57	delta=+0.07
+open	edge	Sessions badge	right	H@26	dom=210.59	board=210.50	app=210.43	delta=-0.07
+open	edge	Sessions badge	top	V@202	dom=18	board=17.50	app=17.57	delta=+0.07
+open	edge	Sessions badge	bottom	V@202	dom=34	board=33.50	app=33.43	delta=-0.07
+open	edge	Tasks badge	left	H@26	dom=272.17	board=271.50	app=272.57	delta=+1.06
+open	edge	Tasks badge	right	H@26	dom=288.17	board=287.50	app=288.43	delta=+0.94
+open	edge	Tasks badge	top	V@280	dom=18	board=17.50	app=17.57	delta=+0.06
+open	edge	Tasks badge	bottom	V@280	dom=34	board=33.50	app=33.43	delta=-0.06
+open	edge	search button	left	H@26	dom=358	board=357.50	app=358.57	delta=+1.07
+open	edge	search button	right	H@26	dom=388	board=387.50	app=388.43	delta=+0.93
+open	edge	search button	top	V@373	dom=11	board=10.50	app=10.57	delta=+0.07
+open	edge	search button	bottom	V@373	dom=41	board=40.50	app=40.43	delta=-0.07
+open	edge	Pro dot	left	H@63	dom=16	board=15.50	app=15.53	delta=+0.03
+open	edge	Pro dot	right	H@63	dom=23	board=22.50	app=22.47	delta=-0.03
+open	edge	Pro dot	top	V@19	dom=59.5	board=59.50	app=59.53	delta=+0.03
+open	edge	Pro dot	bottom	V@19	dom=66.5	board=66.50	app=66.47	delta=-0.03
+open	edge	Air ring	outer left	H@63	dom=62.11	board=61.50	app=62.50	delta=+1.00
+open	edge	Air ring	outer right	H@63	dom=69.11	board=68.50	app=69.50	delta=+1.00
+open	edge	Air ring	outer top	V@65	dom=59.5	board=59.50	app=59.50	delta=+0.00
+open	edge	Air ring	outer bottom	V@65	dom=66.5	board=66.50	app=66.50	delta=+0.00
+open	edge	By status pill	left	H@63	dom=306.17	board=305.50	app=305.56	delta=+0.06
+open	edge	By status pill	right	H@63	dom=384	board=383.50	app=383.44	delta=-0.06
+open	edge	By status pill	top	V@310	board-edge-missing
+open	edge	By status pill	bottom	V@310	dom=74	board=71.28	app=71.26	delta=-0.02
+open	icon	span	@14.0,20.0 12.0x12.0	board=14,20 12x12 c=(20.0,26.0)	app=19,19 14x14 c=(26.0,26.0)	dc=(+6.0,-0.0) dsize=(+2,+2)	col board=#FF6057 app=#4F4F4F
+open	icon	span	@34.0,20.0 12.0x12.0	board=34,20 12x12 c=(40.0,26.0)	app=27,19 26x14 c=(41.8,26.0)	dc=(+1.8,+0.0) dsize=(+14,+2)	col board=#FEBC2F app=#4E4E4E
+open	icon	span	@54.0,20.0 12.0x12.0	board=54,20 12x12 c=(60.0,26.0)	app=47,19 26x14 c=(59.6,26.0)	dc=(-0.4,-0.0) dsize=(+14,+2)	col board=#26C840 app=#4F4F4F
+open	icon	svg[currentColor	@366.0,19.0 14.0x14.0	board=367,20 12x12 c=(372.8,25.8)	app=368,20 12x12 c=(373.9,25.9)	dc=(+1.1,+0.1) dsize=(+0,+0)	col board=#D3D4DA app=#D4D5DB
+open	icon	span	@16.0,59.5 7.0x7.0	board=16,60 7x7 c=(19.5,63.5)	app=16,60 7x7 c=(19.5,63.5)	dc=(+0.0,+0.0) dsize=(+0,+0)	col board=#33D74C app=#33D74C
+open	icon	span	@62.11,59.5 7.0x7.0	board=62,60 7x7 c=(65.5,63.5)	app=63,60 7x7 c=(66.5,63.5)	dc=(+1.0,+0.0) dsize=(+0,+0)	col board=#F0960F app=#FC9E0A
+open	icon	svg[currentColor	@367.0,58.5 9.0x9.0	board=369,62 5x4 c=(371.5,63.6)	app=368,62 7x3 c=(371.5,63.4)	dc=(+0.0,-0.2) dsize=(+2,-1)	col board=#C9CBD3 app=#C3C5CD
+open	icon	svg[#8A8A93	@18.0,100.27 11.0x11.0	board=20,103 7x5 c=(23.5,105.6)	app=20,103 7x5 c=(23.5,105.2)	dc=(+0.0,-0.4) dsize=(+0,+0)	col board=#8A8A93 app=#888891
+open	icon	svg[#FFB340	@62.0,170.22 13.0x13.0	board=63,171 11x11 c=(68.2,176.2)	app=63,165 17x17 c=(68.3,176.1)	dc=(+0.1,-0.1) dsize=(+6,+6)	col board=#FFB33F app=#FFB33F
+open	icon	svg[#FFB340	@62.0,245.48 13.0x13.0	board=63,246 11x11 c=(68.2,251.2)	app=63,240 11x18 c=(68.2,252.1)	dc=(+0.0,+0.9) dsize=(+0,+7)	col board=#FFB33F app=#FFB33F
+open	icon	svg[#8A8A93	@18.0,288.34 11.0x11.0	board=20,291 7x5 c=(23.5,293.6)	app=20,291 7x5 c=(23.5,293.2)	dc=(+0.0,-0.4) dsize=(+0,+0)	col board=#8A8A93 app=#888891
+open	icon	span	@62.0,361.3 7.0x7.0	board=59,358 13x13 c=(65.5,364.5)	app=59,358 17x13 c=(66.3,364.3)	dc=(+0.8,-0.2) dsize=(+4,+0)	col board=#33D34B app=#39D150
+open	icon	span	@62.0,436.56 7.0x7.0	board=59,434 13x13 c=(65.5,440.5)	app=59,429 17x18 c=(66.3,440.3)	dc=(+0.8,-0.2) dsize=(+4,+5)	col board=#33D34B app=#39D050
+open	icon	span	@62.0,511.83 7.0x7.0	board=59,509 13x13 c=(65.5,515.5)	app=59,509 17x13 c=(66.3,515.3)	dc=(+0.8,-0.2) dsize=(+4,+0)	col board=#33D34B app=#39D150
+open	icon	svg[#8A8A93	@18.0,551.69 11.0x11.0	board=20,555 7x5 c=(23.5,557.6)	app=20,555 7x5 c=(23.5,557.2)	dc=(+0.0,-0.4) dsize=(+0,+0)	col board=#8A8A93 app=#888891
+open	hairlines	x=40	board	82:#2C2C2F
+open	hairlines	x=40	app	82:#2C2C2F
+open	hairlines	x=200	board	82:#2C2C2F 195:#2C2C2F 270:#2C2C2F 383:#2C2C2F 458:#2C2C2F 533:#2C2C2F 646:#2C2C2F 722:#2C2C2F 797:#232327
+open	hairlines	x=200	app	82:#2C2C2F 195:#2C2C2F 270:#2C2C2F 383:#2C2C2F 458:#2C2C2F 534:#2C2C2F 646:#2C2C2F 722:#2C2C2F 797:#232527
+open	hairlines	x=380	board	82:#2C2C2F 195:#2C2C2F 270:#2C2C2F 383:#2C2C2F 458:#2C2C2F 533:#2C2C2F 646:#2C2C2F 722:#2C2C2F 797:#232327
+open	hairlines	x=380	app	82:#2C2C2F 195:#2C2C2F 270:#2C2C2F 383:#2C2C2F 458:#2C2C2F 534:#2C2C2F 646:#2C2C2F 722:#2C2C2F 797:#232527
+fold-needs	icon	span	@14.0,20.0 12.0x12.0	board=14,20 12x12 c=(20.0,26.0)	app=19,19 14x14 c=(26.0,26.0)	dc=(+6.0,-0.0) dsize=(+2,+2)	col board=#FF6057 app=#4F4F4F
+fold-needs	icon	span	@34.0,20.0 12.0x12.0	board=34,20 12x12 c=(40.0,26.0)	app=27,19 26x14 c=(41.8,26.0)	dc=(+1.8,+0.0) dsize=(+14,+2)	col board=#FEBC2F app=#4E4E4E
+fold-needs	icon	span	@54.0,20.0 12.0x12.0	board=54,20 12x12 c=(60.0,26.0)	app=47,19 26x14 c=(59.6,26.0)	dc=(-0.4,-0.0) dsize=(+14,+2)	col board=#26C840 app=#4F4F4F
+fold-needs	icon	svg[currentColor	@366.0,19.0 14.0x14.0	board=367,20 12x12 c=(372.8,25.8)	app=368,20 12x12 c=(373.9,25.9)	dc=(+1.1,+0.1) dsize=(+0,+0)	col board=#D3D4DA app=#D4D5DB
+fold-needs	icon	span	@16.0,59.5 7.0x7.0	board=16,60 7x7 c=(19.5,63.5)	app=16,60 7x7 c=(19.5,63.5)	dc=(+0.0,+0.0) dsize=(+0,+0)	col board=#33D74C app=#33D74C
+fold-needs	icon	span	@62.11,59.5 7.0x7.0	board=62,60 7x7 c=(65.5,63.5)	app=63,60 7x7 c=(66.5,63.5)	dc=(+1.0,+0.0) dsize=(+0,+0)	col board=#F0960F app=#FC9E0A
+fold-needs	icon	svg[currentColor	@367.0,58.5 9.0x9.0	board=369,62 5x4 c=(371.5,63.6)	app=368,62 7x3 c=(371.5,63.4)	dc=(+0.0,-0.2) dsize=(+2,-1)	col board=#C9CBD3 app=#C3C5CD
+fold-needs	icon	svg[#8A8A93	@18.0,100.27 11.0x11.0	board=21,102 5x7 c=(23.6,105.5)	app=21,102 5x7 c=(23.2,105.5)	dc=(-0.4,+0.0) dsize=(+0,+0)	col board=#8A8A93 app=#888891
+fold-needs	icon	svg[#8A8A93	@18.0,137.81 11.0x11.0	board=20,141 7x5 c=(23.5,143.6)	app=20,141 7x5 c=(23.5,143.2)	dc=(+0.0,-0.4) dsize=(+0,+0)	col board=#8A8A93 app=#888891
+fold-needs	icon	span	@62.0,210.77 7.0x7.0	board=59,208 13x13 c=(65.5,214.5)	app=59,203 17x18 c=(66.3,214.3)	dc=(+0.8,-0.2) dsize=(+4,+5)	col board=#33D34B app=#39D050
+fold-needs	icon	span	@62.0,286.03 7.0x7.0	board=59,283 13x13 c=(65.5,289.5)	app=59,283 17x13 c=(66.3,289.3)	dc=(+0.8,-0.2) dsize=(+4,+0)	col board=#33D34B app=#39D150
+fold-needs	icon	span	@62.0,361.3 7.0x7.0	board=59,358 13x13 c=(65.5,364.5)	app=59,358 17x13 c=(66.3,364.3)	dc=(+0.8,-0.2) dsize=(+4,+0)	col board=#33D34B app=#39D150
+fold-needs	icon	svg[#8A8A93	@18.0,401.16 11.0x11.0	board=20,404 7x5 c=(23.5,406.6)	app=20,404 7x5 c=(23.5,406.2)	dc=(+0.0,-0.4) dsize=(+0,+0)	col board=#8A8A93 app=#888891
+fold-needs	hairlines	x=40	board	82:#2C2C2F
+fold-needs	hairlines	x=40	app	82:#2C2C2F
+fold-needs	hairlines	x=200	board	82:#2C2C2F 232:#2C2C2F 308:#2C2C2F 383:#2C2C2F 496:#2C2C2F 571:#2C2C2F 646:#232327
+fold-needs	hairlines	x=200	app	82:#2C2C2F 232:#2C2C2F 308:#2C2C2F 383:#2C2C2F 496:#2C2C2F 571:#2C2C2F 646:#232527
+fold-needs	hairlines	x=380	board	82:#2C2C2F 232:#2C2C2F 308:#2C2C2F 383:#2C2C2F 496:#2C2C2F 571:#2C2C2F 646:#232327
+fold-needs	hairlines	x=380	app	82:#2C2C2F 232:#2C2C2F 308:#2C2C2F 383:#2C2C2F 496:#2C2C2F 571:#2C2C2F 646:#232527
+fold-working	icon	span	@14.0,20.0 12.0x12.0	board=14,20 12x12 c=(20.0,26.0)	app=19,19 14x14 c=(26.0,26.0)	dc=(+6.0,-0.0) dsize=(+2,+2)	col board=#FF6057 app=#4F4F4F
+fold-working	icon	span	@34.0,20.0 12.0x12.0	board=34,20 12x12 c=(40.0,26.0)	app=27,19 26x14 c=(41.8,26.0)	dc=(+1.8,+0.0) dsize=(+14,+2)	col board=#FEBC2F app=#4E4E4E
+fold-working	icon	span	@54.0,20.0 12.0x12.0	board=54,20 12x12 c=(60.0,26.0)	app=47,19 26x14 c=(59.6,26.0)	dc=(-0.4,-0.0) dsize=(+14,+2)	col board=#26C840 app=#4F4F4F
+fold-working	icon	svg[currentColor	@366.0,19.0 14.0x14.0	board=367,20 12x12 c=(372.8,25.8)	app=368,20 12x12 c=(373.9,25.9)	dc=(+1.1,+0.1) dsize=(+0,+0)	col board=#D3D4DA app=#D4D5DB
+fold-working	icon	span	@16.0,59.5 7.0x7.0	board=16,60 7x7 c=(19.5,63.5)	app=16,60 7x7 c=(19.5,63.5)	dc=(+0.0,+0.0) dsize=(+0,+0)	col board=#33D74C app=#33D74C
+fold-working	icon	span	@62.11,59.5 7.0x7.0	board=62,60 7x7 c=(65.5,63.5)	app=63,60 7x7 c=(66.5,63.5)	dc=(+1.0,+0.0) dsize=(+0,+0)	col board=#F0960F app=#FC9E0A
+fold-working	icon	svg[currentColor	@367.0,58.5 9.0x9.0	board=369,62 5x4 c=(371.5,63.6)	app=368,62 7x3 c=(371.5,63.4)	dc=(+0.0,-0.2) dsize=(+2,-1)	col board=#C9CBD3 app=#C3C5CD
+fold-working	icon	svg[#8A8A93	@18.0,100.27 11.0x11.0	board=20,103 7x5 c=(23.5,105.6)	app=20,103 7x5 c=(23.5,105.2)	dc=(+0.0,-0.4) dsize=(+0,+0)	col board=#8A8A93 app=#888891
+fold-working	icon	svg[#FFB340	@62.0,170.22 13.0x13.0	board=63,171 11x11 c=(68.2,176.2)	app=63,165 17x17 c=(68.3,176.1)	dc=(+0.1,-0.1) dsize=(+6,+6)	col board=#FFB33F app=#FFB33F
+fold-working	icon	svg[#FFB340	@62.0,245.48 13.0x13.0	board=63,246 11x11 c=(68.2,251.2)	app=63,240 11x18 c=(68.2,252.1)	dc=(+0.0,+0.9) dsize=(+0,+7)	col board=#FFB33F app=#FFB33F
+fold-working	icon	svg[#8A8A93	@18.0,288.34 11.0x11.0	board=21,290 5x7 c=(23.6,293.5)	app=21,290 5x7 c=(23.2,293.5)	dc=(-0.4,+0.0) dsize=(+0,+0)	col board=#8A8A93 app=#888891
+fold-working	icon	svg[#8A8A93	@18.0,325.89 11.0x11.0	board=20,329 7x5 c=(23.5,331.6)	app=20,329 7x5 c=(23.5,331.2)	dc=(+0.0,-0.4) dsize=(+0,+0)	col board=#8A8A93 app=#888891
+fold-working	hairlines	x=40	board	82:#2C2C2F
+fold-working	hairlines	x=40	app	82:#2C2C2F
+fold-working	hairlines	x=200	board	82:#2C2C2F 195:#2C2C2F 270:#2C2C2F 420:#2C2C2F 496:#2C2C2F 571:#232327
+fold-working	hairlines	x=200	app	82:#2C2C2F 195:#2C2C2F 270:#2C2C2F 421:#2C2C2F 496:#2C2C2F 571:#232527
+fold-working	hairlines	x=380	board	82:#2C2C2F 195:#2C2C2F 270:#2C2C2F 420:#2C2C2F 496:#2C2C2F 571:#232327
+fold-working	hairlines	x=380	app	82:#2C2C2F 195:#2C2C2F 270:#2C2C2F 421:#2C2C2F 496:#2C2C2F 571:#232527
+fold-recent	icon	span	@14.0,20.0 12.0x12.0	board=14,20 12x12 c=(20.0,26.0)	app=19,19 14x14 c=(26.0,26.0)	dc=(+6.0,-0.0) dsize=(+2,+2)	col board=#FF6057 app=#4F4F4F
+fold-recent	icon	span	@34.0,20.0 12.0x12.0	board=34,20 12x12 c=(40.0,26.0)	app=27,19 26x14 c=(41.8,26.0)	dc=(+1.8,+0.0) dsize=(+14,+2)	col board=#FEBC2F app=#4E4E4E
+fold-recent	icon	span	@54.0,20.0 12.0x12.0	board=54,20 12x12 c=(60.0,26.0)	app=47,19 26x14 c=(59.6,26.0)	dc=(-0.4,-0.0) dsize=(+14,+2)	col board=#26C840 app=#4F4F4F
+fold-recent	icon	svg[currentColor	@366.0,19.0 14.0x14.0	board=367,20 12x12 c=(372.8,25.8)	app=368,20 12x12 c=(373.9,25.9)	dc=(+1.1,+0.1) dsize=(+0,+0)	col board=#D3D4DA app=#D4D5DB
+fold-recent	icon	span	@16.0,59.5 7.0x7.0	board=16,60 7x7 c=(19.5,63.5)	app=16,60 7x7 c=(19.5,63.5)	dc=(+0.0,+0.0) dsize=(+0,+0)	col board=#33D74C app=#33D74C
+fold-recent	icon	span	@62.11,59.5 7.0x7.0	board=62,60 7x7 c=(65.5,63.5)	app=63,60 7x7 c=(66.5,63.5)	dc=(+1.0,+0.0) dsize=(+0,+0)	col board=#F0960F app=#FC9E0A
+fold-recent	icon	svg[currentColor	@367.0,58.5 9.0x9.0	board=369,62 5x4 c=(371.5,63.6)	app=368,62 7x3 c=(371.5,63.4)	dc=(+0.0,-0.2) dsize=(+2,-1)	col board=#C9CBD3 app=#C3C5CD
+fold-recent	icon	svg[#8A8A93	@18.0,100.27 11.0x11.0	board=20,103 7x5 c=(23.5,105.6)	app=20,103 7x5 c=(23.5,105.2)	dc=(+0.0,-0.4) dsize=(+0,+0)	col board=#8A8A93 app=#888891
+fold-recent	icon	svg[#FFB340	@62.0,170.22 13.0x13.0	board=63,171 11x11 c=(68.2,176.2)	app=63,165 17x17 c=(68.3,176.1)	dc=(+0.1,-0.1) dsize=(+6,+6)	col board=#FFB33F app=#FFB33F
+fold-recent	icon	svg[#FFB340	@62.0,245.48 13.0x13.0	board=63,246 11x11 c=(68.2,251.2)	app=63,240 11x18 c=(68.2,252.1)	dc=(+0.0,+0.9) dsize=(+0,+7)	col board=#FFB33F app=#FFB33F
+fold-recent	icon	svg[#8A8A93	@18.0,288.34 11.0x11.0	board=20,291 7x5 c=(23.5,293.6)	app=20,291 7x5 c=(23.5,293.2)	dc=(+0.0,-0.4) dsize=(+0,+0)	col board=#8A8A93 app=#888891
+fold-recent	icon	span	@62.0,361.3 7.0x7.0	board=59,358 13x13 c=(65.5,364.5)	app=59,358 17x13 c=(66.3,364.3)	dc=(+0.8,-0.2) dsize=(+4,+0)	col board=#33D34B app=#39D150
+fold-recent	icon	span	@62.0,436.56 7.0x7.0	board=59,434 13x13 c=(65.5,440.5)	app=59,429 17x18 c=(66.3,440.3)	dc=(+0.8,-0.2) dsize=(+4,+5)	col board=#33D34B app=#39D050
+fold-recent	icon	span	@62.0,511.83 7.0x7.0	board=59,509 13x13 c=(65.5,515.5)	app=59,509 17x13 c=(66.3,515.3)	dc=(+0.8,-0.2) dsize=(+4,+0)	col board=#33D34B app=#39D150
+fold-recent	icon	svg[#8A8A93	@18.0,551.69 11.0x11.0	board=21,554 5x7 c=(23.6,557.5)	app=21,554 5x7 c=(23.2,557.5)	dc=(-0.4,+0.0) dsize=(+0,+0)	col board=#8A8A93 app=#888891
+fold-recent	hairlines	x=40	board	82:#2C2C2F
+fold-recent	hairlines	x=40	app	82:#2C2C2F
+fold-recent	hairlines	x=200	board	82:#2C2C2F 195:#2C2C2F 270:#2C2C2F 383:#2C2C2F 458:#2C2C2F 533:#2C2C2F
+fold-recent	hairlines	x=200	app	82:#2C2C2F 195:#2C2C2F 270:#2C2C2F 383:#2C2C2F 458:#2C2C2F 534:#2C2C2F
+fold-recent	hairlines	x=380	board	82:#2C2C2F 195:#2C2C2F 270:#2C2C2F 383:#2C2C2F 458:#2C2C2F 533:#2C2C2F
+fold-recent	hairlines	x=380	app	82:#2C2C2F 195:#2C2C2F 270:#2C2C2F 383:#2C2C2F 458:#2C2C2F 534:#2C2C2F
+fold-all	icon	span	@14.0,20.0 12.0x12.0	board=14,20 12x12 c=(20.0,26.0)	app=19,19 14x14 c=(26.0,26.0)	dc=(+6.0,-0.0) dsize=(+2,+2)	col board=#FF6057 app=#4F4F4F
+fold-all	icon	span	@34.0,20.0 12.0x12.0	board=34,20 12x12 c=(40.0,26.0)	app=27,19 26x14 c=(41.8,26.0)	dc=(+1.8,+0.0) dsize=(+14,+2)	col board=#FEBC2F app=#4E4E4E
+fold-all	icon	span	@54.0,20.0 12.0x12.0	board=54,20 12x12 c=(60.0,26.0)	app=47,19 26x14 c=(59.6,26.0)	dc=(-0.4,-0.0) dsize=(+14,+2)	col board=#26C840 app=#4F4F4F
+fold-all	icon	svg[currentColor	@366.0,19.0 14.0x14.0	board=367,20 12x12 c=(372.8,25.8)	app=368,20 12x12 c=(373.9,25.9)	dc=(+1.1,+0.1) dsize=(+0,+0)	col board=#D3D4DA app=#D4D5DB
+fold-all	icon	span	@16.0,59.5 7.0x7.0	board=16,60 7x7 c=(19.5,63.5)	app=16,60 7x7 c=(19.5,63.5)	dc=(+0.0,+0.0) dsize=(+0,+0)	col board=#33D74C app=#33D74C
+fold-all	icon	span	@62.11,59.5 7.0x7.0	board=62,60 7x7 c=(65.5,63.5)	app=63,60 7x7 c=(66.5,63.5)	dc=(+1.0,+0.0) dsize=(+0,+0)	col board=#F0960F app=#FC9E0A
+fold-all	icon	svg[currentColor	@367.0,58.5 9.0x9.0	board=369,62 5x4 c=(371.5,63.6)	app=368,62 7x3 c=(371.5,63.4)	dc=(+0.0,-0.2) dsize=(+2,-1)	col board=#C9CBD3 app=#C3C5CD
+fold-all	icon	svg[#8A8A93	@18.0,100.27 11.0x11.0	board=21,102 5x7 c=(23.6,105.5)	app=21,102 5x7 c=(23.2,105.5)	dc=(-0.4,+0.0) dsize=(+0,+0)	col board=#8A8A93 app=#888891
+fold-all	icon	svg[#8A8A93	@18.0,137.81 11.0x11.0	board=21,140 5x7 c=(23.6,143.5)	app=21,140 5x7 c=(23.2,143.5)	dc=(-0.4,+0.0) dsize=(+0,+0)	col board=#8A8A93 app=#888891
+fold-all	icon	svg[#8A8A93	@18.0,175.36 11.0x11.0	board=21,177 5x7 c=(23.6,180.5)	app=21,177 5x7 c=(23.2,180.5)	dc=(-0.4,+0.0) dsize=(+0,+0)	col board=#8A8A93 app=#888891
+fold-all	hairlines	x=40	board	82:#2C2C2F
+fold-all	hairlines	x=40	app	82:#2C2C2F
+fold-all	hairlines	x=200	board	82:#2C2C2F
+fold-all	hairlines	x=200	app	82:#2C2C2F
+fold-all	hairlines	x=380	board	82:#2C2C2F
+fold-all	hairlines	x=380	app	82:#2C2C2F

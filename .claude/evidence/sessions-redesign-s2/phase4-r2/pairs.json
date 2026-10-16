@@ -1,0 +1,746 @@
+{
+ "sources": {
+  "design-expanded": {
+   "path": "board-expanded-480x1032.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    480,
+    1032
+   ]
+  },
+  "app-expanded": {
+   "path": "app-expanded-srgb.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    400,
+    912
+   ]
+  },
+  "design-collapse-working": {
+   "path": "board-collapse-working-480x1032.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    480,
+    1032
+   ]
+  },
+  "app-collapse-working": {
+   "path": "app-collapse-working-srgb.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    400,
+    912
+   ]
+  },
+  "design-collapse-needsInput": {
+   "path": "board-collapse-needsInput-480x1032.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    480,
+    1032
+   ]
+  },
+  "app-collapse-needsInput": {
+   "path": "app-collapse-needsInput-srgb.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    400,
+    912
+   ]
+  },
+  "design-collapse-recent": {
+   "path": "board-collapse-recent-480x1032.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    480,
+    1032
+   ]
+  },
+  "app-collapse-recent": {
+   "path": "app-collapse-recent-srgb.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    400,
+    912
+   ]
+  },
+  "design-collapse-all": {
+   "path": "board-collapse-all-480x1032.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    480,
+    1032
+   ]
+  },
+  "app-collapse-all": {
+   "path": "app-collapse-all-srgb.png",
+   "pixels_per_unit": 1,
+   "viewport": [
+    400,
+    912
+   ]
+  }
+ },
+ "pairs": [
+  {
+   "id": "01-window-controls",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     0,
+     90,
+     52
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     0,
+     90,
+     52
+    ]
+   }
+  },
+  {
+   "id": "02-switcher",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     112,
+     4,
+     200,
+     44
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     112,
+     4,
+     200,
+     44
+    ]
+   }
+  },
+  {
+   "id": "03-search-button",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     350,
+     4,
+     46,
+     44
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     350,
+     4,
+     46,
+     44
+    ]
+   }
+  },
+  {
+   "id": "04-titlebar-hoststrip-edge",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     36,
+     400,
+     50
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     36,
+     400,
+     50
+    ]
+   }
+  },
+  {
+   "id": "05-host-strip-left",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     52,
+     220,
+     30
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     52,
+     220,
+     30
+    ]
+   }
+  },
+  {
+   "id": "06-by-status-pill",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     298,
+     48,
+     96,
+     30
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     298,
+     48,
+     96,
+     30
+    ]
+   }
+  },
+  {
+   "id": "07-header-needs-input",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     82,
+     400,
+     39
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     82,
+     400,
+     39
+    ]
+   }
+  },
+  {
+   "id": "08-row-needs-question",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     120,
+     400,
+     76
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     120,
+     400,
+     76
+    ]
+   }
+  },
+  {
+   "id": "09-row-needs-permission",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     195,
+     400,
+     76
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     195,
+     400,
+     76
+    ]
+   }
+  },
+  {
+   "id": "10-header-working",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     270,
+     400,
+     39
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     270,
+     400,
+     39
+    ]
+   }
+  },
+  {
+   "id": "11-row-working-1",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     308,
+     400,
+     76
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     308,
+     400,
+     76
+    ]
+   }
+  },
+  {
+   "id": "12-row-working-task",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     383,
+     400,
+     76
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     383,
+     400,
+     76
+    ]
+   }
+  },
+  {
+   "id": "13-row-working-3",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     458,
+     400,
+     76
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     458,
+     400,
+     76
+    ]
+   }
+  },
+  {
+   "id": "14-header-recent",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     533,
+     400,
+     39
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     533,
+     400,
+     39
+    ]
+   }
+  },
+  {
+   "id": "15-row-recent-closed-1",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     571,
+     400,
+     76
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     571,
+     400,
+     76
+    ]
+   }
+  },
+  {
+   "id": "16-row-recent-closed-2",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     646,
+     400,
+     76
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     646,
+     400,
+     76
+    ]
+   }
+  },
+  {
+   "id": "17-row-offline-dimmed",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     722,
+     400,
+     76
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     722,
+     400,
+     76
+    ]
+   }
+  },
+  {
+   "id": "18-time-column",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     120,
+     62,
+     680
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     120,
+     62,
+     680
+    ]
+   }
+  },
+  {
+   "id": "19-window-top-860",
+   "state": "expanded",
+   "design": {
+    "source": "design-expanded",
+    "rect": [
+     0,
+     0,
+     400,
+     860
+    ]
+   },
+   "app": {
+    "source": "app-expanded",
+    "rect": [
+     0,
+     0,
+     400,
+     860
+    ]
+   }
+  },
+  {
+   "id": "20-header-working-collapsed",
+   "state": "collapse-working",
+   "design": {
+    "source": "design-collapse-working",
+    "rect": [
+     0,
+     270,
+     400,
+     39
+    ]
+   },
+   "app": {
+    "source": "app-collapse-working",
+    "rect": [
+     0,
+     270,
+     400,
+     39
+    ]
+   }
+  },
+  {
+   "id": "21-collapse-working-context",
+   "state": "collapse-working",
+   "design": {
+    "source": "design-collapse-working",
+    "rect": [
+     0,
+     195,
+     400,
+     240
+    ]
+   },
+   "app": {
+    "source": "app-collapse-working",
+    "rect": [
+     0,
+     195,
+     400,
+     240
+    ]
+   }
+  },
+  {
+   "id": "22-window-collapse-working",
+   "state": "collapse-working",
+   "design": {
+    "source": "design-collapse-working",
+    "rect": [
+     0,
+     0,
+     400,
+     860
+    ]
+   },
+   "app": {
+    "source": "app-collapse-working",
+    "rect": [
+     0,
+     0,
+     400,
+     860
+    ]
+   }
+  },
+  {
+   "id": "23-header-needs-collapsed",
+   "state": "collapse-needsInput",
+   "design": {
+    "source": "design-collapse-needsInput",
+    "rect": [
+     0,
+     82,
+     400,
+     39
+    ]
+   },
+   "app": {
+    "source": "app-collapse-needsInput",
+    "rect": [
+     0,
+     82,
+     400,
+     39
+    ]
+   }
+  },
+  {
+   "id": "24-collapse-needs-context",
+   "state": "collapse-needsInput",
+   "design": {
+    "source": "design-collapse-needsInput",
+    "rect": [
+     0,
+     82,
+     400,
+     160
+    ]
+   },
+   "app": {
+    "source": "app-collapse-needsInput",
+    "rect": [
+     0,
+     82,
+     400,
+     160
+    ]
+   }
+  },
+  {
+   "id": "25-window-collapse-needs",
+   "state": "collapse-needsInput",
+   "design": {
+    "source": "design-collapse-needsInput",
+    "rect": [
+     0,
+     0,
+     400,
+     860
+    ]
+   },
+   "app": {
+    "source": "app-collapse-needsInput",
+    "rect": [
+     0,
+     0,
+     400,
+     860
+    ]
+   }
+  },
+  {
+   "id": "26-header-recent-collapsed",
+   "state": "collapse-recent",
+   "design": {
+    "source": "design-collapse-recent",
+    "rect": [
+     0,
+     533,
+     400,
+     39
+    ]
+   },
+   "app": {
+    "source": "app-collapse-recent",
+    "rect": [
+     0,
+     533,
+     400,
+     39
+    ]
+   }
+  },
+  {
+   "id": "27-collapse-recent-context",
+   "state": "collapse-recent",
+   "design": {
+    "source": "design-collapse-recent",
+    "rect": [
+     0,
+     458,
+     400,
+     160
+    ]
+   },
+   "app": {
+    "source": "app-collapse-recent",
+    "rect": [
+     0,
+     458,
+     400,
+     160
+    ]
+   }
+  },
+  {
+   "id": "28-window-collapse-recent",
+   "state": "collapse-recent",
+   "design": {
+    "source": "design-collapse-recent",
+    "rect": [
+     0,
+     0,
+     400,
+     860
+    ]
+   },
+   "app": {
+    "source": "app-collapse-recent",
+    "rect": [
+     0,
+     0,
+     400,
+     860
+    ]
+   }
+  },
+  {
+   "id": "29-headers-all-collapsed",
+   "state": "collapse-all",
+   "design": {
+    "source": "design-collapse-all",
+    "rect": [
+     0,
+     82,
+     400,
+     112
+    ]
+   },
+   "app": {
+    "source": "app-collapse-all",
+    "rect": [
+     0,
+     82,
+     400,
+     112
+    ]
+   }
+  },
+  {
+   "id": "30-window-collapse-all",
+   "state": "collapse-all",
+   "design": {
+    "source": "design-collapse-all",
+    "rect": [
+     0,
+     0,
+     400,
+     860
+    ]
+   },
+   "app": {
+    "source": "app-collapse-all",
+    "rect": [
+     0,
+     0,
+     400,
+     860
+    ]
+   }
+  }
+ ]
+}

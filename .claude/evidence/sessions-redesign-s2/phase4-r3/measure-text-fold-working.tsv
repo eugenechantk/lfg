@@ -1,0 +1,40 @@
+state	text	board_ink(x,y,wxh)	app_ink	d_left	d_top	d_right	d_bottom	d_w	d_h	match	board_ink_col	app_ink_col	bg
+fold-working	Sessions	136,20,52x11	136,21,53x10	0	1	1	0	1	-1	match dx=0 dy=1 mad=6.5	#F4F4F6	#F4F4F6	bg #555558/#555558
+fold-working	2	197,18,11x15	195,18,16x16	-2	0	3	1	5	1	match dx=0 dy=1 mad=11.3	#1A1206	#FF9F0B	bg #FF9F0B/#555558
+fold-working	Tasks	233,20,33x11	233,21,33x10	0	1	0	0	0	-1	match dx=0 dy=1 mad=9.1	#C9CBD3	#C9CBD3	bg #2E2E32/#2F2E32
+fold-working	2	274,18,12x15	273,18,16x16	-1	0	3	1	4	1	match dx=1 dy=0 mad=12.3	#1C1406	#ED9414	bg #EC9514/#2F2E32
+fold-working	Pro	32,58,18x9	32,59,18x9	0	1	0	1	0	0	match dx=0 dy=1 mad=4.2	#A8A8B0	#A7A7AE	bg #1A1A1E/#1A1C1E
+fold-working	Air offline	77,57,55x10	78,58,54x10	1	1	0	1	-1	0	match dx=1 dy=1 mad=13.1	#FFB33F	#FAAF3F	bg #1A1A1E/#1A1C1E
+fold-working	· 3 working	140,57,62x13	142,58,61x12	2	1	1	0	-1	-1	match dx=1 dy=1 mad=5.2	#898992	#898992	bg #1A1A1E/#1A1C1E
+fold-working	By status	315,59,48x10	315,59,47x10	0	0	-1	0	-1	0	match dx=0 dy=0 mad=12.2	#C8CAD2	#C6C8D0	bg #2C2C2F/#2C2C2F
+fold-working	Needs input	38,100,75x13	38,101,75x13	0	1	0	1	0	0	match dx=0 dy=1 mad=9.1	#FFB33F	#FFB33F	bg #1A1A1E/#1A1C1E
+fold-working	2	122,101,6x9	123,101,6x9	1	0	1	0	0	0	match dx=1 dy=0 mad=7.4	#8A8A93	#8A8A93	bg #1A1A1E/#1A1C1E
+fold-working	2m	17,135,21x11	17,135,21x11	0	0	0	0	0	0	match dx=0 dy=0 mad=6.3	#FFB33F	#FFB33F	bg #1A1A1E/#1A1C1E
+fold-working	ago	16,156,19x8	16,155,19x8	0	-1	0	-1	0	0	match dx=0 dy=-1 mad=7.8	#8A8A92	#85858D	bg #1A1A1E/#1A1C1E
+fold-working	Choose the launch direction	62,133,189x12	62,133,188x12	0	0	-1	0	-1	0	match dx=0 dy=0 mad=17.3	#F4F4F6	#F4F4F6	bg #1A1A1E/#1A1C1E
+fold-working	fiftystrong · Pro · Claude Code opus	62,152,202x13	62,153,202x13	0	1	0	1	0	0	match dx=0 dy=1 mad=5.7	#A8A8B0	#A6A6AE	bg #1A1A1E/#1A1C1E
+fold-working	Asks: which launch page direction first?	80,171,224x13	80,171,224x13	0	0	0	0	0	0	match dx=0 dy=0 mad=7.1	#FFB33F	#FDB23F	bg #1A1A1E/#1A1C1E
+fold-working	6m	16,210,22x12	16,210,22x12	0	0	0	0	0	0	match dx=0 dy=0 mad=6.2	#FFB33F	#FFB33F	bg #1A1A1E/#1A1C1E
+fold-working	ago	16,231,19x8	16,230,19x8	0	-1	0	-1	0	0	match dx=0 dy=-1 mad=7.8	#8A8A92	#85858D	bg #1A1A1E/#1A1C1E
+fold-working	Restore remote authentication	63,208,204x12	63,209,203x11	0	1	-1	0	-1	-1	match dx=0 dy=1 mad=18.0	#F4F4F6	#F4F4F6	bg #1A1A1E/#1A1C1E
+fold-working	lfg · Pro · Codex gpt-6.1	63,228,132x13	63,228,132x13	0	0	0	0	0	0	match dx=0 dy=0 mad=5.0	#A7A7AF	#A6A6AE	bg #1A1A1E/#1A1C1E
+fold-working	Asks to run launchctl	80,246,118x10	80,247,118x10	0	1	0	1	0	0	match dx=0 dy=1 mad=9.5	#FCB13F	#F9AF3F	bg #1A1A1E/#1A1C1E
+fold-working	Working	37,288,52x13	37,289,52x13	0	1	0	1	0	0	match dx=0 dy=1 mad=6.1	#8A8A93	#8A8A93	bg #1A1A1E/#1A1C1E
+fold-working	3	98,289,7x9	99,289,6x9	1	0	0	0	-1	0	match dx=1 dy=0 mad=14.0	#8A8A93	#87878F	bg #1A1A1E/#1A1C1E
+fold-working	Recent	38,326,43x10	38,326,43x10	0	0	0	0	0	0	match dx=0 dy=0 mad=5.4	#8A8A93	#8A8A93	bg #1A1A1E/#1A1C1E
+fold-working	43	90,326,14x9	90,327,15x9	0	1	1	1	1	0	match dx=1 dy=1 mad=9.9	#8A8A93	#898992	bg #1A1A1E/#1A1C1E
+fold-working	3h	17,360,16x12	17,360,16x11	0	0	0	-1	0	-1	match dx=0 dy=0 mad=4.6	#8A8A93	#8A8A93	bg #1A1A1E/#1A1C1E
+fold-working	ago	16,381,19x8	16,381,19x8	0	0	0	0	0	0	match dx=0 dy=0 mad=7.8	#8A8A92	#85858D	bg #1A1A1E/#1A1C1E
+fold-working	Polish onboarding copy	63,358,157x14	63,359,157x14	0	1	0	1	0	0	match dx=0 dy=1 mad=14.8	#F4F4F6	#F4F4F6	bg #1A1A1E/#1A1C1E
+fold-working	fiftystrong · Pro · Claude Code	62,378,171x13	62,379,171x13	0	1	0	1	0	0	match dx=0 dy=1 mad=6.0	#A8A8B0	#A6A6AE	bg #1A1A1E/#1A1C1E
+fold-working	Closed	62,396,39x11	62,397,38x10	0	1	-1	0	-1	-1	match dx=0 dy=1 mad=7.7	#A8A8B0	#A7A7AF	bg #1A1A1E/#1A1C1E
+fold-working	1d	17,435,17x11	17,436,16x11	0	1	-1	1	-1	0	match dx=0 dy=1 mad=4.4	#8A8A93	#8A8A93	bg #1A1A1E/#1A1C1E
+fold-working	ago	16,456,19x8	16,456,19x8	0	0	0	0	0	0	match dx=0 dy=0 mad=7.8	#8A8A92	#85858D	bg #1A1A1E/#1A1C1E
+fold-working	Fix queued message reconciliation	63,433,231x14	63,435,231x14	0	2	0	2	0	0	match dx=0 dy=2 mad=16.9	#F4F4F6	#F4F4F6	bg #1A1A1E/#1A1C1E
+fold-working	lfg · Pro · Codex	63,453,89x13	63,454,89x13	0	1	0	1	0	0	match dx=0 dy=1 mad=4.3	#A8A8B0	#A7A7AF	bg #1A1A1E/#1A1C1E
+fold-working	Closed	62,472,39x11	62,472,38x10	0	0	-1	-1	-1	-1	match dx=0 dy=0 mad=7.7	#A8A8B0	#A7A7AF	bg #1A1A1E/#1A1C1E
+fold-working	2d	17,511,16x11	17,511,16x11	0	0	0	0	0	0	match dx=0 dy=0 mad=3.1	#56565D	#56575D	bg #1A1A1E/#1A1C1E
+fold-working	ago	16,532,19x8	16,531,19x8	0	-1	0	-1	0	0	match dx=0 dy=-1 mad=4.3	#56565D	#54545A	bg #1A1A1E/#1A1C1E
+fold-working	Weekly dependency audit	62,509,174x14	62,510,173x14	0	1	-1	1	-1	0	match dx=0 dy=1 mad=8.7	#909093	#909193	bg #1A1A1E/#1A1C1E
+fold-working	lfg · Air · Codex · from a task	63,529,159x12	63,529,159x12	0	0	0	0	0	0	match dx=0 dy=0 mad=3.1	#67676C	#66666B	bg #1A1A1E/#1A1C1E
+fold-working	Air is offline	62,547,67x10	62,548,67x10	0	1	0	1	0	0	match dx=0 dy=1 mad=4.1	#67676C	#66666B	bg #1A1A1E/#1A1C1E

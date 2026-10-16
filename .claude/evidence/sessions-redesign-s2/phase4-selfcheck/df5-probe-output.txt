@@ -1,0 +1,5 @@
+{"host":"Pro","error":"","live":23,"offlineRows":0,"first":"Dump iOS share app"}
+{"host":"Air","error":"","live":1,"offlineRows":0,"first":"Weekly dependency audit"}
+{"host":"Pro","error":"","live":23,"offlineRows":0,"first":"personal"}
+{"host":"Air","error":"unreachable","live":1,"offlineRows":1,"first":"Weekly dependency audit"}
+{"ok":true,"width":400,"shot":"/private/tmp/claude-501/-Users-eugenechan-dev-personal-lfg/68284ba9-8aab-498d-9c6e-4a97fab2832f/scratchpad/snaps/live3.png"}
