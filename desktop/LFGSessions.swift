@@ -1670,6 +1670,42 @@ final class SessionStore: ObservableObject {
         }
         duplicateHostsByURL = duplicates
         hosts = uniqueHosts
+        logListStateChanges()
+    }
+
+    /// One line per session whose list state changed since the last refresh, in
+    /// `~/.config/lfg-desktop/desktop-list.log`. Eugene has seen a working session read "Ready
+    /// for your next message" and a Recent row read "Working" (2026-10-16); neither
+    /// reproduced on demand. With this, the next sighting can be traced against
+    /// the host's journal by session id and time instead of re-deriving it.
+    private var lastLoggedListState: [String: String] = [:]
+    private func logListStateChanges() {
+        var current: [String: String] = [:]
+        var lines: [String] = []
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        for item in items {
+            guard let sid = item.session.sessionId else { continue }
+            let state = "\(item.status.title) busy=\(item.session.busy) closed=\(item.session.closed) offline=\(item.hostOffline) group=\(item.s2Group.rawValue)"
+            current[sid] = state
+            if lastLoggedListState[sid] != state {
+                let age = item.session.lastActivityAt.map { Int((Date().timeIntervalSince1970 * 1000 - $0) / 1000) } ?? -1
+                lines.append("\(stamp) \(sid.prefix(8)) \(item.hostLabel) \(lastLoggedListState[sid] ?? "(new)") -> \(state) lastActivity=\(age)s")
+            }
+        }
+        for (sid, old) in lastLoggedListState where current[sid] == nil {
+            lines.append("\(stamp) \(sid.prefix(8)) \(old) -> (gone)")
+        }
+        lastLoggedListState = current
+        guard !lines.isEmpty else { return }
+        let url = Config.dir.appendingPathComponent("desktop-list.log")
+        guard let data = (lines.joined(separator: "\n") + "\n").data(using: .utf8) else { return }
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+        } else {
+            try? data.write(to: url)
+        }
     }
 
     func moveTargets(for item: SessionItem) -> [MoveTarget] {
@@ -5935,6 +5971,19 @@ struct ContentView: View {
                         }
                     }
                 }
+                // The phone's session sheet lets you tap the tmux name or the id
+                // to copy it; this is the desktop's equivalent for debugging.
+                if item.session.sessionId != nil || item.session.tmuxName != nil {
+                    Divider()
+                    if let id = item.session.sessionId {
+                        Button("Copy session ID") { copyToPasteboard(id) }
+                            .accessibilityIdentifier("copy_session_id")
+                    }
+                    if let tmux = item.session.tmuxName {
+                        Button("Copy tmux name") { copyToPasteboard(tmux) }
+                            .accessibilityIdentifier("copy_tmux_name")
+                    }
+                }
                 if item.session.sessionId != nil {
                     Divider()
                     Button("Close session", role: .destructive) {
@@ -5943,6 +5992,12 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
     }
 
     private func requestClose(_ item: SessionItem) {
