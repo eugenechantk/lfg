@@ -1,0 +1,18 @@
+host=Eugenes-MacBook-Pro start=2026-10-16 16:14:54 +0800 ping.seq=1197993 secs=90
+resync curl exit=28
+control curl exit=28
+end=2026-10-16 16:16:24 +0800 ping.seq=1197993
+--- resync summary
+resync frames: 1
+first frame: event: resync data: {"head":1197993} 
+hb lines: : hb 1197993 : hb 1197993 : hb 1197993 : hb 1197993 : hb 1197993 : hb 1197993 : hb 1197993 : hb 1197993 : hb 1197993 
+first hb: : hb 1197993  last hb: : hb 1197993
+id rows: 0  ids: 
+event types:    1 event: resync 
+--- control summary
+resync frames: 0
+first frame: : hb 1197993  
+hb lines: : hb 1197993 : hb 1197993 : hb 1197993 : hb 1197993 : hb 1197993 : hb 1197993 : hb 1197993 : hb 1197993 : hb 1197993 
+first hb: : hb 1197993  last hb: : hb 1197993
+id rows: 0  ids: 
+event types: 

@@ -1,0 +1,167 @@
+event: resync
+data: {"head":1197993}
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+: hb 1197993
+
+id: 1197994
+event: msg
+data: {"sid":"04a23c5d-d305-4388-9869-a2a957c00c6f","m":{"id":"25b5a83b-b177-492f-ab18-aa75643b3695","role":"user","kind":"text","text":"how do i go through the quiz on facebook app?","ts":1792138840473}}
+
+: hb 1197994
+
+id: 1197995
+event: busy
+data: {"sid":"04a23c5d-d305-4388-9869-a2a957c00c6f","busy":true}
+
+: hb 1197995
+
+id: 1197996
+event: msg
+data: {"sid":"04a23c5d-d305-4388-9869-a2a957c00c6f","m":{"id":"3cfc5a4a-7e41-4373-a8f2-0b508e1ad35d","role":"assistant","kind":"thinking","text":"(thinking)","ts":1792138854814}}
+
+id: 1197997
+event: msg
+data: {"sid":"04a23c5d-d305-4388-9869-a2a957c00c6f","m":{"id":"67b76983-7871-4fac-b1b1-8e108d329e79","role":"assistant","kind":"tool_use","text":"Bash: {\n  \"command\": \"set -a; source ~/.config/meta-ads.env; set +a\\ncurl -sg \\\"https://graph.facebook.com/v23.0/120253063959590131?fields=name,preview_shareable_link&access_token=$ACCESS_TOKEN\\\"\",\n  \"description\": \"Get a shareable preview link for the Beginner friendly ad\"\n}","ts":1792138855756,"toolUseId":"toolu_01QniVThC5EaAvYa5tCasB2W","tool":{"name":"Bash","target":"set -a; source ~/.config/meta-ads.env; set +a"}}}
+
+id: 1197998
+event: msg
+data: {"sid":"04a23c5d-d305-4388-9869-a2a957c00c6f","m":{"id":"90221912-3353-4bea-875c-87140c1a10f3","role":"user","kind":"tool_result","text":"{\"name\":\"Purchases \\u00b7 fs.app \\u00b7 Beginner friendly at home \\u00b7 37s\",\"preview_shareable_link\":\"https:\\/\\/fb.me\\/1WgWLnY2UHQ6Ih0\",\"id\":\"120253063959590131\"}","ts":1792138857170,"toolUseId":"toolu_01QniVThC5EaAvYa5tCasB2W","isError":false}}
+
+: hb 1197998
+
+id: 1197999
+event: msg
+data: {"sid":"04a23c5d-d305-4388-9869-a2a957c00c6f","m":{"id":"e33a7e83-303b-4892-91c8-57efd8c8757e","role":"assistant","kind":"thinking","text":"(thinking)","ts":1792138872222}}
+
+id: 1198000
+event: msg
+data: {"sid":"04a23c5d-d305-4388-9869-a2a957c00c6f","m":{"id":"4d85b7c7-d7e4-40ac-8995-70fc675c9b34","role":"assistant","kind":"text","text":"The easiest way is through the real ad, so you see exactly what customers see:\n\n1. On your iPhone, tap this preview link for the Beginner friendly ad: https://fb.me/1WgWLnY2UHQ6Ih0. It should load the ad in the Facebook app.\n2. Tap **Learn more** on the ad. The quiz loads inside Facebook's own browser, with Facebook's bar on the screen.\n3. Go through the quiz. Use an email like `me+fbtest@eugenechantk.me`, so I can leave your test out of the numbers.\n4. On the price screen, tap the **Apple Pay** button.\n5. Check whether the Apple Pay sheet slides up. Then tap Cancel. Do not confirm with Face ID, because that would start a real free trial.\n\nIf the link loads in Safari instead of Facebook, the test doesn't count. In that case, make a Facebook post set to \"Only me\" with `fiftystrong.app/quiz` in it, and tap the link in the post.\n\nThe preview costs nothing. The campaign has hit its cap, so nothing is spending.\n\nTell me what happens when you tap Apple Pay: does the sheet appear, or does nothing happen?","ts":1792138872225}}
+
+: hb 1198000
+
+id: 1198001
+event: busy
+data: {"sid":"04a23c5d-d305-4388-9869-a2a957c00c6f","busy":false}
+
+: hb 1198001
+
+: hb 1198001
+
+: hb 1198001
+
+: hb 1198001
+
+: hb 1198001
+
+: hb 1198001
+
+: hb 1198001
+
+: hb 1198001
+
+: hb 1198001
+
+: hb 1198001
+
+: hb 1198001
+
+: hb 1198001
+
+: hb 1198001
+
+: hb 1198001
+
+: hb 1198001
+
+: hb 1198001
+
+: hb 1198001
+
+id: 1198002
+event: busy
+data: {"sid":"f95cd893-9990-4b8d-96e8-c06228b5c189","busy":true}
+
+id: 1198003
+event: queue
+data: {"sid":"f95cd893-9990-4b8d-96e8-c06228b5c189","queue":[]}
+
+id: 1198004
+event: busy
+data: {"sid":"f95cd893-9990-4b8d-96e8-c06228b5c189","busy":false}
+
+: hb 1198004
+
+: hb 1198004
+
+: hb 1198004
+
+: hb 1198004
+
+: hb 1198004
+
+: hb 1198004
+
+: hb 1198004
+
+: hb 1198004
+
+: hb 1198004
+
+: hb 1198004
+
+: hb 1198004
+
+: hb 1198004
+
+: hb 1198004
+
+: hb 1198004
+
+: hb 1198004
+
+: hb 1198004
+

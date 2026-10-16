@@ -1,0 +1,2 @@
+pro-probe3: resync head=1197993 firstId=1197994 lastId=1198004 n=11 contiguous=yes startsAtHead+1=yes sameAsControl=yes
+air-probe2: resync head=77541 firstId=77542 lastId=77546 n=5 contiguous=yes startsAtHead+1=yes sameAsControl=yes

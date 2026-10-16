@@ -1,0 +1,40 @@
+### SC1 — GET /api/sessions on the live Pro (2026-10-16 16:10:44 +0800)
+$ curl -sS -D - http://127.0.0.1:8766/api/sessions  (body saved to 03-sc1-sessions.json)
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Fri, 16 Oct 2026 08:10:12 GMT
+Content-Length: 178775
+
+$ jq summary
+{
+  "rows": 26,
+  "withLastUserAtKey": 26,
+  "lastUserAtNumeric": 23,
+  "lastUserAtNull": 3,
+  "taskNonNull": 8
+}
+$ rows with null lastUserAt (no user turn recorded yet)
+{"sessionId":null,"agent":"codex","title":"Resources","lastUserText":null}
+{"sessionId":"01a14082-49e1-7293-af5c-23e175bb1193","agent":"codex","title":"Scheduled task: FiftyStrong TikTok — @roxie_bennett (3 daily sessions) …","lastUserText":null}
+{"sessionId":"01a1415d-8a30-7260-8f6b-20d7ea8ec782","agent":"codex","title":"Scheduled task: FiftyStrong TikTok — @roxiebennettfitness (3 daily sess…","lastUserText":null}
+$ rows carrying a task object
+{"sessionId":"01a14082-49e1-7293-af5c-23e175bb1193","task":{"id":"93e8f1e3-d634-4fec-9eaf-5fb587225dd6","name":"FiftyStrong TikTok — @roxie_bennett (3 daily sessions)"}}
+{"sessionId":"01a140ef-9858-7351-94e9-e495cecafc40","task":{"id":"ef93c86a-2a01-4415-a020-eba95c6cf4df","name":"FiftyStrong Instagram — @roxiebennettfitness"}}
+{"sessionId":"01a14127-446d-7390-95f1-601e29977a60","task":{"id":"1cbc925f-da81-41d8-8ce4-e31c457baead","name":"FiftyStrong Instagram — @roxie_bennett_"}}
+{"sessionId":"01a1415d-8a30-7260-8f6b-20d7ea8ec782","task":{"id":"3f93c294-b349-4025-9112-4677da8cf87f","name":"FiftyStrong TikTok — @roxiebennettfitness (3 daily sessions)"}}
+{"sessionId":"01a1419e-11ec-7053-8744-c8ee74641eb4","task":{"id":"29042320-d6e7-48fc-9590-458eff0af186","name":"Dating and AI TikTok — @edythoverstrom828 (3 daily sessions)"}}
+{"sessionId":"01a141cf-fbfe-7a91-9124-7f72ad65e77a","task":{"id":"71be592e-c5cb-40ac-ac88-f2cdbdca7c09","name":"Dating and AI TikTok — @taylor.balor (3 daily sessions)"}}
+{"sessionId":"01a14202-78df-7892-9544-e30233270516","task":{"id":"dd95c530-8ee1-421f-8662-60c64ef89793","name":"Dating and AI TikTok — @kai.averi (3 daily sessions)"}}
+{"sessionId":"01a142ec-1037-79f2-89fc-5c358a896192","task":{"id":"93e8f1e3-d634-4fec-9eaf-5fb587225dd6","name":"FiftyStrong TikTok — @roxie_bennett (3 daily sessions)"}}
+
+### Cross-check: each task row against ~/.lfg/scheduled-tasks.json runs[] (sessionId -> taskId/taskName)
+{"sessionId":"01a14082-49e1-7293-af5c-23e175bb1193","apiTaskId":"93e8f1e3-d634-4fec-9eaf-5fb587225dd6","apiName":"FiftyStrong TikTok — @roxie_bennett (3 daily sessions)","run":{"taskId":"93e8f1e3-d634-4fec-9eaf-5fb587225dd6","taskName":"FiftyStrong TikTok — @roxie_bennett (3 daily sessions)","status":"succeeded"},"match":true}
+{"sessionId":"01a140ef-9858-7351-94e9-e495cecafc40","apiTaskId":"ef93c86a-2a01-4415-a020-eba95c6cf4df","apiName":"FiftyStrong Instagram — @roxiebennettfitness","run":{"taskId":"ef93c86a-2a01-4415-a020-eba95c6cf4df","taskName":"FiftyStrong Instagram — @roxiebennettfitness","status":"succeeded"},"match":true}
+{"sessionId":"01a14127-446d-7390-95f1-601e29977a60","apiTaskId":"1cbc925f-da81-41d8-8ce4-e31c457baead","apiName":"FiftyStrong Instagram — @roxie_bennett_","run":{"taskId":"1cbc925f-da81-41d8-8ce4-e31c457baead","taskName":"FiftyStrong Instagram — @roxie_bennett_","status":"succeeded"},"match":true}
+{"sessionId":"01a1415d-8a30-7260-8f6b-20d7ea8ec782","apiTaskId":"3f93c294-b349-4025-9112-4677da8cf87f","apiName":"FiftyStrong TikTok — @roxiebennettfitness (3 daily sessions)","run":{"taskId":"3f93c294-b349-4025-9112-4677da8cf87f","taskName":"FiftyStrong TikTok — @roxiebennettfitness (3 daily sessions)","status":"succeeded"},"match":true}
+{"sessionId":"01a1419e-11ec-7053-8744-c8ee74641eb4","apiTaskId":"29042320-d6e7-48fc-9590-458eff0af186","apiName":"Dating and AI TikTok — @edythoverstrom828 (3 daily sessions)","run":{"taskId":"29042320-d6e7-48fc-9590-458eff0af186","taskName":"Dating and AI TikTok — @edythoverstrom828 (3 daily sessions)","status":"succeeded"},"match":true}
+{"sessionId":"01a141cf-fbfe-7a91-9124-7f72ad65e77a","apiTaskId":"71be592e-c5cb-40ac-ac88-f2cdbdca7c09","apiName":"Dating and AI TikTok — @taylor.balor (3 daily sessions)","run":{"taskId":"71be592e-c5cb-40ac-ac88-f2cdbdca7c09","taskName":"Dating and AI TikTok — @taylor.balor (3 daily sessions)","status":"succeeded"},"match":true}
+{"sessionId":"01a14202-78df-7892-9544-e30233270516","apiTaskId":"dd95c530-8ee1-421f-8662-60c64ef89793","apiName":"Dating and AI TikTok — @kai.averi (3 daily sessions)","run":{"taskId":"dd95c530-8ee1-421f-8662-60c64ef89793","taskName":"Dating and AI TikTok — @kai.averi (3 daily sessions)","status":"succeeded"},"match":true}
+{"sessionId":"01a142ec-1037-79f2-89fc-5c358a896192","apiTaskId":"93e8f1e3-d634-4fec-9eaf-5fb587225dd6","apiName":"FiftyStrong TikTok — @roxie_bennett (3 daily sessions)","run":{"taskId":"93e8f1e3-d634-4fec-9eaf-5fb587225dd6","taskName":"FiftyStrong TikTok — @roxie_bennett (3 daily sessions)","status":"succeeded"},"match":true}
+$ live rows whose sessionId appears in runs[] but lack a task object (should be none)
+(end)

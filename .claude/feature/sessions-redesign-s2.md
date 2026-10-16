@@ -9,7 +9,7 @@ https://claude.ai/artifact/F2B1MNbv5oxuscm237M9sD
 
 **Review surface:** the canvas page **S2 build plan (Oct 15)**. It has 13 boards, each showing a live S2 design with numbered pins and the FE/BE work for every pin. This file is the working copy of the same plan.
 
-Status (2026-10-16): **Phases 1–4 verified.** Phases 1–3 committed (`7dd6046`, docs `2a29201`), `main` merged at `2672dad`; Phase 4 (desktop list + B12) verified, not yet committed. Phase 5 (ship) waits for Eugene's go-ahead. Worktree `worktree-sessions-redesign-s2`, based on local `main` at `8b0be91`.
+Status (2026-10-16): **Phases 1–5 done; shipped.** Phases 1–4 verified and committed; `main` at `8aaffc7`, pushed. TestFlight 202610161522 (v1.3.0) is VALID and in internal testing; both servers run `8aaffc7`; the desktop app is installed on both Macs. Phase 5 found and fixed an older server bug in `/api/events` (see Phase 5). Worktree `worktree-sessions-redesign-s2`, based on local `main` at `8b0be91`.
 
 Tier: **product** (lfg ships to TestFlight and both Macs).
 
@@ -252,7 +252,7 @@ Dropped 2026-10-15: **B7**, the failure code behind "Not sent · Air is offline"
 
 ## Success criteria
 
-- [ ] SC1: `GET /api/sessions` returns `task` for sessions a scheduled task started, and `GET /api/sessions/resumable` returns `total`. *(2026-10-16: `total` measured in-process on the Pro's real transcripts (null, then 3,982); `task` covered by `src/task-origin.test.ts`. The live-host curl waits for the Phase 5 server restart.)* — **Verify by:** curl on the live host after restart; one task session shows its task, and the total matches a count of closed transcripts.
+- [x] SC1: `GET /api/sessions` returns `task` for sessions a scheduled task started, and `GET /api/sessions/resumable` returns `total`. *(2026-10-16: `total` measured in-process on the Pro's real transcripts (null, then 3,982); `task` covered by `src/task-origin.test.ts`. Live on the Pro after the Phase 5 restart: `total` 4,001 on the first page, `task` on 8 scheduled-task rows, `lastUserAt` on every row.)* — **Verify by:** curl on the live host after restart; one task session shows its task, and the total matches a count of closed transcripts.
 - [x] SC2: Working rows show "Working" and the running time, with no new server field or journal event for it. — **Verify by:** `SessionRowLine` test for a working session; the diff adds no journal event type.
 - [x] SC3: The phone list shows the five groups with the right members: Paused sessions in Needs input, Restarting in Working, no child-agent rows. Collapse state survives a relaunch. — **Verify by:** LFGCore tests on the group rules; simulator screenshot against the live server; relaunch check.
 - [x] SC4: Each row's line 2 matches its state (question, sign-in, Working + time, New reply, idle copy, closed copy). — **Verify by:** `SessionRowLine` tests, one per state; screenshot.
@@ -265,7 +265,7 @@ Dropped 2026-10-15: **B7**, the failure code behind "Not sent · Air is offline"
 - [ ] SC11: The sign-in flow has a review step on the agent path, and only the switched-on domains are sent. — **Verify by:** live request; server log shows the domain list. *(2026-10-16: review step and per-domain send count checked on the fixture; the delivery leg needs a connected Chrome target and is not yet exercised live.)*
 - [x] SC12: The session sheet holds every action of the old ••• menu, and each one works. — **Verify by:** checklist walk on the simulator, one tap per item. *(2026-10-16: 15/15 walked on a throwaway session; fork's refusal was the rig's two-host claim, `phase3-live/live-checks.md`.)*
 - [x] SC13: The desktop list at 400pt shows Needs input / Working / Recent with the time column and status lines from live data; offline-host rows stay visible and dimmed. — **Verify by:** `--window-shot 400` for layout plus a live-data probe (memory: window shots render fixtures); stop the Air's server briefly or use the stub host.
-- [ ] SC14: No regression in send delivery, prompt answering or the Live Activity. — **Verify by:** existing `bun test` and LFGCore suites green; one end-to-end send + answer on a real session.
+- [x] SC14: No regression in send delivery, prompt answering or the Live Activity. *(2026-10-16: bun 1,240 and LFGCore 644 + 415 green; live answer + send in the S2 app on the Pro pass after the `/api/events` fix; Live Activity slices computed with no failures after both restarts. See Phase 5.)* — **Verify by:** existing `bun test` and LFGCore suites green; one end-to-end send + answer on a real session.
 
 ## Steps to verify
 
@@ -352,6 +352,7 @@ The app follows the system appearance today. **Decision: S2 tokens become the da
 - 2026-10-16 — Terminal Wide follows the board: it shrinks the type to 10.5pt and fits the width (about 58 columns on the iPhone 17 Pro). The old Wide kept 13pt type and scrolled a 120-column grid sideways; that is gone. Alternative: keep the 120-column scroll and deviate from the board. Chosen because the canvas is the reference; easy to restore if 120 columns matter more.
 - 2026-10-16 — Terminal header fills use the colour the canvas draws (#313132) rather than SwiftUI's blend of the CSS `rgba(255,255,255,0.12)` (#28282A).
 - 2026-10-16 — The terminal's keyboard key hides and shows the keyboard, as the board's does ("Hide keyboard" / "Show keyboard"), instead of swapping in SwiftTerm's F-key and symbol panel, which is no longer reachable. Hidden keeps the key row on screen at the board's height; iOS draws its keyboard backdrop below it.
+- 2026-10-16 — Phase 5: fixed the deaf `/api/events` resync on the server, not in the app. One server change fixes every shipped client on both hosts at once; an app-side reconnect would need a new build and still leave older builds deaf.
 - 2026-10-16 — Desktop: the window keeps the native macOS window buttons (14pt, macOS 26 spacing) rather than moving them to the board's drawn 12pt traffic lights; system chrome, like the phone's sheets and glass buttons. The switcher's 24pt centring offset is from the board's numbers.
 
 ## Phase 1 — phone list (implementation notes) — VERIFIED 2026-10-15 (verifier round 5 PASS)
@@ -461,6 +462,18 @@ Implementation notes (2026-10-16):
 - Files: `src/resumable-total.ts` (+ test; B12 count and cache) wired into `listResumable`; LFGCore `DesktopSessionList.swift` (+ `DesktopSessionListTests`, groups / lines / ages / meta) and `SessionListRow.swift` are compiled into the Mac app by `desktop/build.sh`; `desktop/SessionsListS2.swift` (colours, glyphs, search button, host strip, group header, row, `SessionItem` facts); `desktop/LFGSessions.swift` (prompt / task / total decoding, DF5 carry-over, `SessionItem.hostOffline`, the S2 list in place of `List`, title bar, `--window-shot --board` and `--live [--refresh-twice s]`).
 - Decisions: every group sorts newest first (the board shows 2m above 6m; the menu-bar projection's oldest-first was not carried over). Idle rows say "Ready for your next message" (the phone's copy; the board shows no idle row). An offline host's rows are idle for every count and sit in Recent. Child-agent rows leave the list (as on the phone). "· N working" hides at 0. Hidden directories moved into the "By status" menu. The "Unreachable: …" footer is gone (the host strip says it). The window-shot colours are read after converting its Display P3 profile to sRGB.
 
+## Phase 5 — ship — DONE 2026-10-16
+
+What shipped:
+
+- **Servers.** Pro restarted from the main checkout (S2 fields live), then again for the stream fix (`8aaffc7`). Air: `git reset --mixed origin/main` on the synced tree, the three fix files taken from git because Syncthing had not delivered them after 4.5 minutes (its `serve.ts` matched `7ae892f` byte for byte first), `bun install --frozen-lockfile`, restart by port under `serve-forever.sh`.
+- **TestFlight 202610161522** (v1.3.0) from the clean worktree at `7ae892f`. Upload 70 s over Surfshark (utun5, 10.14.x), not LetsVPN. Verify lane: VALID, train 1.3.0 highest, internal IN_BETA_TESTING, IPA bundles Cloudflare Access for both hosts. The iOS code is unchanged since; the fix is server-only.
+- **Desktop app** on both Macs at `/Applications/lfg.app`, launched by path. Old bundles: `~/Library/Application Support/lfg-desktop-backups/20261016-s2-sessions/`.
+
+**Bug found by the end-to-end check, and fixed (server, `8aaffc7`).** The first live answer in the S2 app left the question panel up for 40 s, and a later reply never appeared until the session was reopened. The server had delivered every event; the app's stream was connected the whole time. Cause: when the app's saved cursor is too old, `/api/events` sent one `resync` frame and then only heartbeats. The resync branch never subscribed to the journal. The app reads heartbeats as "caught up" and keeps the connection, so busy, prompt and message events after it were lost until the connection dropped. A fresh install or a phone that has not opened the app within the 14-day retention hits it. It predates S2 (`649f3c7`). An old-build comparison first looked like an S2 regression, because that run started from a valid saved cursor. Proof: a stale-cursor curl got 0 events while the head moved 7; a current-cursor control got 11. Fix: `src/events-stream.ts` subscribes from the head it announces, in the same tick. 4 new tests; the resync test fails on the old code. After deploy: stale-cursor probes deliver events on the Pro (95 in 25 s) and on the Air (5, with a session running). A fresh install of the S2 app (RESYNC on both hosts at launch) then cleared an answered question and drew both replies live.
+
+Other observations (pre-existing, not fixed): a new session appears in the app's list only after the 60 s refresh, because the app refreshes for an unknown session's message events but not its prompt or busy events. The scraped preamble above a question can show the agents-md hook line. `GET /api/sessions/resumable` takes 17–21 s on the Pro (about 4,000 transcripts), on later pages too, which do not count the total; the two real-corpus tests timed out the same way before Phase 4.
+
 ## Method from Phase 3 on (after Eugene's correction, 2026-10-16)
 
 Phase 2 took 10 verifier rounds because the verifier was my measuring tool. From Phase 3:
@@ -535,6 +548,12 @@ Phase 2 took 10 verifier rounds because the verifier was my measuring tool. From
 | P4 | Visual verifier round 2 (open + every fold state) | FAIL on one delta: the Working hint "by last activity" stayed when the group folded (the board hides it). Round-1 fixes confirmed; title-bar line only in the off-screen render | `…/phase4-r2/evidence.md` |
 | P4 | Round 2 fix | The hint shows only while Working is open (open: ink 290–299 vs board 289–299; folded and all-folded: none) | — |
 | P4 | **Visual verifier round 3 (open + each fold + all folded)** | **PASS** after closing two gaps with captures of the current build: on screen the title bar is the board's #1A1A1E with no line (active and inactive); a real click folds Working (chevron ›, hint and rows gone) and a second click restores it byte-identically. Remaining observations ≤1.5pt (1x rounding, SF widths) | `…/phase4-r3/evidence.md`, `…/phase4-r3-gaps/` |
+| P5 | Deploy + TestFlight | Pro and Air servers on `8aaffc7`; TestFlight 202610161522 VALID, internal IN_BETA_TESTING; desktop installed on both Macs | `ios/fastlane/deploy-202610161522.log`, `verify-202610161522.log` (worktree) |
+| P5 | End-to-end answer + send (before the fix) | Answer delivered (server got it at once) but the panel stayed 40 s; reply "received" never drew until reopen. Old build on a valid cursor drew its reply in ~1 s | `…/phase5-e2e/` (`answer-and-send.mov`, `send-strip.png`, `base-send-strip.png`) |
+| P5 | Stream fix proof | Stale cursor before: resync + 0 rows while head moved 7; control: 11 rows. After: Pro 95 rows, Air 5 rows (head moved) | commit `8aaffc7`, `src/events-stream.test.ts` |
+| P5 | End-to-end answer + send (after the fix, fresh install) | RESYNC on both hosts at launch; answering cleared the panel and drew "You picked Autumn."; the reply "fourth" drew live without reopening | `…/phase5-e2e/fixed-answer-and-send.mov`, `fixed-after-answer.jpg`, `fixed-after-send.jpg` |
+| P5 | **Independent audit (verification-auditor)** | **PASS** on all six checks: both servers started after `8aaffc7` with matching `events-stream.ts`; SC1 live (26 rows with `lastUserAt`, 8 task rows matching their run records, `total` 3,990); stale-cursor streams on both hosts delivered the same events as a control stream over 10–15 min; TestFlight VALID / IN_BETA_TESTING; desktop signed and running on both Macs with S2 code; clean-copy bun 1,240/1,240 and LFGCore green. Its own scope excluded sends, so the live send + answer evidence is the row above | `…/phase5-audit/evidence.md` |
+| P5 | Suites at `8aaffc7` | bun 1,240 (2 slow real-corpus tests need `--timeout 60000`; they fail the same way before Phase 4), LFGCore 644 XCTest + 415 Swift Testing | — |
 
 ## Bugs
 

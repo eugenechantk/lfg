@@ -1,0 +1,25 @@
+### SC1 — GET /api/sessions/resumable?limit=5 on the live Pro
+$ curl -sS -D - "http://127.0.0.1:8766/api/sessions/resumable?limit=5"   (call #1, ~16:10:50 +0800)
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Fri, 16 Oct 2026 08:11:15 GMT
+Content-Length: 2444
+
+observed: http=200 t=21.2s
+{"total":3990,"totalType":"number","n":5,"nextBefore":1792137746935.8445,"firstRow":{"sessionId":"3ae67248-4e82-4a5f-b11c-2acf730604d3","agent":"claude","closed":true,"lastActivityAt":1792138091471.5432}}
+
+$ call #2 (16:11:35) with /api/ping sampled every 1s in parallel
+observed: resumable#2 http=200 t=17.8s
+{"total":3991,"totalType":"number","n":5,"nextBefore":1792137746935.8445}
+ping 16:11:35 t=0.004782
+ping 16:11:36 t=0.011920
+ping 16:11:37 t=0.004430
+ping 16:11:38 t=0.048779
+ping 16:11:39 t=0.004285
+ping 16:11:40 t=0.031883
+ping 16:11:41 t=0.037572
+ping 16:11:42 t=0.000678
+ping 16:11:43 t=0.018114
+ping 16:11:45 t=0.005480
+ping 16:11:46 t=0.011955
+ping 16:11:47 t=0.001140

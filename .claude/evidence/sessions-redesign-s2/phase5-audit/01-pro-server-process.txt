@@ -1,0 +1,19 @@
+### Pro (local) — Eugenes-MacBook-Pro — 2026-10-16 16:09:26 +0800
+$ lsof -nP -iTCP:8766 -sTCP:LISTEN -t
+94865
+$ ps -o pid=,lstart=,command= -p $P
+94865 Fri Oct 16 15:53:49 2026     /Users/eugenechan/.bun/bin/bun run src/cli.ts serve
+$ lsof -a -p $P -d cwd -Fn
+n/Users/eugenechan/dev/personal/lfg
+$ git -C /Users/eugenechan/dev/personal/lfg log -1 --format="%H %ci" 8aaffc7
+8aaffc7624c0f882fa721c687aed69438ace87bf 2026-10-16 15:53:25 +0800
+$ git rev-parse HEAD; git rev-parse origin/main
+8aaffc7624c0f882fa721c687aed69438ace87bf
+8aaffc7624c0f882fa721c687aed69438ace87bf
+$ shasum src/events-stream.ts (working tree) + git show 8aaffc7:src/events-stream.ts | shasum
+839249bb94b6b0b4050516a6e4b568a43945bb16  /Users/eugenechan/dev/personal/lfg/src/events-stream.ts
+839249bb94b6b0b4050516a6e4b568a43945bb16  -
+$ stat -f "%Sm" src/events-stream.ts src/commands/serve.ts
+/Users/eugenechan/dev/personal/lfg/src/events-stream.ts Oct 16 15:53:30 2026
+/Users/eugenechan/dev/personal/lfg/src/commands/serve.ts Oct 16 15:53:30 2026
+$ git status --short -- src/ (tracked server source dirty?)

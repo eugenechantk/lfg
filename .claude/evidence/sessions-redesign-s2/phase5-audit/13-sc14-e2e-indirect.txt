@@ -1,0 +1,18 @@
+### Indirect, read-only: the implementer's own SC14 send + answer session (not driven by this audit)
+$ jq user/assistant timeline of /Users/eugenechan/.claude/projects/-Users-eugenechan-inbox-s2-e2e-check/3ae67248-4e82-4a5f-b11c-2acf730604d3.jsonl
+2026-10-16T08:04:14.480Z	user	This is an automated check of the lfg app, run by another Claude session. Use the AskUserQuestion tool exactly once to ask: 'Pick a season f
+2026-10-16T08:04:21.005Z	assistant	AskUserQuestion
+2026-10-16T08:06:42.598Z	user	Your questions have been answered: "Pick a season for the check"="Autumn". You can now continue with these answers in mind.
+2026-10-16T08:06:45.284Z	assistant	You picked Autumn.
+2026-10-16T08:07:22.173Z	user	Reply with the single word fourth, then stop.
+2026-10-16T08:07:23.883Z	assistant	fourth
+$ grep 3ae67248-4e82-4a5f-b11c-2acf730604d3 ~/.lfg/sendq.log  (fields: ts, event, state only)
+{"ts":null,"ev":"enqueue","state":"pending","via":null}
+{"ts":null,"ev":"deliver-start","state":"sending","via":null}
+{"ts":null,"ev":"deliver-queued","state":"queued","via":null}
+{"ts":null,"ev":"reconcile-delivered","state":"delivered","via":null}
+$ same sendq.log rows with the real field names (t, event, status, attempts, redeliveries)
+{"t":"2026-10-16T08:07:21.811Z","event":"enqueue","status":"pending","attempts":0,"redeliveries":0}
+{"t":"2026-10-16T08:07:21.812Z","event":"deliver-start","status":"sending","attempts":0,"redeliveries":0}
+{"t":"2026-10-16T08:07:22.325Z","event":"deliver-queued","status":"queued","attempts":1,"redeliveries":0}
+{"t":"2026-10-16T08:07:22.546Z","event":"reconcile-delivered","status":"delivered","attempts":1,"redeliveries":0}

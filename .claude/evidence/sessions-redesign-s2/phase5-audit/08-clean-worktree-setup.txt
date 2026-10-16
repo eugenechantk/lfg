@@ -1,0 +1,22 @@
+### Clean worktree setup (2026-10-16 16:17:07 +0800)
+$ git -C /Users/eugenechan/dev/personal/lfg worktree add --detach /private/tmp/lfg-audit-8aaffc7 8aaffc7
+Preparing worktree (detached HEAD 8aaffc7)
+Updating files:  55% (2247/4038)Updating files:  56% (2262/4038)Updating files:  57% (2302/4038)Updating files:  58% (2343/4038)Updating files:  59% (2383/4038)Updating files:  60% (2423/4038)Updating files:  61% (2464/4038)Updating files:  62% (2504/4038)Updating files:  63% (2544/4038)Updating files:  64% (2585/4038)Updating files:  65% (2625/4038)Updating files:  66% (2666/4038)Updating files:  67% (2706/4038)Updating files:  68% (2746/4038)Updating files:  69% (2787/4038)Updating files:  70% (2827/4038)Updating files:  71% (2867/4038)Updating files:  72% (2908/4038)Updating files:  73% (2948/4038)Updating files:  74% (2989/4038)Updating files:  75% (3029/4038)Updating files:  76% (3069/4038)Updating files:  77% (3110/4038)Updating files:  78% (3150/4038)Updating files:  79% (3191/4038)Updating files:  80% (3231/4038)Updating files:  81% (3271/4038)Updating files:  82% (3312/4038)Updating files:  83% (3352/4038)Updating files:  84% (3392/4038)Updating files:  85% (3433/4038)Updating files:  86% (3473/4038)Updating files:  87% (3514/4038)Updating files:  88% (3554/4038)Updating files:  89% (3594/4038)Updating files:  90% (3635/4038)Updating files:  91% (3675/4038)Updating files:  92% (3715/4038)Updating files:  93% (3756/4038)Updating files:  94% (3796/4038)Updating files:  95% (3837/4038)Updating files:  96% (3877/4038)Updating files:  97% (3917/4038)Updating files:  98% (3958/4038)Updating files:  99% (3998/4038)Updating files: 100% (4038/4038)Updating files: 100% (4038/4038), done.
+HEAD is now at 8aaffc7 fix: a resynced event stream keeps delivering events
+$ ln -s /Users/eugenechan/dev/personal/lfg/node_modules /private/tmp/lfg-audit-8aaffc7/node_modules
+$ git -C /private/tmp/lfg-audit-8aaffc7 rev-parse HEAD; git status --short (expect only nothing; node_modules is gitignored)
+8aaffc7624c0f882fa721c687aed69438ace87bf
+?? node_modules
+(end status)
+$ ls /private/tmp/lfg-audit-8aaffc7/.env (bun auto-loads .env; a clean checkout has none)
+ls: /private/tmp/lfg-audit-8aaffc7/.env: No such file or directory
+### Clean worktree teardown (16:21:14)
+$ git -C /private/tmp/lfg-audit-8aaffc7 status --short   (before teardown: tests must not have modified tracked files)
+?? node_modules
+(end status)
+$ rm /private/tmp/lfg-audit-8aaffc7/node_modules   (removes the symlink only)
+drwxr-xr-x@ 172 eugenechan  staff  5504 Sep 12 01:08 /Users/eugenechan/dev/personal/lfg/node_modules
+$ git -C /Users/eugenechan/dev/personal/lfg worktree remove /private/tmp/lfg-audit-8aaffc7
+exit=0
+$ git worktree list | grep lfg-audit (expect none); ls 
+ls: /private/tmp/lfg-audit-8aaffc7: No such file or directory

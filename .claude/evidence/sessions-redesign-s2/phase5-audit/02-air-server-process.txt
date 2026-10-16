@@ -1,0 +1,40 @@
+### Air (ssh air) — Eugenes-MacBook-Air.local — 2026-10-16 16:09:41 +0800
+$ lsof -nP -iTCP:8766 -sTCP:LISTEN -t
+90094
+$ ps -o pid=,lstart=,command= -p $P
+90094 Fri Oct 16 16:00:23 2026     /opt/homebrew/bin/bun run src/cli.ts serve
+$ lsof -a -p $P -d cwd -Fn
+/Users/eugenechan/dev/personal/lfg
+$ git log -1 --format="%H %ci" HEAD ; git rev-parse origin/main
+$ git merge-base --is-ancestor 8aaffc7 HEAD
+8aaffc7 NOT ancestor
+$ shasum src/events-stream.ts
+zsh:12: no such file or directory: env DEVELOPER_DIR=/Library/Developer/CommandLineTools git
+zsh:12: no such file or directory: env DEVELOPER_DIR=/Library/Developer/CommandLineTools git
+zsh:14: no such file or directory: env DEVELOPER_DIR=/Library/Developer/CommandLineTools git
+839249bb94b6b0b4050516a6e4b568a43945bb16  src/events-stream.ts
+$ stat -f "%N %Sm" src/events-stream.ts src/commands/serve.ts
+src/events-stream.ts Oct 16 16:00:20 2026
+src/commands/serve.ts Oct 16 16:00:20 2026
+$ git diff --stat 8aaffc7 -- src/ (working tree vs fix commit)
+$ git status --short -- src/
+zsh:20: no such file or directory: env DEVELOPER_DIR=/Library/Developer/CommandLineTools git
+zsh:22: no such file or directory: env DEVELOPER_DIR=/Library/Developer/CommandLineTools git
+### Air git state (DEVELOPER_DIR=/Library/Developer/CommandLineTools git)
+$ git log -1 --format="%H %ci %s" HEAD ; git rev-parse origin/main
+8aaffc7624c0f882fa721c687aed69438ace87bf 2026-10-16 15:53:25 +0800 fix: a resynced event stream keeps delivering events
+8aaffc7624c0f882fa721c687aed69438ace87bf
+$ git merge-base --is-ancestor 8aaffc7 HEAD
+8aaffc7 IS an ancestor of HEAD
+$ git show 8aaffc7:src/events-stream.ts | shasum
+839249bb94b6b0b4050516a6e4b568a43945bb16  -
+$ git diff --stat 8aaffc7 -- src/ (working tree vs fix commit)
+(end diff)
+$ git status --short -- src/
+(end status)
+### Bun versions (server binaries)
+Pro: $ ~/.bun/bin/bun --version
+1.3.14
+Air: $ /opt/homebrew/bin/bun --version; ~/.bun/bin/bun --version
+1.3.14
+zsh:1: no such file or directory: /Users/eugenechan/.bun/bin/bun

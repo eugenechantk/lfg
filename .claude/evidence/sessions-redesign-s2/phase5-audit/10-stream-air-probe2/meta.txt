@@ -1,0 +1,18 @@
+host=Eugenes-MacBook-Air.local start=2026-10-16 16:14:52 +0800 ping.seq=77541 secs=900
+resync curl exit=28
+control curl exit=28
+end=2026-10-16 16:29:52 +0800 ping.seq=77546
+--- resync summary
+resync frames: 1
+first frame: event: resync data: {"head":77541} 
+hb lines: : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77545 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 
+first hb: : hb 77541  last hb: : hb 77546
+id rows: 5  ids: 77542 77543 77544 77545 77546 
+event types:    2 event: busy    2 event: msg    1 event: queue    1 event: resync 
+--- control summary
+resync frames: 0
+first frame: : hb 77541  
+hb lines: : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77541 : hb 77545 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 : hb 77546 
+first hb: : hb 77541  last hb: : hb 77546
+id rows: 5  ids: 77542 77543 77544 77545 77546 
+event types:    2 event: busy    2 event: msg    1 event: queue 

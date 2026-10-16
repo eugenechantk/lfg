@@ -1,0 +1,37 @@
+### TestFlight — build 202610161522 (2026-10-16 16:15:17 +0800)
+$ grep (ANSI stripped) verify-202610161522.log for ground truth / VALID / DoD lines
+[15:26:40]: ipa ground truth OK: CFBundleVersion=202610161522, v1.3.0
+[15:26:40]: ipa bundles Cloudflare Access for: https://lfg-pro.eugenechantk.me, https://lfg-air.eugenechantk.me
+[15:26:51]: [1/20] build 202610161522: not visible yet
+[15:27:56]: [2/20] build 202610161522: VALID
+[15:27:59]: DoD PASS: 202610161522 VALID on train 1.3.0 (highest), internal=IN_BETA_TESTING
+[15:27:59]: fastlane.tools finished successfully 🎉
+
+$ grep (ANSI stripped) deploy-202610161522.log for train / archive version / upload lines
+[15:22:27]: Version train OK: 1.3.0 >= highest existing train 1.3.0.
+[15:22:53]: $ set -o pipefail && xcodebuild -scheme LFG -project LFG.xcodeproj -configuration Release -destination 'generic/platform=iOS' -archivePath /Users/eugenechan/Library/Developer/Xcode/Archives/2026-10-16/LFG\ 20
+[15:24:44]: Successfully exported and signed the ipa file:
+[15:25:55]: Successfully uploaded package to App Store Connect. It might take a few minutes until it's visible online.
+[15:25:55]: Successfully uploaded the new binary to App Store Connect
+[15:25:55]: fastlane.tools finished successfully 🎉
+
+$ ls -la ios/build/fastlane/LFG.ipa; shasum -a 256
+-rw-r--r--@ 1 eugenechan  staff  10765850 Oct 16 15:24 /Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/ios/build/fastlane/LFG.ipa
+6f3132aaf580dda960a692536b8bc4ceb214f8e6f036fb51db7b8b01ec8684e2  /Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/ios/build/fastlane/LFG.ipa
+$ unzip Payload/*.app/Info.plist; PlistBuddy CFBundleVersion / CFBundleShortVersionString / CFBundleIdentifier
+CFBundleVersion=202610161522
+CFBundleShortVersionString=1.3.0
+CFBundleIdentifier=com.eugenechan.lfg
+
+$ git -C worktree: commit the IPA was built from vs 8aaffc7 (iOS-side diff)
+7ae892f 2026-10-16 15:08:14 +0800 Merge main (Retry for failed runs) into worktree-sessions-redesign-s2
+$ git diff --stat 7ae892f 8aaffc7  (all paths)
+ src/commands/serve.ts     |  76 +-------------------------------
+ src/events-stream.test.ts |  90 +++++++++++++++++++++++++++++++++++++
+ src/events-stream.ts      | 110 ++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 202 insertions(+), 74 deletions(-)
+$ git diff --stat 7ae892f 8aaffc7 -- ios/ desktop/   (expect empty)
+(end)
+$ git -C .claude/worktrees/sessions-redesign-s2 rev-parse HEAD; git status --short -- ios/ desktop/ src/  (worktree state now)
+8aaffc7624c0f882fa721c687aed69438ace87bf
+(end)

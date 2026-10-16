@@ -1,0 +1,18 @@
+host=Eugenes-MacBook-Air.local start=2026-10-16 16:12:54 +0800 ping.seq=77541 secs=40
+resync curl exit=28
+control curl exit=28
+end=2026-10-16 16:13:34 +0800 ping.seq=77541
+--- resync summary
+resync frames: 1
+first frame: event: resync data: {"head":77541} 
+hb lines: : hb 77541 : hb 77541 : hb 77541 : hb 77541 
+first hb: : hb 77541  last hb: : hb 77541
+id rows: 0  ids: 
+event types:    1 event: resync 
+--- control summary
+resync frames: 0
+first frame: : hb 77541  
+hb lines: : hb 77541 : hb 77541 : hb 77541 : hb 77541 
+first hb: : hb 77541  last hb: : hb 77541
+id rows: 0  ids: 
+event types: 

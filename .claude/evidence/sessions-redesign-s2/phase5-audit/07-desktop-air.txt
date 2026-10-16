@@ -1,0 +1,31 @@
+### Desktop app — Air (Eugenes-MacBook-Air.local, 2026-10-16 16:16:29 +0800)
+$ codesign --verify --deep --strict --verbose=2 /Applications/lfg.app
+exit=0
+$ codesign -dv (Identifier/Authority/Team/Signed Time)
+/Applications/lfg.app: valid on disk
+/Applications/lfg.app: satisfies its Designated Requirement
+Identifier=com.eugenechan.lfg-desktop
+Authority=Developer ID Application: Tsz Kiu Eugene Chan (39GJBP8V5A)
+Authority=Developer ID Certification Authority
+Authority=Apple Root CA
+Signed Time=Oct 16, 2026 at 3:09:17 PM
+TeamIdentifier=39GJBP8V5A
+$ stat; shasum binary
+/Applications/lfg.app/Contents/MacOS/lfg Oct 16 15:09:17 2026
+8ac38239bfcc4f3181414275d39e66218992419a  /Applications/lfg.app/Contents/MacOS/lfg
+$ ps for /Applications/lfg.app/Contents/MacOS/lfg
+62129 Fri Oct 16 15:20:12 2026     /Applications/lfg.app/Contents/MacOS/lfg
+n/Applications/lfg.app/Contents/MacOS/lfg
+$ S2 markers installed vs pre-S2 backup (strings | grep -c)
+/Users/eugenechan/Library/Application Support/lfg-desktop-backups/20261016-s2-sessions/lfg.app
+S2DeskRow            installed=1 backup=0
+n/a
+S2DeskHostStrip      installed=1 backup=0
+n/a
+S2DeskGroupHeader    installed=1 backup=0
+n/a
+by last activity     installed=1 backup=0
+n/a
+$ ls -la backup binary (the n/a lines above are a shell artifact: grep -c printed 0 then exited 1, triggering the || branch)
+-rwxr-xr-x@ 1 eugenechan  admin  7383920 Oct 16 12:43 /Users/eugenechan/Library/Application Support/lfg-desktop-backups/20261016-s2-sessions/lfg.app/Contents/MacOS/lfg
+abfc184ccf6bdc890b52e644766391c7eef6d39b  /Users/eugenechan/Library/Application Support/lfg-desktop-backups/20261016-s2-sessions/lfg.app/Contents/MacOS/lfg
