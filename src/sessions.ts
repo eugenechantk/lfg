@@ -4033,14 +4033,19 @@ async function refreshLeasesForLiveSessions(mark: (step: string) => void = () =>
     const shared = sharedListSessions();
     const live = shared ? await shared : await listSessionsUncached({ enrichRunningWork: false });
     mark(shared ? "scan-shared" : "scan-private");
-    for (const s of live) {
-      // listSessions is briefly cached. A close can tombstone the pid after the
-      // cached row was produced but before resumable search refreshes leases.
-      // Re-check at the side effect boundary or that stale row recreates the
-      // lease releaseLease just removed, hiding the newly closed session for the
-      // full 90-second freshness window.
-      if (mayRefreshLiveLease(s.sessionId, s.pid)) await ensureLease(s.sessionId!, s.pid);
-    }
+    // All at once, not one after another: each lease is a few small awaits,
+    // and on the busy server every await queues behind the pump, so 27 serial
+    // refreshes took 1.2-3.6 s where the same work takes 0.2 s alone.
+    await Promise.all(
+      live.map((s) =>
+        // listSessions is briefly cached. A close can tombstone the pid after the
+        // cached row was produced but before resumable search refreshes leases.
+        // Re-check at the side effect boundary or that stale row recreates the
+        // lease releaseLease just removed, hiding the newly closed session for the
+        // full 90-second freshness window.
+        mayRefreshLiveLease(s.sessionId, s.pid) ? ensureLease(s.sessionId!, s.pid).catch(() => false) : Promise.resolve(false),
+      ),
+    );
   } catch {
     // Enumeration failed: fall through and read whatever leases exist. A stale
     // lease is still fresh for up to LEASE_FRESH_MS, so a transient failure
