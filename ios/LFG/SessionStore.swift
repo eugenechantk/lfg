@@ -409,6 +409,8 @@ import LFGCore
     private var links: [String: HostLink] = [:]
     /// Throttle for "an event referenced a session we don't know" refreshes.
     private var unknownSessionRefresh: Task<Void, Never>?
+    /// Which unknown sessions have earned a list refresh (`UnknownSessionRefresh`).
+    private var unknownSessionPolicy = UnknownSessionRefresh()
     /// Per-host delayed re-evaluation of the sustained-failure banner rule.
     private var bannerRecheck: [String: Task<Void, Never>] = [:]
 
@@ -1887,13 +1889,20 @@ import LFGCore
     }
 
     private func applyIngested(_ ev: LiveEvent) {
-        if case .message(let sid, _) = ev,
-           session(sid) == nil, !sid.hasPrefix("local-"),
-           unknownSessionRefresh == nil {
-            unknownSessionRefresh = Task { [weak self] in
-                await self?.refresh()
-                try? await Task.sleep(for: .seconds(5))
-                self?.unknownSessionRefresh = nil
+        // Any session-scoped event can be the first sign of a new session: one
+        // that asks a question at once emits busy and prompt, and no message
+        // until answered. The policy bounds the tries for an id that stays
+        // unknown (a hidden child agent, a host that lists it late).
+        if let sid = UnknownSessionRefresh.sessionId(of: ev) {
+            if session(sid) != nil {
+                unknownSessionPolicy.forget(sid)
+            } else if unknownSessionPolicy.shouldRefresh(
+                for: sid, known: false, inFlight: unknownSessionRefresh != nil, now: Date()
+            ) {
+                unknownSessionRefresh = Task { [weak self] in
+                    await self?.refresh()
+                    self?.unknownSessionRefresh = nil
+                }
             }
         }
         apply(ev)
