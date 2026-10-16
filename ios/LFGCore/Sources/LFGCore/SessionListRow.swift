@@ -137,7 +137,8 @@ public struct SessionRowLine: Equatable, Sendable {
         return "\(days / 7)w"
     }
 
-    private static func oneLine(_ s: String) -> String {
+    /// Collapses whitespace and newlines to single spaces (shared with the desktop row).
+    public static func oneLine(_ s: String) -> String {
         s.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 

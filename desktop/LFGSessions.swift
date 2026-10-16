@@ -46,7 +46,7 @@ struct DesktopDestinationSwitcher: View {
             segment("Tasks", badge: tasksBadge, tasks: true)
         }
         .padding(3)
-        .background(Color.primary.opacity(0.07), in: Capsule())
+        .background(S2Desk.control, in: Capsule())
         .fixedSize()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("list_destination_picker")
@@ -56,7 +56,9 @@ struct DesktopDestinationSwitcher: View {
         let on = showingTasks == tasks
         return Button { showingTasks = tasks } label: {
             HStack(spacing: 6) {
-                Text(title).font(.system(size: 12, weight: on ? .semibold : .medium))
+                // Board: both labels semibold; the pick is near-white, the other grey.
+                Text(title).font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(on ? S2Desk.switcherInk : S2Desk.switcherInkOff)
                 if badge > 0 {
                     Text("\(badge)")
                         .font(.system(size: 10, weight: .heavy).monospacedDigit())
@@ -68,7 +70,7 @@ struct DesktopDestinationSwitcher: View {
             }
             .padding(.horizontal, 11)
             .frame(height: 26)
-            .background(on ? Color.primary.opacity(0.16) : Color.clear, in: Capsule())
+            .background(on ? S2Desk.controlSelected : Color.clear, in: Capsule())
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -98,6 +100,10 @@ struct APISession: Decodable, Identifiable, Hashable {
     let closed: Bool
     /// "task-edit" for a task's edit chat, which lives behind the task's Change with chat button.
     var purpose: String? = nil
+    /// The question the session is parked on (S2 row line "Asks: …").
+    var prompt: DesktopPrompt? = nil
+    /// The scheduled task that started this session (S2 meta "from a task").
+    var task: TaskOrigin? = nil
 
     var id: String { sessionId ?? "pid-\(pid)" }
 
@@ -124,6 +130,7 @@ struct APISession: Decodable, Identifiable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case agent, pid, cwd, project, title, sessionId, busy, lastActivityAt, tmuxName, model, status, parentSessionId, lastUserText, purpose
+        case prompt, task
     }
 
     init(from decoder: Decoder) throws {
@@ -142,7 +149,38 @@ struct APISession: Decodable, Identifiable, Hashable {
         parentSessionId = try c.decodeIfPresent(String.self, forKey: .parentSessionId)
         lastUserText = try c.decodeIfPresent(String.self, forKey: .lastUserText)
         purpose = try? c.decodeIfPresent(String.self, forKey: .purpose)
+        prompt = (try? c.decodeIfPresent(DesktopPrompt.self, forKey: .prompt)) ?? nil
+        task = (try? c.decodeIfPresent(TaskOrigin.self, forKey: .task)) ?? nil
         closed = false
+    }
+}
+
+/// The part of a session's `prompt` the S2 row line needs. Lenient: any field
+/// may be missing on an older host.
+struct DesktopPrompt: Decodable, Hashable {
+    var question: String?
+    var kind: String?
+    var command: String?
+    var website: String?
+    var askedAt: Double?
+
+    private enum CodingKeys: String, CodingKey { case question, kind, permission, signIn, askedAt }
+    private struct Permission: Decodable { var command: String? }
+    private struct SignIn: Decodable { var website: String? }
+
+    init(question: String? = nil, kind: String? = nil, command: String? = nil, website: String? = nil,
+         askedAt: Double? = nil) {
+        self.question = question; self.kind = kind; self.command = command; self.website = website
+        self.askedAt = askedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        question = try? c.decodeIfPresent(String.self, forKey: .question)
+        kind = try? c.decodeIfPresent(String.self, forKey: .kind)
+        command = (try? c.decodeIfPresent(Permission.self, forKey: .permission))??.command
+        website = (try? c.decodeIfPresent(SignIn.self, forKey: .signIn))??.website
+        askedAt = try? c.decodeIfPresent(Double.self, forKey: .askedAt)
     }
 }
 
@@ -246,6 +284,9 @@ struct ResumableResponse: Decodable {
     /// Cursor for the next page, or nil when this page exhausted the matches.
     /// Optional because an older host omits it entirely.
     let nextBefore: Double?
+    /// B12: every closed session the host would page through (first page only;
+    /// nil from an older host or before its background count lands).
+    var total: Int? = nil
 }
 struct RankedSearchResponse: Decodable {
     let sessions: [ResumableAPISession]
@@ -414,6 +455,8 @@ struct HostState: Identifiable {
     /// Cursor for the page after `closedSessions`, from the host's `nextBefore`.
     /// nil when the host's closed corpus is exhausted (or predates paging).
     var closedNextBefore: Double? = nil
+    /// B12: how many closed sessions this host lists in all (nil when unknown).
+    var closedTotal: Int? = nil
     var needsInputSessionIds: Set<String> = []
     var error: String?
     var isLocal: Bool = false
@@ -462,6 +505,9 @@ struct SessionItem: Identifiable {
     let hostSSHTarget: String?
     let hostRemoteTransport: RemoteTransport
     let needsInput: Bool
+    /// The host did not answer the last refresh; this is its last good row
+    /// (DF5: kept, dimmed, in Recent).
+    let hostOffline: Bool
 
     init(
         session: APISession,
@@ -471,8 +517,10 @@ struct SessionItem: Identifiable {
         hostIsLocal: Bool,
         hostSSHTarget: String?,
         hostRemoteTransport: RemoteTransport = .automatic,
-        needsInput: Bool = false
+        needsInput: Bool = false,
+        hostOffline: Bool = false
     ) {
+        self.hostOffline = hostOffline
         self.session = session
         self.hostURL = hostURL
         self.hostId = hostId
@@ -516,6 +564,8 @@ struct SessionItem: Identifiable {
 
     var status: Status {
         if session.closed { return .closed }
+        // A down host's last row is not known to be working or waiting any more.
+        if hostOffline { return .idle }
         if needsInput { return .needsInput }
         if session.status == "blocked" { return .paused }
         if session.busy { return .working }
@@ -1407,7 +1457,8 @@ final class SessionStore: ObservableObject {
                     hostIsLocal: host.isLocal,
                     hostSSHTarget: host.sshTarget,
                     hostRemoteTransport: host.remoteTransport,
-                    needsInput: $0.sessionId.map(host.needsInputSessionIds.contains) ?? false
+                    needsInput: $0.sessionId.map(host.needsInputSessionIds.contains) ?? false,
+                    hostOffline: host.error != nil
                 )
             }
         }
@@ -1500,6 +1551,13 @@ final class SessionStore: ObservableObject {
 
     var runningCount: Int { items.filter { $0.status == .working }.count }
 
+    /// B12: how many closed sessions the hosts list in all, for "Recent N". The
+    /// closed corpus is synced, so every host counts the same set: take the
+    /// largest answer from a host that answered, nil when none sends it.
+    var closedTotal: Int? {
+        hosts.filter { $0.error == nil }.compactMap(\.closedTotal).max()
+    }
+
     var connectionStatus: HostConnectionStatus {
         let states = configuredHosts.map(resolvedState(for:))
         return ConnectionPresentation.aggregate(
@@ -1559,10 +1617,20 @@ final class SessionStore: ObservableObject {
             for await state in group { results.append(state) }
         }
         // Preserve config order; mark local hosts.
+        // DF5 (board dA2-sessions): a host that stops answering keeps its last
+        // good live rows — dimmed, in Recent, "Air is offline" — instead of
+        // vanishing from the list. Its needs-input set is dropped: that state
+        // is no longer known.
+        let previous = Dictionary(hosts.map { ($0.url, $0) }, uniquingKeysWith: { first, _ in first })
         var ordered: [HostState] = []
         for entry in entries {
             guard var state = results.first(where: { $0.url == entry.url }) else { continue }
             let url = entry.url
+            if state.error != nil, state.sessions.isEmpty, let last = previous[url] {
+                state.sessions = last.sessions.filter { !$0.closed }
+                state.info = state.info ?? last.info
+                state.needsInputSessionIds = []
+            }
             state.isLocal = isLocalURL(url) || matchesLocalHostname(state.info?.hostName)
             ordered.append(state)
         }
@@ -1758,6 +1826,7 @@ final class SessionStore: ObservableObject {
                 state.closedSessions = resumable.sessions.map(Self.closedSession(from:))
                 state.closedRanHereAt = Self.ranHereAt(of: resumable.sessions)
                 state.closedNextBefore = resumable.nextBefore
+                state.closedTotal = resumable.total
             }
         } catch {
             state.error = "unreachable"
@@ -5483,6 +5552,8 @@ struct ContentView: View {
     @State private var expandedDirs: Set<String> = []
     @State private var expandedAgentSections: Set<String> = []
     @State private var expandedAgentParents: Set<String> = []
+    /// S2 status groups the user folded (board dA2-sessions); in-memory like the others.
+    @State private var collapsedGroups: Set<String> = []
     @State private var pendingMove: PendingMove?
     @State private var pendingClose: SessionItem?
     @State private var pendingRename: SessionItem?
@@ -5500,8 +5571,10 @@ struct ContentView: View {
 
     /// `compactSearchShown` is seedable only so the off-screen `--window-shot`
     /// harness can photograph the revealed search row.
-    init(compactSearchShown: Bool = false) {
+    init(compactSearchShown: Bool = false, taskNeedsInput: Int = 0, collapsedGroups: Set<String> = []) {
         _compactSearchShown = State(initialValue: compactSearchShown)
+        _taskNeedsInput = State(initialValue: taskNeedsInput)
+        _collapsedGroups = State(initialValue: collapsedGroups)
     }
     private let timer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
 
@@ -5611,6 +5684,41 @@ struct ContentView: View {
                     > ($1.items.first?.session.lastActivityAt ?? 0)
             }
         }
+    }
+
+    /// One S2 status group (board dA2-sessions) and the count its header shows.
+    private struct S2Group: Identifiable {
+        let group: DesktopListGroup
+        let items: [SessionItem]
+        let count: Int
+        var id: String { group.rawValue }
+    }
+
+    /// Needs input (paused folds in), Working, and Recent (idle and closed, plus
+    /// an offline host's last rows), each newest first. Child agents leave the list: they live in their session,
+    /// as on the phone. Recent counts the hosts' closed total when they send it.
+    private var s2Groups: [S2Group] {
+        let base = matchingItems.filter { normalizedId($0.session.parentSessionId) == nil }
+        return DesktopListGroup.allCases.compactMap { group in
+            let members = base.filter { $0.s2Group == group }
+            let anchor: (SessionItem) -> Double = { $0.s2AgeAnchorMs ?? 0 }
+            // Board: every group shows the newest first (2m above 6m).
+            let ordered = isSearching ? searchOrdered(members)
+                : members.sorted {
+                    let l = anchor($0), r = anchor($1)
+                    return l == r ? $0.id < $1.id : l > r
+                }
+            guard !ordered.isEmpty else { return nil }
+            var count = ordered.count
+            if group == .recent, !isSearching, let closedTotal = store.closedTotal {
+                count = ordered.filter { !$0.session.closed }.count + closedTotal
+            }
+            return S2Group(group: group, items: ordered, count: count)
+        }
+    }
+
+    private func toggleGroup(_ id: String) {
+        if collapsedGroups.contains(id) { collapsedGroups.remove(id) } else { collapsedGroups.insert(id) }
     }
 
     private func statusSections(
@@ -5761,8 +5869,12 @@ struct ContentView: View {
                     }
                 }
             } label: {
-                SessionRow(item: item, showHost: store.multipleHosts, isMoving: isMoving,
-                           compact: windowWidth > 0 && windowWidth < 320)
+                S2DeskRow(title: item.session.title, meta: item.s2Meta,
+                          line: DesktopSessionList.line(item.s2Facts(moving: isMoving)),
+                          age: DesktopSessionList.age(fromMs: item.s2AgeAnchorMs,
+                                                      nowMs: Date().timeIntervalSince1970 * 1000),
+                          group: item.s2Group,
+                          dimmed: item.hostOffline || !item.canOpen)
             }
             .buttonStyle(.plain)
             // A live session outside tmux cannot be attached, but its row
@@ -6052,21 +6164,28 @@ struct ContentView: View {
         .accessibilityIdentifier("refresh_button")
     }
 
+    /// Board dA2-sessions: search is always the round button at the right of
+    /// the title bar; it reveals the search row under the host strip.
     private var compactSearchButton: some View {
-        Button {
+        S2DeskSearchButton(active: compactSearchShown || !searchText.isEmpty) {
             compactSearchShown.toggle()
             searchFieldFocused = compactSearchShown
             if !compactSearchShown { searchText = "" }
-        } label: {
-            Label("Search sessions", systemImage: searchText.isEmpty
-                  ? "magnifyingglass"
-                  : "line.3.horizontal.decrease.circle.fill")
-                .labelStyle(.iconOnly)
         }
-        .buttonStyle(.glass)
-        .buttonBorderShape(.circle)
-        .help(compactSearchShown ? "Hide search" : "Search sessions")
-        .accessibilityIdentifier("compact_search_toggle")
+    }
+
+    /// Board dA2-sessions: a dot per host (an offline one a hollow amber ring),
+    /// how many work, and the grouping menu.
+    private var hostStrip: some View {
+        S2DeskHostStrip(
+            hosts: store.configuredHosts.map { entry in
+                S2DeskHostStrip.HostDot(id: entry.url, label: store.displayLabel(for: entry),
+                                        online: store.connectionStatus(for: entry) != .offline)
+            },
+            workingCount: store.runningCount,
+            groupMode: $groupMode,
+            onHiddenDirectories: { showDirectoryFilter = true }
+        )
     }
 
     /// Compact windows can't afford a permanent search field in the toolbar,
@@ -6103,6 +6222,10 @@ struct ContentView: View {
             DesktopDestinationSwitcher(showingTasks: $store.showingScheduledTasks,
                                        sessionsBadge: MenuBarSessionProjection(items: store.items).needsInputCount,
                                        tasksBadge: taskNeedsInput)
+                // Board dA2-sessions: centred between the window controls (ending at
+                // 74pt) and the search button (from 50pt off the right edge), so
+                // 12pt right of the window's centre.
+                .padding(.leading, store.showingScheduledTasks ? 0 : 24)
         } else {
             iconDestinationPicker
         }
@@ -6144,6 +6267,9 @@ struct ContentView: View {
         }
         .toolbar(removing: .title)
         .background(CompactWindowControls(compact: windowWidth < 350))
+        // Board dA2-sessions: one dark surface from the title bar down.
+        .containerBackground(S2Desk.background, for: .window)
+        .toolbarBackground(S2Desk.background, for: .windowToolbar)
         .toolbar {
             if !(store.showingScheduledTasks && !taskPath.isEmpty) {
                 ToolbarItem(placement: .principal) {
@@ -6155,124 +6281,77 @@ struct ContentView: View {
         }
     }
 
-    private var sessionsBody: some View {
-        List {
-            ForEach(sections) { section in
-                Section {
-                    if !isCollapsed(section) {
-                        ForEach(renderedRows(for: section)) { row in
-                            sessionRow(row)
-                        }
+    /// Board dA2-sessions: the list's top border, then the groups.
+    private var sessionsList: some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(S2Desk.separator).frame(height: 1)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    if groupMode == .status {
+                        statusGroups
+                    } else {
+                        directoryGroups
                     }
-                } header: {
-                    sectionHeader(section)
+                    listFooter
                 }
+                .padding(.bottom, 12)
             }
-            if sections.isEmpty, isSearching, store.searchLoading {
-                // The hosts are still walking their transcripts. "No sessions
-                // match" here would be a lie — the answer hasn't landed.
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text("Searching every session…")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                .accessibilityIdentifier("search_in_flight")
-            } else if sections.isEmpty {
-                Text(searchText.isEmpty
-                     ? "No sessions."
-                     : "No sessions match “\(searchText)” on any host.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            // Closed-list infinite scroll: the sentinel sits at the very
-            // bottom, so it being created means the user reached the end of
-            // what's loaded. Scrolling away and back recreates it, which
-            // re-fires onAppear for the following page.
-            if !isSearching, store.canLoadMoreClosed {
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text("Loading older sessions…")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                .accessibilityIdentifier("load_more_closed")
-                .onAppear { Task { await store.loadMoreClosed() } }
-            }
-            // Search pages independently of the list, so this pulls the next
-            // page of MATCHES — never the next page of the closed list. It is a
-            // list-level sentinel so status/directory grouping cannot hide it.
-            if isSearching, store.canLoadMoreSearch {
-                Button {
-                    Task { await store.loadMoreSearch() }
-                } label: {
-                    HStack(spacing: 6) {
-                        if store.searchLoadingMore {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Image(systemName: "chevron.down.circle")
-                        }
-                        Text(store.searchLoadingMore ? "Loading more" : "Load more results")
-                            .font(.system(size: 12))
-                    }
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.tint)
-                .disabled(store.searchLoadingMore)
-                .accessibilityIdentifier("load_more_search")
-                .onAppear { Task { await store.loadMoreSearch() } }
-            }
-            DesktopConnectionWarning()
         }
-        .listStyle(.inset)
+        .background(S2Desk.background)
+    }
+
+    @ViewBuilder
+    private var statusGroups: some View {
+        ForEach(s2Groups) { g in
+            let open = !collapsedGroups.contains(g.id) || isSearching
+            S2DeskGroupHeader(
+                title: g.group.title, count: g.count,
+                tint: g.group == .needsInput ? S2Desk.attention : S2Desk.secondary,
+                // Board: the ordering hint shows only while the group is open.
+                trailing: g.group == .working && open ? "by last activity" : nil,
+                expanded: open
+            ) { toggleGroup(g.id) }
+            if open {
+                ForEach(g.items) { openButton(for: $0) }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var directoryGroups: some View {
+        ForEach(sections) { section in
+            let open = !isCollapsed(section)
+            S2DeskGroupHeader(title: section.title, count: section.items.count, tint: S2Desk.secondary,
+                              expanded: open) { toggleDirectory(section.id) }
+            if open {
+                ForEach(section.items) { openButton(for: $0) }
+            }
+        }
+    }
+
+    private func toggleDirectory(_ id: String) {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            if expandedDirs.contains(id) { expandedDirs.remove(id) } else { expandedDirs.insert(id) }
+        }
+    }
+
+    private var sessionsBody: some View {
+        sessionsList
         .frame(minWidth: 180, minHeight: 420)
         // Hand every keystroke to the store, which debounces and asks the hosts.
         // Filtering `store.items` alone can't answer "search all my sessions" —
         // it only ever sees each host's newest 100 closed rows.
         .onChange(of: searchText) { _, q in store.setSearchQuery(q) }
         .navigationTitle("")
-        // HIG "Toolbars" item groupings: common view controls in the center
-        // area, search + actions on the trailing edge.
+        // Board dA2-sessions: the title bar holds the window controls, the
+        // switcher and the round search button, nothing else. Host status and
+        // grouping moved to the strip under it; the desktop does not create
+        // sessions, so there is no "+".
         .toolbar {
-            if windowWidth >= 500 {
-            // Refresh the native item when labels collapse; otherwise AppKit
-            // retains the labelled width after narrowing the window.
-            ToolbarItem(id: usesCompactHostStatus ? "compact_connection" : "labelled_connection", placement: .navigation) {
-                DesktopConnectionStatusBar(compact: usesCompactHostStatus)
-            }
-            .sharedBackgroundVisibility(.hidden)
-            }
             ToolbarItem(placement: .primaryAction) {
-                groupPicker
+                compactSearchButton
             }
             .sharedBackgroundVisibility(.hidden)
-            if windowWidth >= 500, isCompactToolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    compactSearchButton
-                }
-                .sharedBackgroundVisibility(.hidden)
-            } else if windowWidth >= 500 {
-                ToolbarItem(placement: .primaryAction) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.secondary)
-                        TextField("Search sessions", text: $searchText)
-                            .textFieldStyle(.plain)
-                    }
-                    .padding(.horizontal, 10)
-                    // 150pt (not wider): at the 640pt minWidth the centered
-                    // pill + this cluster must fit without collapsing into ».
-                    // No custom glass here — the system toolbar item background
-                    // is the only container around the field.
-                    .frame(width: 150, height: 30)
-                }
-            }
-            if windowWidth >= 500 {
-            ToolbarItem(placement: .primaryAction) {
-                createSessionButton
-            }
-            .sharedBackgroundVisibility(.hidden)
-            }
         }
         // One presentation site for both routes into the panel — the toolbar
         // button when there's room, the grouping menu when there isn't. Anchored
@@ -6285,9 +6364,13 @@ struct ContentView: View {
         // The compact search row lives under the toolbar because a permanent
         // field there would push the other items into the » overflow.
         .safeAreaInset(edge: .top, spacing: 0) {
-            if isCompactToolbar && compactSearchShown {
-                compactSearchRow
+            VStack(spacing: 0) {
+                hostStrip
+                if compactSearchShown {
+                    compactSearchRow
+                }
             }
+            .background(S2Desk.background)
         }
         .task { await store.refresh() }
         .onReceive(timer) { _ in
@@ -6358,6 +6441,69 @@ struct ContentView: View {
                 ForkProgressSheet(modal: forkModal) { self.forkModal = nil }
             }
         }
+    }
+
+    /// Empty, searching and paging states under the groups.
+    @ViewBuilder
+    private var listFooter: some View {
+        let empty = groupMode == .status ? s2Groups.isEmpty : sections.isEmpty
+        VStack(alignment: .leading, spacing: 8) {
+            if empty, isSearching, store.searchLoading {
+                // The hosts are still walking their transcripts. "No sessions
+                // match" here would be a lie — the answer hasn't landed.
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Searching every session…")
+                        .font(.system(size: 12))
+                        .foregroundStyle(S2Desk.secondary)
+                }
+                .accessibilityIdentifier("search_in_flight")
+            } else if empty {
+                Text(searchText.isEmpty
+                     ? "No sessions."
+                     : "No sessions match “\(searchText)” on any host.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(S2Desk.secondary)
+            }
+            // Closed-list infinite scroll: the sentinel sits at the very
+            // bottom, so it being created means the user reached the end of
+            // what's loaded. Scrolling away and back recreates it, which
+            // re-fires onAppear for the following page.
+            if !isSearching, store.canLoadMoreClosed {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Loading older sessions…")
+                        .font(.system(size: 12))
+                        .foregroundStyle(S2Desk.secondary)
+                }
+                .accessibilityIdentifier("load_more_closed")
+                .onAppear { Task { await store.loadMoreClosed() } }
+            }
+            // Search pages independently of the list, so this pulls the next
+            // page of MATCHES — never the next page of the closed list.
+            if isSearching, store.canLoadMoreSearch {
+                Button {
+                    Task { await store.loadMoreSearch() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if store.searchLoadingMore {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "chevron.down.circle")
+                        }
+                        Text(store.searchLoadingMore ? "Loading more" : "Load more results")
+                            .font(.system(size: 12))
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+                .disabled(store.searchLoadingMore)
+                .accessibilityIdentifier("load_more_search")
+                .onAppear { Task { await store.loadMoreSearch() } }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
     }
 
     /// Fork with a modal up for the whole request: the server waits for the
@@ -6593,6 +6739,10 @@ private struct CompactWindowControls: NSViewRepresentable {
         func apply() {
             window?.standardWindowButton(.miniaturizeButton)?.isHidden = compact
             window?.standardWindowButton(.zoomButton)?.isHidden = compact
+            // Boards dA2-*: the title bar and the content are one surface; an
+            // inactive window otherwise draws a hairline under the title bar.
+            window?.titlebarSeparatorStyle = .none
+            window?.toolbar?.showsBaselineSeparator = false
         }
     }
 }
@@ -6676,8 +6826,22 @@ enum WindowFitCLI {
             ScheduledTasksPane.launchPath = [.task(id)] + (args.contains("--edit") ? [.edit(id)] : [])
         }
         let height = value("--height").flatMap(Double.init) ?? 560
-        let window = makeWindow(sessions: tasksHost == nil, compactSearchShown: args.contains("--search"),
-                                tasks: args.contains("--tasks") || tasksHost != nil, tasksHost: tasksHost)
+        let live = args.contains("--live")
+        // --collapse needsInput,working,recent: start with those groups folded.
+        let collapsed = Set((value("--collapse") ?? "").split(separator: ",").map(String.init))
+        let window = makeWindow(sessions: tasksHost == nil && !live, compactSearchShown: args.contains("--search"),
+                                tasks: args.contains("--tasks") || tasksHost != nil, tasksHost: tasksHost,
+                                boardFixture: args.contains("--board"), live: live, collapsedGroups: collapsed)
+        // --live: the real hosts in the config dir (LFG_DESKTOP_CONFIG_DIR isolates it).
+        // --refresh-twice <s>: refresh, wait, refresh again in this one process, so a
+        // host stopped in between shows what the list does with a host that went away.
+        if live, let store = liveStore {
+            liveRefresh(store)
+            if let wait = value("--refresh-twice").flatMap(Double.init) {
+                settle(wait)
+                liveRefresh(store)
+            }
+        }
         window.setContentSize(NSSize(width: CGFloat(width), height: CGFloat(height)))
         // --onscreen: cacheDisplay draws Liquid Glass toolbar items as blank capsules, so
         // show the window for real and let screencapture grab it (needs an unlocked screen).
@@ -6720,9 +6884,32 @@ enum WindowFitCLI {
         Darwin.exit(0)
     }
 
+    /// The store a `--live` shot drives (set by makeWindow).
+    @MainActor private static var liveStore: SessionStore?
+
+    @MainActor
+    private static func liveRefresh(_ store: SessionStore) {
+        store.refreshing = false
+        let before = store.lastRefreshed
+        Task { await store.refresh() }
+        let deadline = Date().addingTimeInterval(20)
+        while store.lastRefreshed == before, Date() < deadline { settle(0.2) }
+        settle(0.6)
+        // One line per host, so the probe's claim does not rest on the picture.
+        for host in store.hosts {
+            let live = host.sessions.filter { !$0.closed }
+            let offlineRows = store.items.filter { $0.hostURL == host.url && $0.hostOffline }.count
+            print("{\"host\":\"\(host.label)\",\"error\":\"\(host.error ?? "")\",\"live\":\(live.count),"
+                  + "\"offlineRows\":\(offlineRows),\"first\":\"\(live.first?.title ?? "")\"}")
+        }
+        fflush(stdout)
+    }
+
     @MainActor
     private static func makeWindow(sessions: Bool = false, compactSearchShown: Bool = false,
-                                   tasks: Bool = false, tasksHost: String? = nil) -> NSWindow {
+                                   tasks: Bool = false, tasksHost: String? = nil,
+                                   boardFixture: Bool = false, live: Bool = false,
+                                   collapsedGroups: Set<String> = []) -> NSWindow {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
 
@@ -6761,8 +6948,18 @@ enum WindowFitCLI {
             ]
         }
 
+        if boardFixture { seedBoardFixture(store) }
+        if live {
+            store.configuredHosts = Config.loadHosts()
+            store.lastRefreshed = nil
+            // The view's own .task refresh would race ours; hold it until liveRefresh.
+            store.refreshing = true
+            liveStore = store
+        }
         let host = NSHostingController(
-            rootView: ContentView(compactSearchShown: compactSearchShown).environmentObject(store)
+            rootView: ContentView(compactSearchShown: compactSearchShown,
+                                  taskNeedsInput: boardFixture ? 2 : 0,
+                                  collapsedGroups: collapsedGroups).environmentObject(store)
         )
         // A task page's ideal height would otherwise pin the window to its content and ignore --height.
         if tasksHost != nil { host.sizingOptions = [.minSize] }
@@ -6778,6 +6975,62 @@ enum WindowFitCLI {
         window.setFrameOrigin(NSPoint(x: -8000, y: 200))
         window.orderFrontRegardless()
         return window
+    }
+
+    /// Board `dA2-sessions`: Pro with two questions, three working sessions and
+    /// two closed ones (42 closed in all), and Air offline with its last row.
+    @MainActor
+    private static func seedBoardFixture(_ store: SessionStore) {
+        let now = Date().timeIntervalSince1970 * 1000
+        let min = 60_000.0
+        func row(_ id: String, _ title: String, _ project: String, agent: String = "claude", model: String? = nil,
+                 busy: Bool = false, ago: Double, closed: Bool = false, task: Bool = false,
+                 prompt: DesktopPrompt? = nil) -> APISession {
+            var s = APISession(agent: agent, pid: abs(id.hashValue % 90_000) + 1, cwd: "/Users/eugene/dev/\(project)",
+                               project: project, title: title, sessionId: id, busy: busy,
+                               lastActivityAt: now - ago, tmuxName: closed ? nil : "lfg-\(id)", model: model,
+                               status: nil, lastUserText: nil, closed: closed)
+            s.prompt = prompt
+            s.task = task ? TaskOrigin(id: "task-\(id)", name: title) : nil
+            return s
+        }
+        store.configuredHosts = [
+            Config.HostEntry(url: "http://pro:8766", displayName: "Pro"),
+            Config.HostEntry(url: "http://air:8766", displayName: "Air"),
+        ]
+        var pro = HostState(url: "http://pro:8766", sshTarget: nil, displayName: "Pro",
+                            info: HostInfoResponse(hostId: "pro", hostName: "Pro"),
+                            sessions: [
+                                row("launch", "Choose the launch direction", "fiftystrong", model: "claude-opus-5-5",
+                                    busy: true, ago: 2 * min,
+                                    prompt: DesktopPrompt(question: "which launch page direction first?",
+                                                          kind: "question", askedAt: now - 2 * min)),
+                                row("auth", "Restore remote authentication", "lfg", agent: "codex", model: "gpt-6.1",
+                                    busy: true, ago: 6 * min,
+                                    prompt: DesktopPrompt(question: "Do you want to proceed?", kind: "permission",
+                                                          command: "launchctl kickstart -k gui/501/dev.omg.lfg",
+                                                          askedAt: now - 6 * min)),
+                                row("narrow", "Make the desktop window narrower", "lfg", model: "claude-opus-5-5",
+                                    busy: true, ago: 1 * min),
+                                row("sweep", "Nightly TestFlight crash sweep", "lfg", agent: "codex", busy: true,
+                                    ago: 4 * min, task: true),
+                                row("fatigue", "Reelly creative fatigue check", "reelly", model: "claude-sonnet-5",
+                                    busy: true, ago: 9 * min),
+                                row("copy", "Polish onboarding copy", "fiftystrong", ago: 3 * 60 * min, closed: true),
+                                row("reconcile", "Fix queued message reconciliation", "lfg", agent: "codex",
+                                    ago: 26 * 60 * min, closed: true),
+                            ],
+                            needsInputSessionIds: ["launch", "auth"], isLocal: true)
+        pro.closedTotal = 42
+        var air = HostState(url: "http://air:8766", sshTarget: "air", displayName: "Air",
+                            info: HostInfoResponse(hostId: "air", hostName: "Air"),
+                            sessions: [row("audit", "Weekly dependency audit", "lfg", agent: "codex",
+                                           ago: 2 * 24 * 60 * min, task: true)])
+        air.error = "unreachable"
+        store.hosts = [pro, air]
+        // Hold the store "refreshing" so the window's own refresh does not
+        // reload the real hosts.json over the fixture before the shot.
+        store.refreshing = true
     }
 
     private static func fixtureSession(

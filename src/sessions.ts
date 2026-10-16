@@ -30,6 +30,7 @@ import {
 import { anyFreshAt, ensureLease } from "./leases";
 import { ranHereAt } from "./ran-here.ts";
 import { hidesCwd, normalizeExcludes } from "./hidden-dirs";
+import { countClosed, createTotalCache } from "./resumable-total.ts";
 import {
   flattenTitles,
   parseTitleFile,
@@ -3893,7 +3894,22 @@ export type ResumableSession = {
 export type ResumablePage = {
   sessions: ResumableSession[];
   nextBefore: number | null;
+  /** B12: every closed session the list pages through (first page only; null
+   * until the background count lands). See `src/resumable-total.ts`. */
+  total?: number | null;
 };
+
+// B12: the closed count per hidden-folder set, counted in the background (one
+// lease read per transcript is too much for every request).
+const resumableTotals = createTotalCache(async (key) => {
+  const exclude: string[] = JSON.parse(key);
+  if (exclude.length > 0) {
+    const entries = matchingEntries(await refreshSearchIndex(), [], null).filter((e) => !hidesCwd(e.cwd, exclude));
+    return countClosed(entries.map((e) => ({ id: e.sessionId, path: e.path })), anyFreshAt);
+  }
+  const candidates = await collectResumableCandidates();
+  return countClosed(candidates.map((c) => ({ id: c.id, path: c.path })), anyFreshAt);
+});
 
 // Recently-active claude sessions that are NOT currently live — the closed /
 // rebooted-away conversations a user can bring back with `claude --resume`.
@@ -4057,6 +4073,7 @@ export async function listResumable(
   const exclude = normalizeExcludes(opts.exclude);
   await refreshLeasesForLiveSessions();
   const before = typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
+  const total = before == null ? resumableTotals.get(JSON.stringify(exclude)) : undefined;
   // Excluding by cwd needs a cwd for every candidate BEFORE the page fills, and
   // candidates are deliberately unenriched (readdir + stat, no reads). The
   // search index already carries cwd for the whole corpus and refreshes
@@ -4087,7 +4104,7 @@ export async function listResumable(
           overrides,
         ),
       );
-    return { sessions: out, nextBefore };
+    return { sessions: out, nextBefore, ...(total !== undefined ? { total } : {}) };
   }
   const candidates = (await collectResumableCandidates()).filter(
     (c) => before == null || c.mtime < before,
@@ -4111,7 +4128,7 @@ export async function listResumable(
   const overrides = await readTitleOverrides();
   const out: ResumableSession[] = [];
   for (const c of page) out.push(await enrichCandidate(c, overrides));
-  return { sessions: out, nextBefore };
+  return { sessions: out, nextBefore, ...(total !== undefined ? { total } : {}) };
 }
 
 // ---------------------------------------------------------------------------
