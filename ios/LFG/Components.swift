@@ -208,10 +208,7 @@ private struct TextBubble: View {
         return date.formatted(date: .abbreviated, time: .shortened)
     }
 
-    /// Assistant prose with inline image markdown removed — each image now shows
-    /// as a compact file card below, so leaving `![alt](path)` in the markdown
-    /// would double-render it full-width. Links and all other text are untouched
-    /// (links stay tappable inline AND get a card, as before).
+    /// File handoffs render once as cards below the assistant prose.
     private var prose: String { rowText.prose }
 
     /// For user bubbles, hide attachment references (shown as cards below):

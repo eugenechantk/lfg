@@ -280,9 +280,10 @@ struct CrossProviderSwitchStatusFixture: View {
         )
         #if DEBUG
         if uiFixture {
+            let environment = ProcessInfo.processInfo.environment
             hosts = [
-                Host(url: "http://127.0.0.1:18891", hostId: "session-ui-pro", name: "Fixture Pro", isDefault: true),
-                Host(url: "http://127.0.0.1:18892", hostId: "session-ui-air", name: "Fixture Air", isDefault: false),
+                Host(url: environment["LFG_SESSION_UI_FIXTURE_PRO_URL"] ?? "http://127.0.0.1:18891", hostId: "session-ui-pro", name: "Fixture Pro", isDefault: true),
+                Host(url: environment["LFG_SESSION_UI_FIXTURE_AIR_URL"] ?? "http://127.0.0.1:18892", hostId: "session-ui-air", name: "Fixture Air", isDefault: false),
             ]
             return
         }

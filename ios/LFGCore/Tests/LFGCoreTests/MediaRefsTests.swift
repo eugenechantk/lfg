@@ -276,8 +276,7 @@ struct LinkScannerTests {
 }
 
 /// Cover for hoisting the per-row text derivations out of `TextBubble.body`.
-/// The contract is that results are byte-identical to the inline versions —
-/// this is a performance change, not a behaviour change.
+/// Cards replace file handoffs; ordinary links and prose remain selectable.
 @Suite("Transcript row text")
 struct TranscriptRowTextTests {
 
@@ -290,7 +289,7 @@ struct TranscriptRowTextTests {
         #expect(r.media.count == 1)
     }
 
-    /// `prose` strips ONLY image markdown — a plain link stays tappable inline.
+    /// A web link without a file card stays tappable inline.
     @Test("a plain markdown link survives in prose")
     func plainLinkSurvives() {
         let r = TranscriptRowText.derive(from: "see [docs](https://example.com/x) here")
