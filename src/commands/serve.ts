@@ -15,6 +15,7 @@ import { hostInfo } from "../hostinfo.ts";
 import { currentModelCatalog, isSafeModelId } from "../model-catalog.ts";
 import { claudeModelSwitchBlocker } from "../claude-model-switch.ts";
 import { Journal } from "../journal.ts";
+import { journalEventStream } from "../events-stream.ts";
 import { startJournalPump } from "../journal-pump.ts";
 import { codexDelegationSessionIds, notePaneBusy } from "../activity.ts";
 import {
@@ -2011,80 +2012,7 @@ export async function cmdServe(options: {
         // One line per connect: low-volume, and the observable that proves
         // cursor-resume behavior in the field (client's since vs our head).
         console.log(`[events] connect since=${cursor} head=${journal.head()}`);
-        let unsub: (() => void) | null = null;
-        let hb: ReturnType<typeof setInterval> | null = null;
-        let closed = false;
-        const stream = new ReadableStream({
-          start(controller) {
-            const send = (s: string) => {
-              if (closed) return;
-              try {
-                controller.enqueue(s);
-              } catch {
-                closed = true;
-                if (unsub) unsub();
-                if (hb) clearInterval(hb);
-              }
-            };
-            const sendRow = (r: {
-              seq: number;
-              type: string;
-              payload: string;
-            }) => send(`id: ${r.seq}\nevent: ${r.type}\ndata: ${r.payload}\n\n`);
-
-            if (!journal.canServe(cursor)) {
-              send(`event: resync\ndata: ${JSON.stringify({ head: journal.head() })}\n\n`);
-            } else {
-              // Subscribe FIRST (buffering), then replay, then flush the buffer —
-              // an event appended mid-replay is neither lost nor duplicated.
-              let lastSent = cursor;
-              let replaying = true;
-              const buffered: { seq: number; type: string; payload: string }[] = [];
-              unsub = journal.subscribe((row) => {
-                if (replaying) buffered.push(row);
-                else if (row.seq > lastSent) {
-                  lastSent = row.seq;
-                  sendRow(row);
-                }
-              });
-              let at = cursor;
-              for (;;) {
-                const rows = journal.since(at, 1000);
-                if (rows.length === 0) break;
-                for (const r of rows) {
-                  sendRow(r);
-                  lastSent = r.seq;
-                }
-                at = lastSent;
-              }
-              for (const r of buffered) {
-                if (r.seq > lastSent) {
-                  lastSent = r.seq;
-                  sendRow(r);
-                }
-              }
-              replaying = false;
-            }
-            // Heartbeat carrying head seq: keepalive + a cheap gap detector
-            // (client compares against its cursor without waiting for events).
-            //
-            // The FIRST one is sent immediately, not 10s in. A client whose
-            // cursor is already at head — the normal case when no sessions are
-            // running — gets no replay rows, so without this the response body
-            // stays empty for up to 10s and the client cannot tell an
-            // established stream from a black-holed dial. `HostLink` only leaves
-            // `.connecting` on the first element received, so that silence was
-            // the app showing "Offline" for ~10s after reopening against a
-            // perfectly healthy idle host.
-            send(`: hb ${journal.head()}\n\n`);
-            hb = setInterval(() => send(`: hb ${journal.head()}\n\n`), 10_000);
-          },
-          cancel() {
-            closed = true;
-            if (unsub) unsub();
-            if (hb) clearInterval(hb);
-          },
-        });
+        const stream = journalEventStream(journal, cursor);
         return new Response(stream, { headers: sseHeaders() });
       }
 
