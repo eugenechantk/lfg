@@ -19,7 +19,7 @@ The exported Tasks redesign boards are in `.claude/tasks-a2/design/`. Rendered `
 - [x] Cancel saves nothing; valid Save writes expected fields and returns to the list. Verify through a disposable fixture host with scheduling disabled.
 - [x] Chat creation remains reachable, uses an in-window page, and retains errors and input while starting. Verify the route and a failed fixture response.
 - [x] Desktop build and feature checks pass. No mobile presentation change. Verify the build, existing tests, and conditional scope.
-- [ ] Verified app is installed on Pro and Air; final binary hashes match.
+- [x] Verified app is installed on Pro and Air; final binary hashes match.
 
 ## Decisions
 Reuse the existing A2 editor, rather than duplicate its controls. Add desktop-only create routes to the existing task navigation stack. Keep iOS entry points and modal presentation unchanged.
@@ -41,3 +41,6 @@ A separate release session was asked to reinstall latest root while verification
 
 ## Audit completion
 Independent visual audit passed at 18:50 HKT. The current desktop and shared source hashes match the audited candidate. The auditor verified Once, Weekdays, finite Repeat, inline creation, Cancel, Save, and retained chat input after an error. Report: `.codex/evidence/desktop-task-create-inline-20261016/audit/evidence.md`. Both-Mac installation will be recorded by the release session.
+
+## Release installation
+The release from commit `14dc192` is installed on Pro and Air. Both signed app binaries have SHA-256 `cb9f895e8f74631f8ee5a9955b0fa2292a2ddf354ff6e4ba1791312a53be74b3`. Both installed apps pass all 183 checks and reach both production hosts. Evidence: `.codex/evidence/all-hosts-release-202610162041/`.
