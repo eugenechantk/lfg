@@ -1116,10 +1116,10 @@ private extension View {
     }
 }
 
-/// One S2 list row (canvas board `s2-list`): status dot, then three lines —
-/// title (bold when it needs you or is unread), what state the session is in,
-/// and project · model · subagents · time · host. No buttons: the row is the
-/// tap target.
+/// One S2 list row (canvas board `s2-list`): status dot, title (bold when it
+/// needs you or is unread), an optional active status, and metadata. Compact
+/// unread, idle, and closed rows center their title and metadata together.
+/// No buttons: the row is the tap target.
 struct SessionRow: View {
     @Environment(SessionStore.self) private var store
     let session: Session
@@ -1139,12 +1139,16 @@ struct SessionRow: View {
         group == .needsInput || group == .blocked || group == .unread
     }
 
+    private var showsStateLine: Bool {
+        group != .unread && group != .idle && group != .closed
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
             Circle()
                 .fill(Theme.statusColor(group))
                 .frame(width: 8, height: 8)
-                .padding(.top, 18)
+                .padding(.top, showsStateLine ? 18 : 29)
                 .frame(width: 20, alignment: .leading)
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let nowMs = context.date.timeIntervalSince1970 * 1_000
@@ -1155,9 +1159,14 @@ struct SessionRow: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .frame(height: 22, alignment: .leading)
-                    stateLine(SessionRowLine.resolve(lineState, nowMs: nowMs))
+                    if showsStateLine {
+                        stateLine(SessionRowLine.resolve(lineState, nowMs: nowMs))
+                    }
                     metaLine(nowMs: nowMs)
                 }
+                // Keep every row as tall as three lines, centering the compact
+                // title/meta pair instead of reserving an empty status line.
+                .frame(height: 64, alignment: .leading)
                 .padding(.top, 11)
                 .padding(.bottom, 12)
                 .padding(.trailing, 16)
@@ -1398,6 +1407,16 @@ struct SessionListTimeFixture: View {
                                      lastActivityAt: nowMs - 5_000),
                     group: .working
                 )
+                .accessibilityIdentifier("sessionRow-time-working")
+                Divider()
+                Text("Unread").font(.caption).padding(.horizontal, 20)
+                SessionRow(
+                    session: Session(sessionId: "time-unread", title: "Unread since reply",
+                                     cwd: "/tmp/unread", startedAt: nowMs - 90_000,
+                                     lastActivityAt: nowMs - 15_000),
+                    group: .unread
+                )
+                .accessibilityIdentifier("sessionRow-time-unread")
                 Divider()
                 Text("Idle").font(.caption).padding(.horizontal, 20)
                 SessionRow(
@@ -1406,6 +1425,7 @@ struct SessionListTimeFixture: View {
                                      lastActivityAt: nowMs - 30_000),
                     group: .idle
                 )
+                .accessibilityIdentifier("sessionRow-time-idle")
                 Divider()
                 Text("Closed").font(.caption).padding(.horizontal, 20)
                 SessionRow(
@@ -1414,9 +1434,11 @@ struct SessionListTimeFixture: View {
                                      closed: true),
                     group: .closed
                 )
+                .accessibilityIdentifier("sessionRow-time-closed")
                 Spacer()
             }
             .navigationTitle("Session times")
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("sessionListTimeFixture")
         }
     }
