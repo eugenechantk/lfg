@@ -110,7 +110,17 @@ two live children as running.
 | SC7 background | Resume with a 60 s background command; child ends its turn at 16:31:33 | `running`, session row `busy=True, runningChildAgentCount=1`, until the child's "done" at 16:32:34; then `completed`, count 0 |
 
 Logs: scratchpad `subagent-status/live-foreground.log`, `live-background.log`.
-Production is NOT deployed yet (needs a server restart on both Macs).
+Deployed 2026-10-16 (UTC), commit `1c76039` (not pushed; origin/main lags 13 local commits):
+- Pro: restarted by port 16:42:26Z under `serve-forever.sh`. Live check: a
+  SendMessage-resumed agent with a 40 s foreground command read `running` on
+  `/api/sessions/<id>/subagents` for the whole turn, then `completed`; the
+  session row's `runningChildAgentCount` was 1 during the turn (the list
+  snapshot lags a few seconds at each edge).
+- Air: Syncthing had not delivered the file (Air copy = pre-fix bytes, commit
+  object absent), so the committed `src/subagents.ts` and test were copied over
+  ssh; all other server sources matched by hash. `bun install --frozen-lockfile`
+  (no changes), restarted 16:46:20Z under `serve-forever.sh`; `/api/sessions` 200
+  with tmux targets resolved.
 
 ## Bugs
 
