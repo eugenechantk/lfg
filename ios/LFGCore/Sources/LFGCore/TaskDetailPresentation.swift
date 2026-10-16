@@ -108,7 +108,8 @@ public struct RunTimelineEntry: Sendable, Equatable, Identifiable {
                                  body: nil, bodyTone: .secondary, sessionID: nil, runID: nil))
             }
         }
-        // Retry is offered once, on the newest failed run that never got a session.
+        // Retry is offered once, on the newest failed run, with or without a session. Its row still
+        // opens the session (or the run's details); only the Retry button retries.
         var offeredRetry = task.cancelledAt != nil || task.currentRun != nil
         for run in runs {
             if run.status == "needs_input", run.id == task.currentRun?.id { continue }
@@ -137,11 +138,11 @@ public struct RunTimelineEntry: Sendable, Equatable, Identifiable {
                 entry.body = "Failed · \(reason)" + (run.sessionId == nil && !saysNoSession ? " · no session started" : "")
             }
             if entry.tail.isEmpty {
-                if run.sessionId != nil, let start = run.startedAt, let end = run.finishedAt {
-                    entry.tail = "\(f.duration(from: start, to: end)) ›"
-                } else if run.status == "failed", run.sessionId == nil, !offeredRetry {
+                if run.status == "failed", !offeredRetry {
                     offeredRetry = true
                     entry.tail = "Retry"; entry.tailTone = .accent; entry.tailIsAction = true
+                } else if run.sessionId != nil, let start = run.startedAt, let end = run.finishedAt {
+                    entry.tail = "\(f.duration(from: start, to: end)) ›"
                 } else if run.sessionId != nil {
                     entry.tail = "›"
                 }

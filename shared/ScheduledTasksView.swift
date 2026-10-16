@@ -869,6 +869,8 @@ private struct ScheduledTaskDetail: View {
     /// The answer just sent, kept until the host reports the run moving on.
     @State private var answered: (runID: String, label: String)?
     @State private var answering = false
+    /// A retry waiting for its session to open.
+    @State private var retrying = false
     /// Past runs the viewer has opened (two, then ten more per Show more).
     @State private var olderRequested = 2
     @State private var showsLaterRuns = false
@@ -901,7 +903,7 @@ private struct ScheduledTaskDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 TaskDetailHeader(task: task, hostName: hostName)
-                TaskStatusCard(model: card, prompt: task.currentRun?.prompt, busy: changing || answering,
+                TaskStatusCard(model: card, prompt: task.currentRun?.prompt, busy: changing || answering || retrying,
                                answered: answeredLabel, hostName: hostName, perform: perform)
                     .padding(.top, 10)
                 if task.schedule.kind == "once", card.kind == .waiting || card.kind == .running {
@@ -951,7 +953,8 @@ private struct ScheduledTaskDetail: View {
                     earlier: earlierFold.hasToggle ? RunsToggle(label: earlierFold.label, count: earlierFold.count(upcoming: false),
                                                                 opensUp: false, opens: earlierFold.opens, identifier: "task_runs_more") {
                         showEarlier(earlierFold, loaded: past.count)
-                    } : nil)
+                    } : nil,
+                    retry: { _ in retry() })
             }
             .padding(.horizontal, Self.pageInset)
             .padding(.top, 8)
@@ -1058,7 +1061,8 @@ private struct ScheduledTaskDetail: View {
 
     private func perform(_ intent: TaskCardIntent) {
         switch intent {
-        case .action(.runNow), .action(.retry): action("run", nil)
+        case .action(.runNow): action("run", nil)
+        case .action(.retry): retry()
         case .action(.pause): action("", false)
         case .action(.resume): action("", true)
         case .action(.askToFix): askToChange("Why did the last run fail? Fix the task if you can.")
@@ -1085,10 +1089,32 @@ private struct ScheduledTaskDetail: View {
         if olderRequested > loaded, runs.count < total { Task { await load(more: true) } }
     }
 
+    /// A run row opens its session, or its details when no session started. Retry is its own button.
     private func open(_ entry: RunTimelineEntry) {
-        if entry.tailIsAction { action("run", nil) }
-        else if let sid = entry.sessionID { openSession(sid) }
+        if let sid = entry.sessionID { openSession(sid) }
         else if let id = entry.runID, let run = runs.first(where: { $0.id == id }) { selectedRun = run }
+    }
+
+    /// Retry shows the retry happening: it starts the run, then opens the run's session as soon as
+    /// the host launches it (in iTerm on the Mac, the session view on the phone).
+    private func retry() {
+        guard !retrying else { return }
+        retrying = true; error = nil
+        Task {
+            defer { retrying = false }
+            do {
+                guard let run = try await client.runNow(task.id) else { await refresh(); return }
+                await refresh()
+                // The host launches the agent after replying; its session ID lands in the run a few seconds later.
+                for _ in 0..<45 {
+                    try await Task.sleep(for: .seconds(1))
+                    guard let current = try await client.runs(task.id).runs.first(where: { $0.id == run.id }) else { continue }
+                    if let sid = current.sessionId, !sid.isEmpty { openSession(sid); break }
+                    if current.status == "failed" { break }
+                }
+                await refresh()
+            } catch is CancellationError {} catch { self.error = error.localizedDescription }
+        }
     }
 
     private func load(more: Bool = false) async {

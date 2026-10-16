@@ -574,6 +574,12 @@ public struct ScheduledTasksClient: Sendable {
         let data = try JSONEncoder().encode(ScheduledTaskToggle(enabled: enabled))
         let _: ScheduledTaskMutation = try await call("/api/scheduled-tasks/\(id)" + (action.isEmpty ? "" : "/\(action)"), body: data)
     }
+    /// Starts a run now (Run now or Retry). The host returns the run before its session exists.
+    public func runNow(_ id: String) async throws -> ScheduledTaskRun? {
+        let data = try JSONEncoder().encode(ScheduledTaskToggle(enabled: nil))
+        let result: ScheduledTaskMutation = try await call("/api/scheduled-tasks/\(id)/run", body: data)
+        return result.run
+    }
     public func runs(_ id: String, offset: Int = 0) async throws -> ScheduledTaskRuns { try await call("/api/scheduled-tasks/\(id)/runs?offset=\(offset)") }
     /// Sends a change request to the task's edit chat; the host reuses a live chat or starts one.
     public func startChat(_ id: String, prompt: String) async throws -> String {

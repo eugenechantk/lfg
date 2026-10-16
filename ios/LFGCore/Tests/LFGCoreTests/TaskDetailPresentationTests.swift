@@ -71,6 +71,17 @@ import Testing
         #expect(byID["f2"]?.body == "Failed · Model unavailable · no session started")
     }
 
+    /// A failed run whose session did start still offers Retry, and keeps the session for its row.
+    @Test func retryOnAFailedRunThatHadASession() throws {
+        let f = #"{"id":"f","status":"failed","sessionId":"s9","startedAt":\#(Self.ms("2026-10-14T01:00:00Z")),"finishedAt":\#(Self.ms("2026-10-14T01:04:00Z")),"error":"Claude Code exited."}"#
+        let older = #"{"id":"g","status":"failed","sessionId":"s8","startedAt":\#(Self.ms("2026-10-13T01:00:00Z")),"finishedAt":\#(Self.ms("2026-10-13T01:03:00Z")),"error":"Claude Code exited."}"#
+        let t = try task(#""enabled":true"#)
+        let runs = try JSONDecoder().decode([ScheduledTaskRun].self, from: Data("[\(f),\(older)]".utf8))
+        let e = RunTimelineEntry.entries(task: t, runs: runs, now: Self.now, timeZone: Self.hk, locale: Self.en)
+        #expect(e[0].tail == "Retry"); #expect(e[0].tailIsAction); #expect(e[0].sessionID == "s9")
+        #expect(e[1].tail == "3 min ›"); #expect(!e[1].tailIsAction)
+    }
+
     @Test func failedCardOnFirstFailureWithStreakFromTheSecond() throws {
         let t = try task(#""enabled":true,"consecutiveFailures":1,"nextRunAt":\#(Self.ms("2026-10-15T18:00:00Z")),"upcomingRuns":[\#(Self.ms("2026-10-15T18:00:00Z"))],"lastRun":{"id":"r","status":"failed","finishedAt":\#(Self.ms("2026-10-14T18:00:00Z")),"error":"Opus 5.5 was unavailable, so no session started. Details follow."}"#,
                          schedule: #"{"kind":"cron","timezone":"Asia/Hong_Kong","expression":"0 2 * * *"}"#)
