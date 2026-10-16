@@ -123,6 +123,9 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
         source = "lfg"
         closed = false
         busy = false
+        runningChildAgentCount = 0
+        childAgents = []
+        runningBackgroundProcessCount = 0
         status = "ok"
         statusReason = nil
         statusDetail = nil

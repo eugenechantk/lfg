@@ -97,13 +97,13 @@ struct SessionRowLineTests {
                 == SessionRowLine(icon: .none, text: "New reply", tone: .primary))
     }
 
-    @Test("idle invites the next message")
+    @Test("idle leaves the status slot empty")
     func idle() {
         #expect(SessionRowLine.resolve(.idle, nowMs: now)
-                == SessionRowLine(icon: .none, text: "Ready for your next message", tone: .secondary))
+                == SessionRowLine(icon: .none, text: "", tone: .secondary))
     }
 
-    @Test("closed says when it ended, by calendar day")
+    @Test("closed leaves the status slot empty regardless of its age")
     func closed() {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "UTC")!
@@ -114,11 +114,11 @@ struct SessionRowLineTests {
         func text(_ daysAgo: Int) -> String {
             SessionRowLine.resolve(.closed(lastActivityMs: ms(daysAgo: daysAgo)), nowMs: now, calendar: cal).text
         }
-        #expect(text(0) == "Ended today · send a message to resume")
-        #expect(text(1) == "Ended yesterday · send a message to resume")
-        #expect(text(3) == "Ended 3 days ago · send a message to resume")
+        #expect(text(0).isEmpty)
+        #expect(text(1).isEmpty)
+        #expect(text(3).isEmpty)
         #expect(SessionRowLine.resolve(.closed(lastActivityMs: nil), nowMs: now).text
-                == "Ended · send a message to resume")
+                == "")
         #expect(SessionRowLine.resolve(.closed(lastActivityMs: ms(daysAgo: 1)), nowMs: now, calendar: cal).tone == .secondary)
     }
 }

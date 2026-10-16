@@ -4459,6 +4459,20 @@ import LFGCore
         transcripts[id] = fixtureMessages
         pendingSends[id] = []
         busy[id] = false
+        if let overlayMode = ProcessInfo.processInfo.environment["LFG_SESSION_OVERLAY_FIXTURE"] {
+            childAgentsBySession[id] = overlayMode == "none" ? [] : [
+                ChildAgentSession(id: "fixture-child-active", description: "Check session overlays",
+                                  status: overlayMode == "running" ? .running : .completed),
+                ChildAgentSession(id: "fixture-child-done", description: "Read the transcript", status: .completed),
+                ChildAgentSession(id: "fixture-child-failed", description: "Check an unavailable host", status: .failed),
+            ]
+            pendingSends[id] = [PendingSend(
+                id: "fixture-overlay-queued", displayText: "Keep this queued message above the scrolling transcript",
+                matchText: "Keep this queued message above the scrolling transcript",
+                ts: Date().timeIntervalSince1970 * 1_000, queuedBehindTurn: true, confirmed: false
+            )]
+            busy[id] = true
+        }
         bumpTranscript(id)
         return fixture
     }
@@ -5047,6 +5061,17 @@ import LFGCore
                 sessions.append(branch)
             }
             if let owner { hostBySession[id] = owner.id }
+            // The fork has no submitted turn. Clear the state the views and
+            // send path actually read, including a busy event received while
+            // the host was bootstrapping the branch. The timestamps also keep
+            // an older in-flight snapshot from restoring that stale activity;
+            // the next real turn can update these values normally.
+            let forkedAt = Date()
+            busy[id] = false
+            busyStatedAt[id] = forkedAt
+            prompts[id] = nil
+            promptStatedAt[id] = forkedAt
+            childAgentsBySession[id] = nil
             return id
         } catch { lastError = "Fork failed: \(error.localizedDescription)"; return nil }
     }

@@ -31,7 +31,7 @@ struct TranscriptMessageView: View {
         case "tool_use", "tool_result":
             ToolLineView(message: message)
         case "thinking":
-            ThinkingView(text: message.text)
+            EmptyView()
         case "system_notice":
             SystemNoticeView(text: message.text)
         case "memory_citation":
@@ -163,10 +163,12 @@ private struct TextBubble: View {
             VStack(alignment: .leading, spacing: 6) {
                 // One native text view owns the whole assistant turn, so a
                 // long-press selection can cross paragraphs and list items.
-                ProseView(text: prose)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !prose.isEmpty {
+                    ProseView(text: prose)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 if !media.isEmpty { MediaAttachmentsView(refs: media, onOpen: onOpenFile) }
-                if let onFollowup {
+                if let onFollowup, !rowText.followups.isEmpty {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(rowText.followups.enumerated()), id: \.offset) { index, followup in
                             Button {
@@ -188,6 +190,10 @@ private struct TextBubble: View {
                         .font(.caption2).foregroundStyle(.orange)
                 }
             }
+            // Attachment-only turns use the compact tool-row spacing. Empty
+            // prose and follow-up containers must not create extra gaps.
+            .padding(.top, prose.isEmpty && !media.isEmpty ? -4 : 0)
+            .padding(.bottom, prose.isEmpty && !media.isEmpty ? 2 : 0)
         }
     }
 
@@ -213,55 +219,8 @@ private struct TextBubble: View {
     private var displayText: String { rowText.displayText }
 }
 
-/// Collapsible reasoning block, collapsed by default.
-struct ThinkingView: View {
-    let text: String
-    @State private var expanded = false
-    private var presentation: TranscriptThinkingPresentation {
-        .resolve(text: text)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if presentation.isDisclosure {
-                Button { withAnimation(.easeInOut(duration: 0.15)) { expanded.toggle() } } label: {
-                    header(showsDisclosure: true)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("thinkingDisclosure")
-            } else {
-                header(showsDisclosure: false)
-                    .accessibilityIdentifier("compactingConversationIndicator")
-            }
-
-            if expanded, let detail = presentation.detail {
-                Text(detail)
-                    .font(.callout.italic())
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func header(showsDisclosure: Bool) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: "brain")
-            Text(presentation.title)
-            if showsDisclosure {
-                Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 9))
-            }
-        }
-        .font(.caption.weight(.medium))
-        .foregroundStyle(.secondary)
-    }
-}
-
 /// Provider-owned transcript activity such as a local slash command or model
-/// switch. It shares the quiet, full-width visual language of `ThinkingView`
-/// so it reads as session state rather than something the human sent.
+/// switch. Its quiet, full-width style distinguishes it from a user message.
 private struct SystemNoticeView: View {
     let text: String
     private var presentation: TranscriptSystemNoticePresentation {
@@ -347,34 +306,42 @@ private struct ToolLineView: View {
     private var isUse: Bool { message.kind == "tool_use" }
 
     var body: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.15)) { expanded.toggle() }
-        } label: {
-            HStack(alignment: .top, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { expanded.toggle() }
+            } label: {
+                HStack(alignment: .top, spacing: 8) {
                 Image(systemName: isUse ? "wrench.and.screwdriver" : "arrow.turn.down.right")
                     .font(.caption).foregroundStyle(.secondary)
                 Text(content)
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
-                    .lineLimit(expanded ? nil : 3)
+                    .lineLimit(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     // A collapsed tool row must not be able to grow unbounded.
                     // `lineLimit` alone does not cap it: one measured row was
                     // 2,858pt tall, which `LazyVStack` must place on every
                     // scroll update. Expanding is still one tap away.
-                    .frame(maxHeight: expanded ? nil : Self.collapsedMaxHeight,
+                    .frame(maxHeight: Self.collapsedMaxHeight,
                            alignment: .top)
                     .clipped()
                 Image(systemName: expanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 9)).foregroundStyle(.tertiary)
                     .padding(.top, 2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("legacyToolDisclosure-\(message.stableID)")
+            if expanded {
+                ScrollableCodeBlock(text: content, fontSize: 12, foregroundColor: .secondaryLabel,
+                                    accessibilityID: "legacyToolCode-\(message.stableID)")
+            }
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -427,15 +394,10 @@ struct NeedsInputPanel: View {
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(S2.white)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(command)
-                        .font(.system(size: 13, design: .monospaced))
-                        .lineSpacing(5)
-                        .foregroundStyle(S2.ink)
-                        .frame(minHeight: 18)
-                        .padding(.horizontal, 12).padding(.vertical, 10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    ScrollableCodeBlock(text: command, fontSize: 13, lineHeight: 18,
+                                        foregroundColor: UIColor(S2.ink), maxHeight: 120,
+                                        accessibilityID: "permissionCommandCodeBlock")
                         .background(S2.color(dark: 0x000000, light: 0xF2F2F7), in: RoundedRectangle(cornerRadius: 12))
-                        .textSelection(.enabled)
                     if let place {
                         Text(place).font(.system(size: 13)).foregroundStyle(S2.secondaryInk)
                     }
@@ -812,10 +774,6 @@ struct PendingStripView: View {
                               serverStatus: serverStatus, agent: agent)
     }
 
-    private static let rowFill = S2.color(dark: 0x1A1A1C, light: 0xEDEDF0)
-    /// rgba(118,118,128,0.40) on black: the row while its menu is open.
-    private static let rowFillOpen = S2.color(dark: 0x2F2F33, light: 0xE0E0E5)
-
     private func pendingRow(_ item: SessionStore.PendingSend, _ row: QueuedStripRow, highlighted: Bool) -> some View {
         HStack(spacing: 8) {
             switch row.icon {
@@ -840,8 +798,8 @@ struct PendingStripView: View {
         .padding(.leading, 12)
         .padding(.trailing, 10)
         .frame(height: 32)
-        // rgba(118,118,128,0.22) over the black chrome behind the strip.
-        .background(highlighted ? Self.rowFillOpen : Self.rowFill, in: Capsule())
+        .background(highlighted ? S2.ink.opacity(0.08) : .clear, in: Capsule())
+        .modifier(GlassPanel(cornerRadius: 16))
         .contentShape(Capsule())
     }
 
@@ -1517,12 +1475,9 @@ struct ToolCallCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             sectionLabel(call.kind.inputLabel)
-            Text(inputText)
-                .font(.system(size: 12.5, design: .monospaced))
-                .cssLineBox(size: 12.5, lineHeight: 17, monospaced: true)
-                .foregroundStyle(StepInk.inputInk)
-                .lineLimit(6)
-                .textSelection(.enabled)
+            ScrollableCodeBlock(text: inputText, fontSize: 12.5, lineHeight: 17,
+                                foregroundColor: UIColor(StepInk.inputInk), maxHeight: 122,
+                                accessibilityID: "toolCallInput-\(call.id)")
             if showsCwd, call.kind == .command, let cwd, !cwd.isEmpty {
                 Text("In \(StepFormat.abbreviatingHome(cwd))")
                     .font(.system(size: 12))
@@ -1534,27 +1489,10 @@ struct ToolCallCard: View {
                                                     limit: call.kind == .command ? Self.previewLimit : 6)
                 sectionLabel(resultLabel(preview), tint: call.isError ? StepInk.error : StepInk.meta)
                     .padding(.top, 4)
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(preview.lines.enumerated()), id: \.offset) { index, line in
-                        // Board `s2-tools-group`: when more lines follow, the last
-                        // shown line of a head preview is dimmed (#636366).
-                        let fades = !preview.fromEnd && preview.total > preview.lines.count
-                            && index == preview.lines.count - 1
-                        Text(line.isEmpty ? " " : line)
-                            .font(.system(size: 11.5, design: .monospaced))
-                            // Test tallies read at a glance (board: " 42 pass" in green).
-                            .foregroundStyle(fades ? S2.color(dark: 0x636366, light: 0xAEAEB2)
-                                             : Self.isPassLine(line) ? S2.live : StepInk.outputInk)
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                            .frame(height: 16, alignment: .leading)
-                    }
-                }
-                // minWidth 0 makes the box take the offered width, not its
-                // widest line, so long lines clip at the box.
-                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
+                ScrollableCodeBlock(text: result, fontSize: 11.5, lineHeight: 16,
+                                    foregroundColor: UIColor(StepInk.outputInk), maxHeight: 148,
+                                    startsAtBottom: call.kind == .command, highlightsPassLines: true,
+                                    accessibilityID: "toolCallOutput-\(call.id)")
                 .background(StepInk.outputBox)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 if preview.total > preview.lines.count {
@@ -1585,15 +1523,10 @@ struct ToolCallCard: View {
         return call.input
     }
 
-    private static func isPassLine(_ line: String) -> Bool {
-        line.range(of: #"^\s*\d+ pass(ed)?\b"#, options: .regularExpression) != nil
-    }
-
     private func resultLabel(_ p: ToolCallPreview.Lines) -> String {
         let noun = call.kind == .command ? "Output" : "Result"
         let head = call.isError ? "Error" : noun
         let count = "\(p.total) line\(p.total == 1 ? "" : "s")"
-        if p.total > p.lines.count, p.fromEnd { return "\(head) · last \(p.lines.count) of \(count)" }
         return "\(head) · \(count)"
     }
 
@@ -1613,17 +1546,16 @@ struct ToolOutputSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                Text(text)
-                    .font(.system(size: 12, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-            }
+            ScrollableCodeBlock(text: text, fontSize: 12, maxHeight: .infinity,
+                                accessibilityID: "toolOutputCodeBlock")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .accessibilityIdentifier("toolOutputDone")
+                }
             }
         }
     }

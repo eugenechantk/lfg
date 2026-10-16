@@ -59,6 +59,10 @@ enum ScheduledTaskRoute: Hashable {
     case session(String)
     /// The Mac pushes the edit form as a page; iOS presents it as a sheet.
     case edit(String)
+    #if os(macOS)
+    case create(String)
+    case createChat(String)
+    #endif
 }
 
 private var scheduledTaskActionPlacement: ToolbarItemPlacement {
@@ -331,6 +335,27 @@ struct ScheduledTasksView: View {
                     ContentUnavailableView("Task unavailable", systemImage: "calendar.badge.exclamationmark",
                         description: Text("Return to Scheduled Tasks and refresh the list."))
                 }
+            #if os(macOS)
+            case .create(let hostID):
+                if let host = hosts.first(where: { $0.id == hostID }) {
+                    ScheduledTaskEditor(client: .init(host: host), hosts: hosts, task: nil,
+                        embedded: true, onClose: { closeCreation(route) })
+                        .id("create-\(hostID)")
+                } else {
+                    unavailableCreationHost(route)
+                }
+            case .createChat(let hostID):
+                if let host = hosts.first(where: { $0.id == hostID }) {
+                    ScheduledTaskChat(hosts: hosts, initialHost: host, embedded: true,
+                        onClose: { closeCreation(route) }) { hostID, sessionID in
+                            closeCreation(route)
+                            openSession(hostID, sessionID)
+                        }
+                        .id("create-chat-\(hostID)")
+                } else {
+                    unavailableCreationHost(route)
+                }
+            #endif
             }
         }
         #if os(iOS)
@@ -423,56 +448,25 @@ struct ScheduledTasksView: View {
         .accessibilityIdentifier("tasks_host_strip")
     }
 
-    /// The dA2 board's narrow band: search and + as their own buttons and no •••. The host filter
-    /// lives in the host strip and manual setup on the + button's menu. Narrower or wider keeps the
-    /// verified fold behavior.
-    private var boardToolbarBand: Bool { listWidth >= 360 && listWidth < 500 }
-
+    /// Task creation lives in More; the desktop list has no standalone add button.
     @ToolbarContentBuilder
     private var desktopListActions: some ToolbarContent {
-        if boardToolbarBand {
-            ToolbarItem(placement: scheduledTaskActionPlacement) {
-                Button(action: toggleDesktopSearch) { Label("Search tasks", systemImage: "magnifyingglass") }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
-                    .accessibilityIdentifier("tasks_search")
-            }
-            .sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: scheduledTaskActionPlacement) {
-                // A Menu ignores the glass button style, so + is a button and manual setup is its context menu.
-                Button(action: createTask) { Label("New scheduled task", systemImage: "plus") }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
-                    .contextMenu {
-                        ForEach(hosts) { host in
-                            Button("Set up manually on \(host.name)") { sheet = .manual(host) }
-                                .accessibilityIdentifier("tasks_create_manual_\(host.id)")
-                        }
-                    }
-                    .disabled(hosts.isEmpty).accessibilityIdentifier("tasks_add")
-            }
-            .sharedBackgroundVisibility(.hidden)
-        } else {
-            desktopFoldedListActions
-        }
-    }
-
-    @ToolbarContentBuilder
-    private var desktopFoldedListActions: some ToolbarContent {
         ToolbarItem(placement: scheduledTaskActionPlacement) {
             Menu {
-                if listWidth < 500 {
-                    Button("New scheduled task", systemImage: "plus", action: createTask)
-                        .accessibilityIdentifier("tasks_add")
+                Button("New scheduled task", systemImage: "plus", action: createTask)
+                    .accessibilityIdentifier("tasks_add")
+                Button("Create with chat", systemImage: "bubble.left.and.bubble.right") {
+                    if let host = creationHost { pathBinding.wrappedValue.append(.createChat(host.id)) }
+                }
+                .accessibilityIdentifier("tasks_create_chat")
+                if listWidth < 360 {
                     Button("Search tasks", systemImage: "magnifyingglass") { toggleDesktopSearch() }
                         .accessibilityIdentifier("tasks_search")
-                    Divider()
                 }
+                Divider()
                 hostFilterMenu
                 ForEach(hosts) { host in
-                    Button("Set up manually on \(host.name)") { sheet = .manual(host) }
+                    Button("Set up manually on \(host.name)") { pathBinding.wrappedValue.append(.create(host.id)) }
                         .accessibilityIdentifier("tasks_create_manual_\(host.id)")
                 }
             } label: { Label("More task options", systemImage: "ellipsis") }
@@ -483,7 +477,7 @@ struct ScheduledTasksView: View {
             .disabled(hosts.isEmpty).accessibilityIdentifier("tasks_more")
         }
         .sharedBackgroundVisibility(.hidden)
-        if listWidth >= 500 {
+        if listWidth >= 360 {
         ToolbarItem(placement: scheduledTaskActionPlacement) {
             if listWidth < 1200 {
                 Button(action: toggleDesktopSearch) { Label("Search tasks", systemImage: "magnifyingglass") }
@@ -494,14 +488,6 @@ struct ScheduledTasksView: View {
             } else {
                 desktopSearchField.frame(width: 150, height: 30)
             }
-        }
-        .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: scheduledTaskActionPlacement) {
-            Button(action: createTask) { Label("New scheduled task", systemImage: "plus") }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
-                .disabled(hosts.isEmpty).accessibilityIdentifier("tasks_add")
         }
         .sharedBackgroundVisibility(.hidden)
         }
@@ -599,8 +585,35 @@ struct ScheduledTasksView: View {
     }
 
     private func createTask() {
-        if let onCreate { onCreate() } else { sheet = .chat }
+        if let onCreate { onCreate(); return }
+        #if os(macOS)
+        if let host = creationHost { pathBinding.wrappedValue.append(.create(host.id)) }
+        #else
+        sheet = .chat
+        #endif
     }
+
+    #if os(macOS)
+    private var creationHost: ScheduledTaskHost? {
+        hosts.first(where: { $0.id == hostFilter }) ?? hosts.first
+    }
+
+    private func closeCreation(_ route: ScheduledTaskRoute) {
+        if pathBinding.wrappedValue.last == route { pathBinding.wrappedValue.removeLast() }
+        Task { await model.refresh() }
+    }
+
+    private func unavailableCreationHost(_ route: ScheduledTaskRoute) -> some View {
+        ContentUnavailableView {
+            Label("Host unavailable", systemImage: "desktopcomputer.trianglebadge.exclamationmark")
+        } description: {
+            Text("This host is no longer configured. Return to Tasks and choose another host.")
+        } actions: {
+            Button("Back to Tasks") { closeCreation(route) }
+                .accessibilityIdentifier("task_create_host_unavailable_back")
+        }
+    }
+    #endif
 
     private var taskRequestError: String? {
         let failures = model.loadErrors.filter { connectedHostIDs?.contains($0.key) ?? true }
@@ -1803,21 +1816,33 @@ private struct TaskChatCreated: Decodable, Sendable { let sessionId: String? }
 private struct ScheduledTaskChat: View {
     let hosts: [ScheduledTaskHost]
     let initialHost: ScheduledTaskHost
+    var embedded = false
+    var onClose: (() -> Void)? = nil
     let openSession: (String, String) -> Void
     @State private var draft = TaskChatDraft()
     @Environment(\.dismiss) private var dismiss
     var body: some View {
-        NavigationStack {
-            ScheduledTaskChatContent(hosts: hosts, initialHost: initialHost, task: nil,
-                draft: $draft, openSession: openSession)
-                .navigationTitle("New scheduled task")
-                .toolbar { ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }.disabled(draft.starting).accessibilityIdentifier("task_chat_done")
-                } }
+        Group {
+            if embedded { content } else { NavigationStack { content } }
         }
         #if os(macOS)
-        .frame(width: 650, height: 720)
+        .frame(width: embedded ? nil : 650, height: embedded ? nil : 720)
         #endif
+    }
+
+    private var content: some View {
+        ScheduledTaskChatContent(hosts: hosts, initialHost: initialHost, task: nil,
+            draft: $draft, openSession: openSession)
+            .navigationTitle("New scheduled task")
+            #if os(macOS)
+            .navigationBarBackButtonHidden(embedded)
+            #endif
+            .toolbar { ToolbarItem(placement: .cancellationAction) {
+                Button(embedded ? "Cancel" : "Done") {
+                    if let onClose { onClose() } else { dismiss() }
+                }
+                .disabled(draft.starting).accessibilityIdentifier("task_chat_done")
+            } }
     }
 }
 

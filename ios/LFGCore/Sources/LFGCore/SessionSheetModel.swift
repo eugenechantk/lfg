@@ -29,9 +29,7 @@ public struct SessionSheetModel: Equatable, Sendable {
 
     /// The Host row: where the session runs and where it can move.
     public enum HostRow: Equatable, Sendable {
-        /// One other host: "Pro · move to Air".
-        case moveTo(current: String, target: String)
-        /// Several other hosts: "Pro", tapping lists them.
+        /// Alternative hosts exist: tapping the current host opens a menu.
         case choose(current: String)
         /// No other host: "Pro", nothing to tap.
         case info(current: String)
@@ -92,7 +90,6 @@ public struct SessionSheetModel: Equatable, Sendable {
         if let current = facts.hostLabel, !current.isEmpty {
             switch facts.otherHosts.count {
             case 0: hostRow = .info(current: current)
-            case 1: hostRow = .moveTo(current: current, target: facts.otherHosts[0])
             default: hostRow = .choose(current: current)
             }
         } else {

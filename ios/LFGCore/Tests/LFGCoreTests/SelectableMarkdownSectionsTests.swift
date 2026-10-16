@@ -2,6 +2,23 @@ import Testing
 @testable import LFGCore
 
 struct SelectableMarkdownSectionsTests {
+    @Test func indentedCodeGetsItsOwnViewport() {
+        #expect(SelectableMarkdownSections.split("Before.\n\n    alpha\n        beta\n\nAfter.") == [
+            .prose("Before."), .code("alpha\n    beta", depth: 0), .prose("After."),
+        ])
+    }
+
+    @Test func indentedCodeInsideAListKeepsItsListDepth() {
+        #expect(SelectableMarkdownSections.split("- Example:\n\n      alpha\n      beta\n\nAfter.") == [
+            .prose("- Example:"), .code("alpha\nbeta", depth: 1), .prose("After."),
+        ])
+    }
+
+    @Test func indentationDoesNotInterruptAnExistingParagraph() {
+        let text = "A paragraph\n    continues here."
+        #expect(SelectableMarkdownSections.split(text) == [.prose(text)])
+    }
+
     @Test func proseAndListStayInOneSelectableSection() {
         let markdown = """
         Before the list.
@@ -165,10 +182,12 @@ struct SelectableMarkdownSectionsTests {
         #expect(SelectableMarkdownSections.split(markdown) == [.prose(markdown)])
     }
 
-    @Test func fourSpaceIndentedFenceOutsideListIsNotAFence() {
+    @Test func fourSpaceIndentedFenceOutsideListStaysLiteralCode() {
         let markdown = "Before.\n\n    ```\n    not a fence\n    ```\n\nAfter."
 
-        #expect(SelectableMarkdownSections.split(markdown) == [.prose(markdown)])
+        #expect(SelectableMarkdownSections.split(markdown) == [
+            .prose("Before."), .code("```\nnot a fence\n```", depth: 0), .prose("After."),
+        ])
     }
 
     @Test func delimiterLikeTextWithoutHeaderPipeIsNotATable() {
@@ -182,7 +201,7 @@ struct SelectableMarkdownSectionsTests {
         #expect(SelectableMarkdownSections.split(markdown) == [.prose(markdown)])
     }
 
-    @Test func fourSpaceIndentedTableSyntaxStaysSelectableProse() {
+    @Test func fourSpaceIndentedTableSyntaxStaysLiteralCode() {
         let markdown = """
         Before.
 
@@ -192,6 +211,8 @@ struct SelectableMarkdownSectionsTests {
         After.
         """
 
-        #expect(SelectableMarkdownSections.split(markdown) == [.prose(markdown)])
+        #expect(SelectableMarkdownSections.split(markdown) == [
+            .prose("Before."), .code("| A | B |\n| --- | --- |", depth: 0), .prose("After."),
+        ])
     }
 }

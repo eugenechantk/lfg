@@ -6,7 +6,7 @@ import Foundation
 /// paragraphs and list items. GFM pipe tables are isolated because MarkdownUI's
 /// grid is the authoritative table renderer and intentionally owns one native
 /// selection surface per cell. Fenced code blocks are isolated so they can
-/// scroll horizontally instead of wrapping inside the prose text view.
+/// scroll in a bounded viewport instead of wrapping inside the prose text view.
 public enum SelectableMarkdownSection: Equatable, Sendable {
     case prose(String)
     case table(String)
@@ -34,6 +34,31 @@ public enum SelectableMarkdownSections {
                 // left of. (Lazy continuation lines are not modelled.)
                 let indent = leadingSpaceCount(line)
                 listColumns.removeAll { $0 > indent }
+            }
+
+            // CommonMark indented code needs a blank boundary; indentation
+            // alone cannot interrupt a paragraph or a list item's prose.
+            let containerColumn = listColumns.last ?? 0
+            if !isBlank, leadingSpaceCount(line) >= containerColumn + 4,
+               index == 0 || lines[index - 1].trimmingCharacters(in: .whitespaces).isEmpty {
+                appendProse(lines[proseStart..<index], to: &sections)
+                var end = index + 1
+                while end < lines.count,
+                      lines[end].trimmingCharacters(in: .whitespaces).isEmpty
+                        || leadingSpaceCount(lines[end]) >= containerColumn + 4 {
+                    end += 1
+                }
+                var codeEnd = end
+                while codeEnd > index, lines[codeEnd - 1].trimmingCharacters(in: .whitespaces).isEmpty {
+                    codeEnd -= 1
+                }
+                let code = lines[index..<codeEnd]
+                    .map { dropLeadingSpaces($0, upTo: containerColumn + 4) }
+                    .joined(separator: "\n")
+                sections.append(.code(code, depth: listColumns.count))
+                index = end
+                proseStart = end
+                continue
             }
 
             if let fence = opensFence(line, listColumns: listColumns) {

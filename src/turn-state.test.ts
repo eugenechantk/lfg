@@ -110,6 +110,34 @@ describe("classifyTurnLine", () => {
 });
 
 describe("transcriptTurnState", () => {
+  test("a Codex fork without its own turn is idle, regardless of recent metadata", async () => {
+    const p = write([
+      { type: "session_meta", payload: { id: "branch", forked_from_id: "source",
+        history_base: { thread_id: "source", end_byte_offset: 100 } } },
+      { type: "event_msg", payload: { type: "thread_settings_applied" } },
+    ]);
+    expect(await transcriptTurnState(p)).toBe("idle");
+  });
+
+  test("a fork's first real turn supersedes its idle metadata boundary", async () => {
+    const p = write([
+      { type: "session_meta", payload: { id: "branch", forked_from_id: "source" } },
+    ]);
+    expect(await transcriptTurnState(p)).toBe("idle");
+    appendFileSync(p, JSON.stringify({ type: "event_msg", payload: { type: "task_started" } }) + "\n");
+    expect(await transcriptTurnState(p)).toBe("running");
+    appendFileSync(p, JSON.stringify({ type: "event_msg", payload: { type: "task_complete" } }) + "\n");
+    expect(await transcriptTurnState(p)).toBe("idle");
+  });
+
+  test("ordinary Codex metadata does not close an open turn", async () => {
+    const p = write([
+      { type: "event_msg", payload: { type: "task_started" } },
+      { type: "session_meta", payload: { id: "existing" } },
+    ]);
+    expect(await transcriptTurnState(p)).toBe("running");
+  });
+
   // SC1
   test("finished turn → idle", async () => {
     const p = write([prompt("go"), assistant("done"), stopHook(), turnEnd()]);

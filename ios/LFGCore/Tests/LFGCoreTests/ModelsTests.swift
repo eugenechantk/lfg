@@ -320,4 +320,28 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(session.startedAt, 30)
         XCTAssertEqual(session.lastActivityAt, 30)
     }
+
+    func testMarkAsLFGForkDoesNotInheritSourceWork() {
+        let source = Session(
+            sessionId: "source", title: "Running conversation", agent: "claude",
+            busy: true, runningChildAgentCount: 2,
+            childAgents: [ChildAgentSession(id: "source-child", status: .running)],
+            runningBackgroundProcessCount: 1
+        )
+        var branch = source
+
+        branch.markAsLFGFork(sessionId: "branch", tmuxName: "lfg-branch", cwd: nil)
+
+        XCTAssertEqual(branch.busy, false)
+        XCTAssertEqual(branch.runningChildAgentCount, 0)
+        XCTAssertTrue(branch.childAgents.isEmpty)
+        XCTAssertEqual(branch.runningBackgroundProcessCount, 0)
+        XCTAssertFalse(ChildAgentActivity.parentIsRunning(
+            parentBusy: branch.busy == true, agents: branch.childAgents,
+            reportedRunningCount: branch.runningChildAgentCount))
+        XCTAssertEqual(source.busy, true)
+        XCTAssertEqual(source.runningChildAgentCount, 2)
+        XCTAssertEqual(source.childAgents.first?.status, .running)
+        XCTAssertEqual(source.runningBackgroundProcessCount, 1)
+    }
 }

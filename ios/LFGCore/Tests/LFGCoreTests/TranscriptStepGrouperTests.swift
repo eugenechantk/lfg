@@ -17,6 +17,35 @@ private func prose(_ id: String, _ text: String) -> SessionMessage {
 
 @Suite("Transcript step grouping")
 struct TranscriptStepGrouperTests {
+    @Test("thinking rows are omitted while visible message indices stay stable")
+    func thinkingRowsAreHidden() {
+        let messages = [
+            SessionMessage(id: "empty", role: "assistant", kind: "thinking", text: ""),
+            prose("before", "Visible before"),
+            SessionMessage(id: "detail", role: "assistant", kind: "thinking", text: "Reasoning detail"),
+            SessionMessage(id: "compacting", role: "system", kind: "thinking", text: "Compacting conversation"),
+            prose("after", "Visible after"),
+        ]
+        #expect(TranscriptStepGrouper.items(for: messages) == [.message(1), .message(4)])
+        #expect(messages.count == 5)
+    }
+
+    @Test("hidden thinking does not lose a tool result arriving after its call", arguments: [true, false])
+    func thinkingBetweenCallAndResult(hasIDs: Bool) {
+        let messages = [
+            use("call", "Read", target: "a.swift", text: "Read", useId: hasIDs ? "read-a" : nil),
+            SessionMessage(id: "thinking", role: "assistant", kind: "thinking", text: ""),
+            result("output", "File content", useId: hasIDs ? "read-a" : nil),
+            prose("answer", "Finished"),
+        ]
+        let items = TranscriptStepGrouper.items(for: messages)
+        #expect(items.count == 2)
+        guard case .steps(let group) = items.first else { Issue.record("missing tool step"); return }
+        #expect(group.calls.count == 1)
+        #expect(group.calls[0].result == "File content")
+        #expect(items.last == .message(3))
+    }
+
     @Test("consecutive tool rows fold into one step; prose stays a message")
     func folding() {
         let messages = [

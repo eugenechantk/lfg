@@ -46,4 +46,18 @@ struct SubagentPillTests {
         #expect(SubagentPill(agents: []).isEmpty)
         #expect(SubagentPill(agents: []).doneFraction == 0)
     }
+
+    @Test("only running subagents make the composer pill visible",
+          arguments: [ChildAgentStatus.running, .completed, .failed, .stopped, .unknown])
+    func visibility(status: ChildAgentStatus) {
+        let pill = SubagentPill(agents: [agent("a", status), agent("b", .completed)])
+        #expect(pill.isVisible == (status == .running))
+    }
+
+    @Test("the pill disappears when the last running subagent finishes")
+    func lastAgentFinishes() {
+        #expect(SubagentPill(agents: [agent("a", .running), agent("b", .failed)]).isVisible)
+        #expect(!SubagentPill(agents: [agent("a", .completed), agent("b", .failed)]).isVisible)
+        #expect(!SubagentPill(agents: []).isVisible)
+    }
 }

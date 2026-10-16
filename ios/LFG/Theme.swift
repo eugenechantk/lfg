@@ -146,7 +146,39 @@ extension Glass {
     }
 }
 
-/// The scroll edge treatment for the lists and the session view, drawn by the
+/// A soft backdrop behind session chrome. Transcript content continues beneath
+/// the header, gaining blur gradually as it approaches the navigation controls.
+struct TranscriptTopFade: View {
+    let barHeight: CGFloat
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        let bar = max(barHeight, 1)
+        let height = bar + 36
+        let base = Color(.systemBackground)
+        let stops: [(location: CGFloat, strength: Double)] = [
+            (0, 1), (max(bar - 36, 0) / height, 1),
+            (bar / height, 0.8), ((bar + 16) / height, 0.3), (1, 0),
+        ]
+        let mask = LinearGradient(
+            stops: stops.map { .init(color: .black.opacity($0.strength), location: $0.location) },
+            startPoint: .top, endPoint: .bottom)
+        ZStack {
+            if !reduceTransparency {
+                Rectangle().fill(.regularMaterial).mask(mask)
+            }
+            LinearGradient(
+                stops: stops.map {
+                    .init(color: base.opacity($0.strength * (reduceTransparency ? 1 : 0.16)), location: $0.location)
+                }, startPoint: .top, endPoint: .bottom)
+        }
+        .frame(height: height)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The scroll edge treatment for the lists, drawn by the
 /// app instead of the system. Apple's default effect darkens hard when bare text
 /// sits in a bar (our host-status line), turning near-black and then clearing
 /// within a few points of the bar's edge. The session view's flipped transcript
@@ -315,6 +347,22 @@ extension View {
         } else {
             self.buttonStyle(.plain)
         }
+    }
+}
+
+/// Shared close control for the custom headers in session action sheets.
+struct SheetCloseButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button("Close", systemImage: "xmark", action: action)
+            .labelStyle(.iconOnly)
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(.primary)
+            .buttonBorderShape(.circle)
+            .controlSize(.large)
+            .glassButtonStyleOrPlain()
+            .frame(minWidth: 44, minHeight: 44)
     }
 }
 

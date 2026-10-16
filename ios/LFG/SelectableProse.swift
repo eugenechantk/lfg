@@ -2,6 +2,117 @@ import SwiftUI
 import UIKit
 import LFGCore
 
+/// One bounded, selectable viewport for code in prose and tool responses.
+/// A scroll view owns both axes; its non-scrolling text view owns selection.
+struct ScrollableCodeBlock: UIViewRepresentable {
+    let text: String
+    var fontSize: CGFloat = 14.45
+    var lineHeight: CGFloat? = nil
+    var foregroundColor: UIColor = .label
+    var maxHeight: CGFloat = 240
+    var startsAtBottom = false
+    var highlightsPassLines = false
+    var accessibilityID = "scrollableCodeBlock"
+
+    func makeUIView(context: Context) -> CodeViewportScrollView {
+        let view = CodeViewportScrollView()
+        let textView = view.textView
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.isScrollEnabled = false
+        textView.backgroundColor = .clear
+        textView.isOpaque = false
+        textView.textContainerInset = UIEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
+        textView.textContainer.lineFragmentPadding = 0
+        textView.textContainer.lineBreakMode = .byClipping
+        view.backgroundColor = .clear
+        view.isOpaque = false
+        view.showsHorizontalScrollIndicator = true
+        view.showsVerticalScrollIndicator = true
+        view.isDirectionalLockEnabled = false
+        view.contentInsetAdjustmentBehavior = .never
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return view
+    }
+
+    func updateUIView(_ view: CodeViewportScrollView, context: Context) {
+        view.accessibilityIdentifier = accessibilityID
+        view.textView.accessibilityIdentifier = "\(accessibilityID).text"
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byClipping
+        if let lineHeight {
+            style.minimumLineHeight = lineHeight
+            style.maximumLineHeight = lineHeight
+        } else {
+            style.lineSpacing = 3.825
+        }
+        let font = UIFontMetrics(forTextStyle: .body)
+            .scaledFont(for: .monospacedSystemFont(ofSize: fontSize, weight: .regular))
+        let content = NSMutableAttributedString(string: text, attributes: [
+            .font: font, .foregroundColor: foregroundColor, .paragraphStyle: style,
+        ])
+        if highlightsPassLines {
+            let source = text as NSString
+            var start = 0
+            for line in text.components(separatedBy: "\n") {
+                if line.range(of: #"^\s*\d+ pass(ed)?\b"#, options: .regularExpression) != nil {
+                    content.addAttribute(.foregroundColor, value: UIColor(S2.live),
+                                         range: NSRange(location: start, length: (line as NSString).length))
+                }
+                start += (line as NSString).length + 1
+                if start > source.length { break }
+            }
+        }
+        guard !view.textView.attributedText.isEqual(to: content) else { return }
+        view.textView.attributedText = content
+        let measured = content.boundingRect(
+            with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+        view.codeContentSize = CGSize(width: ceil(measured.width) + 25,
+                                      height: max(ceil(measured.height), ceil(font.lineHeight)) + 20)
+        view.initialScrollToBottom = startsAtBottom
+        view.needsInitialOffset = true
+        view.setNeedsLayout()
+        view.invalidateIntrinsicContentSize()
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: CodeViewportScrollView, context: Context) -> CGSize? {
+        let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? uiView.codeContentSize.width
+        let height = maxHeight.isFinite
+            ? min(uiView.codeContentSize.height, maxHeight)
+            : (proposal.height ?? uiView.codeContentSize.height)
+        return CGSize(width: width, height: max(height, 1))
+    }
+}
+
+final class CodeViewportScrollView: UIScrollView {
+    let textView = UITextView()
+    var codeContentSize: CGSize = .zero
+    var initialScrollToBottom = false
+    var needsInitialOffset = false
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        addSubview(textView)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let size = CGSize(width: max(bounds.width, codeContentSize.width),
+                          height: max(bounds.height, codeContentSize.height))
+        let frame = CGRect(origin: .zero, size: size)
+        if textView.frame != frame { textView.frame = frame }
+        if contentSize != size { contentSize = size }
+        if needsInitialOffset, bounds.height > 0 {
+            setContentOffset(CGPoint(x: 0, y: initialScrollToBottom ? max(size.height - bounds.height, 0) : 0),
+                             animated: false)
+            needsInitialOffset = false
+        }
+    }
+}
+
 // MARK: - Selectable prose (in-place native text selection)
 
 /// A transcript message rendered in ONE non-scrolling `UITextView`, so the

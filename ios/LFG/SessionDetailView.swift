@@ -296,10 +296,9 @@ struct SessionDetailView: View {
         .transformEnvironment(\.hostFiles) { hf in
             if let cwd = session.cwd, !cwd.isEmpty { hf?.cwd = cwd }
         }
-        // Keep this system-owned: on iOS 26 the native navigation toolbar
-        // supplies adaptive Liquid Glass and coordinates its scroll edge with
-        // the transcript behind it. A custom background here would make it
-        // more opaque and break that integration.
+        // Keep native controls, but let transcript rows remain visible behind
+        // the bar. Its transition is an app-owned gradient of system material.
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar { toolbarMenu }
         .task(id: sid) {
             // Opening is now just state: the inverted list rests at the newest
@@ -445,8 +444,10 @@ struct SessionDetailView: View {
         }
         .alert("Rename session", isPresented: $renaming) {
             TextField("Title", text: $newTitle)
+                .accessibilityIdentifier("sessionRenameTitleField")
             Button("Cancel", role: .cancel) {}
             Button("Save") { Task { await store.rename(sid, newTitle) } }
+                .accessibilityIdentifier("sessionRenameSave")
         }
         .confirmationDialog("End this session?", isPresented: $confirmEnd, titleVisibility: .visible) {
             // Gated on the result: `close` returns false and sets `lastError` when
@@ -463,8 +464,8 @@ struct SessionDetailView: View {
     }
 
     /// The transcript is the full-screen content layer. On iOS 26 the custom
-    /// composer floats independently above it, so rows continue behind both
-    /// pieces of glass instead of terminating at opaque safe-area boundaries.
+    /// composer floats independently above it, so rows continue behind the
+    /// clear header and composer instead of stopping at safe-area boundaries.
     @ViewBuilder
     private var sessionSurface: some View {
         if #available(iOS 26.0, *) {
@@ -488,11 +489,11 @@ struct SessionDetailView: View {
                         // The 180-degree transcript transform confuses SwiftUI's
                         // automatic edge detector, expanding its blur through the
                         // viewport instead of confining it to a bar boundary
-                        // (re-checked on iOS 26.3). `ChromeFade` draws the same
-                        // edge the lists use instead.
+                        // (re-checked on iOS 26.3). A local, masked material
+                        // supplies the header blur without that automatic effect.
                         .scrollEdgeEffectHidden(true, for: [.top, .bottom])
                         .overlay(alignment: .top) {
-                            ChromeFade(barHeight: topChromeHeight, solid: true)
+                            TranscriptTopFade(barHeight: topChromeHeight)
                                 .offset(y: -topChromeHeight)
                         }
 
@@ -510,17 +511,6 @@ struct SessionDetailView: View {
                     // Its safe-area padding lifts the glass composer above the
                     // software keyboard without resizing the transcript behind it.
                     measuredBottomChrome
-                        // The bottom edge effect, pinned to the composer's top so
-                        // it lines up with the composer and rides up with the
-                        // keyboard.
-                        .background(alignment: .top) {
-                            GeometryReader { proxy in
-                                ChromeFade(edge: .bottom,
-                                           barHeight: proxy.size.height + windowBottomSafeAreaInset,
-                                           solid: true)
-                                    .offset(y: -ChromeFade.tail(.bottom))
-                            }
-                        }
                 }
                 .background {
                     // The transcript extends behind the tab bar, while the
@@ -536,27 +526,31 @@ struct SessionDetailView: View {
                 }
             }
         } else {
-            transcript
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    bottomChrome
-                }
+            GeometryReader { safeAreaProxy in
+                let topChromeHeight = max(safeAreaProxy.frame(in: .global).minY, 0)
+                transcript
+                    .ignoresSafeArea(.container, edges: .top)
+                    .overlay(alignment: .top) {
+                        TranscriptTopFade(barHeight: topChromeHeight)
+                            .offset(y: -topChromeHeight)
+                    }
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        bottomChrome
+                    }
+            }
         }
     }
 
     private var bottomChrome: some View {
         VStack(spacing: 0) {
-            // S2: Subagents, Files and Terminal sit above the composer as pills.
+            // Only active subagents float above the composer. Files and Terminal
+            // remain available from the session sheet.
             // An unreachable host is said once, in the status line under the
             // title; the draft stays editable and the store queues the send.
             if (prompt == nil || session.isExternallyOwned) && hasPills {
             ComposerPillRow(
                 agents: childAgents,
-                fileCount: pillFileCount,
-                // A shell needs the host; an offline one cannot connect.
-                showsTerminal: !session.isExternallyOwned && !store.isOffline(sid),
-                onSubagents: { presentedSheet = .childSessions(selectedID: nil) },
-                onFiles: { presentedSheet = .attachments },
-                onTerminal: { showTerminal = true }
+                onSubagents: { presentedSheet = .childSessions(selectedID: nil) }
             )
             .padding(.bottom, 10)
             }
@@ -789,12 +783,12 @@ struct SessionDetailView: View {
                         // step (`TranscriptStepGrouper`); every other row keeps
                         // its index into `messages`, so the back-to-back
                         // user-turn rule reads the message ABOVE it as before.
-                        ForEach(Self.transcriptItems(renderedMessages, from: renderedStart).reversed(), id: \.id) { item in
+                        ForEach(TranscriptDisplayItem.items(for: renderedMessages, from: renderedStart).reversed()) { item in
                             switch item.item {
                             case .message(let idx):
                                 TranscriptMessageView(
                                     message: renderedMessages[idx],
-                                    followsUserBubble: idx > 0 && renderedMessages[idx - 1].rendersAsUserBubble,
+                                    followsUserBubble: renderedMessages[..<idx].last(where: { $0.kind != "thinking" })?.rendersAsUserBubble == true,
                                     onFollowup: { prompt in
                                         draft = FollowupDraft.adding(prompt, to: draft)
                                         followupFocusRequest += 1
@@ -950,32 +944,6 @@ struct SessionDetailView: View {
             )
         }
       }
-    }
-
-    /// The rendered window as S2 transcript items, with indices into the FULL
-    /// message array (the grouper sees only the window, so its indices are
-    /// shifted back by `start`).
-    private struct IdentifiedItem: Identifiable {
-        let id: String
-        let item: TranscriptItem
-        /// A step directly under another step (board `s2-queued`: the pair
-        /// keeps the full 14pt gap between rows).
-        var followsStep = false
-    }
-
-    private static func transcriptItems(_ messages: [SessionMessage], from start: Int) -> [IdentifiedItem] {
-        let window = Array(messages[start...])
-        var previousWasStep = false
-        return TranscriptStepGrouper.items(for: window).map { item in
-            switch item {
-            case .message(let i):
-                previousWasStep = false
-                return IdentifiedItem(id: messages[start + i].stableID, item: .message(start + i))
-            case .steps(let group):
-                defer { previousWasStep = true }
-                return IdentifiedItem(id: "steps-\(group.id)", item: .steps(group), followsStep: previousWasStep)
-            }
-        }
     }
 
     /// Inline rows live inside a lazy transcript and can be recreated while the
@@ -1254,16 +1222,9 @@ struct SessionDetailView: View {
         }
     }
 
-    /// Whether any pill applies: subagents, files, or a reachable shell.
+    /// Keep the row and its spacing only while subagents are running.
     private var hasPills: Bool {
-        !childAgents.isEmpty || pillFileCount > 0 || (!session.isExternallyOwned && !store.isOffline(sid))
-    }
-
-    private var pillFileCount: Int {
-        #if DEBUG
-        if let n = store.s2FixtureFiles(sid) { return n }
-        #endif
-        return transcriptPreviewFiles?.count ?? 0
+        SubagentPill(agents: childAgents).isVisible
     }
 
     /// S2 boards: "Add to this turn…" while working (`s2-view`), and "Message ·
@@ -1831,21 +1792,16 @@ struct ExternalSessionComposerNotice: View {
     }
 }
 
-/// The pills above the composer (S2, board `s2-view`): Subagents with a ring,
-/// Files with a count, Terminal. Scrolls sideways when they do not fit.
+/// Active subagents float above the transcript in their own glass capsule.
 private struct ComposerPillRow: View {
     let agents: [ChildAgentSession]
-    let fileCount: Int
-    let showsTerminal: Bool
     let onSubagents: () -> Void
-    let onFiles: () -> Void
-    let onTerminal: () -> Void
 
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 let pill = SubagentPill(agents: agents)
-                if !pill.isEmpty {
+                if pill.isVisible {
                     Button(action: onSubagents) {
                         HStack(spacing: 8) {
                             SubagentRing(done: pill.doneFraction, failed: pill.failedFraction)
@@ -1865,31 +1821,6 @@ private struct ComposerPillRow: View {
                     .accessibilityAddTraits(.isButton)
                     .accessibilityIdentifier("composerPill.subagents")
                 }
-                if fileCount > 0 {
-                    Button(action: onFiles) {
-                        HStack(spacing: 6) {
-                            StepGlyph(kind: .doc, lineWidth: 1.9).frame(width: 15, height: 15)
-                            Text("Files")
-                            Text("\(fileCount)").foregroundStyle(S2.metaInk)
-                        }
-                        .padding(.horizontal, 12)
-                        .modifier(ComposerPillChrome())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("composerPill.files")
-                }
-                if showsTerminal {
-                    Button(action: onTerminal) {
-                        HStack(spacing: 6) {
-                            StepGlyph(kind: .terminal, lineWidth: 1.9).frame(width: 15, height: 15)
-                            Text("Terminal")
-                        }
-                        .padding(.horizontal, 12)
-                        .modifier(ComposerPillChrome())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("composerPill.terminal")
-                }
             }
             .padding(.horizontal, 4)
         }
@@ -1907,8 +1838,7 @@ private struct ComposerPillChrome: ViewModifier {
             .font(.system(size: 14, weight: .medium))
             .foregroundStyle(S2.ink)
             .frame(height: 36)
-            .background(S2.surface, in: Capsule())
-            .overlay(Capsule().strokeBorder(S2.surfaceBorder, lineWidth: 0.5))
+            .modifier(GlassPanel(cornerRadius: 18))
             .contentShape(Capsule())
     }
 }
@@ -2091,15 +2021,7 @@ private struct ChildAgentSessionsSheet: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Button { dismiss() } label: {
-                SheetGlyph(kind: .close)
-                    .stroke(SessionSheet.chromeInk, style: StrokeStyle(lineWidth: 2.8 * 14 / 24, lineCap: .round))
-                    .frame(width: 14, height: 14)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(S2.chip))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close")
+            SheetCloseButton { dismiss() }
             .accessibilityIdentifier("childSessionsDoneButton")
         }
     }
@@ -2206,6 +2128,29 @@ private struct SubagentMarkGlyph: Shape {
     }
 }
 
+/// Shared identified projection for main and child transcripts. Message indices
+/// refer to the full snapshot, even when the main view renders only its tail.
+private struct TranscriptDisplayItem: Identifiable {
+    let id: String
+    let item: TranscriptItem
+    var followsStep = false
+
+    static func items(for messages: [SessionMessage], from start: Int = 0) -> [Self] {
+        let window = Array(messages[start...])
+        var previousWasStep = false
+        return TranscriptStepGrouper.items(for: window).map { item in
+            switch item {
+            case .message(let i):
+                previousWasStep = false
+                return Self(id: messages[start + i].stableID, item: .message(start + i))
+            case .steps(let group):
+                defer { previousWasStep = true }
+                return Self(id: "steps-\(group.id)", item: .steps(group), followsStep: previousWasStep)
+            }
+        }
+    }
+}
+
 private struct ChildAgentTranscriptView: View {
     let parentSessionID: String
     let child: ChildAgentSession
@@ -2213,8 +2158,18 @@ private struct ChildAgentTranscriptView: View {
     @State private var messages: [SessionMessage] = []
     @State private var loading = true
     @State private var errorMessage: String?
+    @State private var toolOutput: ExpandedToolOutput?
+
+    private struct ExpandedToolOutput: Identifiable {
+        let id = UUID()
+        let title: String
+        let text: String
+    }
 
     var body: some View {
+        let renderedMessages = messages
+        let items = TranscriptDisplayItem.items(for: renderedMessages)
+        let cwd = store.session(parentSessionID)?.cwd
         Group {
             if loading && messages.isEmpty {
                 ProgressView("Loading transcript…")
@@ -2227,7 +2182,7 @@ private struct ChildAgentTranscriptView: View {
                     description: Text(errorMessage)
                 )
                 .accessibilityIdentifier("childSessionTranscript")
-            } else if messages.isEmpty {
+            } else if items.isEmpty {
                 ContentUnavailableView(
                     "No transcript yet",
                     systemImage: "text.bubble",
@@ -2236,20 +2191,31 @@ private struct ChildAgentTranscriptView: View {
                 .accessibilityIdentifier("childSessionTranscript")
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(messages, id: \.stableID) { message in
-                            TranscriptMessageView(message: message)
+                    LazyVStack(alignment: .leading, spacing: 14) {
+                        ForEach(items) { item in
+                            switch item.item {
+                            case .message(let index):
+                                TranscriptMessageView(
+                                    message: renderedMessages[index],
+                                    followsUserBubble: renderedMessages[..<index].last(where: { $0.kind != "thinking" })?.rendersAsUserBubble == true
+                                )
+                            case .steps(let group):
+                                ToolStepGroupView(group: group, cwd: cwd, followsStep: item.followsStep) { title, text in
+                                    toolOutput = ExpandedToolOutput(title: title, text: text)
+                                }
+                            }
                         }
                     }
                     .padding()
-                    .accessibilityElement(children: .contain)
-                    .accessibilityIdentifier("childSessionTranscript")
-                    .accessibilityLabel("Child session transcript")
                 }
             }
         }
         .navigationTitle(child.description)
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $toolOutput) { output in
+            ToolOutputSheet(title: output.title, text: output.text)
+                .presentationDetents([.medium, .large])
+        }
         .task(id: child.id) { await loadTranscriptUntilTerminal() }
     }
 

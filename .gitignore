@@ -58,3 +58,8 @@ macos/unlock/build/
 
 # Public per-app release configuration (credentials stay ignored).
 !ios/fastlane/.env
+
+# Local verification captures and frozen release snapshots.
+# Existing tracked evidence remains in history.
+.claude/evidence/
+.claude/tasks-a2/evidence/

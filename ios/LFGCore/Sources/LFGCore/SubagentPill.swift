@@ -18,6 +18,9 @@ public struct SubagentPill: Equatable, Sendable {
 
     public var isEmpty: Bool { total == 0 }
 
+    /// Finished work stays in the session sheet, without leaving a composer pill.
+    public var isVisible: Bool { runningCount > 0 }
+
     /// The green label, nil when nothing runs.
     public var running: String? { runningCount > 0 ? "\(runningCount) running" : nil }
 
