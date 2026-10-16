@@ -6367,7 +6367,14 @@ struct ContentView: View {
                 expanded: open
             ) { toggleGroup(g.id) }
             if open {
-                ForEach(g.items) { openButton(for: $0) }
+                // Identity carries the group: a row that moves between groups is a
+                // new view. With the item id alone, the lazy stack kept the old
+                // row under the new header, so a session that had gone idle still
+                // read "Working" in Recent and one that started work read "Ready
+                // for your next message" in Working (2026-10-16, `--board --flip`).
+                ForEach(g.items) { item in
+                    openButton(for: item).id("\(g.id):\(item.id)")
+                }
             }
         }
     }
@@ -6897,6 +6904,16 @@ enum WindowFitCLI {
                 liveRefresh(store)
             }
         }
+        // --flip: after the first draw, two Working rows go idle and a closed row
+        // comes back working, as a later poll would report. Reproduces the stale
+        // row Eugene saw (2026-10-16): the row kept its old content under the new header.
+        if args.contains("--board"), args.contains("--flip"), let store = liveStore {
+            settle(1.0)
+            // "auth" stays in Needs input: its new title shows whether a row that
+            // does not move still redraws.
+            seedBoardFixture(store, flip: ["narrow", "fatigue", "copy", "auth"])
+            settle(1.5)
+        }
         window.setContentSize(NSSize(width: CGFloat(width), height: CGFloat(height)))
         // --onscreen: cacheDisplay draws Liquid Glass toolbar items as blank capsules, so
         // show the window for real and let screencapture grab it (needs an unlocked screen).
@@ -7003,7 +7020,7 @@ enum WindowFitCLI {
             ]
         }
 
-        if boardFixture { seedBoardFixture(store) }
+        if boardFixture { seedBoardFixture(store); liveStore = store }
         if live {
             store.configuredHosts = Config.loadHosts()
             store.lastRefreshed = nil
@@ -7035,15 +7052,20 @@ enum WindowFitCLI {
     /// Board `dA2-sessions`: Pro with two questions, three working sessions and
     /// two closed ones (42 closed in all), and Air offline with its last row.
     @MainActor
-    private static func seedBoardFixture(_ store: SessionStore) {
+    /// `flip`: ids whose state is inverted (busy ↔ idle; a closed row comes back live and busy),
+    /// so `--flip` can move rows between groups in a running window.
+    private static func seedBoardFixture(_ store: SessionStore, flip: Set<String> = []) {
         let now = Date().timeIntervalSince1970 * 1000
         let min = 60_000.0
         func row(_ id: String, _ title: String, _ project: String, agent: String = "claude", model: String? = nil,
                  busy: Bool = false, ago: Double, closed: Bool = false, task: Bool = false,
                  prompt: DesktopPrompt? = nil) -> APISession {
+            let flipped = flip.contains(id)
+            let busy = flipped ? !busy || closed : busy
+            let closed = flipped ? false : closed
             var s = APISession(agent: agent, pid: abs(id.hashValue % 90_000) + 1, cwd: "/Users/eugene/dev/\(project)",
-                               project: project, title: title, sessionId: id, busy: busy,
-                               lastActivityAt: now - ago, tmuxName: closed ? nil : "lfg-\(id)", model: model,
+                               project: project, title: flipped ? title + " (flipped)" : title, sessionId: id, busy: busy,
+                               lastActivityAt: flipped ? now : now - ago, tmuxName: closed ? nil : "lfg-\(id)", model: model,
                                status: nil, lastUserText: nil, closed: closed)
             s.prompt = prompt
             s.task = task ? TaskOrigin(id: "task-\(id)", name: title) : nil

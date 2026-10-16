@@ -1,4 +1,4 @@
-# Desktop list: out-of-sync rows (report) and copy IDs (done)
+# Desktop list: out-of-sync rows (fixed) and copy IDs (done)
 
 ## Reports (Eugene, 2026-10-16)
 
@@ -15,6 +15,14 @@
 
 - Right-click → "Copy session ID" / "Copy tmux name" (ids `copy_session_id`, `copy_tmux_name`), the phone sheet's tap-to-copy equivalent.
 - `~/.config/lfg-desktop/desktop-list.log`: one line per session whose list state changed at a refresh — status, busy, closed, offline, group, seconds since last activity. Next sighting: copy the id from the row, note the time, and read the line for that id against the host's journal (`GET /api/events/page`).
+
+## Root cause and fix (2026-10-16, later)
+
+Eugene's screenshot showed both directions at once: "Ready for your next message" rows under Working with a grey time, and "● Working" rows under Recent with a green time. The row *content* was internally consistent and old; only the header placement was new. The rows are drawn by `ForEach(g.items)` per group inside one `LazyVStack`, keyed by the item id alone. When a session changes group, the lazy stack keeps the old row view for that id under the new header and does not redraw it (a row that stays in its group does redraw: the `(flipped)` title probe).
+
+Reproduced deterministically with `lfg --window-shot 400 out.png --board --flip`: after the first draw the fixture flips two Working rows idle and brings a closed row back busy. Before the fix, "Reelly creative fatigue check" sat under Recent still reading green "9m ago · Working" (`evidence/desktop-sync/flip-before-fix-2.png`). Fix: each row's identity carries its group (`.id("\(group):\(item.id)")`), so a move is a new view. After: the moved row reads grey "now · Ready for your next message" (`flip-after-fix.png`); the static board shot is byte-identical to before.
+
+Also seen in the screenshot, not fixed here: the same closed session listed twice in Recent ("make sure you're committing…", 11m and 1h). Likely two hosts each returning the synced transcript as closed (lease sync lag on the Air). Separate follow-up.
 
 ## Next step when it recurs
 
