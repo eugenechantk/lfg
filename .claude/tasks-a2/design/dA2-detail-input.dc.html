@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LFG narrow — Task view, run needs input</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#1B1B1E}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 400px; height: 860px; box-sizing: border-box; display: flex; flex-direction: column; background: #1B1B1E; color: #F4F4F6; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif; font-size: 13px; line-height: 1.35">
+
+  <div style="display: flex; align-items: center; gap: 6px; height: 52px; padding: 0 12px 0 14px; flex: none">
+    <div style="display: flex; gap: 8px; flex: none; margin-right: 6px" aria-hidden="true">
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #FF5F57"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #FEBC2E"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #28C840"></span>
+    </div>
+    <a href="dA2-list.dc.html" aria-label="Back to tasks" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 15px; background: rgba(255,255,255,0.07)">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"></path></svg>
+    </a>
+    <span style="flex: 1"></span>
+    <div role="group" aria-label="Task actions" style="height: 30px; display: flex; align-items: center; padding: 0 2px; border-radius: 15px; background: rgba(255,255,255,0.07)">
+      <a href="dA2-edit.dc.html" aria-label="Edit task" title="Edit task" style="width: 32px; height: 30px; display: flex; align-items: center; justify-content: center">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"></path><path d="M13.5 6.5l4 4"></path></svg>
+      </a>
+      <button aria-label="More task options" title="More" style="width: 32px; height: 30px; display: flex; align-items: center; justify-content: center; border: 0; padding: 0; background: transparent">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.3" fill="currentColor"></circle><circle cx="8" cy="8" r="1.3" fill="currentColor"></circle><circle cx="12.5" cy="8" r="1.3" fill="currentColor"></circle></svg>
+      </button>
+    </div>
+  </div>
+
+  <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 6px 18px 0">
+    <h1 style="margin: 0; font-size: 22px; line-height: 28px; font-weight: 700">Release verification</h1>
+    <div style="display: flex; align-items: center; gap: 7px; font-size: 14px; color: #C9CBD3">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="5.8"></circle><path d="M8 4.8v3.4l2.2 1.4"></path></svg>
+      <span>Once · today at 6:40 PM</span>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px">
+      <span style="height: 24px; display: flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: 7px; background: rgba(255,255,255,0.07); font-size: 12px; color: #C9CBD3">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.5"></rect><path d="M9 20h6M12 16v4"></path></svg>Pro</span>
+      <span style="height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 4px; border-radius: 7px; background: rgba(255,255,255,0.07); font-size: 12px; color: #C9CBD3">
+        <span style="width: 16px; height: 16px; border-radius: 4px; background: #D97757; color: #FFFFFF; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center">C</span>Claude default</span>
+      <span style="height: 24px; display: flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: 7px; background: rgba(255,255,255,0.07); font-size: 12px; color: #C9CBD3">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"></path></svg>~/dev/personal/lfg</span>
+    </div>
+
+    <section aria-label="Run is waiting for you" style="margin-top: 8px; display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 16px; background: rgba(255,159,10,0.08); border: 1px solid rgba(255,159,10,0.30)">
+      <span style="display: flex; align-items: center; gap: 8px">
+        <span style="width: 7px; height: 7px; border-radius: 4px; background: #FF9F0A; box-shadow: 0 0 0 3px rgba(255,159,10,0.22)"></span>
+        <span style="flex: 1; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #FFB340">Run is waiting for you</span>
+        <span style="font-size: 12px; color: #A8A8B0">12 min</span>
+      </span>
+      <span style="display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 17px; line-height: 23px; font-weight: 650">Which build should I verify?</span>
+        <span style="font-size: 13px; line-height: 19px; color: #C9CBD3">TestFlight has two builds from today. 1.3.1 has the fork fix. Testers are on 1.3.0.</span>
+      </span>
+      <a href="desk-iterm.dc.html" style="height: 36px; display: flex; align-items: center; justify-content: center; gap: 7px; border-radius: 18px; background: #FF9F0A; color: #1A1206; font-weight: 700">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5"></rect><path d="M5 6.5 7 8.5 5 10.5M8.5 10.5h3"></path></svg>
+        Answer in iTerm
+      </a>
+      <span style="font-size: 12px; color: #A8A8B0">The run’s session is open in tmux on Pro. It continues once you answer there.</span>
+    </section>
+
+    <div style="display: flex; align-items: center; gap: 6px; padding: 2px 2px 0; font-size: 12px; color: #A8A8B0">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="5.8"></circle><path d="M8 7.5v3.5M8 5v.5"></path></svg>
+      One-time task. It moves to Closed when this run ends.
+    </div>
+
+    <section aria-label="Instructions" style="margin-top: 10px; display: flex; flex-direction: column; gap: 4px">
+      <h2 style="margin: 0; font-size: 12px; font-weight: 600; color: #8A8A93">Instructions</h2>
+      <p style="margin: 0; font-size: 14px; line-height: 20px; color: #E4E5EA">Install today’s TestFlight build on the simulator, walk the fork, send and task flows, and report anything broken with screenshots.</p>
+    </section>
+  </div>
+
+  <div style="flex: none; padding: 12px 14px 16px; background: linear-gradient(rgba(27,27,30,0), #1B1B1E 30%)">
+    <a href="desk-iterm.dc.html" style="width: 100%; height: 40px; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 20px; background: rgba(255,255,255,0.09); color: #F4F4F6; font-weight: 600">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#8FB8FF" stroke-width="1.5" aria-hidden="true"><path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h7A1.5 1.5 0 0 1 13 4.5v5a1.5 1.5 0 0 1-1.5 1.5H7l-3 2.5V11A1.5 1.5 0 0 1 3 9.5z"></path></svg>
+      Change with chat
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8A8A93" stroke-width="1.8" aria-hidden="true"><path d="M5.5 10.5 10.5 5.5M6.5 5.5h4v4"></path></svg>
+    </a>
+    <div style="margin-top: 6px; text-align: center; font-size: 11px; color: #8A8A93">Opens a Claude Code session in iTerm with this task’s settings.</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":400,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

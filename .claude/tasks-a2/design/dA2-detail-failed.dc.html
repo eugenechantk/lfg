@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LFG narrow — Task view, last run failed</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#1B1B1E}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 400px; height: 1000px; box-sizing: border-box; display: flex; flex-direction: column; background: #1B1B1E; color: #F4F4F6; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif; font-size: 13px; line-height: 1.35">
+
+  <div style="display: flex; align-items: center; gap: 6px; height: 52px; padding: 0 12px 0 14px; flex: none">
+    <div style="display: flex; gap: 8px; flex: none; margin-right: 6px" aria-hidden="true">
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #FF5F57"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #FEBC2E"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #28C840"></span>
+    </div>
+    <a href="dA2-list.dc.html" aria-label="Back to tasks" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 15px; background: rgba(255,255,255,0.07)">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"></path></svg>
+    </a>
+    <span style="flex: 1"></span>
+    <div role="group" aria-label="Task actions" style="height: 30px; display: flex; align-items: center; padding: 0 2px; border-radius: 15px; background: rgba(255,255,255,0.07)">
+      <a href="dA2-edit.dc.html" aria-label="Edit task" title="Edit task" style="width: 32px; height: 30px; display: flex; align-items: center; justify-content: center">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"></path><path d="M13.5 6.5l4 4"></path></svg>
+      </a>
+      <button aria-label="More task options" title="More" style="width: 32px; height: 30px; display: flex; align-items: center; justify-content: center; border: 0; padding: 0; background: transparent">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.3" fill="currentColor"></circle><circle cx="8" cy="8" r="1.3" fill="currentColor"></circle><circle cx="12.5" cy="8" r="1.3" fill="currentColor"></circle></svg>
+      </button>
+    </div>
+  </div>
+
+  <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 6px 18px 0">
+    <h1 style="margin: 0; font-size: 22px; line-height: 28px; font-weight: 700">Weekly dependency audit</h1>
+    <div style="display: flex; align-items: center; gap: 7px; font-size: 14px; color: #C9CBD3">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2.5l3 3-3 3"></path><path d="M4 11.5v-1a5 5 0 0 1 5-5h11"></path><path d="M7 21.5l-3-3 3-3"></path><path d="M20 12.5v1a5 5 0 0 1-5 5H4"></path></svg>
+      <span>Mondays at 10:00 AM</span>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px">
+      <span style="height: 24px; display: flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: 7px; background: rgba(255,255,255,0.07); font-size: 12px; color: #C9CBD3">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.5"></rect><path d="M9 20h6M12 16v4"></path></svg>Pro</span>
+      <span style="height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 4px; border-radius: 7px; background: rgba(255,255,255,0.07); font-size: 12px; color: #C9CBD3">
+        <span style="width: 16px; height: 16px; border-radius: 4px; background: #E8E8ED; color: #1B1B1E; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center">X</span>gpt-6.1</span>
+      <span style="height: 24px; display: flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: 7px; background: rgba(255,255,255,0.07); font-size: 12px; color: #C9CBD3">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"></path></svg>~/dev/personal</span>
+    </div>
+
+    <sc-if value="{{failed}}" hint-placeholder-val="{{true}}">
+      <section aria-label="Last run failed" style="margin-top: 8px; display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 16px; background: rgba(255,90,80,0.08); border: 1px solid rgba(255,90,80,0.28)">
+        <div style="display: flex; flex-direction: column; gap: 3px">
+          <span style="display: flex; align-items: center; gap: 8px">
+            <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #FF6B61">Last run failed</span>
+            <sc-if value="{{showStreak}}" hint-placeholder-val="{{false}}"><span style="height: 18px; display: flex; align-items: center; padding: 0 7px; border-radius: 9px; background: rgba(255,90,80,0.18); font-size: 11px; font-weight: 600; color: #FF8A82">2nd in a row</span></sc-if>
+          </span>
+          <span style="font-size: 17px; font-weight: 650">Mon 13 Oct, 10:00 AM</span>
+          <span style="font-size: 13px; line-height: 19px; color: #D6D7DD">pnpm audit timed out on reelly after 90 seconds. The other repos have no advisories.</span>
+          <a href="#" style="align-self: flex-start; margin-top: 2px; font-size: 13px; color: #8FB8FF">Open session in iTerm ↗</a>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+          <button onClick="{{retry}}" style="height: 34px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 17px; background: {{accent}}; color: #FFFFFF; font-weight: 600; cursor: pointer">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3"></path></svg>Retry now</button>
+          <a href="desk-iterm.dc.html" style="height: 34px; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 17px; background: rgba(255,255,255,0.09); color: #9CC2FF; font-weight: 600">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"></path></svg>Ask to fix ↗</a>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 12px; color: #A8A8B0">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="5.8"></circle><path d="M8 4.8v3.4l2.2 1.4"></path></svg>
+          Schedule still on. Next run: Mon 20 Oct, 10:00 AM
+        </div>
+      </section>
+    </sc-if>
+    <sc-if value="{{retrying}}" hint-placeholder-val="{{false}}">
+      <section aria-label="Retrying" style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 16px; background: rgba(50,215,75,0.08); border: 1px solid rgba(50,215,75,0.25)">
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #5BE37A"><span style="width: 7px; height: 7px; border-radius: 4px; background: #32D74B; box-shadow: 0 0 0 3px rgba(50,215,75,0.22)"></span>Retrying now</span>
+        <span style="font-size: 17px; font-weight: 650">Started 7:06 PM</span>
+        <a href="#" style="align-self: flex-start; font-size: 13px; color: #8FB8FF">Open session in iTerm ↗</a>
+      </section>
+    </sc-if>
+
+    <section aria-label="Instructions" style="margin-top: 10px; display: flex; flex-direction: column; gap: 4px">
+      <h2 style="margin: 0; font-size: 12px; font-weight: 600; color: #8A8A93">Instructions</h2>
+      <p style="margin: 0; font-size: 14px; line-height: 20px; color: #E4E5EA">For each repo under ~/dev/personal, list outdated dependencies with a security advisory. Do not upgrade anything.</p>
+    </section>
+
+    <div style="margin-top: 6px; display: flex; align-items: baseline; justify-content: space-between">
+      <h2 style="margin: 0; font-size: 12px; font-weight: 600; color: #8A8A93">Runs</h2>
+      <span style="font-size: 12px; color: #8A8A93">{{runCount}}</span>
+    </div>
+    <div style="display: flex; flex-direction: column">
+      <sc-for list="{{runs}}" as="r" hint-placeholder-count="4">
+        <a href="#" style="display: flex; gap: 12px; align-items: stretch">
+          <span style="flex: 0 0 14px; display: flex; flex-direction: column; align-items: center">
+            <span style="width: 2px; height: 9px; background: {{r.lineTop}}"></span>
+            <span style="flex: 0 0 11px; width: 11px; height: 11px; box-sizing: border-box; border-radius: 6px; border: 2px solid {{r.node}}; background: {{r.fill}}"></span>
+            <span style="width: 2px; flex: 1; background: {{r.lineBottom}}"></span>
+          </span>
+          <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 4px 0 11px">
+            <span style="display: flex; align-items: center; gap: 8px">
+              <span style="flex: 1; font-size: 13px; font-weight: 600; color: {{r.headColor}}">{{r.head}}</span>
+              <span style="font-size: 12px; font-weight: 600; color: {{r.tailColor}}">{{r.tail}}</span>
+            </span>
+            <sc-if value="{{r.hasBody}}" hint-placeholder-val="{{true}}">
+              <span style="font-size: 13px; color: {{r.bodyColor}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.body}}</span>
+            </sc-if>
+          </span>
+        </a>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="flex: none; padding: 12px 14px 16px; background: linear-gradient(rgba(27,27,30,0), #1B1B1E 30%)">
+    <a href="desk-iterm.dc.html" style="width: 100%; height: 40px; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 20px; background: rgba(255,255,255,0.09); color: #F4F4F6; font-weight: 600">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#8FB8FF" stroke-width="1.5" aria-hidden="true"><path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h7A1.5 1.5 0 0 1 13 4.5v5a1.5 1.5 0 0 1-1.5 1.5H7l-3 2.5V11A1.5 1.5 0 0 1 3 9.5z"></path></svg>
+      Fix or change with chat
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8A8A93" stroke-width="1.8" aria-hidden="true"><path d="M5.5 10.5 10.5 5.5M6.5 5.5h4v4"></path></svg>
+    </a>
+    <div style="margin-top: 6px; text-align: center; font-size: 11px; color: #8A8A93">Opens a Claude Code session in iTerm with this task’s settings.</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"streak":{"editor":"enum","options":["first failure","2 in a row"],"default":"first failure"},"accent":{"editor":"color","default":"#3B8EFF","options":["#3B8EFF","#FF9F0A","#32D74B","#BF5AF2"]},"$preview":{"width":400,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const r = !!st.retrying;
+    const line = 'rgba(255,255,255,0.14)', none = 'transparent', green = '#32D74B', red = '#FF5A50', grey = '#8A8A93', ink = '#F4F4F6', hollow = '#5A5A62';
+    const live = { lineTop: none, lineBottom: line, node: green, fill: 'transparent', head: 'Today · 7:06 PM · retry', headColor: ink, tail: 'Running ↗', tailColor: '#5BE37A', hasBody: false, body: '', bodyColor: grey };
+    const next = { lineTop: none, lineBottom: line, node: hollow, fill: 'transparent', head: 'Mon, Oct 20 · 10:00 AM', headColor: grey, tail: 'Next', tailColor: '#8FB8FF', hasBody: false, body: '', bodyColor: grey };
+    const streak = (this.props.streak ?? 'first failure') === '2 in a row';
+    const past = [
+      { lineTop: line, lineBottom: line, node: red, fill: red, head: 'Mon, Oct 13 · 10:00 AM', headColor: ink, tail: '2 min ↗', tailColor: grey, hasBody: true, body: 'Failed · pnpm audit timed out on reelly', bodyColor: '#FF6B61' },
+      (streak ? { lineTop: line, lineBottom: line, node: red, fill: red, head: 'Mon, Oct 6 · 10:00 AM', headColor: ink, tail: '2 min ↗', tailColor: grey, hasBody: true, body: 'Failed · pnpm audit timed out on reelly', bodyColor: '#FF6B61' }
+              : { lineTop: line, lineBottom: line, node: green, fill: green, head: 'Mon, Oct 6 · 10:00 AM', headColor: ink, tail: '3 min ↗', tailColor: grey, hasBody: true, body: 'No advisories in any repo', bodyColor: '#C9CBD3' }),
+      { lineTop: line, lineBottom: none, node: green, fill: green, head: 'Mon, Sep 29 · 10:00 AM', headColor: ink, tail: '4 min ↗', tailColor: grey, hasBody: true, body: 'One advisory: tldts in lfg; patch release available', bodyColor: '#C9CBD3' }
+    ];
+    return {
+      accent: this.props.accent ?? '#3B8EFF',
+      failed: !r, retrying: r, showStreak: streak,
+      runCount: streak ? '6 runs · 4 completed' : '6 runs · 5 completed',
+      retry: () => this.setState({ retrying: true }),
+      runs: [r ? live : next].concat(past)
+    };
+  }
+}
+</script>
+</body>
+</html>

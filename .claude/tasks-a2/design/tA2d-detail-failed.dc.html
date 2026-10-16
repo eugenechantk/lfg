@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A2 dark · Task view, last run failed</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #000000; color: #FFFFFF; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; -webkit-font-smoothing: antialiased;">
+
+  <div style="position: absolute; top: 54px; left: 16px; right: 16px; height: 52px; display: flex; align-items: center; gap: 10px;">
+    <a href="tA2d-list.dc.html" aria-label="Back to tasks" style="width: 44px; height: 44px; flex: 0 0 44px; border-radius: 22px; background: rgba(44,44,46,0.92); box-shadow: 0 2px 12px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; justify-content: center;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+    </a>
+    <span style="flex: 1 1 auto;"></span>
+    <div role="group" aria-label="Task actions" style="height: 48px; border-radius: 24px; background: rgba(44,44,46,0.92); box-shadow: 0 2px 12px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; padding: 0 4px;">
+      <a href="tA2d-edit.dc.html" aria-label="Edit task" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"></path><path d="M13.5 6.5l4 4"></path></svg>
+      </a>
+      <button aria-label="More task options" style="width: 44px; height: 44px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; padding: 0;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="#FFFFFF" aria-hidden="true"><circle cx="5" cy="12" r="1.9"></circle><circle cx="12" cy="12" r="1.9"></circle><circle cx="19" cy="12" r="1.9"></circle></svg>
+      </button>
+    </div>
+  </div>
+
+  <div style="position: absolute; top: 116px; left: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px;">
+    <h1 style="margin: 0; font-size: 28px; line-height: 34px; font-weight: 700;">Nightly dependency audit</h1>
+    <div style="display: flex; align-items: center; gap: 7px; font-size: 17px; line-height: 22px; color: #D1D1D6;">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2.5l3 3-3 3"></path><path d="M4 11.5v-1a5 5 0 0 1 5-5h11"></path><path d="M7 21.5l-3-3 3-3"></path><path d="M20 12.5v1a5 5 0 0 1-5 5H4"></path></svg>
+      <span>Every day at 2:00 AM</span>
+    </div>
+    <div style="display: flex; gap: 6px; flex-wrap: wrap; padding-top: 2px;">
+      <span style="height: 26px; padding: 0 9px; border-radius: 8px; background: #1C1C1E; display: flex; align-items: center; gap: 5px; font-size: 13px; color: #D1D1D6;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.5"></rect><path d="M9 20h6M12 16v4"></path></svg>Pro</span>
+      <span style="height: 26px; padding: 0 9px 0 4px; border-radius: 8px; background: #1C1C1E; display: flex; align-items: center; gap: 6px; font-size: 13px; color: #D1D1D6;">
+        <span style="width: 18px; height: 18px; border-radius: 5px; background: #B5562F; color: #FFFFFF; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;">C</span>Opus 5.5</span>
+      <span style="height: 26px; padding: 0 9px; border-radius: 8px; background: #1C1C1E; display: flex; align-items: center; gap: 5px; font-size: 13px; color: #D1D1D6;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"></path></svg>~/dev/personal/lfg</span>
+    </div>
+
+    <sc-if value="{{failed}}" hint-placeholder-val="{{true}}">
+      <div style="margin-top: 10px; background: rgba(255,69,58,0.16); border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <span style="display: flex; align-items: center; gap: 6px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF453A" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9 9l6 6M15 9l-6 6"></path></svg>
+            <span style="flex: 1 1 auto; font-size: 12px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #FF6961;">Last run failed</span>
+            <sc-if value="{{showStreak}}" hint-placeholder-val="{{false}}"><span style="height: 22px; padding: 0 8px; border-radius: 11px; background: #2C2C2E; font-size: 12px; font-weight: 600; color: #FF6961; display: flex; align-items: center;">2nd in a row</span></sc-if>
+          </span>
+          <span style="font-size: 22px; line-height: 28px; font-weight: 600;">Today, 2:00 AM</span>
+          <span style="font-size: 15px; line-height: 20px; color: #D1D1D6;">Opus 5.5 was unavailable, so no session started.</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;">
+          <button onClick="{{retry}}" style="height: 44px; border: 0; border-radius: 22px; background: #0A6EE0; color: #FFFFFF; font: inherit; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6"></path><path d="M20 4v5h-5"></path></svg>Retry now</button>
+          <a href="tA2d-chat.dc.html" style="height: 44px; border-radius: 22px; background: #2C2C2E; color: #409CFF; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 7px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"></path></svg>Ask to fix</a>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; padding-top: 10px; border-top: 0.5px solid rgba(255,69,58,0.25); font-size: 13px; color: #D1D1D6;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path></svg>
+          Schedule still on. Next run: tomorrow, 2:00 AM
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{retrying}}" hint-placeholder-val="{{false}}">
+      <div style="margin-top: 10px; background: rgba(48,209,88,0.16); border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 6px;">
+        <span style="display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #30D158;">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: #30D158; box-shadow: 0 0 0 3px rgba(48,209,88,0.25);"></span>Retrying now</span>
+        <span style="font-size: 22px; line-height: 28px; font-weight: 600;">Started 10:14 AM</span>
+        <a href="phone-chat.dc.html" style="font-size: 15px; color: #409CFF;">Open session ›</a>
+      </div>
+    </sc-if>
+
+    <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 4px;">
+      <span style="font-size: 15px; font-weight: 600; color: #A1A1A6;">Instructions</span>
+      <p style="margin: 0; font-size: 16px; line-height: 22px; color: #F2F2F7; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;">Audit dependencies in every repo under ~/dev/personal. List outdated and vulnerable packages, and open a PR for safe patch updates.</p>
+    </div>
+
+    <div style="margin-top: 8px; display: flex; align-items: baseline; justify-content: space-between;">
+      <span style="font-size: 15px; font-weight: 600; color: #A1A1A6;">Runs</span>
+      <span style="font-size: 13px; color: #A1A1A6;">31 runs · 29 completed</span>
+    </div>
+    <div style="display: flex; flex-direction: column;">
+      <sc-for list="{{runs}}" as="r" hint-placeholder-count="4">
+        <a href="{{r.href}}" style="display: flex; gap: 12px; align-items: stretch;">
+          <span style="width: 16px; flex: 0 0 16px; display: flex; flex-direction: column; align-items: center;">
+            <span style="width: 2px; height: 10px; background: {{r.lineTop}};"></span>
+            <span style="width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; border: 2px solid {{r.node}}; background: {{r.fill}}; flex: 0 0 12px;"></span>
+            <span style="width: 2px; flex: 1 1 auto; background: {{r.lineBottom}};"></span>
+          </span>
+          <span style="flex: 1 1 auto; min-width: 0; padding: 5px 0 12px; display: flex; flex-direction: column; gap: 2px;">
+            <span style="display: flex; align-items: center; gap: 8px;">
+              <span style="flex: 1 1 auto; font-size: 15px; line-height: 20px; font-weight: 600; color: {{r.headColor}};">{{r.head}}</span>
+              <span style="font-size: 13px; color: {{r.tailColor}}; font-weight: 600;">{{r.tail}}</span>
+            </span>
+            <sc-if value="{{r.hasBody}}" hint-placeholder-val="{{true}}">
+              <span style="font-size: 15px; line-height: 20px; color: {{r.bodyColor}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.body}}</span>
+            </sc-if>
+          </span>
+        </a>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 130px; background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.96) 50%);"></div>
+  <a href="tA2d-chat.dc.html" style="position: absolute; left: 16px; right: 16px; bottom: 28px; height: 52px; border-radius: 26px; background: rgba(44,44,46,0.92); box-shadow: 0 4px 24px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; gap: 10px; padding: 0 8px 0 18px; box-sizing: border-box;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#409CFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"></path><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"></path></svg>
+    <span style="flex: 1 1 auto; font-size: 17px; color: #8E8E93;">Ask why it failed, or change it…</span>
+    <span style="width: 36px; height: 36px; border-radius: 18px; background: #3A3A3C; display: flex; align-items: center; justify-content: center;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg>
+    </span>
+  </a>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"streak":{"editor":"enum","options":["first failure","2 in a row"],"default":"first failure"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { retrying: false }; }
+  renderVals() {
+    const r = this.state.retrying;
+    const streak = (this.props.streak ?? 'first failure') === '2 in a row';
+    const line = '#48484A', none = 'transparent', green = '#30D158', red = '#FF453A', grey = '#A1A1A6', ink = '#FFFFFF';
+    const live = { href: 'phone-chat.dc.html', lineTop: none, lineBottom: line, node: '#30D158', fill: '#000000', head: 'Today · 10:14 AM · retry', headColor: ink, tail: 'Running', tailColor: green, hasBody: false, body: '', bodyColor: grey };
+    const next = { href: '#', lineTop: none, lineBottom: line, node: '#636366', fill: '#000000', head: 'Fri, Oct 16 · 2:00 AM', headColor: grey, tail: 'Next', tailColor: '#409CFF', hasBody: false, body: '', bodyColor: grey };
+    const past = [
+      { href: '#', lineTop: line, lineBottom: line, node: red, fill: red, head: 'Today · 2:00 AM', headColor: ink, tail: r ? '' : 'Retry', tailColor: '#409CFF', hasBody: true, body: 'Failed · model unavailable · no session', bodyColor: red },
+      (streak ? { href: '#', lineTop: line, lineBottom: line, node: red, fill: red, head: 'Wed, Oct 14 · 2:00 AM', headColor: ink, tail: '', tailColor: grey, hasBody: true, body: 'Failed · model unavailable · no session', bodyColor: red } : { href: 'phone-chat.dc.html', lineTop: line, lineBottom: line, node: green, fill: green, head: 'Wed, Oct 14 · 2:00 AM', headColor: ink, tail: '8 min ›', tailColor: grey, hasBody: true, body: 'Audited 214 packages; 1 outdated, none vulnerable', bodyColor: '#D1D1D6' }),
+      { href: 'phone-chat.dc.html', lineTop: line, lineBottom: none, node: green, fill: green, head: 'Tue, Oct 13 · 2:00 AM', headColor: ink, tail: '9 min ›', tailColor: grey, hasBody: true, body: 'Audited 214 packages; 2 outdated, none vulnerable', bodyColor: '#D1D1D6' }
+    ];
+    return {
+      failed: !r, retrying: r, showStreak: streak,
+      retry: () => this.setState({ retrying: true }),
+      runs: [r ? live : next].concat(past)
+    };
+  }
+}
+</script>
+</body>
+</html>

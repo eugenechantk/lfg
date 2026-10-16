@@ -3596,7 +3596,8 @@ import LFGCore
     }
 
     var filteredSessions: [Session] {
-        sessions.filter { settings.userFilter.matches($0) && !settings.hiddenDirs.hides(cwd: $0.cwd) }
+        // A scheduled task's edit chat lives in the task's chat sheet, not in Sessions.
+        sessions.filter { settings.userFilter.matches($0) && !settings.hiddenDirs.hides(cwd: $0.cwd) && $0.purpose != "task-edit" }
     }
 
     /// How many LIVE sessions the directory mute list is holding back — the same
@@ -3818,7 +3819,7 @@ import LFGCore
     /// `MultiHost.reconcileResumable`, which is what turns the server's
     /// "closed on this host" into "closed anywhere".
     private static func closedSession(from r: ResumableSession) -> Session {
-        Session(
+        var session = Session(
             sessionId: r.sessionId,
             title: (r.title?.isEmpty == false ? r.title! : "Session"),
             agent: r.agent ?? "claude",
@@ -3832,6 +3833,9 @@ import LFGCore
             lastActivityAt: r.mtime,
             closed: r.closed,
             task: r.task)
+        // A closed task edit chat keeps its tag, so Sessions still leaves it out.
+        session.purpose = r.purpose
+        return session
     }
 
     /// Remove optimistic bubbles whose text now appears as a real user turn in the

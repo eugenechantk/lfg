@@ -28,6 +28,7 @@ import {
   type IndexEntry,
 } from "./session-index";
 import { anyFreshAt, ensureLease } from "./leases";
+import { ranHereAt } from "./ran-here.ts";
 import { hidesCwd, normalizeExcludes } from "./hidden-dirs";
 import {
   flattenTitles,
@@ -222,6 +223,9 @@ export type Session = {
   // Present only for orchestrator-spawned worker sessions. Omitted for
   // untagged rows so existing clients see byte-identical JSON.
   parentSessionId?: string;
+  // Present only for a scheduled task's edit chat (and the task it edits).
+  purpose?: "task-edit";
+  taskId?: string;
 };
 
 // Classify a session's health from the most recent assistant turn. Claude Code
@@ -2996,11 +3000,14 @@ function modelAlias(id: string | null | undefined): string | null {
 export function managedFieldsForTmuxName(
   tmuxName: string | null | undefined,
   managedByName: Map<string, ManagedSession>,
-): { managed: boolean; parentSessionId?: string } {
+): { managed: boolean; parentSessionId?: string; purpose?: "task-edit"; taskId?: string } {
   const rec = tmuxName ? managedByName.get(tmuxName) : undefined;
-  return rec?.parentSessionId
-    ? { managed: !!rec, parentSessionId: rec.parentSessionId }
-    : { managed: !!rec };
+  return {
+    managed: !!rec,
+    ...(rec?.parentSessionId ? { parentSessionId: rec.parentSessionId } : {}),
+    // A scheduled task's edit chat: clients keep it out of the Sessions list.
+    ...(rec?.purpose === "task-edit" ? { purpose: rec.purpose, ...(rec.taskId ? { taskId: rec.taskId } : {}) } : {}),
+  };
 }
 
 // The model of the most recent assistant turn. Claude stamps every assistant
@@ -3873,6 +3880,14 @@ export type ResumableSession = {
    * as "closed here", and let the client's cross-host merge decide "closed".
    */
   closed: true;
+  /**
+   * When THIS host last saw the session running (ms), from its ran-here ledger;
+   * null if it never did. Every host lists every closed transcript, so clients
+   * give the row to the host with the latest answer: a fork or tool switch from
+   * it then runs where the session came from. Per host by design — see
+   * `ran-here.ts`. Optional: older hosts omit it.
+   */
+  lastRunHereAt?: number | null;
 };
 
 export type ResumablePage = {
@@ -4031,6 +4046,7 @@ async function enrichCandidate(
     model: await modelForCandidate(c),
     // Earned, not assumed: nothing holds a fresh lease on this session.
     closed: true,
+    lastRunHereAt: ranHereAt(c.id),
   };
 }
 
@@ -4205,10 +4221,11 @@ export async function rankedSearchResumable(opts: {
   const hits = contentStore().hits(queryTerms(q));
   const ranked = rankSessions(entries, hits, q, (cwd) => hidesCwd(cwd, exclude));
   const pathById = new Map(entries.map((entry) => [entry.sessionId, entry.path]));
-  const closed: typeof ranked = [];
+  const closed: Array<(typeof ranked)[number] & { lastRunHereAt: number | null }> = [];
   for (const row of ranked) {
     const path = pathById.get(row.sessionId);
-    if (path && !(await anyFreshAt(row.sessionId, path))) closed.push(row);
+    if (path && !(await anyFreshAt(row.sessionId, path)))
+      closed.push({ ...row, lastRunHereAt: ranHereAt(row.sessionId) });
   }
   return rankedPager.first(q, excludeKey, closed, limit);
 }
@@ -4368,6 +4385,7 @@ export async function searchResumable(
       // was found in. See `searchPreview`.
       lastUserText: searchPreview(m, terms),
       closed: true,
+      lastRunHereAt: ranHereAt(m.sessionId),
     })),
     nextBefore,
   };

@@ -17,6 +17,8 @@ struct RootView: View {
     @State private var showNewTask = false
     @State private var focusNewTaskComposer = false
     @State private var taskPath: [ScheduledTaskRoute] = []
+    /// Tasks waiting for an answer or with a failed latest run; the Tasks tab badge.
+    @State private var taskNeedsInputCount = 0
     @State private var taskSessionID: String?
     @State private var showSettings = false
     @State private var showNewSession = false
@@ -243,9 +245,9 @@ struct RootView: View {
             HStack(spacing: 12) {
                 HStack(spacing: 0) {
                     dockTab(.sessions, title: "Sessions", icon: "bubble.left.and.bubble.right.fill", id: "sessions_tab",
-                            badge: needsInputCounts.sessions)
+                            badge: needsInputCount)
                     dockTab(.scheduledTasks, title: "Tasks", icon: "calendar.badge.clock", id: "scheduled_tasks_tab",
-                            badge: needsInputCounts.tasks)
+                            badge: taskNeedsInputCount)
                 }
                 .padding(4)
                 .glassOrRaised(in: Capsule(), interactive: true)
@@ -281,16 +283,13 @@ struct RootView: View {
         .accessibilityIdentifier("list_dock")
     }
 
-    /// Amber tab badges (S2, canvas board `s2-list`): how many sessions need you.
-    /// Sessions counts every live session in Needs input (paused ones included);
-    /// Tasks counts the ones a scheduled task started. A task whose last run
-    /// FAILED is not counted yet — that needs the task list, which the Tasks
-    /// redesign owns.
-    private var needsInputCounts: (sessions: Int, tasks: Int) {
-        let waiting = store.filteredSessions.filter {
+    /// Amber Sessions badge (S2, canvas board `s2-list`): live sessions in Needs
+    /// input, paused ones included. The Tasks badge is the task list's own count of
+    /// tasks that need input or failed (`taskNeedsInputCount`).
+    private var needsInputCount: Int {
+        store.filteredSessions.filter {
             !$0.closed && SessionListSection(store.group(for: $0).rowGroup) == .needsInput
-        }
-        return (waiting.count, waiting.filter { $0.task != nil }.count)
+        }.count
     }
 
     private static let selectedTabInk = Color(UIColor { $0.userInterfaceStyle == .dark
@@ -325,14 +324,13 @@ struct RootView: View {
                         .background(Capsule().fill(Color(red: 1, green: 0x9F / 255, blue: 0x0A / 255)))
                         .padding(.top, 4)
                         .padding(.trailing, 20)
-                        .accessibilityHidden(true)
+                        .accessibilityIdentifier("\(id)_badge")
                 }
             }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .accessibilityValue(badge > 0 ? "\(badge) need input" : "")
+        .accessibilityLabel(badge > 0 ? "\(title), \(badge) need input" : title)
         .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
         .accessibilityIdentifier(id)
     }
@@ -356,10 +354,10 @@ struct RootView: View {
            onSearch: { beginSearch(.scheduledTasks) },
            onCreate: beginTaskCreation,
            sessionSelection: $taskSessionID,
-           sessionDestination: { AnyView(taskSessionView($0)) }) { hostID, id in
+           sessionDestination: { AnyView(taskSessionView($0)) }, openSession: { hostID, id in
             taskSessionID = store.navID(id)
             Task { await store.prepareSessionForDisplay(id, sourceHostID: hostID) }
-        }
+        }, onNeedsInputCountChange: { taskNeedsInputCount = $0 })
     }
 
     private func beginTaskCreation() {

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LFG narrow — Edit task, once</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#1B1B1E}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button,input,textarea{font:inherit;color:inherit}
+input::placeholder{color:#8A8A93}
+</style>
+</helmet>
+<div style="width: 400px; height: 1010px; box-sizing: border-box; display: flex; flex-direction: column; background: #1B1B1E; color: #F4F4F6; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif; font-size: 13px; line-height: 1.35">
+
+  <div style="display: flex; align-items: center; gap: 6px; height: 52px; padding: 0 12px 0 14px; flex: none; border-bottom: 1px solid rgba(255,255,255,0.06)">
+    <div style="display: flex; gap: 8px; flex: none; margin-right: 6px" aria-hidden="true">
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #FF5F57"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #FEBC2E"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #28C840"></span>
+    </div>
+    <a href="dA2-detail.dc.html" style="height: 30px; display: flex; align-items: center; padding: 0 12px; border-radius: 15px; background: rgba(255,255,255,0.07)">Cancel</a>
+    <h1 style="flex: 1; margin: 0; text-align: center; font-size: 13px; font-weight: 600">Edit task</h1>
+    <a href="dA2-detail.dc.html" style="height: 30px; display: flex; align-items: center; padding: 0 14px; border-radius: 15px; background: #3B8EFF; color: #FFFFFF; font-weight: 600">Save</a>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 16px">
+    <div style="display: flex; flex-direction: column; border-radius: 14px; background: #26262B">
+      <label style="display: flex; flex-direction: column; gap: 3px; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <span style="font-size: 11px; color: #8A8A93">Name</span>
+        <input value="Daily repo review" style="border: 0; padding: 0; background: transparent; font-size: 15px; font-weight: 600; outline: none">
+      </label>
+      <label style="display: flex; flex-direction: column; gap: 3px; padding: 10px 14px">
+        <span style="font-size: 11px; color: #8A8A93">Instructions</span>
+        <textarea rows="3" style="border: 0; padding: 0; background: transparent; font-size: 14px; line-height: 20px; resize: none; outline: none">Review yesterday’s changes in LFG. Summarize the important fixes, flag anything that looks like a regression, and suggest the next most useful task.</textarea>
+      </label>
+    </div>
+
+    <h2 style="margin: 8px 0 0 4px; font-size: 12px; font-weight: 600; color: #8A8A93">When</h2>
+    <div style="border-radius: 14px; background: #26262B; padding: 12px 0 8px; display: flex; flex-direction: column;">
+      <div role="tablist" aria-label="Schedule type" style="margin: 0 14px 12px; height: 28px; border-radius: 8px; background: rgba(255,255,255,0.08); padding: 2px; box-sizing: border-box; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));"><span aria-current="true" style="border-radius: 6px; background: rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: #FFFFFF;">Once</span><a href="dA2-edit.dc.html" style="border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; color: #C9CBD3;">Repeat</a></div>
+      <div style="padding: 0 14px 10px; display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 16px; line-height: 22px; font-weight: 650;">{{sentence}}</span>
+        <span style="font-size: 12px; line-height: 17px; color: #8A8A93;">{{subline}}</span>
+      </div>
+        <div style="padding: 4px 12px 8px; border-top: 0.5px solid rgba(255,255,255,0.07);">
+          <div style="display: flex; align-items: center; padding: 8px 4px 6px;">
+            <span style="flex: 1 1 auto; font-size: 13px; font-weight: 600;">October 2026 <span style="color: #8FB8FF;">›</span></span>
+            <span style="width: 32px; text-align: center; font-size: 15px; color: #8FB8FF;">‹</span>
+            <span style="width: 32px; text-align: center; font-size: 15px; color: #8FB8FF;">›</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; font-size: 11px; font-weight: 600; color: #8A8A93; padding: 2px 0 4px;">
+            <span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); row-gap: 2px;">
+            <sc-for list="{{days}}" as="d" hint-placeholder-count="35">
+              <button onClick="{{d.pick}}" aria-label="{{d.aria}}" style="height: 26px; border: 0; background: transparent; padding: 0; font: inherit; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                <span style="width: 26px; height: 26px; border-radius: 13px; background: {{d.bg}}; color: {{d.fg}}; font-size: 13px; font-weight: {{d.weight}}; display: flex; align-items: center; justify-content: center;">{{d.n}}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 14px; border-top: 0.5px solid rgba(255,255,255,0.07); font-size: 13px;">
+          <span>Time</span>
+          <span style="height: 28px; padding: 0 11px; border-radius: 9px; background: rgba(255,255,255,0.08); display: flex; align-items: center; color: #8FB8FF; font-variant-numeric: tabular-nums;">9:00 AM</span>
+        </div>
+        <div style="padding: 7px 14px 10px; border-top: 0.5px solid rgba(255,255,255,0.07); display: flex; flex-direction: column; gap: 6px;">
+          <span style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <sc-for list="{{quick}}" as="q" hint-placeholder-count="3">
+              <button onClick="{{q.pick}}" style="height: 26px; padding: 0 11px; border: 0; border-radius: 15px; background: rgba(255,255,255,0.08); font: inherit; font-size: 12px; color: #F4F4F6; cursor: pointer;">{{q.label}}</button>
+            </sc-for>
+          </span>
+          <span style="font-size: 12px; color: #8A8A93;">Runs once, then the task moves to Closed.</span>
+        </div>
+
+      <div style="padding: 8px 14px 2px; border-top: 1px solid rgba(255,255,255,0.07); font-size: 12px; color: #8A8A93;">Hong Kong time (GMT+8) · <button style="border: 0; background: transparent; padding: 0; font-size: 12px; color: #8FB8FF">Change</button></div>
+    </div>
+
+    <h2 style="margin: 8px 0 0 4px; font-size: 12px; font-weight: 600; color: #8A8A93">Runs on</h2>
+    <div style="display: flex; flex-direction: column; border-radius: 14px; background: #26262B">
+      <div style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-bottom: 1px solid rgba(255,255,255,0.06)"><span style="flex: 1; color: #C9CBD3">Host</span><span style="display: flex; align-items: center; gap: 6px; color: #8A8A93"><span style="width: 7px; height: 7px; border-radius: 4px; background: #32D74B"></span>Pro</span></div>
+      <button style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border: 0; border-bottom: 1px solid rgba(255,255,255,0.06); background: transparent; text-align: left"><span style="flex: 1; color: #C9CBD3">Folder</span><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">~/dev/personal/lfg</span><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#5A5A62" stroke-width="2.4" aria-hidden="true"><path d="M6 4l4 4-4 4"></path></svg></button>
+      <div style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <span style="flex: 1; color: #C9CBD3">Agent</span>
+        <span role="radiogroup" aria-label="Agent" style="display: flex; padding: 2px; border-radius: 8px; background: rgba(255,255,255,0.08)">
+          <span role="radio" aria-checked="true" style="height: 24px; display: flex; align-items: center; padding: 0 10px; border-radius: 6px; background: rgba(255,255,255,0.18); font-size: 12px">Claude Code</span>
+          <span role="radio" aria-checked="false" style="height: 24px; display: flex; align-items: center; padding: 0 10px; border-radius: 6px; font-size: 12px">Codex</span>
+        </span>
+      </div>
+      <button style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border: 0; background: transparent; text-align: left"><span style="flex: 1; color: #C9CBD3">Model</span><span>Opus 5.5</span><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#5A5A62" stroke-width="2.4" aria-hidden="true"><path d="M6 4l4 4-4 4"></path></svg></button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":400,"height":1010}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { day: 16 }; }
+  renderVals() {
+    const s = this.state, wk = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const lead = 4, today = 15;
+    const label = (d) => wk[(lead + d - 1) % 7] + ', Oct ' + d;
+    const days = [];
+    for (let i = 0; i < lead; i++) days.push({ n: '', aria: 'blank', bg: 'transparent', fg: 'transparent', weight: '400', pick: () => {} });
+    for (let d = 1; d <= 31; d++) {
+      const sel = d === s.day, past = d < today;
+      days.push({ n: String(d), aria: label(d), bg: sel ? '#3B8EFF' : 'transparent', fg: sel ? '#FFFFFF' : (d === today ? '#8FB8FF' : (past ? '#5A5A62' : '#FFFFFF')), weight: sel || d === today ? '600' : '400', pick: () => { if (d >= today) this.setState({ day: d }); } });
+    }
+    const hoursAway = (s.day - today) * 24 - 1.2;
+    const sub = s.day === today ? 'Later today' : 'In ' + Math.floor(hoursAway / 24 > 0 ? hoursAway / 24 : 0) + ' d ' + Math.round(hoursAway % 24) + ' h';
+    return {
+      sentence: 'Once, ' + label(s.day) + ' at 9:00 AM',
+      subline: s.day === 16 ? 'In 22 h 48 min' : sub,
+      days,
+      quick: [['Tomorrow 9 AM', 16], ['Monday 9 AM', 19], ['Next Friday', 23]].map(([l, d]) => ({ label: l, pick: () => this.setState({ day: d }) }))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LFG narrow — Task view</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#1B1B1E}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 400px; height: 1000px; box-sizing: border-box; display: flex; flex-direction: column; background: #1B1B1E; color: #F4F4F6; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif; font-size: 13px; line-height: 1.35">
+
+  <div style="display: flex; align-items: center; gap: 6px; height: 52px; padding: 0 12px 0 14px; flex: none">
+    <div style="display: flex; gap: 8px; flex: none; margin-right: 6px" aria-hidden="true">
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #FF5F57"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #FEBC2E"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #28C840"></span>
+    </div>
+    <a href="dA2-list.dc.html" aria-label="Back to tasks" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 15px; background: rgba(255,255,255,0.07)">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"></path></svg>
+    </a>
+    <span style="flex: 1"></span>
+    <div role="group" aria-label="Task actions" style="height: 30px; display: flex; align-items: center; padding: 0 2px; border-radius: 15px; background: rgba(255,255,255,0.07)">
+      <a href="dA2-edit.dc.html" aria-label="Edit task" title="Edit task" style="width: 32px; height: 30px; display: flex; align-items: center; justify-content: center">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"></path><path d="M13.5 6.5l4 4"></path></svg>
+      </a>
+      <button aria-label="More task options" title="More" style="width: 32px; height: 30px; display: flex; align-items: center; justify-content: center; border: 0; padding: 0; background: transparent">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.3" fill="currentColor"></circle><circle cx="8" cy="8" r="1.3" fill="currentColor"></circle><circle cx="12.5" cy="8" r="1.3" fill="currentColor"></circle></svg>
+      </button>
+    </div>
+  </div>
+
+  <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 6px 18px 0">
+    <h1 style="margin: 0; font-size: 22px; line-height: 28px; font-weight: 700">Daily project review</h1>
+    <div style="display: flex; align-items: center; gap: 7px; font-size: 14px; color: #C9CBD3">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2.5l3 3-3 3"></path><path d="M4 11.5v-1a5 5 0 0 1 5-5h11"></path><path d="M7 21.5l-3-3 3-3"></path><path d="M20 12.5v1a5 5 0 0 1-5 5H4"></path></svg>
+      <span>Every day at 9:00 AM</span>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px">
+      <span style="height: 24px; display: flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: 7px; background: rgba(255,255,255,0.07); font-size: 12px; color: #C9CBD3">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.5"></rect><path d="M9 20h6M12 16v4"></path></svg>Pro</span>
+      <span style="height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 4px; border-radius: 7px; background: rgba(255,255,255,0.07); font-size: 12px; color: #C9CBD3">
+        <span style="width: 16px; height: 16px; border-radius: 4px; background: #D97757; color: #FFFFFF; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center">C</span>opus</span>
+      <span style="height: 24px; display: flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: 7px; background: rgba(255,255,255,0.07); font-size: 12px; color: #C9CBD3">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"></path></svg>~/dev/personal/lfg</span>
+    </div>
+
+    <section aria-label="{{cardLabel}}" style="margin-top: 8px; display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 16px; background: #26262B">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: {{cardLabelColor}}">{{cardLabel}}</span>
+        <span style="font-size: 19px; line-height: 25px; font-weight: 650">{{cardMain}}</span>
+        <span style="font-size: 13px; color: #A8A8B0">{{cardSub}}</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+        <button style="height: 34px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 17px; background: {{accent}}; color: #FFFFFF; font-weight: 600; cursor: pointer">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"></path></svg>Run now</button>
+        <button onClick="{{togglePause}}" style="height: 34px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 17px; background: rgba(255,255,255,0.09); color: #9CC2FF; font-weight: 600; cursor: pointer">
+          <sc-if value="{{active}}" hint-placeholder-val="{{true}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4.5" width="4" height="15" rx="1"></rect><rect x="14" y="4.5" width="4" height="15" rx="1"></rect></svg></sc-if>
+          <sc-if value="{{paused}}" hint-placeholder-val="{{false}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"></path></svg></sc-if>
+          {{pauseLabel}}</button>
+      </div>
+    </section>
+
+    <section aria-label="Instructions" style="margin-top: 10px; display: flex; flex-direction: column; gap: 4px">
+      <h2 style="margin: 0; font-size: 12px; font-weight: 600; color: #8A8A93">Instructions</h2>
+      <p style="margin: 0; font-size: 14px; line-height: 20px; color: #E4E5EA; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: {{clamp}}; overflow: hidden">Review yesterday’s changes in lfg. Summarize fixes and regressions, flag anything that touched sendq.ts or journal-pump.ts, and suggest one next step. Keep it under 200 words and link each commit you mention.</p>
+      <button onClick="{{toggleMore}}" style="align-self: flex-start; border: 0; background: transparent; padding: 2px 0; font-size: 13px; color: #8FB8FF; cursor: pointer">{{moreLabel}}</button>
+    </section>
+
+    <div style="margin-top: 6px; display: flex; align-items: baseline; justify-content: space-between">
+      <h2 style="margin: 0; font-size: 12px; font-weight: 600; color: #8A8A93">Runs</h2>
+      <span style="font-size: 12px; color: #8A8A93">14 runs · 12 completed</span>
+    </div>
+    <div style="display: flex; flex-direction: column">
+      <sc-for list="{{runs}}" as="r" hint-placeholder-count="6">
+        <a href="{{r.href}}" style="display: flex; gap: 12px; align-items: stretch">
+          <span style="flex: 0 0 14px; display: flex; flex-direction: column; align-items: center">
+            <span style="width: 2px; height: 9px; background: {{r.lineTop}}"></span>
+            <span style="flex: 0 0 11px; width: 11px; height: 11px; box-sizing: border-box; border-radius: 6px; border: 2px solid {{r.node}}; background: {{r.fill}}"></span>
+            <span style="width: 2px; flex: 1; background: {{r.lineBottom}}"></span>
+          </span>
+          <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 4px 0 11px">
+            <span style="display: flex; align-items: center; gap: 8px">
+              <span style="flex: 1; font-size: 13px; font-weight: 600; color: {{r.headColor}}">{{r.head}}</span>
+              <span style="font-size: 12px; font-weight: 600; color: {{r.tailColor}}">{{r.tail}}</span>
+            </span>
+            <sc-if value="{{r.hasBody}}" hint-placeholder-val="{{true}}">
+              <span style="font-size: 13px; color: {{r.bodyColor}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.body}}</span>
+            </sc-if>
+          </span>
+        </a>
+      </sc-for>
+      <button style="align-self: flex-start; margin-left: 26px; border: 0; background: transparent; padding: 2px 0; font-size: 12px; color: #8FB8FF">Show 9 older runs</button>
+    </div>
+  </div>
+
+  <div style="flex: none; padding: 12px 14px 16px; background: linear-gradient(rgba(27,27,30,0), #1B1B1E 30%)">
+    <a href="desk-iterm.dc.html" style="width: 100%; height: 40px; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 20px; background: rgba(255,255,255,0.09); color: #F4F4F6; font-weight: 600">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#8FB8FF" stroke-width="1.5" aria-hidden="true"><path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h7A1.5 1.5 0 0 1 13 4.5v5a1.5 1.5 0 0 1-1.5 1.5H7l-3 2.5V11A1.5 1.5 0 0 1 3 9.5z"></path></svg>
+      Change with chat
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8A8A93" stroke-width="1.8" aria-hidden="true"><path d="M5.5 10.5 10.5 5.5M6.5 5.5h4v4"></path></svg>
+    </a>
+    <div style="margin-top: 6px; text-align: center; font-size: 11px; color: #8A8A93">Opens a Claude Code session in iTerm with this task’s settings.</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#3B8EFF","options":["#3B8EFF","#FF9F0A","#32D74B","#BF5AF2"]},"$preview":{"width":400,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const p = !!st.paused, more = !!st.more;
+    const line = 'rgba(255,255,255,0.14)', none = 'transparent', green = '#32D74B', red = '#FF5A50', amber = '#FF9F0A', grey = '#8A8A93', ink = '#F4F4F6', hollow = '#5A5A62';
+    return {
+      accent: this.props.accent ?? '#3B8EFF',
+      active: !p, paused: p,
+      cardLabel: p ? 'Paused' : 'Next run',
+      cardLabelColor: p ? '#FFB340' : '#8A8A93',
+      cardMain: p ? 'No runs scheduled' : 'Tomorrow, 9:00 AM',
+      cardSub: p ? 'Resume to run again every day at 9:00 AM' : 'Thursday, Oct 16 · in 13 h 56 min',
+      pauseLabel: p ? 'Resume' : 'Pause',
+      togglePause: () => this.setState({ paused: !p }),
+      clamp: more ? 'unset' : '3',
+      moreLabel: more ? 'Show less' : 'Show more',
+      toggleMore: () => this.setState({ more: !more }),
+      runs: [
+        { href: '#', lineTop: none, lineBottom: line, node: hollow, fill: 'transparent', head: p ? 'Thu, Oct 16 · skipped while paused' : 'Thu, Oct 16 · 9:00 AM', headColor: grey, tail: p ? '' : 'Next', tailColor: '#8FB8FF', hasBody: false, body: '', bodyColor: grey },
+        { href: '#', lineTop: line, lineBottom: line, node: hollow, fill: 'transparent', head: 'Fri, Oct 17 · 9:00 AM', headColor: grey, tail: '', tailColor: grey, hasBody: false, body: '', bodyColor: grey },
+        { href: '#', lineTop: line, lineBottom: line, node: green, fill: green, head: 'Today · 9:00 AM', headColor: ink, tail: '6 min ↗', tailColor: grey, hasBody: true, body: 'Three fixes landed; flagged a task-list selection regression', bodyColor: '#C9CBD3' },
+        { href: '#', lineTop: line, lineBottom: line, node: green, fill: green, head: 'Tue, Oct 14 · 9:00 AM', headColor: ink, tail: '5 min ↗', tailColor: grey, hasBody: true, body: 'No regressions; finite-repeat work still uncommitted', bodyColor: '#C9CBD3' },
+        { href: '#', lineTop: line, lineBottom: line, node: red, fill: red, head: 'Mon, Oct 13 · 9:00 AM', headColor: ink, tail: 'Retry', tailColor: '#8FB8FF', hasBody: true, body: 'Failed · Claude Code exited · no session started', bodyColor: '#FF6B61' },
+        { href: '#', lineTop: line, lineBottom: line, node: green, fill: green, head: 'Sun, Oct 12 · 9:00 AM', headColor: ink, tail: '4 min ↗', tailColor: grey, hasBody: true, body: 'Quiet day: two docs commits, nothing to review', bodyColor: '#C9CBD3' },
+        { href: '#', lineTop: line, lineBottom: none, node: amber, fill: amber, head: 'Thu, Oct 9 · 9:00 AM', headColor: ink, tail: '2 min ↗', tailColor: grey, hasBody: true, body: 'Interrupted when the host restarted', bodyColor: '#FFB340' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

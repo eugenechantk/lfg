@@ -43,27 +43,23 @@ are stretched to the full visible height of the display they open on.
   main window.
   Its monochrome template icon is generated from the canonical iOS logo at
   build time, so macOS supplies the correct menu-bar tint in light and dark mode.
-- **Toolbar** (Liquid Glass, per the HIG toolbar groupings) — host connection
-  status replaces the static title on the leading edge, the Status / Directory
-  segmented control sits in the center area, and refresh + search sit on the
-  trailing edge. A single host shows Connected/Connecting/Offline; multiple
+- **Toolbar** — host connection status sits on the leading edge, the
+  Sessions / Tasks segmented control sits in the center, and More, Search,
+  and Plus sit on the trailing edge. A single host shows Connected/Connecting/Offline; multiple
   hosts get one named green/gray/orange status chip each.
-- **Narrow windows** — the window resizes down to 440pt wide, so it can sit in
-  a third of a 13" Air's screen. Under 760pt the toolbar switches to a compact
-  form: the centered segmented control becomes an icon pull-down on the
-  trailing edge (a centered item reserves twice the wider side's width, which a
-  narrow window can't spare), and the search field becomes a toggle that
-  reveals a search row under the toolbar. AppKit charges roughly 300pt of
-  toolbar chrome before any item gets a point, so those swaps are what make 440
-  reachable at all.
-- **Host labels are dropped by measurement, not by breakpoint.** The labelled
+- **Narrow windows** — the window resizes down to 180pt and keeps the switcher
+  centered on the original top bar. Below 500pt, Search and Create move into
+  More; task detail also puts Back in More. Below 350pt, only the Close window
+  button stays visible. Below 280pt, the switcher uses labelled, accessible
+  icons. Widening restores the labels and other window buttons. Below 1200pt,
+  Search reveals a field beneath the toolbar.
+- **Host labels adapt to the available space.** The labelled
   status cluster is measured off-screen (`DesktopConnectionStatusBar.labelledWidth`,
-  cached per name set) and keeps its labels while they fit the leftover budget
-  — short names like "Pro"/"Air" survive down to ~480pt, long ones give way to
-  bare dots (names on hover) sooner. `ContentView.hostLabelsFit` is the pure
-  decision and is covered by `--desktop-feature-test`.
+  cached per name set) and keeps its labels while they fit the leftover budget.
+  Below 700pt it uses dots; below 500pt the toolbar omits status to preserve
+  the centered switcher. Connection warnings remain in the content.
 - **Search** — filters on title, project, last user message, model, agent, host.
-- **Status / Directory segments** — group like the iOS client: by status
+- **Status / Directory grouping** — the More menu groups like the iOS client: by status
   (Working / Paused / Idle) or by directory (collapsible sections, most
   recently active first, running/idle tallies; ambiguous leaf names get their
   parent directory prefixed).
@@ -237,8 +233,9 @@ override — because a locked login session can't be driven through the menu.
 The last two cover window sizing. `--window-fit` builds the real window
 off-screen at each width and reports whether every toolbar item is still
 visible (exit 1 if any collapsed into the » overflow, or if the window refused
-the requested width) — this is how the 440pt minimum and the 760pt compact
-breakpoint were chosen. `--window-shot` draws that same window, chrome
+the requested width). Overflow is expected at narrow widths; native window
+measurements also verify the centered switcher's actual segment bounds.
+`--window-shot` draws that same window, chrome
 included, into a PNG via `cacheDisplay`, so it needs neither Screen Recording
 permission nor an awake display; AppKit-backed controls (the segmented picker,
 the wide search field) come out as blank rounded rects in those shots, which is
