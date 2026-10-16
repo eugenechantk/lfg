@@ -31,6 +31,7 @@ import { anyFreshAt, ensureLease } from "./leases";
 import { ranHereAt } from "./ran-here.ts";
 import { hidesCwd, normalizeExcludes } from "./hidden-dirs";
 import { countClosed, createTotalCache } from "./resumable-total.ts";
+import { createRolloutMemo } from "./codex-rollout-memo.ts";
 import {
   flattenTitles,
   parseTitleFile,
@@ -732,73 +733,122 @@ async function lastCodexRecordAt(path: string): Promise<number | null> {
   }, { startBytes: 8 * 1024 });
 }
 
+type CodexRolloutHead = Pick<
+  CodexThread,
+  | "id"
+  | "cwd"
+  | "createdAt"
+  | "forkedFromId"
+  | "parentThreadId"
+  | "agentPath"
+  | "agentNickname"
+  | "agentRole"
+  | "spawnDepth"
+>;
+
+type CodexMetaRow = {
+  type?: string;
+  forked_from_id?: string;
+  payload?: {
+    id?: string;
+    cwd?: string;
+    timestamp?: string;
+    forked_from_id?: string;
+    parent_thread_id?: string;
+    thread_source?: string;
+    agent_path?: string;
+    agent_nickname?: string;
+    agent_role?: string;
+    source?: {
+      subagent?: {
+        thread_spawn?: { parent_thread_id?: string; depth?: number };
+      };
+    };
+  };
+};
+
+/** Parse a rollout's `session_meta` line. Not final while that line is unterminated. */
+async function readCodexRolloutHead(
+  path: string,
+): Promise<{ head: CodexRolloutHead | null; final: boolean }> {
+  const text = await Bun.file(path).slice(0, 128 * 1024).text();
+  const nl = text.indexOf("\n");
+  const complete = nl >= 0;
+  const first = complete ? text.slice(0, nl) : text;
+  if (!first) return { head: null, final: complete };
+  let row: CodexMetaRow;
+  try {
+    row = JSON.parse(first) as CodexMetaRow;
+  } catch {
+    return { head: null, final: complete };
+  }
+  const id = row.payload?.id ?? path.match(UUID)?.[0] ?? null;
+  if (row.type !== "session_meta" || !id) return { head: null, final: true };
+  return {
+    final: true,
+    head: {
+      id,
+      cwd: row.payload?.cwd ?? null,
+      createdAt: row.payload?.timestamp ? Date.parse(row.payload.timestamp) : null,
+      forkedFromId: row.payload?.forked_from_id ?? row.forked_from_id ?? null,
+      parentThreadId:
+        row.payload?.parent_thread_id
+        ?? row.payload?.source?.subagent?.thread_spawn?.parent_thread_id
+        ?? null,
+      agentPath: row.payload?.agent_path ?? null,
+      agentNickname: row.payload?.agent_nickname ?? null,
+      agentRole: row.payload?.agent_role ?? null,
+      spawnDepth: row.payload?.source?.subagent?.thread_spawn?.depth ?? null,
+    },
+  };
+}
+
+// The header and first user message of each rollout, read once per file (see
+// codex-rollout-memo.ts). Without it every call re-read about 1 GB.
+const codexRolloutMemo = createRolloutMemo<CodexRolloutHead>({
+  readHead: readCodexRolloutHead,
+  readFirstUserText: (path) => firstUserTextFromTop(path),
+  windowBytes: CODEX_PROMPT_READ_BYTES,
+});
+
 async function codexThreads(
   liveOpenPaths: ReadonlySet<string> = new Set(),
 ): Promise<CodexThread[]> {
   const out: CodexThread[] = [];
-  for (const path of await codexRolloutFiles()) {
+  const paths = await codexRolloutFiles();
+  for (const path of paths) {
     try {
-      const first = (await Bun.file(path).slice(0, 128 * 1024).text()).split("\n")[0];
-      if (!first) continue;
-      const row = JSON.parse(first) as {
-        type?: string;
-        forked_from_id?: string;
-        payload?: {
-          id?: string;
-          cwd?: string;
-          timestamp?: string;
-          forked_from_id?: string;
-          parent_thread_id?: string;
-          thread_source?: string;
-          agent_path?: string;
-          agent_nickname?: string;
-          agent_role?: string;
-          source?: {
-            subagent?: {
-              thread_spawn?: { parent_thread_id?: string; depth?: number };
-            };
-          };
-        };
-      };
-      const id = row.payload?.id ?? path.match(UUID)?.[0] ?? null;
-      if (row.type !== "session_meta" || !id) continue;
-      let fileCreatedAt: number | null = null;
-      let updatedAt: number | null = null;
+      let stat: ReturnType<typeof statSync>;
       try {
-        const stat = statSync(path);
+        stat = statSync(path);
+      } catch {
+        continue;
+      }
+      const { head, firstUserText } = await codexRolloutMemo.get(path, {
+        birthtimeMs: stat.birthtimeMs,
+        size: stat.size,
+      });
+      if (!head) continue;
+      out.push({
+        ...head,
+        path,
         // `session_meta.payload.timestamp` is normally the rollout creation
         // time, but Codex can create an abandoned metadata-only rollout later
         // while preserving the parent TUI's original launch timestamp. Keep the
         // filesystem birth time as a second signal so that late file cannot
         // impersonate the rollout that actually appeared at process launch.
-        fileCreatedAt = stat.birthtimeMs > 0 ? stat.birthtimeMs : null;
-        updatedAt = stat.mtimeMs;
-      } catch {}
-      out.push({
-        id,
-        path,
-        cwd: row.payload?.cwd ?? null,
-        createdAt: row.payload?.timestamp ? Date.parse(row.payload.timestamp) : null,
-        fileCreatedAt,
-        updatedAt,
+        fileCreatedAt: stat.birthtimeMs > 0 ? stat.birthtimeMs : null,
+        updatedAt: stat.mtimeMs,
         // Files in the synced Codex tree can receive a fresh filesystem mtime
         // without new conversation content. For live open rollouts, carry the
         // newest embedded timestamp so binding cannot jump when sync touches an
         // older descriptor the same long-lived TUI still owns.
         lastRecordAt: liveOpenPaths.has(path) ? await lastCodexRecordAt(path) : null,
-        firstUserText: await firstUserTextFromTop(path),
-        forkedFromId: row.payload?.forked_from_id ?? row.forked_from_id ?? null,
-        parentThreadId:
-          row.payload?.parent_thread_id
-          ?? row.payload?.source?.subagent?.thread_spawn?.parent_thread_id
-          ?? null,
-        agentPath: row.payload?.agent_path ?? null,
-        agentNickname: row.payload?.agent_nickname ?? null,
-        agentRole: row.payload?.agent_role ?? null,
-        spawnDepth: row.payload?.source?.subagent?.thread_spawn?.depth ?? null,
+        firstUserText,
       });
     } catch {}
   }
+  codexRolloutMemo.prune(new Set(paths));
   return out;
 }
 
