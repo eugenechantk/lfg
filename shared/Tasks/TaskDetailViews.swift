@@ -461,6 +461,8 @@ struct RunTimelineView: View {
     var later: RunsToggle? = nil
     /// Below the past runs.
     var earlier: RunsToggle? = nil
+    /// The Retry button on the newest failed run. The rest of that row still calls `open`.
+    var retry: ((RunTimelineEntry) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -487,6 +489,8 @@ struct RunTimelineView: View {
                                 Text(Self.tail(entry.tail))
                                     .font(.system(size: TaskDetailMetrics.runTail, weight: .semibold))
                                     .foregroundStyle(entry.tailTone.color)
+                                    // Drawn by the Retry button over the row instead, so it keeps its own tap.
+                                    .opacity(entry.tailIsAction && retry != nil ? 0 : 1)
                             }
                             .frame(height: TaskDetailMetrics.runLine)
                             if let body = entry.body {
@@ -505,7 +509,26 @@ struct RunTimelineView: View {
                     else { row.accessibilityElement(children: .combine) }
                 }
                 .accessibilityIdentifier(entry.runID.map { "task_run_\($0)" } ?? "task_upcoming_\(index)")
+                .overlay(alignment: .topTrailing) {
+                    if entry.tailIsAction, let retry { retryButton(entry, retry) }
+                }
         }
+    }
+
+    /// "Retry" in the tail's place, with a hit area larger than the text.
+    private func retryButton(_ entry: RunTimelineEntry, _ retry: @escaping (RunTimelineEntry) -> Void) -> some View {
+        let pad: CGFloat = 10
+        return Button { retry(entry) } label: {
+            Text(entry.tail)
+                .font(.system(size: TaskDetailMetrics.runTail, weight: .semibold))
+                .foregroundStyle(entry.tailTone.color)
+                .frame(height: TaskDetailMetrics.runLine)
+                .padding(.leading, 16).padding(.vertical, pad)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .offset(y: TaskDetailMetrics.runPadTop - pad)
+        .accessibilityIdentifier("task_run_retry")
     }
 
     /// On the Mac a run opens in iTerm, so its "›" becomes "↗".
