@@ -3225,6 +3225,18 @@ async function noteConfirmedSessionSetting(
   update(lastGood);
 }
 
+/**
+ * The cached session-list scan if one is fresh or still in flight, else null.
+ * Never starts a scan.
+ */
+export function sharedListSessions(now = Date.now()): Promise<Session[]> | null {
+  if (!listCache) return null;
+  if (listCache.settledAt == null) {
+    return now - listCache.startedAt < LIST_INFLIGHT_MAX_MS ? listCache.promise : null;
+  }
+  return now - listCache.settledAt < LIST_TTL_MS ? listCache.promise : null;
+}
+
 export function listSessions(): Promise<Session[]> {
   const now = Date.now();
   if (listCache) {
@@ -4001,10 +4013,18 @@ export function mayRefreshLiveLease(
 
 async function refreshLeasesForLiveSessions(): Promise<void> {
   try {
-    // Deliberately bypass the public session-list cache: resumable enumeration
-    // must see newly started local sessions before offering them as closed, but
-    // it does not need delegated-work counts or transcript-sidecar discovery.
-    for (const s of await listSessionsUncached({ enrichRunningWork: false })) {
+    // Reuse the shared session-list scan when there is a fresh or in-flight
+    // one. In the server the journal pump lists sessions every second and the
+    // cache lives 1.5s, so this returns at once or joins the scan already
+    // running; a session that started in the last couple of seconds may be
+    // missed, and the client drops closed rows that are live on any host
+    // anyway. A private scan here cost ~1.6s in-process and 5-10s on the busy
+    // server, on every closed-list page (2026-10-16). With no shared scan (a
+    // cold process, tests), fall back to a lightweight private scan rather than
+    // starting the full enrichment one.
+    const shared = sharedListSessions();
+    const live = shared ? await shared : await listSessionsUncached({ enrichRunningWork: false });
+    for (const s of live) {
       // listSessions is briefly cached. A close can tombstone the pid after the
       // cached row was produced but before resumable search refreshes leases.
       // Re-check at the side effect boundary or that stale row recreates the
