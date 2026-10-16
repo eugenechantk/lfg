@@ -3199,6 +3199,7 @@ let listCache: ListCacheEntry | null = null;
 // list view from flashing a 500 during a transient storm; the next poll, a few
 // hundred ms later, almost always succeeds.
 let lastGood: Session[] | null = null;
+let lastGoodAt = 0;
 
 /** Apply an acknowledged native change to the coalesced scan before replying.
  * Await the existing scan rather than invalidating it and spawning a duplicate
@@ -3225,16 +3226,22 @@ async function noteConfirmedSessionSetting(
   update(lastGood);
 }
 
+/** How old a finished scan `sharedListSessions` may hand out instead of waiting. */
+const SHARED_SCAN_MAX_AGE_MS = 5_000;
+
 /**
- * The cached session-list scan if one is fresh or still in flight, else null.
- * Never starts a scan.
+ * A recent session-list scan without starting one: the cached scan if it is
+ * fresh, else the last finished scan if it is under 5s old (the pump starts a
+ * new one every second, so waiting for the one in flight would cost a whole
+ * scan), else the scan in flight, else null.
  */
 export function sharedListSessions(now = Date.now()): Promise<Session[]> | null {
-  if (!listCache) return null;
-  if (listCache.settledAt == null) {
-    return now - listCache.startedAt < LIST_INFLIGHT_MAX_MS ? listCache.promise : null;
+  if (listCache?.settledAt != null && now - listCache.settledAt < LIST_TTL_MS) return listCache.promise;
+  if (lastGood && now - lastGoodAt < SHARED_SCAN_MAX_AGE_MS) return Promise.resolve(lastGood);
+  if (listCache?.settledAt == null && listCache && now - listCache.startedAt < LIST_INFLIGHT_MAX_MS) {
+    return listCache.promise;
   }
-  return now - listCache.settledAt < LIST_TTL_MS ? listCache.promise : null;
+  return null;
 }
 
 export function listSessions(): Promise<Session[]> {
@@ -3259,6 +3266,7 @@ export function listSessions(): Promise<Session[]> {
   entry.promise = listSessionsUncached()
     .then((sessions) => {
       lastGood = sessions;
+      lastGoodAt = Date.now();
       return sessions;
     })
     .catch((e) => {

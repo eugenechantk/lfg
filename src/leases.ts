@@ -1,3 +1,4 @@
+import { statSync } from "node:fs";
 import { mkdir, readFile, rename, unlink } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { basename, dirname, join } from "node:path";
@@ -113,6 +114,25 @@ export function parseLease(raw: string): LeaseRecord | null {
 
 export function leaseIsFresh(lease: LeaseRecord, now: number): boolean {
   return now - lease.heartbeatAt < LEASE_FRESH_MS;
+}
+
+/** Room for clock skew between the hosts that write a synced lease file. */
+export const LEASE_MTIME_SLACK_MS = 5 * 60_000;
+
+/**
+ * Whether a lease file was written recently enough to hold a fresh heartbeat.
+ * Every heartbeat rewrites the file (and Syncthing keeps the writer's mtime),
+ * so a file untouched for longer than the freshness window plus skew slack
+ * cannot be fresh. A stat is far cheaper than an async read and parse, and the
+ * closed list asks this for thousands of mostly long-dead leases (12,988 lease
+ * files on the Pro, 2026-10-16).
+ */
+export function leaseFileMayBeFresh(path: string, now: number): boolean {
+  try {
+    return statSync(path).mtimeMs >= now - LEASE_FRESH_MS - LEASE_MTIME_SLACK_MS;
+  } catch {
+    return false;
+  }
 }
 
 async function defaultResolveTranscript(sessionId: string): Promise<string | null> {
@@ -274,8 +294,11 @@ export function createLeaseManager(
    * the same question.
    */
   const anyFreshAt = async (sessionId: string, transcriptPath: string): Promise<string | null> => {
-    const lease = await readLeaseAt(leasePathForTranscript(sessionId, transcriptPath));
-    return lease && leaseIsFresh(lease, now()) ? lease.hostId : null;
+    const path = leasePathForTranscript(sessionId, transcriptPath);
+    const at = now();
+    if (!leaseFileMayBeFresh(path, at)) return null;
+    const lease = await readLeaseAt(path);
+    return lease && leaseIsFresh(lease, at) ? lease.hostId : null;
   };
 
   return {

@@ -1,10 +1,11 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   LEASE_FRESH_MS,
+  LEASE_MTIME_SLACK_MS,
   createLeaseManager,
   leasePathForTranscript,
   parseLease,
@@ -298,5 +299,41 @@ describe("ensureLease", () => {
     expect(l.hostId).toBe("host-a");
     expect(l.state).toBe("running"); // other writer's field survived
     expect(l.stateAt).toBe(900);
+  });
+});
+
+describe("anyFreshAt skips lease files too old to be fresh", () => {
+  beforeEach(resetFs);
+
+  function writeLease(heartbeatAt: number, mtimeMs?: number) {
+    const path = leasePathForTranscript(SID, transcriptPath(SID));
+    writeFileSync(path, JSON.stringify({ hostId: "peer", pid: 4242, acquiredAt: heartbeatAt, heartbeatAt }));
+    if (mtimeMs != null) utimesSync(path, mtimeMs / 1000, mtimeMs / 1000);
+  }
+  const real = () =>
+    createLeaseManager({ hostId: () => "me", now: () => Date.now(), resolveTranscript: async () => transcriptPath(SID) });
+
+  test("a freshly written, fresh lease is found", async () => {
+    writeLease(Date.now());
+    expect(await real().anyFreshAt(SID, transcriptPath(SID))).toBe("peer");
+  });
+
+  test("a recently written but stale heartbeat is still read and judged stale", async () => {
+    writeLease(Date.now() - LEASE_FRESH_MS - 1000);
+    expect(await real().anyFreshAt(SID, transcriptPath(SID))).toBeNull();
+  });
+
+  test("a file untouched past the window plus slack is not fresh, whatever it says", async () => {
+    writeLease(Date.now(), Date.now() - LEASE_FRESH_MS - LEASE_MTIME_SLACK_MS - 60_000);
+    expect(await real().anyFreshAt(SID, transcriptPath(SID))).toBeNull();
+  });
+
+  test("an mtime inside the slack still gets read (clock skew between hosts)", async () => {
+    writeLease(Date.now(), Date.now() - LEASE_FRESH_MS - 60_000);
+    expect(await real().anyFreshAt(SID, transcriptPath(SID))).toBe("peer");
+  });
+
+  test("no lease file means not fresh", async () => {
+    expect(await real().anyFreshAt(SID, transcriptPath(SID))).toBeNull();
   });
 });
