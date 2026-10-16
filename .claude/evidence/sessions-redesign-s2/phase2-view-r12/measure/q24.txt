@@ -1,0 +1,6 @@
+b2 row2-arg | design/b2-3x.png | bbox | 100 273 200 26 | 30 0,0,0
+g3 row2-arg | app/g3.png | bbox | 100 188 200 26 | 30 0,0,0
+b2 row2-arg-cols | design/b2-3x.png | cols | 100 273 200 26 | 30 0,0,0
+g3 row2-arg-cols | app/g3.png | cols | 100 188 200 26 | 30 0,0,0
+b2 card-val-cols | design/b2-3x.png | cols | 50 333 320 13 | 40 28,28,30
+g3 card-val-cols | app/g3.png | cols | 50 251 320 13 | 40 28,28,30

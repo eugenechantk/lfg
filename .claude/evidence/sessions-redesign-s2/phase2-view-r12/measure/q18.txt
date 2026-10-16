@@ -1,0 +1,10 @@
+b7 foot-rows | design/b7-3x.png | rows | 25 762 340 70 | 30 28,28,30
+si foot-rows | app/signin.png | rows | 25 792 352 70 | 30 26,26,28
+b7 foot-l1-T | design/b7-3x.png | bbox | 33 772 9 20 | 40 28,28,30
+si foot-l1-T | app/signin.png | bbox | 28 800 12 22 | 40 26,26,28
+b7 foot-l2-cols | design/b7-3x.png | cols | 25 792 340 18 | 40 28,28,30
+si foot-l2-cols | app/signin.png | cols | 25 822 352 18 | 40 26,26,28
+b7 foot-l1-cols | design/b7-3x.png | cols | 25 774 340 16 | 40 28,28,30
+si foot-l1-cols | app/signin.png | cols | 25 803 352 16 | 40 26,26,28
+b7 btn-key | design/b7-3x.png | bbox | 105 720 30 30 | 60 10,110,224
+si btn-key | app/signin.png | bbox | 115 750 30 30 | 60 6,108,222

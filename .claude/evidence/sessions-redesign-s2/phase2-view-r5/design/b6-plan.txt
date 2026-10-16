@@ -1,0 +1,46 @@
+# http://127.0.0.1:8793/s2-question-plan.dc.html viewport 700x857 dpr 1 fonts loaded
+div [0,0,700,844]
+div [0,0,700,844]
+div [0,0,390,844] | bg=rgb(0, 0, 0) | ov=hidden
+div [0,112,390,312] | pad=0px 16px 12px 16px | gap=12px | ov=hidden
+div [175.6,282,198.4,40] | bg=rgb(10, 110, 224) | rad=20px | pad=9px 14px 9px 14px | T="ship 1.3.1 to testflight" f=17px/22px w=400 ls=normal c=rgb(255, 255, 255) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=189.6,292,170.4,20
+div [16,334,358,18] | gap=8px
+svg [16,334.5,17,17] | ov=hidden | svg stroke=rgb(161, 161, 166) sw=1.9 fill=none vb=0 0 24 24
+path [18.8,338.8,11.3,8.5] | path {"data-dc-tpl":"7","d":"M4 6h10M4 12h16M4 18h12"} stroke=rgb(161, 161, 166) fill=none
+span [41,334,313,18] | T="Ran 7 commands, edited 1 file" f=15px/normal w=400 ls=normal c=rgb(161, 161, 166) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=41,334,211.4,18
+svg [362,337,12,12] | ov=hidden | svg stroke=rgb(99, 99, 102) sw=2.8 fill=none vb=0 0 24 24
+path [366.5,340,3,6] | path {"data-dc-tpl":"10","d":"M9 6l6 6-6 6"} stroke=rgb(99, 99, 102) fill=none
+div [16,364,358,48] | T="Build 205 passed all tests and is archived. Before I upload it, one check." f=17px/24px w=400 ls=normal c=rgb(255, 255, 255) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=16,366,336.2,20 16,390,233.7,20
+div [0,0,390,124] | bgi=linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0))
+div [16,54,358,56] | gap=10px
+a [16,59,46,46] | bg=rgba(44, 44, 46, 0.92) | bd=1px/1px/1px/1px rgba(255, 255, 255, 0.1)|rgba(255, 255, 255, 0.1) | rad=22px | sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [29,72,20,20] | ov=hidden | svg stroke=rgb(255, 255, 255) sw=2.4 fill=none vb=0 0 24 24
+path [35.7,76.2,5.8,11.7] | path {"data-dc-tpl":"18","d":"M15 5l-7 7 7 7"} stroke=rgb(255, 255, 255) fill=none
+a [72,63.5,246,37] | gap=3px
+span [88.2,63.5,213.7,20] | ov=hidden | T="Ship lfg 1.3.1 to TestFlight" f=17px/normal w=600 ls=normal c=rgb(255, 255, 255) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=nowrap | lines=88.2,63.5,213.7,20
+span [110.2,86.5,169.6,14] | gap=6px
+span [110.2,90,7,7] | bg=rgb(255, 159, 10) | rad=50%
+span [123.2,86.5,99.8,14]
+span [123.2,86.5,99.8,14] | T="Needs input · 2m" f=12px/normal w=600 ls=normal c=rgb(255, 159, 10) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=nowrap | lines=123.2,86.5,99.8,14
+span [229,86.5,50.8,14] | T="· Pro · lfg" f=12px/normal w=400 ls=normal c=rgb(161, 161, 166) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=nowrap | lines=229,86.5,50.8,14
+a [328,59,46,46] | bg=rgba(44, 44, 46, 0.92) | bd=1px/1px/1px/1px rgba(255, 255, 255, 0.1)|rgba(255, 255, 255, 0.1) | rad=22px | sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [341,72,20,20] | ov=hidden | svg stroke=rgb(255, 255, 255) sw=1.9 fill=none vb=0 0 24 24
+path [344.3,77.8,13.3,8.3] | path {"data-dc-tpl":"27","d":"M4 7h9M17 7h3M4 17h3M11 17h9"} stroke=rgb(255, 255, 255) fill=none
+circle [351.7,76,3.7,3.7] | circle {"data-dc-tpl":"28","cx":"15","cy":"7","r":"2.2"} stroke=rgb(255, 255, 255) fill=none
+circle [346.7,84.3,3.7,3.7] | circle {"data-dc-tpl":"29","cx":"9","cy":"17","r":"2.2"} stroke=rgb(255, 255, 255) fill=none
+div [8,525,374,311] | bg=rgb(28, 28, 30) | bd=1px/1px/1px/1px rgba(255, 255, 255, 0.1)|rgba(255, 255, 255, 0.1) | rad=32px | pad=16px 16px 26px 16px | gap=12px | sh=rgba(0, 0, 0, 0.14) 0px -2px 30px 0px
+div [25,542,340,30] | gap=8px
+span [25,553,8,8] | bg=rgb(255, 159, 10) | rad=50% | sh=rgba(255, 159, 10, 0.28) 0px 0px 0px 3px
+span [41,550,239.4,14]
+span [41,550,165.3,14] | T="Plan ready for review" f=12px/normal w=700 ls=0.4px c=rgb(255, 179, 64) ff=-apple-system, "SF Pro Text", system-ui, tt=uppercase ws=normal | lines=41,550,165.3,14
+button [288.4,542,76.6,30] | bg=rgb(44, 44, 46) | rad=15px | pad=0px 12px 0px 12px | T="Dismiss" f=14px/normal w=500 ls=normal c=rgb(209, 209, 214) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=300.4,549,52.6,16
+div [25,584,340,165] | gap=6px
+span [25,584,340,25] | T="Approve this plan?" f=20px/25px w=600 ls=normal c=rgb(255, 255, 255) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=25,584,182.3,24
+div [25,615,340,112] | bg=rgb(44, 44, 46) | rad=14px | pad=10px 14px 10px 14px | gap=4px
+span [39,625,312,21] | T="1. Bump the build to 205 and archive" f=15px/21px w=400 ls=normal c=rgb(242, 242, 247) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=39,626,258.3,18
+span [39,650,312,42] | T="2. Run the release checklist on the simulator" f=15px/21px w=400 ls=normal c=rgb(242, 242, 247) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=39,651,243.4,18 39,672,65.4,18
+span [39,696,312,21] | T="3. Upload with fastlane, then post the notes" f=15px/21px w=400 ls=normal c=rgb(242, 242, 247) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=39,697,308.5,18
+a [25,733,340,16] | T="Read the full plan ›" f=14px/normal w=400 ls=normal c=rgb(64, 156, 255) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=25,733,124.9,16
+div [25,761,340,48] | gap=8px
+button [25,761,166,48] | bg=rgb(10, 110, 224) | rad=24px | pad=1px 6px 1px 6px | T="Approve" f=16px/normal w=600 ls=normal c=rgb(255, 255, 255) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=75.1,775.5,65.7,19
+button [199,761,166,48] | bg=rgb(44, 44, 46) | rad=24px | pad=1px 6px 1px 6px | T="Keep planning" f=16px/normal w=600 ls=normal c=rgb(242, 242, 247) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=226.3,775.5,111.3,19

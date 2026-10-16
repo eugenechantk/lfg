@@ -1,0 +1,26 @@
+/s2-question-plan.dc.html
+T "ship 1.3.1 to testflight" box 175.61,282.00 198.39x40.00 fs17px fw400 lh22px lsnormal -apple-system crgb(255, 255, 255) bgrgb(10, 110, 224) r20px pad9px 14px wbnormal
+S 16.00,334.50 17.00x17.00 crgb(161, 161, 166) sw1.9
+T "Ran 7 commands, edited 1 file" box 41.00,334.00 313.00x18.00 fs15px fw400 lhnormal lsnormal -apple-system crgb(161, 161, 166) pad0px wbnormal
+S 362.00,337.00 12.00x12.00 crgb(161, 161, 166) sw2.8
+T "Build 205 passed all tests and is " box 16.00,364.00 358.00x48.00 fs17px fw400 lh24px lsnormal -apple-system crgb(255, 255, 255) pad0px wbnormal
+B A 16.00,59.67 44.67x44.67 bgrgba(44, 44, 46, 0.92) bd0.333333px rgba(255, 255, 255, 0.1) r22px pad0px shrgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+S 28.33,72.00 20.00x20.00 crgb(255, 255, 255) sw2.4
+T "Ship lfg 1.3.1 to TestFlight" box 88.17,63.17 213.67x20.33 fs17px fw600 lhnormal lsnormal -apple-system crgb(255, 255, 255) pad0px wbnormal
+B SPAN 110.21,90.17 7.00x7.00 bgrgb(255, 159, 10) r50% pad0px
+T "Needs input · 2m" box 123.21,86.50 99.80x14.33 fs12px fw600 lhnormal lsnormal -apple-system crgb(255, 159, 10) pad0px wbnormal
+T "· Pro · lfg" box 229.01,86.50 50.79x14.33 fs12px fw400 lhnormal lsnormal -apple-system crgb(161, 161, 166) pad0px wbnormal
+B A 329.33,59.67 44.67x44.67 bgrgba(44, 44, 46, 0.92) bd0.333333px rgba(255, 255, 255, 0.1) r22px pad0px shrgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+S 341.67,72.00 20.00x20.00 crgb(255, 255, 255) sw1.9
+B DIV 8.00,546.67 374.00x289.33 bgrgb(28, 28, 30) bd0.333333px rgba(255, 255, 255, 0.1) r32px pad16px 16px 26px shrgba(0, 0, 0, 0.14) 0px -2px 30px 0px
+B SPAN 24.33,574.00 8.00x8.00 bgrgb(255, 159, 10) r50% pad0px shrgba(255, 159, 10, 0.28) 0px 0px 0px 3px
+T "Plan ready for review" box 40.33,570.83 165.26x14.33 fs12px fw700 lhnormal ls0.4px -apple-system crgb(255, 179, 64) pad0px wbnormal
+T "Dismiss" box 289.06,563.00 76.60x30.00 fs14px fw500 lhnormal lsnormal -apple-system crgb(209, 209, 214) bgrgb(44, 44, 46) r15px pad0px 12px wbnormal
+T "Approve this plan?" box 24.33,605.00 341.33x25.00 fs20px fw600 lh25px lsnormal -apple-system crgb(255, 255, 255) pad0px wbnormal
+B DIV 24.33,636.00 341.33x91.00 bgrgb(44, 44, 46) r14px pad10px 14px
+T "1. Bump the build to 205 and archi" box 38.33,646.00 313.33x21.00 fs15px fw400 lh21px lsnormal -apple-system crgb(242, 242, 247) pad0px wbnormal
+T "2. Run the release checklist on th" box 38.33,671.00 313.33x21.00 fs15px fw400 lh21px lsnormal -apple-system crgb(242, 242, 247) pad0px wbnormal
+T "3. Upload with fastlane, then post" box 38.33,696.00 313.33x21.00 fs15px fw400 lh21px lsnormal -apple-system crgb(242, 242, 247) pad0px wbnormal
+T "Read the full plan ›" box 24.33,733.00 341.33x16.67 fs14px fw400 lhnormal lsnormal -apple-system crgb(64, 156, 255) pad0px wbnormal
+T "Approve" box 24.33,761.67 166.67x48.00 fs16px fw600 lhnormal lsnormal -apple-system crgb(255, 255, 255) bgrgb(10, 110, 224) r24px pad1px 6px wbnormal
+T "Keep planning" box 199.00,761.67 166.67x48.00 fs16px fw600 lhnormal lsnormal -apple-system crgb(242, 242, 247) bgrgb(44, 44, 46) r24px pad1px 6px wbnormal

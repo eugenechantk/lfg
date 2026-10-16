@@ -1,0 +1,719 @@
+{
+  "manifest_sha256": "5761a2bad4cd7ddac0bc803a5dce15ff0b6a78998f44ece8f877798d75a34141",
+  "sources": {
+    "b4": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r6/design/b4-queued.png",
+      "sha256": "2ffa23831c3d1991996fad82db9683e74051e16f0d48d3256a99777ac13e6b5b",
+      "pixels_per_unit": 1,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        390,
+        844
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b4closed": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r6/design/b4-queued-closed.png",
+      "sha256": "14ac0094cf30a3c577fc3844f2ba098f4fe52f95e5aa1e39a26b460ac9767006",
+      "pixels_per_unit": 1,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        390,
+        844
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b5": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r6/design/b5-failed.png",
+      "sha256": "53561af71fb27eaef75d6362bf897fff5a0435e6edc0f2664085e01fc481f5f9",
+      "pixels_per_unit": 1,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        390,
+        844
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "q0": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r6/app/q0.png",
+      "sha256": "539e4ca235014308a17fabb43df818fa5e4fa417d8e0cc7e4da3d32e3433ad33",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "q1": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r6/app/q1.png",
+      "sha256": "dddae2ec7a3ffd14675e378b4a196ea5384ee5336a728a0b16afbae3efa6aebc",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "f0": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r6/app/f0.png",
+      "sha256": "f182f6b2cf7a18268eabdc1039970374a1a95abecda9fb81aa26f78502ff9f49",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "f1": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r6/app/f1.png",
+      "sha256": "b0a2d8f113f382ca875c332b4ad63535a4cf7614a37a627f5a2c77fedcfc07dd",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    }
+  },
+  "pairs": [
+    {
+      "id": "b4-header",
+      "state": "queued",
+      "design": {
+        "source": "b4",
+        "rect": [
+          0,
+          52,
+          390,
+          60
+        ],
+        "pixel_box": [
+          0,
+          52,
+          390,
+          112
+        ],
+        "crop": "b4-header-design.png",
+        "sha256": "b782e4e35a839c55b898dc07211668432dde21fd9a1d4096bbb9bdcb5556a97d"
+      },
+      "app": {
+        "source": "q0",
+        "rect": [
+          0,
+          54,
+          402,
+          60
+        ],
+        "pixel_box": [
+          0,
+          162,
+          1206,
+          342
+        ],
+        "crop": "b4-header-app.png",
+        "sha256": "3b1e45907dd92b864934eb74932bb7d8c107fa4c452df0b6628c607f96999a26"
+      }
+    },
+    {
+      "id": "b4-transcript",
+      "state": "queued",
+      "design": {
+        "source": "b4",
+        "rect": [
+          0,
+          510,
+          390,
+          162
+        ],
+        "pixel_box": [
+          0,
+          510,
+          390,
+          672
+        ],
+        "crop": "b4-transcript-design.png",
+        "sha256": "9577a0ce7ac0c430ea419aa26d2b59d1fc6ff9b5ada24de90ffe63ad90617240"
+      },
+      "app": {
+        "source": "q0",
+        "rect": [
+          0,
+          502,
+          402,
+          208
+        ],
+        "pixel_box": [
+          0,
+          1506,
+          1206,
+          2130
+        ],
+        "crop": "b4-transcript-app.png",
+        "sha256": "743b4c6376f8642448c37dbed5c57f0f2f59cd6cb64847d05de057b87039d2d4"
+      }
+    },
+    {
+      "id": "b4-strip-closed",
+      "state": "queued, menu closed",
+      "design": {
+        "source": "b4closed",
+        "rect": [
+          12,
+          682,
+          366,
+          32
+        ],
+        "pixel_box": [
+          12,
+          682,
+          378,
+          714
+        ],
+        "crop": "b4-strip-closed-design.png",
+        "sha256": "2c390b777e3c8c91fcf83702db4ac922452986ec12c9dc3c4980dded0e11f91b"
+      },
+      "app": {
+        "source": "q0",
+        "rect": [
+          12,
+          713,
+          378,
+          32
+        ],
+        "pixel_box": [
+          36,
+          2139,
+          1170,
+          2235
+        ],
+        "crop": "b4-strip-closed-app.png",
+        "sha256": "8820f54804602301df30697908e54fa82012cce941c57771e46a25d13feb8312"
+      }
+    },
+    {
+      "id": "b4-strip-open",
+      "state": "queued, menu open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          12,
+          682,
+          366,
+          32
+        ],
+        "pixel_box": [
+          12,
+          682,
+          378,
+          714
+        ],
+        "crop": "b4-strip-open-design.png",
+        "sha256": "7eca82f8304e1eea24390473be3622fa7dcb13d0767d29413c5d3b1362f932bd"
+      },
+      "app": {
+        "source": "q1",
+        "rect": [
+          12,
+          713,
+          378,
+          32
+        ],
+        "pixel_box": [
+          36,
+          2139,
+          1170,
+          2235
+        ],
+        "crop": "b4-strip-open-app.png",
+        "sha256": "61356de8270930ccbda7370d82596f321d0406552597313f88646a469ab913eb"
+      }
+    },
+    {
+      "id": "b4-ellipsis-open",
+      "state": "queued, menu open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          350,
+          688,
+          20,
+          20
+        ],
+        "pixel_box": [
+          350,
+          688,
+          370,
+          708
+        ],
+        "crop": "b4-ellipsis-open-design.png",
+        "sha256": "a95e175ae027eceee4005061ef69b6aaf3836adbd0224b3039314589c94d1cab"
+      },
+      "app": {
+        "source": "q1",
+        "rect": [
+          362,
+          719,
+          20,
+          20
+        ],
+        "pixel_box": [
+          1086,
+          2157,
+          1146,
+          2217
+        ],
+        "crop": "b4-ellipsis-open-app.png",
+        "sha256": "4cc680f308f2182b3bc6a3a3acfcc085e3a59e11f2d881d343ee35864bc242c1"
+      }
+    },
+    {
+      "id": "b4-ellipsis-closed",
+      "state": "queued, menu closed",
+      "design": {
+        "source": "b4closed",
+        "rect": [
+          350,
+          688,
+          20,
+          20
+        ],
+        "pixel_box": [
+          350,
+          688,
+          370,
+          708
+        ],
+        "crop": "b4-ellipsis-closed-design.png",
+        "sha256": "26fa5665f3a40fc6f5d70b894a8b6e2e7ac31c1fd46aa31cf4ae4532035ac72a"
+      },
+      "app": {
+        "source": "q0",
+        "rect": [
+          362,
+          719,
+          20,
+          20
+        ],
+        "pixel_box": [
+          1086,
+          2157,
+          1146,
+          2217
+        ],
+        "crop": "b4-ellipsis-closed-app.png",
+        "sha256": "a503dce886d3c8b8e4b6fb27f7decf3eafae72773ba3407a02202885ef20afa6"
+      }
+    },
+    {
+      "id": "b4-menu",
+      "state": "queued, menu open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          128,
+          533,
+          250,
+          141
+        ],
+        "pixel_box": [
+          128,
+          533,
+          378,
+          674
+        ],
+        "crop": "b4-menu-design.png",
+        "sha256": "a52b804bd1e266b7283d87b949dd1de7c1dc0881a3b8ab1a1f1887bb53b50373"
+      },
+      "app": {
+        "source": "q1",
+        "rect": [
+          140,
+          563,
+          250,
+          142
+        ],
+        "pixel_box": [
+          420,
+          1689,
+          1170,
+          2115
+        ],
+        "crop": "b4-menu-app.png",
+        "sha256": "b6833edf43db3c9c43139645572854164cca6234a4071c86d19af871aed2844a"
+      }
+    },
+    {
+      "id": "b4-menu-shadow-zone",
+      "state": "queued, menu open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          100,
+          520,
+          290,
+          200
+        ],
+        "pixel_box": [
+          100,
+          520,
+          390,
+          720
+        ],
+        "crop": "b4-menu-shadow-zone-design.png",
+        "sha256": "34088b7171a79f357344a9601a4172b32ee845e2eb27eb627bda42025549edbc"
+      },
+      "app": {
+        "source": "q1",
+        "rect": [
+          111,
+          551,
+          291,
+          200
+        ],
+        "pixel_box": [
+          333,
+          1653,
+          1206,
+          2253
+        ],
+        "crop": "b4-menu-shadow-zone-app.png",
+        "sha256": "18c29692756b3e66e19b3f1b185004d9f214a90057c30546b8187d86b23b9766"
+      }
+    },
+    {
+      "id": "b4-composer",
+      "state": "queued",
+      "design": {
+        "source": "b4",
+        "rect": [
+          12,
+          720,
+          366,
+          96
+        ],
+        "pixel_box": [
+          12,
+          720,
+          378,
+          816
+        ],
+        "crop": "b4-composer-design.png",
+        "sha256": "8bfea1895c24c6d7514019bb4feb9745fa7d8002c0abf86982a489adc59feae6"
+      },
+      "app": {
+        "source": "q0",
+        "rect": [
+          12,
+          751,
+          378,
+          95
+        ],
+        "pixel_box": [
+          36,
+          2253,
+          1170,
+          2538
+        ],
+        "crop": "b4-composer-app.png",
+        "sha256": "10eb4d92147aa0444d506dfcb00d36bbddba985c17324ca52f75cc9dd7276f56"
+      }
+    },
+    {
+      "id": "b5-header",
+      "state": "offline, not sent",
+      "design": {
+        "source": "b5",
+        "rect": [
+          0,
+          52,
+          390,
+          60
+        ],
+        "pixel_box": [
+          0,
+          52,
+          390,
+          112
+        ],
+        "crop": "b5-header-design.png",
+        "sha256": "1ce4c96d1d1fd18a9f678a19dd15f189a5d1bb97d9d56ffc223fa8c4c16dddf3"
+      },
+      "app": {
+        "source": "f0",
+        "rect": [
+          0,
+          54,
+          402,
+          60
+        ],
+        "pixel_box": [
+          0,
+          162,
+          1206,
+          342
+        ],
+        "crop": "b5-header-app.png",
+        "sha256": "950e6e9073105f27c13ad24629e21e9312435a9adb249071992c6f1354fb4454"
+      }
+    },
+    {
+      "id": "b5-transcript",
+      "state": "offline, not sent",
+      "design": {
+        "source": "b5",
+        "rect": [
+          0,
+          530,
+          390,
+          140
+        ],
+        "pixel_box": [
+          0,
+          530,
+          390,
+          670
+        ],
+        "crop": "b5-transcript-design.png",
+        "sha256": "a6b99c1ccc6fab8bb44977b327927d656dd55b4df889f4765ec99aa11069048e"
+      },
+      "app": {
+        "source": "f0",
+        "rect": [
+          0,
+          563,
+          402,
+          135
+        ],
+        "pixel_box": [
+          0,
+          1689,
+          1206,
+          2094
+        ],
+        "crop": "b5-transcript-app.png",
+        "sha256": "6b8e4ae799b47fe8d19dab6a1ee724ffa468c48af257c2519633ee7461ad96c7"
+      }
+    },
+    {
+      "id": "b5-strip-open",
+      "state": "not sent, menu open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          12,
+          682,
+          366,
+          32
+        ],
+        "pixel_box": [
+          12,
+          682,
+          378,
+          714
+        ],
+        "crop": "b5-strip-open-design.png",
+        "sha256": "bf9e60ef418606f2220fd46afb417b53618a2f88a5b3e9979f26c1df83e76412"
+      },
+      "app": {
+        "source": "f1",
+        "rect": [
+          12,
+          713,
+          378,
+          32
+        ],
+        "pixel_box": [
+          36,
+          2139,
+          1170,
+          2235
+        ],
+        "crop": "b5-strip-open-app.png",
+        "sha256": "c49bf665f4bd0eb1737e84b06da0030f4ff5288581cba43acc547218bc763962"
+      }
+    },
+    {
+      "id": "b5-ellipsis-open",
+      "state": "not sent, menu open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          350,
+          688,
+          20,
+          20
+        ],
+        "pixel_box": [
+          350,
+          688,
+          370,
+          708
+        ],
+        "crop": "b5-ellipsis-open-design.png",
+        "sha256": "6e6c952b892379a7252b0832b8224ecd919f5acd93c8fff6592c8474c9601280"
+      },
+      "app": {
+        "source": "f1",
+        "rect": [
+          362,
+          719,
+          20,
+          20
+        ],
+        "pixel_box": [
+          1086,
+          2157,
+          1146,
+          2217
+        ],
+        "crop": "b5-ellipsis-open-app.png",
+        "sha256": "127143cf493426358aaa2f566a89ed7de59881b2a1d79c888322f6367ec0b249"
+      }
+    },
+    {
+      "id": "b5-menu",
+      "state": "not sent, menu open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          148,
+          546,
+          230,
+          128
+        ],
+        "pixel_box": [
+          148,
+          546,
+          378,
+          674
+        ],
+        "crop": "b5-menu-design.png",
+        "sha256": "1f65762ec2d5455c247157dc8cf5c15154618d49d3fcc9a69449a140c9fefb98"
+      },
+      "app": {
+        "source": "f1",
+        "rect": [
+          160,
+          577,
+          230,
+          128
+        ],
+        "pixel_box": [
+          480,
+          1731,
+          1170,
+          2115
+        ],
+        "crop": "b5-menu-app.png",
+        "sha256": "2d18f2bbe796b22d058a25b243b0430804e2d577b7d4b443fa6354f7f46c7a47"
+      }
+    },
+    {
+      "id": "b5-menu-shadow-zone",
+      "state": "not sent, menu open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          60,
+          520,
+          330,
+          200
+        ],
+        "pixel_box": [
+          60,
+          520,
+          390,
+          720
+        ],
+        "crop": "b5-menu-shadow-zone-design.png",
+        "sha256": "1c9d75a3c1ddda7c926ed78fbd7635e28dfac05b8e6021ec48fa361b12fc71a4"
+      },
+      "app": {
+        "source": "f1",
+        "rect": [
+          71,
+          551,
+          331,
+          200
+        ],
+        "pixel_box": [
+          213,
+          1653,
+          1206,
+          2253
+        ],
+        "crop": "b5-menu-shadow-zone-app.png",
+        "sha256": "799653ea7edf7583293027d8775445918239908189cbb68e9062cc53fceb123d"
+      }
+    },
+    {
+      "id": "b5-composer",
+      "state": "offline",
+      "design": {
+        "source": "b5",
+        "rect": [
+          12,
+          720,
+          366,
+          96
+        ],
+        "pixel_box": [
+          12,
+          720,
+          378,
+          816
+        ],
+        "crop": "b5-composer-design.png",
+        "sha256": "6b638652e2475bd5064f30b211e1d02c21eba67e876f5b021b42d1e6a3f92e75"
+      },
+      "app": {
+        "source": "f0",
+        "rect": [
+          12,
+          751,
+          378,
+          95
+        ],
+        "pixel_box": [
+          36,
+          2253,
+          1170,
+          2538
+        ],
+        "crop": "b5-composer-app.png",
+        "sha256": "8bd29679b333148cab1762bc721ea361606bc5e2107500c516b87608853019ce"
+      }
+    }
+  ],
+  "review_sheets": [
+    "review-01.png",
+    "review-02.png"
+  ],
+  "review_sheet_scale": "1 pixel per logical unit; browsing only; measure raw crops",
+  "elapsed_seconds": 0.6686
+}

@@ -1,0 +1,1239 @@
+{
+  "manifest_sha256": "292163536e29bb6779d6cc1f2d589e81cbcfe59ea0fa697f1131cf2543cb614a",
+  "sources": {
+    "b4": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r7/design/b4-full-3x.png",
+      "sha256": "3561b66e52058c1a0dcb96e2222be5959f2d24cf5defa06c8a74630d5a7008e6",
+      "pixels_per_unit": 3,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        1170,
+        2532
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b5": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r7/design/b5-full-3x.png",
+      "sha256": "b4a1e7468657418878bf4d9f3bfa9d571f0e125bb854c82509d24769308a818d",
+      "pixels_per_unit": 3,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        1170,
+        2532
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "q_menu": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r7/app/q-menu.png",
+      "sha256": "34ae4edd263624108be7995444f600622cfe4aef8292987c5ac321549998bd2f",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "q_closed": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r7/app/q-closed.png",
+      "sha256": "d6c74917ec3c4b723783fc9269285889302390d7c8eaa80c5d9e1aa7fefd5b7f",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "f_menu": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r7/app/f-menu.png",
+      "sha256": "0aacda6b7aca6003b1b066dcf753ffce20807aed006f05ef43a145b11be70e32",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "f_closed": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r7/app/f-closed.png",
+      "sha256": "c0316cc1105f2be8431b5974401d0350ed08f338c5b82ebad51aeb99c9fcace7",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    }
+  },
+  "pairs": [
+    {
+      "id": "b4-full",
+      "state": "queued-menu-open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          0,
+          0,
+          390,
+          844
+        ],
+        "pixel_box": [
+          0,
+          0,
+          1170,
+          2532
+        ],
+        "crop": "b4-full-design.png",
+        "sha256": "3561b66e52058c1a0dcb96e2222be5959f2d24cf5defa06c8a74630d5a7008e6"
+      },
+      "app": {
+        "source": "q_menu",
+        "rect": [
+          0,
+          0,
+          402,
+          874
+        ],
+        "pixel_box": [
+          0,
+          0,
+          1206,
+          2622
+        ],
+        "crop": "b4-full-app.png",
+        "sha256": "b1ec93eef84e02d40fefcf294ba4ba475a7016f008cd29439cce2438600eec9b"
+      }
+    },
+    {
+      "id": "b4-header",
+      "state": "queued-menu-open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          0,
+          50,
+          390,
+          60
+        ],
+        "pixel_box": [
+          0,
+          150,
+          1170,
+          330
+        ],
+        "crop": "b4-header-design.png",
+        "sha256": "1793434daea5963b9880a005c1773958300e180ccc45b49da2eb52a3cfc6f6c0"
+      },
+      "app": {
+        "source": "q_menu",
+        "rect": [
+          0,
+          52,
+          402,
+          60
+        ],
+        "pixel_box": [
+          0,
+          156,
+          1206,
+          336
+        ],
+        "crop": "b4-header-app.png",
+        "sha256": "c3011d76ce126c7fcf10cacd5eac902e43ce1eb42c923b911543d3d1e0042cfc"
+      }
+    },
+    {
+      "id": "b4-card",
+      "state": "queued-menu-open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          120,
+          525,
+          266,
+          157
+        ],
+        "pixel_box": [
+          360,
+          1575,
+          1158,
+          2046
+        ],
+        "crop": "b4-card-design.png",
+        "sha256": "8157efd5c246ef0cd71e2678b5f070425c4d15cbd683ffcbf83a045a421e6333"
+      },
+      "app": {
+        "source": "q_menu",
+        "rect": [
+          132,
+          555.33,
+          266,
+          158
+        ],
+        "pixel_box": [
+          396,
+          1665,
+          1194,
+          2140
+        ],
+        "crop": "b4-card-app.png",
+        "sha256": "bf6d47bbff096d3b2a0958390f8d931041a6bc13759b11f8d28812f2e4a76973"
+      }
+    },
+    {
+      "id": "b4-card-item1-sendnow",
+      "state": "queued-menu-open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          128,
+          533,
+          250,
+          56
+        ],
+        "pixel_box": [
+          384,
+          1599,
+          1134,
+          1767
+        ],
+        "crop": "b4-card-item1-sendnow-design.png",
+        "sha256": "2efb5e68bb791476c2f5cad956a3ce29c30358e02fec1e1a1b31b6e40041e448"
+      },
+      "app": {
+        "source": "q_menu",
+        "rect": [
+          140,
+          563.33,
+          250,
+          56
+        ],
+        "pixel_box": [
+          420,
+          1689,
+          1170,
+          1858
+        ],
+        "crop": "b4-card-item1-sendnow-app.png",
+        "sha256": "6052e8bdd3cd14b5e8b9d6a5ba2e06c2d4d8384d801646ce78701adac2610329"
+      }
+    },
+    {
+      "id": "b4-card-item2-edit",
+      "state": "queued-menu-open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          128,
+          588.67,
+          250,
+          43
+        ],
+        "pixel_box": [
+          384,
+          1766,
+          1134,
+          1896
+        ],
+        "crop": "b4-card-item2-edit-design.png",
+        "sha256": "28845e1acb929357100721f38b951e9540f3c4ebe8d1a3e64de8e5325edcdd43"
+      },
+      "app": {
+        "source": "q_menu",
+        "rect": [
+          140,
+          619.33,
+          250,
+          43
+        ],
+        "pixel_box": [
+          420,
+          1857,
+          1170,
+          1987
+        ],
+        "crop": "b4-card-item2-edit-app.png",
+        "sha256": "b8a0cf52a5751254049d0d88734be3d529bf4eb357c77c344b32ffb6f1517aa3"
+      }
+    },
+    {
+      "id": "b4-card-item3-remove",
+      "state": "queued-menu-open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          128,
+          631.33,
+          250,
+          42.67
+        ],
+        "pixel_box": [
+          384,
+          1893,
+          1134,
+          2022
+        ],
+        "crop": "b4-card-item3-remove-design.png",
+        "sha256": "bd6bd840d3512ba00d9327370299e343943e5718bd4bd4b55013b29aad97990b"
+      },
+      "app": {
+        "source": "q_menu",
+        "rect": [
+          140,
+          662.33,
+          250,
+          42.67
+        ],
+        "pixel_box": [
+          420,
+          1986,
+          1170,
+          2115
+        ],
+        "crop": "b4-card-item3-remove-app.png",
+        "sha256": "b2278509845770c8339dafefdbbb4758579f7974576de708bd2ba6523734c8a5"
+      }
+    },
+    {
+      "id": "b4-icon-arrow",
+      "state": "queued-menu-open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          341,
+          549,
+          24,
+          24
+        ],
+        "pixel_box": [
+          1023,
+          1647,
+          1095,
+          1719
+        ],
+        "crop": "b4-icon-arrow-design.png",
+        "sha256": "e4e3da5f5999aacc812c7d826a1db25e9315b4dd3dc133e141eec96160e71f9a"
+      },
+      "app": {
+        "source": "q_menu",
+        "rect": [
+          353,
+          579.33,
+          24,
+          24
+        ],
+        "pixel_box": [
+          1059,
+          1737,
+          1131,
+          1810
+        ],
+        "crop": "b4-icon-arrow-app.png",
+        "sha256": "9d9e1f060d10fee29fd55620ae63ccc5e18c0bdd966cf28737f7242f95a85175"
+      }
+    },
+    {
+      "id": "b4-icon-pencil",
+      "state": "queued-menu-open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          341,
+          598.33,
+          24,
+          24
+        ],
+        "pixel_box": [
+          1023,
+          1794,
+          1095,
+          1867
+        ],
+        "crop": "b4-icon-pencil-design.png",
+        "sha256": "866e351a1a11b6bca5d01a54f644edc28a71efb21427815adf50863c36401baa"
+      },
+      "app": {
+        "source": "q_menu",
+        "rect": [
+          353,
+          629.33,
+          24,
+          24
+        ],
+        "pixel_box": [
+          1059,
+          1887,
+          1131,
+          1960
+        ],
+        "crop": "b4-icon-pencil-app.png",
+        "sha256": "9ce445d3fe0708ea5381481d6fc1c235f439d21eac97b25527467c6fee86830e"
+      }
+    },
+    {
+      "id": "b4-icon-trash",
+      "state": "queued-menu-open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          341.67,
+          640.67,
+          24,
+          24
+        ],
+        "pixel_box": [
+          1025,
+          1922,
+          1098,
+          1995
+        ],
+        "crop": "b4-icon-trash-design.png",
+        "sha256": "b561722923ff752ad408fa5562a8972e981593b6a33b5a5f9c92776de147cd3f"
+      },
+      "app": {
+        "source": "q_menu",
+        "rect": [
+          353.67,
+          672,
+          24,
+          24
+        ],
+        "pixel_box": [
+          1061,
+          2016,
+          1134,
+          2088
+        ],
+        "crop": "b4-icon-trash-app.png",
+        "sha256": "4662ebba32b6bc0d165bf52a26fbecb7485d4bc362e0b2336ce1e5a4be0ffe6a"
+      }
+    },
+    {
+      "id": "b4-strip",
+      "state": "queued-menu-open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          6,
+          676,
+          378,
+          44
+        ],
+        "pixel_box": [
+          18,
+          2028,
+          1152,
+          2160
+        ],
+        "crop": "b4-strip-design.png",
+        "sha256": "507bef0c7f05c9058ba029635c71d123208f087af66f43e70374bdafbc1d36c3"
+      },
+      "app": {
+        "source": "q_menu",
+        "rect": [
+          6,
+          707,
+          390,
+          44
+        ],
+        "pixel_box": [
+          18,
+          2121,
+          1188,
+          2253
+        ],
+        "crop": "b4-strip-app.png",
+        "sha256": "3741190aaa316f031bfecbb570f4acad876ddef0b1935b2d7a0d13e5d3210f54"
+      }
+    },
+    {
+      "id": "b4-strip-dots",
+      "state": "queued-menu-open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          350,
+          688,
+          20,
+          20
+        ],
+        "pixel_box": [
+          1050,
+          2064,
+          1110,
+          2124
+        ],
+        "crop": "b4-strip-dots-design.png",
+        "sha256": "8b25cf28b12f112f67e5821c3e8197c47274688bf80d31c78373aed4b71ab76d"
+      },
+      "app": {
+        "source": "q_menu",
+        "rect": [
+          362,
+          719,
+          20,
+          20
+        ],
+        "pixel_box": [
+          1086,
+          2157,
+          1146,
+          2217
+        ],
+        "crop": "b4-strip-dots-app.png",
+        "sha256": "2f5cd02edd3eccdcfff54346253bed85f96496e98f9e03ceabe5061b0ffffe11"
+      }
+    },
+    {
+      "id": "b4-strip-spinner",
+      "state": "queued-menu-open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          20.67,
+          688,
+          20,
+          20
+        ],
+        "pixel_box": [
+          62,
+          2064,
+          123,
+          2124
+        ],
+        "crop": "b4-strip-spinner-design.png",
+        "sha256": "0b03a47517d8f86f6b977dc60db4adce15011a00773a5394ca8731167f11a464"
+      },
+      "app": {
+        "source": "q_menu",
+        "rect": [
+          20.67,
+          719,
+          20,
+          20
+        ],
+        "pixel_box": [
+          62,
+          2157,
+          123,
+          2217
+        ],
+        "crop": "b4-strip-spinner-app.png",
+        "sha256": "a14abb137437168484aed393ff95afc2d93c3f9d67f6c8f8a122010c9c2c1ee6"
+      }
+    },
+    {
+      "id": "b4-composer",
+      "state": "queued-menu-open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          6,
+          714,
+          378,
+          108
+        ],
+        "pixel_box": [
+          18,
+          2142,
+          1152,
+          2466
+        ],
+        "crop": "b4-composer-design.png",
+        "sha256": "4f57f1471f9492a531e9d63bd7f319c527575a78c1421a05ca66f3e2f2af563d"
+      },
+      "app": {
+        "source": "q_menu",
+        "rect": [
+          6,
+          745,
+          390,
+          107
+        ],
+        "pixel_box": [
+          18,
+          2235,
+          1188,
+          2556
+        ],
+        "crop": "b4-composer-app.png",
+        "sha256": "83f733a934bc1ae620cf85c84849fd2e25ffd497b4033feb28a04fb841f1afd1"
+      }
+    },
+    {
+      "id": "b4-transcript-under-card",
+      "state": "queued-menu-open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          0,
+          500,
+          390,
+          182
+        ],
+        "pixel_box": [
+          0,
+          1500,
+          1170,
+          2046
+        ],
+        "crop": "b4-transcript-under-card-design.png",
+        "sha256": "7784d95ed0b0e9481030c86334ee04d2615e65c3a0019114763cd7ff2b595e84"
+      },
+      "app": {
+        "source": "q_menu",
+        "rect": [
+          0,
+          531,
+          402,
+          182
+        ],
+        "pixel_box": [
+          0,
+          1593,
+          1206,
+          2139
+        ],
+        "crop": "b4-transcript-under-card-app.png",
+        "sha256": "5df0eb0a7791f409f667b16b15b8a95bd8b65d3e1dd438fc236f78206a6e259c"
+      }
+    },
+    {
+      "id": "b4-strip-closed-app-only",
+      "state": "queued-menu-closed",
+      "design": {
+        "source": "b4",
+        "rect": [
+          6,
+          676,
+          378,
+          44
+        ],
+        "pixel_box": [
+          18,
+          2028,
+          1152,
+          2160
+        ],
+        "crop": "b4-strip-closed-app-only-design.png",
+        "sha256": "507bef0c7f05c9058ba029635c71d123208f087af66f43e70374bdafbc1d36c3"
+      },
+      "app": {
+        "source": "q_closed",
+        "rect": [
+          6,
+          707,
+          390,
+          44
+        ],
+        "pixel_box": [
+          18,
+          2121,
+          1188,
+          2253
+        ],
+        "crop": "b4-strip-closed-app-only-app.png",
+        "sha256": "943d5428e220f0dc871cee0dab93832322211f7ced148d34fbb6942f91fcc763"
+      }
+    },
+    {
+      "id": "b5-full",
+      "state": "failed-menu-open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          0,
+          0,
+          390,
+          844
+        ],
+        "pixel_box": [
+          0,
+          0,
+          1170,
+          2532
+        ],
+        "crop": "b5-full-design.png",
+        "sha256": "b4a1e7468657418878bf4d9f3bfa9d571f0e125bb854c82509d24769308a818d"
+      },
+      "app": {
+        "source": "f_menu",
+        "rect": [
+          0,
+          0,
+          402,
+          874
+        ],
+        "pixel_box": [
+          0,
+          0,
+          1206,
+          2622
+        ],
+        "crop": "b5-full-app.png",
+        "sha256": "a48ed211b308405d3d14d38abb555dbff74da67572b510fe150d1a0e5a994cf8"
+      }
+    },
+    {
+      "id": "b5-header",
+      "state": "failed-menu-open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          0,
+          50,
+          390,
+          60
+        ],
+        "pixel_box": [
+          0,
+          150,
+          1170,
+          330
+        ],
+        "crop": "b5-header-design.png",
+        "sha256": "ad3cf7ea46718b6c0677bcfb8eb83fa4788df23d09dc112c1100597c859668e2"
+      },
+      "app": {
+        "source": "f_menu",
+        "rect": [
+          0,
+          52,
+          402,
+          60
+        ],
+        "pixel_box": [
+          0,
+          156,
+          1206,
+          336
+        ],
+        "crop": "b5-header-app.png",
+        "sha256": "107b1bbd0636cca360cbd4f568c02bf1fb8f36b467a5cfc805a4080dfe086002"
+      }
+    },
+    {
+      "id": "b5-card",
+      "state": "failed-menu-open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          140,
+          530,
+          246,
+          152
+        ],
+        "pixel_box": [
+          420,
+          1590,
+          1158,
+          2046
+        ],
+        "crop": "b5-card-design.png",
+        "sha256": "dca4a45d570f9acb380234da928d6dbb8737fa6226677e44f4d4af6cc07a06c1"
+      },
+      "app": {
+        "source": "f_menu",
+        "rect": [
+          152,
+          561.33,
+          246,
+          152
+        ],
+        "pixel_box": [
+          456,
+          1683,
+          1194,
+          2140
+        ],
+        "crop": "b5-card-app.png",
+        "sha256": "ebde75a08fab251ac0a76bf4c39279d38e0d0118e687d6a0ed7a37346fdc0bd0"
+      }
+    },
+    {
+      "id": "b5-card-item1-retry",
+      "state": "failed-menu-open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          148,
+          546.33,
+          230,
+          42.67
+        ],
+        "pixel_box": [
+          444,
+          1638,
+          1134,
+          1767
+        ],
+        "crop": "b5-card-item1-retry-design.png",
+        "sha256": "5d10781f00d76ffa33e1266f81f4cb99d6774bcc2401c93e823412fb66f44630"
+      },
+      "app": {
+        "source": "f_menu",
+        "rect": [
+          160,
+          577.33,
+          230,
+          42.67
+        ],
+        "pixel_box": [
+          480,
+          1731,
+          1170,
+          1860
+        ],
+        "crop": "b5-card-item1-retry-app.png",
+        "sha256": "91faa841d8f476d6290025cf3214771ff59b8e1ce5408c5634b9b1865d353a37"
+      }
+    },
+    {
+      "id": "b5-card-item2-edit",
+      "state": "failed-menu-open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          148,
+          588.67,
+          230,
+          43
+        ],
+        "pixel_box": [
+          444,
+          1766,
+          1134,
+          1896
+        ],
+        "crop": "b5-card-item2-edit-design.png",
+        "sha256": "9057c66117e83da09bcf92a27bf8f5a8fcf40fff367eb8fc423b1f4db84fe67e"
+      },
+      "app": {
+        "source": "f_menu",
+        "rect": [
+          160,
+          619.33,
+          230,
+          43
+        ],
+        "pixel_box": [
+          480,
+          1857,
+          1170,
+          1987
+        ],
+        "crop": "b5-card-item2-edit-app.png",
+        "sha256": "708cfa60bcd4a9923a9e4dd46c41bf62eccab51ace9f4ac20f180ee87fb3010f"
+      }
+    },
+    {
+      "id": "b5-card-item3-delete",
+      "state": "failed-menu-open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          148,
+          631.33,
+          230,
+          42.67
+        ],
+        "pixel_box": [
+          444,
+          1893,
+          1134,
+          2022
+        ],
+        "crop": "b5-card-item3-delete-design.png",
+        "sha256": "60ca750f0eab67a8e56f460f43768b3fd6cb14aff145688cc97cbd73326abf9b"
+      },
+      "app": {
+        "source": "f_menu",
+        "rect": [
+          160,
+          662.33,
+          230,
+          42.67
+        ],
+        "pixel_box": [
+          480,
+          1986,
+          1170,
+          2115
+        ],
+        "crop": "b5-card-item3-delete-app.png",
+        "sha256": "3cce9121a71bca01a27b764fd31ef9d7a7a621a260806e8a6bc69465e05e1e20"
+      }
+    },
+    {
+      "id": "b5-icon-retry",
+      "state": "failed-menu-open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          341.67,
+          555.67,
+          24,
+          24
+        ],
+        "pixel_box": [
+          1025,
+          1667,
+          1098,
+          1740
+        ],
+        "crop": "b5-icon-retry-design.png",
+        "sha256": "60a0dc100776417410807207a7e5d14eaec25eb1f911571003b84aa97ff294df"
+      },
+      "app": {
+        "source": "f_menu",
+        "rect": [
+          353.67,
+          586.33,
+          24,
+          24
+        ],
+        "pixel_box": [
+          1061,
+          1758,
+          1134,
+          1831
+        ],
+        "crop": "b5-icon-retry-app.png",
+        "sha256": "2b938d6841806ea315199f5fa526d7bbbc5766660a97823bd84b14ce69bc95dc"
+      }
+    },
+    {
+      "id": "b5-icon-pencil",
+      "state": "failed-menu-open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          341,
+          598.33,
+          24,
+          24
+        ],
+        "pixel_box": [
+          1023,
+          1794,
+          1095,
+          1867
+        ],
+        "crop": "b5-icon-pencil-design.png",
+        "sha256": "dbbec4a9521bee6571ebeb79397c5c115c46a446748d4bdfe6049d289cb08a34"
+      },
+      "app": {
+        "source": "f_menu",
+        "rect": [
+          353,
+          629.33,
+          24,
+          24
+        ],
+        "pixel_box": [
+          1059,
+          1887,
+          1131,
+          1960
+        ],
+        "crop": "b5-icon-pencil-app.png",
+        "sha256": "08dacb481243ebf5ac8413153fab8ef2d32d96b7f49b5eb01e0dc9bece0b1493"
+      }
+    },
+    {
+      "id": "b5-icon-trash",
+      "state": "failed-menu-open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          341.67,
+          640.67,
+          24,
+          24
+        ],
+        "pixel_box": [
+          1025,
+          1922,
+          1098,
+          1995
+        ],
+        "crop": "b5-icon-trash-design.png",
+        "sha256": "e3dc479160531cb53dea238ae4de6aaf270f1aed024ed70b561fa1a1c79f44db"
+      },
+      "app": {
+        "source": "f_menu",
+        "rect": [
+          353.67,
+          672,
+          24,
+          24
+        ],
+        "pixel_box": [
+          1061,
+          2016,
+          1134,
+          2088
+        ],
+        "crop": "b5-icon-trash-app.png",
+        "sha256": "6bae51c5c5836be9abac2585f12463e2ddd1a7528d8e431e9728f532a9b3f2da"
+      }
+    },
+    {
+      "id": "b5-strip",
+      "state": "failed-menu-open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          6,
+          676,
+          378,
+          44
+        ],
+        "pixel_box": [
+          18,
+          2028,
+          1152,
+          2160
+        ],
+        "crop": "b5-strip-design.png",
+        "sha256": "9545ec0d06abdace733183c77b06494bbed8c74bac575f5a90040bbc762db6ae"
+      },
+      "app": {
+        "source": "f_menu",
+        "rect": [
+          6,
+          707,
+          390,
+          44
+        ],
+        "pixel_box": [
+          18,
+          2121,
+          1188,
+          2253
+        ],
+        "crop": "b5-strip-app.png",
+        "sha256": "9b46dfdb80c4b7fe53cf98ccbf7cad6e961991e9aedc7b3b2db5172764c8153d"
+      }
+    },
+    {
+      "id": "b5-strip-alert",
+      "state": "failed-menu-open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          21.67,
+          688,
+          20,
+          20
+        ],
+        "pixel_box": [
+          65,
+          2064,
+          126,
+          2124
+        ],
+        "crop": "b5-strip-alert-design.png",
+        "sha256": "23f857676fe8e97dc84a002c8eec8c936e43451a678079a8e7cb0c8c0736f89c"
+      },
+      "app": {
+        "source": "f_menu",
+        "rect": [
+          21.67,
+          719,
+          20,
+          20
+        ],
+        "pixel_box": [
+          65,
+          2157,
+          126,
+          2217
+        ],
+        "crop": "b5-strip-alert-app.png",
+        "sha256": "510e9968cb3f60b8d71f3d7aeb4d0f71d38de1ca04d8038ea5499dde3ea85127"
+      }
+    },
+    {
+      "id": "b5-strip-tag-dots",
+      "state": "failed-menu-open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          290,
+          688,
+          82,
+          20
+        ],
+        "pixel_box": [
+          870,
+          2064,
+          1116,
+          2124
+        ],
+        "crop": "b5-strip-tag-dots-design.png",
+        "sha256": "67e028b78a0887010dd88135fb66fa93575c96bc1b0283b457d87f9bae974dab"
+      },
+      "app": {
+        "source": "f_menu",
+        "rect": [
+          302,
+          719,
+          82,
+          20
+        ],
+        "pixel_box": [
+          906,
+          2157,
+          1152,
+          2217
+        ],
+        "crop": "b5-strip-tag-dots-app.png",
+        "sha256": "45f501fcd646480c0f53278ac9369c2df35a34cf8cbe96c20f6e321d45d411af"
+      }
+    },
+    {
+      "id": "b5-composer",
+      "state": "failed-menu-open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          6,
+          714,
+          378,
+          108
+        ],
+        "pixel_box": [
+          18,
+          2142,
+          1152,
+          2466
+        ],
+        "crop": "b5-composer-design.png",
+        "sha256": "e4e603d841f71cf320e860a2baf6286aac673863ef4bc398327f829f3f72fd3f"
+      },
+      "app": {
+        "source": "f_menu",
+        "rect": [
+          6,
+          745,
+          390,
+          107
+        ],
+        "pixel_box": [
+          18,
+          2235,
+          1188,
+          2556
+        ],
+        "crop": "b5-composer-app.png",
+        "sha256": "7a8efedad0795e6140780d6ad0f0051cea501e67c3485ce2f2be598064c27213"
+      }
+    },
+    {
+      "id": "b5-bubble-card-overlap",
+      "state": "failed-menu-open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          60,
+          530,
+          330,
+          60
+        ],
+        "pixel_box": [
+          180,
+          1590,
+          1170,
+          1770
+        ],
+        "crop": "b5-bubble-card-overlap-design.png",
+        "sha256": "18165306b430aad4e358cb31d54f650b9c77f77aefb2b350ac64c2252fa7aeb9"
+      },
+      "app": {
+        "source": "f_menu",
+        "rect": [
+          72,
+          563,
+          330,
+          60
+        ],
+        "pixel_box": [
+          216,
+          1689,
+          1206,
+          1869
+        ],
+        "crop": "b5-bubble-card-overlap-app.png",
+        "sha256": "8b8ef2ab42a9a05127843325380710de674bdc2269bf11fdfd5fb7676a3375d6"
+      }
+    },
+    {
+      "id": "b5-strip-closed-app-only",
+      "state": "failed-menu-closed",
+      "design": {
+        "source": "b5",
+        "rect": [
+          6,
+          676,
+          378,
+          44
+        ],
+        "pixel_box": [
+          18,
+          2028,
+          1152,
+          2160
+        ],
+        "crop": "b5-strip-closed-app-only-design.png",
+        "sha256": "9545ec0d06abdace733183c77b06494bbed8c74bac575f5a90040bbc762db6ae"
+      },
+      "app": {
+        "source": "f_closed",
+        "rect": [
+          6,
+          707,
+          390,
+          44
+        ],
+        "pixel_box": [
+          18,
+          2121,
+          1188,
+          2253
+        ],
+        "crop": "b5-strip-closed-app-only-app.png",
+        "sha256": "931c18a6ad6b352e77602770eb43b8fb5e233848bf142f5f7862fe03cfc932ba"
+      }
+    }
+  ],
+  "review_sheets": [
+    "review-01.png",
+    "review-02.png",
+    "review-03.png",
+    "review-04.png"
+  ],
+  "review_sheet_scale": "1 pixel per logical unit; browsing only; measure raw crops",
+  "elapsed_seconds": 0.5659
+}

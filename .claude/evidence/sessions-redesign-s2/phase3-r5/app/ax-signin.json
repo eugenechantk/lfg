@@ -1,0 +1,161 @@
+{
+  "accessibility" : {
+    "element_count" : 8,
+    "frame_space" : "points",
+    "tree" : [
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 437
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 874,
+          "width" : 402,
+          "x" : 0,
+          "y" : 0
+        },
+        "label" : "lfg",
+        "role" : "Application",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 30,
+          "y" : 95
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 40,
+          "width" : 40,
+          "x" : 10,
+          "y" : 75
+        },
+        "id" : "phone_sign_in_close",
+        "label" : "Close",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 209,
+          "y" : 88
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 17,
+          "width" : 89,
+          "x" : 164,
+          "y" : 79
+        },
+        "id" : "phone_sign_in_current_host",
+        "label" : "example.com",
+        "role" : "StaticText",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 103
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 13,
+          "width" : 206,
+          "x" : 98,
+          "y" : 96
+        },
+        "label" : "For Search Console audit · goes to Mac",
+        "role" : "StaticText",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 372,
+          "y" : 95
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 40,
+          "width" : 40,
+          "x" : 352,
+          "y" : 75
+        },
+        "id" : "phone_sign_in_reload",
+        "label" : "Reload",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 32,
+          "y" : 818
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 44,
+          "width" : 44,
+          "x" : 10,
+          "y" : 796
+        },
+        "id" : "phone_sign_in_back",
+        "label" : "Back",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 84,
+          "y" : 818
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 44,
+          "width" : 44,
+          "x" : 62,
+          "y" : 796
+        },
+        "id" : "phone_sign_in_forward",
+        "label" : "Forward",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 253,
+          "y" : 818
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 50,
+          "width" : 278,
+          "x" : 114,
+          "y" : 793
+        },
+        "id" : "phone_sign_in_done",
+        "label" : "I’m signed in",
+        "role" : "Button",
+        "visible" : true
+      }
+    ]
+  },
+  "schemaVersion" : "1.0.0",
+  "screenshot" : {
+    "captured" : false,
+    "height" : 874,
+    "pixel_height" : 874,
+    "pixel_width" : 402,
+    "point_height" : 874,
+    "point_width" : 402,
+    "unit" : "points",
+    "width" : 402
+  },
+  "simulator" : {
+    "name" : "Simulator",
+    "runtime" : "iOS",
+    "udid" : "C47EB72F-A352-44C9-8A80-9F13D33780AD"
+  },
+  "success" : true,
+  "timestamp" : "2026-10-16T03:26:12Z",
+  "type" : "ui_snapshot"
+}

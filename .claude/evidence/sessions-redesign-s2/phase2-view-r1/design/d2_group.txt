@@ -1,0 +1,69 @@
+div |  | 0 | 0 | 390 | 844 |  |  | rgb(0, 0, 0) |  |  |  | 
+div | I’ll trace how fork works on both clie | 16 | 181 | 358 | 24 | 17px/24px/400/lsnormal | rgb(242, 242, 247) op1 |  |  |  |  | none
+svg |  | 16 | 219.5 | 17 | 17 |  |  |  |  |  |  | 
+span | Read 4 files, ran 2 commands | 41 | 219 | 238.8 | 18 | 15px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none
+span | 6 steps · 9s | 287.8 | 221 | 66.2 | 14 | 12px/normal/400/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none
+svg |  | 362 | 222 | 12 | 12 |  |  |  |  |  |  | 
+div |  | 24 | 245 | 350 | 413 |  |  |  |  | bl1px rgb(56, 56, 58) |  | 
+svg |  | 39 | 251 | 14 | 14 |  |  |  |  |  |  | 
+span | Ran | 61 | 250 | 25 | 16 | 14px/normal/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  |  | none
+span | rg -n "forkSession" ios src desktop | 94 | 250.5 | 263.4 | 15 | 12.5px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  | mono | none
+span | 0.4s | 331.7 | 251 | 24.3 | 14 | 12px/normal/400/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none
+svg |  | 364 | 253 | 10 | 10 |  |  |  |  |  |  | 
+svg |  | 39 | 279 | 14 | 14 |  |  |  |  |  |  | 
+span | Read | 61 | 278 | 33.3 | 16 | 14px/normal/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  |  | none
+span | ios/LFG/SessionStore.swift | 102.3 | 278.5 | 195.7 | 15 | 12.5px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  | mono | none
+span | 0.1s | 333.8 | 279 | 22.2 | 14 | 12px/normal/400/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none
+svg |  | 364 | 281 | 10 | 10 |  |  |  |  |  |  | 
+div |  | 39 | 303 | 335 | 237 |  |  | rgb(28, 28, 30) | 12px | bt1px rgb(56, 56, 58) |  | 
+span | File | 52 | 314 | 24.5 | 13 | 11px/normal/600/ls0.4px | rgb(142, 142, 147) op1 |  |  |  |  | uppercase
+span | ios/LFG/SessionStore.swift · lines 160 | 52 | 334 | 308.6 | 32 | 12.5px/17px/400/lsnormal | rgb(242, 242, 247) op1 |  |  |  | mono | none
+span | Result · 61 lines | 52 | 377 | 106.4 | 13 | 11px/normal/600/ls0.4px | rgb(142, 142, 147) op1 |  |  |  |  | uppercase
+div |  | 52 | 396 | 309 | 112 |  |  | rgb(0, 0, 0) | 8px |  |  | 
+span | 1611  func forkSession(_ id: String) a | 62 | 405 | 304.6 | 14 | 11.5px/16px/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  | mono | none
+span | 1612      forking.insert(id) | 62 | 421 | 193.9 | 14 | 11.5px/16px/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  | mono | none
+span | 1613      defer { forking.remove(id) } | 62 | 437 | 263.1 | 14 | 11.5px/16px/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  | mono | none
+span | 1614      let fork = try? await client | 62 | 453 | 325.4 | 14 | 11.5px/16px/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  | mono | none
+span | 1615      guard let newId = fork?.sess | 62 | 469 | 346.2 | 14 | 11.5px/16px/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  | mono | none
+span | 1616          return | 62 | 485 | 138.5 | 14 | 11.5px/16px/400/lsnormal | rgb(99, 99, 102) op1 |  |  |  | mono | none
+span | Show all 61 lines | 52 | 514 | 100.8 | 15 | 13px/normal/400/lsnormal | rgb(64, 156, 255) op1 |  |  |  |  | none
+svg |  | 39 | 554 | 14 | 14 |  |  |  |  |  |  | 
+span | Read | 61 | 553 | 33.3 | 16 | 14px/normal/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  |  | none
+span | desktop/LFGSessions.swift | 102.3 | 553.5 | 188.2 | 15 | 12.5px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  | mono | none
+span | 0.1s | 333.8 | 554 | 22.2 | 14 | 12px/normal/400/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none
+svg |  | 364 | 556 | 10 | 10 |  |  |  |  |  |  | 
+svg |  | 39 | 582 | 14 | 14 |  |  |  |  |  |  | 
+span | Read | 61 | 581 | 33.3 | 16 | 14px/normal/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  |  | none
+span | src/sessions.ts | 102.3 | 581.5 | 112.9 | 15 | 12.5px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  | mono | none
+span | 0.2s | 332 | 582 | 24 | 14 | 12px/normal/400/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none
+svg |  | 364 | 584 | 10 | 10 |  |  |  |  |  |  | 
+svg |  | 39 | 610 | 14 | 14 |  |  |  |  |  |  | 
+span | Read | 61 | 609 | 33.3 | 16 | 14px/normal/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  |  | none
+span | src/commands/serve.ts | 102.3 | 609.5 | 158 | 15 | 12.5px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  | mono | none
+span | 0.1s | 333.8 | 610 | 22.2 | 14 | 12px/normal/400/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none
+svg |  | 364 | 612 | 10 | 10 |  |  |  |  |  |  | 
+svg |  | 39 | 638 | 14 | 14 |  |  |  |  |  |  | 
+span | Ran | 61 | 637 | 25 | 16 | 14px/normal/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  |  | none
+span | bun test src/sessions.test.ts | 94 | 637.5 | 218.3 | 15 | 12.5px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  | mono | none
+span | 1.8s | 333.6 | 638 | 22.4 | 14 | 12px/normal/400/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none
+svg |  | 364 | 640 | 10 | 10 |  |  |  |  |  |  | 
+div |  | 0 | 0 | 390 | 124 |  |  | rgba(0, 0, 0, 0) linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0)) |  |  |  | 
+a |  | 16 | 59 | 46 | 46 |  |  | rgba(44, 44, 46, 0.92) | 22px | bt1px rgba(255, 255, 255, 0.1) |  | 
+svg |  | 29 | 72 | 20 | 20 |  |  |  |  |  |  | 
+span | Fork session feature | 110.1 | 63.5 | 169.8 | 20 | 17px/normal/600/lsnormal | rgb(255, 255, 255) op1 |  |  |  |  | none
+span |  | 109.5 | 90 | 7 | 7 |  |  | rgb(48, 209, 88) | 50% |  |  | 
+span | Working · 3m 12s | 122.5 | 86.5 | 101.1 | 14 | 12px/normal/600/lsnormal | rgb(48, 209, 88) op1 |  |  |  |  | none
+span | · Pro · lfg | 229.7 | 86.5 | 50.8 | 14 | 12px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none
+a |  | 328 | 59 | 46 | 46 |  |  | rgba(44, 44, 46, 0.92) | 22px | bt1px rgba(255, 255, 255, 0.1) |  | 
+svg |  | 341 | 72 | 20 | 20 |  |  |  |  |  |  | 
+div |  | 0 | 648 | 390 | 196 |  |  | rgba(0, 0, 0, 0) linear-gradient(rgba(0, 0, 0, 0), rgb(0, 0, 0) 22%) |  |  |  | 
+a | Subagents | 16 | 672 | 166.3 | 38 | 14px/normal/500/lsnormal | rgb(242, 242, 247) op1 | rgb(28, 28, 30) | 18px | bt1px rgb(56, 56, 58) |  | none
+span | 1 running | 107.2 | 683 | 62.1 | 16 | 14px/normal/500/lsnormal | rgb(48, 209, 88) op1 |  |  |  |  | none
+a | Files | 190.3 | 672 | 72.5 | 38 | 14px/normal/500/lsnormal | rgb(242, 242, 247) op1 | rgb(28, 28, 30) | 18px | bt1px rgb(56, 56, 58) |  | none
+span | 4 | 240.6 | 683 | 9.2 | 16 | 14px/normal/500/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none
+a | Terminal | 270.8 | 672 | 83.8 | 38 | 14px/normal/500/lsnormal | rgb(242, 242, 247) op1 | rgb(28, 28, 30) | 18px | bt1px rgb(56, 56, 58) |  | none
+div |  | 12 | 720 | 366 | 96 |  |  | rgb(28, 28, 30) | 24px | bt1px rgb(56, 56, 58) |  | 
+span | Add to this turn… | 29 | 734 | 338 | 20 | 17px/normal/400/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none
+span | Opus 5.5 · High | 29 | 774 | 116.6 | 28 | 13px/normal/500/lsnormal | rgb(209, 209, 214) op1 | rgb(44, 44, 46) | 14px |  |  | none
+button |  | 333 | 771 | 34 | 34 |  |  | rgb(242, 242, 247) | 17px |  |  | 
+span |  | 344.5 | 782.5 | 11 | 11 |  |  | rgb(0, 0, 0) | 3px |  |  | 

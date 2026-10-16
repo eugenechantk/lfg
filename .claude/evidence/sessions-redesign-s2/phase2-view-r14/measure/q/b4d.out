@@ -1,0 +1,13 @@
+b4 spinner-ring: bbox x 29.67..36.33  y 692.33..699.00  (w 6.67 h 6.67) bg (49, 49, 53)
+qm spinner-ring: bbox x 24.67..36.00  y 723.00..734.00  (w 11.33 h 11.00) bg (46, 46, 49)
+qc spinner-ring: bbox x 24.67..36.00  y 722.33..734.00  (w 11.33 h 11.67) bg (24, 24, 26)
+b4 spinner-mode: mode (49, 49, 53) #313135
+qm spinner-mode: mode (46, 46, 49) #2E2E31
+b4 spinner-track-ink: ink (72, 72, 74) #48484A (n=40, bg (49, 49, 53))
+qm spinner-ink: ink (160, 160, 164) #A0A0A4 (n=100, bg (46, 46, 49))
+b4 spinner-arc-ink: ink (161, 161, 166) #A1A1A6 (n=97, bg (49, 49, 53))
+qm prose-ink: ink (240, 240, 243) #F0F0F3 (n=7232, bg (0, 0, 0))
+qc prose-ink2: ink (240, 240, 243) #F0F0F3 (n=7248, bg (0, 0, 0))
+qm editlabel-ink: ink (160, 160, 162) #A0A0A2 (n=1190, bg (0, 0, 0))
+qm bubble-fill: median (11, 109, 222) #0B6DDE
+qc bubble-fill: median (11, 109, 222) #0B6DDE

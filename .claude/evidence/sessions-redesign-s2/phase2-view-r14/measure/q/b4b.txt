@@ -1,0 +1,27 @@
+# Board 4 refinements
+b4 dot-core | design/b4-3x.png | bbox | 84 84 16 18 | 100 0,0,0
+qm dot-core | app/q-menu.png | bbox | 90 86 16 18 | 100 0,0,0
+b4 spinner-ring | design/b4-3x.png | bbox | 20 686 22 24 | 15 33,33,35
+qm spinner-ring | app/q-menu.png | bbox | 20 716 22 24 | 15 32,32,34
+b4 more2 | design/b4-3x.png | bbox | 348 688 26 20 | 30 33,33,35
+qm more2 | app/q-menu.png | bbox | 360 718 26 20 | 30 32,32,34
+b4 more2-ink | design/b4-3x.png | ink | 348 688 26 20 | 30 33,33,35
+qm more2-ink | app/q-menu.png | ink | 360 718 26 20 | 30 32,32,34
+qc ran-chev2 | app/q-closed.png | bbox | 370 624 20 30 | 30 0,0,0
+qc ran-chev2-rows | app/q-closed.png | rows | 362 624 28 30 | 30 0,0,0
+qc ran-chev2-cols | app/q-closed.png | cols | 340 636 50 8 | 30 0,0,0
+# menu edges
+b4 line1-gaps | design/b4-3x.png | cols | 128 523 250 9 | 40 0,0,0
+qm menu-left-right | app/q-menu.png | cols | 100 620 302 2 | 20 0,0,0
+b4 menu-left-right | design/b4-3x.png | cols | 100 634 290 1.34 | 20 0,0,0
+qm menu-top | app/q-menu.png | rows | 250 545 3 40 | 20 0,0,0
+qm menu-top2 | app/q-menu.png | rows | 300 545 3 40 | 20 0,0,0
+# see-through: strongest text pixels under the menu, relative to menu fill
+b4 under-remove | design/b4-3x.png | ink | 215 645 50 16 | 3 43,43,44
+qm under-edit | app/q-menu.png | ink | 192 632 100 16 | 3 41,41,44
+b4 under-remove-bbox | design/b4-3x.png | bbox | 215 645 50 16 | 6 43,43,44
+qm under-edit-bbox | app/q-menu.png | bbox | 192 632 100 16 | 6 41,41,44
+b4 under-send | design/b4-3x.png | ink | 240 520 90 22 | 3 43,43,44
+b4 under-send-bbox | design/b4-3x.png | bbox | 240 536 90 8 | 6 43,43,44
+qm under-top | app/q-menu.png | ink | 145 565 55 10 | 3 41,41,44
+qm under-top-bbox | app/q-menu.png | bbox | 145 565 55 10 | 6 41,41,44

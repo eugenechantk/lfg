@@ -1,0 +1,44 @@
+/s2-tools-single.dc.html
+T "Small forks wait for a transcript " box 16.00,240.67 358.00x72.00 fs17px fw400 lh24px lsnormal -apple-system crgb(242, 242, 247) pad0px wbnormal
+S 16.00,327.17 17.00x17.00 crgb(161, 161, 166) sw1.9
+T "Ran" box 41.00,326.67 26.83x18.00 fs15px fw400 lhnormal lsnormal -apple-system crgb(161, 161, 166) pad0px wbnormal
+T "bun test src/sessions.test.ts" box 75.83,328.17 247.79x15.00 fs13px fw400 lhnormal lsnormal ui-monospace crgb(161, 161, 166) pad0px wbnormal
+T "1.8s" box 331.63,328.50 22.38x14.33 fs12px fw400 lhnormal lsnormal -apple-system crgb(142, 142, 147) pad0px wbnormal
+S 362.00,329.67 12.00x12.00 crgb(161, 161, 166) sw2.8
+B DIV 16.00,352.67 358.00x271.33 bgrgb(28, 28, 30) bd0.333333px rgb(56, 56, 58) r12px pad10px 12px
+T "Command" box 28.33,363.00 333.33x13.00 fs11px fw600 lhnormal ls0.4px -apple-system crgb(142, 142, 147) pad0px wbnormal
+T "bun test src/sessions.test.ts" box 28.33,382.00 333.33x17.00 fs12.5px fw400 lh17px lsnormal ui-monospace crgb(242, 242, 247) pad0px wbnormal
+T "In ~/dev/personal/lfg" box 28.33,405.00 333.33x14.33 fs12px fw400 lhnormal lsnormal -apple-system crgb(142, 142, 147) pad0px wbnormal
+T "Output · last 8 of 46 lines" box 28.33,429.33 333.33x13.00 fs11px fw600 lhnormal ls0.4px -apple-system crgb(142, 142, 147) pad0px wbnormal
+B DIV 28.33,448.33 333.33x144.00 bgrgb(0, 0, 0) r8px pad8px 10px
+T "✓ forkSession opens before the tra" box 38.33,456.33 313.33x16.00 fs11.5px fw400 lh16px lsnormal ui-monospace crgb(209, 209, 214) pad0px wbnormal
+T "✓ forkSession keeps the parent's m" box 38.33,472.33 313.33x16.00 fs11.5px fw400 lh16px lsnormal ui-monospace crgb(209, 209, 214) pad0px wbnormal
+T "✓ listSessions maps a fork to its " box 38.33,488.33 313.33x16.00 fs11.5px fw400 lh16px lsnormal ui-monospace crgb(209, 209, 214) pad0px wbnormal
+T "42 pass" box 38.33,520.33 313.33x16.00 fs11.5px fw400 lh16px lsnormal ui-monospace crgb(48, 209, 88) pad0px wbnormal
+T "0 fail" box 38.33,536.33 313.33x16.00 fs11.5px fw400 lh16px lsnormal ui-monospace crgb(209, 209, 214) pad0px wbnormal
+T "118 expect() calls" box 38.33,552.33 313.33x16.00 fs11.5px fw400 lh16px lsnormal ui-monospace crgb(209, 209, 214) pad0px wbnormal
+T "Ran 42 tests across 1 file. [1.80s" box 38.33,568.33 313.33x16.00 fs11.5px fw400 lh16px lsnormal ui-monospace crgb(209, 209, 214) pad0px wbnormal
+T "Show all 46 lines" box 28.33,598.33 333.33x15.33 fs13px fw400 lhnormal lsnormal -apple-system crgb(64, 156, 255) pad0px wbnormal
+S 16.00,638.50 17.00x17.00 crgb(161, 161, 166) sw1.9
+T "Edited" box 41.00,638.00 44.98x18.00 fs15px fw400 lhnormal lsnormal -apple-system crgb(161, 161, 166) pad0px wbnormal
+T "ios/LFG/SessionStore.swift" box 93.98,639.50 229.87x15.00 fs13px fw400 lhnormal lsnormal ui-monospace crgb(161, 161, 166) pad0px wbnormal
+T "0.1s" box 331.85,639.83 22.15x14.33 fs12px fw400 lhnormal lsnormal -apple-system crgb(142, 142, 147) pad0px wbnormal
+S 362.00,641.00 12.00x12.00 crgb(161, 161, 166) sw2.8
+B A 16.00,59.67 44.67x44.67 bgrgba(44, 44, 46, 0.92) bd0.333333px rgba(255, 255, 255, 0.1) r22px pad0px
+S 28.33,72.00 20.00x20.00 crgb(255, 255, 255) sw2.4
+T "Fork session feature" box 110.11,63.17 169.77x20.33 fs17px fw600 lhnormal lsnormal -apple-system crgb(255, 255, 255) pad0px wbnormal
+B SPAN 108.28,90.17 7.00x7.00 bgrgb(48, 209, 88) r50% pad0px
+T "Working · 3m 40s" box 121.28,86.50 103.66x14.33 fs12px fw600 lhnormal lsnormal -apple-system crgb(48, 209, 88) pad0px wbnormal
+T "· Pro · lfg" box 230.93,86.50 50.79x14.33 fs12px fw400 lhnormal lsnormal -apple-system crgb(161, 161, 166) pad0px wbnormal
+B A 329.33,59.67 44.67x44.67 bgrgba(44, 44, 46, 0.92) bd0.333333px rgba(255, 255, 255, 0.1) r22px pad0px
+S 341.67,72.00 20.00x20.00 crgb(255, 255, 255) sw1.9
+T "Subagents" box 16.00,673.33 164.97x36.67 fs14px fw500 lhnormal lsnormal -apple-system crgb(242, 242, 247) bgrgb(28, 28, 30) bd0.333333px rgb(56, 56, 58) r18px pad0px 12px wbnormal
+T "1 running" box 106.55,683.33 62.09x16.67 fs14px fw500 lhnormal lsnormal -apple-system crgb(48, 209, 88) pad0px wbnormal
+T "Files" box 188.97,673.33 71.15x36.67 fs14px fw500 lhnormal lsnormal -apple-system crgb(242, 242, 247) bgrgb(28, 28, 30) bd0.333333px rgb(56, 56, 58) r18px pad0px 12px wbnormal
+T "4" box 238.56,683.33 9.23x16.67 fs14px fw500 lhnormal lsnormal -apple-system crgb(142, 142, 147) pad0px wbnormal
+T "Terminal" box 268.13,673.33 82.41x36.67 fs14px fw500 lhnormal lsnormal -apple-system crgb(242, 242, 247) bgrgb(28, 28, 30) bd0.333333px rgb(56, 56, 58) r18px pad0px 12px wbnormal
+B DIV 12.00,720.00 366.00x96.00 bgrgb(28, 28, 30) bd0.333333px rgb(56, 56, 58) r24px pad13px 10px 10px 16px
+T "Add to this turn…" box 28.33,733.33 339.33x20.33 fs17px fw400 lhnormal lsnormal -apple-system crgb(142, 142, 147) pad0px wbnormal
+T "Opus 5.5 · High" box 28.33,774.67 116.64x28.00 fs13px fw500 lhnormal lsnormal -apple-system crgb(209, 209, 214) bgrgb(44, 44, 46) r14px pad0px 10px wbnormal
+B BUTTON 333.67,771.67 34.00x34.00 bgrgb(242, 242, 247) r17px pad0px
+B SPAN 345.17,783.17 11.00x11.00 bgrgb(0, 0, 0) r3px pad0px

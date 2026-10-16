@@ -1,0 +1,7 @@
+b4 menu-top-gap1: rows 533.00..560.00  bg (0, 0, 0)
+b4 menu-top-gap2: rows 533.00..560.00  bg (0, 0, 0)
+b4 menu-top-gap3: rows 533.00..560.00  bg (0, 0, 0)
+b4 menu-top-color: median (43, 43, 44) #2B2B2C
+b4 text-in-menu-rows: rows 525.33..533.00  bg (43, 43, 44)
+b4 menu-fill-top: median (43, 43, 44) #2B2B2C
+qm menu-fill-top: median (42, 42, 45) #2A2A2D

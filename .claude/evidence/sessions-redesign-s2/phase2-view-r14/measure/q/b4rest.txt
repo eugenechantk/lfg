@@ -1,0 +1,38 @@
+# Board 4 interactive rest state (menu closed, rendered by the board's own toggle) vs app q-dismissed / q-closed
+br edit-icon | design/b4rest-partial-3x.png | bbox | 12 600 26 32 | 40 0,0,0
+qd edit-icon | app/q-dismissed.png | bbox | 12 588 26 30 | 40 0,0,0
+br ran-icon | design/b4rest-partial-3x.png | bbox | 12 636 26 32 | 40 0,0,0
+qd ran-icon | app/q-dismissed.png | bbox | 12 624 26 30 | 40 0,0,0
+br edit-label | design/b4rest-partial-3x.png | bbox | 38 600 300 32 | 40 0,0,0
+qd edit-label | app/q-dismissed.png | bbox | 38 588 300 30 | 40 0,0,0
+br ran-label | design/b4rest-partial-3x.png | bbox | 38 636 300 32 | 40 0,0,0
+qd ran-label | app/q-dismissed.png | bbox | 38 624 300 30 | 40 0,0,0
+br edit-chev | design/b4rest-partial-3x.png | bbox | 358 600 20 32 | 30 0,0,0
+qd edit-chev | app/q-dismissed.png | bbox | 370 588 20 30 | 30 0,0,0
+br ran-chev | design/b4rest-partial-3x.png | bbox | 358 636 20 32 | 30 0,0,0
+qd ran-chev | app/q-dismissed.png | bbox | 370 624 20 30 | 30 0,0,0
+br chev-ink | design/b4rest-partial-3x.png | ink | 358 600 20 32 | 30 0,0,0
+qd chev-ink | app/q-dismissed.png | ink | 370 588 20 30 | 30 0,0,0
+br prose-rows | design/b4rest-partial-3x.png | rows | 10 515 370 80 | 60 0,0,0
+qd prose-rows | app/q-dismissed.png | rows | 10 500 382 80 | 60 0,0,0
+br prose-x | design/b4rest-partial-3x.png | bbox | 10 515 370 80 | 60 0,0,0
+qd prose-x | app/q-dismissed.png | bbox | 10 500 382 80 | 60 0,0,0
+br strip-rows | design/b4rest-partial-3x.png | rows | 200 670 10 50 | 10 0,0,0
+qd strip-rows | app/q-dismissed.png | rows | 212 700 10 50 | 10 0,0,0
+br strip-cols | design/b4rest-partial-3x.png | cols | 0 696 378.33 2 | 10 0,0,0
+qd strip-cols | app/q-dismissed.png | cols | 0 726 402 2 | 10 0,0,0
+br strip-fill-top | design/b4rest-partial-3x.png | color | 200 684 30 3
+qd strip-fill-top | app/q-dismissed.png | color | 212 714 30 3
+br strip-mid | design/b4rest-partial-3x.png | color | 341 694 10 8
+qd strip-mid | app/q-dismissed.png | color | 353 724 10 8
+br strip-text | design/b4rest-partial-3x.png | bbox | 42 686 304 24 | 40
+qd strip-text | app/q-dismissed.png | bbox | 42 716 316 24 | 40
+br strip-text-ink | design/b4rest-partial-3x.png | ink | 42 686 304 24 | 40
+qd strip-text-ink | app/q-dismissed.png | ink | 42 716 316 24 | 40
+br spinner | design/b4rest-partial-3x.png | bbox | 20 686 22 24 | 15
+qd spinner | app/q-dismissed.png | bbox | 20 716 22 24 | 15
+br more | design/b4rest-partial-3x.png | bbox | 348 688 26 20 | 30
+qd more | app/q-dismissed.png | bbox | 360 718 26 20 | 30
+br more-ink | design/b4rest-partial-3x.png | ink | 348 688 26 20 | 30
+qd more-ink | app/q-dismissed.png | ink | 360 718 26 20 | 30
+br below-ran | design/b4rest-partial-3x.png | rows | 14 662 360 20 | 12 0,0,0

@@ -1,0 +1,12 @@
+board Model card [44, 44, 47]  chevron bbox (np.float64(350.33), np.float64(291.33), np.float64(355.33), np.float64(299.0))  size (np.float64(5.0), np.float64(7.67))  right inset 34.67  centre y 295.16  peak 74
+board Host card [44, 44, 47]  chevron bbox (np.float64(350.33), np.float64(382.33), np.float64(355.33), np.float64(390.0))  size (np.float64(5.0), np.float64(7.67))  right inset 34.67  centre y 386.16  peak 74
+board pencil vscan at centre: [20.0] [50.0]
+board pencil fill [58, 58, 59]  glyph bbox (np.float64(263.0), np.float64(30.33), np.float64(273.0), np.float64(40.33))  glyph peak [209, 209, 214]
+board pencil hscan y=26 [256.0] [280.67]
+board badge digit p98 247.0  tile label p98 247.0  Fork p98 255.0
+app Model card [42, 42, 45]  chevron bbox (np.float64(362.42), np.float64(291.61), np.float64(366.59), np.float64(298.55))  size (np.float64(4.17), np.float64(6.94))  right inset 35.41  centre y 295.08  peak 77
+app Host card [42, 42, 45]  chevron bbox (np.float64(362.42), np.float64(382.56), np.float64(366.59), np.float64(389.5))  size (np.float64(4.17), np.float64(6.94))  right inset 35.41  centre y 386.03  peak 76
+app pencil vscan at centre: [19.79] [49.99]
+app pencil fill [56, 56, 59]  glyph bbox (np.float64(245.44), np.float64(30.2), np.float64(255.5), np.float64(40.27))  glyph peak [219, 219, 222]
+app pencil hscan y=26 [238.15] [263.14]
+app badge digit p98 247.0  tile label p98 246.0  Fork p98 255.0

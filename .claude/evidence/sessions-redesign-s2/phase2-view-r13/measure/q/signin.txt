@@ -1,0 +1,45 @@
+# Sign-in panel internals. Board panel bg (28,28,30); app panel bg (26,26,28).
+b7 panel-rows | design/b7-3x.png | rows | 20 512 350 320 | 25
+signin panel-rows | app/signin.png | rows | 20 542 362 320 | 25
+b7 panel-box | design/b7-3x.png | bbox | 2 495 386 349 | 12 0,0,0
+signin panel-box | app/signin.png | bbox | 2 525 398 349 | 12 0,0,0
+b7 head-label | design/b7-3x.png | bbox | 36 520 130 24 | 40
+signin head-label | app/signin.png | bbox | 36 550 130 24 | 40
+b7 title | design/b7-3x.png | bbox | 22 550 340 30 | 60
+signin title | app/signin.png | bbox | 22 580 352 30 | 60
+b7 sub | design/b7-3x.png | bbox | 22 582 350 40 | 40
+signin sub | app/signin.png | bbox | 22 612 362 40 | 40
+b7 hostrow | design/b7-3x.png | bbox | 20 630 350 60 | 6
+signin hostrow | app/signin.png | bbox | 20 660 362 60 | 6
+b7 tile | design/b7-3x.png | bbox | 36 642 40 36 | 8 44,44,47
+signin tile | app/signin.png | bbox | 36 672 40 36 | 8 42,42,45
+b7 host | design/b7-3x.png | bbox | 80 645 200 20 | 60 44,44,47
+signin host | app/signin.png | bbox | 80 675 200 20 | 60 42,42,45
+b7 host-sub | design/b7-3x.png | bbox | 80 666 250 16 | 40 44,44,47
+signin host-sub | app/signin.png | bbox | 80 696 262 16 | 40 42,42,45
+b7 button | design/b7-3x.png | bbox | 20 700 350 70 | 40 28,28,30
+signin button | app/signin.png | bbox | 20 730 362 70 | 40 26,26,28
+b7 button-content | design/b7-3x.png | bbox | 60 715 270 40 | 60 9,110,224
+signin button-content | app/signin.png | bbox | 60 745 282 40 | 60 6,108,222
+b7 key-icon | design/b7-3x.png | bbox | 105 722 30 26 | 60 9,110,224
+signin key-icon | app/signin.png | bbox | 115 752 30 26 | 60 6,108,222
+b7 foot | design/b7-3x.png | bbox | 22 768 350 50 | 30 28,28,30
+signin foot | app/signin.png | bbox | 22 798 362 50 | 30 26,26,28
+b7 foot-rows | design/b7-3x.png | rows | 22 768 350 50 | 30 28,28,30
+signin foot-rows | app/signin.png | rows | 22 798 362 50 | 30 26,26,28
+b7 foot-ink | design/b7-3x.png | ink | 22 768 350 50 | 30 28,28,30
+signin foot-ink | app/signin.png | ink | 22 798 362 50 | 30 26,26,28
+b7 sub-ink | design/b7-3x.png | ink | 22 582 350 40 | 40 28,28,30
+signin sub-ink | app/signin.png | ink | 22 612 362 40 | 40 26,26,28
+b7 hostsub-ink | design/b7-3x.png | ink | 80 666 250 16 | 40 44,44,47
+signin hostsub-ink | app/signin.png | ink | 80 696 262 16 | 40 42,42,45
+b7 label-ink | design/b7-3x.png | ink | 36 520 130 24 | 40 28,28,30
+signin label-ink | app/signin.png | ink | 36 550 130 24 | 40 26,26,28
+b7 button-fill | design/b7-3x.png | color | 30 712 30 10
+signin button-fill | app/signin.png | color | 30 742 30 10
+b7 hostrow-fill | design/b7-3x.png | color | 300 640 40 10
+signin hostrow-fill | app/signin.png | color | 300 670 40 10
+b7 tile-fill | design/b7-3x.png | color | 42 646 6 6
+signin tile-fill | app/signin.png | color | 42 676 6 6
+b7 panel-fill | design/b7-3x.png | color | 300 520 40 10
+signin panel-fill | app/signin.png | color | 300 550 40 10

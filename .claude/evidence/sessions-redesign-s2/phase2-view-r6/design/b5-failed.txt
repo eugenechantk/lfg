@@ -1,0 +1,62 @@
+URL=http://127.0.0.1:8793/s2-queued-failed.dc.html TITLE=S2 · Session view, message not sent VP=1136x1288 DPR=1
+div [0,0,1136,844]
+div [0,0,1136,844]
+div [0,0,390,844] | bg=rgb(0, 0, 0) | ov=hidden | pos=relative z=auto
+div [0,112,390,560] | pad=0px 16px 8px 16px | gap=14px | ov=hidden | pos=absolute z=auto
+div [73.3,538,300.7,40] | bg=rgb(10, 110, 224) | rad=20px | pad=9px 14px 9px 14px | T="list the top crawl errors for lfg.app" f=17px/22px w=400 ls=normal c=rgb(255, 255, 255) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=87.3,548,272.7,20
+div [16,592,358,72] | T="There are 3 crawl errors. Two are 404s from old release notes, and one is a redi" f=17px/24px w=400 ls=normal c=rgb(242, 242, 247) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=16,594,352.5,20 16,618,349.7,20 16,642,112.4,20
+div [0,0,390,124] | bgi=linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0)) | pos=absolute z=auto
+div [16,54,358,56] | gap=10px | pos=absolute z=auto
+a [16,59,46,46] | bg=rgba(44, 44, 46, 0.92) | bd=1px/1px/1px/1px rgba(255, 255, 255, 0.1)|rgba(255, 255, 255, 0.1) | rad=22px | sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [29,72,20,20] | ov=hidden | svg stroke=rgb(255, 255, 255) sw=2.4 fill=none vb=0 0 24 24 col=rgb(255, 255, 255)
+path [35.7,76.2,5.8,11.7] | path {"data-dc-tpl":"10","d":"M15 5l-7 7 7 7"} stroke=rgb(255, 255, 255) fill=none
+a [72,63.5,246,37] | gap=3px
+span [106.3,63.5,177.3,20] | T="Search Console audit" f=17px/normal w=600 ls=normal c=rgb(255, 255, 255) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=106.3,63.5,177.3,20
+span [123.5,86.5,142.9,14] | gap=6px
+span [123.5,90,7,7] | bg=rgb(255, 159, 10) | rad=50%
+span [136.5,86.5,86.6,14] | T="Air offline · 2m" f=12px/normal w=600 ls=normal c=rgb(255, 159, 10) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=nowrap | lines=136.5,86.5,86.6,14
+span [229.1,86.5,37.4,14] | T="· inbox" f=12px/normal w=400 ls=normal c=rgb(161, 161, 166) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=nowrap | lines=229.1,86.5,37.4,14
+a [328,59,46,46] | bg=rgba(44, 44, 46, 0.92) | bd=1px/1px/1px/1px rgba(255, 255, 255, 0.1)|rgba(255, 255, 255, 0.1) | rad=22px | sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [341,72,20,20] | ov=hidden | svg stroke=rgb(255, 255, 255) sw=1.9 fill=none vb=0 0 24 24 col=rgb(255, 255, 255)
+path [344.3,77.8,13.3,8.3] | path {"data-dc-tpl":"19","d":"M4 7h9M17 7h3M4 17h3M11 17h9"} stroke=rgb(255, 255, 255) fill=none
+circle [351.7,76,3.7,3.7] | circle {"data-dc-tpl":"20","cx":"15","cy":"7","r":"2.2"} stroke=rgb(255, 255, 255) fill=none
+circle [346.7,84.3,3.7,3.7] | circle {"data-dc-tpl":"21","cx":"9","cy":"17","r":"2.2"} stroke=rgb(255, 255, 255) fill=none
+div [0,648,390,196] | bgi=linear-gradient(rgba(0, 0, 0, 0), rgb(0, 0, 0) 30%) | pos=absolute z=auto
+button [12,682,366,32] | bg=rgba(118, 118, 128, 0.4) | rad=16px | pad=0px 10px 0px 12px | gap=8px | bf=blur(12px) | pos=absolute z=auto
+svg [24,690.5,15,15] | ov=hidden | svg stroke=none sw=1px fill=rgb(0, 0, 0) vb=0 0 24 24 col=rgb(0, 0, 0)
+circle [25.3,691.8,12.5,12.5] | circle {"data-dc-tpl":"26","cx":"12","cy":"12","r":"10","fill":"#FF453A"} stroke=none fill=rgb(255, 69, 58)
+circle [30.6,700.1,1.8,1.8] | circle {"data-dc-tpl":"28","cx":"12","cy":"16.8","r":"1.4","fill":"#FFFFFF"} stroke=none fill=rgb(255, 255, 255)
+span [47,690.5,239.7,15] | ov=hidden | T="fix the redirect loop first, then the 404s" f=13px/normal w=400 ls=normal c=rgb(161, 161, 166) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=nowrap | lines=47,690.5,241.4,15 47,690.5,226.2,15
+span [294.7,691,49.3,14]
+span [294.7,691,49.3,14] | T="Not sent" f=12px/normal w=500 ls=normal c=rgb(255, 105, 97) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=294.7,691,49.3,14
+svg [352,690,16,16] | ov=hidden | svg stroke=rgb(142, 142, 147) sw=1.8 fill=none vb=0 0 24 24 col=rgb(0, 0, 0)
+circle [354,692,12,12] | circle {"data-dc-tpl":"36","cx":"12","cy":"12","r":"9"} stroke=rgb(142, 142, 147) fill=none
+circle [356.7,697.4,1.2,1.2] | circle {"data-dc-tpl":"37","cx":"8","cy":"12","r":"0.9","fill":"#8E8E93"} stroke=rgb(142, 142, 147) fill=rgb(142, 142, 147)
+circle [359.4,697.4,1.2,1.2] | circle {"data-dc-tpl":"38","cx":"12","cy":"12","r":"0.9","fill":"#8E8E93"} stroke=rgb(142, 142, 147) fill=rgb(142, 142, 147)
+circle [362.1,697.4,1.2,1.2] | circle {"data-dc-tpl":"39","cx":"16","cy":"12","r":"0.9","fill":"#8E8E93"} stroke=rgb(142, 142, 147) fill=rgb(142, 142, 147)
+div [12,720,366,96] | bg=rgb(28, 28, 30) | bd=1px/1px/1px/1px rgb(56, 56, 58)|rgb(56, 56, 58) | rad=24px | pad=13px 10px 10px 16px | pos=absolute z=auto
+span [29,734,338,20] | T="Message · sends when Air is back" f=17px/normal w=400 ls=normal c=rgb(142, 142, 147) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=29,734,269.9,20
+span [29,771,338,34] | gap=8px
+svg [29,777,22,22] | ov=hidden | svg stroke=rgb(161, 161, 166) sw=1.7 fill=none vb=0 0 24 24 col=rgb(255, 255, 255)
+path [32.4,779.9,15.4,16.5] | path {"data-dc-tpl":"44","d":"M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"} stroke=rgb(161, 161, 166) fill=none
+span [59,774,135.7,28] | bg=rgb(44, 44, 46) | rad=14px | pad=0px 10px 0px 10px | T="GPT-6 Astra · Med" f=13px/normal w=500 ls=normal c=rgb(209, 209, 214) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=69,780.5,115.7,15
+span [333,771,34,34] | bg=rgb(58, 58, 60) | rad=17px
+svg [342,780,16,16] | ov=hidden | svg stroke=rgb(142, 142, 147) sw=3 fill=none vb=0 0 24 24 col=rgb(255, 255, 255)
+path [345.3,783.3,9.3,9.3] | path {"data-dc-tpl":"49","d":"M12 19V5M5 12l7-7 7 7"} stroke=rgb(142, 142, 147) fill=none
+button [0,0,390,672] | pos=absolute z=auto
+div [148,546,230,128] | bg=rgba(44, 44, 46, 0.97) | rad=16px | sh=rgba(0, 0, 0, 0.6) 0px 12px 40px 0px | ov=hidden | pos=absolute z=auto
+button [148,546,230,43] | bd=0px/0px/1px/0px rgb(255, 255, 255)|rgb(72, 72, 74) | pad=11px 16px 11px 16px | gap=10px
+span [164,557,171,20]
+span [164,557,42.5,20] | T="Retry" f=17px/normal w=400 ls=normal c=rgb(255, 255, 255) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=164,557,42.5,20
+svg [345,558.5,17,17] | ov=hidden | svg stroke=rgb(255, 255, 255) sw=2.2 fill=none vb=0 0 24 24 col=rgb(255, 255, 255)
+path [347.8,561.3,11.3,11.3] | path {"data-dc-tpl":"56","d":"M20 12a8 8 0 1 1-2.3-5.6"} stroke=rgb(255, 255, 255) fill=none
+path [355.6,561.3,3.5,3.5] | path {"data-dc-tpl":"57","d":"M20 4v5h-5"} stroke=rgb(255, 255, 255) fill=none
+button [148,589,230,43] | bd=0px/0px/1px/0px rgb(255, 255, 255)|rgb(72, 72, 74) | pad=11px 16px 11px 16px | gap=10px
+span [164,600,171,20] | T="Edit" f=17px/normal w=400 ls=normal c=rgb(255, 255, 255) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=164,600,31,20
+svg [345,601.5,17,17] | ov=hidden | svg stroke=rgb(255, 255, 255) sw=2 fill=none vb=0 0 24 24 col=rgb(255, 255, 255)
+path [347.8,605,10.6,10.6] | path {"data-dc-tpl":"61","d":"M4 20h4L19 9l-4-4L4 16z"} stroke=rgb(255, 255, 255) fill=none
+button [148,632,230,42] | pad=11px 16px 11px 16px | gap=10px
+span [164,643,171,20]
+span [164,643,51.8,20] | T="Delete" f=17px/normal w=400 ls=normal c=rgb(255, 69, 58) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=164,643,51.8,20
+svg [345,644.5,17,17] | ov=hidden | svg stroke=rgb(255, 69, 58) sw=2 fill=none vb=0 0 24 24 col=rgb(255, 69, 58)
+path [348.5,647.3,9.9,11.3] | path {"data-dc-tpl":"65","d":"M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"} stroke=rgb(255, 69, 58) fill=none

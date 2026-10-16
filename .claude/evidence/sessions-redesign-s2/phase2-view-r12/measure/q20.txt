@@ -1,0 +1,72 @@
+b6p hdr | design/b6p-3x.png | bbox | 18 565 270 22 | 30 28,28,30
+pp hdr | app/permission.png | bbox | 18 596 280 22 | 30 26,26,28
+b6p hdr-ink | design/b6p-3x.png | ink | 39 565 200 22 | 40 28,28,30
+pp hdr-ink | app/permission.png | ink | 39 596 200 22 | 40 26,26,28
+b6p dismiss | design/b6p-3x.png | bbox | 280 560 90 34 | 8 28,28,30
+pp dismiss | app/permission.png | bbox | 292 591 92 34 | 8 26,26,28
+b6p title | design/b6p-3x.png | bbox | 22 605 300 22 | 60 28,28,30
+pp title | app/permission.png | bbox | 22 636 300 22 | 60 26,26,28
+b6p title-ink | design/b6p-3x.png | ink | 22 605 300 22 | 60 28,28,30
+pp title-ink | app/permission.png | ink | 22 636 300 22 | 60 26,26,28
+b6p cmd | design/b6p-3x.png | bbox | 20 630 350 50 | 15 28,28,30
+pp cmd | app/permission.png | bbox | 20 660 362 50 | 15 26,26,28
+b6p cmd-lr | design/b6p-3x.png | cols | 10 640 380 1 | 15 28,28,30
+pp cmd-lr | app/permission.png | cols | 10 670 392 1 | 15 26,26,28
+b6p cmd-text | design/b6p-3x.png | bbox | 30 642 330 26 | 40 0,0,0
+pp cmd-text | app/permission.png | bbox | 30 672 342 26 | 40 0,0,0
+b6p cmd-ink | design/b6p-3x.png | ink | 30 642 330 26 | 40 0,0,0
+pp cmd-ink | app/permission.png | ink | 30 672 342 26 | 40 0,0,0
+b6p cmd-cols | design/b6p-3x.png | cols | 30 645 120 20 | 40 0,0,0
+pp cmd-cols | app/permission.png | cols | 30 675 120 20 | 40 0,0,0
+b6p cwd | design/b6p-3x.png | bbox | 22 682 300 18 | 40 28,28,30
+pp cwd | app/permission.png | bbox | 22 712 300 18 | 40 26,26,28
+b6p cwd-ink | design/b6p-3x.png | ink | 22 682 300 18 | 40 28,28,30
+pp cwd-ink | app/permission.png | ink | 22 712 300 18 | 40 26,26,28
+b6p btns-lr | design/b6p-3x.png | cols | 10 733 380 1 | 15 28,28,30
+pp btns-lr | app/permission.png | cols | 10 763 392 1 | 15 26,26,28
+b6p allow-fill | design/b6p-3x.png | color | 40 733 4 4
+pp allow-fill | app/permission.png | color | 40 763 4 4
+b6p deny-fill | design/b6p-3x.png | color | 215 733 4 4
+pp deny-fill | app/permission.png | color | 220 763 4 4
+b6p allow-lbl | design/b6p-3x.png | bbox | 40 720 140 26 | 60 10,110,224
+pp allow-lbl | app/permission.png | bbox | 40 750 150 26 | 60 6,108,222
+b6p allow-ink | design/b6p-3x.png | ink | 40 720 140 26 | 60 10,110,224
+pp allow-ink | app/permission.png | ink | 40 750 150 26 | 60 6,108,222
+b6p deny-lbl | design/b6p-3x.png | bbox | 210 720 145 26 | 60 44,44,46
+pp deny-lbl | app/permission.png | bbox | 215 750 155 26 | 60 42,42,44
+b6p deny-ink | design/b6p-3x.png | ink | 210 720 145 26 | 60 44,44,46
+pp deny-ink | app/permission.png | ink | 215 750 155 26 | 60 42,42,44
+b6p link | design/b6p-3x.png | bbox | 30 780 330 22 | 40 28,28,30
+pp link | app/permission.png | bbox | 30 810 342 22 | 40 26,26,28
+b6p link-ink | design/b6p-3x.png | ink | 30 780 330 22 | 40 28,28,30
+pp link-ink | app/permission.png | ink | 30 810 342 22 | 40 26,26,28
+b6l hdr | design/b6l-3x.png | bbox | 18 566 270 22 | 30 28,28,30
+pl hdr | app/plan.png | bbox | 18 597 280 22 | 30 26,26,28
+b6l dismiss | design/b6l-3x.png | bbox | 280 561 90 34 | 8 28,28,30
+pl dismiss | app/plan.png | bbox | 292 592 92 34 | 8 26,26,28
+b6l title | design/b6l-3x.png | bbox | 22 606 300 26 | 60 28,28,30
+pl title | app/plan.png | bbox | 22 636 300 26 | 60 26,26,28
+b6l box-lr | design/b6l-3x.png | cols | 10 690 380 1 | 8 28,28,30
+pl box-lr | app/plan.png | cols | 10 720 392 1 | 8 26,26,28
+b6l box-rows | design/b6l-3x.png | rows | 300 630 20 102 | 8 28,28,30
+pl box-rows | app/plan.png | rows | 312 660 20 102 | 8 26,26,28
+b6l box-fill | design/b6l-3x.png | color | 330 645 4 4
+pl box-fill | app/plan.png | color | 342 675 4 4
+b6l items | design/b6l-3x.png | bbox | 30 645 330 75 | 50 44,44,46
+pl items | app/plan.png | bbox | 30 675 342 75 | 50 42,42,44
+b6l items-ink | design/b6l-3x.png | ink | 30 645 330 75 | 50 44,44,46
+pl items-ink | app/plan.png | ink | 30 675 342 75 | 50 42,42,44
+b6l link | design/b6l-3x.png | bbox | 22 733 200 20 | 40 28,28,30
+pl link | app/plan.png | bbox | 22 763 200 20 | 40 26,26,28
+b6l link-ink | design/b6l-3x.png | ink | 22 733 200 20 | 40 28,28,30
+pl link-ink | app/plan.png | ink | 22 763 200 20 | 40 26,26,28
+b6l btns-lr | design/b6l-3x.png | cols | 10 785 380 1 | 15 28,28,30
+pl btns-lr | app/plan.png | cols | 10 816 392 1 | 15 26,26,28
+b6l approve-lbl | design/b6l-3x.png | bbox | 40 772 140 26 | 60 10,110,224
+pl approve-lbl | app/plan.png | bbox | 40 802 150 26 | 60 6,108,222
+b6l approve-ink | design/b6l-3x.png | ink | 40 772 140 26 | 60 10,110,224
+pl approve-ink | app/plan.png | ink | 40 802 150 26 | 60 6,108,222
+b6l keep-lbl | design/b6l-3x.png | bbox | 210 772 145 26 | 60 44,44,46
+pl keep-lbl | app/plan.png | bbox | 215 802 155 26 | 60 42,42,44
+b6l keep-ink | design/b6l-3x.png | ink | 210 772 145 26 | 60 44,44,46
+pl keep-ink | app/plan.png | ink | 215 802 155 26 | 60 42,42,44

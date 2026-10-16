@@ -1,0 +1,1388 @@
+{
+  "manifest_sha256": "a24fdc29a110e168d536d5452102e7d067ad0fcac86e0a07cf88c0430c93cf5a",
+  "sources": {
+    "b1": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/design/b1-view.png",
+      "sha256": "5f67a9e4b524d0305c956f25db0ab2741946028ca6dbaea75b8c3ec4cea0d599",
+      "pixels_per_unit": 1,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        390,
+        844
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b2": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/design/b2-tools-group.png",
+      "sha256": "fa30805e6a64b6bebb52c20a18d13bdd4dc355ded60a78aa459d12f9abe6c24c",
+      "pixels_per_unit": 1,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        390,
+        844
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b3": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/design/b3-tools-single.png",
+      "sha256": "8fee130cfe40ac5d77aa99906afc05a06427bb94f9b606b577aedba8e7a9289f",
+      "pixels_per_unit": 1,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        390,
+        844
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b4": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/design/b4-queued.png",
+      "sha256": "a51d76265580035f728acc8ec4922bbd2c4edcd95dc1f70c7a326a94585790de",
+      "pixels_per_unit": 1,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        390,
+        844
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b5": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/design/b5-failed.png",
+      "sha256": "b8de441a9f94fa88ce9b2a2127a6fc7606b2df10d895301dc62ec7d2c346a7b5",
+      "pixels_per_unit": 1,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        390,
+        844
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b6q": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/design/b6-question.png",
+      "sha256": "35b855233f4f88b508b2d26b7f271a0ef029c2dd8515eb9e627bbd6df2c8d0ed",
+      "pixels_per_unit": 1,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        390,
+        844
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b6p": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/design/b6-permission.png",
+      "sha256": "6e51e15f7f268e39472b8b44ce95dd2ad4357735cdd2e29ae2af8a35161526bd",
+      "pixels_per_unit": 1,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        390,
+        844
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b6plan": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/design/b6-plan.png",
+      "sha256": "41d8b79420fb88a416acb58d7605efb65e6972d7a75abfed318d278e1e966897",
+      "pixels_per_unit": 1,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        390,
+        844
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b7": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/design/b7-signin.png",
+      "sha256": "8fd6ba8d8fb25ffd8a30a9618ed6a3966914d342fe9c0c61e9ed1cbe5a56732d",
+      "pixels_per_unit": 1,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        390,
+        844
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "w0": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/app/w0.png",
+      "sha256": "852e337688e33fd3c2e689f5ab492caec58756daf68d8a9f11a9fb32d63d8c1c",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "w1": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/app/w1.png",
+      "sha256": "ccab76edfe14160480ce6202d77b0bb40b0c6e43591f36fee10e87870688fdd4",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "w3": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/app/w3.png",
+      "sha256": "27cc6398520038023182f056768dcc1361663b565e789f52ba089d177e9dbb36",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "w4": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/app/w4.png",
+      "sha256": "d23461b25c9456d25612a78af1961cfde8cf400f1bfeca8537873fdfa80bf980",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "q0": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/app/q0.png",
+      "sha256": "a0478f6e0d694ba97a3ce805e15750c5edc7c750bc904d601226e93456bf04bd",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "q1": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/app/q1.png",
+      "sha256": "c2555c524fb4e25c8504e264d75f65abe9addec773e2f11fc131f93af0bc2a94",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "q2": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/app/q2.png",
+      "sha256": "1d3bdc30b1030bdaa49b8824dcb23c08e7dc9ff42392824c399e0bb957ad04cc",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "f0": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/app/f0.png",
+      "sha256": "1965f250d798efa948997d91a8085fe5db82e593c20ca7ef144428c4916140b1",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "f1": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/app/f1.png",
+      "sha256": "61fbcb19243a365a5df5413d72a144b67c1f17ea52b815b9e53f05cfc5f9151e",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "kq": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/app/k-question.png",
+      "sha256": "4e541ea83a937502f54e5abf158a583208c12886a312b951b18307af81cfe482",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "kp": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/app/k-permission.png",
+      "sha256": "a17a8f6cdbdc23a9b266a3e03189826d1ca0b8235207030abb0c737e1f0dacea",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "kplan": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/app/k-plan.png",
+      "sha256": "7b78cb35bae0667bd60c9a8c6cc9970c219c3e5f0dddfb7080c7b3f3078af372",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "s0": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r5/app/s0.png",
+      "sha256": "af70f5211eea46e357896dddc6162fbd55d112f98cb2aa4f89af8cb9b578639f",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "capture_kind": "unspecified; confirm before measuring colors"
+    }
+  },
+  "pairs": [
+    {
+      "id": "b1-topbar",
+      "state": "working",
+      "design": {
+        "source": "b1",
+        "rect": [
+          0,
+          54,
+          390,
+          56
+        ],
+        "pixel_box": [
+          0,
+          54,
+          390,
+          110
+        ],
+        "crop": "b1-topbar-design.png",
+        "sha256": "655b2b0c176c406d12d1ab965d8311eded82c280640d6926c4cf24e9235b0391"
+      },
+      "app": {
+        "source": "w0",
+        "rect": [
+          0,
+          57,
+          402,
+          56
+        ],
+        "pixel_box": [
+          0,
+          171,
+          1206,
+          339
+        ],
+        "crop": "b1-topbar-app.png",
+        "sha256": "a496634348725a346358a0b4925259fc9e79657b7c736ce451e24a37bc5ac5a7"
+      }
+    },
+    {
+      "id": "b1-bubble",
+      "state": "working",
+      "design": {
+        "source": "b1",
+        "rect": [
+          50,
+          372,
+          330,
+          96
+        ],
+        "pixel_box": [
+          50,
+          372,
+          380,
+          468
+        ],
+        "crop": "b1-bubble-design.png",
+        "sha256": "8f4fd13c06b7e1f841b7d829e66093a03c141f0634a4110af8fa282aed2882e1"
+      },
+      "app": {
+        "source": "w0",
+        "rect": [
+          62,
+          429,
+          330,
+          73
+        ],
+        "pixel_box": [
+          186,
+          1287,
+          1176,
+          1506
+        ],
+        "crop": "b1-bubble-app.png",
+        "sha256": "5bd588a52e73ace0552aa266b82897718a93a8dc5d0240435b0f4ef53faff052"
+      }
+    },
+    {
+      "id": "b1-prose-steps",
+      "state": "working",
+      "design": {
+        "source": "b1",
+        "rect": [
+          10,
+          474,
+          380,
+          190
+        ],
+        "pixel_box": [
+          10,
+          474,
+          390,
+          664
+        ],
+        "crop": "b1-prose-steps-design.png",
+        "sha256": "a51dc242d7f59fc4e7568c95e3c6152a3f5c5b3ab92feb9478d76883137fdb00"
+      },
+      "app": {
+        "source": "w0",
+        "rect": [
+          10,
+          507,
+          392,
+          190
+        ],
+        "pixel_box": [
+          30,
+          1521,
+          1206,
+          2091
+        ],
+        "crop": "b1-prose-steps-app.png",
+        "sha256": "77d09bb4fae331a2cc2f3bafe13afa5caaa64eea518177634a47781b85b9e1d0"
+      }
+    },
+    {
+      "id": "b1-pills",
+      "state": "working",
+      "design": {
+        "source": "b1",
+        "rect": [
+          10,
+          668,
+          380,
+          46
+        ],
+        "pixel_box": [
+          10,
+          668,
+          390,
+          714
+        ],
+        "crop": "b1-pills-design.png",
+        "sha256": "384f1e3a37400548bd11a86c74e0b08cac6e98e22721cc02184f43bf593f186a"
+      },
+      "app": {
+        "source": "w0",
+        "rect": [
+          10,
+          701,
+          392,
+          44
+        ],
+        "pixel_box": [
+          30,
+          2103,
+          1206,
+          2235
+        ],
+        "crop": "b1-pills-app.png",
+        "sha256": "617998fbd5e213bc9f3466b88a5304df6a8ba31e7c8895906492ef48331b2abf"
+      }
+    },
+    {
+      "id": "b1-pills-terminal",
+      "state": "working, pills scrolled",
+      "design": {
+        "source": "b2",
+        "rect": [
+          10,
+          668,
+          380,
+          46
+        ],
+        "pixel_box": [
+          10,
+          668,
+          390,
+          714
+        ],
+        "crop": "b1-pills-terminal-design.png",
+        "sha256": "afdc784004a2085f67fb077d14f80fd0517742f96dd0a0bb632202ae69b35eaf"
+      },
+      "app": {
+        "source": "w4",
+        "rect": [
+          10,
+          701,
+          392,
+          44
+        ],
+        "pixel_box": [
+          30,
+          2103,
+          1206,
+          2235
+        ],
+        "crop": "b1-pills-terminal-app.png",
+        "sha256": "1d7880288430ffe6c4ea2efdb7454b1c9eba079981b7b9d57b7305dadfc55ba8"
+      }
+    },
+    {
+      "id": "b1-composer",
+      "state": "working",
+      "design": {
+        "source": "b1",
+        "rect": [
+          8,
+          716,
+          374,
+          104
+        ],
+        "pixel_box": [
+          8,
+          716,
+          382,
+          820
+        ],
+        "crop": "b1-composer-design.png",
+        "sha256": "a5eb844acfc6769d5f5202674f1b42e0ed7257de8938072441a029c7c0aa72a9"
+      },
+      "app": {
+        "source": "w0",
+        "rect": [
+          8,
+          747,
+          386,
+          103
+        ],
+        "pixel_box": [
+          24,
+          2241,
+          1182,
+          2550
+        ],
+        "crop": "b1-composer-app.png",
+        "sha256": "160f4ffa0e40a2c2c8382daec7b23b4843aa0e6ec850bab97fcc4d9ec962772d"
+      }
+    },
+    {
+      "id": "b1-bottom-edge",
+      "state": "working, transcript behind pills",
+      "design": {
+        "source": "b1",
+        "rect": [
+          0,
+          600,
+          390,
+          125
+        ],
+        "pixel_box": [
+          0,
+          600,
+          390,
+          725
+        ],
+        "crop": "b1-bottom-edge-design.png",
+        "sha256": "e821c74b1f3f222a8fa71a52163f679368ebe2dccce870cfbb757059719b39ca"
+      },
+      "app": {
+        "source": "w3",
+        "rect": [
+          0,
+          630,
+          402,
+          125
+        ],
+        "pixel_box": [
+          0,
+          1890,
+          1206,
+          2265
+        ],
+        "crop": "b1-bottom-edge-app.png",
+        "sha256": "592f2e1a769f5fefc34c5113ab9d8a106de85984e8408d7df6645e1d7858f0f8"
+      }
+    },
+    {
+      "id": "b2-header-rows",
+      "state": "group expanded",
+      "design": {
+        "source": "b2",
+        "rect": [
+          10,
+          176,
+          380,
+          126
+        ],
+        "pixel_box": [
+          10,
+          176,
+          390,
+          302
+        ],
+        "crop": "b2-header-rows-design.png",
+        "sha256": "b91d74d3279fa611eda081e363a9308a5a486121d313d8831a72fe04824ef38c"
+      },
+      "app": {
+        "source": "w1",
+        "rect": [
+          10,
+          252,
+          392,
+          128
+        ],
+        "pixel_box": [
+          30,
+          756,
+          1206,
+          1140
+        ],
+        "crop": "b2-header-rows-app.png",
+        "sha256": "68c0a2e271a5af1f1d9cf30984e98d6d944b373f6f6e292f8b89ef83f6e07bcd"
+      }
+    },
+    {
+      "id": "b2-header-open-row",
+      "state": "group expanded, card open",
+      "design": {
+        "source": "b2",
+        "rect": [
+          10,
+          212,
+          380,
+          90
+        ],
+        "pixel_box": [
+          10,
+          212,
+          390,
+          302
+        ],
+        "crop": "b2-header-open-row-design.png",
+        "sha256": "c20c43cb124ecd2198446a5eae54792905f6860f0809032b06753c936b378a67"
+      },
+      "app": {
+        "source": "w3",
+        "rect": [
+          10,
+          128,
+          392,
+          88
+        ],
+        "pixel_box": [
+          30,
+          384,
+          1206,
+          648
+        ],
+        "crop": "b2-header-open-row-app.png",
+        "sha256": "e7fe6827396d677415566c27c75d099487ca06ae3dd4493f1f07f635e7e09538"
+      }
+    },
+    {
+      "id": "b2-card",
+      "state": "card open",
+      "design": {
+        "source": "b2",
+        "rect": [
+          34,
+          298,
+          346,
+          246
+        ],
+        "pixel_box": [
+          34,
+          298,
+          380,
+          544
+        ],
+        "crop": "b2-card-design.png",
+        "sha256": "fd805a4f05aa2848297778ec9358c6b90c20123a8c378235091d443e1267410c"
+      },
+      "app": {
+        "source": "w3",
+        "rect": [
+          34,
+          210,
+          362,
+          245
+        ],
+        "pixel_box": [
+          102,
+          630,
+          1188,
+          1365
+        ],
+        "crop": "b2-card-app.png",
+        "sha256": "741a6df4193b92b4a37e2546675cacf97f312868cd59109e02b16bdb05dab342"
+      }
+    },
+    {
+      "id": "b2-rows-after",
+      "state": "card open",
+      "design": {
+        "source": "b2",
+        "rect": [
+          10,
+          544,
+          380,
+          120
+        ],
+        "pixel_box": [
+          10,
+          544,
+          390,
+          664
+        ],
+        "crop": "b2-rows-after-design.png",
+        "sha256": "283c0ddb517afa676f15519b79199dc2196480fe62d6ff6dcfdc6e2d77e37d3e"
+      },
+      "app": {
+        "source": "w3",
+        "rect": [
+          10,
+          458,
+          392,
+          120
+        ],
+        "pixel_box": [
+          30,
+          1374,
+          1206,
+          1734
+        ],
+        "crop": "b2-rows-after-app.png",
+        "sha256": "13c50f3c01d5241754c96e54d55f45e4f5e56e32a21a4380f3ee0e1e09484c10"
+      }
+    },
+    {
+      "id": "b3-row-card",
+      "state": "single call open",
+      "design": {
+        "source": "b3",
+        "rect": [
+          10,
+          320,
+          380,
+          308
+        ],
+        "pixel_box": [
+          10,
+          320,
+          390,
+          628
+        ],
+        "crop": "b3-row-card-design.png",
+        "sha256": "da380d5cf859581ca3fcbbad6949bc9d9b17a1a041064bac1e86e1d2aade8c64"
+      },
+      "app": {
+        "source": "q1",
+        "rect": [
+          10,
+          355,
+          392,
+          305
+        ],
+        "pixel_box": [
+          30,
+          1065,
+          1206,
+          1980
+        ],
+        "crop": "b3-row-card-app.png",
+        "sha256": "b970a893d87b0ce915767f2c5dea2b0cabc1871ec0789645fca136bbe51ca0a5"
+      }
+    },
+    {
+      "id": "b4-status",
+      "state": "queued",
+      "design": {
+        "source": "b4",
+        "rect": [
+          80,
+          60,
+          230,
+          44
+        ],
+        "pixel_box": [
+          80,
+          60,
+          310,
+          104
+        ],
+        "crop": "b4-status-design.png",
+        "sha256": "81079add90d96e7325cc9d758856826db0c4b42847bf3202366d01834b3871ca"
+      },
+      "app": {
+        "source": "q0",
+        "rect": [
+          90,
+          63,
+          222,
+          44
+        ],
+        "pixel_box": [
+          270,
+          189,
+          936,
+          321
+        ],
+        "crop": "b4-status-app.png",
+        "sha256": "1f2e88d6ba0c877091e07f628ff4812bb87daa48488f02be3a50a2f8e5769bad"
+      }
+    },
+    {
+      "id": "b4-steps",
+      "state": "queued, collapsed",
+      "design": {
+        "source": "b4",
+        "rect": [
+          10,
+          600,
+          380,
+          70
+        ],
+        "pixel_box": [
+          10,
+          600,
+          390,
+          670
+        ],
+        "crop": "b4-steps-design.png",
+        "sha256": "3316c3bd8b39a7ef947a19550b305c94f6831419141ce1a4b75e1a73c1571a5e"
+      },
+      "app": {
+        "source": "q0",
+        "rect": [
+          10,
+          597,
+          392,
+          58
+        ],
+        "pixel_box": [
+          30,
+          1791,
+          1206,
+          1965
+        ],
+        "crop": "b4-steps-app.png",
+        "sha256": "fe8ecf86fb47edec69292267d277d3eb83f84a2ee56823a755966a28f448e6ce"
+      }
+    },
+    {
+      "id": "b4-strip-closed",
+      "state": "queued, menu closed (board shows open only)",
+      "design": {
+        "source": "b4",
+        "rect": [
+          6,
+          678,
+          378,
+          40
+        ],
+        "pixel_box": [
+          6,
+          678,
+          384,
+          718
+        ],
+        "crop": "b4-strip-closed-design.png",
+        "sha256": "99c4a3c4b79977ab6c8b9bb0f03ef973ad0072788e2d60f8454e6a1054f74e85"
+      },
+      "app": {
+        "source": "q0",
+        "rect": [
+          6,
+          709,
+          390,
+          40
+        ],
+        "pixel_box": [
+          18,
+          2127,
+          1188,
+          2247
+        ],
+        "crop": "b4-strip-closed-app.png",
+        "sha256": "84828842ee5feceff99e936cbdf9379e39c8788d344568e52bd1c91dafca94a2"
+      }
+    },
+    {
+      "id": "b4-strip-open",
+      "state": "queued, menu open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          6,
+          678,
+          378,
+          40
+        ],
+        "pixel_box": [
+          6,
+          678,
+          384,
+          718
+        ],
+        "crop": "b4-strip-open-design.png",
+        "sha256": "99c4a3c4b79977ab6c8b9bb0f03ef973ad0072788e2d60f8454e6a1054f74e85"
+      },
+      "app": {
+        "source": "q2",
+        "rect": [
+          6,
+          709,
+          390,
+          40
+        ],
+        "pixel_box": [
+          18,
+          2127,
+          1188,
+          2247
+        ],
+        "crop": "b4-strip-open-app.png",
+        "sha256": "afc7b6d48366425d70e756503976b80440bc3ce0b8e1ae8bc98d9c3037005908"
+      }
+    },
+    {
+      "id": "b4-menu",
+      "state": "queued, menu open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          120,
+          526,
+          266,
+          154
+        ],
+        "pixel_box": [
+          120,
+          526,
+          386,
+          680
+        ],
+        "crop": "b4-menu-design.png",
+        "sha256": "74d08cdef742c3b2e4fd29e5754fc92e44c3675c1dbda31bf9858a1deaf77d20"
+      },
+      "app": {
+        "source": "q2",
+        "rect": [
+          132,
+          556,
+          266,
+          154
+        ],
+        "pixel_box": [
+          396,
+          1668,
+          1194,
+          2130
+        ],
+        "crop": "b4-menu-app.png",
+        "sha256": "e7dc2c2de02e76608004f4a80d87c21cc88f3731810a91164fe3c9226ef62cc1"
+      }
+    },
+    {
+      "id": "b5-status",
+      "state": "offline",
+      "design": {
+        "source": "b5",
+        "rect": [
+          90,
+          60,
+          210,
+          44
+        ],
+        "pixel_box": [
+          90,
+          60,
+          300,
+          104
+        ],
+        "crop": "b5-status-design.png",
+        "sha256": "ed0748ee6bd88c513867b91d23293fc54f909e3284e56e57a8c990309c522d29"
+      },
+      "app": {
+        "source": "f0",
+        "rect": [
+          100,
+          63,
+          202,
+          44
+        ],
+        "pixel_box": [
+          300,
+          189,
+          906,
+          321
+        ],
+        "crop": "b5-status-app.png",
+        "sha256": "d3d2cc69e23027be85ab00eca1995773524bf78cf3aa5030a6727bd54b7c61da"
+      }
+    },
+    {
+      "id": "b5-transcript-strip",
+      "state": "offline",
+      "design": {
+        "source": "b5",
+        "rect": [
+          10,
+          530,
+          380,
+          190
+        ],
+        "pixel_box": [
+          10,
+          530,
+          390,
+          720
+        ],
+        "crop": "b5-transcript-strip-design.png",
+        "sha256": "f241e0ab05070e468aa706e84a5374aeb45c4ae79adbdf334d3a73110e1b2846"
+      },
+      "app": {
+        "source": "f0",
+        "rect": [
+          10,
+          563,
+          392,
+          190
+        ],
+        "pixel_box": [
+          30,
+          1689,
+          1206,
+          2259
+        ],
+        "crop": "b5-transcript-strip-app.png",
+        "sha256": "fab6d674522ff5530ba4501a944129e59cc28f55349f20a7423a645a25129a99"
+      }
+    },
+    {
+      "id": "b5-menu",
+      "state": "offline, menu open",
+      "design": {
+        "source": "b5",
+        "rect": [
+          140,
+          540,
+          244,
+          140
+        ],
+        "pixel_box": [
+          140,
+          540,
+          384,
+          680
+        ],
+        "crop": "b5-menu-design.png",
+        "sha256": "524201b0b6fdfab28ba37d76d01490d1a380f2df8d0601e91450aebad6e9d031"
+      },
+      "app": {
+        "source": "f1",
+        "rect": [
+          152,
+          571,
+          244,
+          140
+        ],
+        "pixel_box": [
+          456,
+          1713,
+          1188,
+          2133
+        ],
+        "crop": "b5-menu-app.png",
+        "sha256": "65669262e74e522baf7c31818e86fbd12728aae51f4effbd7cf7383438b5745e"
+      }
+    },
+    {
+      "id": "b5-strip",
+      "state": "offline",
+      "design": {
+        "source": "b5",
+        "rect": [
+          6,
+          678,
+          378,
+          40
+        ],
+        "pixel_box": [
+          6,
+          678,
+          384,
+          718
+        ],
+        "crop": "b5-strip-design.png",
+        "sha256": "59006cf543c416cb68edb99cd0c979403333f01d2a447913bbb6732c03bcec01"
+      },
+      "app": {
+        "source": "f1",
+        "rect": [
+          6,
+          709,
+          390,
+          40
+        ],
+        "pixel_box": [
+          18,
+          2127,
+          1188,
+          2247
+        ],
+        "crop": "b5-strip-app.png",
+        "sha256": "5ad7d520ec7564742d0ca79172d364eb4eab8bb80311a49bc94b083955599879"
+      }
+    },
+    {
+      "id": "b5-composer",
+      "state": "offline",
+      "design": {
+        "source": "b5",
+        "rect": [
+          8,
+          716,
+          374,
+          104
+        ],
+        "pixel_box": [
+          8,
+          716,
+          382,
+          820
+        ],
+        "crop": "b5-composer-design.png",
+        "sha256": "127e0508fdc82104b960053d2740bc877de306fb498317892b56e8f0a4b8c138"
+      },
+      "app": {
+        "source": "f0",
+        "rect": [
+          8,
+          747,
+          386,
+          103
+        ],
+        "pixel_box": [
+          24,
+          2241,
+          1182,
+          2550
+        ],
+        "crop": "b5-composer-app.png",
+        "sha256": "02005bd861b13d69e26d8bbefb8a1d13d40288a2fb43efd21ff0f218caa77436"
+      }
+    },
+    {
+      "id": "b6q-prose-panel",
+      "state": "question",
+      "design": {
+        "source": "b6q",
+        "rect": [
+          10,
+          328,
+          380,
+          102
+        ],
+        "pixel_box": [
+          10,
+          328,
+          390,
+          430
+        ],
+        "crop": "b6q-prose-panel-design.png",
+        "sha256": "492bbf6067969cd91c3684dbc9dcdff5b7f540f87600930ae6128da6258b57a7"
+      },
+      "app": {
+        "source": "kq",
+        "rect": [
+          10,
+          390,
+          392,
+          97
+        ],
+        "pixel_box": [
+          30,
+          1170,
+          1206,
+          1461
+        ],
+        "crop": "b6q-prose-panel-app.png",
+        "sha256": "89cf2d960d171609d7f56229c0167ae2f45e07aede00dadc069c8b06545723c0"
+      }
+    },
+    {
+      "id": "b6q-panel",
+      "state": "question",
+      "design": {
+        "source": "b6q",
+        "rect": [
+          4,
+          422,
+          382,
+          418
+        ],
+        "pixel_box": [
+          4,
+          422,
+          386,
+          840
+        ],
+        "crop": "b6q-panel-design.png",
+        "sha256": "185b9350872a76382941f9c5153d5820f8ae5b9cb9ea842ca8e79f2a0d61aae9"
+      },
+      "app": {
+        "source": "kq",
+        "rect": [
+          4,
+          479,
+          394,
+          391
+        ],
+        "pixel_box": [
+          12,
+          1437,
+          1194,
+          2610
+        ],
+        "crop": "b6q-panel-app.png",
+        "sha256": "8b2efe96479cab0fccbe0905828ba580b7e028d0fc70ba752a0a3a8d00557c8f"
+      }
+    },
+    {
+      "id": "b6p-panel",
+      "state": "permission",
+      "design": {
+        "source": "b6p",
+        "rect": [
+          4,
+          540,
+          382,
+          300
+        ],
+        "pixel_box": [
+          4,
+          540,
+          386,
+          840
+        ],
+        "crop": "b6p-panel-design.png",
+        "sha256": "533ab2c7173b3aef31f677876e9b26669601170e436df7e3c025a8c2ea70ec1c"
+      },
+      "app": {
+        "source": "kp",
+        "rect": [
+          4,
+          572,
+          394,
+          298
+        ],
+        "pixel_box": [
+          12,
+          1716,
+          1194,
+          2610
+        ],
+        "crop": "b6p-panel-app.png",
+        "sha256": "044e126fbc55b9159eb524779a061d53b78dd7d4d4aed4ad1a9911b24d550131"
+      }
+    },
+    {
+      "id": "b6plan-panel",
+      "state": "plan",
+      "design": {
+        "source": "b6plan",
+        "rect": [
+          4,
+          521,
+          382,
+          319
+        ],
+        "pixel_box": [
+          4,
+          521,
+          386,
+          840
+        ],
+        "crop": "b6plan-panel-design.png",
+        "sha256": "850ea26e18d71fb93363fe0c66e8b377d8e2159be73147dd6e423c389252ef0f"
+      },
+      "app": {
+        "source": "kplan",
+        "rect": [
+          4,
+          574,
+          394,
+          296
+        ],
+        "pixel_box": [
+          12,
+          1722,
+          1194,
+          2610
+        ],
+        "crop": "b6plan-panel-app.png",
+        "sha256": "c03da0298bbcac15de731fc1a91604a350c5e0ea93d6c583e7454b75c3306cd1"
+      }
+    },
+    {
+      "id": "b7-panel",
+      "state": "sign-in",
+      "design": {
+        "source": "b7",
+        "rect": [
+          4,
+          504,
+          382,
+          336
+        ],
+        "pixel_box": [
+          4,
+          504,
+          386,
+          840
+        ],
+        "crop": "b7-panel-design.png",
+        "sha256": "0603bbf6a76097d61c6876e22719d5c939781ca6557b87b38b37b34092c7d264"
+      },
+      "app": {
+        "source": "s0",
+        "rect": [
+          4,
+          535,
+          394,
+          335
+        ],
+        "pixel_box": [
+          12,
+          1605,
+          1194,
+          2610
+        ],
+        "crop": "b7-panel-app.png",
+        "sha256": "b27e9f25e5ecfe72a4125118e149eb6208ce20969748db9afe318658508f146b"
+      }
+    },
+    {
+      "id": "b7-sitecard",
+      "state": "sign-in",
+      "design": {
+        "source": "b7",
+        "rect": [
+          20,
+          630,
+          350,
+          70
+        ],
+        "pixel_box": [
+          20,
+          630,
+          370,
+          700
+        ],
+        "crop": "b7-sitecard-design.png",
+        "sha256": "5f2a1a514e4ee0a65c29c94ed954619ac6e8fc11584d2683a0dd95bf8fcbe29a"
+      },
+      "app": {
+        "source": "s0",
+        "rect": [
+          20,
+          660,
+          362,
+          70
+        ],
+        "pixel_box": [
+          60,
+          1980,
+          1146,
+          2190
+        ],
+        "crop": "b7-sitecard-app.png",
+        "sha256": "9f79f357e6ce880e25a1b45a223861470b099ce832da73191a8c3eb8660effdf"
+      }
+    }
+  ],
+  "review_sheets": [
+    "review-01.png",
+    "review-02.png",
+    "review-03.png",
+    "review-04.png",
+    "review-05.png"
+  ],
+  "review_sheet_scale": "1 pixel per logical unit; browsing only; measure raw crops",
+  "elapsed_seconds": 0.7133
+}

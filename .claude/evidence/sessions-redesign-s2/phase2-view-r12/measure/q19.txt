@@ -1,0 +1,8 @@
+b7 btn-t15 | design/b7-3x.png | rows | 300 700 30 70 | 15 28,28,30
+si btn-t15 | app/signin.png | rows | 312 730 30 70 | 15 26,26,28
+b7 btn-t90 | design/b7-3x.png | rows | 300 700 30 70 | 90 28,28,30
+si btn-t90 | app/signin.png | rows | 312 730 30 70 | 90 26,26,28
+b7 foot-t20 | design/b7-3x.png | rows | 25 762 340 70 | 20 28,28,30
+si foot-t20 | app/signin.png | rows | 25 792 352 70 | 20 26,26,28
+b7 foot-t70 | design/b7-3x.png | rows | 25 762 340 70 | 70 28,28,30
+si foot-t70 | app/signin.png | rows | 25 792 352 70 | 70 26,26,28

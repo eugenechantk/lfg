@@ -1,0 +1,109 @@
+div |  |  | 12 | 54 | 366 | 52 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px
+a | Close terminal |  | 12 | 58 | 44 | 44 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(255, 255, 255, 0.12) | 22px
+svg |  |  | 26.5 | 72.5 | 15 | 15 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px
+path |  |  | 30.25 | 76.25 | 7.5 | 7.5 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px
+div |  |  | 64 | 63 | 214 | 34 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px
+span |  | Terminal | 137.27 | 63 | 67.47 | 19 | 16px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px
+span |  | Shell on Pro | 137.2 | 83 | 67.59 | 14 | 12px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(161, 161, 166) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 286 | 64 | 92 | 32 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(255, 255, 255, 0.12) | 16px
+button |  |  | 288 | 66 | 44 | 28 | 12px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 14px
+span |  | Fit | 302.45 | 73 | 15.08 | 14 | 12px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button |  |  | 332 | 66 | 44 | 28 | 12px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(0, 0, 0) | rgb(255, 255, 255) | 14px
+span |  | Wide | 339.03 | 73 | 29.94 | 14 | 12px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px
+div |  |  | 0 | 116 | 390 | 644 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(209, 209, 214) | rgba(0, 0, 0, 0) | 0px
+span |  | % cd dev/personal/lfg | 12 | 536.94 | 366 | 15.22 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(209, 209, 214) | rgba(0, 0, 0, 0) | 0px
+span |  | eugene@Pro | 12 | 537.94 | 63.22 | 12 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(48, 209, 88) | rgba(0, 0, 0, 0) | 0px
+span |  | ~ | 81.55 | 537.94 | 6.33 | 12 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(64, 156, 255) | rgba(0, 0, 0, 0) | 0px
+span |  | % git status --short | 12 | 552.16 | 366 | 15.22 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(209, 209, 214) | rgba(0, 0, 0, 0) | 0px
+span |  | eugene@Pro | 12 | 553.16 | 63.22 | 12 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(48, 209, 88) | rgba(0, 0, 0, 0) | 0px
+span |  | lfg | 81.55 | 553.16 | 18.97 | 12 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(64, 156, 255) | rgba(0, 0, 0, 0) | 0px
+span |  | M ios/LFG/SessionStore.swift | 12 | 567.38 | 366 | 15.22 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(255, 159, 90) | rgba(0, 0, 0, 0) | 0px
+span |  | M desktop/LFGSessions.swift | 12 | 582.59 | 366 | 15.22 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(255, 159, 90) | rgba(0, 0, 0, 0) | 0px
+span |  | % tmux ls | 12 | 597.81 | 366 | 15.22 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(209, 209, 214) | rgba(0, 0, 0, 0) | 0px
+span |  | eugene@Pro | 12 | 598.81 | 63.22 | 12 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(48, 209, 88) | rgba(0, 0, 0, 0) | 0px
+span |  | lfg | 81.55 | 598.81 | 18.97 | 12 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(64, 156, 255) | rgba(0, 0, 0, 0) | 0px
+span |  | lfg-fork-3: 1 windows (attached) | 12 | 613.03 | 366 | 15.22 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(142, 142, 147) | rgba(0, 0, 0, 0) | 0px
+span |  | lfg-term-phone: 1 windows (attached) | 12 | 628.25 | 366 | 15.22 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(142, 142, 147) | rgba(0, 0, 0, 0) | 0px
+span |  | reelly-ads: 1 windows | 12 | 643.47 | 366 | 15.22 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(142, 142, 147) | rgba(0, 0, 0, 0) | 0px
+span |  | % bun test src/sessions.test.ts | 12 | 658.69 | 366 | 15.22 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(209, 209, 214) | rgba(0, 0, 0, 0) | 0px
+span |  | eugene@Pro | 12 | 659.69 | 63.22 | 12 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(48, 209, 88) | rgba(0, 0, 0, 0) | 0px
+span |  | lfg | 81.55 | 659.69 | 18.97 | 12 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(64, 156, 255) | rgba(0, 0, 0, 0) | 0px
+span |  | bun test v1.3.0 | 12 | 673.91 | 366 | 15.22 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(142, 142, 147) | rgba(0, 0, 0, 0) | 0px
+span |  | 42 pass | 12 | 689.13 | 366 | 15.22 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(48, 209, 88) | rgba(0, 0, 0, 0) | 0px
+span |  | 0 fail | 12 | 704.34 | 366 | 15.22 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(209, 209, 214) | rgba(0, 0, 0, 0) | 0px
+span |  | Ran 42 tests across 1 file. [1.80s] | 12 | 719.56 | 366 | 15.22 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(142, 142, 147) | rgba(0, 0, 0, 0) | 0px
+span |  | % | 12 | 734.78 | 366 | 15.22 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(209, 209, 214) | rgba(0, 0, 0, 0) | 0px
+span |  | eugene@Pro | 12 | 735.78 | 63.22 | 12 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(48, 209, 88) | rgba(0, 0, 0, 0) | 0px
+span |  | lfg | 81.55 | 735.78 | 18.97 | 12 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(64, 156, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 119.48 | 735.78 | 6.33 | 12 | 10.5px | 400 | 15.225px | ui-monospace, "SF Mono", Menlo | rgb(11, 11, 13) | rgb(209, 209, 214) | 0px
+div |  |  | 0 | 760 | 390 | 50 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgb(28, 28, 30) | 0px
+button | Escape |  | 8 | 767.5 | 43.3 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | esc | 17 | 777.5 | 25.3 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Tab |  | 57.3 | 767.5 | 43.3 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | tab | 66.3 | 777.5 | 25.3 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Control |  | 106.59 | 767.5 | 51.72 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | ctrl | 115.59 | 777.5 | 33.72 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Option |  | 164.31 | 767.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | ⌥ | 180.09 | 777.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Up |  | 210.31 | 767.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | ↑ | 226.09 | 777.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Down |  | 256.31 | 767.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | ↓ | 272.09 | 777.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Left |  | 302.31 | 767.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | ← | 318.09 | 777.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Right |  | 348.31 | 767.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | → | 364.09 | 777.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Pipe |  | 394.31 | 767.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | | | 410.09 | 777.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Slash |  | 440.31 | 767.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | / | 456.09 | 777.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Tilde |  | 486.31 | 767.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | ~ | 502.09 | 777.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Paste |  | 532.31 | 767.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | ⌘V | 543.88 | 777.5 | 16.86 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Show keyboard |  | 578.31 | 767.5 | 44 | 36 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgb(58, 58, 60) | 8px
+svg |  |  | 590.31 | 777.5 | 20 | 16 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px
+rect |  |  | 591.08 | 778.58 | 18.46 | 9.23 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px
+path |  |  | 594.16 | 781.65 | 12.32 | 3.08 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px
+path |  |  | 598 | 790.12 | 4.62 | 2.31 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px
+---TEXT---
+"Terminal" | 137.27 | 63 | 67.47 | 19
+"Shell on Pro" | 137.2 | 83 | 67.59 | 14
+"Fit" | 302.45 | 73 | 15.08 | 14
+"Wide" | 339.03 | 73 | 29.94 | 14
+"eugene@Pro" | 12 | 537.94 | 63.22 | 12
+"~" | 81.55 | 537.94 | 6.33 | 12
+" % cd dev/personal/lfg" | 87.88 | 537.94 | 139.08 | 12
+"eugene@Pro" | 12 | 553.16 | 63.22 | 12
+"lfg" | 81.55 | 553.16 | 18.97 | 12
+" % git status --short" | 100.52 | 553.16 | 132.77 | 12
+" M ios/LFG/SessionStore.swift" | 12 | 568.38 | 183.33 | 12
+" M desktop/LFGSessions.swift" | 12 | 583.59 | 177.02 | 12
+"eugene@Pro" | 12 | 598.81 | 63.22 | 12
+"lfg" | 81.55 | 598.81 | 18.97 | 12
+" % tmux ls" | 100.52 | 598.81 | 63.22 | 12
+"lfg-fork-3: 1 windows (attached)" | 12 | 614.03 | 202.3 | 12
+"lfg-term-phone: 1 windows (attached)" | 12 | 629.25 | 227.58 | 12
+"reelly-ads: 1 windows" | 12 | 644.47 | 132.77 | 12
+"eugene@Pro" | 12 | 659.69 | 63.22 | 12
+"lfg" | 81.55 | 659.69 | 18.97 | 12
+" % bun test src/sessions.test.ts" | 100.52 | 659.69 | 202.3 | 12
+"bun test v1.3.0" | 12 | 674.91 | 94.83 | 12
+" 42 pass" | 12 | 690.13 | 50.58 | 12
+" 0 fail" | 12 | 705.34 | 44.27 | 12
+"Ran 42 tests across 1 file. [1.80s]" | 12 | 720.56 | 221.27 | 12
+"eugene@Pro" | 12 | 735.78 | 63.22 | 12
+"lfg" | 81.55 | 735.78 | 18.97 | 12
+" % " | 100.52 | 735.78 | 18.97 | 12
+"esc" | 17 | 777.5 | 25.3 | 16
+"tab" | 66.3 | 777.5 | 25.3 | 16
+"ctrl" | 115.59 | 777.5 | 33.72 | 16
+"⌥" | 180.09 | 777.5 | 8.44 | 16
+"↑" | 226.09 | 777.5 | 8.44 | 16
+"↓" | 272.09 | 777.5 | 8.44 | 16
+"←" | 318.09 | 777.5 | 8.44 | 16
+"→" | 364.09 | 777.5 | 8.44 | 16
+"|" | 410.09 | 777.5 | 8.44 | 16
+"/" | 456.09 | 777.5 | 8.44 | 16
+"~" | 502.09 | 777.5 | 8.44 | 16
+"⌘V" | 543.88 | 777.5 | 16.86 | 16

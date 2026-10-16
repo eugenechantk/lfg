@@ -1,0 +1,62 @@
+b1 bubble | design/b1-3x.png | bbox | 30 360 360 115 | 40 0,0,0
+w bubble | app/w.png | bbox | 30 410 372 95 | 40 0,0,0
+b1 bubble-text-ink | design/b1-3x.png | ink | 62 384 300 72 | 80 9,110,224
+w bubble-text-ink | app/w.png | ink | 75 435 310 52 | 80 6,108,222
+b1 prose-ink | design/b1-3x.png | ink | 10 476 380 24 | 40 0,0,0
+w prose-ink | app/w.png | ink | 10 505 392 24 | 40 0,0,0
+b1 step-ink | design/b1-3x.png | ink | 38 514 300 22 | 30 0,0,0
+w step-ink | app/w.png | ink | 38 544 300 22 | 30 0,0,0
+b1 stepicon-ink | design/b1-3x.png | ink | 10 514 30 22 | 30 0,0,0
+w stepicon-ink | app/w.png | ink | 10 544 30 22 | 30 0,0,0
+b1 chev-ink | design/b1-3x.png | ink | 350 514 40 22 | 30 0,0,0
+w chev-ink | app/w.png | ink | 360 544 42 22 | 30 0,0,0
+b1 title-ink | design/b1-3x.png | ink | 70 58 250 26 | 60 0,0,0
+w title-ink | app/w.png | ink | 70 60 262 26 | 60 0,0,0
+b1 status-green | design/b1-3x.png | ink | 122 86 100 16 | 40 0,0,0
+w status-green | app/w.png | ink | 128 88 100 16 | 40 0,0,0
+b1 status-grey | design/b1-3x.png | ink | 229 86 52 16 | 40 0,0,0
+w status-grey | app/w.png | ink | 235 88 52 16 | 40 0,0,0
+b1 pills-row | design/b1-3x.png | cols | 0 690 390 2 | 20 0,0,0
+w pills-row | app/w.png | cols | 0 721 402 2 | 20 0,0,0
+b1 pill1 | design/b1-3x.png | bbox | 10 665 285 50 | 20 0,0,0
+w pill1 | app/w.png | bbox | 10 695 290 50 | 20 0,0,0
+b1 pill1-fill | design/b1-3x.png | color | 160 675 10 3
+w pill1-fill | app/w.png | color | 165 706 10 3
+b1 pill1-cols | design/b1-3x.png | cols | 20 680 270 22 | 60 28,28,30
+w pill1-cols | app/w.png | cols | 20 711 270 22 | 60 28,28,30
+b1 pill1-rows | design/b1-3x.png | rows | 50 676 240 30 | 60 28,28,30
+w pill1-rows | app/w.png | rows | 50 707 240 30 | 60 28,28,30
+b1 pill-subagents-ink | design/b1-3x.png | ink | 55 680 72 22 | 60 28,28,30
+w pill-subagents-ink | app/w.png | ink | 60 711 72 22 | 60 28,28,30
+b1 pill-running-ink | design/b1-3x.png | ink | 135 680 62 22 | 60 28,28,30
+w pill-running-ink | app/w.png | ink | 158 711 62 22 | 60 28,28,30
+b1 pill-done-ink | design/b1-3x.png | ink | 210 680 62 22 | 50 28,28,30
+w pill-done-ink | app/w.png | ink | 210 711 62 22 | 50 28,28,30
+b1 pill2-cols | design/b1-3x.png | cols | 296 680 94 22 | 60 28,28,30
+w pill2-cols | app/w.png | cols | 290 711 112 22 | 60 28,28,30
+b1 composer | design/b1-3x.png | bbox | 0 715 390 105 | 20 0,0,0
+w composer | app/w.png | bbox | 0 745 402 105 | 20 0,0,0
+b1 composer-fill | design/b1-3x.png | color | 200 760 20 5
+w composer-fill | app/w.png | color | 200 790 20 5
+b1 composer-border | design/b1-3x.png | color | 200 720 10 0.34
+w composer-border | app/w.png | color | 200 750 10 0.34
+b1 placeholder | design/b1-3x.png | bbox | 20 728 300 30 | 40 28,28,30
+w placeholder | app/w.png | bbox | 20 758 300 30 | 40 28,28,30
+b1 placeholder-ink | design/b1-3x.png | ink | 20 728 300 30 | 40 28,28,30
+w placeholder-ink | app/w.png | ink | 20 758 300 30 | 40 28,28,30
+b1 clip | design/b1-3x.png | bbox | 24 770 32 36 | 40 28,28,30
+w clip | app/w.png | bbox | 24 800 32 36 | 40 28,28,30
+b1 chip | design/b1-3x.png | bbox | 56 770 140 36 | 10 28,28,30
+w chip | app/w.png | bbox | 56 800 150 36 | 10 28,28,30
+b1 chip-text | design/b1-3x.png | bbox | 64 776 125 24 | 60 44,44,46
+w chip-text | app/w.png | bbox | 64 806 135 24 | 60 44,44,46
+b1 chip-text-ink | design/b1-3x.png | ink | 64 776 100 24 | 60 44,44,46
+w chip-text-ink | app/w.png | ink | 64 806 100 24 | 60 44,44,46
+b1 chip-fill | design/b1-3x.png | color | 62 787 3 2
+w chip-fill | app/w.png | color | 62 817 3 2
+b1 stop | design/b1-3x.png | bbox | 320 765 60 46 | 60 28,28,30
+w stop | app/w.png | bbox | 330 795 62 46 | 60 28,28,30
+b1 stop-square | design/b1-3x.png | bbox | 340 778 20 20 | 60 242,242,247
+w stop-square | app/w.png | bbox | 350 808 22 22 | 60 242,242,247
+b1 stop-fill | design/b1-3x.png | color | 337 788 2 2
+w stop-fill | app/w.png | color | 349 818 2 2

@@ -1,0 +1,4015 @@
+{
+ "name": "dom-kbopen-fit.json",
+ "zoom": 1,
+ "rootRect": {
+  "x": 0,
+  "y": 0,
+  "width": 390,
+  "height": 844,
+  "top": 0,
+  "right": 390,
+  "bottom": 844,
+  "left": 0
+ },
+ "scrollX": 0,
+ "scrollY": 0,
+ "els": [
+  {
+   "i": 0,
+   "tag": "div",
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 844
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(242, 242, 247)",
+    "bg": "rgb(11, 11, 13)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(242, 242, 247)",
+    "bb": "0px none rgb(242, 242, 247)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 1,
+   "tag": "div",
+   "rect": {
+    "x": 12,
+    "y": 54,
+    "w": 366,
+    "h": 52
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(242, 242, 247)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(242, 242, 247)",
+    "bb": "0px none rgb(242, 242, 247)",
+    "op": "1",
+    "gap": "8px"
+   }
+  },
+  {
+   "i": 2,
+   "tag": "a",
+   "aria": "Close terminal",
+   "rect": {
+    "x": 12,
+    "y": 58,
+    "w": 44,
+    "h": 44
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(242, 242, 247)",
+    "bg": "rgba(255, 255, 255, 0.12)",
+    "br": "22px",
+    "pad": "0px",
+    "bt": "0px none rgb(242, 242, 247)",
+    "bb": "0px none rgb(242, 242, 247)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 3,
+   "tag": "svg",
+   "rect": {
+    "x": 26.5,
+    "y": 72.5,
+    "w": 15,
+    "h": 15
+   },
+   "svg": {
+    "width": "15",
+    "height": "15",
+    "viewBox": "0 0 24 24",
+    "stroke": "#FFFFFF",
+    "stroke-width": "2.6",
+    "fill": "none",
+    "stroke-linecap": "round"
+   }
+  },
+  {
+   "i": 4,
+   "tag": "path",
+   "rect": {
+    "x": 30.25,
+    "y": 76.25,
+    "w": 7.5,
+    "h": 7.5
+   },
+   "svg": {
+    "d": "M6 6l12 12M18 6L6 18"
+   }
+  },
+  {
+   "i": 5,
+   "tag": "div",
+   "rect": {
+    "x": 64,
+    "y": 63,
+    "w": 214,
+    "h": 34
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(242, 242, 247)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(242, 242, 247)",
+    "bb": "0px none rgb(242, 242, 247)",
+    "op": "1",
+    "gap": "1px"
+   }
+  },
+  {
+   "i": 6,
+   "tag": "span",
+   "rect": {
+    "x": 137.266,
+    "y": 63,
+    "w": 67.469,
+    "h": 19
+   },
+   "text": "Terminal",
+   "textRects": [
+    {
+     "x": 137.266,
+     "y": 63,
+     "w": 67.469,
+     "h": 19
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(242, 242, 247)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(242, 242, 247)",
+    "bb": "0px none rgb(242, 242, 247)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 7,
+   "tag": "span",
+   "rect": {
+    "x": 137.203,
+    "y": 83,
+    "w": 67.594,
+    "h": 14
+   },
+   "text": "Shell on Pro",
+   "textRects": [
+    {
+     "x": 137.203,
+     "y": 83,
+     "w": 67.594,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(161, 161, 166)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(161, 161, 166)",
+    "bb": "0px none rgb(161, 161, 166)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 8,
+   "tag": "span",
+   "rect": {
+    "x": 286,
+    "y": 64,
+    "w": 92,
+    "h": 32
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(242, 242, 247)",
+    "bg": "rgba(255, 255, 255, 0.12)",
+    "br": "16px",
+    "pad": "2px",
+    "bt": "0px none rgb(242, 242, 247)",
+    "bb": "0px none rgb(242, 242, 247)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 9,
+   "tag": "button",
+   "rect": {
+    "x": 288,
+    "y": 66,
+    "w": 44,
+    "h": 28
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "12px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(0, 0, 0)",
+    "bg": "rgb(255, 255, 255)",
+    "br": "14px",
+    "pad": "1px 6px",
+    "bt": "0px none rgb(0, 0, 0)",
+    "bb": "0px none rgb(0, 0, 0)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 10,
+   "tag": "span",
+   "rect": {
+    "x": 302.453,
+    "y": 73,
+    "w": 15.078,
+    "h": 14
+   },
+   "text": "Fit",
+   "textRects": [
+    {
+     "x": 302.453,
+     "y": 73,
+     "w": 15.078,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "12px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(0, 0, 0)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(0, 0, 0)",
+    "bb": "0px none rgb(0, 0, 0)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 11,
+   "tag": "button",
+   "rect": {
+    "x": 332,
+    "y": 66,
+    "w": 44,
+    "h": 28
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "12px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "14px",
+    "pad": "1px 6px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 12,
+   "tag": "span",
+   "rect": {
+    "x": 339.031,
+    "y": 73,
+    "w": 29.938,
+    "h": 14
+   },
+   "text": "Wide",
+   "textRects": [
+    {
+     "x": 339.031,
+     "y": 73,
+     "w": 29.938,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "12px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 13,
+   "tag": "div",
+   "rect": {
+    "x": 0,
+    "y": 116,
+    "w": 390,
+    "h": 408
+   },
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(209, 209, 214)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px 12px 10px",
+    "bt": "0px none rgb(209, 209, 214)",
+    "bb": "0px none rgb(209, 209, 214)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 14,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 270.531,
+    "w": 366,
+    "h": 17.391
+   },
+   "text": " % cd dev/personal/lfg",
+   "textRects": [
+    {
+     "x": 98.719,
+     "y": 271.531,
+     "w": 158.953,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(209, 209, 214)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(209, 209, 214)",
+    "bb": "0px none rgb(209, 209, 214)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 15,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 271.531,
+    "w": 72.25,
+    "h": 14
+   },
+   "text": "eugene@Pro",
+   "textRects": [
+    {
+     "x": 12,
+     "y": 271.531,
+     "w": 72.25,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(48, 209, 88)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(48, 209, 88)",
+    "bb": "0px none rgb(48, 209, 88)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 16,
+   "tag": "span",
+   "rect": {
+    "x": 91.484,
+    "y": 271.531,
+    "w": 7.234,
+    "h": 14
+   },
+   "text": "~",
+   "textRects": [
+    {
+     "x": 91.484,
+     "y": 271.531,
+     "w": 7.234,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(64, 156, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(64, 156, 255)",
+    "bb": "0px none rgb(64, 156, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 17,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 287.922,
+    "w": 366,
+    "h": 17.391
+   },
+   "text": " % git status --short",
+   "textRects": [
+    {
+     "x": 113.172,
+     "y": 288.922,
+     "w": 151.719,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(209, 209, 214)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(209, 209, 214)",
+    "bb": "0px none rgb(209, 209, 214)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 18,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 288.922,
+    "w": 72.25,
+    "h": 14
+   },
+   "text": "eugene@Pro",
+   "textRects": [
+    {
+     "x": 12,
+     "y": 288.922,
+     "w": 72.25,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(48, 209, 88)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(48, 209, 88)",
+    "bb": "0px none rgb(48, 209, 88)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 19,
+   "tag": "span",
+   "rect": {
+    "x": 91.484,
+    "y": 288.922,
+    "w": 21.688,
+    "h": 14
+   },
+   "text": "lfg",
+   "textRects": [
+    {
+     "x": 91.484,
+     "y": 288.922,
+     "w": 21.688,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(64, 156, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(64, 156, 255)",
+    "bb": "0px none rgb(64, 156, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 20,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 305.313,
+    "w": 366,
+    "h": 17.391
+   },
+   "text": " M ios/LFG/SessionStore.swift",
+   "textRects": [
+    {
+     "x": 12,
+     "y": 306.313,
+     "w": 209.516,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(255, 159, 90)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 159, 90)",
+    "bb": "0px none rgb(255, 159, 90)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 21,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 322.703,
+    "w": 366,
+    "h": 17.391
+   },
+   "text": " M desktop/LFGSessions.swift",
+   "textRects": [
+    {
+     "x": 12,
+     "y": 323.703,
+     "w": 202.297,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(255, 159, 90)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 159, 90)",
+    "bb": "0px none rgb(255, 159, 90)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 22,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 340.094,
+    "w": 366,
+    "h": 17.391
+   },
+   "text": " % tmux ls",
+   "textRects": [
+    {
+     "x": 113.172,
+     "y": 341.094,
+     "w": 72.25,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(209, 209, 214)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(209, 209, 214)",
+    "bb": "0px none rgb(209, 209, 214)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 23,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 341.094,
+    "w": 72.25,
+    "h": 14
+   },
+   "text": "eugene@Pro",
+   "textRects": [
+    {
+     "x": 12,
+     "y": 341.094,
+     "w": 72.25,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(48, 209, 88)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(48, 209, 88)",
+    "bb": "0px none rgb(48, 209, 88)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 24,
+   "tag": "span",
+   "rect": {
+    "x": 91.484,
+    "y": 341.094,
+    "w": 21.688,
+    "h": 14
+   },
+   "text": "lfg",
+   "textRects": [
+    {
+     "x": 91.484,
+     "y": 341.094,
+     "w": 21.688,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(64, 156, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(64, 156, 255)",
+    "bb": "0px none rgb(64, 156, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 25,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 357.484,
+    "w": 366,
+    "h": 17.391
+   },
+   "text": "lfg-fork-3: 1 windows (attached)",
+   "textRects": [
+    {
+     "x": 12,
+     "y": 358.484,
+     "w": 231.188,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(142, 142, 147)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(142, 142, 147)",
+    "bb": "0px none rgb(142, 142, 147)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 26,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 374.875,
+    "w": 366,
+    "h": 17.391
+   },
+   "text": "lfg-term-phone: 1 windows (attached)",
+   "textRects": [
+    {
+     "x": 12,
+     "y": 375.875,
+     "w": 260.094,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(142, 142, 147)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(142, 142, 147)",
+    "bb": "0px none rgb(142, 142, 147)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 27,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 392.266,
+    "w": 366,
+    "h": 17.391
+   },
+   "text": "reelly-ads: 1 windows",
+   "textRects": [
+    {
+     "x": 12,
+     "y": 393.266,
+     "w": 151.719,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(142, 142, 147)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(142, 142, 147)",
+    "bb": "0px none rgb(142, 142, 147)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 28,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 409.656,
+    "w": 366,
+    "h": 17.391
+   },
+   "text": " % bun test src/sessions.test.ts",
+   "textRects": [
+    {
+     "x": 113.172,
+     "y": 410.656,
+     "w": 231.188,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(209, 209, 214)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(209, 209, 214)",
+    "bb": "0px none rgb(209, 209, 214)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 29,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 410.656,
+    "w": 72.25,
+    "h": 14
+   },
+   "text": "eugene@Pro",
+   "textRects": [
+    {
+     "x": 12,
+     "y": 410.656,
+     "w": 72.25,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(48, 209, 88)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(48, 209, 88)",
+    "bb": "0px none rgb(48, 209, 88)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 30,
+   "tag": "span",
+   "rect": {
+    "x": 91.484,
+    "y": 410.656,
+    "w": 21.688,
+    "h": 14
+   },
+   "text": "lfg",
+   "textRects": [
+    {
+     "x": 91.484,
+     "y": 410.656,
+     "w": 21.688,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(64, 156, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(64, 156, 255)",
+    "bb": "0px none rgb(64, 156, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 31,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 427.047,
+    "w": 366,
+    "h": 17.391
+   },
+   "text": "bun test v1.3.0",
+   "textRects": [
+    {
+     "x": 12,
+     "y": 428.047,
+     "w": 108.375,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(142, 142, 147)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(142, 142, 147)",
+    "bb": "0px none rgb(142, 142, 147)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 32,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 444.438,
+    "w": 366,
+    "h": 17.391
+   },
+   "text": " 42 pass",
+   "textRects": [
+    {
+     "x": 12,
+     "y": 445.438,
+     "w": 57.797,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(48, 209, 88)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(48, 209, 88)",
+    "bb": "0px none rgb(48, 209, 88)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 33,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 461.828,
+    "w": 366,
+    "h": 17.391
+   },
+   "text": " 0 fail",
+   "textRects": [
+    {
+     "x": 12,
+     "y": 462.828,
+     "w": 50.578,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(209, 209, 214)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(209, 209, 214)",
+    "bb": "0px none rgb(209, 209, 214)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 34,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 479.219,
+    "w": 366,
+    "h": 17.391
+   },
+   "text": "Ran 42 tests across 1 file. [1.80s]",
+   "textRects": [
+    {
+     "x": 12,
+     "y": 480.219,
+     "w": 252.875,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(142, 142, 147)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(142, 142, 147)",
+    "bb": "0px none rgb(142, 142, 147)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 35,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 496.609,
+    "w": 366,
+    "h": 17.391
+   },
+   "text": " % ",
+   "textRects": [
+    {
+     "x": 113.172,
+     "y": 497.609,
+     "w": 21.688,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(209, 209, 214)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(209, 209, 214)",
+    "bb": "0px none rgb(209, 209, 214)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 36,
+   "tag": "span",
+   "rect": {
+    "x": 12,
+    "y": 497.609,
+    "w": 72.25,
+    "h": 14
+   },
+   "text": "eugene@Pro",
+   "textRects": [
+    {
+     "x": 12,
+     "y": 497.609,
+     "w": 72.25,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(48, 209, 88)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(48, 209, 88)",
+    "bb": "0px none rgb(48, 209, 88)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 37,
+   "tag": "span",
+   "rect": {
+    "x": 91.484,
+    "y": 497.609,
+    "w": 21.688,
+    "h": 14
+   },
+   "text": "lfg",
+   "textRects": [
+    {
+     "x": 91.484,
+     "y": 497.609,
+     "w": 21.688,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(64, 156, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(64, 156, 255)",
+    "bb": "0px none rgb(64, 156, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 38,
+   "tag": "span",
+   "rect": {
+    "x": 134.859,
+    "y": 497.609,
+    "w": 7.234,
+    "h": 14
+   },
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "12px",
+    "fw": "400",
+    "lh": "17.4px",
+    "ls": "normal",
+    "color": "rgb(11, 11, 13)",
+    "bg": "rgb(209, 209, 214)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(11, 11, 13)",
+    "bb": "0px none rgb(11, 11, 13)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 39,
+   "tag": "div",
+   "rect": {
+    "x": 0,
+    "y": 524,
+    "w": 390,
+    "h": 50
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(242, 242, 247)",
+    "bg": "rgb(28, 28, 30)",
+    "br": "0px",
+    "pad": "0px 8px",
+    "bt": "1px solid rgb(44, 44, 46)",
+    "bb": "0px none rgb(242, 242, 247)",
+    "op": "1",
+    "gap": "6px"
+   }
+  },
+  {
+   "i": 40,
+   "tag": "button",
+   "aria": "Escape",
+   "rect": {
+    "x": 8,
+    "y": 531.5,
+    "w": 43.297,
+    "h": 36
+   },
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(58, 58, 60)",
+    "br": "8px",
+    "pad": "0px 9px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 41,
+   "tag": "span",
+   "rect": {
+    "x": 17,
+    "y": 541.5,
+    "w": 25.297,
+    "h": 16
+   },
+   "text": "esc",
+   "textRects": [
+    {
+     "x": 17,
+     "y": 541.5,
+     "w": 25.297,
+     "h": 16
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 42,
+   "tag": "button",
+   "aria": "Tab",
+   "rect": {
+    "x": 57.297,
+    "y": 531.5,
+    "w": 43.297,
+    "h": 36
+   },
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(58, 58, 60)",
+    "br": "8px",
+    "pad": "0px 9px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 43,
+   "tag": "span",
+   "rect": {
+    "x": 66.297,
+    "y": 541.5,
+    "w": 25.297,
+    "h": 16
+   },
+   "text": "tab",
+   "textRects": [
+    {
+     "x": 66.297,
+     "y": 541.5,
+     "w": 25.297,
+     "h": 16
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 44,
+   "tag": "button",
+   "aria": "Control",
+   "rect": {
+    "x": 106.594,
+    "y": 531.5,
+    "w": 51.719,
+    "h": 36
+   },
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(58, 58, 60)",
+    "br": "8px",
+    "pad": "0px 9px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 45,
+   "tag": "span",
+   "rect": {
+    "x": 115.594,
+    "y": 541.5,
+    "w": 33.719,
+    "h": 16
+   },
+   "text": "ctrl",
+   "textRects": [
+    {
+     "x": 115.594,
+     "y": 541.5,
+     "w": 33.719,
+     "h": 16
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 46,
+   "tag": "button",
+   "aria": "Option",
+   "rect": {
+    "x": 164.313,
+    "y": 531.5,
+    "w": 40,
+    "h": 36
+   },
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(58, 58, 60)",
+    "br": "8px",
+    "pad": "0px 9px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 47,
+   "tag": "span",
+   "rect": {
+    "x": 180.094,
+    "y": 541.5,
+    "w": 8.438,
+    "h": 16
+   },
+   "text": "⌥",
+   "textRects": [
+    {
+     "x": 180.094,
+     "y": 541.5,
+     "w": 8.438,
+     "h": 16
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 48,
+   "tag": "button",
+   "aria": "Up",
+   "rect": {
+    "x": 210.313,
+    "y": 531.5,
+    "w": 40,
+    "h": 36
+   },
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(58, 58, 60)",
+    "br": "8px",
+    "pad": "0px 9px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 49,
+   "tag": "span",
+   "rect": {
+    "x": 226.094,
+    "y": 541.5,
+    "w": 8.438,
+    "h": 16
+   },
+   "text": "↑",
+   "textRects": [
+    {
+     "x": 226.094,
+     "y": 541.5,
+     "w": 8.438,
+     "h": 16
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 50,
+   "tag": "button",
+   "aria": "Down",
+   "rect": {
+    "x": 256.313,
+    "y": 531.5,
+    "w": 40,
+    "h": 36
+   },
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(58, 58, 60)",
+    "br": "8px",
+    "pad": "0px 9px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 51,
+   "tag": "span",
+   "rect": {
+    "x": 272.094,
+    "y": 541.5,
+    "w": 8.438,
+    "h": 16
+   },
+   "text": "↓",
+   "textRects": [
+    {
+     "x": 272.094,
+     "y": 541.5,
+     "w": 8.438,
+     "h": 16
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 52,
+   "tag": "button",
+   "aria": "Left",
+   "rect": {
+    "x": 302.313,
+    "y": 531.5,
+    "w": 40,
+    "h": 36
+   },
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(58, 58, 60)",
+    "br": "8px",
+    "pad": "0px 9px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 53,
+   "tag": "span",
+   "rect": {
+    "x": 318.094,
+    "y": 541.5,
+    "w": 8.438,
+    "h": 16
+   },
+   "text": "←",
+   "textRects": [
+    {
+     "x": 318.094,
+     "y": 541.5,
+     "w": 8.438,
+     "h": 16
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 54,
+   "tag": "button",
+   "aria": "Right",
+   "rect": {
+    "x": 348.313,
+    "y": 531.5,
+    "w": 40,
+    "h": 36
+   },
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(58, 58, 60)",
+    "br": "8px",
+    "pad": "0px 9px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 55,
+   "tag": "span",
+   "rect": {
+    "x": 364.094,
+    "y": 541.5,
+    "w": 8.438,
+    "h": 16
+   },
+   "text": "→",
+   "textRects": [
+    {
+     "x": 364.094,
+     "y": 541.5,
+     "w": 8.438,
+     "h": 16
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 56,
+   "tag": "button",
+   "aria": "Pipe",
+   "rect": {
+    "x": 394.313,
+    "y": 531.5,
+    "w": 40,
+    "h": 36
+   },
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(58, 58, 60)",
+    "br": "8px",
+    "pad": "0px 9px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 57,
+   "tag": "span",
+   "rect": {
+    "x": 410.094,
+    "y": 541.5,
+    "w": 8.438,
+    "h": 16
+   },
+   "text": "|",
+   "textRects": [
+    {
+     "x": 410.094,
+     "y": 541.5,
+     "w": 8.438,
+     "h": 16
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 58,
+   "tag": "button",
+   "aria": "Slash",
+   "rect": {
+    "x": 440.313,
+    "y": 531.5,
+    "w": 40,
+    "h": 36
+   },
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(58, 58, 60)",
+    "br": "8px",
+    "pad": "0px 9px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 59,
+   "tag": "span",
+   "rect": {
+    "x": 456.094,
+    "y": 541.5,
+    "w": 8.438,
+    "h": 16
+   },
+   "text": "/",
+   "textRects": [
+    {
+     "x": 456.094,
+     "y": 541.5,
+     "w": 8.438,
+     "h": 16
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 60,
+   "tag": "button",
+   "aria": "Tilde",
+   "rect": {
+    "x": 486.313,
+    "y": 531.5,
+    "w": 40,
+    "h": 36
+   },
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(58, 58, 60)",
+    "br": "8px",
+    "pad": "0px 9px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 61,
+   "tag": "span",
+   "rect": {
+    "x": 502.094,
+    "y": 541.5,
+    "w": 8.438,
+    "h": 16
+   },
+   "text": "~",
+   "textRects": [
+    {
+     "x": 502.094,
+     "y": 541.5,
+     "w": 8.438,
+     "h": 16
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 62,
+   "tag": "button",
+   "aria": "Paste",
+   "rect": {
+    "x": 532.313,
+    "y": 531.5,
+    "w": 40,
+    "h": 36
+   },
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(58, 58, 60)",
+    "br": "8px",
+    "pad": "0px 9px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 63,
+   "tag": "span",
+   "rect": {
+    "x": 543.875,
+    "y": 541.5,
+    "w": 16.859,
+    "h": 16
+   },
+   "text": "⌘V",
+   "textRects": [
+    {
+     "x": 543.875,
+     "y": 541.5,
+     "w": 16.859,
+     "h": 16
+    }
+   ],
+   "cs": {
+    "ff": "ui-monospace, \"SF Mono\", Menlo, monospace",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 64,
+   "tag": "button",
+   "aria": "Hide keyboard",
+   "rect": {
+    "x": 578.313,
+    "y": 531.5,
+    "w": 44,
+    "h": 36
+   },
+   "cs": {
+    "ff": "Arial",
+    "fs": "13.3333px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(0, 0, 0)",
+    "bg": "rgb(58, 58, 60)",
+    "br": "8px",
+    "pad": "1px 6px",
+    "bt": "0px none rgb(0, 0, 0)",
+    "bb": "0px none rgb(0, 0, 0)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 65,
+   "tag": "svg",
+   "rect": {
+    "x": 590.313,
+    "y": 541.5,
+    "w": 20,
+    "h": 16
+   },
+   "svg": {
+    "width": "20",
+    "height": "16",
+    "viewBox": "0 0 26 20",
+    "stroke": "#FFFFFF",
+    "stroke-width": "1.6",
+    "fill": "none",
+    "stroke-linecap": "round"
+   }
+  },
+  {
+   "i": 66,
+   "tag": "rect",
+   "rect": {
+    "x": 591.082,
+    "y": 542.577,
+    "w": 18.462,
+    "h": 9.231
+   },
+   "svg": {
+    "width": "24",
+    "height": "12",
+    "x": "1",
+    "y": "1",
+    "rx": "2"
+   }
+  },
+  {
+   "i": 67,
+   "tag": "path",
+   "rect": {
+    "x": 594.159,
+    "y": 545.654,
+    "w": 12.315,
+    "h": 3.077
+   },
+   "svg": {
+    "d": "M5 5h.01M9 5h.01M13 5h.01M17 5h.01M21 5h.01M7 9h12"
+   }
+  },
+  {
+   "i": 68,
+   "tag": "path",
+   "rect": {
+    "x": 598.005,
+    "y": 554.115,
+    "w": 4.615,
+    "h": 2.308
+   },
+   "svg": {
+    "d": "M10 16l3 3 3-3"
+   }
+  },
+  {
+   "i": 69,
+   "tag": "div",
+   "rect": {
+    "x": 0,
+    "y": 574,
+    "w": 390,
+    "h": 270
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(242, 242, 247)",
+    "bg": "rgb(42, 42, 44)",
+    "br": "0px",
+    "pad": "8px 3px 0px",
+    "bt": "0px none rgb(242, 242, 247)",
+    "bb": "0px none rgb(242, 242, 247)",
+    "op": "1",
+    "gap": "11px"
+   }
+  },
+  {
+   "i": 70,
+   "tag": "div",
+   "rect": {
+    "x": 3,
+    "y": 582,
+    "w": 384,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(242, 242, 247)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(242, 242, 247)",
+    "bb": "0px none rgb(242, 242, 247)",
+    "op": "1",
+    "gap": "6px"
+   }
+  },
+  {
+   "i": 71,
+   "tag": "span",
+   "rect": {
+    "x": 3,
+    "y": 582,
+    "w": 33,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 72,
+   "tag": "span",
+   "rect": {
+    "x": 13.406,
+    "y": 591,
+    "w": 12.188,
+    "h": 24
+   },
+   "text": "q",
+   "textRects": [
+    {
+     "x": 13.406,
+     "y": 591,
+     "w": 12.188,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 73,
+   "tag": "span",
+   "rect": {
+    "x": 42,
+    "y": 582,
+    "w": 33,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 74,
+   "tag": "span",
+   "rect": {
+    "x": 50.75,
+    "y": 591,
+    "w": 15.5,
+    "h": 24
+   },
+   "text": "w",
+   "textRects": [
+    {
+     "x": 50.75,
+     "y": 591,
+     "w": 15.5,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 75,
+   "tag": "span",
+   "rect": {
+    "x": 81,
+    "y": 582,
+    "w": 33,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 76,
+   "tag": "span",
+   "rect": {
+    "x": 91.781,
+    "y": 591,
+    "w": 11.438,
+    "h": 24
+   },
+   "text": "e",
+   "textRects": [
+    {
+     "x": 91.781,
+     "y": 591,
+     "w": 11.438,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 77,
+   "tag": "span",
+   "rect": {
+    "x": 120,
+    "y": 582,
+    "w": 33,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 78,
+   "tag": "span",
+   "rect": {
+    "x": 132.688,
+    "y": 591,
+    "w": 7.625,
+    "h": 24
+   },
+   "text": "r",
+   "textRects": [
+    {
+     "x": 132.688,
+     "y": 591,
+     "w": 7.625,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 79,
+   "tag": "span",
+   "rect": {
+    "x": 159,
+    "y": 582,
+    "w": 33,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 80,
+   "tag": "span",
+   "rect": {
+    "x": 171.859,
+    "y": 591,
+    "w": 7.266,
+    "h": 24
+   },
+   "text": "t",
+   "textRects": [
+    {
+     "x": 171.859,
+     "y": 591,
+     "w": 7.266,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 81,
+   "tag": "span",
+   "rect": {
+    "x": 198,
+    "y": 582,
+    "w": 33,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 82,
+   "tag": "span",
+   "rect": {
+    "x": 209.063,
+    "y": 591,
+    "w": 10.859,
+    "h": 24
+   },
+   "text": "y",
+   "textRects": [
+    {
+     "x": 209.063,
+     "y": 591,
+     "w": 10.859,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 83,
+   "tag": "span",
+   "rect": {
+    "x": 237,
+    "y": 582,
+    "w": 33,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 84,
+   "tag": "span",
+   "rect": {
+    "x": 247.656,
+    "y": 591,
+    "w": 11.672,
+    "h": 24
+   },
+   "text": "u",
+   "textRects": [
+    {
+     "x": 247.656,
+     "y": 591,
+     "w": 11.672,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 85,
+   "tag": "span",
+   "rect": {
+    "x": 276,
+    "y": 582,
+    "w": 33,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 86,
+   "tag": "span",
+   "rect": {
+    "x": 290.016,
+    "y": 591,
+    "w": 4.953,
+    "h": 24
+   },
+   "text": "i",
+   "textRects": [
+    {
+     "x": 290.016,
+     "y": 591,
+     "w": 4.953,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 87,
+   "tag": "span",
+   "rect": {
+    "x": 315,
+    "y": 582,
+    "w": 33,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 88,
+   "tag": "span",
+   "rect": {
+    "x": 325.578,
+    "y": 591,
+    "w": 11.828,
+    "h": 24
+   },
+   "text": "o",
+   "textRects": [
+    {
+     "x": 325.578,
+     "y": 591,
+     "w": 11.828,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 89,
+   "tag": "span",
+   "rect": {
+    "x": 354,
+    "y": 582,
+    "w": 33,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 90,
+   "tag": "span",
+   "rect": {
+    "x": 364.391,
+    "y": 591,
+    "w": 12.219,
+    "h": 24
+   },
+   "text": "p",
+   "textRects": [
+    {
+     "x": 364.391,
+     "y": 591,
+     "w": 12.219,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 91,
+   "tag": "div",
+   "rect": {
+    "x": 3,
+    "y": 635,
+    "w": 384,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(242, 242, 247)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px 18px",
+    "bt": "0px none rgb(242, 242, 247)",
+    "bb": "0px none rgb(242, 242, 247)",
+    "op": "1",
+    "gap": "6px"
+   }
+  },
+  {
+   "i": 92,
+   "tag": "span",
+   "rect": {
+    "x": 21,
+    "y": 635,
+    "w": 33.328,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 93,
+   "tag": "span",
+   "rect": {
+    "x": 32.141,
+    "y": 644,
+    "w": 11.047,
+    "h": 24
+   },
+   "text": "a",
+   "textRects": [
+    {
+     "x": 32.141,
+     "y": 644,
+     "w": 11.047,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 94,
+   "tag": "span",
+   "rect": {
+    "x": 60.328,
+    "y": 635,
+    "w": 33.344,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 95,
+   "tag": "span",
+   "rect": {
+    "x": 71.766,
+    "y": 644,
+    "w": 10.469,
+    "h": 24
+   },
+   "text": "s",
+   "textRects": [
+    {
+     "x": 71.766,
+     "y": 644,
+     "w": 10.469,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 96,
+   "tag": "span",
+   "rect": {
+    "x": 99.672,
+    "y": 635,
+    "w": 33.328,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 97,
+   "tag": "span",
+   "rect": {
+    "x": 110.188,
+    "y": 644,
+    "w": 12.297,
+    "h": 24
+   },
+   "text": "d",
+   "textRects": [
+    {
+     "x": 110.188,
+     "y": 644,
+     "w": 12.297,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 98,
+   "tag": "span",
+   "rect": {
+    "x": 139,
+    "y": 635,
+    "w": 33.344,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 99,
+   "tag": "span",
+   "rect": {
+    "x": 152.047,
+    "y": 644,
+    "w": 7.25,
+    "h": 24
+   },
+   "text": "f",
+   "textRects": [
+    {
+     "x": 152.047,
+     "y": 644,
+     "w": 7.25,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 100,
+   "tag": "span",
+   "rect": {
+    "x": 178.344,
+    "y": 635,
+    "w": 33.328,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 101,
+   "tag": "span",
+   "rect": {
+    "x": 188.906,
+    "y": 644,
+    "w": 12.188,
+    "h": 24
+   },
+   "text": "g",
+   "textRects": [
+    {
+     "x": 188.906,
+     "y": 644,
+     "w": 12.188,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 102,
+   "tag": "span",
+   "rect": {
+    "x": 217.672,
+    "y": 635,
+    "w": 33.344,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 103,
+   "tag": "span",
+   "rect": {
+    "x": 228.453,
+    "y": 644,
+    "w": 11.781,
+    "h": 24
+   },
+   "text": "h",
+   "textRects": [
+    {
+     "x": 228.453,
+     "y": 644,
+     "w": 11.781,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 104,
+   "tag": "span",
+   "rect": {
+    "x": 257.016,
+    "y": 635,
+    "w": 33.328,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 105,
+   "tag": "span",
+   "rect": {
+    "x": 271.203,
+    "y": 644,
+    "w": 4.938,
+    "h": 24
+   },
+   "text": "j",
+   "textRects": [
+    {
+     "x": 271.203,
+     "y": 644,
+     "w": 4.938,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 106,
+   "tag": "span",
+   "rect": {
+    "x": 296.344,
+    "y": 635,
+    "w": 33.328,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 107,
+   "tag": "span",
+   "rect": {
+    "x": 307.578,
+    "y": 644,
+    "w": 10.859,
+    "h": 24
+   },
+   "text": "k",
+   "textRects": [
+    {
+     "x": 307.578,
+     "y": 644,
+     "w": 10.859,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 108,
+   "tag": "span",
+   "rect": {
+    "x": 335.672,
+    "y": 635,
+    "w": 33.328,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 109,
+   "tag": "span",
+   "rect": {
+    "x": 349.797,
+    "y": 644,
+    "w": 5.063,
+    "h": 24
+   },
+   "text": "l",
+   "textRects": [
+    {
+     "x": 349.797,
+     "y": 644,
+     "w": 5.063,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 110,
+   "tag": "div",
+   "rect": {
+    "x": 3,
+    "y": 688,
+    "w": 384,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(242, 242, 247)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(242, 242, 247)",
+    "bb": "0px none rgb(242, 242, 247)",
+    "op": "1",
+    "gap": "6px"
+   }
+  },
+  {
+   "i": 111,
+   "tag": "span",
+   "rect": {
+    "x": 3,
+    "y": 688,
+    "w": 48,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "15px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(54, 54, 56)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 112,
+   "tag": "span",
+   "rect": {
+    "x": 19.625,
+    "y": 700,
+    "w": 14.734,
+    "h": 18
+   },
+   "text": "⇧",
+   "textRects": [
+    {
+     "x": 19.625,
+     "y": 700,
+     "w": 14.734,
+     "h": 18
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "15px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 113,
+   "tag": "span",
+   "rect": {
+    "x": 57,
+    "y": 688,
+    "w": 34.297,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 114,
+   "tag": "span",
+   "rect": {
+    "x": 68.75,
+    "y": 697,
+    "w": 10.781,
+    "h": 24
+   },
+   "text": "z",
+   "textRects": [
+    {
+     "x": 68.75,
+     "y": 697,
+     "w": 10.781,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 115,
+   "tag": "span",
+   "rect": {
+    "x": 97.297,
+    "y": 688,
+    "w": 34.281,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 116,
+   "tag": "span",
+   "rect": {
+    "x": 109.188,
+    "y": 697,
+    "w": 10.5,
+    "h": 24
+   },
+   "text": "x",
+   "textRects": [
+    {
+     "x": 109.188,
+     "y": 697,
+     "w": 10.5,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 117,
+   "tag": "span",
+   "rect": {
+    "x": 137.578,
+    "y": 688,
+    "w": 34.297,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 118,
+   "tag": "span",
+   "rect": {
+    "x": 149.125,
+    "y": 697,
+    "w": 11.203,
+    "h": 24
+   },
+   "text": "c",
+   "textRects": [
+    {
+     "x": 149.125,
+     "y": 697,
+     "w": 11.203,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 119,
+   "tag": "span",
+   "rect": {
+    "x": 177.875,
+    "y": 688,
+    "w": 34.281,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 120,
+   "tag": "span",
+   "rect": {
+    "x": 189.594,
+    "y": 697,
+    "w": 10.844,
+    "h": 24
+   },
+   "text": "v",
+   "textRects": [
+    {
+     "x": 189.594,
+     "y": 697,
+     "w": 10.844,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 121,
+   "tag": "span",
+   "rect": {
+    "x": 218.156,
+    "y": 688,
+    "w": 34.281,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 122,
+   "tag": "span",
+   "rect": {
+    "x": 229.141,
+    "y": 697,
+    "w": 12.297,
+    "h": 24
+   },
+   "text": "b",
+   "textRects": [
+    {
+     "x": 229.141,
+     "y": 697,
+     "w": 12.297,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 123,
+   "tag": "span",
+   "rect": {
+    "x": 258.438,
+    "y": 688,
+    "w": 34.281,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 124,
+   "tag": "span",
+   "rect": {
+    "x": 269.734,
+    "y": 697,
+    "w": 11.672,
+    "h": 24
+   },
+   "text": "n",
+   "textRects": [
+    {
+     "x": 269.734,
+     "y": 697,
+     "w": 11.672,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 125,
+   "tag": "span",
+   "rect": {
+    "x": 298.719,
+    "y": 688,
+    "w": 34.281,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(74, 74, 77)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 126,
+   "tag": "span",
+   "rect": {
+    "x": 307.156,
+    "y": 697,
+    "w": 17.406,
+    "h": 24
+   },
+   "text": "m",
+   "textRects": [
+    {
+     "x": 307.156,
+     "y": 697,
+     "w": 17.406,
+     "h": 24
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "20px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 127,
+   "tag": "span",
+   "rect": {
+    "x": 339,
+    "y": 688,
+    "w": 48,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "15px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(54, 54, 56)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 128,
+   "tag": "span",
+   "rect": {
+    "x": 355.375,
+    "y": 700,
+    "w": 15.25,
+    "h": 18
+   },
+   "text": "⌫",
+   "textRects": [
+    {
+     "x": 355.375,
+     "y": 700,
+     "w": 15.25,
+     "h": 18
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "15px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 129,
+   "tag": "div",
+   "rect": {
+    "x": 3,
+    "y": 741,
+    "w": 384,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(242, 242, 247)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(242, 242, 247)",
+    "bb": "0px none rgb(242, 242, 247)",
+    "op": "1",
+    "gap": "6px"
+   }
+  },
+  {
+   "i": 130,
+   "tag": "span",
+   "rect": {
+    "x": 3,
+    "y": 741,
+    "w": 54.438,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "15px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(54, 54, 56)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 131,
+   "tag": "span",
+   "rect": {
+    "x": 17.5,
+    "y": 753,
+    "w": 25.422,
+    "h": 18
+   },
+   "text": "123",
+   "textRects": [
+    {
+     "x": 17.5,
+     "y": 753,
+     "w": 25.422,
+     "h": 18
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "15px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 132,
+   "tag": "span",
+   "rect": {
+    "x": 63.438,
+    "y": 741,
+    "w": 226.828,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "15px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(54, 54, 56)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 133,
+   "tag": "span",
+   "rect": {
+    "x": 155.719,
+    "y": 753,
+    "w": 42.25,
+    "h": 18
+   },
+   "text": "space",
+   "textRects": [
+    {
+     "x": 155.719,
+     "y": 753,
+     "w": 42.25,
+     "h": 18
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "15px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 134,
+   "tag": "span",
+   "rect": {
+    "x": 296.266,
+    "y": 741,
+    "w": 90.734,
+    "h": 42
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "15px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(54, 54, 56)",
+    "br": "6px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 135,
+   "tag": "span",
+   "rect": {
+    "x": 320.188,
+    "y": 753,
+    "w": 42.891,
+    "h": 18
+   },
+   "text": "return",
+   "textRects": [
+    {
+     "x": 320.188,
+     "y": 753,
+     "w": 42.891,
+     "h": 18
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "15px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  }
+ ]
+}

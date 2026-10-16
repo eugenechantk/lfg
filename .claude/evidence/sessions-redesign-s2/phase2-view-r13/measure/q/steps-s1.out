@@ -1,0 +1,6 @@
+s1 icon-rows: rows 324.33..336.67, 358.00..369.67  bg (0, 0, 0)
+qm icon-rows: rows 600.00..612.33, 634.00..645.67  bg (0, 0, 0)
+qd icon-rows: rows 600.00..612.33, 634.00..645.67  bg (0, 0, 0)
+s1 chev-rows: rows 326.33..333.67, 361.67..366.33  bg (0, 0, 0)
+qc chev-rows: rows 602.00..609.33, 636.00..643.33  bg (0, 0, 0)
+b4 chev-rows: no ink (bg (np.int16(0), np.int16(0), np.int16(0)))

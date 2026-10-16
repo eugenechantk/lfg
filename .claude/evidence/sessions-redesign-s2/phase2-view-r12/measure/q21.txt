@@ -1,0 +1,15 @@
+g3 fade-line | app/g3.png | ink | 14 679 370 16 | 40 0,0,0
+g3 fade-line-pct | app/g3.png | pct | 14 679 370 16
+w normal-prose | app/w.png | ink | 14 584 370 16 | 40 0,0,0
+g3 fade-l-top | app/g3.png | pct | 14 679 370 5
+g3 fade-l-bot | app/g3.png | pct | 14 689 370 5
+s1 top-bubble | app/s1.png | pct | 160 118 220 26
+s1 top-bubble-rows | app/s1.png | rows | 300 105 20 45 | 20 0,0,0
+g2 top-card-rows | app/g2.png | rows | 300 105 20 30 | 8 0,0,0
+g2 top-card-col | app/g2.png | color | 300 125 4 2
+g2 top-card-col2 | app/g2.png | color | 300 135 4 2
+g2 top-card-col3 | app/g2.png | color | 300 145 4 2
+s1 bubble-c1 | app/s1.png | color | 300 122 4 2
+s1 bubble-c2 | app/s1.png | color | 300 132 4 2
+s1 bubble-c3 | app/s1.png | color | 300 140 4 2
+b1 hdr-grad | design/b1-3x.png | color | 200 110 4 2

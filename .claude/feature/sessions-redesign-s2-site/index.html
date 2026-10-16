@@ -1,0 +1,1715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+  <meta name="googlebot" content="noindex, nofollow">
+  <title># Feature: Sessions redesign S2 (phone) + Desktop sessions
+list</title>
+  <style>
+    :root {
+      --bg: #fafaf7;
+      --surface: #ffffff;
+      --ink: #1e2227;
+      --ink-soft: #4a5057;
+      --ink-faint: #757a82;
+      --rule: #e5e3dc;
+      --accent: #2a6f97;
+      --accent-soft: #eaf2f7;
+      --warn: #b88a3a;
+      --maxw: 760px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #15171a;
+        --surface: #1c1f23;
+        --ink: #e8e8e3;
+        --ink-soft: #b6b8bd;
+        --ink-faint: #82868d;
+        --rule: #2a2e34;
+        --accent: #7fb3d5;
+        --accent-soft: #1f2a32;
+        --warn: #d4a865;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      font-size: 17px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    .wrap {
+      max-width: var(--maxw);
+      margin: 0 auto;
+      padding: 56px 24px 96px;
+    }
+    .meta-banner {
+      background: var(--accent-soft);
+      border-left: 3px solid var(--accent);
+      padding: 12px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      color: var(--ink-soft);
+      margin-bottom: 32px;
+    }
+    .meta-banner strong { color: var(--ink); }
+    h1, h2, h3, h4 {
+      font-weight: 650;
+      line-height: 1.25;
+      color: var(--ink);
+      letter-spacing: -0.01em;
+    }
+    h1 {
+      font-size: 2.1em;
+      margin: 0 0 0.4em;
+      letter-spacing: -0.02em;
+    }
+    h2 {
+      font-size: 1.45em;
+      margin: 2.2em 0 0.6em;
+      padding-bottom: 0.35em;
+      border-bottom: 1px solid var(--rule);
+    }
+    h3 {
+      font-size: 1.18em;
+      margin: 2em 0 0.5em;
+      color: var(--accent);
+    }
+    h4 {
+      font-size: 1.02em;
+      margin: 1.6em 0 0.4em;
+      color: var(--ink-soft);
+      text-transform: none;
+    }
+    p { margin: 0.7em 0; }
+    a {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      text-decoration-thickness: 1px;
+    }
+    a:hover { text-decoration-thickness: 2px; }
+    strong { font-weight: 650; color: var(--ink); }
+    em { font-style: italic; color: var(--ink-soft); }
+    ul, ol { padding-left: 1.4em; margin: 0.7em 0; }
+    li { margin: 0.25em 0; }
+    li > p { margin: 0.3em 0; }
+    hr {
+      border: 0;
+      border-top: 1px solid var(--rule);
+      margin: 2.4em 0;
+    }
+    blockquote {
+      margin: 1em 0;
+      padding: 0.4em 1em;
+      border-left: 3px solid var(--rule);
+      color: var(--ink-soft);
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 1.4em auto;
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 4px 14px rgba(0,0,0,0.06);
+    }
+    code {
+      font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      font-size: 0.9em;
+      padding: 0.12em 0.35em;
+      background: var(--accent-soft);
+      border-radius: 3px;
+      color: var(--ink);
+    }
+    pre {
+      background: var(--surface);
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      padding: 14px 18px;
+      overflow-x: auto;
+      font-size: 0.9em;
+    }
+    pre code { background: transparent; padding: 0; }
+    .table-scroll {
+      margin: 1.4em 0;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 6px;
+      border: 1px solid var(--rule);
+      background: var(--surface);
+    }
+    .table-scroll table { margin: 0; border: none; border-radius: 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.4em 0;
+      font-size: 0.94em;
+      background: var(--surface);
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid var(--rule);
+    }
+    thead {
+      background: var(--accent-soft);
+    }
+    th, td {
+      padding: 10px 14px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--rule);
+    }
+    th {
+      font-weight: 600;
+      color: var(--ink);
+      font-size: 0.92em;
+      letter-spacing: 0.01em;
+    }
+    tr:last-child td { border-bottom: 0; }
+    tr:hover td { background: rgba(0,0,0,0.015); }
+    @media (prefers-color-scheme: dark) {
+      tr:hover td { background: rgba(255,255,255,0.02); }
+    }
+    /* checkbox list */
+    li input[type="checkbox"] {
+      margin-right: 0.5em;
+      transform: translateY(1px);
+    }
+    /* TL;DR / callout-ish first h2 section */
+    h2#tl-dr + p,
+    h2#tldr + p {
+      font-size: 1.02em;
+    }
+    /* Footer */
+    .footer {
+      margin-top: 72px;
+      padding-top: 20px;
+      border-top: 1px solid var(--rule);
+      font-size: 13px;
+      color: var(--ink-faint);
+      text-align: center;
+    }
+    /* Smooth anchor scrolling + offset so headings aren't flush with the top edge */
+    html { scroll-behavior: smooth; }
+    h2, h3, h4 { scroll-margin-top: 24px; }
+    /* TOC panel — sticky right-side collapsible */
+    .toc-panel {
+      position: fixed;
+      top: 80px;
+      right: 0;
+      z-index: 100;
+      font-size: 14px;
+      max-width: min(360px, calc(100vw - 32px));
+    }
+    .toc-panel details {
+      background: var(--surface);
+      border: 1px solid var(--rule);
+      border-right: none;
+      border-radius: 8px 0 0 8px;
+      box-shadow: -2px 2px 12px rgba(0,0,0,0.08);
+      max-height: calc(100vh - 100px);
+      overflow: hidden;
+      width: auto;
+    }
+    .toc-panel details[open] {
+      overflow-y: auto;
+      width: min(320px, calc(100vw - 32px));
+    }
+    .toc-panel summary {
+      cursor: pointer;
+      list-style: none;
+      font-weight: 600;
+      color: var(--ink);
+      user-select: none;
+      white-space: nowrap;
+    }
+    .toc-panel summary::-webkit-details-marker { display: none; }
+    /* Collapsed: vertical side-tab — menu icon stacked above rotated text */
+    .toc-panel details:not([open]) summary {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 10px;
+      color: var(--ink-soft);
+    }
+    .toc-panel details:not([open]) .toc-icon {
+      font-size: 16px;
+      color: var(--ink-faint);
+      line-height: 1;
+    }
+    .toc-panel details:not([open]) .toc-label {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      font-size: 13px;
+      letter-spacing: 0.05em;
+    }
+    .toc-panel details:not([open]) summary:hover {
+      color: var(--accent);
+    }
+    .toc-panel details:not([open]) summary:hover .toc-icon {
+      color: var(--accent);
+    }
+    /* Open: horizontal header with close affordance — sticky so × stays reachable while TOC scrolls */
+    .toc-panel details[open] summary {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      background: var(--surface);
+      z-index: 1;
+      border-bottom: 1px solid var(--rule);
+    }
+    /* Avoid double-border when summary is sticky above the nav (nav has its own top border) */
+    .toc-panel details[open] nav,
+    .toc-panel details[open] #TOC { border-top: none; }
+    .toc-panel details[open] .toc-icon { display: none; }
+    .toc-panel details[open] summary::after {
+      content: "×";
+      color: var(--ink-faint);
+      font-size: 1.2em;
+      line-height: 1;
+    }
+    .toc-panel nav,
+    .toc-panel #TOC {
+      padding: 4px 14px 14px;
+      border-top: 1px solid var(--rule);
+    }
+    .toc-panel ul {
+      list-style: none;
+      padding-left: 0;
+      margin: 6px 0;
+    }
+    .toc-panel ul ul {
+      padding-left: 12px;
+      margin-top: 2px;
+      border-left: 1px solid var(--rule);
+      margin-left: 4px;
+    }
+    .toc-panel li {
+      margin: 5px 0;
+    }
+    .toc-panel a {
+      text-decoration: none;
+      color: var(--ink-soft);
+      font-size: 13.5px;
+      display: block;
+      line-height: 1.35;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    .toc-panel a:hover {
+      color: var(--accent);
+      background: var(--accent-soft);
+    }
+    /* Mobile */
+    @media (max-width: 760px) {
+      .table-scroll th,
+      .table-scroll td { min-width: 160px; }
+    }
+    @media (max-width: 600px) {
+      body { font-size: 16px; }
+      .wrap { padding: 32px 18px 64px; }
+      h1 { font-size: 1.7em; }
+      h2 { font-size: 1.25em; }
+      table { font-size: 0.88em; }
+      th, td { padding: 8px 10px; }
+    }
+    /* Print */
+    @media print {
+      :root {
+        --bg: #ffffff;
+        --surface: #ffffff;
+        --ink: #000;
+        --ink-soft: #333;
+        --rule: #ccc;
+        --accent: #1a4d6e;
+        --accent-soft: #f0f4f7;
+      }
+      body { font-size: 11pt; line-height: 1.5; }
+      .wrap { max-width: 100%; padding: 0; }
+      .meta-banner, .footer, .toc-panel { display: none; }
+      h2 { page-break-after: avoid; }
+      table, tr, td, th { page-break-inside: avoid; }
+      a { color: var(--ink); text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <aside class="toc-panel" aria-label="Table of contents">
+    <details>
+      <summary><span class="toc-icon" aria-hidden="true">☰</span><span class="toc-label">Contents</span></summary>
+      <nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#feature-sessions-redesign-s2-phone--desktop-sessions-list"
+id="toc-feature-sessions-redesign-s2-phone--desktop-sessions-list">Feature:
+Sessions redesign S2 (phone) + Desktop sessions list</a>
+<ul>
+<li><a href="#how-to-read-this-plan" id="toc-how-to-read-this-plan">How
+to read this plan</a></li>
+<li><a href="#user-story" id="toc-user-story">User story</a></li>
+<li><a href="#user-flow" id="toc-user-flow">User flow</a></li>
+<li><a href="#screen-by-screen-annotation"
+id="toc-screen-by-screen-annotation">Screen-by-screen annotation</a>
+<ul>
+<li><a href="#1-s2--sessions-list-s2-list"
+id="toc-1-s2--sessions-list-s2-list">1. S2 · Sessions list
+(<code>s2-list</code>)</a></li>
+<li><a href="#2-s2--session-view-working-s2-view"
+id="toc-2-s2--session-view-working-s2-view">2. S2 · Session view,
+working (<code>s2-view</code>)</a></li>
+<li><a href="#3-s2--message-queued-s2-queued"
+id="toc-3-s2--message-queued-s2-queued">3. S2 · Message queued
+(<code>s2-queued</code>)</a></li>
+<li><a href="#4-s2--message-not-sent-s2-queued-failed"
+id="toc-4-s2--message-not-sent-s2-queued-failed">4. S2 · Message not
+sent (<code>s2-queued-failed</code>)</a></li>
+<li><a
+href="#5-s2--needs-input-question--permission--plan-s2-question-tweak-kind"
+id="toc-5-s2--needs-input-question--permission--plan-s2-question-tweak-kind">5.
+S2 · Needs input: question / permission / plan
+(<code>s2-question</code>, tweak <code>kind</code>)</a></li>
+<li><a href="#6-s2--needs-input-sign-in-s2-signin-prompt"
+id="toc-6-s2--needs-input-sign-in-s2-signin-prompt">6. S2 · Needs input:
+sign-in (<code>s2-signin-prompt</code>)</a></li>
+<li><a href="#7-s2--sign-in-browser-s2-signin"
+id="toc-7-s2--sign-in-browser-s2-signin">7. S2 · Sign-in browser
+(<code>s2-signin</code>)</a></li>
+<li><a href="#8-s2--session-sheet-s2-menu"
+id="toc-8-s2--session-sheet-s2-menu">8. S2 · Session sheet
+(<code>s2-menu</code>)</a></li>
+<li><a href="#9-s2--subagents-sheet-s2-subagents"
+id="toc-9-s2--subagents-sheet-s2-subagents">9. S2 · Subagents sheet
+(<code>s2-subagents</code>)</a></li>
+<li><a href="#10-s2--files--links-sheet-s2-files"
+id="toc-10-s2--files--links-sheet-s2-files">10. S2 · Files &amp; links
+sheet (<code>s2-files</code>)</a></li>
+<li><a href="#11-s2--terminal-s2-terminal"
+id="toc-11-s2--terminal-s2-terminal">11. S2 · Terminal
+(<code>s2-terminal</code>)</a></li>
+<li><a href="#12-desktop--sessions-list-da2-sessions"
+id="toc-12-desktop--sessions-list-da2-sessions">12. Desktop · Sessions
+list (<code>dA2-sessions</code>)</a></li>
+</ul></li>
+<li><a href="#backend-work" id="toc-backend-work">Backend work</a></li>
+<li><a href="#component-inventory"
+id="toc-component-inventory">Component inventory</a></li>
+<li><a href="#success-criteria" id="toc-success-criteria">Success
+criteria</a></li>
+<li><a href="#steps-to-verify" id="toc-steps-to-verify">Steps to
+verify</a></li>
+<li><a href="#phases" id="toc-phases">Phases</a></li>
+<li><a href="#open-decisions" id="toc-open-decisions">Open decisions</a>
+<ul>
+<li><a
+href="#d1-activity-line-server-field-recommended-or-client-derived"
+id="toc-d1-activity-line-server-field-recommended-or-client-derived">D1.
+Activity line: server field (recommended) or client-derived</a></li>
+<li><a href="#d2-desktop-keeps-three-groups"
+id="toc-d2-desktop-keeps-three-groups">D2. Desktop keeps three
+groups</a></li>
+<li><a href="#d3-terminal-shows-a-shell-not-the-agents-pane"
+id="toc-d3-terminal-shows-a-shell-not-the-agents-pane">D3. Terminal
+shows a shell, not the agent's pane</a></li>
+<li><a href="#d4-queued-messages-that-claude-already-holds"
+id="toc-d4-queued-messages-that-claude-already-holds">D4. Queued
+messages that Claude already holds</a></li>
+<li><a href="#d5-free-text-answers-ship-last"
+id="toc-d5-free-text-answers-ship-last">D5. Free-text answers ship
+last</a></li>
+<li><a href="#d6-dark-first-light-kept"
+id="toc-d6-dark-first-light-kept">D6. Dark-first, light kept</a></li>
+</ul></li>
+<li><a href="#risks-and-collisions" id="toc-risks-and-collisions">Risks
+and collisions</a></li>
+<li><a href="#decision-log" id="toc-decision-log">Decision Log</a></li>
+<li><a href="#verification-evidence"
+id="toc-verification-evidence">Verification Evidence</a></li>
+<li><a href="#bugs" id="toc-bugs">Bugs</a></li>
+</ul></li>
+</ul>
+      </nav>
+    </details>
+  </aside>
+  <div class="wrap">
+<h1
+id="feature-sessions-redesign-s2-phone--desktop-sessions-list">Feature:
+Sessions redesign S2 (phone) + Desktop sessions list</h1>
+<p>Design: "LFG UI Map" canvas, page <strong>Sessions redesign (Oct
+15)</strong> — <a
+href="https://claude.ai/artifact/F2B1MNbv5oxuscm237M9sD">https://claude.ai/artifact/F2B1MNbv5oxuscm237M9sD</a></p>
+<ul>
+<li>Row <strong>S2</strong> (y=1300): the phone screens, files
+<code>s2-*</code>. This is the direction to build.</li>
+<li>Row <strong>Desktop</strong> (y=2600): <code>dA2-sessions</code>,
+the desktop sessions list in a 400pt window. Moved here from the Tasks
+page on 2026-10-15.</li>
+<li>Row S1 (y=0) is the superseded first pass. Its "Needs from the
+server" sticky still applies where S2 did not remove it.</li>
+</ul>
+<p>Status: <strong>plan, waiting for review.</strong> No code changed.
+Worktree <code>worktree-sessions-redesign-s2</code>, based on local
+<code>main</code> at <code>8b0be91</code>.</p>
+<p>Tier: <strong>product</strong> (lfg ships to TestFlight and both
+Macs).</p>
+<hr />
+<h2 id="how-to-read-this-plan">How to read this plan</h2>
+<p>Each design screen gets a table. Every row maps one thing you can see
+in the design to:</p>
+<ul>
+<li><strong>Frontend</strong>: the view or component to build or change.
+IDs start with <code>F</code> (phone) or <code>DF</code> (desktop).</li>
+<li><strong>Backend</strong>: what the server already gives
+(<strong>exists</strong>) or what we must add. New server work has a
+<code>B</code> ID.</li>
+</ul>
+<p>The <code>B</code> items are collected in <a
+href="#backend-work">Backend work</a>, and the
+<code>F</code>/<code>DF</code> items in <a
+href="#component-inventory">Component inventory</a>. The <a
+href="#phases">Phases</a> section orders all of it.</p>
+<hr />
+<h2 id="user-story">User story</h2>
+<p>As Eugene, I run many agent sessions across two Macs. I want the
+session list to tell me <strong>what each session is doing right
+now</strong>, and the session view to show <strong>state, questions and
+tools without hunting through a menu</strong>, so I can triage and
+answer from my phone in seconds and see the same picture on the
+desktop.</p>
+<h2 id="user-flow">User flow</h2>
+<p><strong>Phone</strong></p>
+<ol type="1">
+<li>Open Sessions. Groups show Needs input, Working, Unread, Idle and
+Closed, with counts.</li>
+<li>Each row says what is happening: the question being asked, the
+current step, or the last reply.</li>
+<li>Tap a Needs input row. The session opens with the question in a
+bottom panel, laid out for its kind (question, permission, plan,
+sign-in).</li>
+<li>Answer. The status under the title turns to "Working · 4s".</li>
+<li>While it works, type a follow-up. The Stop button turns into Send.
+The message shows as a dashed "Queued" bubble until the agent picks it
+up.</li>
+<li>Tap the tools button for the session sheet: Terminal, Files &amp;
+links, Subagents, Sign in, previews, Model, Effort, Host, Fork, Stop,
+End.</li>
+</ol>
+<p><strong>Desktop (400pt window)</strong></p>
+<ol type="1">
+<li>The Sessions tab shows Needs input, Working and Recent, each with a
+time column.</li>
+<li>Rows on an offline host stay visible, dimmed.</li>
+<li>Click a row. The session opens in iTerm (no change).</li>
+</ol>
+<hr />
+<h2 id="screen-by-screen-annotation">Screen-by-screen annotation</h2>
+<h3 id="1-s2--sessions-list-s2-list">1. S2 · Sessions list
+(<code>s2-list</code>)</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Design element</th>
+<th>Frontend</th>
+<th>Backend</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Host dots "● Pro ● Air" top-left</td>
+<td><strong>F1</strong> <code>SessionListTopBar</code>: always dots +
+names, also with one host. Replaces the "Connected · N running" text in
+<code>HeaderStatusLine</code>
+(<code>SessionListView.swift:889</code>).</td>
+<td>Exists: host reachability is client state
+(<code>MultiHost</code>).</td>
+</tr>
+<tr>
+<td>Glass capsule: Search + •••</td>
+<td><strong>F1</strong>: one capsule with two buttons. Today they are
+two separate toolbar items (<code>:766</code>, <code>:825</code>). The
+••• menu keeps Filter directories, Group by, Sort by, Settings.</td>
+<td>None.</td>
+</tr>
+<tr>
+<td>Groups: Needs input · Working · Unread (Mark all read) · Idle ·
+Closed</td>
+<td><strong>F2</strong> group changes in <code>SessionStore.Group</code>
+(<code>SessionStore.swift:3186</code>). Rename "Needs you" → "Needs
+input". Fold <strong>Paused</strong> (API error) into Needs input and
+<strong>Restarting</strong> into Working, as the S1 note says. Remove
+child-agent rows and the orphan "Agents" section: subagents live in the
+session. Persist which groups are collapsed (Idle and Closed collapsed
+by default). "Mark all read" exists (<code>markAllRead</code>).</td>
+<td>Exists: the ladder <code>closed → prompt → blocked → busy</code>,
+unread is client-side (<code>ReadState</code>).</td>
+</tr>
+<tr>
+<td>Status dot colour per group</td>
+<td><strong>F3</strong>: amber needs input, green working, purple
+unread, blue idle, grey closed. New dark tokens
+(<strong>F16</strong>).</td>
+<td>None.</td>
+</tr>
+<tr>
+<td>Row line 1: title, <strong>bold</strong> when needs input or
+unread</td>
+<td><strong>F3</strong> <code>SessionRow</code> v2
+(<code>SessionListView.swift:1147</code>).</td>
+<td>Exists: <code>title</code>.</td>
+</tr>
+<tr>
+<td>Row line 2, needs input: "Asks: upload build 205 now?" with a chat
+icon</td>
+<td><strong>F3</strong> + <strong>F17</strong>
+<code>SessionRowLine</code> presenter in LFGCore (pure function: group +
+prompt + activity + reply → icon, text, colour).</td>
+<td>Exists: <code>prompt.question</code>.</td>
+</tr>
+<tr>
+<td>Row line 2, sign-in: "Sign in to search.google.com" with a key
+icon</td>
+<td><strong>F17</strong>.</td>
+<td>Exists: <code>prompt.signIn.website</code>.</td>
+</tr>
+<tr>
+<td>Row line 2, working: "● Editing LFGSessions.swift · 3m" in
+green</td>
+<td><strong>F17</strong>.</td>
+<td><strong>B1</strong> <code>activity</code> (current step, human
+words) + <code>turnStartedAt</code>. Not on the row today;
+<code>last</code> is a raw tool row such as <code>Edit: {…}</code>.</td>
+</tr>
+<tr>
+<td>Row line 2, unread: the last reply ("Done. The tab bar now uses
+glass…")</td>
+<td><strong>F17</strong>.</td>
+<td><strong>B2</strong> <code>lastReply</code>. Today <code>last</code>
+is the newest message of any kind, often a tool row.</td>
+</tr>
+<tr>
+<td>Row line 2, idle: "Ready for your next message"</td>
+<td><strong>F17</strong> fixed copy.</td>
+<td>None.</td>
+</tr>
+<tr>
+<td>Row line 2, closed: "Ended yesterday · send a message to
+resume"</td>
+<td><strong>F17</strong>.</td>
+<td>Exists: <code>closed</code>, <code>lastActivityAt</code>.</td>
+</tr>
+<tr>
+<td>Row line 3: project · model · "2 subagents" · time · host</td>
+<td><strong>F3</strong>. Host moves from a chip on the right into the
+meta line, always shown.</td>
+<td>Exists: <code>project</code>, <code>model</code>,
+<code>runningChildAgentCount</code>, <code>lastActivityAt</code>, host
+from <code>/api/info</code>.</td>
+</tr>
+<tr>
+<td>Row line 3: repeat icon when the session came from a scheduled
+task</td>
+<td><strong>F3</strong>.</td>
+<td><strong>B6</strong> <code>task: {id, name}</code> on the row. Only
+the reverse link exists today (<code>TaskRun.sessionId</code>).</td>
+</tr>
+<tr>
+<td>No buttons in rows</td>
+<td><strong>F3</strong> keeps swipe actions (read/unread, hide
+directory), no inline buttons.</td>
+<td>None.</td>
+</tr>
+<tr>
+<td>Floating tab bar with badge counts + floating "+"</td>
+<td><strong>F4</strong>: badges on both tabs. The dock exists
+(<code>RootView.swift:241</code>); badges are new. Sessions badge =
+Needs input count. Tasks badge = tasks whose run needs input or
+failed.</td>
+<td>Exists: both counts can be derived from data the client has.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="2-s2--session-view-working-s2-view">2. S2 · Session view,
+working (<code>s2-view</code>)</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Design element</th>
+<th>Frontend</th>
+<th>Backend</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Glass back button, glass tools button</td>
+<td><strong>F5</strong> <code>SessionTopBar</code>. The tools button
+opens the session sheet (<strong>F12</strong>). Today the title bar has
+a ••• menu.</td>
+<td>None.</td>
+</tr>
+<tr>
+<td>Title + status line "● Working · 3m 12s · Pro · lfg"</td>
+<td><strong>F5</strong> + <strong>F18</strong>
+<code>SessionStatusLine</code> presenter (LFGCore). The elapsed time
+ticks with a <code>TimelineView</code>. Replaces
+<code>SessionTitleActivity</code>
+(<code>SessionDetailView.swift:1176</code>) and the separate paused,
+offline and error banners.</td>
+<td><strong>B1</strong> <code>turnStartedAt</code> for the elapsed
+time.</td>
+</tr>
+<tr>
+<td>User bubble (blue) and assistant prose</td>
+<td>Exists: <code>TextBubble</code> (<code>Components.swift</code>).
+Restyle to S2 tokens.</td>
+<td>Exists.</td>
+</tr>
+<tr>
+<td>"Read 6 files, ran 3 commands" step, expands to each command</td>
+<td><strong>F6</strong> <code>ToolStepGroup</code> view +
+<strong>F19</strong> <code>TranscriptStepGrouper</code> (LFGCore, pure).
+It folds consecutive tool calls and results into one step with counts.
+Today <code>ToolLineView</code> (<code>Components.swift:316</code>)
+shows one raw row per call and per result.</td>
+<td><strong>B11</strong> structured tool fields on each message:
+<code>tool: {name, target}</code>. Today the text is
+<code>"Edit: {json}"</code>, which is fragile to parse. Codex rows
+already carry "Ran / Explored / Edited".</td>
+</tr>
+<tr>
+<td>"Edited 2 files" step</td>
+<td><strong>F6</strong>/<strong>F19</strong>: edits get their own step.
+No diff counts (design rule).</td>
+<td><strong>B11</strong>.</td>
+</tr>
+<tr>
+<td>Pills above the composer: Subagents (ring, "1 running · 3/4 done"),
+Files 4, Terminal</td>
+<td><strong>F7</strong> <code>ComposerPillRow</code>. Replaces the
+full-width <code>ChildSessionsComposerBar</code>
+(<code>SessionDetailView.swift:1977</code>) and the sign-in cards
+(sign-in moves to the needs-input panel).</td>
+<td>Exists: <code>childAgents</code> statuses; the files count comes
+from <code>TranscriptResourceIndex</code> on the client.</td>
+</tr>
+<tr>
+<td>Composer placeholder "Add to this turn…" while working</td>
+<td><strong>F8</strong> <code>MessageComposer</code> v2
+(<code>MessageComposer.swift:24</code>).</td>
+<td>Exists: <code>busy</code>.</td>
+</tr>
+<tr>
+<td>Attach button</td>
+<td>Exists: <code>AttachmentTray</code>.</td>
+<td>Exists.</td>
+</tr>
+<tr>
+<td>Model + effort chip "Opus 5.5 · High" in the composer</td>
+<td><strong>F8</strong>: chip opens Model and Effort pickers. Disabled
+with a hint while the agent works or asks, because the server refuses a
+change then.</td>
+<td>Exists: <code>POST /model</code>, <code>POST /effort</code> (409
+while busy, queued or prompting).</td>
+</tr>
+<tr>
+<td>Send button is Stop while working; typing turns it into Send</td>
+<td><strong>F8</strong>. Stop calls <code>store.interrupt</code> (today
+only in the ••• menu).</td>
+<td>Exists: <code>POST /interrupt</code>.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="3-s2--message-queued-s2-queued">3. S2 · Message queued
+(<code>s2-queued</code>)</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Design element</th>
+<th>Frontend</th>
+<th>Backend</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Status line "Working · 3m 40s · 1 queued · Pro"</td>
+<td><strong>F18</strong>: queued count from
+<code>pendingSends</code>.</td>
+<td>Exists.</td>
+</tr>
+<tr>
+<td>Dashed grey bubble in the transcript, "Queued · joins this turn at
+the next step"</td>
+<td><strong>F9</strong> <code>QueuedBubble</code>. It replaces the
+capsules in <code>PendingStripView</code>
+(<code>Components.swift:561</code>).</td>
+<td>Exists: <code>QueuedMsg.status</code> `pending</td>
+</tr>
+<tr>
+<td>Tap → Send now ("Stops the current step first") / Edit / Remove</td>
+<td><strong>F9</strong> menu. <strong>Edit and Remove only while lfg
+still holds the message</strong> (<code>pending</code>). Once Claude has
+it in its own queue (<code>queued</code>), the server refuses removal
+(409), so the menu shows Send now only, with "Already with Claude". See
+<a href="#d4-queued-messages-that-claude-already-holds">D4</a>.</td>
+<td>Exists: <code>POST /queue/:id/send-now</code> (works for
+<code>pending</code> and <code>queued</code>),
+<code>DELETE /queue/:id</code> (pending only). Edit = delete + resend on
+the client.</td>
+</tr>
+<tr>
+<td>After Send now: "Sent now · the step was stopped"</td>
+<td><strong>F9</strong>.</td>
+<td>Exists.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="4-s2--message-not-sent-s2-queued-failed">4. S2 · Message not
+sent (<code>s2-queued-failed</code>)</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Design element</th>
+<th>Frontend</th>
+<th>Backend</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Status line "Air offline · 2m" in the top bar</td>
+<td><strong>F18</strong>. Needs an "offline since" time per host.</td>
+<td>None: the client records when a host went offline
+(<code>MultiHost</code>).</td>
+</tr>
+<tr>
+<td>Waiting bubble "Waiting · sends when Air is back"</td>
+<td><strong>F9</strong> state <code>offlineQueued</code> (exists in
+<code>OutgoingSendPresentation</code>).</td>
+<td>Exists (client outbox).</td>
+</tr>
+<tr>
+<td>Failed bubble: red mark + "Not sent · Air is offline · tap for
+options"</td>
+<td><strong>F9</strong> <code>NotSentBubble</code>. Today
+<code>OptimisticUserBubble</code> shows "Not sent" + Retry.</td>
+<td><strong>B7</strong> a machine-readable <code>errorCode</code> on
+failed queue rows, so the client can word the reason. Offline stays
+client-side.</td>
+</tr>
+<tr>
+<td>Tap → Retry / Edit / Delete</td>
+<td><strong>F9</strong>. Delete is new.</td>
+<td>Exists: <code>POST /queue/:id/retry</code>,
+<code>DELETE /queue/:id</code> for failed rows.</td>
+</tr>
+</tbody>
+</table></div>
+<h3
+id="5-s2--needs-input-question--permission--plan-s2-question-tweak-kind">5.
+S2 · Needs input: question / permission / plan
+(<code>s2-question</code>, tweak <code>kind</code>)</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Design element</th>
+<th>Frontend</th>
+<th>Backend</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Panel docked at the bottom, transcript above it</td>
+<td><strong>F10</strong> <code>NeedsInputPanel</code>. Today
+<code>PromptPanelView</code> (<code>Components.swift:359</code>) renders
+inside the transcript as its newest row.</td>
+<td>Exists: <code>prompt</code> on the row and as a journal delta.</td>
+</tr>
+<tr>
+<td>Header "Claude is asking · 1 of 1" / "Claude needs permission" /
+"Plan ready for review"</td>
+<td><strong>F10</strong> picks a layout by kind.</td>
+<td><strong>B4</strong> <code>prompt.kind</code>: `question</td>
+</tr>
+<tr>
+<td>Status line "Needs input · 2m"</td>
+<td><strong>F18</strong>.</td>
+<td><strong>B3</strong> <code>prompt.askedAt</code>.</td>
+</tr>
+<tr>
+<td>Question: numbered options, "Type something else…", Dismiss</td>
+<td><strong>F10</strong> question layout. Options call
+<code>answer(index)</code>.</td>
+<td>Exists: <code>POST /answer {index}</code>,
+<code>POST /dismiss</code>. <strong>B5</strong> free-text answer for
+"Type something else…".</td>
+</tr>
+<tr>
+<td>Permission: command card "bundle exec fastlane beta…", "In
+~/dev/personal/lfg on Pro", Allow once / Deny / Always allow</td>
+<td><strong>F10</strong> permission layout. Buttons map to the matching
+option index.</td>
+<td><strong>B4</strong> <code>permission: {command, cwd}</code> from the
+pane. Today <code>question</code> is just "Do you want to
+proceed?".</td>
+</tr>
+<tr>
+<td>Plan: numbered summary, "Read the full plan ›", Approve / Keep
+planning</td>
+<td><strong>F10</strong> plan layout + a sheet with the full plan.</td>
+<td><strong>B4</strong> <code>plan: {text}</code> from the stitched pane
+preamble (<code>PaneStitcher</code>). The plan is not in the transcript
+while it is live.</td>
+</tr>
+<tr>
+<td>After an answer: status turns to "Working · uploading · 4s"</td>
+<td><strong>F18</strong>.</td>
+<td>Exists.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="6-s2--needs-input-sign-in-s2-signin-prompt">6. S2 · Needs input:
+sign-in (<code>s2-signin-prompt</code>)</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Design element</th>
+<th>Frontend</th>
+<th>Backend</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Status "Needs sign-in · 5m · Air · inbox"</td>
+<td><strong>F18</strong>.</td>
+<td><strong>B3</strong> <code>askedAt</code> (or the request's
+<code>createdAt</code>, which exists).</td>
+</tr>
+<tr>
+<td>Panel: "Sign in to search.google.com", "To Chrome on
+Eugenes-MacBook-Air", "Sign in on iPhone", no Dismiss</td>
+<td><strong>F10</strong> sign-in layout, same anatomy as a question.
+Replaces <code>signInPanel</code> (<code>Components.swift:381</code>)
+and the sign-in cards above the composer.</td>
+<td>Exists: <code>prompt.signIn {url, website, targetName}</code>;
+<code>/dismiss</code> already refuses sign-in prompts.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="7-s2--sign-in-browser-s2-signin">7. S2 · Sign-in browser
+(<code>s2-signin</code>)</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Design element</th>
+<th>Frontend</th>
+<th>Backend</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Address pill holds the context: "accounts.google.com · For Search
+Console audit · goes to Air"</td>
+<td><strong>F11</strong> <code>PhoneSignInView</code> header
+(<code>PhoneSignInView.swift:77</code>). Today: back, host text,
+spinner, reload.</td>
+<td>None.</td>
+</tr>
+<tr>
+<td>"I'm signed in" → review sheet "Send this sign-in to Air?" with a
+switch per domain and "Send N cookies"</td>
+<td><strong>F11</strong>: add the review step to the agent-request path.
+Today "Done" sends every cookie with no review.</td>
+<td>Exists: <code>POST …/requests/:id/complete {cookies}</code> derives
+the domains from the cookies sent, so the client filters by domain.</td>
+</tr>
+<tr>
+<td>Result "Signed in on Air · picked up the sign-in and is working
+again"</td>
+<td><strong>F11</strong> copy.</td>
+<td>Exists: request <code>state</code>/<code>result</code>.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="8-s2--session-sheet-s2-menu">8. S2 · Session sheet
+(<code>s2-menu</code>)</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Design element</th>
+<th>Frontend</th>
+<th>Backend</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Title with rename, "Pro · ~/dev/personal/lfg · started 2h ago"</td>
+<td><strong>F12</strong> <code>SessionSheet</code>. It replaces
+<code>SessionOptionsMenu</code>
+(<code>SessionDetailView.swift:1525</code>).</td>
+<td>Exists: <code>PUT /title</code>, <code>cwd</code>,
+<code>startedAt</code>.</td>
+</tr>
+<tr>
+<td>6 tiles: Terminal, Files &amp; links (6), Subagents (2), Sign in,
+Browser preview, iPhone preview</td>
+<td><strong>F12</strong> tile grid with badges. Each tile opens what the
+menu opens today.</td>
+<td>Exists.</td>
+</tr>
+<tr>
+<td>Model row</td>
+<td><strong>F12</strong>.</td>
+<td>Exists: <code>POST /model</code>.</td>
+</tr>
+<tr>
+<td>Effort segmented: Low · Med · High · Max</td>
+<td><strong>F12</strong>. Levels come from
+<code>SessionEffort.known</code> for the current model (not always
+four).</td>
+<td>Exists: <code>POST /effort</code>.</td>
+</tr>
+<tr>
+<td>Host row "Pro · move to Air"</td>
+<td><strong>F12</strong>. Uses today's move flow and its confirm.</td>
+<td>Exists (client-driven move).</td>
+</tr>
+<tr>
+<td>Fork session · Mark as unread · Stop current turn · End session</td>
+<td><strong>F12</strong>.</td>
+<td>Exists: fork, <code>interrupt</code>, <code>close</code>; unread is
+client-side.</td>
+</tr>
+<tr>
+<td>Footer "tmux lfg-fork-3 · id 7f3a…c21 · tap to copy"</td>
+<td><strong>F12</strong>.</td>
+<td>Exists: <code>tmuxName</code>, <code>sessionId</code>.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="9-s2--subagents-sheet-s2-subagents">9. S2 · Subagents sheet
+(<code>s2-subagents</code>)</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Design element</th>
+<th>Frontend</th>
+<th>Backend</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Header "1 running · 2 done · 1 failed"</td>
+<td><strong>F13</strong> restyled <code>ChildAgentSessionsSheet</code>
+(<code>SessionDetailView.swift:2038</code>), renamed "Subagents".</td>
+<td>Exists: <code>childAgents[].status</code>.</td>
+</tr>
+<tr>
+<td>Row: status pill, title, current step or result, "general-purpose ·
+1m 12s"</td>
+<td><strong>F13</strong>. Duration from start/finish times.</td>
+<td>Exists: <code>description</code>, <code>agentType</code>, times.
+<strong>B8</strong> <code>currentStep</code> and <code>result</code> per
+subagent.</td>
+</tr>
+<tr>
+<td>Detail: Task prompt, steps summary, result</td>
+<td><strong>F13</strong> child detail, with a link to today's full
+transcript view.</td>
+<td><strong>B8</strong> <code>prompt</code> (the server hides the Agent
+input today) and a steps summary from <strong>B11</strong>.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="10-s2--files--links-sheet-s2-files">10. S2 · Files &amp; links
+sheet (<code>s2-files</code>)</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Design element</th>
+<th>Frontend</th>
+<th>Backend</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Segmented "Files 4 · Links 2"</td>
+<td><strong>F14</strong> restyled <code>AttachmentsSheet</code>
+(<code>AttachmentsSheet.swift:11</code>).</td>
+<td>None.</td>
+</tr>
+<tr>
+<td>Images grid, Documents list (name · folder · age), Links (mark ·
+title · domain)</td>
+<td><strong>F14</strong>. Split images from documents by extension.</td>
+<td>Exists: <code>TranscriptResourceIndex</code> (client),
+<code>GET /api/file</code>.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="11-s2--terminal-s2-terminal">11. S2 · Terminal
+(<code>s2-terminal</code>)</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Design element</th>
+<th>Frontend</th>
+<th>Backend</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Extra keys: esc, tab, ctrl (sticky), ⌥, arrows, `</td>
+<td><code>, </code>/<code>, </code>~`, ⌘V paste</td>
+<td><strong>F15</strong>: add ⌥ and ⌘V paste to the SwiftTerm accessory
+row. The others exist.</td>
+</tr>
+<tr>
+<td>Fit / Wide toggle, keyboard show/hide</td>
+<td>Exists (<code>TerminalScreen.swift:115</code>). Restyle.</td>
+<td>None.</td>
+</tr>
+<tr>
+<td>Title "tmux lfg-fork-3 · Pro" showing <strong>the agent's own
+pane</strong></td>
+<td>Not in this plan. Today the terminal opens a shared shell named
+"phone". See <a
+href="#d3-terminal-shows-a-shell-not-the-agents-pane">D3</a>.</td>
+<td>Would need a new attach mode (follow-up).</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="12-desktop--sessions-list-da2-sessions">12. Desktop · Sessions
+list (<code>dA2-sessions</code>)</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Design element</th>
+<th>Frontend</th>
+<th>Backend</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Centered Sessions / Tasks switcher with amber count badges</td>
+<td><strong>DF1</strong>. Builds on the other session's narrow-window
+work (uncommitted, see <a href="#risks-and-collisions">Risks</a>).
+Badges: Sessions = Needs input count; Tasks = tasks needing input or
+failed.</td>
+<td>Exists.</td>
+</tr>
+<tr>
+<td>Search button; no "+"</td>
+<td><strong>DF1</strong>: search is always the button; remove
+<code>createSessionButton</code> (desktop scope: no session
+creation).</td>
+<td>None.</td>
+</tr>
+<tr>
+<td>Host strip "● Pro ○ Air offline · 3 working"</td>
+<td><strong>DF2</strong>: a row under the title bar, not toolbar chips.
+Offline = hollow amber ring + "offline".</td>
+<td>Exists (client host state).</td>
+</tr>
+<tr>
+<td>"By status" dropdown</td>
+<td><strong>DF2</strong>: text menu over today's <code>GroupMode</code>
+(status / directory).</td>
+<td>None.</td>
+</tr>
+<tr>
+<td>Groups: Needs input · Working ("by last activity") · Recent 43,
+collapsible</td>
+<td><strong>DF3</strong>: reuse <code>MenuBarSessionProjection</code>
+(<code>LFGSessions.swift:436</code>), which already splits needs input
+(oldest first), running (newest first) and recent. Make status headers
+collapsible.</td>
+<td><strong>B12</strong> <code>total</code> on
+<code>GET /api/sessions/resumable</code> so "Recent 43" is a real count;
+today pages hold 100 rows.</td>
+</tr>
+<tr>
+<td>Time column "2m ago" (amber / green / grey)</td>
+<td><strong>DF4</strong> <code>SessionRow</code> v2
+(<code>LFGSessions.swift:4282</code>).</td>
+<td>Exists: <code>lastActivityAt</code>.</td>
+</tr>
+<tr>
+<td>Meta "fiftystrong · Pro · Claude Code opus · from a task"</td>
+<td><strong>DF4</strong>.</td>
+<td><strong>B6</strong> <code>task</code>.</td>
+</tr>
+<tr>
+<td>Needs input line "Asks: which launch page direction first?"</td>
+<td><strong>DF4</strong>: decode <code>prompt</code> in
+<code>APISession</code> (it is in the payload, not decoded).</td>
+<td>Exists: <code>prompt</code>.</td>
+</tr>
+<tr>
+<td>Working line "● Measuring the toolbar at 180–500pt"</td>
+<td><strong>DF4</strong>.</td>
+<td><strong>B1</strong> <code>activity</code>.</td>
+</tr>
+<tr>
+<td>Recent line "Closed · cut screen 2 to 21 words"</td>
+<td><strong>DF4</strong>.</td>
+<td><strong>B2</strong> <code>lastReply</code>, also on closed
+rows.</td>
+</tr>
+<tr>
+<td>Offline host rows dimmed to 50% with "Air is offline"</td>
+<td><strong>DF5</strong>: keep each host's last good snapshot. Today a
+failed host's rows disappear (<code>fetchHost</code>,
+<code>:1584</code>).</td>
+<td>None.</td>
+</tr>
+<tr>
+<td>Click opens iTerm</td>
+<td>Exists (<code>Opener.open</code>).</td>
+<td>Exists.</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="backend-work">Backend work</h2>
+<p>All additive: new optional fields and one new endpoint mode. Old
+clients ignore them.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>What</th>
+<th>Shape</th>
+<th>Where</th>
+<th>Used by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>B1</strong></td>
+<td>Current activity + turn start</td>
+<td>`activity: {text, kind: "tool"</td>
+<td>"thinking"</td>
+<td>"reply", since}<code>, </code>turnStartedAt` on live rows</td>
+</tr>
+<tr>
+<td><strong>B1b</strong></td>
+<td>Live updates for B1</td>
+<td>journal <code>activity</code> delta</td>
+<td>Follow the busy/prompt rule from <code>.claude/CLAUDE.md</code>:
+snapshot field + delta in <code>pollOne</code> +
+<code>PumpDeltas.activityChanged</code> + retraction in
+<code>appendDisappearanceRetractions</code> + client
+<code>activityStatedAt</code> arbitrated by
+<code>JournalFreshness</code>, blanked for offline hosts.</td>
+<td>Phone (desktop polls REST every 10s)</td>
+</tr>
+<tr>
+<td><strong>B2</strong></td>
+<td>Last reply preview</td>
+<td><code>lastReply: {text, ts}</code> (about 140 chars, markdown
+stripped) on live <strong>and</strong> closed rows</td>
+<td>Return the <code>lastAssistantMsg</code> that
+<code>sessions.ts:3028</code> already computes. Closed rows: read it in
+<code>listResumable</code>, cached by transcript mtime (100 rows per
+page).</td>
+<td>Phone unread rows, desktop Recent rows</td>
+</tr>
+<tr>
+<td><strong>B3</strong></td>
+<td>When the prompt appeared</td>
+<td><code>prompt.askedAt</code></td>
+<td>Stamp the first time the pump sees a prompt identity
+(<code>PumpDeltas</code>); sign-in uses the request's
+<code>createdAt</code>.</td>
+<td>Status line "Needs input · 2m"</td>
+</tr>
+<tr>
+<td><strong>B4</strong></td>
+<td>Prompt kind + details</td>
+<td><code>prompt.kind</code>,
+<code>prompt.permission {command, cwd}</code>,
+<code>prompt.plan {text}</code></td>
+<td>Classify in <code>parsePrompt</code> (<code>tmux.ts:1132</code>)
+from the selector wording; transcript AskUserQuestion =
+<code>question</code>; sign-in = <code>signIn</code>. Extract the
+command from the box above the selector; take the plan from the stitched
+preamble. Cover Claude and Codex prompts. Fixture tests from real pane
+captures.</td>
+<td>Needs-input panel</td>
+</tr>
+<tr>
+<td><strong>B5</strong></td>
+<td>Free-text answer</td>
+<td><code>POST /answer {index, text}</code></td>
+<td>Select the "Type something" option, type the text, press Enter,
+confirm by the transcript (same rules as sendq: no pane read may gate
+the Enter).</td>
+<td>"Type something else…"</td>
+</tr>
+<tr>
+<td><strong>B6</strong></td>
+<td>Scheduled-task origin</td>
+<td><code>task: {id, name}</code> on live and closed rows</td>
+<td>In-memory <code>sessionId → task</code> map from the scheduled-task
+runs store.</td>
+<td>Phone repeat icon, desktop "from a task"</td>
+</tr>
+<tr>
+<td><strong>B7</strong></td>
+<td>Failure code on queue rows</td>
+<td>`QueuedMsg.errorCode: "not_picked_up"</td>
+<td>"no_pane"</td>
+<td>"selector_stuck"</td>
+</tr>
+<tr>
+<td><strong>B8</strong></td>
+<td>Subagent detail</td>
+<td><code>currentStep</code>, <code>result</code>, <code>prompt</code>
+per subagent</td>
+<td><code>GET /api/sessions/:id/subagents</code>: run B1's humanizer on
+each subagent transcript tail; the result is its last assistant text;
+expose the Agent prompt on this endpoint only.</td>
+<td>Subagents sheet</td>
+</tr>
+<tr>
+<td><strong>B11</strong></td>
+<td>Structured tool fields</td>
+<td><code>SessionMsg.tool: {name, target}</code></td>
+<td>Set where tool rows are built (<code>sessions.ts:2491</code>, Codex
+<code>:1416</code>). <code>target</code> = file path, command, pattern
+or URL.</td>
+<td>Step grouping, B1, B8</td>
+</tr>
+<tr>
+<td><strong>B12</strong></td>
+<td>Closed-session total</td>
+<td><code>total</code> on <code>GET /api/sessions/resumable</code></td>
+<td>Count while enumerating.</td>
+<td>Desktop "Recent 43"</td>
+</tr>
+</tbody>
+</table></div>
+<p>Not needed (already exist): answer by index, dismiss, interrupt,
+close, fork, rename, model, effort, queue send-now / retry / delete,
+sign-in complete with filtered cookies, subagent list, file serving,
+terminal byte bridge.</p>
+<p>Not in this plan: server-side unread sync across devices; a terminal
+attached to the agent's pane.</p>
+<hr />
+<h2 id="component-inventory">Component inventory</h2>
+<p><strong>Phone (iOS app + LFGCore)</strong></p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Component</th>
+<th>New / changed</th>
+<th>File(s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>F1</td>
+<td><code>SessionListTopBar</code> (host dots + glass Search/•••
+capsule)</td>
+<td>changed</td>
+<td><code>SessionListView.swift</code></td>
+</tr>
+<tr>
+<td>F2</td>
+<td>Group rules (rename, fold Paused/Restarting, drop child rows,
+persisted collapse)</td>
+<td>changed</td>
+<td><code>SessionStore.swift</code>,
+<code>SessionListView.swift</code></td>
+</tr>
+<tr>
+<td>F3</td>
+<td><code>SessionRow</code> v2 (3 lines, bold, meta with host and task
+icon)</td>
+<td>changed</td>
+<td><code>SessionListView.swift</code></td>
+</tr>
+<tr>
+<td>F4</td>
+<td>Dock tab badges</td>
+<td>changed</td>
+<td><code>RootView.swift</code></td>
+</tr>
+<tr>
+<td>F5</td>
+<td><code>SessionTopBar</code> (glass back/tools, title, status
+line)</td>
+<td>changed</td>
+<td><code>SessionDetailView.swift</code></td>
+</tr>
+<tr>
+<td>F6</td>
+<td><code>ToolStepGroup</code> (collapsible step row)</td>
+<td>new</td>
+<td><code>Components.swift</code></td>
+</tr>
+<tr>
+<td>F7</td>
+<td><code>ComposerPillRow</code> (Subagents ring, Files, Terminal)</td>
+<td>new</td>
+<td><code>SessionDetailView.swift</code></td>
+</tr>
+<tr>
+<td>F8</td>
+<td><code>MessageComposer</code> v2 (placeholder, model/effort chip,
+Stop↔︎Send)</td>
+<td>changed</td>
+<td><code>MessageComposer.swift</code></td>
+</tr>
+<tr>
+<td>F9</td>
+<td><code>QueuedBubble</code>, <code>NotSentBubble</code> + menus</td>
+<td>new (replaces <code>PendingStripView</code>)</td>
+<td><code>Components.swift</code></td>
+</tr>
+<tr>
+<td>F10</td>
+<td><code>NeedsInputPanel</code> (question / permission / plan /
+sign-in)</td>
+<td>new (replaces <code>PromptPanelView</code>)</td>
+<td>new <code>NeedsInputPanel.swift</code></td>
+</tr>
+<tr>
+<td>F11</td>
+<td>Sign-in browser header, review step, result</td>
+<td>changed</td>
+<td><code>PhoneSignInView.swift</code></td>
+</tr>
+<tr>
+<td>F12</td>
+<td><code>SessionSheet</code></td>
+<td>new (replaces <code>SessionOptionsMenu</code>)</td>
+<td>new <code>SessionSheet.swift</code></td>
+</tr>
+<tr>
+<td>F13</td>
+<td>Subagents sheet + child detail</td>
+<td>changed</td>
+<td><code>SessionDetailView.swift</code></td>
+</tr>
+<tr>
+<td>F14</td>
+<td>Files &amp; links sheet (segmented, image grid)</td>
+<td>changed</td>
+<td><code>AttachmentsSheet.swift</code></td>
+</tr>
+<tr>
+<td>F15</td>
+<td>Terminal keys ⌥ and ⌘V</td>
+<td>changed</td>
+<td>vendored SwiftTerm accessory, <code>TerminalScreen.swift</code></td>
+</tr>
+<tr>
+<td>F16</td>
+<td>S2 dark tokens (with light counterparts)</td>
+<td>changed</td>
+<td><code>Theme.swift</code></td>
+</tr>
+<tr>
+<td>F17</td>
+<td><code>SessionRowLine</code> presenter</td>
+<td>new, pure, tested</td>
+<td><code>LFGCore</code></td>
+</tr>
+<tr>
+<td>F18</td>
+<td><code>SessionStatusLine</code> presenter</td>
+<td>new, pure, tested</td>
+<td><code>LFGCore</code></td>
+</tr>
+<tr>
+<td>F19</td>
+<td><code>TranscriptStepGrouper</code></td>
+<td>new, pure, tested</td>
+<td><code>LFGCore</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Desktop (<code>desktop/LFGSessions.swift</code>)</strong></p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Component</th>
+<th>New / changed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DF1</td>
+<td>Switcher with badges, search button, no "+"</td>
+<td>changed</td>
+</tr>
+<tr>
+<td>DF2</td>
+<td>Host strip row + "By status" menu</td>
+<td>new</td>
+</tr>
+<tr>
+<td>DF3</td>
+<td>Three collapsible groups from
+<code>MenuBarSessionProjection</code></td>
+<td>changed</td>
+</tr>
+<tr>
+<td>DF4</td>
+<td><code>SessionRow</code> v2 (time column, 3 lines); decode
+<code>prompt</code>, <code>activity</code>, <code>lastReply</code>,
+<code>task</code></td>
+<td>changed</td>
+</tr>
+<tr>
+<td>DF5</td>
+<td>Keep last good snapshot per host; dim offline rows</td>
+<td>changed</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="success-criteria">Success criteria</h2>
+<ul class="task-list">
+<li><label><input type="checkbox" />SC1: <code>GET /api/sessions</code>
+returns <code>activity</code>, <code>turnStartedAt</code>,
+<code>lastReply</code> and <code>task</code> for real sessions on the
+Pro. — <strong>Verify by:</strong> curl on the live host after restart;
+one working, one idle and one task session show the right values. Unit
+tests for <code>src/activity.ts</code>.</label></li>
+<li><label><input type="checkbox" />SC2: The activity line updates live
+on the phone without a list refresh, and clears when a session ends or
+its host goes offline. — <strong>Verify by:</strong> journal test
+(delta, retraction); on the simulator, watch a working session's row
+change step.</label></li>
+<li><label><input type="checkbox" />SC3: The phone list shows the five
+groups with the right members: Paused sessions in Needs input,
+Restarting in Working, no child-agent rows. Collapse state survives a
+relaunch. — <strong>Verify by:</strong> LFGCore tests on the group
+rules; simulator screenshot against the live server; relaunch
+check.</label></li>
+<li><label><input type="checkbox" />SC4: Each row's line 2 matches its
+state (question, sign-in, current step, last reply, idle copy, closed
+copy). — <strong>Verify by:</strong> <code>SessionRowLine</code> tests,
+one per state; screenshot.</label></li>
+<li><label><input type="checkbox" />SC5: The session top bar shows
+Working + ticking elapsed, Needs input + age, Needs sign-in, host
+offline + age, and the queued count. — <strong>Verify by:</strong>
+<code>SessionStatusLine</code> tests; screenshots of a working and a
+waiting session.</label></li>
+<li><label><input type="checkbox" />SC6: Consecutive tool calls show as
+one step row with correct counts, and expand to each call. —
+<strong>Verify by:</strong> <code>TranscriptStepGrouper</code> tests on
+real Claude and Codex transcripts; screenshot.</label></li>
+<li><label><input type="checkbox" />SC7: Stop is the send button while
+working and turns into Send when you type; Stop really interrupts. —
+<strong>Verify by:</strong> tap Stop on a live working session on the
+simulator; transcript shows the interrupt.</label></li>
+<li><label><input type="checkbox" />SC8: A message sent mid-turn shows
+as a dashed Queued bubble; Send now works; Edit/Remove appear only while
+lfg holds it; a failed send shows the reason and Retry/Edit/Delete work.
+— <strong>Verify by:</strong> live send to a busy session; seed a failed
+outbox row (per memory: loopback stubs hide failures).</label></li>
+<li><label><input type="checkbox" />SC9: The needs-input panel shows the
+right layout for a question, a permission, a plan and a sign-in, and
+each button answers the prompt. — <strong>Verify by:</strong>
+<code>parsePrompt</code> fixture tests from real pane captures (all four
+kinds); live answer of a real permission prompt.</label></li>
+<li><label><input type="checkbox" />SC10: "Type something else…" answers
+a question with free text. — <strong>Verify by:</strong> live
+AskUserQuestion in a test session; the answer lands in the
+transcript.</label></li>
+<li><label><input type="checkbox" />SC11: The sign-in flow has a review
+step on the agent path, and only the switched-on domains are sent. —
+<strong>Verify by:</strong> live request; server log shows the domain
+list.</label></li>
+<li><label><input type="checkbox" />SC12: The session sheet holds every
+action of the old ••• menu, and each one works. — <strong>Verify
+by:</strong> checklist walk on the simulator, one tap per
+item.</label></li>
+<li><label><input type="checkbox" />SC13: The desktop list at 400pt
+shows Needs input / Working / Recent with the time column and status
+lines from live data; offline-host rows stay visible and dimmed. —
+<strong>Verify by:</strong> <code>--window-shot 400</code> for layout
+plus a live-data probe (memory: window shots render fixtures); stop the
+Air's server briefly or use the stub host.</label></li>
+<li><label><input type="checkbox" />SC14: No regression in send
+delivery, prompt answering or the Live Activity. — <strong>Verify
+by:</strong> existing <code>bun test</code> and LFGCore suites green;
+one end-to-end send + answer on a real session.</label></li>
+</ul>
+<h2 id="steps-to-verify">Steps to verify</h2>
+<ol type="1">
+<li>Server: <code>bun test</code>; restart the Pro server by port; curl
+<code>/api/sessions</code> and
+<code>/api/sessions/resumable</code>.</li>
+<li>LFGCore: <code>swift test</code> in <code>ios/LFGCore</code>.</li>
+<li>iOS: FlowDeck build + run on the iPhone 17 Pro simulator pointed at
+the Pro; drive each screen by tapping.</li>
+<li>Desktop: <code>desktop/build.sh</code>;
+<code>lfg --window-shot 400 …</code> and a live-data probe.</li>
+<li>Independent audit: <code>ios_visual_evidence_auditor</code> for
+phone, <code>verification-auditor</code> for server + desktop.</li>
+</ol>
+<hr />
+<h2 id="phases">Phases</h2>
+<p>Each phase ends green before the next starts.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Scope</th>
+<th>Covers</th>
+<th>Gate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>P0 Prereqs</strong></td>
+<td>Wait for the other session to commit its desktop narrow-window and
+scheduled-task work; rebase this worktree. Add S2 tokens (F16).</td>
+<td>—</td>
+<td>Clean rebase; builds green.</td>
+</tr>
+<tr>
+<td><strong>P1 List data (server)</strong></td>
+<td>B1, B2, B3, B6, B11, B12 + tests.</td>
+<td>SC1</td>
+<td><code>bun test</code>; live curl.</td>
+</tr>
+<tr>
+<td><strong>P2 Phone list</strong></td>
+<td>F1–F4, F17, live activity delta (B1b).</td>
+<td>SC2–SC4</td>
+<td>LFGCore tests; simulator screenshots on live data.</td>
+</tr>
+<tr>
+<td><strong>P3 Desktop list</strong></td>
+<td>DF1–DF5.</td>
+<td>SC13</td>
+<td>window shot at 400pt + live probe; install on Pro after your
+OK.</td>
+</tr>
+<tr>
+<td><strong>P4 Session view core</strong></td>
+<td>F5–F9, F18, F19, B7.</td>
+<td>SC5–SC8</td>
+<td>Tests; live send, Stop and queue checks on the simulator.</td>
+</tr>
+<tr>
+<td><strong>P5 Needs input</strong></td>
+<td>B4, B5, F10, F11.</td>
+<td>SC9–SC11</td>
+<td>Pane fixture tests; live prompts of each kind.</td>
+</tr>
+<tr>
+<td><strong>P6 Sheets</strong></td>
+<td>F12–F15, B8.</td>
+<td>SC12</td>
+<td>Checklist walk on the simulator.</td>
+</tr>
+<tr>
+<td><strong>P7 Ship</strong></td>
+<td>Audit, TestFlight, desktop install on both Macs.</td>
+<td>SC14</td>
+<td>Auditor PASS; only with your go-ahead.</td>
+</tr>
+</tbody>
+</table></div>
+<p>P2 and P3 can swap: the desktop list is smaller, but it waits on
+P0.</p>
+<hr />
+<h2 id="open-decisions">Open decisions</h2>
+<h3 id="d1-activity-line-server-field-recommended-or-client-derived">D1.
+Activity line: server field (recommended) or client-derived</h3>
+<p><strong>Recommended: server field (B1 + B1b).</strong> One humanizer
+in TypeScript serves the phone, the desktop and the Live Activity. A
+client version would be written twice, because the desktop does not
+share the iOS models. Cost: one more journal delta, built by the
+documented pattern.</p>
+<h3 id="d2-desktop-keeps-three-groups">D2. Desktop keeps three
+groups</h3>
+<p><strong>Recommended: keep Needs input / Working / Recent, as
+drawn.</strong> The desktop has no read state, so Unread and Idle have
+nothing to sort by. The phone keeps five groups.</p>
+<h3 id="d3-terminal-shows-a-shell-not-the-agents-pane">D3. Terminal
+shows a shell, not the agent's pane</h3>
+<p>The design shows the agent's own Claude screen. Today the phone
+terminal opens a separate shell. Attaching a client to an agent's pane
+resizes it, and <code>.claude/CLAUDE.md</code> records that one such
+visit broke prompt capture until a fix. <strong>Recommended: this plan
+ships the new keys and styling on the shell terminal. Attaching to the
+agent's pane becomes its own follow-up feature.</strong></p>
+<h3 id="d4-queued-messages-that-claude-already-holds">D4. Queued
+messages that Claude already holds</h3>
+<p>Once a message reaches Claude's own queue, the server cannot remove
+it (it is absorbed at the next step). <strong>So Edit and Remove show
+only while lfg holds the message.</strong> After that, the menu offers
+Send now only, with "Already with Claude". This is a server limit, not a
+choice; the design needs that one-line state.</p>
+<h3 id="d5-free-text-answers-ship-last">D5. Free-text answers ship
+last</h3>
+<p>B5 drives the TUI with keystrokes, the riskiest change here. It sits
+in P5 with live tests. Until it lands, "Type something else…" falls back
+to today's behaviour: the text goes as a new message, which closes the
+selector first.</p>
+<h3 id="d6-dark-first-light-kept">D6. Dark-first, light kept</h3>
+<p>The app follows the system appearance today. <strong>Decision: S2
+tokens become the dark values; light values are derived, not
+redesigned.</strong> You use dark mode; light stays usable.</p>
+<hr />
+<h2 id="risks-and-collisions">Risks and collisions</h2>
+<ul>
+<li><strong>Another session has uncommitted work in the files this plan
+changes</strong> (main checkout, 2026-10-15):
+<code>desktop/LFGSessions.swift</code> (about 330 changed lines: the
+180pt narrow window, fork routing), <code>src/tmux.ts</code> (55),
+<code>src/sessions.ts</code> (16), <code>src/commands/serve.ts</code>
+(11), plus scheduled-task files. This worktree branched from committed
+<code>main</code>, so it does not have those edits. P0 waits for them to
+be committed. Server edits stay additive to keep rebases small.</li>
+<li><strong>Pane parsing (B4, B5)</strong> is the most fragile seam in
+lfg. Real sessions come from the <code>cy</code>/<code>cx</code> shell
+functions and are attached at about 78 columns; tests must use captures
+from those, not from API-spawned panes.</li>
+<li><strong>Closed-row cost (B2, B12):</strong> reading a reply for 100
+closed transcripts per page must be cached by mtime, or the list
+endpoint slows the single event loop.</li>
+<li><strong><code>SessionStore.swift</code> (4,899 lines) and
+<code>SessionDetailView.swift</code> (2,221 lines)</strong> are shared
+hot spots. New views go into new files.</li>
+</ul>
+<hr />
+<h2 id="decision-log">Decision Log</h2>
+<ul>
+<li>2026-10-15 — Moved <code>dA2-sessions</code> from the Tasks page to
+the Sessions page (canvas version 42), at x=0, y=2600, renamed "Desktop
+· Sessions list (400pt window)". No content change.</li>
+<li>2026-10-15 — Worktree reset from stale <code>origin/main</code>
+(<code>9b6a684</code>) to local <code>main</code>
+(<code>8b0be91</code>), per the known worktree quirk.</li>
+<li>2026-10-15 — Paused (API error) folds into Needs input and
+Restarting into Working, carried over from the S1 note, since S2 shows
+neither group.</li>
+<li>2026-10-15 — Child-agent rows leave the list; subagents show in the
+session (pill + sheet), per S2.</li>
+</ul>
+<h2 id="verification-evidence">Verification Evidence</h2>
+<p><em>None yet. Filled in during verification.</em></p>
+<h2 id="bugs">Bugs</h2>
+<p><em>None yet.</em></p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,61 @@
+scale 1
+div (0,0 390x844) bg rgb(0, 0, 0)
+  div (0,62 390x20) "Fork session feature" 17px/normal w600 rgb(255, 255, 255) lines 1 txt 110.11,62 169.78x20
+  div (0,0 390x844) bg rgba(0, 0, 0, 0.55)
+  div (0,200 390x644) bg rgb(28, 28, 30) r 38px 38px 0px 0px
+    div (177,206 36x5) bg rgb(72, 72, 74) r 3px
+    div (20,220 354x46)
+      div (20,220 308x46)
+        span (20,220 308x28) "Subagents" 22px/28px w700 rgb(255, 255, 255) lines 1 txt 20,221 118.64x26
+        span (20,250 308x16) "1 running · 2 done · 1 failed" 14px/normal w400 rgb(161, 161, 166) lines 1 txt 20,250 176.53x16
+      a (338,220 36x36) bg rgb(44, 44, 46) r 18px
+        svg (349,231 14x14) svg 14 sw 2.8 #D1D1D6
+    div (0,288 390x352)
+      button (0,288 390x88)
+        span (20,288 22x26)
+          span (26.5,305 9x9) bg rgb(48, 209, 88) r 50% shadow rgba(48, 209, 88, 0.25) 0px 0px 0px 3px
+        span (54,288 336x88) bb 1px rgb(56, 56, 58)
+          span (54,299 298x64)
+            span (54,299 298x22)
+              span (54,300 236.27x20) "Check the desktop fork menu" 17px/22px w400 rgb(255, 255, 255) lines 1 txt 54,300 236.27x20
+            span (54,323 298x20)
+              span (54,324 57.66x18) "Running" 15px/20px w400 rgb(48, 209, 88) lines 1 txt 54,324 57.66x18
+            span (54,345 298x18)
+              span (54,346 155.2x15) "general-purpose · 1m 12s" 13px/18px w400 rgb(161, 161, 166) lines 1 txt 54,346 155.2x15
+          svg (362,325 12x12) svg 12 sw 2.8 #48484A
+      button (0,376 390x88)
+        span (20,376 22x31)
+          svg (22.5,390 17x17) svg 17 sw 2.4 #30D158
+        span (54,376 336x88) bb 1px rgb(56, 56, 58)
+          span (54,387 298x64)
+            span (54,387 298x22)
+              span (54,388 167.78x20) "Find every fork caller" 17px/22px w400 rgb(255, 255, 255) lines 1 txt 54,388 167.78x20
+            span (54,411 298x20)
+              span (54,412 172.52x18) "Found 6 callers in 4 files" 15px/20px w400 rgb(209, 209, 214) lines 1 txt 54,412 172.52x18
+            span (54,433 298x18)
+              span (54,434 80.31x15) "Explore · 48s" 13px/18px w400 rgb(161, 161, 166) lines 1 txt 54,434 80.31x15
+          svg (362,413 12x12) svg 12 sw 2.8 #48484A
+      button (0,464 390x88)
+        span (20,464 22x31)
+          svg (22.5,478 17x17) svg 17 sw 2.4 #30D158
+        span (54,464 336x88) bb 1px rgb(56, 56, 58)
+          span (54,475 298x64)
+            span (54,475 298x22)
+              span (54,476 153.03x20) "Audit the fork tests" 17px/22px w400 rgb(255, 255, 255) lines 1 txt 54,476 153.03x20
+            span (54,499 298x20)
+              span (54,500 146.23x18) "All 12 fork tests pass" 15px/20px w400 rgb(209, 209, 214) lines 1 txt 54,500 146.23x18
+            span (54,521 298x18)
+              span (54,522 159.38x15) "general-purpose · 2m 05s" 13px/18px w400 rgb(161, 161, 166) lines 1 txt 54,522 159.38x15
+          svg (362,501 12x12) svg 12 sw 2.8 #48484A
+      button (0,552 390x88)
+        span (20,552 22x31)
+          svg (22.5,566 17x17) svg 17 sw 2.4 #FF453A
+        span (54,552 336x88) bb 1px rgb(56, 56, 58)
+          span (54,563 298x64)
+            span (54,563 298x22)
+              span (54,564 219.56x20) "Measure fork latency on Air" 17px/22px w400 rgb(255, 255, 255) lines 1 txt 54,564 219.56x20
+            span (54,587 298x20)
+              span (54,588 179.86x18) "Host Air was unreachable" 15px/20px w400 rgb(255, 69, 58) lines 1 txt 54,588 179.86x18
+            span (54,609 298x18)
+              span (54,610 136.67x15) "general-purpose · 30s" 13px/18px w400 rgb(161, 161, 166) lines 1 txt 54,610 136.67x15
+          svg (362,589 12x12) svg 12 sw 2.8 #48484A

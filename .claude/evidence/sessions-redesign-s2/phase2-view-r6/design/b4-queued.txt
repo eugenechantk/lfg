@@ -1,0 +1,71 @@
+URL=http://127.0.0.1:8793/s2-queued.dc.html TITLE=S2 · Session view, message queued VP=1136x1288 DPR=1
+div [0,0,1136,844]
+div [0,0,1136,844]
+div [0,0,390,844] | bg=rgb(0, 0, 0) | ov=hidden | pos=relative z=auto
+div [0,112,390,560] | pad=0px 16px 8px 16px | gap=14px | ov=hidden | pos=absolute z=auto
+div [16,520,358,72] | T="Small forks wait for a transcript that is only written on the first turn. I’ll o" f=17px/24px w=400 ls=normal c=rgb(242, 242, 247) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=16,522,342.2,20 16,546,347.9,20 16,570,243.1,20
+div [16,606,358,22] | pad=2px 0px 2px 0px | gap=8px
+svg [16,608.5,17,17] | ov=hidden | svg stroke=rgb(161, 161, 166) sw=1.9 fill=none vb=0 0 24 24 col=rgb(161, 161, 166)
+path [18.8,612,10.6,10.6] | path {"data-dc-tpl":"7","d":"M4 20h4L19 9l-4-4L4 16z"} stroke=rgb(161, 161, 166) fill=none
+path [25.6,613.1,2.8,2.8] | path {"data-dc-tpl":"8","d":"M13.5 6.5l4 4"} stroke=rgb(161, 161, 166) fill=none
+span [41,608,313,18] | T="Edited 2 files" f=15px/normal w=400 ls=normal c=rgb(161, 161, 166) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=41,608,91.8,18
+svg [362,611,12,12] | ov=hidden | svg stroke=rgb(99, 99, 102) sw=2.8 fill=none vb=0 0 24 24 col=rgb(161, 161, 166)
+path [366.5,614,3,6] | path {"data-dc-tpl":"11","d":"M9 6l6 6-6 6"} stroke=rgb(99, 99, 102) fill=none
+div [16,642,358,22] | pad=2px 0px 2px 0px | gap=8px
+svg [16,644.5,17,17] | ov=hidden | svg stroke=rgb(161, 161, 166) sw=1.9 fill=none vb=0 0 24 24 col=rgb(161, 161, 166)
+path [18.8,648,11.3,9.9] | path {"data-dc-tpl":"14","d":"M4 5h16v14H4zM8 10l3 2-3 2M13 15h3"} stroke=rgb(161, 161, 166) fill=none
+span [41,644,313,18] | T="Ran bun test src/sessions.test.ts" f=15px/normal w=400 ls=normal c=rgb(161, 161, 166) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=41,644,229.4,18
+svg [362,647,12,12] | ov=hidden | svg stroke=rgb(99, 99, 102) sw=2.8 fill=none vb=0 0 24 24 col=rgb(161, 161, 166)
+path [366.5,650,3,6] | path {"data-dc-tpl":"17","d":"M9 6l6 6-6 6"} stroke=rgb(99, 99, 102) fill=none
+div [0,0,390,124] | bgi=linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0)) | pos=absolute z=auto
+div [16,54,358,56] | gap=10px | pos=absolute z=auto
+a [16,59,46,46] | bg=rgba(44, 44, 46, 0.92) | bd=1px/1px/1px/1px rgba(255, 255, 255, 0.1)|rgba(255, 255, 255, 0.1) | rad=22px | sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [29,72,20,20] | ov=hidden | svg stroke=rgb(255, 255, 255) sw=2.4 fill=none vb=0 0 24 24 col=rgb(255, 255, 255)
+path [35.7,76.2,5.8,11.7] | path {"data-dc-tpl":"26","d":"M15 5l-7 7 7 7"} stroke=rgb(255, 255, 255) fill=none
+a [72,63.5,246,37] | gap=3px
+span [110.1,63.5,169.8,20] | T="Fork session feature" f=17px/normal w=600 ls=normal c=rgb(255, 255, 255) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=110.1,63.5,169.8,20
+span [89.8,86.5,210.4,14] | gap=6px
+span [89.8,90,7,7] | bg=rgb(48, 209, 88) | rad=50% | sh=rgba(48, 209, 88, 0.25) 0px 0px 0px 3px
+span [102.8,86.5,103.7,14] | T="Working · 3m 40s" f=12px/normal w=600 ls=normal c=rgb(48, 209, 88) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=nowrap | lines=102.8,86.5,103.7,14
+span [212.5,86.5,87.7,14] | T="· Pro" f=12px/normal w=400 ls=normal c=rgb(161, 161, 166) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=nowrap | lines=270.8,86.5,29.4,14
+span [212.5,86.5,58.3,14] | T="· 1 queued" f=12px/normal w=400 ls=normal c=rgb(161, 161, 166) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=nowrap | lines=212.5,86.5,58.3,14
+a [328,59,46,46] | bg=rgba(44, 44, 46, 0.92) | bd=1px/1px/1px/1px rgba(255, 255, 255, 0.1)|rgba(255, 255, 255, 0.1) | rad=22px | sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [341,72,20,20] | ov=hidden | svg stroke=rgb(255, 255, 255) sw=1.9 fill=none vb=0 0 24 24 col=rgb(255, 255, 255)
+path [344.3,77.8,13.3,8.3] | path {"data-dc-tpl":"35","d":"M4 7h9M17 7h3M4 17h3M11 17h9"} stroke=rgb(255, 255, 255) fill=none
+circle [351.7,76,3.7,3.7] | circle {"data-dc-tpl":"36","cx":"15","cy":"7","r":"2.2"} stroke=rgb(255, 255, 255) fill=none
+circle [346.7,84.3,3.7,3.7] | circle {"data-dc-tpl":"37","cx":"9","cy":"17","r":"2.2"} stroke=rgb(255, 255, 255) fill=none
+div [0,648,390,196] | bgi=linear-gradient(rgba(0, 0, 0, 0), rgb(0, 0, 0) 30%) | pos=absolute z=auto
+button [12,682,366,32] | bg=rgba(118, 118, 128, 0.4) | rad=16px | pad=0px 10px 0px 12px | gap=8px | bf=blur(12px) | pos=absolute z=auto
+svg [24,691.5,13,13] | ov=hidden | svg stroke=none sw=1px fill=none vb=0 0 24 24 col=rgb(0, 0, 0)
+circle [25.6,693.1,9.8,9.8] | circle {"data-dc-tpl":"42","cx":"12","cy":"12","r":"9","stroke":"#48484A","stroke-width":"3"} stroke=rgb(72, 72, 74) fill=none
+path [30.5,693.1,4.9,4.9] | path {"data-dc-tpl":"43","d":"M12 3a9 9 0 0 1 9 9","stroke":"#A1A1A6","stroke-width":"3","stroke-linecap":"round"} stroke=rgb(161, 161, 166) fill=none
+span [45,690.5,299,15] | ov=hidden | T="also open the fork in a new window on desktop, not a tab" f=13px/normal w=400 ls=normal c=rgb(161, 161, 166) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=nowrap | lines=45,690.5,348.3,15 45,690.5,286.5,15
+svg [352,690,16,16] | ov=hidden | svg stroke=rgb(142, 142, 147) sw=1.8 fill=none vb=0 0 24 24 col=rgb(0, 0, 0)
+circle [354,692,12,12] | circle {"data-dc-tpl":"46","cx":"12","cy":"12","r":"9"} stroke=rgb(142, 142, 147) fill=none
+circle [356.7,697.4,1.2,1.2] | circle {"data-dc-tpl":"47","cx":"8","cy":"12","r":"0.9","fill":"#8E8E93"} stroke=rgb(142, 142, 147) fill=rgb(142, 142, 147)
+circle [359.4,697.4,1.2,1.2] | circle {"data-dc-tpl":"48","cx":"12","cy":"12","r":"0.9","fill":"#8E8E93"} stroke=rgb(142, 142, 147) fill=rgb(142, 142, 147)
+circle [362.1,697.4,1.2,1.2] | circle {"data-dc-tpl":"49","cx":"16","cy":"12","r":"0.9","fill":"#8E8E93"} stroke=rgb(142, 142, 147) fill=rgb(142, 142, 147)
+div [12,720,366,96] | bg=rgb(28, 28, 30) | bd=1px/1px/1px/1px rgb(56, 56, 58)|rgb(56, 56, 58) | rad=24px | pad=11px 10px 10px 16px | pos=absolute z=auto
+textarea [29,732,338,22] | ov=auto
+span [29,771,338,34] | gap=8px
+svg [29,777,22,22] | ov=hidden | svg stroke=rgb(161, 161, 166) sw=1.7 fill=none vb=0 0 24 24 col=rgb(255, 255, 255)
+path [32.4,779.9,15.4,16.5] | path {"data-dc-tpl":"54","d":"M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"} stroke=rgb(161, 161, 166) fill=none
+span [59,774,116.6,28] | bg=rgb(44, 44, 46) | rad=14px | pad=0px 10px 0px 10px | T="Opus 5.5 · High" f=13px/normal w=500 ls=normal c=rgb(209, 209, 214) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=69,780.5,96.6,15
+button [333,771,34,34] | bg=rgb(242, 242, 247) | rad=17px
+span [344.5,782.5,11,11] | bg=rgb(0, 0, 0) | rad=3px
+button [0,0,390,672] | pos=absolute z=auto
+div [128,533,250,141] | bg=rgba(44, 44, 46, 0.97) | rad=16px | sh=rgba(0, 0, 0, 0.6) 0px 12px 40px 0px | ov=hidden | pos=absolute z=auto
+button [128,533,250,56] | bd=0px/0px/1px/0px rgb(255, 255, 255)|rgb(72, 72, 74) | pad=10px 16px 10px 16px | gap=10px
+span [144,543,190,35]
+span [144,543,190,20] | T="Send now" f=17px/normal w=400 ls=normal c=rgb(255, 255, 255) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=144,543,78.5,20
+span [144,563,190,15] | T="Stops the current step first" f=13px/normal w=400 ls=normal c=rgb(161, 161, 166) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=144,563,165.1,15
+svg [344,551.5,18,18] | ov=hidden | svg stroke=rgb(255, 255, 255) sw=2 fill=none vb=0 0 24 24 col=rgb(255, 255, 255)
+path [347.8,555.3,10.5,10.5] | path {"data-dc-tpl":"72","d":"M12 19V5M5 12l7-7 7 7"} stroke=rgb(255, 255, 255) fill=none
+button [128,589,250,43] | bd=0px/0px/1px/0px rgb(255, 255, 255)|rgb(72, 72, 74) | pad=11px 16px 11px 16px | gap=10px
+span [144,600,191,20] | T="Edit" f=17px/normal w=400 ls=normal c=rgb(255, 255, 255) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=144,600,31,20
+svg [345,601.5,17,17] | ov=hidden | svg stroke=rgb(255, 255, 255) sw=2 fill=none vb=0 0 24 24 col=rgb(255, 255, 255)
+path [347.8,605,10.6,10.6] | path {"data-dc-tpl":"76","d":"M4 20h4L19 9l-4-4L4 16z"} stroke=rgb(255, 255, 255) fill=none
+button [128,632,250,42] | pad=11px 16px 11px 16px | gap=10px
+span [144,643,191,20] | T="Remove" f=17px/normal w=400 ls=normal c=rgb(255, 69, 58) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=144,643,63.7,20
+svg [345,644.5,17,17] | ov=hidden | svg stroke=rgb(255, 69, 58) sw=2 fill=none vb=0 0 24 24 col=rgb(255, 69, 58)
+path [348.5,647.3,9.9,11.3] | path {"data-dc-tpl":"80","d":"M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"} stroke=rgb(255, 69, 58) fill=none

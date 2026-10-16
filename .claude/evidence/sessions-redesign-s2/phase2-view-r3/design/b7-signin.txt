@@ -1,0 +1,26 @@
+div [56,304,318,62] "audit search console for lfg.app and list the top crawl errors" fs=17px fw=400 lh=22px ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=start lines=2 tb=[70,314,287.8,42] lineTops=314/336 bg=rgb(10, 110, 224) r=20px pad=9px 14px
+svg [16,380.5,17,17] stroke=currentColor sw=1.9 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=M3 4h18v14H3zM3 8h18
+span [41,380,313,18] "Opened search.google.com in Chrome" fs=15px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=start lines=1 tb=[41,380,270.9,18]
+svg [362,383,12,12] stroke=#636366 sw=2.8 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=M9 6l6 6-6 6
+div [16,412,358,48] "Search Console wants a login. I’ll wait here until you sign in." fs=17px fw=400 lh=24px ls=normal c=rgb(242, 242, 247) ff=-apple-syste ta=start lines=2 tb=[16,414,341.1,44] lineTops=414/438
+div [0,0,390,124] bgi=linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0))
+a [16,59,46,46] bg=rgba(44, 44, 46, 0.92) bt=1px rgba(255, 255, 255, 0.1) r=22px sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [29,72,20,20] stroke=#FFFFFF sw=2.4 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M15 5l-7 7 7 7
+span [106.3,63.5,177.3,20] "Search Console audit" fs=17px fw=600 lh=normal ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=start lines=1 tb=[106.3,63.5,177.3,20]
+span [98.4,90,7,7] bg=rgb(255, 159, 10) r=50%
+span [111.4,86.5,110.9,14] "Needs sign-in · 5m" fs=12px fw=600 lh=normal ls=normal c=rgb(255, 159, 10) ff=-apple-syste ta=start lines=1 tb=[111.4,86.5,110.9,14]
+span [228.3,86.5,63.3,14] "· Air · inbox" fs=12px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=start lines=1 tb=[228.3,86.5,63.3,14]
+a [328,59,46,46] bg=rgba(44, 44, 46, 0.92) bt=1px rgba(255, 255, 255, 0.1) r=22px sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [341,72,20,20] stroke=#FFFFFF sw=1.9 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M4 7h9M17 7h3M4 17h3M11 17h9 | circle(15 7 2.2) | circle(9 17 2.2)
+div [8,508,374,328] bg=rgb(28, 28, 30) bt=1px rgb(56, 56, 58) r=32px sh=rgba(0, 0, 0, 0.6) 0px -2px 30px 0px pad=16px 16px 26px gap=14px
+span [25,528,8,8] bg=rgb(255, 159, 10) r=50% sh=rgba(255, 159, 10, 0.28) 0px 0px 0px 3px
+span [41,525,324,14] "Sign-in needed" fs=12px fw=700 lh=normal ls=0.4px c=rgb(255, 179, 64) ff=-apple-syste ta=start lines=1 tb=[41,525,107.4,14]
+span [25,553,340,25] "Sign in to search.google.com" fs=20px fw=600 lh=25px ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=start lines=1 tb=[25,553,284.8,24]
+span [25,582,340,40] "You log in on this iPhone. The sign-in then goes to Chrome on Air, whe" fs=15px fw=400 lh=20px ls=normal c=rgb(209, 209, 214) ff=-apple-syste ta=start lines=2 tb=[25,583,336.5,38] lineTops=583/603
+div [25,636,340,59] bg=rgb(44, 44, 46) r=14px pad=12px 14px gap=12px
+span [39,649.5,32,32] "G" fs=15px fw=700 lh=normal ls=normal c=rgb(242, 242, 247) ff=-apple-syste ta=start lines=1 tb=[49.3,656.5,11.4,18] bg=rgb(58, 58, 60) r=8px
+span [83,648,268,19] "search.google.com" fs=16px fw=500 lh=normal ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=start lines=1 tb=[83,648,147.2,19]
+span [83,668,268,15] "To Chrome on Eugenes-MacBook-Air" fs=13px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=start lines=1 tb=[83,668,226.7,15]
+a [25,709,340,50] "Sign in on iPhone" fs=17px fw=600 lh=normal ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=start lines=1 tb=[135.8,724,143.5,20] bg=rgb(10, 110, 224) r=25px gap=8px
+svg [110.8,725.5,17,17] stroke=currentColor sw=2.2 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=circle(8 15 4) | M11 12l9-9M16 7l3 3
+span [25,773,340,36] "There is no Dismiss here. The agent stays paused on this step until th" fs=13px fw=400 lh=18px ls=normal c=rgb(142, 142, 147) ff=-apple-syste ta=center lines=2 tb=[33.7,774,322.7,33] lineTops=774/792

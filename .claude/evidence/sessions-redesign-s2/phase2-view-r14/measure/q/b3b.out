@@ -1,0 +1,21 @@
+s1 edit-label: bbox x 42.33..128.67  y 322.00..333.67  (w 86.33 h 11.67) bg (0, 0, 0)
+s1 ran-label: bbox x 42.33..66.00  y 358.67..369.67  (w 23.67 h 11.00) bg (0, 0, 0)
+s1 edit-chev: bbox x 377.67..382.33  y 324.33..331.67  (w 4.67 h 7.33) bg (0, 0, 0)
+qd edit-icon: bbox x 18.00..30.33  y 598.00..610.33  (w 12.33 h 12.33) bg (0, 0, 0)
+qd ran-icon: bbox x 18.00..31.00  y 634.00..645.67  (w 13.00 h 11.67) bg (0, 0, 0)
+qd edit-label: bbox x 42.33..128.67  y 597.67..609.33  (w 86.33 h 11.67) bg (0, 0, 0)
+qd ran-label: bbox x 42.33..66.00  y 634.33..645.33  (w 23.67 h 11.00) bg (0, 0, 0)
+qc ran-label-ran: bbox x 42.33..66.00  y 634.33..645.33  (w 23.67 h 11.00) bg (0, 0, 0)
+s1 pill-top: rows 666.00..702.00, 712.00..715.00  bg (0, 0, 0)
+qc pill-top: rows 640.00..645.00, 666.00..700.00  bg (0, 0, 0)
+b3 pill-top: rows 641.00..652.67, 673.33..710.00  bg (0, 0, 0)
+b3 edited-after-card: bbox x 18.00..30.33  y 641.33..653.67  (w 12.33 h 12.33) bg (0, 0, 0)
+s1 top-edge: rows 100.00..100.33, 116.00..130.00  bg (0, 0, 0)
+s1 top-edge-a: median (0, 0, 0) #000000
+s1 top-edge-b: median (5, 49, 73) #053149
+s1 top-edge-c: median (12, 84, 173) #0C54AD
+s1 top-edge-d: median (9, 98, 200) #0962C8
+s1 top-edge-e: median (6, 108, 222) #066CDE
+s1 top-edge-f: median (6, 108, 222) #066CDE
+s1 top-edge-g: median (6, 108, 222) #066CDE
+b3 top-area: no ink (bg (np.int16(0), np.int16(0), np.int16(0)))

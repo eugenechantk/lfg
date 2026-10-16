@@ -1,0 +1,22 @@
+s2-tools-single.dc.html — DOM bounds in board pt (zoom 3 / 3). tag:x,y,w,h|text
+div:16,240.67,358,72|Small forks wait f (prose 3 lines)
+button:16,324.67,358,22| (Ran step header)
+svg:16,327.17,17,17|
+span:41,326.67,26.83,18|Ran
+span:75.83,328.17,247.79,15|bun test src/sessi (mono 13)
+span:331.63,328.5,22.38,14.33|1.8s
+svg:362,329.67,12,12| (down chevron)
+div:16,352.67,358,271.33| (card)
+span:28.33,363,333.33,13|Command (label)
+span:28.33,382,333.33,17|bun test src/sessi (input)
+span:28.33,405,333.33,14.33|In ~/dev/personal/
+span:28.33,429.33,333.33,13|Output · last 8 of (label)
+div:28.33,448.33,333.33,144| (output box)
+span:38.33,456.33,313.33,16| x8 lines at 16 pitch (456.33..568.33)
+a:28.33,598.33,333.33,15.33|Show all 46 lines
+button:16,636,358,22| (Edited step, mono)
+span:41,638,44.98,18|Edited
+span:93.98,639.5,229.87,15|ios/LFG/SessionSto
+span:331.85,639.83,22.15,14.33|0.1s
+svg:362,641,12,12|
+header: title span 110.11,63.17 ; dot 108.28,90.17 ; status 121.28,86.5

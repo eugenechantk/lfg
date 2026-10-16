@@ -1,0 +1,348 @@
+{
+ "board": {
+  "sheet_top_px_pt": 54.0,
+  "sheet_fill": "#1C1C1E",
+  "sheet_corner_profile_px": [
+   [
+    0,
+    103
+   ],
+   [
+    3,
+    86
+   ],
+   [
+    6,
+    76
+   ],
+   [
+    12,
+    62
+   ],
+   [
+    24,
+    43
+   ],
+   [
+    48,
+    21
+   ],
+   [
+    72,
+    8
+   ],
+   [
+    96,
+    1
+   ],
+   [
+    114,
+    0
+   ]
+  ],
+  "close": [
+   3.0,
+   9.0,
+   47.0,
+   44.0
+  ],
+  "close_fill": "#1C1C1E",
+  "close_glyph": [
+   25.67,
+   28.67,
+   8.67,
+   8.67
+  ],
+  "close_glyph_color": "#D1D1D6",
+  "reload": [
+   340.0,
+   9.0,
+   47.0,
+   44.0
+  ],
+  "reload_right_inset": 3.0,
+  "reload_glyph": [
+   354.0,
+   27.0,
+   12.33,
+   12.33
+  ],
+  "reload_glyph_rel_circle": [
+   14.0,
+   18.0
+  ],
+  "pill": [
+   58.0,
+   13.0,
+   274.0,
+   40.0
+  ],
+  "pill_right_inset": 58.0,
+  "pill_fill": "#2C2C2F",
+  "pill_corner_rows_px": 30,
+  "line1_ink": [
+   114.67,
+   21.33,
+   161.33,
+   12.67
+  ],
+  "line1_cx_off": 0.33,
+  "lock_icon": [
+   114.67,
+   22.33,
+   7.67,
+   9.0
+  ],
+  "lock_color": "#A1A1A6",
+  "host_ink": [
+   129.67,
+   21.33,
+   146.33,
+   12.67
+  ],
+  "lock_to_host_gap": 7.33,
+  "host_color_top5": "#F2F2F7",
+  "subtitle_ink": [
+   98.0,
+   37.0,
+   194.67,
+   10.33
+  ],
+  "subtitle_cx_off": 0.33,
+  "subtitle_color_top5": "#FFB33F",
+  "web_top": 64.0,
+  "web_bottom_from_screen": 92.0,
+  "web_bg_sample": "#F2F2F7",
+  "back": [
+   10.0,
+   766.0,
+   44.0,
+   44.0
+  ],
+  "back_bottom_from_screen": 34.0,
+  "back_right_inset": 336.0,
+  "back_fill": "#2C2C2F",
+  "forward": [
+   62.0,
+   766.0,
+   44.0,
+   44.0
+  ],
+  "forward_bottom_from_screen": 34.0,
+  "forward_right_inset": 284.0,
+  "forward_fill": "#2C2C2F",
+  "done": [
+   114.0,
+   764.0,
+   266.0,
+   49.0
+  ],
+  "done_bottom_from_screen": 31.0,
+  "done_right_inset": 10.0,
+  "done_fill": "#096EE0",
+  "back_glyph": [
+   28.0,
+   781.67,
+   7.33,
+   12.67
+  ],
+  "back_glyph_rel": [
+   18.0,
+   15.67
+  ],
+  "back_glyph_color_top5": "#D1D1D6",
+  "forward_glyph": [
+   80.67,
+   781.67,
+   7.33,
+   12.33
+  ],
+  "forward_glyph_rel": [
+   18.67,
+   15.67
+  ],
+  "forward_glyph_color_top5": "#636366",
+  "done_label": [
+   195.33,
+   781.33,
+   103.67,
+   16.0
+  ],
+  "done_label_cx_off": 0.17,
+  "done_label_cy_off": 0.83,
+  "done_corner_rows_px": 61
+ },
+ "app": {
+  "sheet_top_px_pt": 62.0,
+  "sheet_fill": "#1A1A1C",
+  "sheet_corner_profile_px": [
+   [
+    0,
+    113
+   ],
+   [
+    3,
+    93
+   ],
+   [
+    6,
+    78
+   ],
+   [
+    12,
+    62
+   ],
+   [
+    24,
+    43
+   ],
+   [
+    48,
+    20
+   ],
+   [
+    72,
+    8
+   ],
+   [
+    96,
+    3
+   ],
+   [
+    114,
+    1
+   ]
+  ],
+  "close": [
+   3.0,
+   9.0,
+   47.0,
+   44.0
+  ],
+  "close_fill": "#1A1A1C",
+  "close_glyph": [
+   25.67,
+   28.67,
+   8.67,
+   8.67
+  ],
+  "close_glyph_color": "#D0D0D2",
+  "reload": [
+   352.0,
+   9.0,
+   47.0,
+   44.0
+  ],
+  "reload_right_inset": 3.0,
+  "reload_glyph": [
+   366.0,
+   27.0,
+   12.0,
+   12.0
+  ],
+  "reload_glyph_rel_circle": [
+   14.0,
+   18.0
+  ],
+  "pill": [
+   58.0,
+   13.0,
+   286.0,
+   40.0
+  ],
+  "pill_right_inset": 58.0,
+  "pill_fill": "#2A2A2D",
+  "pill_corner_rows_px": 35,
+  "line1_ink": [
+   150.0,
+   21.0,
+   103.0,
+   13.0
+  ],
+  "line1_cx_off": 0.5,
+  "lock_icon": [
+   150.0,
+   22.33,
+   7.67,
+   9.0
+  ],
+  "lock_color": "#A0A0A2",
+  "host_ink": [
+   165.0,
+   21.0,
+   88.0,
+   13.0
+  ],
+  "lock_to_host_gap": 7.33,
+  "host_color_top5": "#F3F3F5",
+  "subtitle_ink": [
+   99.33,
+   36.67,
+   204.0,
+   10.0
+  ],
+  "subtitle_cx_off": 0.33,
+  "subtitle_color_top5": "#FCB041",
+  "web_top": 64.0,
+  "web_bottom_from_screen": 92.0,
+  "web_bg_sample": "#202020",
+  "back": [
+   10.0,
+   796.0,
+   44.0,
+   44.0
+  ],
+  "back_bottom_from_screen": 34.0,
+  "back_right_inset": 348.0,
+  "back_fill": "#2A2A2D",
+  "forward": [
+   62.0,
+   796.0,
+   44.0,
+   44.0
+  ],
+  "forward_bottom_from_screen": 34.0,
+  "forward_right_inset": 296.0,
+  "forward_fill": "#2A2A2D",
+  "done": [
+   114.0,
+   794.0,
+   278.0,
+   49.33
+  ],
+  "done_bottom_from_screen": 30.67,
+  "done_right_inset": 10.0,
+  "done_fill": "#056DDE",
+  "back_glyph": [
+   28.0,
+   812.0,
+   7.0,
+   12.0
+  ],
+  "back_glyph_rel": [
+   18.0,
+   16.0
+  ],
+  "back_glyph_color_top5": "#646466",
+  "forward_glyph": [
+   81.0,
+   812.0,
+   7.0,
+   12.0
+  ],
+  "forward_glyph_rel": [
+   19.0,
+   16.0
+  ],
+  "forward_glyph_color_top5": "#646466",
+  "done_label": [
+   204.33,
+   811.33,
+   97.67,
+   16.0
+  ],
+  "done_label_cx_off": 0.17,
+  "done_label_cy_off": 0.67,
+  "done_corner_rows_px": 62
+ }
+}

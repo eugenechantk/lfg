@@ -1,0 +1,18 @@
+qm strip | app/q-menu.png | bbox | 0 706 402 42 | 12 0,0,0
+qm strip-spinner | app/q-menu.png | bbox | 18 716 24 24 | 25 38,38,41
+b4 strip-spinner2 | design/b4-3x.png | bbox | 18 686 24 24 | 12 39,39,43
+qm strip-spinner2 | app/q-menu.png | bbox | 18 716 24 24 | 12 38,38,41
+qm spinner-ink | app/q-menu.png | ink | 18 716 24 24 | 25 38,38,41
+qm strip-text | app/q-menu.png | bbox | 44 716 310 24 | 40 38,38,41
+qm strip-text-ink | app/q-menu.png | ink | 44 716 290 24 | 40 38,38,41
+qm strip-more | app/q-menu.png | bbox | 360 716 24 24 | 30 38,38,41
+qm strip-more-ink | app/q-menu.png | ink | 360 716 24 24 | 30 38,38,41
+b4 strip-more-pct | design/b4-3x.png | pct | 353 691 14 14
+qm strip-more-pct | app/q-menu.png | pct | 365 721 14 14
+qc strip-more-pct | app/q-closed.png | pct | 365 721 14 14
+b4 spinner-track | design/b4-3x.png | pct | 24 691 4 4
+qm spinner-track | app/q-menu.png | pct | 24 721 4 4
+qc strip-fill-left | app/q-closed.png | color | 20 727 2 2
+qd strip-fill | app/q-dismissed.png | color | 330 724 8 4
+qm composer-top | app/q-menu.png | rows | 100 740 100 14 | 15 0,0,0
+b4 composer-top | design/b4-3x.png | rows | 100 710 100 14 | 15 0,0,0

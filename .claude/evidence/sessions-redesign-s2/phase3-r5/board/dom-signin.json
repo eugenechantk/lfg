@@ -1,0 +1,760 @@
+{
+ "name": "dom-signin.json",
+ "zoom": 1,
+ "rootRect": {
+  "x": 0,
+  "y": 0,
+  "width": 390,
+  "height": 844,
+  "top": 0,
+  "right": 390,
+  "bottom": 844,
+  "left": 0
+ },
+ "scrollX": 0,
+ "scrollY": 0,
+ "els": [
+  {
+   "i": 0,
+   "tag": "div",
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 844
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 1,
+   "tag": "div",
+   "rect": {
+    "x": 0,
+    "y": 54,
+    "w": 390,
+    "h": 790
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(28, 28, 30)",
+    "br": "38px 38px 0px 0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 2,
+   "tag": "div",
+   "rect": {
+    "x": 10,
+    "y": 64,
+    "w": 370,
+    "h": 46
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "8px"
+   }
+  },
+  {
+   "i": 3,
+   "tag": "a",
+   "aria": "Cancel sign-in",
+   "rect": {
+    "x": 10,
+    "y": 67,
+    "w": 40,
+    "h": 40
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(44, 44, 46)",
+    "br": "20px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 4,
+   "tag": "svg",
+   "rect": {
+    "x": 23,
+    "y": 80,
+    "w": 14,
+    "h": 14
+   },
+   "svg": {
+    "width": "14",
+    "height": "14",
+    "viewBox": "0 0 24 24",
+    "stroke": "#D1D1D6",
+    "stroke-width": "2.8",
+    "fill": "none",
+    "stroke-linecap": "round"
+   }
+  },
+  {
+   "i": 5,
+   "tag": "path",
+   "rect": {
+    "x": 26.5,
+    "y": 83.5,
+    "w": 7,
+    "h": 7
+   },
+   "svg": {
+    "d": "M6 6l12 12M18 6L6 18"
+   }
+  },
+  {
+   "i": 6,
+   "tag": "span",
+   "rect": {
+    "x": 58,
+    "y": 67,
+    "w": 274,
+    "h": 40
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(44, 44, 46)",
+    "br": "12px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "0px"
+   }
+  },
+  {
+   "i": 7,
+   "tag": "span",
+   "rect": {
+    "x": 113.016,
+    "y": 72.5,
+    "w": 163.969,
+    "h": 16
+   },
+   "text": "\n          accounts.google.com",
+   "textRects": [
+    {
+     "x": 129.016,
+     "y": 72.5,
+     "w": 147.969,
+     "h": 16
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "14px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(242, 242, 247)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(242, 242, 247)",
+    "bb": "0px none rgb(242, 242, 247)",
+    "op": "1",
+    "gap": "5px"
+   }
+  },
+  {
+   "i": 8,
+   "tag": "svg",
+   "rect": {
+    "x": 113.016,
+    "y": 75,
+    "w": 11,
+    "h": 11
+   },
+   "svg": {
+    "width": "11",
+    "height": "11",
+    "viewBox": "0 0 24 24",
+    "stroke": "#A1A1A6",
+    "stroke-width": "2.8",
+    "fill": "none",
+    "stroke-linecap": "round"
+   }
+  },
+  {
+   "i": 9,
+   "tag": "rect",
+   "rect": {
+    "x": 115.307,
+    "y": 80.042,
+    "w": 6.417,
+    "h": 4.583
+   },
+   "svg": {
+    "width": "14",
+    "height": "10",
+    "x": "5",
+    "y": "11",
+    "rx": "2"
+   }
+  },
+  {
+   "i": 10,
+   "tag": "path",
+   "rect": {
+    "x": 116.682,
+    "y": 76.833,
+    "w": 3.667,
+    "h": 3.208
+   },
+   "svg": {
+    "d": "M8 11V8a4 4 0 0 1 8 0v3"
+   }
+  },
+  {
+   "i": 11,
+   "tag": "span",
+   "rect": {
+    "x": 97,
+    "y": 88.5,
+    "w": 195.984,
+    "h": 13
+   },
+   "text": "For Search Console audit · goes to Air",
+   "textRects": [
+    {
+     "x": 97,
+     "y": 88.5,
+     "w": 195.984,
+     "h": 13
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "11px",
+    "fw": "400",
+    "lh": "13px",
+    "ls": "normal",
+    "color": "rgb(255, 179, 64)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 179, 64)",
+    "bb": "0px none rgb(255, 179, 64)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 12,
+   "tag": "button",
+   "aria": "Reload",
+   "rect": {
+    "x": 340,
+    "y": 67,
+    "w": 40,
+    "h": 40
+   },
+   "cs": {
+    "ff": "Arial",
+    "fs": "13.3333px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(0, 0, 0)",
+    "bg": "rgb(44, 44, 46)",
+    "br": "20px",
+    "pad": "0px",
+    "bt": "0px none rgb(0, 0, 0)",
+    "bb": "0px none rgb(0, 0, 0)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 13,
+   "tag": "svg",
+   "rect": {
+    "x": 352,
+    "y": 79,
+    "w": 16,
+    "h": 16
+   },
+   "svg": {
+    "width": "16",
+    "height": "16",
+    "viewBox": "0 0 24 24",
+    "stroke": "#D1D1D6",
+    "stroke-width": "2.4",
+    "fill": "none",
+    "stroke-linecap": "round"
+   }
+  },
+  {
+   "i": 14,
+   "tag": "path",
+   "rect": {
+    "x": 354.667,
+    "y": 81.676,
+    "w": 10.667,
+    "h": 10.667
+   },
+   "svg": {
+    "d": "M20 12a8 8 0 1 1-2.3-5.6"
+   }
+  },
+  {
+   "i": 15,
+   "tag": "path",
+   "rect": {
+    "x": 362,
+    "y": 81.667,
+    "w": 3.333,
+    "h": 3.333
+   },
+   "svg": {
+    "d": "M20 4v5h-5"
+   }
+  },
+  {
+   "i": 16,
+   "tag": "div",
+   "aria": "Website content",
+   "rect": {
+    "x": 0,
+    "y": 118,
+    "w": 390,
+    "h": 634
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(28, 28, 30)",
+    "bg": "rgb(242, 242, 247)",
+    "br": "0px",
+    "pad": "64px 32px 0px",
+    "bt": "0px none rgb(28, 28, 30)",
+    "bb": "0px none rgb(28, 28, 30)",
+    "op": "1",
+    "gap": "14px"
+   }
+  },
+  {
+   "i": 17,
+   "tag": "span",
+   "rect": {
+    "x": 119.703,
+    "y": 182,
+    "w": 150.578,
+    "h": 14
+   },
+   "text": "Website sign-in page",
+   "textRects": [
+    {
+     "x": 119.703,
+     "y": 182,
+     "w": 150.578,
+     "h": 14
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "12px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "0.5px",
+    "color": "rgb(108, 108, 112)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(108, 108, 112)",
+    "bb": "0px none rgb(108, 108, 112)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 18,
+   "tag": "span",
+   "rect": {
+    "x": 167,
+    "y": 210,
+    "w": 56,
+    "h": 56
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(28, 28, 30)",
+    "bg": "rgb(209, 209, 214)",
+    "br": "14px",
+    "pad": "0px",
+    "bt": "0px none rgb(28, 28, 30)",
+    "bb": "0px none rgb(28, 28, 30)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 19,
+   "tag": "span",
+   "rect": {
+    "x": 155.063,
+    "y": 280,
+    "w": 79.859,
+    "h": 29
+   },
+   "text": "Sign in",
+   "textRects": [
+    {
+     "x": 155.063,
+     "y": 280,
+     "w": 79.859,
+     "h": 29
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "24px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(28, 28, 30)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(28, 28, 30)",
+    "bb": "0px none rgb(28, 28, 30)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 20,
+   "tag": "span",
+   "rect": {
+    "x": 32,
+    "y": 323,
+    "w": 326,
+    "h": 54
+   },
+   "text": "Email or phone",
+   "textRects": [
+    {
+     "x": 47,
+     "y": 340.5,
+     "w": 111.938,
+     "h": 19
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(108, 108, 112)",
+    "bg": "rgb(255, 255, 255)",
+    "br": "10px",
+    "pad": "0px 14px",
+    "bt": "1px solid rgb(174, 174, 178)",
+    "bb": "1px solid rgb(174, 174, 178)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 21,
+   "tag": "span",
+   "rect": {
+    "x": 32,
+    "y": 391,
+    "w": 326,
+    "h": 54
+   },
+   "text": "Password",
+   "textRects": [
+    {
+     "x": 47,
+     "y": 408.5,
+     "w": 72.266,
+     "h": 19
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(108, 108, 112)",
+    "bg": "rgb(255, 255, 255)",
+    "br": "10px",
+    "pad": "0px 14px",
+    "bt": "1px solid rgb(174, 174, 178)",
+    "bb": "1px solid rgb(174, 174, 178)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 22,
+   "tag": "span",
+   "rect": {
+    "x": 283.766,
+    "y": 459,
+    "w": 74.234,
+    "h": 40
+   },
+   "text": "Next",
+   "textRects": [
+    {
+     "x": 303.766,
+     "y": 470,
+     "w": 34.234,
+     "h": 18
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "15px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(58, 58, 60)",
+    "br": "20px",
+    "pad": "0px 20px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 23,
+   "tag": "div",
+   "rect": {
+    "x": 10,
+    "y": 760,
+    "w": 370,
+    "h": 56
+   },
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "16px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgba(0, 0, 0, 0)",
+    "br": "0px",
+    "pad": "0px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "8px"
+   }
+  },
+  {
+   "i": 24,
+   "tag": "button",
+   "aria": "Back",
+   "rect": {
+    "x": 10,
+    "y": 766,
+    "w": 44,
+    "h": 44
+   },
+   "cs": {
+    "ff": "Arial",
+    "fs": "13.3333px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(0, 0, 0)",
+    "bg": "rgb(44, 44, 46)",
+    "br": "22px",
+    "pad": "0px",
+    "bt": "0px none rgb(0, 0, 0)",
+    "bb": "0px none rgb(0, 0, 0)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 25,
+   "tag": "svg",
+   "rect": {
+    "x": 23,
+    "y": 779,
+    "w": 18,
+    "h": 18
+   },
+   "svg": {
+    "width": "18",
+    "height": "18",
+    "viewBox": "0 0 24 24",
+    "stroke": "#D1D1D6",
+    "stroke-width": "2.4",
+    "fill": "none",
+    "stroke-linecap": "round"
+   }
+  },
+  {
+   "i": 26,
+   "tag": "path",
+   "rect": {
+    "x": 29,
+    "y": 782.75,
+    "w": 5.25,
+    "h": 10.5
+   },
+   "svg": {
+    "d": "M15 5l-7 7 7 7"
+   }
+  },
+  {
+   "i": 27,
+   "tag": "button",
+   "aria": "Forward",
+   "rect": {
+    "x": 62,
+    "y": 766,
+    "w": 44,
+    "h": 44
+   },
+   "cs": {
+    "ff": "Arial",
+    "fs": "13.3333px",
+    "fw": "400",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(0, 0, 0)",
+    "bg": "rgb(44, 44, 46)",
+    "br": "22px",
+    "pad": "0px",
+    "bt": "0px none rgb(0, 0, 0)",
+    "bb": "0px none rgb(0, 0, 0)",
+    "op": "1",
+    "gap": "normal"
+   }
+  },
+  {
+   "i": 28,
+   "tag": "svg",
+   "rect": {
+    "x": 75,
+    "y": 779,
+    "w": 18,
+    "h": 18
+   },
+   "svg": {
+    "width": "18",
+    "height": "18",
+    "viewBox": "0 0 24 24",
+    "stroke": "#636366",
+    "stroke-width": "2.4",
+    "fill": "none",
+    "stroke-linecap": "round"
+   }
+  },
+  {
+   "i": 29,
+   "tag": "path",
+   "rect": {
+    "x": 81.75,
+    "y": 782.75,
+    "w": 5.25,
+    "h": 10.5
+   },
+   "svg": {
+    "d": "M9 5l7 7-7 7"
+   }
+  },
+  {
+   "i": 30,
+   "tag": "button",
+   "rect": {
+    "x": 114,
+    "y": 763,
+    "w": 266,
+    "h": 50
+   },
+   "text": "I’m signed in",
+   "textRects": [
+    {
+     "x": 193.875,
+     "y": 778,
+     "w": 106.234,
+     "h": 20
+    }
+   ],
+   "cs": {
+    "ff": "-apple-system, \"SF Pro Text\", system-ui, sans-serif",
+    "fs": "17px",
+    "fw": "600",
+    "lh": "normal",
+    "ls": "normal",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(10, 110, 224)",
+    "br": "25px",
+    "pad": "1px 6px",
+    "bt": "0px none rgb(255, 255, 255)",
+    "bb": "0px none rgb(255, 255, 255)",
+    "op": "1",
+    "gap": "normal"
+   }
+  }
+ ]
+}

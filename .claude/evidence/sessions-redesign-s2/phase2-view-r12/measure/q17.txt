@@ -1,0 +1,60 @@
+b7 panel-top2 | design/b7-3x.png | rows | 150 500 100 12 | 8 0,0,0
+si panel-top2 | app/signin.png | rows | 150 532 100 12 | 8 0,0,0
+b6l panel-top2 | design/b6l-3x.png | rows | 150 535 100 20 | 8 0,0,0
+pl panel-top2 | app/plan.png | rows | 150 568 100 20 | 8 0,0,0
+b6p panel-top2 | design/b6p-3x.png | rows | 150 538 100 12 | 8 0,0,0
+pp panel-top2 | app/permission.png | rows | 150 568 100 12 | 8 0,0,0
+b7 host-row | design/b7-3x.png | rows | 300 625 30 80 | 8 28,28,30
+si host-row | app/signin.png | rows | 312 655 30 80 | 8 26,26,28
+b7 host-lr | design/b7-3x.png | cols | 10 690 380 1 | 8 28,28,30
+si host-lr | app/signin.png | cols | 10 720 392 1 | 8 26,26,28
+b7 host-fill | design/b7-3x.png | color | 300 660 4 4
+si host-fill | app/signin.png | color | 312 690 4 4
+b7 g-tile | design/b7-3x.png | bbox | 36 645 40 40 | 8 44,44,46
+si g-tile | app/signin.png | bbox | 36 675 40 40 | 8 42,42,44
+b7 g-tile-fill | design/b7-3x.png | color | 42 652 2 2
+si g-tile-fill | app/signin.png | color | 42 682 2 2
+b7 g-letter | design/b7-3x.png | bbox | 42 652 26 26 | 60 58,58,60
+si g-letter | app/signin.png | bbox | 42 682 26 26 | 60 56,56,58
+b7 g-ink | design/b7-3x.png | ink | 42 652 26 26 | 60 58,58,60
+si g-ink | app/signin.png | ink | 42 682 26 26 | 60 56,56,58
+b7 host-name | design/b7-3x.png | bbox | 80 645 260 22 | 50 44,44,46
+si host-name | app/signin.png | bbox | 80 675 272 22 | 50 42,42,44
+b7 host-name-ink | design/b7-3x.png | ink | 80 645 200 22 | 50 44,44,46
+si host-name-ink | app/signin.png | ink | 80 675 200 22 | 50 42,42,44
+b7 host-sub | design/b7-3x.png | bbox | 80 666 260 20 | 40 44,44,46
+si host-sub | app/signin.png | bbox | 80 696 272 20 | 40 42,42,44
+b7 host-sub-ink | design/b7-3x.png | ink | 80 666 260 20 | 40 44,44,46
+si host-sub-ink | app/signin.png | ink | 80 696 272 20 | 40 42,42,44
+b7 btn | design/b7-3x.png | rows | 300 700 30 70 | 30 28,28,30
+si btn | app/signin.png | rows | 312 730 30 70 | 30 26,26,28
+b7 btn-lr | design/b7-3x.png | cols | 10 734 380 1 | 30 28,28,30
+si btn-lr | app/signin.png | cols | 10 764 392 1 | 30 26,26,28
+b7 btn-fill | design/b7-3x.png | color | 320 734 4 4
+si btn-fill | app/signin.png | color | 332 764 4 4
+b7 btn-label | design/b7-3x.png | bbox | 100 715 200 40 | 60 10,110,224
+si btn-label | app/signin.png | bbox | 100 745 212 40 | 60 6,108,222
+b7 btn-label-ink | design/b7-3x.png | ink | 130 715 160 40 | 60 10,110,224
+si btn-label-ink | app/signin.png | ink | 130 745 172 40 | 60 6,108,222
+b7 btn-label-cols | design/b7-3x.png | cols | 100 715 200 40 | 60 10,110,224
+si btn-label-cols | app/signin.png | cols | 100 745 212 40 | 60 6,108,222
+b7 foot-T | design/b7-3x.png | rows | 33 772 9 20 | 40 28,28,30
+si foot-T | app/signin.png | rows | 33 800 12 22 | 40 26,26,28
+b7 foot | design/b7-3x.png | bbox | 20 772 350 40 | 40 28,28,30
+si foot | app/signin.png | bbox | 20 800 362 40 | 40 26,26,28
+b7 foot-ink | design/b7-3x.png | ink | 20 772 350 40 | 30 28,28,30
+si foot-ink | app/signin.png | ink | 20 800 362 40 | 30 26,26,28
+b7 title | design/b7-3x.png | bbox | 22 554 345 26 | 60 28,28,30
+si title | app/signin.png | bbox | 22 585 357 26 | 60 26,26,28
+b7 title-ink | design/b7-3x.png | ink | 22 554 300 26 | 60 28,28,30
+si title-ink | app/signin.png | ink | 22 585 300 26 | 60 26,26,28
+b7 sub | design/b7-3x.png | bbox | 22 583 345 40 | 40 28,28,30
+si sub | app/signin.png | bbox | 22 614 357 40 | 40 26,26,28
+b7 sub-ink | design/b7-3x.png | ink | 22 583 345 40 | 40 28,28,30
+si sub-ink | app/signin.png | ink | 22 614 357 40 | 40 26,26,28
+b7 hdr | design/b7-3x.png | bbox | 18 520 200 22 | 30 28,28,30
+si hdr | app/signin.png | bbox | 18 551 200 22 | 30 26,26,28
+b7 panel-border | design/b7-3x.png | pct | 150 508.33 100 0.34
+si panel-border | app/signin.png | pct | 150 539.33 100 0.34
+b7 panel-left | design/b7-3x.png | pct | 8.0 700 0.34 20
+si panel-left | app/signin.png | pct | 8.0 730 0.34 20

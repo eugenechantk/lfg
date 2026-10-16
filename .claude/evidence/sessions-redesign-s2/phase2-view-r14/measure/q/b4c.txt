@@ -1,0 +1,8 @@
+# Board 4 menu top edge in word-gap columns of prose line 1
+b4 menu-top-gap1 | design/b4-3x.png | rows | 143 515 3 45 | 20 0,0,0
+b4 menu-top-gap2 | design/b4-3x.png | rows | 170 515 3 45 | 20 0,0,0
+b4 menu-top-gap3 | design/b4-3x.png | rows | 266 515 3 45 | 20 0,0,0
+b4 menu-top-color | design/b4-3x.png | color | 143 534 3 3
+b4 text-in-menu-rows | design/b4-3x.png | rows | 240 520 90 30 | 100 43,43,44
+b4 menu-fill-top | design/b4-3x.png | color | 143 540 3 3
+qm menu-fill-top | app/q-menu.png | color | 155 570 3 3

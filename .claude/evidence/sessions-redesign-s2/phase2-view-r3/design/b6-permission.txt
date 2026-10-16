@@ -1,0 +1,24 @@
+div [175.6,282,198.4,40] "ship 1.3.1 to testflight" fs=17px fw=400 lh=22px ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=start lines=1 tb=[189.6,292,170.4,20] bg=rgb(10, 110, 224) r=20px pad=9px 14px
+svg [16,334.5,17,17] stroke=currentColor sw=1.9 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=M4 6h10M4 12h16M4 18h12
+span [41,334,313,18] "Ran 7 commands, edited 1 file" fs=15px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=start lines=1 tb=[41,334,211.4,18]
+svg [362,337,12,12] stroke=#636366 sw=2.8 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=M9 6l6 6-6 6
+div [16,364,358,48] "Build 205 passed all tests and is archived. Before I upload it, one ch" fs=17px fw=400 lh=24px ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=start lines=2 tb=[16,366,336.2,44] lineTops=366/390
+div [0,0,390,124] bgi=linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0))
+a [16,59,46,46] bg=rgba(44, 44, 46, 0.92) bt=1px rgba(255, 255, 255, 0.1) r=22px sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [29,72,20,20] stroke=#FFFFFF sw=2.4 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M15 5l-7 7 7 7
+span [88.2,63.5,213.7,20] "Ship lfg 1.3.1 to TestFlight" fs=17px fw=600 lh=normal ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=start lines=1 tb=[88.2,63.5,213.7,20]
+span [110.2,90,7,7] bg=rgb(255, 159, 10) r=50%
+span [123.2,86.5,99.8,14] "Needs input · 2m" fs=12px fw=600 lh=normal ls=normal c=rgb(255, 159, 10) ff=-apple-syste ta=start lines=1 tb=[123.2,86.5,99.8,14]
+span [229,86.5,50.8,14] "· Pro · lfg" fs=12px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=start lines=1 tb=[229,86.5,50.8,14]
+a [328,59,46,46] bg=rgba(44, 44, 46, 0.92) bt=1px rgba(255, 255, 255, 0.1) r=22px sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [341,72,20,20] stroke=#FFFFFF sw=1.9 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M4 7h9M17 7h3M4 17h3M11 17h9 | circle(15 7 2.2) | circle(9 17 2.2)
+div [8,544,374,292] bg=rgb(28, 28, 30) bt=1px rgba(255, 255, 255, 0.1) r=32px sh=rgba(0, 0, 0, 0.14) 0px -2px 30px 0px pad=16px 16px 26px gap=12px
+span [25,572,8,8] bg=rgb(255, 159, 10) r=50% sh=rgba(255, 159, 10, 0.28) 0px 0px 0px 3px
+span [41,569,184.1,14] "Claude needs permission" fs=12px fw=700 lh=normal ls=0.4px c=rgb(255, 179, 64) ff=-apple-syste ta=start lines=1 tb=[41,569,184.1,14]
+button [288.4,561,76.6,30] "Dismiss" fs=14px fw=500 lh=normal ls=normal c=rgb(209, 209, 214) ff=-apple-syste ta=center lines=1 tb=[300.4,568,52.6,16] bg=rgb(44, 44, 46) r=15px pad=0px 12px
+span [25,603,340,25] "Run this command?" fs=20px fw=600 lh=25px ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=start lines=1 tb=[25,603,192.8,24]
+div [25,636,340,38] "bundle exec fastlane beta upload:true" fs=13px fw=400 lh=18px ls=normal c=rgb(242, 242, 247) ff=ui-monospace ta=start lines=1 tb=[37,647,289.6,15] bg=rgb(0, 0, 0) r=12px pad=10px 12px
+span [25,682,340,15] "In ~/dev/personal/lfg on Pro" fs=13px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=start lines=1 tb=[25,682,168.1,15]
+button [25,709,166,48] "Allow once" fs=16px fw=600 lh=normal ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=center lines=1 tb=[65.3,723.5,85.3,19] bg=rgb(10, 110, 224) r=24px pad=1px 6px
+button [199,709,166,48] "Deny" fs=16px fw=600 lh=normal ls=normal c=rgb(242, 242, 247) ff=-apple-syste ta=center lines=1 tb=[262,723.5,40,19] bg=rgb(44, 44, 46) r=24px pad=1px 6px
+button [25,769,340,40] "Always allow fastlane in this folder" fs=15px fw=400 lh=normal ls=normal c=rgb(64, 156, 255) ff=-apple-syste ta=center lines=1 tb=[74.1,780,241.9,18] pad=1px 6px

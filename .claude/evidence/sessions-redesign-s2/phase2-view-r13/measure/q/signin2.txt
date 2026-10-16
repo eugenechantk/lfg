@@ -1,0 +1,16 @@
+b7 hostrow-rect | design/b7-3x.png | bbox | 14 625 362 75 | 8 28,28,30
+signin hostrow-rect | app/signin.png | bbox | 14 655 374 75 | 8 26,26,28
+b7 hostrow-rows-x200 | design/b7-3x.png | rows | 330 625 20 75 | 8 28,28,30
+signin hostrow-rows-x200 | app/signin.png | rows | 340 655 20 75 | 8 26,26,28
+b7 host-name | design/b7-3x.png | bbox | 80 645 200 22.5 | 60 44,44,46
+signin host-name | app/signin.png | bbox | 80 675 200 22.3 | 60 42,42,45
+b7 host-sub | design/b7-3x.png | bbox | 120 668 220 16 | 40 44,44,46
+signin host-sub | app/signin.png | bbox | 120 698 220 16 | 40 42,42,45
+b7 host-sub-ink | design/b7-3x.png | ink | 120 668 220 16 | 40 44,44,46
+signin host-sub-ink | app/signin.png | ink | 120 698 220 16 | 40 42,42,45
+b7 tile-box | design/b7-3x.png | bbox | 30 640 50 50 | 6 44,44,46
+signin tile-box | app/signin.png | bbox | 30 670 50 50 | 6 42,42,45
+b7 G | design/b7-3x.png | bbox | 44 652 22 24 | 60 58,58,60
+signin G | app/signin.png | bbox | 44 682 22 24 | 60 56,56,59
+b7 G-ink | design/b7-3x.png | ink | 44 652 22 24 | 60 58,58,60
+signin G-ink | app/signin.png | ink | 44 682 22 24 | 60 56,56,59

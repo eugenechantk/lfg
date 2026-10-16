@@ -1,0 +1,6 @@
+s1 icon-rows | app/s1.png | rows | 14 315 22 60 | 40 0,0,0
+qm icon-rows | app/q-menu.png | rows | 14 590 22 64 | 40 0,0,0
+qd icon-rows | app/q-dismissed.png | rows | 14 590 22 64 | 40 0,0,0
+s1 chev-rows | app/s1.png | rows | 372 315 16 60 | 30 0,0,0
+qc chev-rows | app/q-closed.png | rows | 372 590 16 64 | 30 0,0,0
+b4 chev-rows | design/b4-3x.png | rows | 14 600 1 1 | 30 0,0,0

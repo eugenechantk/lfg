@@ -1,0 +1,78 @@
+scale 1
+div (0,0 390x844) bg rgb(0, 0, 0)
+  div (0,62 390x20) "Fork session feature" 17px/normal w600 rgb(255, 255, 255) lines 1 txt 110.11,62 169.78x20
+  div (0,0 390x844) bg rgba(0, 0, 0, 0.55)
+  div (0,200 390x644) bg rgb(28, 28, 30) r 38px 38px 0px 0px
+    div (177,206 36x5) bg rgb(72, 72, 74) r 3px
+    div (20,220 354x46)
+      div (20,220 308x46)
+        span (20,220 308x28) "Files & links" 22px/28px w700 rgb(255, 255, 255) lines 1 txt 20,221 131.19x26
+        span (20,250 308x16) "Shared in this session" 14px/normal w400 rgb(161, 161, 166) lines 1 txt 20,250 143.91x16
+      a (338,220 36x36) bg rgb(44, 44, 46) r 18px
+        svg (349,231 14x14) svg 14 sw 2.8 #D1D1D6
+    div (16,284 358x34) bg rgb(44, 44, 46) r 17px
+      button (18,286 177x30) bg rgb(99, 99, 102) r 15px
+        span (84.13,293 44.73x16) "Files 5" 14px/normal w600 rgb(255, 255, 255) lines 1 txt 84.13,293 44.73x16
+      button (195,286 177x30) r 15px
+        span (259.17,293 48.64x16) "Links 2" 14px/normal w600 rgb(255, 255, 255) lines 1 txt 259.17,293 48.64x16
+    div (0,332 390x512)
+      div (0,332 390x29)
+        span (20,342 46.27x15)
+          span (20,342 46.27x15) "Images" 13px/normal w600 rgb(161, 161, 166) lines 1 txt 20,342 46.27x15
+        span (72.27,342 7.86x15)
+          span (72.27,342 7.86x15) "2" 13px/normal w400 rgb(142, 142, 147) lines 1 txt 72.27,342 7.86x15
+      a (0,361 390x59)
+        svg (20,378.5 24x24) svg 24 sw 1.5 #D1D1D6
+        span (56,361 334x59) bb 1px rgb(56, 56, 58)
+          span (56,371 297x38)
+            span (56,371 297x22)
+              span (56,372 126.42x20) "fork-before.png" 17px/22px w400 rgb(255, 255, 255) lines 1 txt 56,372 126.42x20
+            span (56,394 297x15)
+              span (56,394 160.75x15) ".claude/evidence · 6m ago" 13px/normal w400 rgb(161, 161, 166) lines 1 txt 56,394 160.75x15
+          svg (363,384.5 11x11) svg 11 sw 3 #636366
+      a (0,420 390x59)
+        svg (20,437.5 24x24) svg 24 sw 1.5 #D1D1D6
+        span (56,420 334x59) bb 1px rgb(56, 56, 58)
+          span (56,430 297x38)
+            span (56,430 297x22)
+              span (56,431 111.2x20) "fork-after.png" 17px/22px w400 rgb(255, 255, 255) lines 1 txt 56,431 111.2x20
+            span (56,453 297x15)
+              span (56,453 160.84x15) ".claude/evidence · 4m ago" 13px/normal w400 rgb(161, 161, 166) lines 1 txt 56,453 160.84x15
+          svg (363,443.5 11x11) svg 11 sw 3 #636366
+      div (0,479 390x29)
+        span (20,489 43.75x15)
+          span (20,489 43.75x15) "Videos" 13px/normal w600 rgb(161, 161, 166) lines 1 txt 20,489 43.75x15
+        span (69.75,489 6.03x15)
+          span (69.75,489 6.03x15) "1" 13px/normal w400 rgb(142, 142, 147) lines 1 txt 69.75,489 6.03x15
+      a (0,508 390x59)
+        svg (20,525.5 24x24) svg 24 sw 1.5 #D1D1D6
+        span (56,508 334x59) bb 1px rgb(56, 56, 58)
+          span (56,518 297x38)
+            span (56,518 297x22)
+              span (56,519 220.73x20) "fork-opens-right-away.mp4" 17px/22px w400 rgb(255, 255, 255) lines 1 txt 56,519 220.73x20
+            span (56,541 297x15)
+              span (56,541 160.63x15) ".claude/evidence · 3m ago" 13px/normal w400 rgb(161, 161, 166) lines 1 txt 56,541 160.63x15
+          svg (363,531.5 11x11) svg 11 sw 3 #636366
+      div (0,567 390x29)
+        span (20,577 72.64x15)
+          span (20,577 72.64x15) "Documents" 13px/normal w600 rgb(161, 161, 166) lines 1 txt 20,577 72.64x15
+        span (98.64,577 7.86x15)
+          span (98.64,577 7.86x15) "2" 13px/normal w400 rgb(142, 142, 147) lines 1 txt 98.64,577 7.86x15
+      a (0,596 390x59)
+        svg (20,613.5 24x24) svg 24 sw 1.5 #D1D1D6
+        span (56,596 334x59) bb 1px rgb(56, 56, 58)
+          span (56,606 297x38)
+            span (56,606 297x22)
+              span (56,607 125.95x20) "fork-latency.md" 17px/22px w400 rgb(255, 255, 255) lines 1 txt 56,607 125.95x20
+            span (56,629 297x15)
+              span (56,629 160.84x15) ".claude/evidence · 4m ago" 13px/normal w400 rgb(161, 161, 166) lines 1 txt 56,629 160.84x15
+          svg (363,619.5 11x11) svg 11 sw 3 #636366
+      a (0,655 390x59)
+        svg (20,672.5 24x24) svg 24 sw 1.5 #D1D1D6
+        span (56,655 334x59) bb 1px rgb(56, 56, 58)
+          span (56,665 297x38)
+            span (56,665 297x22)
+              span (56,666 140.88x20) "release-notes.md" 17px/22px w400 rgb(255, 255, 255) lines 1 txt 56,666 140.88x20
+            span (56,688 297x15)
+              span (56,688 95.63x15) ".claude · 1h ago" 13px/normal w400 rgb(161, 161, 166) lines 1 txt 56,688 95.63x15
+          svg (363,678.5 11x11) svg 11 sw 3 #636366

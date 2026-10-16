@@ -1,0 +1,62 @@
+b6q rows-left | design/b6q-3x.png | rows | 14 120 40 724 | 30 0,0,0
+qq rows-left | app/question.png | rows | 14 120 40 754 | 30 0,0,0
+b6q panel | design/b6q-3x.png | bbox | 0 415 390 429 | 12 0,0,0
+qq panel | app/question.png | bbox | 0 445 402 429 | 12 0,0,0
+b6q panel-fill | design/b6q-3x.png | color | 200 470 10 5
+qq panel-fill | app/question.png | color | 200 520 10 5
+b6q panel-border | design/b6q-3x.png | pct | 150 426 100 0.34
+qq panel-top-rows | app/question.png | rows | 150 470 100 20 | 8 0,0,0
+b6q panel-inner-rows | design/b6q-3x.png | rows | 20 432 350 400 | 30 28,28,30
+qq panel-inner-rows | app/question.png | rows | 20 495 362 368 | 30 28,28,30
+b6q hdr-dot | design/b6q-3x.png | bbox | 20 446 18 22 | 40 28,28,30
+qq hdr-dot | app/question.png | bbox | 20 526 18 22 | 40 28,28,30
+b6q hdr-dot-col | design/b6q-3x.png | color | 28 457 2 2
+qq hdr-dot-col | app/question.png | color | 28 537 2 2
+b6q hdr-label | design/b6q-3x.png | bbox | 39 446 140 22 | 40 28,28,30
+qq hdr-label | app/question.png | bbox | 39 526 140 22 | 40 28,28,30
+b6q hdr-label-ink | design/b6q-3x.png | ink | 39 446 140 22 | 40 28,28,30
+qq hdr-label-ink | app/question.png | ink | 39 526 140 22 | 40 28,28,30
+b6q dismiss | design/b6q-3x.png | bbox | 280 440 90 36 | 8 28,28,30
+qq dismiss | app/question.png | bbox | 290 520 92 36 | 8 28,28,30
+b6q dismiss-fill | design/b6q-3x.png | color | 292 457 2 2
+qq dismiss-fill | app/question.png | color | 304 537 2 2
+b6q dismiss-text | design/b6q-3x.png | bbox | 295 448 66 20 | 50 44,44,46
+qq dismiss-text | app/question.png | bbox | 307 528 66 20 | 50 44,44,46
+b6q dismiss-ink | design/b6q-3x.png | ink | 295 448 66 20 | 50 44,44,46
+qq dismiss-ink | app/question.png | ink | 307 528 66 20 | 50 44,44,46
+b6q title | design/b6q-3x.png | bbox | 22 485 345 26 | 60 28,28,30
+qq title | app/question.png | bbox | 22 565 357 26 | 60 28,28,30
+b6q title-ink | design/b6q-3x.png | ink | 22 485 300 26 | 60 28,28,30
+qq title-ink | app/question.png | ink | 22 565 300 26 | 60 28,28,30
+b6q sub | design/b6q-3x.png | bbox | 22 539 345 42 | 40 28,28,30
+qq sub | app/question.png | bbox | 22 572 357 70 | 40 28,28,30
+b6q sub-ink | design/b6q-3x.png | ink | 22 539 345 42 | 40 28,28,30
+qq sub-ink | app/question.png | ink | 22 572 357 70 | 40 28,28,30
+b6q opt1 | design/b6q-3x.png | bbox | 20 588 350 54 | 8 28,28,30
+qq opt1 | app/question.png | bbox | 20 618 362 54 | 8 28,28,30
+b6q opt-fill | design/b6q-3x.png | color | 300 600 4 4
+qq opt-fill | app/question.png | color | 312 630 4 4
+b6q opts-rows | design/b6q-3x.png | rows | 320 585 10 175 | 8 28,28,30
+qq opts-rows | app/question.png | rows | 332 615 10 175 | 8 28,28,30
+b6q num1 | design/b6q-3x.png | bbox | 39 603 24 24 | 50 44,44,46
+qq num1 | app/question.png | bbox | 39 633 24 24 | 50 44,44,46
+b6q num-ink | design/b6q-3x.png | ink | 39 603 24 24 | 50 44,44,46
+qq num-ink | app/question.png | ink | 39 633 24 24 | 50 44,44,46
+b6q opt1-lbl | design/b6q-3x.png | bbox | 70 600 200 30 | 50 44,44,46
+qq opt1-lbl | app/question.png | bbox | 70 630 200 30 | 50 44,44,46
+b6q opt1-ink | design/b6q-3x.png | ink | 70 600 200 30 | 50 44,44,46
+qq opt1-ink | app/question.png | ink | 70 630 200 30 | 50 44,44,46
+b6q field | design/b6q-3x.png | bbox | 20 758 350 56 | 20 28,28,30
+qq field | app/question.png | bbox | 20 788 362 56 | 20 28,28,30
+b6q field-border | design/b6q-3x.png | pct | 150 763 60 0.67
+b6q field-ph | design/b6q-3x.png | bbox | 38 772 200 28 | 40 28,28,30
+qq field-ph | app/question.png | bbox | 38 802 200 28 | 40 28,28,30
+b6q field-ph-ink | design/b6q-3x.png | ink | 38 772 200 28 | 40 28,28,30
+qq field-ph-ink | app/question.png | ink | 38 802 200 28 | 40 28,28,30
+b6q field-send | design/b6q-3x.png | bbox | 320 765 42 42 | 20 28,28,30
+qq field-send | app/question.png | bbox | 332 795 42 42 | 20 28,28,30
+b6q field-send-fill | design/b6q-3x.png | color | 330 786 2 2
+qq field-send-fill | app/question.png | color | 342 816 2 2
+b6q field-arrow | design/b6q-3x.png | bbox | 330 774 24 24 | 60 72,72,74
+qq field-arrow | app/question.png | bbox | 342 804 24 24 | 60 72,72,74
+qq clock-ink | app/question.png | ink | 40 18 60 26 | 60 0,0,0

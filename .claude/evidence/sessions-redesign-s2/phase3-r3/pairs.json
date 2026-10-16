@@ -1,0 +1,39 @@
+{
+  "sources": {
+    "b_menu": {"path": "board/board-menu-appvalues-3x.png", "pixels_per_unit": 3, "viewport": [390, 844]},
+    "a_menu": {"path": "app/menu.png", "pixels_per_unit": 3, "viewport": [402, 874]},
+    "b_sub": {"path": "board/board-subagents-3x.png", "pixels_per_unit": 3, "viewport": [390, 844]},
+    "a_sub": {"path": "app/subagents.png", "pixels_per_unit": 3, "viewport": [402, 874]},
+    "b_files": {"path": "board/board-files-3x.png", "pixels_per_unit": 3, "viewport": [390, 844]},
+    "a_files": {"path": "app/files.png", "pixels_per_unit": 3, "viewport": [402, 874]},
+    "b_links": {"path": "board/board-links-3x.png", "pixels_per_unit": 3, "viewport": [390, 844]},
+    "a_links": {"path": "app/links.png", "pixels_per_unit": 3, "viewport": [402, 874]},
+    "b_term_kbc": {"path": "board/board-terminal-kbclosed-fit-3x.png", "pixels_per_unit": 3, "viewport": [390, 844]},
+    "b_term_kb": {"path": "board/board-terminal-kb-3x.png", "pixels_per_unit": 3, "viewport": [390, 844]},
+    "a_term_fit": {"path": "app/terminal-fit.png", "pixels_per_unit": 3, "viewport": [402, 874]},
+    "a_term_wide": {"path": "app/terminal-wide.png", "pixels_per_unit": 3, "viewport": [402, 874]},
+    "a_term_keys": {"path": "app/terminal-keys-scrolled.png", "pixels_per_unit": 3, "viewport": [402, 874]},
+    "b_signin": {"path": "board/board-signin-appvalues-3x.png", "pixels_per_unit": 3, "viewport": [390, 844]},
+    "a_signin": {"path": "app/signin.png", "pixels_per_unit": 3, "viewport": [402, 874]}
+  },
+  "pairs": [
+    {"id": "A-header", "state": "menu", "design": {"source": "b_menu", "rect": [0, 122, 390, 82]}, "app": {"source": "a_menu", "rect": [8, 140.27, 386, 78.7]}},
+    {"id": "A-tiles", "state": "menu", "design": {"source": "b_menu", "rect": [0, 202, 390, 176]}, "app": {"source": "a_menu", "rect": [8, 217.1, 386, 169]}},
+    {"id": "A-card1", "state": "menu", "design": {"source": "b_menu", "rect": [0, 382, 390, 228]}, "app": {"source": "a_menu", "rect": [8, 389.9, 386, 218.9]}},
+    {"id": "A-card2-footer", "state": "menu", "design": {"source": "b_menu", "rect": [0, 614, 390, 128]}, "app": {"source": "a_menu", "rect": [8, 612.7, 386, 122.9]}},
+    {"id": "B-header", "state": "subagents", "design": {"source": "b_sub", "rect": [0, 210, 390, 70]}, "app": {"source": "a_sub", "rect": [8, 224.6, 386, 67.2]}},
+    {"id": "B-rows", "state": "subagents", "design": {"source": "b_sub", "rect": [0, 284, 390, 361]}, "app": {"source": "a_sub", "rect": [8, 295.66, 386, 346.6]}},
+    {"id": "B-row0", "state": "subagents-running", "design": {"source": "b_sub", "rect": [0, 288, 390, 88]}, "app": {"source": "a_sub", "rect": [8, 299.5, 386, 84.5]}},
+    {"id": "C-header-pill", "state": "files", "design": {"source": "b_files", "rect": [0, 210, 390, 114]}, "app": {"source": "a_files", "rect": [8, 224.6, 386, 109.5]}},
+    {"id": "C-files-list", "state": "files", "design": {"source": "b_files", "rect": [0, 328, 390, 392]}, "app": {"source": "a_files", "rect": [8, 337.9, 386, 376.4]}},
+    {"id": "C-links-pill", "state": "links", "design": {"source": "b_links", "rect": [0, 210, 390, 114]}, "app": {"source": "a_links", "rect": [8, 224.6, 386, 109.5]}},
+    {"id": "C-links-list", "state": "links", "design": {"source": "b_links", "rect": [0, 328, 390, 132]}, "app": {"source": "a_links", "rect": [8, 337.9, 386, 126.7]}},
+    {"id": "D-header", "state": "terminal-fit", "design": {"source": "b_term_kbc", "rect": [0, 54, 390, 56]}, "app": {"source": "a_term_fit", "rect": [0, 62, 402, 56]}},
+    {"id": "D-text-glyphs", "state": "terminal-fit", "design": {"source": "b_term_kbc", "rect": [0, 731, 220, 26]}, "app": {"source": "a_term_fit", "rect": [0, 122, 220, 26]}},
+    {"id": "D-text-glyphs-wide", "state": "terminal-wide", "design": {"source": "b_term_kbc", "rect": [0, 731, 220, 26]}, "app": {"source": "a_term_wide", "rect": [0, 122, 220, 26]}},
+    {"id": "D-keyrow-start", "state": "terminal-keys", "design": {"source": "b_term_kbc", "rect": [0, 760, 390, 50]}, "app": {"source": "a_term_fit", "rect": [0, 824, 402, 50]}},
+    {"id": "D-keyrow-end", "state": "terminal-keys-scrolled", "design": {"source": "b_term_kb", "rect": [0, 524, 390, 50]}, "app": {"source": "a_term_keys", "rect": [0, 824, 402, 50]}},
+    {"id": "E-topbar", "state": "signin", "design": {"source": "b_signin", "rect": [0, 54, 390, 70]}, "app": {"source": "a_signin", "rect": [0, 62, 402, 70]}},
+    {"id": "E-bottombar", "state": "signin", "design": {"source": "b_signin", "rect": [0, 750, 390, 94]}, "app": {"source": "a_signin", "rect": [0, 780, 402, 94]}}
+  ]
+}

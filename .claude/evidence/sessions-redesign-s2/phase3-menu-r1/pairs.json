@@ -1,0 +1,27 @@
+{
+  "sources": {
+    "design": {"path": "raw/board-3x.png", "pixels_per_unit": 3, "viewport": [390, 844]},
+    "app": {"path": "raw/app1.png", "pixels_per_unit": 3, "viewport": [402, 874]}
+  },
+  "pairs": [
+    {"id": "00-full-screen", "state": "menu", "design": {"source": "design", "rect": [0, 0, 390, 844]}, "app": {"source": "app", "rect": [0, 0, 402, 874]}},
+    {"id": "01-header", "state": "menu", "design": {"source": "design", "rect": [0, 112, 390, 84]}, "app": {"source": "app", "rect": [8, 130.67, 386, 80.66]}},
+    {"id": "02-title-rename", "state": "menu", "design": {"source": "design", "rect": [14, 126, 280, 64]}, "app": {"source": "app", "rect": [21.44, 144.11, 268.8, 61.44]}},
+    {"id": "03-close", "state": "menu", "design": {"source": "design", "rect": [330, 124, 52, 52]}, "app": {"source": "app", "rect": [336.4, 142.19, 49.92, 49.92]}},
+    {"id": "10-tile-terminal", "state": "menu", "design": {"source": "design", "rect": [12, 204, 122, 86]}, "app": {"source": "app", "rect": [19.52, 219.0, 120.96, 82.56]}},
+    {"id": "11-tile-files", "state": "menu", "design": {"source": "design", "rect": [134, 204, 122, 86]}, "app": {"source": "app", "rect": [140.48, 219.0, 120.96, 82.56]}},
+    {"id": "12-tile-subagents", "state": "menu", "design": {"source": "design", "rect": [256, 204, 122, 86]}, "app": {"source": "app", "rect": [261.44, 219.0, 120.96, 82.56]}},
+    {"id": "13-tile-signin", "state": "menu", "design": {"source": "design", "rect": [12, 290, 122, 86]}, "app": {"source": "app", "rect": [19.52, 301.56, 120.96, 82.56]}},
+    {"id": "14-tile-browser", "state": "menu", "design": {"source": "design", "rect": [134, 290, 122, 86]}, "app": {"source": "app", "rect": [140.48, 301.56, 120.96, 82.56]}},
+    {"id": "15-tile-iphone", "state": "menu", "design": {"source": "design", "rect": [256, 290, 122, 86]}, "app": {"source": "app", "rect": [261.44, 301.56, 120.96, 82.56]}},
+    {"id": "20-row-model", "state": "menu", "design": {"source": "design", "rect": [12, 383, 366, 49]}, "app": {"source": "app", "rect": [19.52, 390.83, 362.88, 47.04]}},
+    {"id": "21-row-effort", "state": "menu", "design": {"source": "design", "rect": [12, 426, 366, 55]}, "app": {"source": "app", "rect": [19.52, 432.11, 362.88, 52.8]}},
+    {"id": "22-row-host", "state": "menu", "design": {"source": "design", "rect": [12, 475, 366, 49]}, "app": {"source": "app", "rect": [19.52, 479.15, 362.88, 47.04]}},
+    {"id": "23-row-fork", "state": "menu", "design": {"source": "design", "rect": [12, 518, 366, 49]}, "app": {"source": "app", "rect": [19.52, 520.43, 362.88, 47.04]}},
+    {"id": "24-row-unread", "state": "menu", "design": {"source": "design", "rect": [12, 561, 366, 49]}, "app": {"source": "app", "rect": [19.52, 561.71, 362.88, 47.04]}},
+    {"id": "30-row-stop", "state": "menu", "design": {"source": "design", "rect": [12, 617, 366, 49]}, "app": {"source": "app", "rect": [19.52, 615.47, 362.88, 47.04]}},
+    {"id": "31-row-end", "state": "menu", "design": {"source": "design", "rect": [12, 660, 366, 49]}, "app": {"source": "app", "rect": [19.52, 656.75, 362.88, 47.04]}},
+    {"id": "40-footer", "state": "menu", "design": {"source": "design", "rect": [12, 711, 366, 30]}, "app": {"source": "app", "rect": [19.52, 705.71, 362.88, 28.8]}},
+    {"id": "50-cards-and-tiles", "state": "menu", "design": {"source": "design", "rect": [0, 196, 390, 548]}, "app": {"source": "app", "rect": [8, 211.31, 386, 526.08]}}
+  ]
+}

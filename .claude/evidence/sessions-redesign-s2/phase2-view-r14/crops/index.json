@@ -1,0 +1,793 @@
+{
+  "manifest_sha256": "48aa1a25e118366d7f43b4d921e20fb7e4cc7b39255dcb8f92d51754005ba244",
+  "sources": {
+    "b3": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r14/design/b3-3x.png",
+      "sha256": "170238fb3793ad276006f475a018bb2c395869bdc5e8dfdbb8892b886c1fe819",
+      "pixels_per_unit": 3,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        1170,
+        2532
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1170,
+        2532
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b4": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r14/design/b4-3x.png",
+      "sha256": "856457d0eb22664a6f3d4e409dc92e976b8543db98fa59a368a23065517a181a",
+      "pixels_per_unit": 3,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        1170,
+        2532
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1170,
+        2532
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "s1": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r14/app/s1.png",
+      "sha256": "65746444b876f342a052a432f4f65cd1c0415637acd38d90407843c85e097deb",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1206,
+        2622
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "qc": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r14/app/q-closed.png",
+      "sha256": "988f9e6e9d8a681f1fb8c08f0b2597872bf3c7ec960211568bcc3415b809ccd2",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1206,
+        2622
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "qm": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r14/app/q-menu.png",
+      "sha256": "91283427d6dd2c012cc68204133c87fcdb623de28487afdd469cbd46d34d1dc7",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1206,
+        2622
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "qd": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase2-view-r14/app/q-dismissed.png",
+      "sha256": "640d1f42f6e6fdba0517a070d563aa65cf5858ac8a297717c9174ed26998a0d2",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1206,
+        2622
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    }
+  },
+  "pairs": [
+    {
+      "id": "b3-full",
+      "state": "single call open",
+      "design": {
+        "source": "b3",
+        "rect": [
+          0,
+          0,
+          390,
+          844
+        ],
+        "pixel_box": [
+          0,
+          0,
+          1170,
+          2532
+        ],
+        "crop": "b3-full-design.png",
+        "sha256": "170238fb3793ad276006f475a018bb2c395869bdc5e8dfdbb8892b886c1fe819"
+      },
+      "app": {
+        "source": "s1",
+        "rect": [
+          0,
+          0,
+          402,
+          874
+        ],
+        "pixel_box": [
+          0,
+          0,
+          1206,
+          2622
+        ],
+        "crop": "b3-full-app.png",
+        "sha256": "006e07f807d9fbfea0e9409bf254e95f4a06e0e31ef93d6371f654173bfe051b"
+      }
+    },
+    {
+      "id": "b3-header",
+      "state": "single call open",
+      "design": {
+        "source": "b3",
+        "rect": [
+          0,
+          50,
+          390,
+          60
+        ],
+        "pixel_box": [
+          0,
+          150,
+          1170,
+          330
+        ],
+        "crop": "b3-header-design.png",
+        "sha256": "4e74b61c71810d865ab9908e760161431b708743665c17338c70e293084815ed"
+      },
+      "app": {
+        "source": "s1",
+        "rect": [
+          0,
+          52,
+          402,
+          60
+        ],
+        "pixel_box": [
+          0,
+          156,
+          1206,
+          336
+        ],
+        "crop": "b3-header-app.png",
+        "sha256": "d06059423d0737a16ceaef4cec7181ac426a18a8b6d67b45091a568ed9fc2524"
+      }
+    },
+    {
+      "id": "b3-prose",
+      "state": "single call open",
+      "design": {
+        "source": "b3",
+        "rect": [
+          0,
+          236,
+          390,
+          80
+        ],
+        "pixel_box": [
+          0,
+          708,
+          1170,
+          948
+        ],
+        "crop": "b3-prose-design.png",
+        "sha256": "d6bbde2df12840bf062c8be9da0bfdf49719d9680cf4891c1f68fe9a1bc0a553"
+      },
+      "app": {
+        "source": "s1",
+        "rect": [
+          0,
+          226,
+          402,
+          80
+        ],
+        "pixel_box": [
+          0,
+          678,
+          1206,
+          918
+        ],
+        "crop": "b3-prose-app.png",
+        "sha256": "6f48028b91d6b2d172853fb8138813065892761de8d0828dff98a1446ad88331"
+      }
+    },
+    {
+      "id": "b3-step-row",
+      "state": "single call open",
+      "design": {
+        "source": "b3",
+        "rect": [
+          0,
+          318,
+          390,
+          32
+        ],
+        "pixel_box": [
+          0,
+          954,
+          1170,
+          1050
+        ],
+        "crop": "b3-step-row-design.png",
+        "sha256": "605a1b1d39f6dfec19d5aac4903e7fb64e3f2afed2655fb3f69af92cbfff71a6"
+      },
+      "app": {
+        "source": "s1",
+        "rect": [
+          0,
+          346,
+          402,
+          32
+        ],
+        "pixel_box": [
+          0,
+          1038,
+          1206,
+          1134
+        ],
+        "crop": "b3-step-row-app.png",
+        "sha256": "812177afd64f89c1d5abd1c505a68f6b957bac5414ea2fde60d6af260af5712e"
+      }
+    },
+    {
+      "id": "b3-card",
+      "state": "single call open",
+      "design": {
+        "source": "b3",
+        "rect": [
+          0,
+          346,
+          390,
+          284
+        ],
+        "pixel_box": [
+          0,
+          1038,
+          1170,
+          1890
+        ],
+        "crop": "b3-card-design.png",
+        "sha256": "9d8b4b4145cba251b441926d8dff852d95d88e78fb0e36b51415bad010434542"
+      },
+      "app": {
+        "source": "s1",
+        "rect": [
+          0,
+          374,
+          402,
+          284
+        ],
+        "pixel_box": [
+          0,
+          1122,
+          1206,
+          1974
+        ],
+        "crop": "b3-card-app.png",
+        "sha256": "ac3460e67737dd97d4de68fce82415dd8ff4c14a03b45a1d5d7c6029353c0cdc"
+      }
+    },
+    {
+      "id": "b3-output-block",
+      "state": "single call open",
+      "design": {
+        "source": "b3",
+        "rect": [
+          16,
+          440,
+          358,
+          160
+        ],
+        "pixel_box": [
+          48,
+          1320,
+          1122,
+          1800
+        ],
+        "crop": "b3-output-block-design.png",
+        "sha256": "8897535e9a0169713cb6209bc6abfe8d4545a7dc928fa396bde7cf9af8e608a6"
+      },
+      "app": {
+        "source": "s1",
+        "rect": [
+          16,
+          469,
+          370,
+          160
+        ],
+        "pixel_box": [
+          48,
+          1407,
+          1158,
+          1887
+        ],
+        "crop": "b3-output-block-app.png",
+        "sha256": "45b623eb202a5c5b3c8c4d6cfdcced8d508033f4d364089d8b3205a0cb96dfa9"
+      }
+    },
+    {
+      "id": "b3-bottom",
+      "state": "single call open",
+      "design": {
+        "source": "b3",
+        "rect": [
+          0,
+          620,
+          390,
+          224
+        ],
+        "pixel_box": [
+          0,
+          1860,
+          1170,
+          2532
+        ],
+        "crop": "b3-bottom-design.png",
+        "sha256": "916eebc5660afda695a08a572f13f42eeaf4601bc5ac2c3aee7b0d62d5ea17e0"
+      },
+      "app": {
+        "source": "s1",
+        "rect": [
+          0,
+          650,
+          402,
+          224
+        ],
+        "pixel_box": [
+          0,
+          1950,
+          1206,
+          2622
+        ],
+        "crop": "b3-bottom-app.png",
+        "sha256": "b3a4df3fe2b020f790a1754ca73c59111e00450f1a51c8cf7a9fa2920386d791"
+      }
+    },
+    {
+      "id": "b4-full",
+      "state": "queued, strip menu open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          0,
+          0,
+          390,
+          844
+        ],
+        "pixel_box": [
+          0,
+          0,
+          1170,
+          2532
+        ],
+        "crop": "b4-full-design.png",
+        "sha256": "856457d0eb22664a6f3d4e409dc92e976b8543db98fa59a368a23065517a181a"
+      },
+      "app": {
+        "source": "qm",
+        "rect": [
+          0,
+          0,
+          402,
+          874
+        ],
+        "pixel_box": [
+          0,
+          0,
+          1206,
+          2622
+        ],
+        "crop": "b4-full-app.png",
+        "sha256": "94b20c326b9ec4f76383de000c8e7c6ac8420b0548875646a61877152acae8e8"
+      }
+    },
+    {
+      "id": "b4-header",
+      "state": "queued, strip menu open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          0,
+          50,
+          390,
+          60
+        ],
+        "pixel_box": [
+          0,
+          150,
+          1170,
+          330
+        ],
+        "crop": "b4-header-design.png",
+        "sha256": "0fcc27db10c7de70eb812b3d31acd2726487c6bb9502313fc380a03d885f3eec"
+      },
+      "app": {
+        "source": "qm",
+        "rect": [
+          0,
+          52,
+          402,
+          60
+        ],
+        "pixel_box": [
+          0,
+          156,
+          1206,
+          336
+        ],
+        "crop": "b4-header-app.png",
+        "sha256": "bfc0b68b5f90799e77f99114725b4c3b5ae4be27ea03b93091c5c7db5f3f2faa"
+      }
+    },
+    {
+      "id": "b4-transcript",
+      "state": "queued (app: menu closed)",
+      "design": {
+        "source": "b4",
+        "rect": [
+          0,
+          512,
+          390,
+          160
+        ],
+        "pixel_box": [
+          0,
+          1536,
+          1170,
+          2016
+        ],
+        "crop": "b4-transcript-design.png",
+        "sha256": "f2f9c3cd8c0629b9f520ba809da100c9a841746b8635d5f7dac23b246b327fb6"
+      },
+      "app": {
+        "source": "qc",
+        "rect": [
+          0,
+          498,
+          402,
+          160
+        ],
+        "pixel_box": [
+          0,
+          1494,
+          1206,
+          1974
+        ],
+        "crop": "b4-transcript-app.png",
+        "sha256": "bfe28a5256b97d1cfba613830f099a90ffc435277f39526f52414f2b8c0d7d75"
+      }
+    },
+    {
+      "id": "b4-step-pair",
+      "state": "queued (app: menu closed)",
+      "design": {
+        "source": "b4",
+        "rect": [
+          0,
+          598,
+          140,
+          70
+        ],
+        "pixel_box": [
+          0,
+          1794,
+          420,
+          2004
+        ],
+        "crop": "b4-step-pair-design.png",
+        "sha256": "642fa064501f4ec479e72220dd4819c637edf7e553663f6cd07b546cbc676df5"
+      },
+      "app": {
+        "source": "qc",
+        "rect": [
+          0,
+          585,
+          140,
+          70
+        ],
+        "pixel_box": [
+          0,
+          1755,
+          420,
+          1965
+        ],
+        "crop": "b4-step-pair-app.png",
+        "sha256": "5ce3589ac4b24ab3dc9c7bdbb8d529617fb65dfff875f8eb28f660e32001c579"
+      }
+    },
+    {
+      "id": "b4-step-pair-menu",
+      "state": "queued, strip menu open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          0,
+          598,
+          140,
+          70
+        ],
+        "pixel_box": [
+          0,
+          1794,
+          420,
+          2004
+        ],
+        "crop": "b4-step-pair-menu-design.png",
+        "sha256": "642fa064501f4ec479e72220dd4819c637edf7e553663f6cd07b546cbc676df5"
+      },
+      "app": {
+        "source": "qm",
+        "rect": [
+          0,
+          585,
+          140,
+          70
+        ],
+        "pixel_box": [
+          0,
+          1755,
+          420,
+          1965
+        ],
+        "crop": "b4-step-pair-menu-app.png",
+        "sha256": "1247c57d0125bc4704cd2cde815bc97e21b6906af6d1783e573031fb33c3c929"
+      }
+    },
+    {
+      "id": "b4-step-pair-s1",
+      "state": "board 4 pair vs app single call open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          0,
+          598,
+          140,
+          70
+        ],
+        "pixel_box": [
+          0,
+          1794,
+          420,
+          2004
+        ],
+        "crop": "b4-step-pair-s1-design.png",
+        "sha256": "642fa064501f4ec479e72220dd4819c637edf7e553663f6cd07b546cbc676df5"
+      },
+      "app": {
+        "source": "s1",
+        "rect": [
+          0,
+          309,
+          140,
+          70
+        ],
+        "pixel_box": [
+          0,
+          927,
+          420,
+          1137
+        ],
+        "crop": "b4-step-pair-s1-app.png",
+        "sha256": "2e5c9f52571e5b832eb7048b3fea8fc5a2c1cac7f3084129bd36c932f644f029"
+      }
+    },
+    {
+      "id": "b4-menu",
+      "state": "queued, strip menu open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          120,
+          525,
+          270,
+          155
+        ],
+        "pixel_box": [
+          360,
+          1575,
+          1170,
+          2040
+        ],
+        "crop": "b4-menu-design.png",
+        "sha256": "0c732b6ee49dc9e733462f71c9766329b5580547937f68e5940fcf72389d834c"
+      },
+      "app": {
+        "source": "qm",
+        "rect": [
+          132,
+          555,
+          270,
+          155
+        ],
+        "pixel_box": [
+          396,
+          1665,
+          1206,
+          2130
+        ],
+        "crop": "b4-menu-app.png",
+        "sha256": "dfe33cceb98ce361c1f457a4fd1b16e8bff90b55bb9e9a1c445cd7579503be90"
+      }
+    },
+    {
+      "id": "b4-strip-open",
+      "state": "queued, strip menu open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          0,
+          676,
+          390,
+          44
+        ],
+        "pixel_box": [
+          0,
+          2028,
+          1170,
+          2160
+        ],
+        "crop": "b4-strip-open-design.png",
+        "sha256": "b0e38382b9c4fd8802b6224c4b122d9658a7723c734a54997aedbb36d5fa90a7"
+      },
+      "app": {
+        "source": "qm",
+        "rect": [
+          0,
+          706,
+          402,
+          44
+        ],
+        "pixel_box": [
+          0,
+          2118,
+          1206,
+          2250
+        ],
+        "crop": "b4-strip-open-app.png",
+        "sha256": "c9d861e3db9eb7d7cb4d295a9913273afe90bffac4bb852be80fee6dea01440a"
+      }
+    },
+    {
+      "id": "b4-strip-rest",
+      "state": "board open vs app dismissed",
+      "design": {
+        "source": "b4",
+        "rect": [
+          0,
+          676,
+          390,
+          44
+        ],
+        "pixel_box": [
+          0,
+          2028,
+          1170,
+          2160
+        ],
+        "crop": "b4-strip-rest-design.png",
+        "sha256": "b0e38382b9c4fd8802b6224c4b122d9658a7723c734a54997aedbb36d5fa90a7"
+      },
+      "app": {
+        "source": "qd",
+        "rect": [
+          0,
+          706,
+          402,
+          44
+        ],
+        "pixel_box": [
+          0,
+          2118,
+          1206,
+          2250
+        ],
+        "crop": "b4-strip-rest-app.png",
+        "sha256": "95cfe93a33484cacfa7bbd57bac70fbdd461bbb72e9bc4cfe8deeb927176958c"
+      }
+    },
+    {
+      "id": "b4-composer",
+      "state": "queued, strip menu open",
+      "design": {
+        "source": "b4",
+        "rect": [
+          0,
+          716,
+          390,
+          104
+        ],
+        "pixel_box": [
+          0,
+          2148,
+          1170,
+          2460
+        ],
+        "crop": "b4-composer-design.png",
+        "sha256": "1f882c24f55dc3407c828f103298acdc5e74975d1542e88b0a2a9ce20cc8b523"
+      },
+      "app": {
+        "source": "qm",
+        "rect": [
+          0,
+          746,
+          402,
+          104
+        ],
+        "pixel_box": [
+          0,
+          2238,
+          1206,
+          2550
+        ],
+        "crop": "b4-composer-app.png",
+        "sha256": "4edfe186b83f8c0f5506ec7da35ec53735c4410dc8ea2a7d55d546ed6c26b852"
+      }
+    }
+  ],
+  "review_sheets": [
+    "review-01.png",
+    "review-02.png",
+    "review-03.png",
+    "review-04.png"
+  ],
+  "review_sheet_scale": "1 pixel per logical unit; browsing only; measure raw crops",
+  "elapsed_seconds": 0.584
+}

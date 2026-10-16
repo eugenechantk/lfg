@@ -1,0 +1,8 @@
+qd menu-area | app/q-dismissed.png | mode | 150 565 240 135
+qm menu-area | app/q-menu.png | mode | 150 565 240 135
+qd strip-fill | app/q-dismissed.png | color | 200 714 30 3
+qd rows | app/q-dismissed.png | rows | 0 112 402 762 | 30
+qc rows | app/q-closed.png | rows | 0 112 402 762 | 30
+fc rows | app/f-closed.png | rows | 0 112 402 762 | 30
+g1 rows | app/g1.png | rows | 0 112 402 762 | 30
+g2 rows | app/g2.png | rows | 0 112 402 762 | 30

@@ -1,0 +1,61 @@
+# Board 6q vs question frame
+b6q panel | design/b6q-3x.png | bbox | 2 415 386 429 | 12 0,0,0
+question panel | app/question.png | bbox | 2 470 398 404 | 12 0,0,0
+b6q panel-rows-x200 | design/b6q-3x.png | rows | 195 415 10 429 | 12 0,0,0
+question panel-rows-x200 | app/question.png | rows | 195 470 10 404 | 12 0,0,0
+b6q inner-rows | design/b6q-3x.png | rows | 20 436 350 395 | 12 28,28,30
+question inner-rows | app/question.png | rows | 20 490 362 372 | 12 26,26,28
+b6q dot | design/b6q-3x.png | bbox | 20 448 20 20 | 30 28,28,30
+question dot | app/question.png | bbox | 20 528 20 20 | 30 26,26,28
+b6q dot-core | design/b6q-3x.png | bbox | 20 448 20 20 | 150 28,28,30
+question dot-core | app/question.png | bbox | 20 528 20 20 | 150 26,26,28
+b6q dot-ink | design/b6q-3x.png | ink | 20 448 20 20 | 150 28,28,30
+question dot-ink | app/question.png | ink | 20 528 20 20 | 150 26,26,28
+b6q label | design/b6q-3x.png | bbox | 38 446 140 22 | 40 28,28,30
+question label | app/question.png | bbox | 38 526 140 22 | 40 26,26,28
+b6q label-ink | design/b6q-3x.png | ink | 38 446 140 22 | 40 28,28,30
+question label-ink | app/question.png | ink | 38 526 140 22 | 40 26,26,28
+b6q dismiss | design/b6q-3x.png | bbox | 280 440 100 36 | 8 28,28,30
+question dismiss | app/question.png | bbox | 292 520 100 36 | 8 26,26,28
+b6q dismiss-text | design/b6q-3x.png | bbox | 296 448 64 20 | 60 44,44,46
+question dismiss-text | app/question.png | bbox | 308 528 64 20 | 60 42,42,45
+b6q dismiss-ink | design/b6q-3x.png | ink | 296 448 64 20 | 60 44,44,46
+question dismiss-ink | app/question.png | ink | 308 528 64 20 | 60 42,42,45
+b6q dismiss-fill | design/b6q-3x.png | color | 293 452 3 6
+question dismiss-fill | app/question.png | color | 305 532 3 6
+b6q title | design/b6q-3x.png | bbox | 22 482 340 56 | 60 28,28,30
+question title | app/question.png | bbox | 22 536 352 32 | 60 26,26,28
+b6q sub | design/b6q-3x.png | bbox | 22 538 350 44 | 40 28,28,30
+question sub | app/question.png | bbox | 22 568 362 44 | 40 26,26,28
+b6q sub-rows | design/b6q-3x.png | rows | 22 538 350 44 | 40 28,28,30
+question sub-rows | app/question.png | rows | 22 568 362 44 | 40 26,26,28
+b6q sub-ink | design/b6q-3x.png | ink | 22 538 350 44 | 40 28,28,30
+question sub-ink | app/question.png | ink | 22 568 362 44 | 40 26,26,28
+b6q opt-rows-x300 | design/b6q-3x.png | rows | 300 585 4 175 | 8 28,28,30
+question opt-rows-x300 | app/question.png | rows | 300 615 4 175 | 8 26,26,28
+b6q opt-cols-y615 | design/b6q-3x.png | cols | 14 615 362 1 | 8 28,28,30
+question opt-cols-y645 | app/question.png | cols | 14 645 374 1 | 8 26,26,28
+b6q opt1-fill | design/b6q-3x.png | color | 300 597 20 4
+question opt1-fill | app/question.png | color | 300 627 20 4
+b6q num1 | design/b6q-3x.png | bbox | 40 600 22 30 | 60 44,44,46
+question num1 | app/question.png | bbox | 40 630 22 30 | 60 42,42,45
+b6q num-ink | design/b6q-3x.png | ink | 40 600 22 30 | 60 44,44,46
+question num-ink | app/question.png | ink | 40 630 22 30 | 60 42,42,45
+b6q opt1-label | design/b6q-3x.png | bbox | 70 600 200 30 | 60 44,44,46
+question opt1-label | app/question.png | bbox | 70 630 200 30 | 60 42,42,45
+b6q field | design/b6q-3x.png | bbox | 14 756 362 60 | 15 28,28,30
+question field | app/question.png | bbox | 14 786 374 60 | 15 26,26,28
+b6q field-rows-x150 | design/b6q-3x.png | rows | 150 756 4 60 | 15 28,28,30
+question field-rows-x150 | app/question.png | rows | 150 786 4 60 | 15 26,26,28
+b6q field-ph | design/b6q-3x.png | bbox | 36 772 200 26 | 40 28,28,30
+question field-ph | app/question.png | bbox | 36 802 200 26 | 40 26,26,28
+b6q field-ph-ink | design/b6q-3x.png | ink | 36 772 200 26 | 40 28,28,30
+question field-ph-ink | app/question.png | ink | 36 802 200 26 | 40 26,26,28
+b6q send | design/b6q-3x.png | bbox | 320 766 44 40 | 12 28,28,30
+question send | app/question.png | bbox | 332 796 44 40 | 12 26,26,28
+b6q send-fill | design/b6q-3x.png | color | 340 772 4 3
+question send-fill | app/question.png | color | 352 802 4 3
+b6q send-arrow | design/b6q-3x.png | bbox | 334 778 16 18 | 60 72,72,74
+question send-arrow | app/question.png | bbox | 346 808 16 18 | 60 72,72,74
+b6q panel-fill | design/b6q-3x.png | color | 200 580 30 6
+question panel-fill | app/question.png | color | 200 610 30 6

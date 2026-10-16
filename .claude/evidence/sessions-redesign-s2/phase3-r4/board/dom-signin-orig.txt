@@ -1,0 +1,39 @@
+div |  |  | 0 | 54 | 390 | 790 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(28, 28, 30) | 38px 38px 0px 0px | none
+div |  |  | 10 | 64 | 370 | 46 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px | none
+a | Cancel sign-in |  | 10 | 67 | 40 | 40 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(44, 44, 46) | 20px | none
+svg |  |  | 23 | 80 | 14 | 14 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px | rgb(209, 209, 214)
+path |  |  | 26.5 | 83.5 | 7 | 7 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px | rgb(209, 209, 214)
+span |  |  | 58 | 67 | 274 | 40 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(44, 44, 46) | 12px | none
+span |  | accounts.google.com | 113.02 | 72.5 | 163.97 | 16 | 14px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px | none
+svg |  |  | 113.02 | 75 | 11 | 11 | 14px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px | rgb(161, 161, 166)
+rect |  |  | 115.31 | 80.04 | 6.42 | 4.58 | 14px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px | rgb(161, 161, 166)
+path |  |  | 116.68 | 76.83 | 3.67 | 3.21 | 14px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px | rgb(161, 161, 166)
+span |  | For Search Console audit · goes to Air | 97 | 88.5 | 195.98 | 13 | 11px | 400 | 13px | -apple-system, "SF Pro Text",  | rgb(255, 179, 64) | rgba(0, 0, 0, 0) | 0px | none
+button | Reload |  | 340 | 67 | 40 | 40 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgb(44, 44, 46) | 20px | none
+svg |  |  | 352 | 79 | 16 | 16 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px | rgb(209, 209, 214)
+path |  |  | 354.67 | 81.68 | 10.67 | 10.67 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px | rgb(209, 209, 214)
+path |  |  | 362 | 81.67 | 3.33 | 3.33 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px | rgb(209, 209, 214)
+div | Website content |  | 0 | 118 | 390 | 634 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(28, 28, 30) | rgb(242, 242, 247) | 0px | none
+span |  | Website sign-in page | 119.7 | 182 | 150.58 | 14 | 12px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(108, 108, 112) | rgba(0, 0, 0, 0) | 0px | none
+span |  |  | 167 | 210 | 56 | 56 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(28, 28, 30) | rgb(209, 209, 214) | 14px | none
+span |  | Sign in | 155.06 | 280 | 79.86 | 29 | 24px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(28, 28, 30) | rgba(0, 0, 0, 0) | 0px | none
+span |  | Email or phone | 32 | 323 | 326 | 54 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(108, 108, 112) | rgb(255, 255, 255) | 10px | none
+span |  | Password | 32 | 391 | 326 | 54 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(108, 108, 112) | rgb(255, 255, 255) | 10px | none
+span |  | Next | 283.77 | 459 | 74.23 | 40 | 15px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(58, 58, 60) | 20px | none
+div |  |  | 10 | 760 | 370 | 56 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px | none
+button | Back |  | 10 | 766 | 44 | 44 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgb(44, 44, 46) | 22px | none
+svg |  |  | 23 | 779 | 18 | 18 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px | rgb(209, 209, 214)
+path |  |  | 29 | 782.75 | 5.25 | 10.5 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px | rgb(209, 209, 214)
+button | Forward |  | 62 | 766 | 44 | 44 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgb(44, 44, 46) | 22px | none
+svg |  |  | 75 | 779 | 18 | 18 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px | rgb(99, 99, 102)
+path |  |  | 81.75 | 782.75 | 5.25 | 10.5 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px | rgb(99, 99, 102)
+button |  | I’m signed in | 114 | 763 | 266 | 50 | 17px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(10, 110, 224) | 25px | none
+---TEXT---
+"accounts.google.com" | 129.02 | 72.5 | 147.97 | 16
+"For Search Console audit · goes to Air" | 97 | 88.5 | 195.98 | 13
+"Website sign-in page" | 119.7 | 182 | 150.58 | 14
+"Sign in" | 155.06 | 280 | 79.86 | 29
+"Email or phone" | 47 | 340.5 | 111.94 | 19
+"Password" | 47 | 408.5 | 72.27 | 19
+"Next" | 303.77 | 470 | 34.23 | 18
+"I’m signed in" | 193.88 | 778 | 106.23 | 20

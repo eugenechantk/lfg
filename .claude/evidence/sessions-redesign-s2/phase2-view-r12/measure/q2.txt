@@ -1,0 +1,32 @@
+b1 title | design/b1-3x.png | bbox | 70 58 250 26 | 60
+w title | app/w.png | bbox | 70 60 262 26 | 60
+b1 status | design/b1-3x.png | bbox | 70 85 250 18 | 40
+w status | app/w.png | bbox | 70 87 262 18 | 40
+b1 status-cols | design/b1-3x.png | cols | 70 85 250 18 | 40
+w status-cols | app/w.png | cols | 70 87 262 18 | 40
+b1 dot | design/b1-3x.png | color | 111.5 92 3 3
+w dot | app/w.png | color | 0 0 0 0
+b1 bubble | design/b1-3x.png | bbox | 30 370 360 100 | 40
+w bubble | app/w.png | bbox | 30 420 372 80 | 40
+b1 bubble-col | design/b1-3x.png | color | 200 384 20 4
+w bubble-col | app/w.png | color | 200 435 20 4
+b1 bubble-text | design/b1-3x.png | bbox | 62 384 300 72 | 80
+w bubble-text | app/w.png | bbox | 75 435 310 52 | 80
+b1 prose1 | design/b1-3x.png | bbox | 10 476 380 24 | 40
+w prose1 | app/w.png | bbox | 10 505 392 24 | 40
+b1 step1 | design/b1-3x.png | cols | 10 514 380 22 | 30
+w step1 | app/w.png | cols | 10 544 392 22 | 30
+b1 step1-rows-icon | design/b1-3x.png | bbox | 10 514 30 22 | 30
+w step1-rows-icon | app/w.png | bbox | 10 544 30 22 | 30
+b1 step1-label | design/b1-3x.png | bbox | 38 514 300 22 | 30
+w step1-label | app/w.png | bbox | 38 544 300 22 | 30
+b1 step1-chev | design/b1-3x.png | bbox | 350 514 40 22 | 30
+w step1-chev | app/w.png | bbox | 360 544 42 22 | 30
+b1 prose2 | design/b1-3x.png | bbox | 10 550 380 72 | 40
+w prose2 | app/w.png | bbox | 10 580 392 72 | 40
+b1 step2 | design/b1-3x.png | cols | 10 636 380 22 | 30
+w step2 | app/w.png | cols | 10 666 392 22 | 30
+b1 step2-icon | design/b1-3x.png | bbox | 10 636 30 22 | 30
+w step2-icon | app/w.png | bbox | 10 666 30 22 | 30
+b1 step2-chev | design/b1-3x.png | bbox | 350 636 40 22 | 30
+w step2-chev | app/w.png | bbox | 360 666 42 22 | 30

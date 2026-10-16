@@ -1,0 +1,6 @@
+b4 spinner-ring15: bbox x 25.00..36.33  y 692.33..703.67  (w 11.33 h 11.33) bg (49, 49, 53)
+qm spinner-ring15: bbox x 24.67..36.00  y 722.67..734.00  (w 11.33 h 11.33) bg (46, 46, 49)
+qm spinner-track-ink: ink (159, 159, 162) #9F9FA2 (n=22, bg (46, 46, 49))
+b4 strip-mid: median (40, 40, 44) #28282C
+qm strip-mid: median (39, 39, 42) #27272A
+qc strip-mid: median (24, 24, 26) #18181A

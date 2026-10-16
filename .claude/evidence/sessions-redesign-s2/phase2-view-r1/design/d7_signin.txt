@@ -1,0 +1,27 @@
+div |  | 0 | 0 | 390 | 844 |  |  | rgb(0, 0, 0) |  |  |  | 
+div | audit search console for lfg.app and l | 56 | 304 | 318 | 62 | 17px/22px/400/lsnormal | rgb(255, 255, 255) op1 | rgb(10, 110, 224) | 20px |  |  | none clip normal
+svg |  | 16 | 380.5 | 17 | 17 |  |  |  |  |  |  | 
+span | Opened search.google.com in Chrome | 41 | 380 | 313 | 18 | 15px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none clip normal
+svg |  | 362 | 383 | 12 | 12 |  |  |  |  |  |  | 
+div | Search Console wants a login. I’ll wai | 16 | 412 | 358 | 48 | 17px/24px/400/lsnormal | rgb(242, 242, 247) op1 |  |  |  |  | none clip normal
+div |  | 0 | 0 | 390 | 124 |  |  | rgba(0, 0, 0, 0) linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0)) |  |  |  | 
+a |  | 16 | 59 | 46 | 46 |  |  | rgba(44, 44, 46, 0.92) | 22px | bt1px rgba(255, 255, 255, 0.1) |  | 
+svg |  | 29 | 72 | 20 | 20 |  |  |  |  |  |  | 
+span | Search Console audit | 106.3 | 63.5 | 177.3 | 20 | 17px/normal/600/lsnormal | rgb(255, 255, 255) op1 |  |  |  |  | none clip normal
+span |  | 98.4 | 90 | 7 | 7 |  |  | rgb(255, 159, 10) | 50% |  |  | 
+span | Needs sign-in · 5m | 111.4 | 86.5 | 110.9 | 14 | 12px/normal/600/lsnormal | rgb(255, 159, 10) op1 |  |  |  |  | none clip nowrap
+span | · Air · inbox | 228.3 | 86.5 | 63.3 | 14 | 12px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none clip nowrap
+a |  | 328 | 59 | 46 | 46 |  |  | rgba(44, 44, 46, 0.92) | 22px | bt1px rgba(255, 255, 255, 0.1) |  | 
+svg |  | 341 | 72 | 20 | 20 |  |  |  |  |  |  | 
+div |  | 8 | 508 | 374 | 328 |  |  | rgb(28, 28, 30) | 32px | bt1px rgb(56, 56, 58) |  | 
+span |  | 25 | 528 | 8 | 8 |  |  | rgb(255, 159, 10) | 50% |  |  | 
+span | Sign-in needed | 41 | 525 | 324 | 14 | 12px/normal/700/ls0.4px | rgb(255, 179, 64) op1 |  |  |  |  | uppercase clip normal
+span | Sign in to search.google.com | 25 | 553 | 340 | 25 | 20px/25px/600/lsnormal | rgb(255, 255, 255) op1 |  |  |  |  | none clip normal
+span | You log in on this iPhone. The sign-in | 25 | 582 | 340 | 40 | 15px/20px/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  |  | none clip normal
+div |  | 25 | 636 | 340 | 59 |  |  | rgb(44, 44, 46) | 14px |  |  | 
+span | G | 39 | 649.5 | 32 | 32 | 15px/normal/700/lsnormal | rgb(242, 242, 247) op1 | rgb(58, 58, 60) | 8px |  |  | none clip normal
+span | search.google.com | 83 | 648 | 268 | 19 | 16px/normal/500/lsnormal | rgb(255, 255, 255) op1 |  |  |  |  | none clip normal
+span | To Chrome on Eugenes-MacBook-Air | 83 | 668 | 268 | 15 | 13px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none clip normal
+a | Sign in on iPhone | 25 | 709 | 340 | 50 | 17px/normal/600/lsnormal | rgb(255, 255, 255) op1 | rgb(10, 110, 224) | 25px |  |  | none clip normal
+svg |  | 110.8 | 725.5 | 17 | 17 |  |  |  |  |  |  | 
+span | There is no Dismiss here. The agent st | 25 | 773 | 340 | 36 | 13px/18px/400/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none clip normal

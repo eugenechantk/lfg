@@ -1,0 +1,1028 @@
+{
+  "manifest_sha256": "b2da52f7d0b67e4ae45eacac668d8706147f108ff62c0d36e479cc5d7cf31fd5",
+  "sources": {
+    "b_menu": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase3-r3/board/board-menu-appvalues-3x.png",
+      "sha256": "ad9299ec152eb69e91020cc3061bb0c386e5c4fee090c7dbe30d0cc8cf03a106",
+      "pixels_per_unit": 3,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        1170,
+        2532
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1170,
+        2532
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "a_menu": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase3-r3/app/menu.png",
+      "sha256": "5355af4bde0ce6f6c62a4725cf10280e1bfbd7e017793bfa8a7c22624b795ec6",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1206,
+        2622
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b_sub": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase3-r3/board/board-subagents-3x.png",
+      "sha256": "a507998eabe2d5fe568446f4e8256a85d9a3005644fc7c1b9ca2124659030fc6",
+      "pixels_per_unit": 3,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        1170,
+        2532
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1170,
+        2532
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "a_sub": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase3-r3/app/subagents.png",
+      "sha256": "734885137503242e6c59664e288cb25dfb8f2eabad254807616b1ed58384f1ff",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1206,
+        2622
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b_files": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase3-r3/board/board-files-3x.png",
+      "sha256": "f6bc5628335cadb97b0e645386b2f8e1e6346f01287d74ff780e8d97d28420d9",
+      "pixels_per_unit": 3,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        1170,
+        2532
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1170,
+        2532
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "a_files": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase3-r3/app/files.png",
+      "sha256": "8c8dcd28c3a4a97adff576bae038f9658868a2bf5c60451b19082d800dba4e09",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1206,
+        2622
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b_links": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase3-r3/board/board-links-3x.png",
+      "sha256": "a67e1577ed2ed9130c28d1d792e65666e25ebe204a38e98a4442cce7aca9d5ed",
+      "pixels_per_unit": 3,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        1170,
+        2532
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1170,
+        2532
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "a_links": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase3-r3/app/links.png",
+      "sha256": "8c8da848749ba4879a39f323d4746e0c76478fccbde7734ef4d9692114c3b61d",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1206,
+        2622
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b_term_kbc": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase3-r3/board/board-terminal-kbclosed-fit-3x.png",
+      "sha256": "38d85ce7ffb515b87ca2beac58664ca354f9d43511c0a9331dd4e08de688cde2",
+      "pixels_per_unit": 3,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        1170,
+        2532
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1170,
+        2532
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b_term_kb": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase3-r3/board/board-terminal-kb-3x.png",
+      "sha256": "e58bf81d4ab8087735ab872c04e559868d356bf84de30e57874dc2d14c9aa20c",
+      "pixels_per_unit": 3,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        1170,
+        2532
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1170,
+        2532
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "a_term_fit": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase3-r3/app/terminal-fit.png",
+      "sha256": "4e073dd4bc91649fb31d6404c20f6f388568274bd48fdef6d835511c00a41b0b",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1206,
+        2622
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "a_term_wide": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase3-r3/app/terminal-wide.png",
+      "sha256": "706aab916adcf77434c58558fd6b76ace9a313e968fa79b8afbb6f2f89688f35",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1206,
+        2622
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "a_term_keys": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase3-r3/app/terminal-keys-scrolled.png",
+      "sha256": "0c7a655dead4d33ad16ea220c2bcd77b7667f6a987143d72f4d234344e7a34ab",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1206,
+        2622
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "b_signin": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase3-r3/board/board-signin-appvalues-3x.png",
+      "sha256": "56f2b8b6e59cdfb3b50a5102b710281de430f8754766dc4a048e031cd9682f85",
+      "pixels_per_unit": 3,
+      "viewport": [
+        390,
+        844
+      ],
+      "pixel_size": [
+        1170,
+        2532
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1170,
+        2532
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    },
+    "a_signin": {
+      "path": "/Users/eugenechan/dev/personal/lfg/.claude/worktrees/sessions-redesign-s2/.claude/evidence/sessions-redesign-s2/phase3-r3/app/signin.png",
+      "sha256": "24d701207688b0b36c7c354d4388d517a6f967fd742be9922f988685ce2cb7b7",
+      "pixels_per_unit": 3,
+      "viewport": [
+        402,
+        874
+      ],
+      "pixel_size": [
+        1206,
+        2622
+      ],
+      "source_format": "PNG",
+      "source_pixel_size": [
+        1206,
+        2622
+      ],
+      "exif_orientation": 1,
+      "coordinate_basis": "EXIF-oriented decoded pixels",
+      "icc_profile_sha256": null,
+      "capture_kind": "unspecified; confirm before measuring colors"
+    }
+  },
+  "pairs": [
+    {
+      "id": "A-header",
+      "state": "menu",
+      "design": {
+        "source": "b_menu",
+        "rect": [
+          0,
+          122,
+          390,
+          82
+        ],
+        "pixel_box": [
+          0,
+          366,
+          1170,
+          612
+        ],
+        "crop": "A-header-design.png",
+        "sha256": "e1024f226491f3e3bbfae588aa6354428c903d433a3f926867d3cf0e074a78a2"
+      },
+      "app": {
+        "source": "a_menu",
+        "rect": [
+          8,
+          140.27,
+          386,
+          78.7
+        ],
+        "pixel_box": [
+          24,
+          420,
+          1182,
+          657
+        ],
+        "crop": "A-header-app.png",
+        "sha256": "684fad548a82d7c16ab3cb85ecdf1601597744f32e4800a525c5efa8b57429dd"
+      }
+    },
+    {
+      "id": "A-tiles",
+      "state": "menu",
+      "design": {
+        "source": "b_menu",
+        "rect": [
+          0,
+          202,
+          390,
+          176
+        ],
+        "pixel_box": [
+          0,
+          606,
+          1170,
+          1134
+        ],
+        "crop": "A-tiles-design.png",
+        "sha256": "48d6020253bf59afe9db606b89430582037791b6324ef48a5a9278d0bfa4a458"
+      },
+      "app": {
+        "source": "a_menu",
+        "rect": [
+          8,
+          217.1,
+          386,
+          169
+        ],
+        "pixel_box": [
+          24,
+          651,
+          1182,
+          1159
+        ],
+        "crop": "A-tiles-app.png",
+        "sha256": "4a14e99350a83082d32d16441f169aaf4719ba289edc279387abac2995c3c1a1"
+      }
+    },
+    {
+      "id": "A-card1",
+      "state": "menu",
+      "design": {
+        "source": "b_menu",
+        "rect": [
+          0,
+          382,
+          390,
+          228
+        ],
+        "pixel_box": [
+          0,
+          1146,
+          1170,
+          1830
+        ],
+        "crop": "A-card1-design.png",
+        "sha256": "ce9878f10454348901bab1ce8c67d2787ca2e0adb3e029b47f574c1794c82d4d"
+      },
+      "app": {
+        "source": "a_menu",
+        "rect": [
+          8,
+          389.9,
+          386,
+          218.9
+        ],
+        "pixel_box": [
+          24,
+          1169,
+          1182,
+          1827
+        ],
+        "crop": "A-card1-app.png",
+        "sha256": "cfe40df693c9605cee01b4cfe375d7e34e7fd4e5180e5e02a0b62ad9c0e6194e"
+      }
+    },
+    {
+      "id": "A-card2-footer",
+      "state": "menu",
+      "design": {
+        "source": "b_menu",
+        "rect": [
+          0,
+          614,
+          390,
+          128
+        ],
+        "pixel_box": [
+          0,
+          1842,
+          1170,
+          2226
+        ],
+        "crop": "A-card2-footer-design.png",
+        "sha256": "8676bdcd7e2e66ed5c71c73724fd620bffd1d6c9c89ceab8e6f3641a4067727e"
+      },
+      "app": {
+        "source": "a_menu",
+        "rect": [
+          8,
+          612.7,
+          386,
+          122.9
+        ],
+        "pixel_box": [
+          24,
+          1838,
+          1182,
+          2207
+        ],
+        "crop": "A-card2-footer-app.png",
+        "sha256": "fb73b918b25d0aa2878fd9ecef71c647ffdcc900747e774d320cdef1a29ce8bb"
+      }
+    },
+    {
+      "id": "B-header",
+      "state": "subagents",
+      "design": {
+        "source": "b_sub",
+        "rect": [
+          0,
+          210,
+          390,
+          70
+        ],
+        "pixel_box": [
+          0,
+          630,
+          1170,
+          840
+        ],
+        "crop": "B-header-design.png",
+        "sha256": "c71bcdad474381bd7795f5075201c8d3326f65dc4c2d306a183d94c5d38c76ff"
+      },
+      "app": {
+        "source": "a_sub",
+        "rect": [
+          8,
+          224.6,
+          386,
+          67.2
+        ],
+        "pixel_box": [
+          24,
+          673,
+          1182,
+          876
+        ],
+        "crop": "B-header-app.png",
+        "sha256": "a97a314b6d0d354e128cb1ecfabdf9b48e6982ef5b1d04670ce61ab0a7b53cf3"
+      }
+    },
+    {
+      "id": "B-rows",
+      "state": "subagents",
+      "design": {
+        "source": "b_sub",
+        "rect": [
+          0,
+          284,
+          390,
+          361
+        ],
+        "pixel_box": [
+          0,
+          852,
+          1170,
+          1935
+        ],
+        "crop": "B-rows-design.png",
+        "sha256": "f7c371396a768b1e92552a345e04cf32b6431226df3992809fa8f0bafb49671f"
+      },
+      "app": {
+        "source": "a_sub",
+        "rect": [
+          8,
+          295.66,
+          386,
+          346.6
+        ],
+        "pixel_box": [
+          24,
+          886,
+          1182,
+          1927
+        ],
+        "crop": "B-rows-app.png",
+        "sha256": "a2c7551a4088f9397519ca0974416eac7780bfff0da0dad91dff6f7d8418e40c"
+      }
+    },
+    {
+      "id": "B-row0",
+      "state": "subagents-running",
+      "design": {
+        "source": "b_sub",
+        "rect": [
+          0,
+          288,
+          390,
+          88
+        ],
+        "pixel_box": [
+          0,
+          864,
+          1170,
+          1128
+        ],
+        "crop": "B-row0-design.png",
+        "sha256": "bc012dd16db78abd4dfb7014db350ffc412b6f2abb7dad110257e0dc062f64cf"
+      },
+      "app": {
+        "source": "a_sub",
+        "rect": [
+          8,
+          299.5,
+          386,
+          84.5
+        ],
+        "pixel_box": [
+          24,
+          898,
+          1182,
+          1152
+        ],
+        "crop": "B-row0-app.png",
+        "sha256": "e898a1396fb6b7a7f3bc0adb02c14f4b9ab4b8edcdf938e7ca6208e33abff2cf"
+      }
+    },
+    {
+      "id": "C-header-pill",
+      "state": "files",
+      "design": {
+        "source": "b_files",
+        "rect": [
+          0,
+          210,
+          390,
+          114
+        ],
+        "pixel_box": [
+          0,
+          630,
+          1170,
+          972
+        ],
+        "crop": "C-header-pill-design.png",
+        "sha256": "57db8826832d879ef7657d0cb4a0605fcd5f6b0a62956c0e3896583a9f5acc41"
+      },
+      "app": {
+        "source": "a_files",
+        "rect": [
+          8,
+          224.6,
+          386,
+          109.5
+        ],
+        "pixel_box": [
+          24,
+          673,
+          1182,
+          1003
+        ],
+        "crop": "C-header-pill-app.png",
+        "sha256": "346787568ea4d418b4af46de898414c5391a50a90273688be559c41254605bf7"
+      }
+    },
+    {
+      "id": "C-files-list",
+      "state": "files",
+      "design": {
+        "source": "b_files",
+        "rect": [
+          0,
+          328,
+          390,
+          392
+        ],
+        "pixel_box": [
+          0,
+          984,
+          1170,
+          2160
+        ],
+        "crop": "C-files-list-design.png",
+        "sha256": "3fcb8bcacef9f5722b1b148f1c5d5afb7a5b8cc0f4ba460cf4917277104c52de"
+      },
+      "app": {
+        "source": "a_files",
+        "rect": [
+          8,
+          337.9,
+          386,
+          376.4
+        ],
+        "pixel_box": [
+          24,
+          1013,
+          1182,
+          2143
+        ],
+        "crop": "C-files-list-app.png",
+        "sha256": "3f056684f20f75dd0f7a69c28738d71eb4abf9d646f37e3b7e15d30e2be00404"
+      }
+    },
+    {
+      "id": "C-links-pill",
+      "state": "links",
+      "design": {
+        "source": "b_links",
+        "rect": [
+          0,
+          210,
+          390,
+          114
+        ],
+        "pixel_box": [
+          0,
+          630,
+          1170,
+          972
+        ],
+        "crop": "C-links-pill-design.png",
+        "sha256": "13688264871d175bcc51c5a95569b58eba78d7111e1aaca2ca05d42f3f2d7ed8"
+      },
+      "app": {
+        "source": "a_links",
+        "rect": [
+          8,
+          224.6,
+          386,
+          109.5
+        ],
+        "pixel_box": [
+          24,
+          673,
+          1182,
+          1003
+        ],
+        "crop": "C-links-pill-app.png",
+        "sha256": "b8f85a244a559856f8f3c7cf141b51e57173d547d2f5804bfb690bac277387e7"
+      }
+    },
+    {
+      "id": "C-links-list",
+      "state": "links",
+      "design": {
+        "source": "b_links",
+        "rect": [
+          0,
+          328,
+          390,
+          132
+        ],
+        "pixel_box": [
+          0,
+          984,
+          1170,
+          1380
+        ],
+        "crop": "C-links-list-design.png",
+        "sha256": "9f5bea70c817bc50a47775a1f10f3dc4fd1a35d8ca32ed5a9005a3dc66920980"
+      },
+      "app": {
+        "source": "a_links",
+        "rect": [
+          8,
+          337.9,
+          386,
+          126.7
+        ],
+        "pixel_box": [
+          24,
+          1013,
+          1182,
+          1394
+        ],
+        "crop": "C-links-list-app.png",
+        "sha256": "2dc3c41221ab28624f0a2281e2c1491839496bf90c1f1a2ef11b37873c0b0109"
+      }
+    },
+    {
+      "id": "D-header",
+      "state": "terminal-fit",
+      "design": {
+        "source": "b_term_kbc",
+        "rect": [
+          0,
+          54,
+          390,
+          56
+        ],
+        "pixel_box": [
+          0,
+          162,
+          1170,
+          330
+        ],
+        "crop": "D-header-design.png",
+        "sha256": "adcf86f23a811e70817ff0fdbce6d20f5aacac28468506ca8931f1a11b163b3e"
+      },
+      "app": {
+        "source": "a_term_fit",
+        "rect": [
+          0,
+          62,
+          402,
+          56
+        ],
+        "pixel_box": [
+          0,
+          186,
+          1206,
+          354
+        ],
+        "crop": "D-header-app.png",
+        "sha256": "80c3ac209addf90cdca8b0f7fc78df616ab2c201995f3a7b33ce2c73e9ee5649"
+      }
+    },
+    {
+      "id": "D-text-glyphs",
+      "state": "terminal-fit",
+      "design": {
+        "source": "b_term_kbc",
+        "rect": [
+          0,
+          731,
+          220,
+          26
+        ],
+        "pixel_box": [
+          0,
+          2193,
+          660,
+          2271
+        ],
+        "crop": "D-text-glyphs-design.png",
+        "sha256": "253a6a34e0ced826ce25001891f4ad5ea18075cf0b5362019bfd63e4833184ce"
+      },
+      "app": {
+        "source": "a_term_fit",
+        "rect": [
+          0,
+          122,
+          220,
+          26
+        ],
+        "pixel_box": [
+          0,
+          366,
+          660,
+          444
+        ],
+        "crop": "D-text-glyphs-app.png",
+        "sha256": "710e562b5e758b42f0b674de624944e2f58068b248faa08c07ebd280f1218fc0"
+      }
+    },
+    {
+      "id": "D-text-glyphs-wide",
+      "state": "terminal-wide",
+      "design": {
+        "source": "b_term_kbc",
+        "rect": [
+          0,
+          731,
+          220,
+          26
+        ],
+        "pixel_box": [
+          0,
+          2193,
+          660,
+          2271
+        ],
+        "crop": "D-text-glyphs-wide-design.png",
+        "sha256": "253a6a34e0ced826ce25001891f4ad5ea18075cf0b5362019bfd63e4833184ce"
+      },
+      "app": {
+        "source": "a_term_wide",
+        "rect": [
+          0,
+          122,
+          220,
+          26
+        ],
+        "pixel_box": [
+          0,
+          366,
+          660,
+          444
+        ],
+        "crop": "D-text-glyphs-wide-app.png",
+        "sha256": "245b9e3fb3d96c6c52a1270acfb70e6ca0d8c2de1d388be9636dcc371b760968"
+      }
+    },
+    {
+      "id": "D-keyrow-start",
+      "state": "terminal-keys",
+      "design": {
+        "source": "b_term_kbc",
+        "rect": [
+          0,
+          760,
+          390,
+          50
+        ],
+        "pixel_box": [
+          0,
+          2280,
+          1170,
+          2430
+        ],
+        "crop": "D-keyrow-start-design.png",
+        "sha256": "8ee4c48fdd76e901fa1f55efd764461549e6bc58a5298ca5c6e3092fb8370e35"
+      },
+      "app": {
+        "source": "a_term_fit",
+        "rect": [
+          0,
+          824,
+          402,
+          50
+        ],
+        "pixel_box": [
+          0,
+          2472,
+          1206,
+          2622
+        ],
+        "crop": "D-keyrow-start-app.png",
+        "sha256": "029938e4c1f22a94378399a17e5032d9712d9d8b509d46b88f85f3682493402c"
+      }
+    },
+    {
+      "id": "D-keyrow-end",
+      "state": "terminal-keys-scrolled",
+      "design": {
+        "source": "b_term_kb",
+        "rect": [
+          0,
+          524,
+          390,
+          50
+        ],
+        "pixel_box": [
+          0,
+          1572,
+          1170,
+          1722
+        ],
+        "crop": "D-keyrow-end-design.png",
+        "sha256": "8ee4c48fdd76e901fa1f55efd764461549e6bc58a5298ca5c6e3092fb8370e35"
+      },
+      "app": {
+        "source": "a_term_keys",
+        "rect": [
+          0,
+          824,
+          402,
+          50
+        ],
+        "pixel_box": [
+          0,
+          2472,
+          1206,
+          2622
+        ],
+        "crop": "D-keyrow-end-app.png",
+        "sha256": "97523e4abe3de72f33a4afe05d54e364f5ec56227b2d119033e886029ea01073"
+      }
+    },
+    {
+      "id": "E-topbar",
+      "state": "signin",
+      "design": {
+        "source": "b_signin",
+        "rect": [
+          0,
+          54,
+          390,
+          70
+        ],
+        "pixel_box": [
+          0,
+          162,
+          1170,
+          372
+        ],
+        "crop": "E-topbar-design.png",
+        "sha256": "45341ff733703af0058e0a1546c965d752253da4a809cc30f6a58a12bbdaf600"
+      },
+      "app": {
+        "source": "a_signin",
+        "rect": [
+          0,
+          62,
+          402,
+          70
+        ],
+        "pixel_box": [
+          0,
+          186,
+          1206,
+          396
+        ],
+        "crop": "E-topbar-app.png",
+        "sha256": "a2addd51113745c51cf68ae817af43e6a62b84c8195ea3a41dd0bdddb9d63c0e"
+      }
+    },
+    {
+      "id": "E-bottombar",
+      "state": "signin",
+      "design": {
+        "source": "b_signin",
+        "rect": [
+          0,
+          750,
+          390,
+          94
+        ],
+        "pixel_box": [
+          0,
+          2250,
+          1170,
+          2532
+        ],
+        "crop": "E-bottombar-design.png",
+        "sha256": "40af80762a226ca7d0d18c44b6dbfe5ea7380ea84ef626b6015074f90e85d86a"
+      },
+      "app": {
+        "source": "a_signin",
+        "rect": [
+          0,
+          780,
+          402,
+          94
+        ],
+        "pixel_box": [
+          0,
+          2340,
+          1206,
+          2622
+        ],
+        "crop": "E-bottombar-app.png",
+        "sha256": "1aba3f867a7efd17d9f84ce70becf87250b011250e572fe7309d52fb07b87f78"
+      }
+    }
+  ],
+  "review_sheets": [
+    "review-01.png",
+    "review-02.png",
+    "review-03.png"
+  ],
+  "review_sheet_scale": "1 pixel per logical unit; browsing only; measure raw crops",
+  "elapsed_seconds": 0.6385
+}

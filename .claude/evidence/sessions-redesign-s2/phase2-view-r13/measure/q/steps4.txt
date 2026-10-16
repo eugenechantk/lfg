@@ -1,0 +1,20 @@
+# Step-row pitch on board 4 (Edited -> Ran) vs app queued frame
+b4 icon-rows | design/b4-3x.png | rows | 14 595 22 80 | 40 0,0,0
+qc icon-rows | app/q-closed.png | rows | 14 590 22 64 | 40 0,0,0
+b4 label-rows | design/b4-3x.png | rows | 40 595 60 80 | 40 0,0,0
+qc label-rows | app/q-closed.png | rows | 40 590 60 64 | 40 0,0,0
+b4 edited-icon | design/b4-3x.png | bbox | 14 600 22 30 | 40 0,0,0
+qc edited-icon | app/q-closed.png | bbox | 14 594 22 24 | 40 0,0,0
+b4 ran-icon | design/b4-3x.png | bbox | 14 638 22 30 | 40 0,0,0
+qc ran-icon | app/q-closed.png | bbox | 14 628 22 24 | 40 0,0,0
+b4 edited-label | design/b4-3x.png | bbox | 40 600 50 30 | 40 0,0,0
+qc edited-label | app/q-closed.png | bbox | 40 594 50 24 | 40 0,0,0
+b4 ran-label | design/b4-3x.png | bbox | 40 638 30 30 | 40 0,0,0
+qc ran-label | app/q-closed.png | bbox | 40 628 30 24 | 40 0,0,0
+b4 prose-rows | design/b4-3x.png | rows | 14 515 100 80 | 60 0,0,0
+qc prose-rows | app/q-closed.png | rows | 14 505 100 80 | 60 0,0,0
+b1 edited-to-pills | design/b1-3x.png | rows | 14 630 30 90 | 40 0,0,0
+w edited-to-pills | app/w.png | rows | 14 660 30 90 | 40 0,0,0
+b3 card-to-edited | design/b3-3x.png | rows | 14 615 30 50 | 40 0,0,0
+b3 edited-icon | design/b3-3x.png | bbox | 14 632 22 30 | 40 0,0,0
+b3 edited-label | design/b3-3x.png | bbox | 40 632 50 30 | 40 0,0,0

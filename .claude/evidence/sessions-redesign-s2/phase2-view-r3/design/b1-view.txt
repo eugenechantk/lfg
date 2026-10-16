@@ -1,0 +1,35 @@
+div [56,378,318,84] "when i tap fork on desktop or phone, it should open the fork right awa" fs=17px fw=400 lh=22px ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=start lines=3 tb=[70,388,282.5,64] lineTops=388/410/432 bg=rgb(10, 110, 224) r=20px pad=9px 14px
+div [16,476,358,24] "I’ll trace how fork works on both clients first." fs=17px fw=400 lh=24px ls=normal c=rgb(242, 242, 247) ff=-apple-syste ta=start lines=1 tb=[16,478,355.1,20]
+button [16,514,358,22] pad=2px 0px gap=8px
+svg [16,516.5,17,17] stroke=currentColor sw=1.9 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=circle(11 11 6.5) | M16 16l4.5 4.5
+span [41,516,313,18] "Read 6 files, ran 3 commands" fs=15px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=left lines=1 tb=[41,516,209.7,18]
+svg [362,519,12,12] stroke=#636366 sw=2.8 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=M9 6l6 6-6 6
+div [16,550,358,72] "Small forks wait for a transcript that is only written on the first tu" fs=17px fw=400 lh=24px ls=normal c=rgb(242, 242, 247) ff=-apple-syste ta=start lines=3 tb=[16,552,347.9,68] lineTops=552/576/600
+svg [16,638.5,17,17] stroke=currentColor sw=1.9 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=M4 20h4L19 9l-4-4L4 16z | M13.5 6.5l4 4
+span [41,638,313,18] "Edited 2 files" fs=15px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=start lines=1 tb=[41,638,91.8,18]
+svg [362,641,12,12] stroke=#636366 sw=2.8 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=M9 6l6 6-6 6
+div [0,0,390,124] bgi=linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0))
+a [16,59,46,46] bg=rgba(44, 44, 46, 0.92) bt=1px rgba(255, 255, 255, 0.1) r=22px sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [29,72,20,20] stroke=#FFFFFF sw=2.4 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M15 5l-7 7 7 7
+span [110.1,63.5,169.8,20] "Fork session feature" fs=17px fw=600 lh=normal ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=start lines=1 tb=[110.1,63.5,169.8,20]
+span [109.5,90,7,7] bg=rgb(48, 209, 88) r=50% sh=rgba(48, 209, 88, 0.25) 0px 0px 0px 3px
+span [122.5,86.5,101.1,14] "Working · 3m 12s" fs=12px fw=600 lh=normal ls=normal c=rgb(48, 209, 88) ff=-apple-syste ta=start lines=1 tb=[122.5,86.5,101.1,14]
+span [229.7,86.5,50.8,14] "· Pro · lfg" fs=12px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=start lines=1 tb=[229.7,86.5,50.8,14]
+a [328,59,46,46] bg=rgba(44, 44, 46, 0.92) bt=1px rgba(255, 255, 255, 0.1) r=22px sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [341,72,20,20] stroke=#FFFFFF sw=1.9 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M4 7h9M17 7h3M4 17h3M11 17h9 | circle(15 7 2.2) | circle(9 17 2.2)
+div [0,648,390,196] bgi=linear-gradient(rgba(0, 0, 0, 0), rgb(0, 0, 0) 22%)
+a [16,672,270.5,38] bg=rgb(28, 28, 30) bt=1px rgb(56, 56, 58) r=18px pad=0px 12px 0px 8px gap=8px
+svg [25,680,22,22] stroke=null sw=null fill=null c=rgb(242, 242, 247) vb=0 0 22 22 d=circle(11 11 8) s=#3A3A3C f=none | circle(11 11 8) s=#30D158 f=none | circle(11 11 8) s=#FF453A f=none
+span [55,683,72.2,16] "Subagents" fs=14px fw=500 lh=normal ls=normal c=rgb(242, 242, 247) ff=-apple-syste ta=start lines=1 tb=[55,683,72.2,16]
+span [135.2,683,62.1,16] "1 running" fs=14px fw=500 lh=normal ls=normal c=rgb(48, 209, 88) ff=-apple-syste ta=start lines=1 tb=[135.2,683,62.1,16]
+span [205.3,683,68.2,16] "· 3/4 done" fs=14px fw=500 lh=normal ls=normal c=rgb(142, 142, 147) ff=-apple-syste ta=start lines=1 tb=[205.3,683,68.2,16]
+a [294.5,672,93.5,38] "Files" fs=14px fw=500 lh=normal ls=normal c=rgb(242, 242, 247) ff=-apple-syste ta=start lines=1 tb=[328.5,683,31.3,16] bg=rgb(28, 28, 30) bt=1px rgb(56, 56, 58) r=18px pad=0px 12px gap=6px
+svg [307.5,683.5,15,15] stroke=currentColor sw=1.9 fill=none c=rgb(242, 242, 247) vb=0 0 24 24 d=M6 2.5h8l4.5 4.5v14.5H6zM14 2.5V7h4.5
+span [365.8,683,9.2,16] "4" fs=14px fw=500 lh=normal ls=normal c=rgb(142, 142, 147) ff=-apple-syste ta=start lines=1 tb=[365.8,683,9.2,16]
+div [12,720,366,96] bg=rgb(28, 28, 30) bt=1px rgb(56, 56, 58) r=24px pad=11px 10px 10px 16px
+textarea [29,732,338,22] ph="Add to this turn…" fs=17px lh=22px c=rgb(255, 255, 255)
+svg [29,777,22,22] stroke=#A1A1A6 sw=1.7 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9
+span [59,774,130.6,28] "Opus 5.5 · High" fs=13px fw=500 lh=normal ls=normal c=rgb(209, 209, 214) ff=-apple-syste ta=start lines=1 tb=[69,780.5,96.6,15] bg=rgb(44, 44, 46) r=14px pad=0px 10px gap=5px
+svg [170.6,783.5,9,9] stroke=currentColor sw=3 fill=none c=rgb(209, 209, 214) vb=0 0 24 24 d=M6 9l6 6 6-6
+button [333,771,34,34] bg=rgb(242, 242, 247) r=17px
+span [344.5,782.5,11,11] bg=rgb(0, 0, 0) r=3px

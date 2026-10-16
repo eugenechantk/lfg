@@ -1,0 +1,63 @@
+# Board 2 vs g3 x-positions and colours (app dy = -82.33)
+b2 hdr-cols | design/b2-3x.png | cols | 10 216 375 18 | 40 0,0,0
+g3 hdr-cols | app/g3.png | cols | 10 134 387 18 | 40 0,0,0
+b2 hdr-icon | design/b2-3x.png | bbox | 12 214 26 22 | 40 0,0,0
+g3 hdr-icon | app/g3.png | bbox | 12 132 26 22 | 40 0,0,0
+b2 hdr-meta | design/b2-3x.png | bbox | 280 214 78 22 | 40 0,0,0
+g3 hdr-meta | app/g3.png | bbox | 280 132 90 22 | 40 0,0,0
+b2 hdr-meta-ink | design/b2-3x.png | ink | 280 214 78 22 | 40 0,0,0
+g3 hdr-meta-ink | app/g3.png | ink | 280 132 90 22 | 40 0,0,0
+b2 hdr-chev | design/b2-3x.png | bbox | 358 214 20 22 | 30 0,0,0
+g3 hdr-chev | app/g3.png | bbox | 370 132 20 22 | 30 0,0,0
+b2 row1-icon | design/b2-3x.png | bbox | 38 248 20 18 | 40 0,0,0
+g3 row1-icon | app/g3.png | bbox | 38 166 20 18 | 40 0,0,0
+b2 row1-verb | design/b2-3x.png | bbox | 58 248 32 18 | 60 0,0,0
+g3 row1-verb | app/g3.png | bbox | 58 166 32 18 | 60 0,0,0
+b2 row1-verb-ink | design/b2-3x.png | ink | 58 248 32 18 | 60 0,0,0
+g3 row1-verb-ink | app/g3.png | ink | 58 166 32 18 | 60 0,0,0
+b2 row1-arg | design/b2-3x.png | bbox | 92 248 230 18 | 40 0,0,0
+g3 row1-arg | app/g3.png | bbox | 92 166 240 18 | 40 0,0,0
+b2 row1-arg-ink | design/b2-3x.png | ink | 92 248 230 18 | 40 0,0,0
+g3 row1-arg-ink | app/g3.png | ink | 92 166 240 18 | 40 0,0,0
+b2 row1-dur | design/b2-3x.png | bbox | 328 248 30 18 | 40 0,0,0
+g3 row1-dur | app/g3.png | bbox | 340 166 30 18 | 40 0,0,0
+b2 row1-dur-ink | design/b2-3x.png | ink | 328 248 30 18 | 40 0,0,0
+g3 row1-dur-ink | app/g3.png | ink | 340 166 30 18 | 40 0,0,0
+b2 row1-chev | design/b2-3x.png | bbox | 360 248 18 18 | 30 0,0,0
+g3 row1-chev | app/g3.png | bbox | 372 166 18 18 | 30 0,0,0
+b2 row1-chev-ink | design/b2-3x.png | ink | 360 248 18 18 | 30 0,0,0
+g3 row1-chev-ink | app/g3.png | ink | 372 166 18 18 | 30 0,0,0
+b2 row2-icon | design/b2-3x.png | bbox | 38 276 20 18 | 40 0,0,0
+g3 row2-icon | app/g3.png | bbox | 38 194 20 18 | 40 0,0,0
+b2 row2-arg | design/b2-3x.png | bbox | 98 276 210 18 | 40 0,0,0
+g3 row2-arg | app/g3.png | bbox | 98 194 210 18 | 40 0,0,0
+b2 row2-chev | design/b2-3x.png | bbox | 360 276 18 18 | 30 0,0,0
+g3 row2-chev | app/g3.png | bbox | 372 194 18 18 | 30 0,0,0
+b2 row2-dur | design/b2-3x.png | bbox | 328 276 30 18 | 40 0,0,0
+g3 row2-dur | app/g3.png | bbox | 340 194 30 18 | 40 0,0,0
+b2 rail-ink | design/b2-3x.png | pct | 23.8 400 0.67 60
+g3 rail-ink | app/g3.png | pct | 23.8 320 0.67 60
+b2 card-fill | design/b2-3x.png | color | 300 320 40 10
+g3 card-fill | app/g3.png | color | 320 238 40 10
+b2 card-label-ink | design/b2-3x.png | ink | 50 312 30 12 | 40 28,28,30
+g3 card-label-ink | app/g3.png | ink | 50 230 30 12 | 40 28,28,30
+b2 card-label-cols | design/b2-3x.png | cols | 46 312 130 12 | 40 28,28,30
+g3 card-label-cols | app/g3.png | cols | 46 230 130 12 | 40 28,28,30
+b2 card-value | design/b2-3x.png | bbox | 46 331 330 15 | 60 28,28,30
+g3 card-value | app/g3.png | bbox | 46 249 342 15 | 60 28,28,30
+b2 card-value-ink | design/b2-3x.png | ink | 46 331 330 15 | 60 28,28,30
+g3 card-value-ink | app/g3.png | ink | 46 249 342 15 | 60 28,28,30
+b2 result-label | design/b2-3x.png | bbox | 46 374 140 14 | 40 28,28,30
+g3 result-label | app/g3.png | bbox | 46 292 140 14 | 40 28,28,30
+b2 block-fill | design/b2-3x.png | color | 300 400 20 4
+g3 block-fill | app/g3.png | color | 320 318 20 4
+b2 block-box | design/b2-3x.png | bbox | 46 393 334 120 | 10 28,28,30
+g3 block-box | app/g3.png | bbox | 46 310 346 120 | 10 28,28,30
+b2 block-line1-ink | design/b2-3x.png | ink | 60 403 300 14 | 60 0,0,0
+g3 block-line1-ink | app/g3.png | ink | 60 321 300 14 | 60 0,0,0
+b2 block-last-ink | design/b2-3x.png | ink | 60 483 300 14 | 30 0,0,0
+g3 block-last-ink | app/g3.png | ink | 60 401 300 14 | 30 0,0,0
+b2 link | design/b2-3x.png | bbox | 46 511 150 16 | 40 28,28,30
+g3 link | app/g3.png | bbox | 46 429 150 16 | 40 28,28,30
+b2 link-ink | design/b2-3x.png | ink | 46 511 150 16 | 40 28,28,30
+g3 link-ink | app/g3.png | ink | 46 429 150 16 | 40 28,28,30

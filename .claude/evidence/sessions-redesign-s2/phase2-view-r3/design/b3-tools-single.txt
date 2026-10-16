@@ -1,0 +1,47 @@
+div [16,240,358,72] "Small forks wait for a transcript that is only written on the first tu" fs=17px fw=400 lh=24px ls=normal c=rgb(242, 242, 247) ff=-apple-syste ta=start lines=3 tb=[16,242,347.9,68] lineTops=242/266/290
+button [16,324,358,22] pad=2px 0px gap=8px
+svg [16,326.5,17,17] stroke=currentColor sw=1.9 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=M4 5h16v14H4zM8 10l3 2-3 2M13 15h3
+span [41,326,26.8,18] "Ran" fs=15px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=left lines=1 tb=[41,326,26.8,18]
+span [75.8,327.5,247.8,15] "bun test src/sessions.test.ts" fs=13px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=ui-monospace ta=left lines=1 tb=[75.8,327.5,227,15]
+span [331.6,328,22.4,14] "1.8s" fs=12px fw=400 lh=normal ls=normal c=rgb(142, 142, 147) ff=-apple-syste ta=left lines=1 tb=[331.6,328,22.4,14]
+svg [362,329,12,12] stroke=#8E8E93 sw=2.8 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=M6 9l6 6 6-6
+div [16,352,358,272] bg=rgb(28, 28, 30) bt=1px rgb(56, 56, 58) r=12px pad=10px 12px gap=6px
+span [29,363,332,13] "Command" fs=11px fw=600 lh=normal ls=0.4px c=rgb(142, 142, 147) ff=-apple-syste ta=start lines=1 tb=[29,363,63.4,13]
+span [29,382,332,17] "bun test src/sessions.test.ts" fs=12.5px fw=400 lh=17px ls=normal c=rgb(242, 242, 247) ff=ui-monospace ta=start lines=1 tb=[29,383,218.3,15]
+span [29,405,332,14] "In ~/dev/personal/lfg" fs=12px fw=400 lh=normal ls=normal c=rgb(142, 142, 147) ff=-apple-syste ta=start lines=1 tb=[29,405,115.2,14]
+span [29,429,332,13] "Output · last 8 of 46 lines" fs=11px fw=600 lh=normal ls=0.4px c=rgb(142, 142, 147) ff=-apple-syste ta=start lines=1 tb=[29,429,176.6,13]
+div [29,448,332,144] bg=rgb(0, 0, 0) r=8px pad=8px 10px
+span [39,456,312,16] "✓ forkSession opens before the transcript [3.1ms]" fs=11.5px fw=400 lh=16px ls=normal c=rgb(209, 209, 214) ff=ui-monospace ta=start lines=1 tb=[39,457,339.3,14]
+span [39,472,312,16] "✓ forkSession keeps the parent's model [0.8ms]" fs=11.5px fw=400 lh=16px ls=normal c=rgb(209, 209, 214) ff=ui-monospace ta=start lines=1 tb=[39,473,318.5,14]
+span [39,488,312,16] "✓ listSessions maps a fork to its own id [1.2ms]" fs=11.5px fw=400 lh=16px ls=normal c=rgb(209, 209, 214) ff=ui-monospace ta=start lines=1 tb=[39,489,332.3,14]
+span [39,520,312,16] "42 pass" fs=11.5px fw=400 lh=16px ls=normal c=rgb(48, 209, 88) ff=ui-monospace ta=start lines=1 tb=[39,521,55.4,14]
+span [39,536,312,16] "0 fail" fs=11.5px fw=400 lh=16px ls=normal c=rgb(209, 209, 214) ff=ui-monospace ta=start lines=1 tb=[39,537,48.5,14]
+span [39,552,312,16] "118 expect() calls" fs=11.5px fw=400 lh=16px ls=normal c=rgb(209, 209, 214) ff=ui-monospace ta=start lines=1 tb=[39,553,131.6,14]
+span [39,568,312,16] "Ran 42 tests across 1 file. [1.80s]" fs=11.5px fw=400 lh=16px ls=normal c=rgb(209, 209, 214) ff=ui-monospace ta=start lines=1 tb=[39,569,242.3,14]
+a [29,598,332,15] "Show all 46 lines" fs=13px fw=400 lh=normal ls=normal c=rgb(64, 156, 255) ff=-apple-syste ta=start lines=1 tb=[29,598,103.1,15]
+button [16,636,358,22] pad=2px 0px gap=8px
+svg [16,638.5,17,17] stroke=currentColor sw=1.9 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=M4 20h4L19 9l-4-4L4 16z | M13.5 6.5l4 4
+span [41,638,45,18] "Edited" fs=15px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=left lines=1 tb=[41,638,45,18]
+span [94,639.5,229.9,15] "ios/LFG/SessionStore.swift" fs=13px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=ui-monospace ta=left lines=1 tb=[94,639.5,203.5,15]
+span [331.8,640,22.2,14] "0.1s" fs=12px fw=400 lh=normal ls=normal c=rgb(142, 142, 147) ff=-apple-syste ta=left lines=1 tb=[331.8,640,22.2,14]
+svg [362,641,12,12] stroke=#8E8E93 sw=2.8 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=M9 6l6 6-6 6
+div [0,0,390,124] bgi=linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0))
+a [16,59,46,46] bg=rgba(44, 44, 46, 0.92) bt=1px rgba(255, 255, 255, 0.1) r=22px sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [29,72,20,20] stroke=#FFFFFF sw=2.4 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M15 5l-7 7 7 7
+span [110.1,63.5,169.8,20] "Fork session feature" fs=17px fw=600 lh=normal ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=start lines=1 tb=[110.1,63.5,169.8,20]
+span [108.3,90,7,7] bg=rgb(48, 209, 88) r=50% sh=rgba(48, 209, 88, 0.25) 0px 0px 0px 3px
+span [121.3,86.5,103.7,14] "Working · 3m 40s" fs=12px fw=600 lh=normal ls=normal c=rgb(48, 209, 88) ff=-apple-syste ta=start lines=1 tb=[121.3,86.5,103.7,14]
+span [230.9,86.5,50.8,14] "· Pro · lfg" fs=12px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=start lines=1 tb=[230.9,86.5,50.8,14]
+a [328,59,46,46] bg=rgba(44, 44, 46, 0.92) bt=1px rgba(255, 255, 255, 0.1) r=22px sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [341,72,20,20] stroke=#FFFFFF sw=1.9 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M4 7h9M17 7h3M4 17h3M11 17h9 | circle(15 7 2.2) | circle(9 17 2.2)
+div [0,648,390,196] bgi=linear-gradient(rgba(0, 0, 0, 0), rgb(0, 0, 0) 22%)
+a [16,672,166.3,38] "Subagents" fs=14px fw=500 lh=normal ls=normal c=rgb(242, 242, 247) ff=-apple-syste ta=start lines=1 tb=[29,683,72.2,16] bg=rgb(28, 28, 30) bt=1px rgb(56, 56, 58) r=18px pad=0px 12px gap=6px
+span [107.2,683,62.1,16] "1 running" fs=14px fw=500 lh=normal ls=normal c=rgb(48, 209, 88) ff=-apple-syste ta=start lines=1 tb=[107.2,683,62.1,16]
+a [190.3,672,72.5,38] "Files" fs=14px fw=500 lh=normal ls=normal c=rgb(242, 242, 247) ff=-apple-syste ta=start lines=1 tb=[203.3,683,31.3,16] bg=rgb(28, 28, 30) bt=1px rgb(56, 56, 58) r=18px pad=0px 12px gap=6px
+span [240.6,683,9.2,16] "4" fs=14px fw=500 lh=normal ls=normal c=rgb(142, 142, 147) ff=-apple-syste ta=start lines=1 tb=[240.6,683,9.2,16]
+a [270.8,672,83.8,38] "Terminal" fs=14px fw=500 lh=normal ls=normal c=rgb(242, 242, 247) ff=-apple-syste ta=start lines=1 tb=[283.8,683,57.8,16] bg=rgb(28, 28, 30) bt=1px rgb(56, 56, 58) r=18px pad=0px 12px gap=6px
+div [12,720,366,96] bg=rgb(28, 28, 30) bt=1px rgb(56, 56, 58) r=24px pad=13px 10px 10px 16px
+span [29,734,338,20] "Add to this turn…" fs=17px fw=400 lh=normal ls=normal c=rgb(142, 142, 147) ff=-apple-syste ta=start lines=1 tb=[29,734,137.9,20]
+span [29,774,116.6,28] "Opus 5.5 · High" fs=13px fw=500 lh=normal ls=normal c=rgb(209, 209, 214) ff=-apple-syste ta=start lines=1 tb=[39,780.5,96.6,15] bg=rgb(44, 44, 46) r=14px pad=0px 10px
+button [333,771,34,34] bg=rgb(242, 242, 247) r=17px
+span [344.5,782.5,11,11] bg=rgb(0, 0, 0) r=3px

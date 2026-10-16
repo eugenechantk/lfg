@@ -1,0 +1,32 @@
+DOM bounds in board pt (zoom 3 / 3). tag:x,y,w,h|text
+
+s2-question-permission.dc.html (copy of s2-question with default "permission"; diff = that one prop only)
+transcript identical to question (bubble 175.61,282 ; step 334 ; prose 364..412)
+div:8,545,374,291| (panel; bottom 836)
+span:24.33,572.33,8,8| (dot) ; span:40.33,569.17,184.05,14.33|Claude needs p ; button:289.06,561.33,76.6,30|Dismiss
+span:24.33,603.33,341.33,25|Run this comma
+div:24.33,636.33,341.33,38|bundle exec fa (black code box)
+span:24.33,682.33,341.33,15.33|In ~/dev/perso
+button:24.33,709.67,166.67,48|Allow once ; button:199,709.67,166.67,48|Deny
+button:24.33,769.67,341.33,40|Always allow f
+
+s2-question-plan.dc.html (copy with default "plan")
+div:8,546.67,374,289.33| (panel; bottom 836)
+span:24.33,574,8,8| ; span:40.33,570.83,165.26,14.33|Plan ready for ; button:289.06,563,76.6,30|Dismiss
+span:24.33,605,341.33,25|Approve this p
+div:24.33,636,341.33,91| (plan list box #2C2C2E r14)
+span:38.33,646,313.33,21|1. ... ; span:38.33,671 ; span:38.33,696 (pitch 25 = 21 + gap 4)
+a:24.33,733,341.33,16.67|Read the full plan ›
+button:24.33,761.67,166.67,48|Approve ; button:199,761.67,166.67,48|Keep planning
+
+s2-signin-prompt.dc.html
+div:56,304,318,62|audit search c (bubble 2 lines in Chrome)
+svg:16,380.5,17,17| ; span:41,380,313,18|Opened search. ; svg:362,383,12,12|
+div:16,412,358,48|Search Console (prose 2 lines)
+header: title 106.35,63.17,177.29 ; dot 98.4,90.17,7,7 ; "Needs sign-in · 5m" 111.4,86.5,110.9 ; "· Air · inbox" 228.3,86.5,63.3
+div:8,508.33,374,327.67| (panel; bottom 836)
+span:24.33,527.83,8,8| ; span:40.33,524.67,325.33,14.33|Sign-in needed
+span:24.33,553,341.33,25|Sign in to sea ; span:24.33,582,341.33,40|You log in on (2 lines)
+div:24.33,636,341.33,59.67| (host card) ; span:38.33,649.83,32,32|G ; span:82.33,648,269.33,19.33|search.google. ; span:82.33,668.33,269.33,15.33|To Chrome on E
+a:24.33,709.67,341.33,50|Sign in on iPhone ; svg:110.77,726.17,17,17| (key)
+span:24.33,773.67,341.33,36|There is no Di (2 lines, centred)

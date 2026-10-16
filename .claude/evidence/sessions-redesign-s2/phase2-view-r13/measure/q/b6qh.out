@@ -1,0 +1,22 @@
+b6q dot: bbox x 21.33..35.33  y 453.00..467.00  (w 14.00 h 14.00) bg (28, 28, 30)
+question dot: bbox x 21.00..35.00  y 507.00..521.00  (w 14.00 h 14.00) bg (26, 26, 28)
+b6q dot-core: bbox x 24.33..32.33  y 456.00..464.00  (w 8.00 h 8.00) bg (28, 28, 30)
+question dot-core: bbox x 24.00..32.00  y 510.00..518.00  (w 8.00 h 8.00) bg (26, 26, 28)
+b6q dot-ink: ink (255, 159, 11) #FF9F0B (n=432, bg (28, 28, 30))
+question dot-ink: ink (252, 157, 9) #FC9D09 (n=404, bg (26, 26, 28))
+b6q ring-ink: median (100, 69, 31) #64451F
+question ring-ink: median (89, 63, 19) #593F13
+b6q label: bbox x 41.00..198.00  y 455.67..464.67  (w 157.00 h 9.00) bg (28, 28, 30)
+question label: bbox x 40.67..161.33  y 509.67..518.67  (w 120.67 h 9.00) bg (26, 26, 28)
+b6q label-ink: ink (255, 179, 63) #FFB33F (n=3755, bg (28, 28, 30))
+question label-ink: ink (251, 176, 62) #FBB03E (n=2876, bg (26, 26, 28))
+b6q dismiss: bbox x 289.00..380.00  y 440.00..475.00  (w 91.00 h 35.00) bg (28, 28, 30)
+question dismiss: bbox x 302.33..392.00  y 494.00..529.00  (w 89.67 h 35.00) bg (26, 26, 28)
+b6q dismiss-text: bbox x 302.33..353.00  y 454.33..465.33  (w 50.67 h 11.00) bg (44, 44, 46)
+question dismiss-text: bbox x 315.67..365.33  y 508.33..519.33  (w 49.67 h 11.00) bg (42, 42, 45)
+b6q dismiss-ink: ink (209, 209, 214) #D1D1D6 (n=1289, bg (44, 44, 46))
+question dismiss-ink: ink (208, 208, 210) #D0D0D2 (n=1125, bg (42, 42, 45))
+b6q dismiss-fill: median (44, 44, 47) #2C2C2F
+question dismiss-fill: median (42, 42, 45) #2A2A2D
+b6q panel-top-border: max (56, 56, 58) top0.5% median (56, 56, 58)
+question panel-top-border: max (54, 54, 54) top0.5% median (54, 54, 54)

@@ -1,0 +1,46 @@
+div |  | 0 | 0 | 390 | 844 |  |  | rgb(0, 0, 0) |  |  |  | 
+div | Small forks wait for a transcript that | 16 | 240 | 358 | 72 | 17px/24px/400/lsnormal | rgb(242, 242, 247) op1 |  |  |  |  | none clip normal
+svg |  | 16 | 326.5 | 17 | 17 |  |  |  |  |  |  | 
+span | Ran | 41 | 326 | 26.8 | 18 | 15px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none clip normal
+span | bun test src/sessions.test.ts | 75.8 | 327.5 | 247.8 | 15 | 13px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  | mono | none ellipsis nowrap
+span | 1.8s | 331.6 | 328 | 22.4 | 14 | 12px/normal/400/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none clip normal
+svg |  | 362 | 329 | 12 | 12 |  |  |  |  |  |  | 
+div |  | 16 | 352 | 358 | 272 |  |  | rgb(28, 28, 30) | 12px | bt1px rgb(56, 56, 58) |  | 
+span | Command | 29 | 363 | 332 | 13 | 11px/normal/600/ls0.4px | rgb(142, 142, 147) op1 |  |  |  |  | uppercase clip normal
+span | bun test src/sessions.test.ts | 29 | 382 | 332 | 17 | 12.5px/17px/400/lsnormal | rgb(242, 242, 247) op1 |  |  |  | mono | none clip normal
+span | In ~/dev/personal/lfg | 29 | 405 | 332 | 14 | 12px/normal/400/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none clip normal
+span | Output · last 8 of 46 lines | 29 | 429 | 332 | 13 | 11px/normal/600/ls0.4px | rgb(142, 142, 147) op1 |  |  |  |  | uppercase clip normal
+div |  | 29 | 448 | 332 | 144 |  |  | rgb(0, 0, 0) | 8px |  |  | 
+span | ✓ forkSession opens before the transcr | 39 | 456 | 312 | 16 | 11.5px/16px/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  | mono | none clip pre
+span | ✓ forkSession keeps the parent's model | 39 | 472 | 312 | 16 | 11.5px/16px/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  | mono | none clip pre
+span | ✓ listSessions maps a fork to its own  | 39 | 488 | 312 | 16 | 11.5px/16px/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  | mono | none clip pre
+span | 42 pass | 39 | 520 | 312 | 16 | 11.5px/16px/400/lsnormal | rgb(48, 209, 88) op1 |  |  |  | mono | none clip pre
+span | 0 fail | 39 | 536 | 312 | 16 | 11.5px/16px/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  | mono | none clip pre
+span | 118 expect() calls | 39 | 552 | 312 | 16 | 11.5px/16px/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  | mono | none clip pre
+span | Ran 42 tests across 1 file. [1.80s] | 39 | 568 | 312 | 16 | 11.5px/16px/400/lsnormal | rgb(209, 209, 214) op1 |  |  |  | mono | none clip pre
+a | Show all 46 lines | 29 | 598 | 332 | 15 | 13px/normal/400/lsnormal | rgb(64, 156, 255) op1 |  |  |  |  | none clip normal
+svg |  | 16 | 638.5 | 17 | 17 |  |  |  |  |  |  | 
+span | Edited | 41 | 638 | 45 | 18 | 15px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none clip normal
+span | ios/LFG/SessionStore.swift | 94 | 639.5 | 229.9 | 15 | 13px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  | mono | none ellipsis nowrap
+span | 0.1s | 331.8 | 640 | 22.2 | 14 | 12px/normal/400/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none clip normal
+svg |  | 362 | 641 | 12 | 12 |  |  |  |  |  |  | 
+div |  | 0 | 0 | 390 | 124 |  |  | rgba(0, 0, 0, 0) linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0)) |  |  |  | 
+a |  | 16 | 59 | 46 | 46 |  |  | rgba(44, 44, 46, 0.92) | 22px | bt1px rgba(255, 255, 255, 0.1) |  | 
+svg |  | 29 | 72 | 20 | 20 |  |  |  |  |  |  | 
+span | Fork session feature | 110.1 | 63.5 | 169.8 | 20 | 17px/normal/600/lsnormal | rgb(255, 255, 255) op1 |  |  |  |  | none ellipsis nowrap
+span |  | 108.3 | 90 | 7 | 7 |  |  | rgb(48, 209, 88) | 50% |  |  | 
+span | Working · 3m 40s | 121.3 | 86.5 | 103.7 | 14 | 12px/normal/600/lsnormal | rgb(48, 209, 88) op1 |  |  |  |  | none clip nowrap
+span | · Pro · lfg | 230.9 | 86.5 | 50.8 | 14 | 12px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none clip nowrap
+a |  | 328 | 59 | 46 | 46 |  |  | rgba(44, 44, 46, 0.92) | 22px | bt1px rgba(255, 255, 255, 0.1) |  | 
+svg |  | 341 | 72 | 20 | 20 |  |  |  |  |  |  | 
+div |  | 0 | 648 | 390 | 196 |  |  | rgba(0, 0, 0, 0) linear-gradient(rgba(0, 0, 0, 0), rgb(0, 0, 0) 22%) |  |  |  | 
+a | Subagents | 16 | 672 | 166.3 | 38 | 14px/normal/500/lsnormal | rgb(242, 242, 247) op1 | rgb(28, 28, 30) | 18px | bt1px rgb(56, 56, 58) |  | none clip normal
+span | 1 running | 107.2 | 683 | 62.1 | 16 | 14px/normal/500/lsnormal | rgb(48, 209, 88) op1 |  |  |  |  | none clip normal
+a | Files | 190.3 | 672 | 72.5 | 38 | 14px/normal/500/lsnormal | rgb(242, 242, 247) op1 | rgb(28, 28, 30) | 18px | bt1px rgb(56, 56, 58) |  | none clip normal
+span | 4 | 240.6 | 683 | 9.2 | 16 | 14px/normal/500/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none clip normal
+a | Terminal | 270.8 | 672 | 83.8 | 38 | 14px/normal/500/lsnormal | rgb(242, 242, 247) op1 | rgb(28, 28, 30) | 18px | bt1px rgb(56, 56, 58) |  | none clip normal
+div |  | 12 | 720 | 366 | 96 |  |  | rgb(28, 28, 30) | 24px | bt1px rgb(56, 56, 58) |  | 
+span | Add to this turn… | 29 | 734 | 338 | 20 | 17px/normal/400/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none clip normal
+span | Opus 5.5 · High | 29 | 774 | 116.6 | 28 | 13px/normal/500/lsnormal | rgb(209, 209, 214) op1 | rgb(44, 44, 46) | 14px |  |  | none clip normal
+button |  | 333 | 771 | 34 | 34 |  |  | rgb(242, 242, 247) | 17px |  |  | 
+span |  | 344.5 | 782.5 | 11 | 11 |  |  | rgb(0, 0, 0) | 3px |  |  | 

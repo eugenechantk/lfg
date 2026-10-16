@@ -1,0 +1,26 @@
+/s2-signin-prompt.dc.html
+T "audit search console for lfg.app a" box 56.00,304.00 318.00x62.00 fs17px fw400 lh22px lsnormal -apple-system crgb(255, 255, 255) bgrgb(10, 110, 224) r20px pad9px 14px wbnormal
+S 16.00,380.50 17.00x17.00 crgb(161, 161, 166) sw1.9
+T "Opened search.google.com in Chrome" box 41.00,380.00 313.00x18.00 fs15px fw400 lhnormal lsnormal -apple-system crgb(161, 161, 166) pad0px wbnormal
+S 362.00,383.00 12.00x12.00 crgb(161, 161, 166) sw2.8
+T "Search Console wants a login. I’ll" box 16.00,412.00 358.00x48.00 fs17px fw400 lh24px lsnormal -apple-system crgb(242, 242, 247) pad0px wbnormal
+B A 16.00,59.67 44.67x44.67 bgrgba(44, 44, 46, 0.92) bd0.333333px rgba(255, 255, 255, 0.1) r22px pad0px shrgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+S 28.33,72.00 20.00x20.00 crgb(255, 255, 255) sw2.4
+T "Search Console audit" box 106.35,63.17 177.29x20.33 fs17px fw600 lhnormal lsnormal -apple-system crgb(255, 255, 255) pad0px wbnormal
+B SPAN 98.40,90.17 7.00x7.00 bgrgb(255, 159, 10) r50% pad0px
+T "Needs sign-in · 5m" box 111.40,86.50 110.90x14.33 fs12px fw600 lhnormal lsnormal -apple-system crgb(255, 159, 10) pad0px wbnormal
+T "· Air · inbox" box 228.30,86.50 63.30x14.33 fs12px fw400 lhnormal lsnormal -apple-system crgb(161, 161, 166) pad0px wbnormal
+B A 329.33,59.67 44.67x44.67 bgrgba(44, 44, 46, 0.92) bd0.333333px rgba(255, 255, 255, 0.1) r22px pad0px shrgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+S 341.67,72.00 20.00x20.00 crgb(255, 255, 255) sw1.9
+B DIV 8.00,508.33 374.00x327.67 bgrgb(28, 28, 30) bd0.333333px rgb(56, 56, 58) r32px pad16px 16px 26px shrgba(0, 0, 0, 0.6) 0px -2px 30px 0px
+B SPAN 24.33,527.83 8.00x8.00 bgrgb(255, 159, 10) r50% pad0px shrgba(255, 159, 10, 0.28) 0px 0px 0px 3px
+T "Sign-in needed" box 40.33,524.67 325.33x14.33 fs12px fw700 lhnormal ls0.4px -apple-system crgb(255, 179, 64) pad0px wbnormal
+T "Sign in to search.google.com" box 24.33,553.00 341.33x25.00 fs20px fw600 lh25px lsnormal -apple-system crgb(255, 255, 255) pad0px wbnormal
+T "You log in on this iPhone. The sig" box 24.33,582.00 341.33x40.00 fs15px fw400 lh20px lsnormal -apple-system crgb(209, 209, 214) pad0px wbnormal
+B DIV 24.33,636.00 341.33x59.67 bgrgb(44, 44, 46) r14px pad12px 14px
+T "G" box 38.33,649.83 32.00x32.00 fs15px fw700 lhnormal lsnormal -apple-system crgb(242, 242, 247) bgrgb(58, 58, 60) r8px pad0px wbnormal
+T "search.google.com" box 82.33,648.00 269.33x19.33 fs16px fw500 lhnormal lsnormal -apple-system crgb(255, 255, 255) pad0px wbnormal
+T "To Chrome on Eugenes-MacBook-Air" box 82.33,668.33 269.33x15.33 fs13px fw400 lhnormal lsnormal -apple-system crgb(161, 161, 166) pad0px wbnormal
+T "Sign in on iPhone" box 24.33,709.67 341.33x50.00 fs17px fw600 lhnormal lsnormal -apple-system crgb(255, 255, 255) bgrgb(10, 110, 224) r25px pad0px wbnormal
+S 110.77,726.17 17.00x17.00 crgb(255, 255, 255) sw2.2
+T "There is no Dismiss here. The agen" box 24.33,773.67 341.33x36.00 fs13px fw400 lh18px lsnormal -apple-system crgb(142, 142, 147) pad0px wbnormal

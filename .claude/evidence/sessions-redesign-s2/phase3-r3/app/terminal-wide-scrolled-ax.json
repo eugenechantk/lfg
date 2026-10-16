@@ -1,0 +1,351 @@
+{
+  "accessibility" : {
+    "element_count" : 20,
+    "frame_space" : "points",
+    "tree" : [
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 437
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 874,
+          "width" : 402,
+          "x" : 0,
+          "y" : 0
+        },
+        "label" : "lfg",
+        "role" : "Application",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 34,
+          "y" : 88
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 44,
+          "width" : 44,
+          "x" : 12,
+          "y" : 66
+        },
+        "id" : "terminalCloseButton",
+        "label" : "Close",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 177,
+          "y" : 87
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 34,
+          "width" : 179,
+          "x" : 87,
+          "y" : 70
+        },
+        "id" : "terminalHostMenu",
+        "label" : "Terminal, Shell on Eugenes-MacBook-Pro",
+        "role" : "PopUpButton",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 322,
+          "y" : 88
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 28,
+          "width" : 44,
+          "x" : 300,
+          "y" : 74
+        },
+        "id" : "terminalWidthButton",
+        "label" : "Fit terminal to screen",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 366,
+          "y" : 88
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 28,
+          "width" : 44,
+          "x" : 344,
+          "y" : 74
+        },
+        "id" : "terminalWidthButton",
+        "label" : "Show wide terminal",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 494,
+          "y" : 469
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 690,
+          "width" : 965,
+          "x" : 12,
+          "y" : 124
+        },
+        "id" : "terminalView",
+        "role" : "TextArea",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : -247,
+          "y" : 849
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 36,
+          "width" : 44,
+          "x" : -269,
+          "y" : 831
+        },
+        "label" : "esc",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : -197,
+          "y" : 849
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 36,
+          "width" : 44,
+          "x" : -219,
+          "y" : 831
+        },
+        "label" : "tab",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : -142,
+          "y" : 849
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 36,
+          "width" : 53,
+          "x" : -169,
+          "y" : 831
+        },
+        "label" : "ctrl",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : -90,
+          "y" : 849
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 36,
+          "width" : 40,
+          "x" : -110,
+          "y" : 831
+        },
+        "label" : "⌥",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : -44,
+          "y" : 849
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 36,
+          "width" : 40,
+          "x" : -64,
+          "y" : 831
+        },
+        "label" : "↑",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 2,
+          "y" : 849
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 36,
+          "width" : 40,
+          "x" : -18,
+          "y" : 831
+        },
+        "label" : "↓",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 48,
+          "y" : 849
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 36,
+          "width" : 40,
+          "x" : 28,
+          "y" : 831
+        },
+        "label" : "←",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 94,
+          "y" : 849
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 36,
+          "width" : 40,
+          "x" : 74,
+          "y" : 831
+        },
+        "label" : "→",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 140,
+          "y" : 849
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 36,
+          "width" : 40,
+          "x" : 120,
+          "y" : 831
+        },
+        "label" : "|",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 186,
+          "y" : 849
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 36,
+          "width" : 40,
+          "x" : 166,
+          "y" : 831
+        },
+        "label" : "\/",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 232,
+          "y" : 849
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 36,
+          "width" : 40,
+          "x" : 212,
+          "y" : 831
+        },
+        "label" : "~",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 278,
+          "y" : 849
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 36,
+          "width" : 40,
+          "x" : 258,
+          "y" : 831
+        },
+        "label" : "-",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 324,
+          "y" : 849
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 36,
+          "width" : 40,
+          "x" : 304,
+          "y" : 831
+        },
+        "label" : "⌘V",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 372,
+          "y" : 849
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 36,
+          "width" : 44,
+          "x" : 350,
+          "y" : 831
+        },
+        "label" : "Keyboard",
+        "role" : "Button",
+        "visible" : true
+      }
+    ]
+  },
+  "schemaVersion" : "1.0.0",
+  "screenshot" : {
+    "captured" : false,
+    "height" : 874,
+    "pixel_height" : 874,
+    "pixel_width" : 402,
+    "point_height" : 874,
+    "point_width" : 402,
+    "unit" : "points",
+    "width" : 402
+  },
+  "simulator" : {
+    "name" : "Simulator",
+    "runtime" : "iOS",
+    "udid" : "C47EB72F-A352-44C9-8A80-9F13D33780AD"
+  },
+  "success" : true,
+  "timestamp" : "2026-10-16T01:37:17Z",
+  "type" : "ui_snapshot"
+}

@@ -1,0 +1,31 @@
+div |  | 0 | 0 | 390 | 844 |  |  | rgb(0, 0, 0) |  |  |  | 
+div | list the top crawl errors for lfg.app | 73.3 | 538 | 300.7 | 40 | 17px/22px/400/lsnormal | rgb(255, 255, 255) op1 | rgb(10, 110, 224) | 20px |  |  | none clip normal
+div | There are 3 crawl errors. Two are 404s | 16 | 592 | 358 | 72 | 17px/24px/400/lsnormal | rgb(242, 242, 247) op1 |  |  |  |  | none clip normal
+div |  | 0 | 0 | 390 | 124 |  |  | rgba(0, 0, 0, 0) linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0)) |  |  |  | 
+a |  | 16 | 59 | 46 | 46 |  |  | rgba(44, 44, 46, 0.92) | 22px | bt1px rgba(255, 255, 255, 0.1) |  | 
+svg |  | 29 | 72 | 20 | 20 |  |  |  |  |  |  | 
+span | Search Console audit | 106.3 | 63.5 | 177.3 | 20 | 17px/normal/600/lsnormal | rgb(255, 255, 255) op1 |  |  |  |  | none clip normal
+span |  | 123.5 | 90 | 7 | 7 |  |  | rgb(255, 159, 10) | 50% |  |  | 
+span | Air offline · 2m | 136.5 | 86.5 | 86.6 | 14 | 12px/normal/600/lsnormal | rgb(255, 159, 10) op1 |  |  |  |  | none clip nowrap
+span | · inbox | 229.1 | 86.5 | 37.4 | 14 | 12px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none clip nowrap
+a |  | 328 | 59 | 46 | 46 |  |  | rgba(44, 44, 46, 0.92) | 22px | bt1px rgba(255, 255, 255, 0.1) |  | 
+svg |  | 341 | 72 | 20 | 20 |  |  |  |  |  |  | 
+div |  | 0 | 648 | 390 | 196 |  |  | rgba(0, 0, 0, 0) linear-gradient(rgba(0, 0, 0, 0), rgb(0, 0, 0) 30%) |  |  |  | 
+button |  | 12 | 682 | 366 | 32 |  |  | rgba(118, 118, 128, 0.4) | 16px |  |  | 
+svg |  | 24 | 690.5 | 15 | 15 |  |  |  |  |  |  | 
+span | fix the redirect loop first, then the  | 47 | 690.5 | 239.7 | 15 | 13px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none ellipsis nowrap
+span | Not sent | 294.7 | 691 | 49.3 | 14 | 12px/normal/500/lsnormal | rgb(255, 105, 97) op1 |  |  |  |  | none clip normal
+svg |  | 352 | 690 | 16 | 16 |  |  |  |  |  |  | 
+div |  | 12 | 720 | 366 | 96 |  |  | rgb(28, 28, 30) | 24px | bt1px rgb(56, 56, 58) |  | 
+span | Message · sends when Air is back | 29 | 734 | 338 | 20 | 17px/normal/400/lsnormal | rgb(142, 142, 147) op1 |  |  |  |  | none clip normal
+svg |  | 29 | 777 | 22 | 22 |  |  |  |  |  |  | 
+span | GPT-6 Astra · Med | 59 | 774 | 135.7 | 28 | 13px/normal/500/lsnormal | rgb(209, 209, 214) op1 | rgb(44, 44, 46) | 14px |  |  | none clip normal
+span |  | 333 | 771 | 34 | 34 |  |  | rgb(58, 58, 60) | 17px |  |  | 
+svg |  | 342 | 780 | 16 | 16 |  |  |  |  |  |  | 
+div |  | 148 | 546 | 230 | 128 |  |  | rgba(44, 44, 46, 0.97) | 16px |  |  | 
+span | Retry | 164 | 557 | 42.5 | 20 | 17px/normal/400/lsnormal | rgb(255, 255, 255) op1 |  |  |  |  | none clip normal
+svg |  | 345 | 558.5 | 17 | 17 |  |  |  |  |  |  | 
+span | Edit | 164 | 600 | 171 | 20 | 17px/normal/400/lsnormal | rgb(255, 255, 255) op1 |  |  |  |  | none clip normal
+svg |  | 345 | 601.5 | 17 | 17 |  |  |  |  |  |  | 
+span | Delete | 164 | 643 | 51.8 | 20 | 17px/normal/400/lsnormal | rgb(255, 69, 58) op1 |  |  |  |  | none clip normal
+svg |  | 345 | 644.5 | 17 | 17 |  |  |  |  |  |  | 

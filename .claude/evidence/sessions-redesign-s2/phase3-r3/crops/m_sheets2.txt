@@ -1,0 +1,12 @@
+board chevron (366.33, 186.67, 371.33, 194.67)  size 5.0 8.0  right inset 18.67  centre y 190.67  peak 102
+board chevron (366.33, 245.33, 371.33, 253.33)  size 5.0 8.0  right inset 18.67  centre y 249.33  peak 102
+board chevron (366.33, 333.33, 371.33, 341.33)  size 5.0 8.0  right inset 18.67  centre y 337.33  peak 102
+board chevron (366.33, 421.33, 371.33, 429.33)  size 5.0 8.0  right inset 18.67  centre y 425.33  peak 102
+board chevron (366.33, 480.0, 371.33, 488.0)  size 5.0 8.0  right inset 18.67  centre y 484.0  peak 102
+app chevron (378.39, 187.11, 382.56, 194.06)  size 4.17 6.95  right inset 19.44  centre y 190.58  peak 103
+app chevron (378.39, 246.13, 382.56, 253.07)  size 4.17 6.94  right inset 19.44  centre y 249.6  peak 104
+app chevron (378.39, 333.96, 382.56, 340.9)  size 4.17 6.94  right inset 19.44  centre y 337.43  peak 104
+app chevron (378.39, 422.13, 382.56, 429.08)  size 4.17 6.95  right inset 19.44  centre y 425.6  peak 103
+app chevron (378.39, 481.15, 382.56, 488.09)  size 4.17 6.94  right inset 19.44  centre y 484.62  peak 102
+board link tile fill [44, 44, 47] [44, 44, 47]  tile corner radius probe hscan y=147.8: []
+app link tile fill [40, 40, 42] [42, 42, 45]  tile corner radius probe hscan y=147.8: [26.38]

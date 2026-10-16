@@ -1,0 +1,38 @@
+scale 3
+div (0,0 390x844) bg rgb(0, 0, 0)
+  div (0,62 390x20.33) "Fork session feature" 17px/normal w600 rgb(255, 255, 255) lines 1 txt 110.11,62 169.77x20.33
+  div (0,0 390x844) bg rgba(0, 0, 0, 0.55)
+  div (0,200 390x644) bg rgb(28, 28, 30) r 38px 38px 0px 0px
+    div (177,206 36x5) bg rgb(72, 72, 74) r 3px
+    div (20,220 354x46.67)
+      div (20,220 308x46.67)
+        span (20,220 308x28) "Files & links" 22px/28px w700 rgb(255, 255, 255) lines 1 txt 20,220.67 131.19x26.33
+        span (20,250 308x16.67) "Shared in this session" 14px/normal w400 rgb(161, 161, 166) lines 1 txt 20,250 143.91x16.67
+      a (338,220 36x36) bg rgb(44, 44, 46) r 18px
+        svg (349,231 14x14) svg 14 sw 2.8 #D1D1D6
+    div (16,284 358x34) bg rgb(44, 44, 46) r 17px
+      button (18,286 177x30) r 15px
+        span (84.14,292.67 44.72x16.67) "Files 5" 14px/normal w600 rgb(255, 255, 255) lines 1 txt 84.14,292.67 44.72x16.67
+      button (195,286 177x30) bg rgb(99, 99, 102) r 15px
+        span (259.18,292.67 48.64x16.67) "Links 2" 14px/normal w600 rgb(255, 255, 255) lines 1 txt 259.18,292.67 48.64x16.67
+    div (0,332 390x512)
+      div (0,332 390x60.67)
+        span (20,347.33 30x30) bg rgb(44, 44, 46) r 8px
+          span (29.68,354 10.65x16.67) "G" 14px/normal w700 rgb(209, 209, 214) lines 1 txt 29.68,354 10.65x16.67
+        span (62,332 328x60.67) bb 0.333333px rgb(56, 56, 58)
+          span (62,343 287x38.33)
+            span (62,343 287x22)
+              span (62,343.67 256.82x20.33) "PR #412 · Fork opens right away" 17px/22px w400 rgb(255, 255, 255) lines 1 txt 62,343.67 256.82x20.33
+            span (62,366 287x15.33)
+              span (62,366 68.82x15.33) "github.com" 13px/normal w400 rgb(161, 161, 166) lines 1 txt 62,366 68.82x15.33
+          svg (359,354.67 15x15) svg 15 sw 2.2 #636366
+      div (0,392.67 390x60.67)
+        span (20,408 30x30) bg rgb(44, 44, 46) r 8px
+          span (29.87,414.67 10.26x16.67) "A" 14px/normal w700 rgb(209, 209, 214) lines 1 txt 29.87,414.67 10.26x16.67
+        span (62,392.67 328x60.67) bb 0.333333px rgb(56, 56, 58)
+          span (62,403.67 287x38.33)
+            span (62,403.67 287x22)
+              span (62,404.33 158.93x20.33) "TestFlight build 205" 17px/22px w400 rgb(255, 255, 255) lines 1 txt 62,404.33 158.93x20.33
+            span (62,426.67 287x15.33)
+              span (62,426.67 171.45x15.33) "appstoreconnect.apple.com" 13px/normal w400 rgb(161, 161, 166) lines 1 txt 62,426.67 171.45x15.33
+          svg (359,415.33 15x15) svg 15 sw 2.2 #636366

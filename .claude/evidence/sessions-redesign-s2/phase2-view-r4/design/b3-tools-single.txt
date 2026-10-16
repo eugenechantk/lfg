@@ -1,0 +1,67 @@
+div [0,0,700,844]
+div [0,0,700,844]
+div [0,0,390,844] | bg=rgb(0, 0, 0) | ov=hidden
+div [0,112,390,552] | pad=0px 16px 6px 16px | gap=12px | ov=hidden
+div [16,240,358,72] | T="Small forks wait for a transcript that is only written on the first turn. I’ll o" f=17px/24px w=400 ls=normal c=rgb(242, 242, 247) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=16,242,342.2,20 16,266,347.9,20 16,290,243.1,20
+div [16,324,358,300] | gap=6px
+button [16,324,358,22] | pad=2px 0px 2px 0px | gap=8px
+svg [16,326.5,17,17] | ov=hidden | svg stroke=rgb(161, 161, 166) sw=1.9 fill=none vb=0 0 24 24
+path [18.8,330,11.3,9.9] | path {"data-dc-tpl":"8","d":"M4 5h16v14H4zM8 10l3 2-3 2M13 15h3"} stroke=rgb(161, 161, 166) fill=none
+span [41,326,26.8,18] | T="Ran" f=15px/normal w=400 ls=normal c=rgb(161, 161, 166) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=41,326,26.8,18
+span [75.8,327.5,247.8,15] | ov=hidden | T="bun test src/sessions.test.ts" f=13px/normal w=400 ls=normal c=rgb(161, 161, 166) ff=ui-monospace, "SF Mono", Menlo, monospac tt=none ws=nowrap | lines=75.8,327.5,227,15
+span [331.6,328,22.4,14] | T="1.8s" f=12px/normal w=400 ls=normal c=rgb(142, 142, 147) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=331.6,328,22.4,14
+svg [362,329,12,12] | ov=hidden | svg stroke=rgb(142, 142, 147) sw=2.8 fill=none vb=0 0 24 24
+path [365,333.5,6,3] | path {"data-dc-tpl":"13","d":"M6 9l6 6 6-6"} stroke=rgb(142, 142, 147) fill=none
+div [16,352,358,272] | bg=rgb(28, 28, 30) | bd=1px/1px/1px/1px rgb(56, 56, 58)|rgb(56, 56, 58) | rad=12px | pad=10px 12px 10px 12px | gap=6px
+span [29,363,332,13] | T="Command" f=11px/normal w=600 ls=0.4px c=rgb(142, 142, 147) ff=-apple-system, "SF Pro Text", system-ui, tt=uppercase ws=normal | lines=29,363,63.4,13
+span [29,382,332,17] | T="bun test src/sessions.test.ts" f=12.5px/17px w=400 ls=normal c=rgb(242, 242, 247) ff=ui-monospace, "SF Mono", Menlo, monospac tt=none ws=normal | lines=29,383,218.3,15
+span [29,405,332,14] | T="In ~/dev/personal/lfg" f=12px/normal w=400 ls=normal c=rgb(142, 142, 147) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=29,405,115.2,14
+span [29,429,332,13] | T="Output · last 8 of 46 lines" f=11px/normal w=600 ls=0.4px c=rgb(142, 142, 147) ff=-apple-system, "SF Pro Text", system-ui, tt=uppercase ws=normal | lines=29,429,176.6,13
+div [29,448,332,144] | bg=rgb(0, 0, 0) | rad=8px | pad=8px 10px 8px 10px | ov=hidden
+span [39,456,312,16] | T="✓ forkSession opens before the transcript [3.1ms]" f=11.5px/16px w=400 ls=normal c=rgb(209, 209, 214) ff=ui-monospace, "SF Mono", Menlo, monospac tt=none ws=pre | lines=39,457,339.3,14
+span [39,472,312,16] | T="✓ forkSession keeps the parent's model [0.8ms]" f=11.5px/16px w=400 ls=normal c=rgb(209, 209, 214) ff=ui-monospace, "SF Mono", Menlo, monospac tt=none ws=pre | lines=39,473,318.5,14
+span [39,488,312,16] | T="✓ listSessions maps a fork to its own id [1.2ms]" f=11.5px/16px w=400 ls=normal c=rgb(209, 209, 214) ff=ui-monospace, "SF Mono", Menlo, monospac tt=none ws=pre | lines=39,489,332.3,14
+span [39,504,312,16]
+span [39,520,312,16] | T="42 pass" f=11.5px/16px w=400 ls=normal c=rgb(48, 209, 88) ff=ui-monospace, "SF Mono", Menlo, monospac tt=none ws=pre | lines=39,521,55.4,14
+span [39,536,312,16] | T="0 fail" f=11.5px/16px w=400 ls=normal c=rgb(209, 209, 214) ff=ui-monospace, "SF Mono", Menlo, monospac tt=none ws=pre | lines=39,537,48.5,14
+span [39,552,312,16] | T="118 expect() calls" f=11.5px/16px w=400 ls=normal c=rgb(209, 209, 214) ff=ui-monospace, "SF Mono", Menlo, monospac tt=none ws=pre | lines=39,553,131.6,14
+span [39,568,312,16] | T="Ran 42 tests across 1 file. [1.80s]" f=11.5px/16px w=400 ls=normal c=rgb(209, 209, 214) ff=ui-monospace, "SF Mono", Menlo, monospac tt=none ws=pre | lines=39,569,242.3,14
+a [29,598,332,15] | T="Show all 46 lines" f=13px/normal w=400 ls=normal c=rgb(64, 156, 255) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=29,598,103.1,15
+button [16,636,358,22] | pad=2px 0px 2px 0px | gap=8px
+svg [16,638.5,17,17] | ov=hidden | svg stroke=rgb(161, 161, 166) sw=1.9 fill=none vb=0 0 24 24
+path [18.8,642,10.6,10.6] | path {"data-dc-tpl":"32","d":"M4 20h4L19 9l-4-4L4 16z"} stroke=rgb(161, 161, 166) fill=none
+path [25.6,643.1,2.8,2.8] | path {"data-dc-tpl":"33","d":"M13.5 6.5l4 4"} stroke=rgb(161, 161, 166) fill=none
+span [41,638,45,18] | T="Edited" f=15px/normal w=400 ls=normal c=rgb(161, 161, 166) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=41,638,45,18
+span [94,639.5,229.9,15] | ov=hidden | T="ios/LFG/SessionStore.swift" f=13px/normal w=400 ls=normal c=rgb(161, 161, 166) ff=ui-monospace, "SF Mono", Menlo, monospac tt=none ws=nowrap | lines=94,639.5,203.5,15
+span [331.8,640,22.2,14] | T="0.1s" f=12px/normal w=400 ls=normal c=rgb(142, 142, 147) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=331.8,640,22.2,14
+svg [362,641,12,12] | ov=hidden | svg stroke=rgb(142, 142, 147) sw=2.8 fill=none vb=0 0 24 24
+path [366.5,644,3,6] | path {"data-dc-tpl":"38","d":"M9 6l6 6-6 6"} stroke=rgb(142, 142, 147) fill=none
+div [0,0,390,124] | bgi=linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0))
+div [16,54,358,56] | gap=10px
+a [16,59,46,46] | bg=rgba(44, 44, 46, 0.92) | bd=1px/1px/1px/1px rgba(255, 255, 255, 0.1)|rgba(255, 255, 255, 0.1) | rad=22px | sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [29,72,20,20] | ov=hidden | svg stroke=rgb(255, 255, 255) sw=2.4 fill=none vb=0 0 24 24
+path [35.7,76.2,5.8,11.7] | path {"data-dc-tpl":"49","d":"M15 5l-7 7 7 7"} stroke=rgb(255, 255, 255) fill=none
+a [72,63.5,246,37] | gap=3px
+span [110.1,63.5,169.8,20] | ov=hidden | T="Fork session feature" f=17px/normal w=600 ls=normal c=rgb(255, 255, 255) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=nowrap | lines=110.1,63.5,169.8,20
+span [108.3,86.5,173.5,14] | gap=6px
+span [108.3,90,7,7] | bg=rgb(48, 209, 88) | rad=50% | sh=rgba(48, 209, 88, 0.25) 0px 0px 0px 3px
+span [121.3,86.5,103.7,14] | T="Working · 3m 40s" f=12px/normal w=600 ls=normal c=rgb(48, 209, 88) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=nowrap | lines=121.3,86.5,103.7,14
+span [230.9,86.5,50.8,14] | T="· Pro · lfg" f=12px/normal w=400 ls=normal c=rgb(161, 161, 166) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=nowrap | lines=230.9,86.5,50.8,14
+a [328,59,46,46] | bg=rgba(44, 44, 46, 0.92) | bd=1px/1px/1px/1px rgba(255, 255, 255, 0.1)|rgba(255, 255, 255, 0.1) | rad=22px | sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [341,72,20,20] | ov=hidden | svg stroke=rgb(255, 255, 255) sw=1.9 fill=none vb=0 0 24 24
+path [344.3,77.8,13.3,8.3] | path {"data-dc-tpl":"58","d":"M4 7h9M17 7h3M4 17h3M11 17h9"} stroke=rgb(255, 255, 255) fill=none
+circle [351.7,76,3.7,3.7] | circle {"data-dc-tpl":"59","cx":"15","cy":"7","r":"2.2"} stroke=rgb(255, 255, 255) fill=none
+circle [346.7,84.3,3.7,3.7] | circle {"data-dc-tpl":"60","cx":"9","cy":"17","r":"2.2"} stroke=rgb(255, 255, 255) fill=none
+div [0,648,390,196] | bgi=linear-gradient(rgba(0, 0, 0, 0), rgb(0, 0, 0) 22%)
+div [12,672,366,38] | pad=0px 4px 0px 4px | gap=8px
+a [16,672,166.3,38] | bg=rgb(28, 28, 30) | bd=1px/1px/1px/1px rgb(56, 56, 58)|rgb(56, 56, 58) | rad=18px | pad=0px 12px 0px 12px | gap=6px | T="Subagents" f=14px/normal w=500 ls=normal c=rgb(242, 242, 247) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=29,683,72.2,16
+span [107.2,683,62.1,16] | T="1 running" f=14px/normal w=500 ls=normal c=rgb(48, 209, 88) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=107.2,683,62.1,16
+a [190.3,672,72.5,38] | bg=rgb(28, 28, 30) | bd=1px/1px/1px/1px rgb(56, 56, 58)|rgb(56, 56, 58) | rad=18px | pad=0px 12px 0px 12px | gap=6px | T="Files" f=14px/normal w=500 ls=normal c=rgb(242, 242, 247) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=203.3,683,31.3,16
+span [240.6,683,9.2,16] | T="4" f=14px/normal w=500 ls=normal c=rgb(142, 142, 147) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=240.6,683,9.2,16
+a [270.8,672,83.8,38] | bg=rgb(28, 28, 30) | bd=1px/1px/1px/1px rgb(56, 56, 58)|rgb(56, 56, 58) | rad=18px | pad=0px 12px 0px 12px | gap=6px | T="Terminal" f=14px/normal w=500 ls=normal c=rgb(242, 242, 247) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=283.8,683,57.8,16
+div [12,720,366,96] | bg=rgb(28, 28, 30) | bd=1px/1px/1px/1px rgb(56, 56, 58)|rgb(56, 56, 58) | rad=24px | pad=13px 10px 10px 16px
+span [29,734,338,20] | T="Add to this turn…" f=17px/normal w=400 ls=normal c=rgb(142, 142, 147) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=29,734,137.9,20
+span [29,771,338,34] | gap=8px
+span [29,774,116.6,28] | bg=rgb(44, 44, 46) | rad=14px | pad=0px 10px 0px 10px | T="Opus 5.5 · High" f=13px/normal w=500 ls=normal c=rgb(209, 209, 214) ff=-apple-system, "SF Pro Text", system-ui, tt=none ws=normal | lines=39,780.5,96.6,15
+button [333,771,34,34] | bg=rgb(242, 242, 247) | rad=17px
+span [344.5,782.5,11,11] | bg=rgb(0, 0, 0) | rad=3px

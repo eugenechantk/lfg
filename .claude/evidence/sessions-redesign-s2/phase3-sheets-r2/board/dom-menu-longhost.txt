@@ -1,0 +1,81 @@
+div (0,0 390x844) bg rgb(0, 0, 0)
+  div (0,62 390x20) "Fork session feature" 17px/normal w600 rgb(255, 255, 255) lines 1 txt 110.11,62 169.78x20
+  div (0,0 390x844) bg rgba(0, 0, 0, 0.55)
+  div (0,112 390x732) bg rgb(28, 28, 30) r 38px 38px 0px 0px
+    div (177,118 36x5) bg rgb(72, 72, 74) r 3px
+    div (20,132 354x65)
+      div (20,132 308x65)
+        span (20,132 308x30)
+          span (20,133 225.27x28) "Fork session feature" 22px/28px w700 rgb(255, 255, 255) lines 1 txt 20,134 225.27x26
+          button (253.27,132 30x30) bg rgb(58, 58, 60) r 15px
+            svg (261.27,140 14x14) svg 14 sw 2.2 #D1D1D6
+        span (20,165 308x32) "Eugenes-MacBook-Pro · ~/dev/personal/lfg · started" 14px/normal w400 rgb(161, 161, 166) lines 2 txt 20,165 291.2x16 | 20,181 96.22x16
+      a (338,132 36x36) bg rgb(58, 58, 60) r 18px
+        svg (349,143 14x14) svg 14 sw 2.8 #D1D1D6
+    div (16,208 358x547)
+      div (16,208 358x164)
+        a (16,208 114x78) bg rgb(44, 44, 46) r 18px
+          svg (28,218 22x22) svg 22 sw 1.8 #409CFF
+          span (28,260 92x17)
+            span (28,260 57.75x16) "Terminal" 14px/17px w500 rgb(242, 242, 247) lines 1 txt 28,260 57.75x16
+        a (138,208 114x78) bg rgb(44, 44, 46) r 18px
+          svg (150,218 22x22) svg 22 sw 1.8 #409CFF
+          span (150,260 92x17)
+            span (150,260 79.98x16) "Files & links" 14px/17px w500 rgb(242, 242, 247) lines 1 txt 150,260 79.98x16
+          span (221.8,218 20.2x20) bg rgb(58, 58, 60) r 10px
+            span (227.8,221 8.2x14) "6" 12px/normal w700 rgb(242, 242, 247) lines 1 txt 227.8,221 8.2x14
+        a (260,208 114x78) bg rgb(44, 44, 46) r 18px
+          svg (272,218 22x22) svg 22 sw 1.8 #409CFF
+          span (272,260 92x17)
+            span (272,260 72.22x16) "Subagents" 14px/17px w500 rgb(242, 242, 247) lines 1 txt 272,260 72.22x16
+          span (344,218 20x20) bg rgb(58, 58, 60) r 10px
+            span (350.14,221 7.72x14) "2" 12px/normal w700 rgb(242, 242, 247) lines 1 txt 350.14,221 7.72x14
+        a (16,294 114x78) bg rgb(44, 44, 46) r 18px
+          svg (28,304 22x22) svg 22 sw 1.8 #409CFF
+          span (28,346 92x17)
+            span (28,346 45.75x16) "Sign in" 14px/17px w500 rgb(242, 242, 247) lines 1 txt 28,346 45.75x16
+        a (138,294 114x78) bg rgb(44, 44, 46) r 18px
+          svg (150,304 22x22) svg 22 sw 1.8 #409CFF
+          span (150,329 92x34)
+            span (150,329 55.23x33) "Browser preview" 14px/17px w500 rgb(242, 242, 247) lines 2 txt 150,329 55.23x16 | 150,346 52.91x16
+        a (260,294 114x78) bg rgb(44, 44, 46) r 18px
+          svg (272,304 22x22) svg 22 sw 1.8 #409CFF
+          span (272,329 92x34)
+            span (272,329 52.91x33) "iPhone preview" 14px/17px w500 rgb(242, 242, 247) lines 2 txt 272,329 46.16x16 | 272,346 52.91x16
+      div (16,386 358x240) bg rgb(44, 44, 46) r 20px
+        div (16,386 358x43) bb 1px rgb(56, 56, 58)
+          span (32,397 194.95x20) "Model" 17px/normal w400 rgb(255, 255, 255) lines 1 txt 32,397 49.36x20
+          span (236.95,398 18x18) "C" 11px/normal w700 rgb(255, 255, 255) lines 1 txt 241.88,400.5 8.16x13 bg rgb(181, 86, 47) r 5px
+          span (264.95,397 72.05x20) "Opus 5.5" 17px/normal w400 rgb(161, 161, 166) lines 1 txt 264.95,397 72.05x20
+          svg (347,401.5 11x11) svg 11 sw 3 #48484A
+        div (16,429 358x49) bb 1px rgb(56, 56, 58)
+          span (32,443 116x20) "Effort" 17px/normal w400 rgb(255, 255, 255) lines 1 txt 32,443 44.92x20
+          span (158,437 200x32) bg rgb(58, 58, 60) r 9px
+            button (160,439 49x28) r 7px
+              span (171.92,445.5 25.16x15) "Low" 13px/normal w500 rgb(255, 255, 255) lines 1 txt 171.92,445.5 25.16x15
+            button (209,439 49x28) r 7px
+              span (219.88,445.5 27.25x15) "Med" 13px/normal w500 rgb(255, 255, 255) lines 1 txt 219.88,445.5 27.25x15
+            button (258,439 49x28) bg rgb(99, 99, 102) r 7px
+              span (267.91,445.5 29.19x15) "High" 13px/normal w500 rgb(255, 255, 255) lines 1 txt 267.91,445.5 29.19x15
+            button (307,439 49x28) r 7px
+              span (318.52,445.5 25.95x15) "Max" 13px/normal w500 rgb(255, 255, 255) lines 1 txt 318.52,445.5 25.95x15
+        div (16,478 358x63) bb 1px rgb(56, 56, 58)
+          span (32,499 37.66x20) "Host" 17px/normal w400 rgb(255, 255, 255) lines 1 txt 32,499 37.66x20
+          span (79.66,489 258.92x40) "Eugenes-MacBook-Pro · move to Mac" 17px/normal w400 rgb(161, 161, 166) lines 2 txt 79.66,489 242.97x20 | 79.66,509 54.64x20
+          svg (348.58,503.5 9.42x11) svg 11 sw 3 #48484A
+        div (16,541 358x43) bb 1px rgb(56, 56, 58)
+          svg (32,553 18x18) svg 18 sw 2 currentColor
+          span (60,552 298x20) "Fork session" 17px/normal w400 rgb(64, 156, 255) lines 1 txt 60,552 100.67x20
+        div (16,584 358x42)
+          span (32,600.5 18x9)
+            span (36.5,600.5 9x9) bg rgb(191, 90, 240) r 50%
+          span (60,595 298x20) "Mark as unread" 17px/normal w400 rgb(64, 156, 255) lines 1 txt 60,595 123.39x20
+      div (16,640 358x85) bg rgb(44, 44, 46) r 20px
+        div (16,640 358x43) bb 1px rgb(56, 56, 58)
+          span (32,655.5 18x11)
+            span (35.5,655.5 11x11) bg rgb(242, 242, 248) r 2px
+          span (60,651 298x20) "Stop current turn" 17px/normal w400 rgb(255, 255, 255) lines 1 txt 60,651 137.64x20
+        div (16,683 358x42)
+          svg (32,695 18x18) svg 18 sw 2 currentColor
+          span (60,694 298x20) "End session" 17px/normal w400 rgb(255, 69, 58) lines 1 txt 60,694 95.69x20
+      button (30.05,739 329.89x16) "tmux lfg-fork-3 · id s2fx-fork · tap to copy" 12px/normal w400 rgb(161, 161, 166) lines 1 txt 36.05,740 317.89x14

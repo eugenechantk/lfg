@@ -1,0 +1,16 @@
+b1 bubble-text | design/b1-3x.png | bbox | 64 384 300 72 | 60 9,110,224
+w bubble-text | app/w.png | bbox | 76 434 300 52 | 60 6,108,222
+b1 bubble-text-rows | design/b1-3x.png | rows | 64 384 300 72 | 60 9,110,224
+w bubble-text-rows | app/w.png | rows | 76 434 300 52 | 60 6,108,222
+b1 stop-square | design/b1-3x.png | bbox | 341 779 18 18 | 60 242,242,247
+w stop-square | app/w.png | bbox | 353 809 18 18 | 60 242,242,247
+b1 pill2-content-cols | design/b1-3x.png | cols | 298 680 80 22 | 40 28,28,30
+w pill2-content-cols | app/w.png | cols | 294 710 86 22 | 40 28,28,30
+b1 pill2-icon | design/b1-3x.png | bbox | 300 678 25 26 | 40 28,28,30
+w pill2-icon | app/w.png | bbox | 296 708 25 26 | 40 28,28,30
+b1 pill2-files-ink | design/b1-3x.png | ink | 327 680 34 22 | 60 28,28,30
+w pill2-files-ink | app/w.png | ink | 323 710 34 22 | 60 28,28,30
+b1 pill2-count-ink | design/b1-3x.png | ink | 362 680 16 22 | 40 28,28,30
+w pill2-count-ink | app/w.png | ink | 358 710 16 22 | 40 28,28,30
+b1 top-fade-col | design/b1-3x.png | rows | 0 105 390 20 | 3 0,0,0
+w top-fade-col | app/w.png | rows | 0 107 402 20 | 3 0,0,0

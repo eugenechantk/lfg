@@ -1,0 +1,14 @@
+w title | app/w.png | ink | 90 62 230 22 | 60 0,0,0
+w clock | app/w.png | ink | 40 18 60 26 | 60 0,0,0
+g3 title | app/g3.png | ink | 90 62 230 22 | 60 0,0,0
+s1 title | app/s1.png | ink | 90 62 230 22 | 60 0,0,0
+qm title | app/q-menu.png | ink | 90 62 230 22 | 60 0,0,0
+fc title | app/f-closed.png | ink | 90 62 230 22 | 60 0,0,0
+fc clock | app/f-closed.png | ink | 40 18 60 26 | 60 0,0,0
+qq title | app/question.png | ink | 90 62 230 22 | 60 0,0,0
+pp title | app/permission.png | ink | 90 62 230 22 | 60 0,0,0
+pl title | app/plan.png | ink | 90 62 230 22 | 60 0,0,0
+si title | app/signin.png | ink | 90 62 230 22 | 60 0,0,0
+si clock | app/signin.png | ink | 40 18 60 26 | 60 0,0,0
+b1 title | design/b1-3x.png | ink | 90 62 230 22 | 60 0,0,0
+b7 title | design/b7-3x.png | ink | 90 62 230 22 | 60 0,0,0

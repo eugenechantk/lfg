@@ -1,0 +1,29 @@
+{
+  "sources": {
+    "b4": {"path": "design/b4-queued.png", "pixels_per_unit": 1, "viewport": [390, 844]},
+    "b4closed": {"path": "design/b4-queued-closed.png", "pixels_per_unit": 1, "viewport": [390, 844]},
+    "b5": {"path": "design/b5-failed.png", "pixels_per_unit": 1, "viewport": [390, 844]},
+    "q0": {"path": "app/q0.png", "pixels_per_unit": 3, "viewport": [402, 874]},
+    "q1": {"path": "app/q1.png", "pixels_per_unit": 3, "viewport": [402, 874]},
+    "f0": {"path": "app/f0.png", "pixels_per_unit": 3, "viewport": [402, 874]},
+    "f1": {"path": "app/f1.png", "pixels_per_unit": 3, "viewport": [402, 874]}
+  },
+  "pairs": [
+    {"id": "b4-header", "state": "queued", "design": {"source": "b4", "rect": [0, 52, 390, 60]}, "app": {"source": "q0", "rect": [0, 54, 402, 60]}},
+    {"id": "b4-transcript", "state": "queued", "design": {"source": "b4", "rect": [0, 510, 390, 162]}, "app": {"source": "q0", "rect": [0, 502, 402, 208]}},
+    {"id": "b4-strip-closed", "state": "queued, menu closed", "design": {"source": "b4closed", "rect": [12, 682, 366, 32]}, "app": {"source": "q0", "rect": [12, 713, 378, 32]}},
+    {"id": "b4-strip-open", "state": "queued, menu open", "design": {"source": "b4", "rect": [12, 682, 366, 32]}, "app": {"source": "q1", "rect": [12, 713, 378, 32]}},
+    {"id": "b4-ellipsis-open", "state": "queued, menu open", "design": {"source": "b4", "rect": [350, 688, 20, 20]}, "app": {"source": "q1", "rect": [362, 719, 20, 20]}},
+    {"id": "b4-ellipsis-closed", "state": "queued, menu closed", "design": {"source": "b4closed", "rect": [350, 688, 20, 20]}, "app": {"source": "q0", "rect": [362, 719, 20, 20]}},
+    {"id": "b4-menu", "state": "queued, menu open", "design": {"source": "b4", "rect": [128, 533, 250, 141]}, "app": {"source": "q1", "rect": [140, 563, 250, 142]}},
+    {"id": "b4-menu-shadow-zone", "state": "queued, menu open", "design": {"source": "b4", "rect": [100, 520, 290, 200]}, "app": {"source": "q1", "rect": [111, 551, 291, 200]}},
+    {"id": "b4-composer", "state": "queued", "design": {"source": "b4", "rect": [12, 720, 366, 96]}, "app": {"source": "q0", "rect": [12, 751, 378, 95]}},
+    {"id": "b5-header", "state": "offline, not sent", "design": {"source": "b5", "rect": [0, 52, 390, 60]}, "app": {"source": "f0", "rect": [0, 54, 402, 60]}},
+    {"id": "b5-transcript", "state": "offline, not sent", "design": {"source": "b5", "rect": [0, 530, 390, 140]}, "app": {"source": "f0", "rect": [0, 563, 402, 135]}},
+    {"id": "b5-strip-open", "state": "not sent, menu open", "design": {"source": "b5", "rect": [12, 682, 366, 32]}, "app": {"source": "f1", "rect": [12, 713, 378, 32]}},
+    {"id": "b5-ellipsis-open", "state": "not sent, menu open", "design": {"source": "b5", "rect": [350, 688, 20, 20]}, "app": {"source": "f1", "rect": [362, 719, 20, 20]}},
+    {"id": "b5-menu", "state": "not sent, menu open", "design": {"source": "b5", "rect": [148, 546, 230, 128]}, "app": {"source": "f1", "rect": [160, 577, 230, 128]}},
+    {"id": "b5-menu-shadow-zone", "state": "not sent, menu open", "design": {"source": "b5", "rect": [60, 520, 330, 200]}, "app": {"source": "f1", "rect": [71, 551, 331, 200]}},
+    {"id": "b5-composer", "state": "offline", "design": {"source": "b5", "rect": [12, 720, 366, 96]}, "app": {"source": "f0", "rect": [12, 751, 378, 95]}}
+  ]
+}

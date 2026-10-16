@@ -1,0 +1,31 @@
+== header row: title ink cols then pencil button (y 26..44)
+board first (21.67, 32.0)  last title glyph (233.0, 244.33)
+board pencil btn hscan y=35: [(202.0, [77, 77, 80]), (202.33, [255, 255, 255])] ... [(271.67, [58, 58, 59]), (283.33, [28, 28, 30])]
+board pencil btn vscan: []
+app first (21.52, 31.94)  last title glyph (207.94, 226.69)
+app pencil btn hscan y=35: [(202.04, [48, 48, 51]), (202.39, [185, 185, 187])] ... [(265.57, [34, 34, 37]), (265.92, [25, 25, 27])]
+app pencil btn vscan: []
+board pencil vscan x=268: [20.0, 31.67, 32.0, 33.67, 34.0, 36.33, 36.67, 38.33, 38.67, 50.0]
+app hscan y=35 transitions into fill: [(202.04, [27, 27, 30], [48, 48, 51]), (202.39, [48, 48, 51], [185, 185, 187]), (202.74, [185, 185, 187], [253, 253, 255]), (205.17, [253, 253, 255], [228, 228, 230]), (205.51, [228, 228, 230], [100, 100, 102]), (205.86, [100, 100, 102], [26, 26, 28])]
+== close button
+board close hscan y=38: [(338.0, [58, 58, 59])] [(374.0, [28, 28, 30])]
+board close vscan x=W-34: [20.0] [56.0]
+app close hscan y=38: [(349.93, [52, 52, 54])] [(386.03, [26, 26, 28])]
+app close vscan x=W-34: [19.79] [55.89]
+== badges (hscan at badge centre y=116, vscan at badge centre)
+board tile right 252: badge x-transitions [221.67] [242.0, 252.0]  inset 10.0
+board tile right 374: badge x-transitions [344.0] [364.0, 374.0]  inset 10.0
+board badge2 vscan [106.0, 111.67, 113.0, 113.33, 115.67, 116.0, 116.33, 118.0, 118.33, 118.67, 119.0, 120.33, 126.0]
+board badge fill [58, 58, 59]  digit peak [242, 242, 247]
+app tile right 260: badge x-transitions [229.81] [243.01, 249.95]  inset 10.05
+app tile right 386: badge x-transitions [365.2] [375.96, 386.03]  inset 10.04
+app badge2 vscan [105.88, 111.44, 111.78, 112.82, 113.17, 115.25, 115.6, 115.95, 116.3, 116.99, 117.34, 117.68, 118.03, 118.38, 118.73, 119.07, 120.11, 120.46]
+app badge fill [56, 56, 59]  digit peak [254, 254, 255]
+== chevrons (Model row 274-317, Host row 366-409)
+board Model chevron bbox (np.float64(360.0), np.float64(282.0), np.float64(374.0), np.float64(310.0))  size (np.float64(14.0), np.float64(28.0))  right inset 16.0  peak [44, 44, 47]
+board Host chevron bbox (np.float64(360.0), np.float64(374.0), np.float64(374.0), np.float64(402.0))  size (np.float64(14.0), np.float64(28.0))  right inset 16.0  peak [44, 44, 47]
+app Model chevron bbox (np.float64(372.15), np.float64(281.89), np.float64(386.03), np.float64(310.01))  size (np.float64(13.88), np.float64(28.12))  right inset 15.97  peak [45, 45, 47]
+app Host chevron bbox (np.float64(372.15), np.float64(373.88), np.float64(386.03), np.float64(402.0))  size (np.float64(13.88), np.float64(28.12))  right inset 15.97  peak [42, 42, 45]
+== grey text (p90 / p98 of glyph pixels) vs white reference
+board subtitle p90/p98 166.0 166.0  Opus p90/p98 166.0 166.0  Host value p90 166.0  footer p90/p98 166.0 166.0  title p98 (white ref) 255.0  Model label p98 255.0
+app subtitle p90/p98 164.0 167.0  Opus p90/p98 164.0 167.0  Host value p90 164.0  footer p90/p98 162.0 166.0  title p98 (white ref) 255.0  Model label p98 255.0

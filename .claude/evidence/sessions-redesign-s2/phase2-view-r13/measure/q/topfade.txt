@@ -1,0 +1,18 @@
+# Top scroll edge in s1 (bubble scrolled under the bar): blue channel per row at x 300-320
+s1 r110 | app/s1.png | color | 300 110 20 0.67
+s1 r112 | app/s1.png | color | 300 112 20 0.67
+s1 r114 | app/s1.png | color | 300 114 20 0.67
+s1 r116 | app/s1.png | color | 300 116 20 0.67
+s1 r118 | app/s1.png | color | 300 118 20 0.67
+s1 r120 | app/s1.png | color | 300 120 20 0.67
+s1 r122 | app/s1.png | color | 300 122 20 0.67
+s1 r124 | app/s1.png | color | 300 124 20 0.67
+s1 r126 | app/s1.png | color | 300 126 20 0.67
+s1 r130 | app/s1.png | color | 300 130 20 0.67
+s1 r135 | app/s1.png | color | 300 135 20 0.67
+g2 r110 | app/g2.png | color | 200 110 20 0.67
+g2 r114 | app/g2.png | color | 200 114 20 0.67
+g2 r118 | app/g2.png | color | 200 118 20 0.67
+g2 r122 | app/g2.png | color | 200 122 20 0.67
+g2 r126 | app/g2.png | color | 200 126 20 0.67
+g2 r130 | app/g2.png | color | 200 130 20 0.67

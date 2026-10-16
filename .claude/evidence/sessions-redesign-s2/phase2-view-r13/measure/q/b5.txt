@@ -1,0 +1,60 @@
+# Board 5 vs f-menu / f-closed (expected +12 right, +30 bottom)
+b5 menu-cols-y600 | design/b5-3x.png | cols | 100 610 290 1 | 30 0,0,0
+fm menu-cols-y640 | app/f-menu.png | cols | 100 640 302 1 | 30 0,0,0
+b5 menu-inner-rows | design/b5-3x.png | rows | 335 548 40 124 | 25 44,44,46
+fm menu-inner-rows | app/f-menu.png | rows | 347 578 40 124 | 25 41,41,44
+b5 menu-rows-x200 | design/b5-3x.png | rows | 220 580 2 100 | 4 44,44,46
+fm menu-rows-x232 | app/f-menu.png | rows | 232 610 2 100 | 4 41,41,44
+b5 retry | design/b5-3x.png | bbox | 158 554 60 26 | 60 44,47,53
+fm retry | app/f-menu.png | bbox | 170 584 60 26 | 60 41,44,47
+b5 edit | design/b5-3x.png | bbox | 158 597 50 24 | 60 43,43,44
+fm edit | app/f-menu.png | bbox | 170 627 50 24 | 60 41,41,44
+b5 delete | design/b5-3x.png | bbox | 158 640 70 24 | 60 43,43,44
+fm delete | app/f-menu.png | bbox | 170 670 70 24 | 60 41,41,44
+b5 delete-ink | design/b5-3x.png | ink | 158 640 70 24 | 60 43,43,44
+fm delete-ink | app/f-menu.png | ink | 170 670 70 24 | 60 41,41,44
+b5 retry-icon | design/b5-3x.png | bbox | 342 555 24 24 | 60 44,47,53
+fm retry-icon | app/f-menu.png | bbox | 354 585 24 24 | 60 41,44,47
+b5 menu-top | design/b5-3x.png | rows | 250 540 30 12 | 12 0,0,0
+fm menu-top | app/f-menu.png | rows | 262 570 30 12 | 12 0,0,0
+b5 strip | design/b5-3x.png | bbox | 4 678 382 40 | 12 0,0,0
+fm strip | app/f-menu.png | bbox | 4 708 394 40 | 12 0,0,0
+b5 strip-icon | design/b5-3x.png | bbox | 20 686 22 24 | 40 39,39,43
+fm strip-icon | app/f-menu.png | bbox | 20 716 22 24 | 40 38,38,41
+b5 strip-icon-ink | design/b5-3x.png | ink | 20 686 22 24 | 40 39,39,43
+fm strip-icon-ink | app/f-menu.png | ink | 20 716 22 24 | 40 38,38,41
+b5 strip-text | design/b5-3x.png | bbox | 44 688 240 20 | 40 39,39,43
+fm strip-text | app/f-menu.png | bbox | 44 718 260 20 | 40 38,38,41
+b5 notsent | design/b5-3x.png | bbox | 290 688 58 20 | 40 39,39,43
+fm notsent | app/f-menu.png | bbox | 300 718 60 20 | 40 38,38,41
+b5 notsent-ink | design/b5-3x.png | ink | 290 688 58 20 | 40 39,39,43
+fm notsent-ink | app/f-menu.png | ink | 300 718 60 20 | 40 38,38,41
+b5 more | design/b5-3x.png | bbox | 348 686 24 24 | 30 39,39,43
+fm more | app/f-menu.png | bbox | 360 716 24 24 | 30 38,38,41
+b5 bubble | design/b5-3x.png | bbox | 60 530 325 46 | 40 0,0,0
+fc bubble | app/f-closed.png | bbox | 60 560 337 46 | 40 0,0,0
+b5 prose-rows | design/b5-3x.png | rows | 10 590 370 80 | 60 0,0,0
+fc prose-rows | app/f-closed.png | rows | 10 620 382 80 | 60 0,0,0
+b5 status | design/b5-3x.png | bbox | 120 84 160 18 | 30 0,0,0
+fc status | app/f-closed.png | bbox | 120 86 172 18 | 30 0,0,0
+b5 status-dot | design/b5-3x.png | bbox | 122 84 18 18 | 100 0,0,0
+fc status-dot | app/f-closed.png | bbox | 128 86 18 18 | 100 0,0,0
+b5 status-ink | design/b5-3x.png | ink | 135 84 90 18 | 60 0,0,0
+fc status-ink | app/f-closed.png | ink | 145 86 90 18 | 60 0,0,0
+b5 placeholder | design/b5-3x.png | bbox | 20 726 330 32 | 40 28,28,30
+fc placeholder | app/f-closed.png | bbox | 20 756 340 32 | 40 26,26,28
+b5 placeholder-ink | design/b5-3x.png | ink | 20 726 330 32 | 40 28,28,30
+fc placeholder-ink | app/f-closed.png | ink | 20 756 340 32 | 40 26,26,28
+b5 chip | design/b5-3x.png | bbox | 56 768 160 40 | 8 28,28,30
+fc chip | app/f-closed.png | bbox | 56 798 180 40 | 8 26,26,28
+b5 send | design/b5-3x.png | bbox | 325 764 52 48 | 12 28,28,30
+fc send | app/f-closed.png | bbox | 337 794 52 48 | 12 26,26,28
+b5 send-fill | design/b5-3x.png | color | 337 785 4 4
+fc send-fill | app/f-closed.png | color | 349 815 4 4
+b5 send-arrow | design/b5-3x.png | bbox | 340 776 20 24 | 30 58,58,60
+fc send-arrow | app/f-closed.png | bbox | 352 806 20 24 | 30 56,56,59
+b5 send-arrow-ink | design/b5-3x.png | ink | 340 776 20 24 | 30 58,58,60
+fc send-arrow-ink | app/f-closed.png | ink | 352 806 20 24 | 30 56,56,59
+fc strip-fill-rest | app/f-closed.png | color | 200 714 30 3
+fm strip-fill-open | app/f-menu.png | color | 200 714 30 3
+b5 strip-fill-open | design/b5-3x.png | color | 200 684 30 3

@@ -1,0 +1,348 @@
+{
+ "app_fit_kbup": {
+  "rows_pt": [
+   [
+    12.0,
+    139.33,
+    370.67,
+    8.67
+   ],
+   [
+    12.0,
+    156.67,
+    133.33,
+    8.67
+   ],
+   [
+    13.33,
+    173.0,
+    34.67,
+    9.67
+   ],
+   [
+    13.33,
+    190.67,
+    35.0,
+    9.67
+   ],
+   [
+    13.33,
+    206.0,
+    65.33,
+    14.33
+   ]
+  ],
+  "ruler_runs": 13,
+  "ruler_first_last_px": [
+   [
+    36,
+    124
+   ],
+   [
+    1104,
+    1148
+   ]
+  ],
+  "ruler_pitch_pt": 29.6667,
+  "ruler_extent_pt": [
+   12.0,
+   382.67
+  ],
+  "pitch_line2_line3_pt": 17.667,
+  "pitch_ruler1_ruler2_pt": 17.333,
+  "line2_ink_h_pt": 9.67,
+  "W_ink_h_pt": 8.67,
+  "text_ink_top5": "#D2D2D4",
+  "cursor_pt": [
+   71.33,
+   206.0,
+   7.33,
+   14.33
+  ],
+  "cursor_color": "#D0D0D2",
+  "prompt_row_pt": [
+   13.33,
+   206.0,
+   65.33,
+   14.33
+  ]
+ },
+ "app_wide_kbup": {
+  "rows_pt": [
+   [
+    12.0,
+    132.67,
+    376.33,
+    7.33
+   ],
+   [
+    12.0,
+    147.67,
+    64.67,
+    7.33
+   ],
+   [
+    13.0,
+    162.0,
+    30.33,
+    8.33
+   ],
+   [
+    13.0,
+    177.33,
+    30.67,
+    8.67
+   ],
+   [
+    13.0,
+    190.67,
+    57.33,
+    12.33
+   ]
+  ],
+  "ruler_runs": 1,
+  "ruler_first_last_px": [
+   [
+    36,
+    1165
+   ],
+   [
+    36,
+    1165
+   ]
+  ],
+  "pitch_line2_line3_pt": 15.333,
+  "pitch_ruler1_ruler2_pt": 15.0,
+  "line2_ink_h_pt": 8.33,
+  "W_ink_h_pt": 7.33,
+  "text_ink_top5": "#D0D0D2",
+  "cursor_pt": [
+   64.0,
+   191.0,
+   6.0,
+   12.0
+  ],
+  "cursor_color": "#D0D0D3",
+  "prompt_row_pt": [
+   13.0,
+   190.67,
+   57.33,
+   12.33
+  ]
+ },
+ "app_fit_kbhidden": {
+  "rows_pt": [
+   [
+    12.0,
+    139.33,
+    370.67,
+    8.33
+   ],
+   [
+    12.0,
+    157.0,
+    133.33,
+    8.33
+   ],
+   [
+    13.33,
+    173.0,
+    34.67,
+    9.67
+   ],
+   [
+    13.33,
+    190.33,
+    35.0,
+    10.0
+   ],
+   [
+    13.33,
+    206.0,
+    65.33,
+    14.0
+   ]
+  ],
+  "ruler_runs": 13,
+  "ruler_first_last_px": [
+   [
+    36,
+    124
+   ],
+   [
+    1104,
+    1148
+   ]
+  ],
+  "ruler_pitch_pt": 29.6667,
+  "ruler_extent_pt": [
+   12.0,
+   382.67
+  ],
+  "pitch_line2_line3_pt": 17.333,
+  "pitch_ruler1_ruler2_pt": 17.667,
+  "line2_ink_h_pt": 9.67,
+  "W_ink_h_pt": 8.33,
+  "text_ink_top5": "#D1D1D3",
+  "cursor_pt": [
+   71.33,
+   206.0,
+   7.33,
+   14.0
+  ],
+  "cursor_color": "#D0D0D3",
+  "prompt_row_pt": [
+   13.33,
+   206.0,
+   65.33,
+   14.0
+  ]
+ },
+ "app_wide_kbhidden": {
+  "rows_pt": [
+   [
+    12.0,
+    128.33,
+    376.33,
+    7.33
+   ],
+   [
+    12.0,
+    143.33,
+    64.67,
+    7.33
+   ],
+   [
+    13.0,
+    157.67,
+    30.33,
+    8.33
+   ],
+   [
+    13.0,
+    173.0,
+    30.67,
+    8.33
+   ],
+   [
+    13.0,
+    186.33,
+    57.33,
+    12.33
+   ]
+  ],
+  "ruler_runs": 1,
+  "ruler_first_last_px": [
+   [
+    36,
+    1165
+   ],
+   [
+    36,
+    1165
+   ]
+  ],
+  "pitch_line2_line3_pt": 15.333,
+  "pitch_ruler1_ruler2_pt": 15.0,
+  "line2_ink_h_pt": 8.33,
+  "W_ink_h_pt": 7.33,
+  "text_ink_top5": "#D0D0D2",
+  "cursor_pt": [
+   64.0,
+   186.67,
+   6.33,
+   12.0
+  ],
+  "cursor_color": "#D0D0D3",
+  "prompt_row_pt": [
+   13.0,
+   186.33,
+   57.33,
+   12.33
+  ]
+ },
+ "board_fit_kbo": {
+  "n_rows": 14,
+  "zero_fail_ink_h_pt": 9.67,
+  "zero_fail_top5": "#D1D1D6",
+  "last_row_bottom_pt": 512.0,
+  "pitch_from_prompt_rows_pt": 17.067,
+  "cursor_pt": [
+   135.0,
+   498.33,
+   7.0,
+   13.67
+  ],
+  "cursor_color": "#D1D1D6",
+  "prompt_row_pt": [
+   12.67,
+   498.33,
+   129.33,
+   13.67
+  ],
+  "M_row_ink_h_pt": 10.67
+ },
+ "board_wide_kbo": {
+  "n_rows": 14,
+  "zero_fail_ink_h_pt": 8.33,
+  "zero_fail_top5": "#D1D1D6",
+  "last_row_bottom_pt": 512.0,
+  "pitch_from_prompt_rows_pt": 14.867,
+  "cursor_pt": [
+   119.33,
+   500.0,
+   6.33,
+   12.0
+  ],
+  "cursor_color": "#D1D1D6",
+  "prompt_row_pt": [
+   12.67,
+   500.0,
+   113.0,
+   12.0
+  ],
+  "M_row_ink_h_pt": 9.0
+ },
+ "board_fit_kbc": {
+  "n_rows": 14,
+  "zero_fail_ink_h_pt": 9.67,
+  "zero_fail_top5": "#D1D1D6",
+  "last_row_bottom_pt": 748.0,
+  "pitch_from_prompt_rows_pt": 17.067,
+  "cursor_pt": [
+   135.0,
+   734.33,
+   7.0,
+   13.67
+  ],
+  "cursor_color": "#D1D1D6",
+  "prompt_row_pt": [
+   12.67,
+   734.33,
+   129.33,
+   13.67
+  ],
+  "M_row_ink_h_pt": 10.67
+ },
+ "board_wide_kbc": {
+  "n_rows": 14,
+  "zero_fail_ink_h_pt": 8.33,
+  "zero_fail_top5": "#D1D1D6",
+  "last_row_bottom_pt": 748.0,
+  "pitch_from_prompt_rows_pt": 14.867,
+  "cursor_pt": [
+   119.33,
+   736.0,
+   6.33,
+   12.0
+  ],
+  "cursor_color": "#D1D1D6",
+  "prompt_row_pt": [
+   12.67,
+   736.0,
+   113.0,
+   12.0
+  ],
+  "M_row_ink_h_pt": 9.0
+ }
+}

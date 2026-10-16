@@ -1,0 +1,57 @@
+b4 rows-left | design/b4-3x.png | rows | 14 120 40 700 | 30 0,0,0
+qm rows-left | app/q-menu.png | rows | 14 120 40 730 | 30 0,0,0
+qc rows-left | app/q-closed.png | rows | 14 120 40 730 | 30 0,0,0
+b4 strip | design/b4-3x.png | bbox | 0 676 390 42 | 12 0,0,0
+qc strip | app/q-closed.png | bbox | 0 706 402 42 | 12 0,0,0
+b4 strip-fill | design/b4-3x.png | color | 330 694 8 4
+qc strip-fill | app/q-closed.png | color | 330 724 8 4
+qm strip-fill | app/q-menu.png | color | 330 724 8 4
+b4 strip-cols | design/b4-3x.png | cols | 14 688 370 20 | 40 47,47,51
+qc strip-cols | app/q-closed.png | cols | 14 718 382 20 | 40 47,47,51
+b4 strip-spinner | design/b4-3x.png | bbox | 18 686 24 24 | 25 47,47,51
+qc strip-spinner | app/q-closed.png | bbox | 18 716 24 24 | 25 47,47,51
+b4 strip-text | design/b4-3x.png | bbox | 44 686 300 24 | 40 47,47,51
+qc strip-text | app/q-closed.png | bbox | 44 716 310 24 | 40 47,47,51
+b4 strip-text-ink | design/b4-3x.png | ink | 44 686 290 24 | 40 47,47,51
+qc strip-text-ink | app/q-closed.png | ink | 44 716 290 24 | 40 47,47,51
+b4 strip-more | design/b4-3x.png | bbox | 348 686 24 24 | 30 47,47,51
+qc strip-more | app/q-closed.png | bbox | 360 716 24 24 | 30 47,47,51
+b4 strip-more-ink | design/b4-3x.png | ink | 348 686 24 24 | 30 47,47,51
+qc strip-more-ink | app/q-closed.png | ink | 360 716 24 24 | 30 47,47,51
+b4 spinner-ink | design/b4-3x.png | ink | 18 686 24 24 | 25 47,47,51
+qc spinner-ink | app/q-closed.png | ink | 18 716 24 24 | 25 47,47,51
+b4 menu | design/b4-3x.png | bbox | 120 528 270 150 | 22 0,0,0
+qm menu-rows | app/q-menu.png | rows | 380 540 6 180 | 15 0,0,0
+b4 menu-rows | design/b4-3x.png | rows | 368 520 6 170 | 15 0,0,0
+b4 menu-left | design/b4-3x.png | cols | 100 640 60 1 | 15 0,0,0
+qm menu-left | app/q-menu.png | cols | 100 670 60 1 | 15 0,0,0
+b4 menu-fill | design/b4-3x.png | color | 300 620 10 4
+qm menu-fill | app/q-menu.png | color | 312 650 10 4
+b4 menu-fill2 | design/b4-3x.png | color | 300 580 10 4
+qm menu-fill2 | app/q-menu.png | color | 312 610 10 4
+b4 menu-seps | design/b4-3x.png | rows | 300 580 30 60 | 6 44,44,46
+qm menu-seps | app/q-menu.png | rows | 312 610 30 60 | 6 44,44,46
+b4 menu-labels | design/b4-3x.png | rows | 140 538 120 132 | 50 44,44,46
+qm menu-labels | app/q-menu.png | rows | 152 568 120 132 | 50 44,44,46
+b4 send-lbl | design/b4-3x.png | bbox | 140 540 100 22 | 50 44,44,46
+qm send-lbl | app/q-menu.png | bbox | 152 570 100 22 | 50 44,44,46
+b4 send-ink | design/b4-3x.png | ink | 140 540 100 22 | 50 44,44,46
+qm send-ink | app/q-menu.png | ink | 152 570 100 22 | 50 44,44,46
+b4 sub-lbl | design/b4-3x.png | bbox | 140 562 190 18 | 40 44,44,46
+qm sub-lbl | app/q-menu.png | bbox | 152 592 190 18 | 40 44,44,46
+b4 sub-ink | design/b4-3x.png | ink | 140 562 190 18 | 40 44,44,46
+qm sub-ink | app/q-menu.png | ink | 152 592 190 18 | 40 44,44,46
+b4 send-icon | design/b4-3x.png | bbox | 338 545 30 30 | 50 44,44,46
+qm send-icon | app/q-menu.png | bbox | 350 575 30 30 | 50 44,44,46
+b4 edit-lbl | design/b4-3x.png | bbox | 140 595 100 30 | 50 44,44,46
+qm edit-lbl | app/q-menu.png | bbox | 152 625 100 30 | 50 44,44,46
+b4 edit-icon | design/b4-3x.png | bbox | 338 595 30 30 | 50 44,44,46
+qm edit-icon | app/q-menu.png | bbox | 350 625 30 30 | 50 44,44,46
+b4 remove-lbl | design/b4-3x.png | bbox | 140 638 100 30 | 50 44,44,46
+qm remove-lbl | app/q-menu.png | bbox | 152 668 100 30 | 50 44,44,46
+b4 remove-ink | design/b4-3x.png | ink | 140 638 100 30 | 50 44,44,46
+qm remove-ink | app/q-menu.png | ink | 152 668 100 30 | 50 44,44,46
+b4 remove-icon | design/b4-3x.png | bbox | 338 638 30 30 | 50 44,44,46
+qm remove-icon | app/q-menu.png | bbox | 350 668 30 30 | 50 44,44,46
+qm send-pct | app/q-menu.png | pct | 152 570 100 22
+qm clock-ink | app/q-menu.png | ink | 40 18 60 26 | 60 0,0,0

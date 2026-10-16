@@ -1,0 +1,40 @@
+div [16,520,358,72] "Small forks wait for a transcript that is only written on the first tu" fs=17px fw=400 lh=24px ls=normal c=rgb(242, 242, 247) ff=-apple-syste ta=start lines=3 tb=[16,522,347.9,68] lineTops=522/546/570
+svg [16,608.5,17,17] stroke=currentColor sw=1.9 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=M4 20h4L19 9l-4-4L4 16z | M13.5 6.5l4 4
+span [41,608,313,18] "Edited 2 files" fs=15px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=start lines=1 tb=[41,608,91.8,18]
+svg [362,611,12,12] stroke=#636366 sw=2.8 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=M9 6l6 6-6 6
+svg [16,644.5,17,17] stroke=currentColor sw=1.9 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=M4 5h16v14H4zM8 10l3 2-3 2M13 15h3
+span [41,644,313,18] "Ran bun test src/sessions.test.ts" fs=15px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=start lines=1 tb=[41,644,229.4,18]
+svg [362,647,12,12] stroke=#636366 sw=2.8 fill=none c=rgb(161, 161, 166) vb=0 0 24 24 d=M9 6l6 6-6 6
+div [0,0,390,124] bgi=linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0))
+a [16,59,46,46] bg=rgba(44, 44, 46, 0.92) bt=1px rgba(255, 255, 255, 0.1) r=22px sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [29,72,20,20] stroke=#FFFFFF sw=2.4 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M15 5l-7 7 7 7
+span [110.1,63.5,169.8,20] "Fork session feature" fs=17px fw=600 lh=normal ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=start lines=1 tb=[110.1,63.5,169.8,20]
+span [89.8,90,7,7] bg=rgb(48, 209, 88) r=50% sh=rgba(48, 209, 88, 0.25) 0px 0px 0px 3px
+span [102.8,86.5,103.7,14] "Working · 3m 40s" fs=12px fw=600 lh=normal ls=normal c=rgb(48, 209, 88) ff=-apple-syste ta=start lines=1 tb=[102.8,86.5,103.7,14]
+span [212.5,86.5,87.7,14] "· Pro" fs=12px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=start lines=1 tb=[270.8,86.5,29.4,14]
+span [212.5,86.5,58.3,14] "· 1 queued" fs=12px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=start lines=1 tb=[212.5,86.5,58.3,14]
+a [328,59,46,46] bg=rgba(44, 44, 46, 0.92) bt=1px rgba(255, 255, 255, 0.1) r=22px sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [341,72,20,20] stroke=#FFFFFF sw=1.9 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M4 7h9M17 7h3M4 17h3M11 17h9 | circle(15 7 2.2) | circle(9 17 2.2)
+div [0,648,390,196] bgi=linear-gradient(rgba(0, 0, 0, 0), rgb(0, 0, 0) 30%)
+button [12,682,366,32] bg=rgba(118, 118, 128, 0.4) r=16px bdf=blur(12px) pad=0px 10px 0px 12px gap=8px
+svg [24,691.5,13,13] stroke=null sw=null fill=none c=rgb(0, 0, 0) vb=0 0 24 24 d=circle(12 12 9) s=#48484A | M12 3a9 9 0 0 1 9 9
+span [45,690.5,299,15] "also open the fork in a new window on desktop, not a tab" fs=13px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=left lines=2 tb=[45,690.5,348.3,15] lineTops=690.5
+svg [352,690,16,16] stroke=#8E8E93 sw=1.8 fill=none c=rgb(0, 0, 0) vb=0 0 24 24 d=circle(12 12 9) | circle(8 12 0.9) f=#8E8E93 | circle(12 12 0.9) f=#8E8E93 | circle(16 12 0.9) f=#8E8E93
+div [12,720,366,96] bg=rgb(28, 28, 30) bt=1px rgb(56, 56, 58) r=24px pad=11px 10px 10px 16px
+textarea [29,732,338,22] ph="Add to this turn…" fs=17px lh=22px c=rgb(255, 255, 255)
+svg [29,777,22,22] stroke=#A1A1A6 sw=1.7 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9
+span [59,774,116.6,28] "Opus 5.5 · High" fs=13px fw=500 lh=normal ls=normal c=rgb(209, 209, 214) ff=-apple-syste ta=start lines=1 tb=[69,780.5,96.6,15] bg=rgb(44, 44, 46) r=14px pad=0px 10px
+button [333,771,34,34] bg=rgb(242, 242, 247) r=17px
+span [344.5,782.5,11,11] bg=rgb(0, 0, 0) r=3px
+button [0,0,390,672]
+div [128,533,250,141] bg=rgba(44, 44, 46, 0.97) r=16px sh=rgba(0, 0, 0, 0.6) 0px 12px 40px 0px
+button [128,533,250,56] bb=1px rgb(72, 72, 74) pad=10px 16px gap=10px
+span [144,543,190,20] "Send now" fs=17px fw=400 lh=normal ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=left lines=1 tb=[144,543,78.5,20]
+span [144,563,190,15] "Stops the current step first" fs=13px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=left lines=1 tb=[144,563,165.1,15]
+svg [344,551.5,18,18] stroke=currentColor sw=2 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M12 19V5M5 12l7-7 7 7
+button [128,589,250,43] bb=1px rgb(72, 72, 74) pad=11px 16px gap=10px
+span [144,600,191,20] "Edit" fs=17px fw=400 lh=normal ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=left lines=1 tb=[144,600,31,20]
+svg [345,601.5,17,17] stroke=currentColor sw=2 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M4 20h4L19 9l-4-4L4 16z
+button [128,632,250,42] pad=11px 16px gap=10px
+span [144,643,191,20] "Remove" fs=17px fw=400 lh=normal ls=normal c=rgb(255, 69, 58) ff=-apple-syste ta=left lines=1 tb=[144,643,63.7,20]
+svg [345,644.5,17,17] stroke=currentColor sw=2 fill=none c=rgb(255, 69, 58) vb=0 0 24 24 d=M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13

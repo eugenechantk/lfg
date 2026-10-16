@@ -1,0 +1,16 @@
+s2-queued-failed.dc.html (menu open, default) — DOM bounds in board pt (zoom 3 / 3). tag:x,y,w,h|text
+div:73.3,538,300.7,40|list the top crawl (bubble 1 line)
+div:16,592,358,72|There are 3 crawl (prose 3 lines)
+header: title 106.35,63.17,177.29,20.33 ; dot 123.54,90.17,7,7 ; "Air offline · 2m" 136.54,86.5,86.56 ; "· inbox" 229.09,86.5,37.37
+div:0,648,390,196| (bottom fade, 30%)
+button:12,682,366,32| (strip, rowBg 0.40 open / 0.22 closed)
+svg:24,690.5,15,15| (alert) ; span:47,690.33,239.71,15.33|fix the redirect l ; span:294.71,690.83,49.29,14.33|Not sent ; svg:352,690,16,16| (more)
+div:12,720,366,96| (composer)
+span:28.33,733.33,339.33,20.33|Message · sends wh (placeholder span, padding-top 13)
+svg:28.33,777.67,22,22| (clip) ; span:58.33,774.67,135.67,28|GPT-6 Astra · Med ; span:333.67,771.67,34,34| (disabled send #3A3A3C) ; svg:342.67,780.67,16,16|
+button:0,0,390,672| (scrim)
+div:148,546.33,230,127.67| (menu card)
+button:148,546.33,230,42.67| ; span:164,557.33,42.54,20.33|Retry ; svg:345,559,17,17|
+button:148,589,230,42.67| ; span:164,600,171,20.33|Edit ; svg:345,601.67,17,17|
+button:148,631.67,230,42.33| ; span:164,642.67,51.84,20.33|Delete ; svg:345,644.33,17,17|
+Closed render: clicked the board's own "Close menu" button; tiles t2/t3 recaptured (b5c-3x.png = closed t2,t3 + open t1,t4,t5 which hold only header and empty right column).

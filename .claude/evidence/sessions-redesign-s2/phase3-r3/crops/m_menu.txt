@@ -1,0 +1,173 @@
+== vertical structure at x=22 (tiles, cards, separators)
+-- vscan x=22
+   board: [66.33, 75.67, 76.0, 77.0, 77.33, 77.67, 78.0, 79.33, 79.67, 81.33, 81.67, 82.67, 83.0, 100.33, 100.67, 169.33, 169.67, 186.33, 186.67, 255.33, 255.67, 279.33, 279.67, 316.33, 316.67, 364.67, 365.0, 407.33, 407.67, 450.0, 450.33, 487.0, 487.33, 512.0, 512.33, 549.0, 549.33, 586.0, 586.33]
+   app  : [65.61, 65.96, 75.33, 75.68, 76.03, 76.72, 77.07, 77.76, 78.8, 79.15, 80.89, 81.23, 81.58, 82.27, 82.62, 82.97, 100.33, 169.41, 255.5, 315.91, 316.6, 364.51, 364.85, 407.21, 407.9, 449.91, 450.25, 486.36, 548.15, 548.5, 584.6]
+== vertical structure at x=200 (separators, effort control)
+-- vscan x=200
+   board: [(274.0, [44, 44, 47]), (316.33, [56, 56, 58]), (316.67, [44, 44, 47]), (324.67, [58, 58, 59]), (356.67, [44, 44, 47]), (364.67, [56, 56, 58]), (365.0, [44, 44, 47]), (384.67, [87, 87, 90]), (385.0, [144, 144, 149]), (385.33, [160, 160, 165]), (392.33, [44, 44, 47]), (407.33, [56, 56, 58]), (407.67, [44, 44, 47]), (450.0, [56, 56, 58]), (450.33, [44, 44, 47]), (492.67, [28, 28, 30]), (506.67, [44, 44, 47]), (549.0, [56, 56, 58]), (549.33, [44, 44, 47]), (591.67, [28, 28, 30])]
+   app  : [(273.9, [42, 42, 45]), (315.91, [53, 53, 55]), (316.6, [42, 42, 45]), (324.59, [56, 56, 59]), (356.52, [42, 42, 45]), (364.51, [53, 53, 55]), (364.85, [41, 41, 44]), (407.21, [54, 54, 56]), (407.9, [44, 44, 46]), (449.91, [52, 52, 54]), (450.25, [44, 44, 46]), (492.26, [27, 27, 30]), (506.15, [41, 41, 44]), (548.15, [53, 53, 55]), (548.5, [42, 42, 45]), (590.5, [26, 26, 28])]
+== header
+-- title+subtitle rows (x 18..250)
+   board: [(25.33, 43.0, np.float64(21.67), np.float64(244.33)), (56.0, 69.0, np.float64(21.33), np.float64(250.0)), (72.67, 85.67, np.float64(20.67), np.float64(115.67))]
+   app  : [(26.04, 43.39, np.float64(21.52), np.float64(249.95)), (55.54, 68.39, np.float64(21.18), np.float64(248.56)), (72.55, 85.4, np.float64(20.83), np.float64(113.17))]
+-- pencil btn bbox
+   board: (np.float64(240.0), np.float64(20.0), np.float64(283.33), np.float64(50.0))
+   app  : (np.float64(239.88), np.float64(19.79), np.float64(265.92), np.float64(49.99))
+-- pencil glyph bbox
+   board: (np.float64(263.0), np.float64(30.33), np.float64(273.0), np.float64(40.33))
+   app  : None
+-- title ink x-extent (x 18..250, y 24..46)
+   board: (np.float64(21.67), np.float64(25.33), np.float64(244.33), np.float64(43.0))
+   app  : (np.float64(21.52), np.float64(26.04), np.float64(249.95), np.float64(43.05))
+-- close btn bbox (right region)
+   board: (np.float64(338.0), np.float64(15.0), np.float64(386.0), np.float64(56.0))
+   app  : (np.float64(349.93), np.float64(14.93), np.float64(397.83), np.float64(55.89))
+   right inset board 4.0  app 4.17
+-- close glyph
+   board: (np.float64(351.67), np.float64(33.67), np.float64(360.33), np.float64(42.33))
+   app  : (np.float64(363.81), np.float64(33.67), np.float64(372.15), np.float64(42.01))
+== tiles
+-- tile r0 c0 bbox
+   board: (np.float64(12.0), np.float64(92.0), np.float64(134.0), np.float64(178.0))
+   app  : (np.float64(12.15), np.float64(91.99), np.float64(138.17), np.float64(178.09))
+--    icon bbox
+   board: (np.float64(30.67), np.float64(109.67), np.float64(47.33), np.float64(124.33))
+   app  : (np.float64(30.9), np.float64(109.35), np.float64(47.21), np.float64(124.28))
+--    label rows
+   board: [(150.67, 161.67, np.float64(28.67), np.float64(84.67))]
+   app  : [(150.32, 161.42, np.float64(28.47), np.float64(83.32))]
+-- tile r0 c1 bbox
+   board: (np.float64(134.0), np.float64(92.0), np.float64(256.0), np.float64(178.0))
+   app  : (np.float64(138.17), np.float64(91.99), np.float64(263.83), np.float64(178.09))
+--    icon bbox
+   board: (np.float64(154.67), np.float64(107.33), np.float64(168.0), np.float64(126.67))
+   app  : (np.float64(158.65), np.float64(107.27), np.float64(172.19), np.float64(126.36))
+--    label rows
+   board: [(150.67, 161.67, np.float64(151.0), np.float64(229.33))]
+   app  : [(150.32, 161.42, np.float64(155.18), np.float64(231.2))]
+--    badge bbox
+   board: (np.float64(221.67), np.float64(100.0), np.float64(250.0), np.float64(126.0))
+   app  : (np.float64(229.81), np.float64(99.98), np.float64(257.93), np.float64(125.67))
+-- tile r0 c2 bbox
+   board: (np.float64(256.0), np.float64(92.0), np.float64(378.0), np.float64(178.0))
+   app  : (np.float64(263.83), np.float64(91.99), np.float64(389.85), np.float64(178.09))
+--    icon bbox
+   board: (np.float64(274.67), np.float64(107.67), np.float64(291.33), np.float64(126.33))
+   app  : (np.float64(282.93), np.float64(107.62), np.float64(299.24), np.float64(126.36))
+--    label rows
+   board: [(151.0, 164.0, np.float64(272.67), np.float64(343.67))]
+   app  : [(150.66, 163.85, np.float64(280.5), np.float64(350.27))]
+--    badge bbox
+   board: (np.float64(344.0), np.float64(100.0), np.float64(372.0), np.float64(126.0))
+   app  : (np.float64(356.18), np.float64(99.98), np.float64(383.95), np.float64(125.67))
+-- tile r1 c0 bbox
+   board: (np.float64(12.0), np.float64(178.0), np.float64(134.0), np.float64(264.0))
+   app  : (np.float64(12.15), np.float64(178.09), np.float64(138.17), np.float64(263.83))
+--    icon bbox
+   board: (np.float64(30.67), np.float64(194.0), np.float64(47.33), np.float64(210.33))
+   app  : (np.float64(30.9), np.float64(193.71), np.float64(47.21), np.float64(210.37))
+--    label rows
+   board: [(236.67, 250.0, np.float64(28.67), np.float64(72.67))]
+   app  : [(236.41, 249.95, np.float64(28.81), np.float64(71.86))]
+-- tile r1 c1 bbox
+   board: (np.float64(134.0), np.float64(178.0), np.float64(256.0), np.float64(264.0))
+   app  : (np.float64(154.83), np.float64(194.4), np.float64(208.29), np.float64(249.95))
+--    icon bbox
+   board: (np.float64(151.67), np.float64(194.67), np.float64(170.33), np.float64(209.33))
+   app  : (np.float64(156.22), np.float64(195.1), np.float64(173.92), np.float64(208.98))
+--    label rows
+   board: [(220.33, 230.67, np.float64(151.0), np.float64(205.0)), (236.67, 238.67, np.float64(180.67), np.float64(182.67)), (239.67, 250.0, np.float64(151.0), np.float64(202.33))]
+   app  : [(220.44, 230.16, np.float64(155.52), np.float64(207.6)), (236.76, 238.15, np.float64(184.34), np.float64(185.73)), (239.88, 249.25, np.float64(155.52), np.float64(204.82))]
+-- tile r1 c2 bbox
+   board: (np.float64(256.0), np.float64(178.0), np.float64(378.0), np.float64(264.0))
+   app  : (np.float64(263.83), np.float64(178.09), np.float64(389.85), np.float64(263.83))
+--    icon bbox
+   board: (np.float64(277.33), np.float64(193.33), np.float64(288.67), np.float64(212.67))
+   app  : (np.float64(285.36), np.float64(193.02), np.float64(296.47), np.float64(212.46))
+--    label rows
+   board: [(220.0, 230.67, np.float64(273.0), np.float64(317.67)), (236.67, 238.67, np.float64(302.67), np.float64(304.67)), (239.67, 250.0, np.float64(273.0), np.float64(324.33))]
+   app  : [(220.09, 230.51, np.float64(280.84), np.float64(324.59)), (236.41, 238.49, np.float64(310.01), np.float64(312.09)), (239.53, 249.95, np.float64(280.84), np.float64(331.53))]
+== card 1 rows
+-- Model left cols (x 24..170)
+   board: [(33.33, 45.33, np.float64(289.33), np.float64(301.33)), (47.67, 56.0, np.float64(292.0), np.float64(301.67)), (57.67, 66.0, np.float64(288.67), np.float64(301.67))]
+   app  : [(33.33, 45.48, np.float64(289.18), np.float64(301.33)), (47.21, 55.54, np.float64(291.95), np.float64(301.33)), (56.59, 65.26, np.float64(288.48), np.float64(301.33))]
+-- Model left rows
+   board: [(288.67, 301.67, np.float64(33.33), np.float64(80.0))]
+   app  : [(288.48, 301.33, np.float64(33.33), np.float64(78.46))]
+-- Effort left cols (x 24..170)
+   board: [(33.33, 41.0, np.float64(335.0), np.float64(347.0)), (42.67, 47.67, np.float64(334.33), np.float64(347.0)), (48.67, 54.0, np.float64(334.33), np.float64(347.0))]
+   app  : [(33.33, 40.96, np.float64(334.31), np.float64(346.46)), (42.01, 47.21, np.float64(333.61), np.float64(346.46)), (47.56, 53.11, np.float64(333.61), np.float64(346.46))]
+-- Effort left rows
+   board: [(334.33, 347.33, np.float64(33.33), np.float64(76.33))]
+   app  : [(333.61, 346.8, np.float64(33.33), np.float64(73.94))]
+-- Host left cols (x 24..170)
+   board: [(33.33, 43.33, np.float64(380.33), np.float64(392.33)), (45.33, 54.0, np.float64(383.0), np.float64(392.67)), (55.67, 62.67, np.float64(383.0), np.float64(392.67))]
+   app  : [(33.33, 43.39, np.float64(380.13), np.float64(392.28)), (44.78, 53.46, np.float64(382.91), np.float64(392.63)), (54.5, 61.79, np.float64(382.91), np.float64(392.63))]
+-- Host left rows
+   board: [(380.33, 392.67, np.float64(33.33), np.float64(69.0))]
+   app  : [(380.13, 392.63, np.float64(33.33), np.float64(67.35))]
+-- Fork left cols (x 24..170)
+   board: [(34.0, 48.0, np.float64(421.33), np.float64(436.67)), (61.33, 69.0, np.float64(423.0), np.float64(435.0)), (70.67, 79.0, np.float64(425.67), np.float64(435.33))]
+   app  : [(34.02, 47.91, np.float64(421.09), np.float64(436.72)), (61.45, 69.08, np.float64(422.83), np.float64(435.33)), (69.78, 78.46, np.float64(425.61), np.float64(435.33))]
+-- Fork left rows
+   board: [(421.33, 436.67, np.float64(34.0), np.float64(150.0))]
+   app  : [(421.09, 436.72, np.float64(34.02), np.float64(149.97))]
+-- Mark left cols (x 24..170)
+   board: [(36.67, 45.67, np.float64(467.0), np.float64(476.0)), (61.33, 73.33, np.float64(465.67), np.float64(477.67)), (75.67, 83.0, np.float64(468.33), np.float64(478.0))]
+   app  : [(36.8, 45.82, np.float64(466.57), np.float64(476.29)), (61.45, 73.6, np.float64(465.53), np.float64(477.68)), (74.98, 82.62, np.float64(468.31), np.float64(477.68))]
+-- Mark left rows
+   board: [(465.0, 478.0, np.float64(36.67), np.float64(150.0))]
+   app  : [(464.83, 477.68, np.float64(36.8), np.float64(149.27))]
+-- Model right side cols
+   board: [(237.0, 255.0, np.float64(286.33), np.float64(304.33)), (266.0, 277.0, np.float64(289.0), np.float64(301.67)), (279.33, 287.67, np.float64(292.0), np.float64(304.33)), (289.67, 297.0, np.float64(292.33), np.float64(301.67)), (299.33, 306.33, np.float64(292.0), np.float64(301.67)), (313.33, 321.67, np.float64(289.33), np.float64(301.67)), (323.33, 325.67, np.float64(299.33), np.float64(301.33)), (327.67, 336.0, np.float64(289.33), np.float64(301.67))]
+   app  : [(252.38, 270.78, np.float64(285.7), np.float64(304.1)), (281.19, 292.3, np.float64(288.83), np.float64(301.67)), (294.38, 302.72, np.float64(291.95), np.float64(304.1)), (304.1, 311.74, np.float64(291.95), np.float64(301.33)), (313.13, 320.42, np.float64(291.95), np.float64(301.33)), (326.32, 334.65, np.float64(289.18), np.float64(301.67)), (336.04, 338.47, np.float64(298.9), np.float64(301.33)), (339.86, 348.19, np.float64(289.18), np.float64(301.67)), (363.12, 363.81, np.float64(292.3), np.float64(298.2)), (364.16, 364.85, np.float64(292.99), np.float64(296.12)), (365.2, 365.9, np.float64(295.42), np.float64(296.12))]
+-- Host right side cols
+   board: [(311.33, 320.0, np.float64(380.33), np.float64(392.33)), (322.0, 327.0, np.float64(383.0), np.float64(392.33)), (327.67, 336.0, np.float64(383.0), np.float64(392.67))]
+   app  : [(339.86, 348.19, np.float64(382.91), np.float64(392.28)), (363.12, 363.81, np.float64(383.25), np.float64(388.81)), (364.16, 365.9, np.float64(383.95), np.float64(388.11))]
+-- Host value bbox
+   board: (np.float64(153.33), np.float64(379.67), np.float64(336.0), np.float64(395.67))
+   app  : (np.float64(173.23), np.float64(379.44), np.float64(348.19), np.float64(395.4))
+-- chevron Model
+   board: (np.float64(371.67), np.float64(284.0), np.float64(372.0), np.float64(284.67))
+   app  : (np.float64(383.6), np.float64(283.97), np.float64(383.95), np.float64(284.32))
+-- chevron Host
+   board: None
+   app  : None
+-- effort track hscan y=341
+   board: [158.0, 173.0, 173.33, 342.33, 358.0, 374.0]
+   app  : [157.26, 172.19, 172.53, 354.09, 370.06, 386.03]
+-- effort track vscan x=150/162
+   board: [364.67]
+   app  : [364.51]
+== card 2 + footer
+-- Stop cols
+   board: [(35.67, 46.67, np.float64(522.33), np.float64(533.33)), (61.0, 70.0, np.float64(521.67), np.float64(534.33)), (71.33, 76.33, np.float64(522.67), np.float64(534.0))]
+   app  : [(35.41, 46.87, np.float64(521.42), np.float64(532.53)), (60.75, 70.12, np.float64(520.73), np.float64(533.57)), (70.47, 75.68, np.float64(521.77), np.float64(533.22))]
+-- Stop rows
+   board: [(521.67, 537.0, np.float64(35.67), np.float64(196.33))]
+   app  : [(520.73, 536.35, np.float64(35.41), np.float64(189.54))]
+-- End cols
+   board: [(33.33, 48.67, np.float64(563.0), np.float64(578.33)), (61.33, 69.0, np.float64(564.67), np.float64(576.67)), (71.33, 79.0, np.float64(567.33), np.float64(576.67))]
+   app  : [(33.33, 48.6, np.float64(562.04), np.float64(576.96)), (61.45, 69.43, np.float64(563.77), np.float64(576.27)), (70.82, 78.46, np.float64(566.55), np.float64(576.27))]
+-- End rows
+   board: [(563.0, 578.33, np.float64(33.33), np.float64(154.67))]
+   app  : [(562.04, 576.96, np.float64(33.33), np.float64(149.97))]
+-- footer rows
+   board: [(608.33, 620.33, np.float64(36.67), np.float64(353.67))]
+   app  : [(607.17, 619.32, np.float64(38.53), np.float64(363.81))]
+   footer centre board 195.17 of 195.0  app 201.17 of 201.0  width board 317.0  app 325.28
+== colours (sample / peak)
+   sheet bg: board [28, 28, 30]  app [26, 26, 28]
+   tile fill: board [44, 44, 47]  app [42, 42, 45]
+   card fill: board [44, 44, 47]  app [42, 42, 45]
+   close fill: board [58, 58, 59]  app [56, 56, 59]
+   pencil fill: board [255, 255, 255]  app [56, 56, 59]
+   subtitle peak: board [161, 161, 166]  app [171, 171, 173]
+   tile icon peak (blue): board [65, 156, 255]  app [55, 158, 255]
+   Fork label peak: board [65, 156, 255]  app [65, 151, 255]
+   End label peak: board [255, 69, 59]  app [255, 68, 56]
+   Opus value peak: board [161, 161, 166]  app [173, 173, 175]
+   C badge: board [181, 86, 47]  app [180, 84, 45]
+   footer peak: board [161, 161, 166]  app [172, 172, 174]
+   effort selected: board [99, 99, 102]  app [97, 97, 100]  track: board [44, 44, 47]  app [42, 42, 45]
+   browser tile dimmed icon peak: board [65, 156, 255]  app [30, 54, 83]

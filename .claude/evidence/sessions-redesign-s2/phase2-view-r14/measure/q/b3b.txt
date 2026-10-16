@@ -1,0 +1,22 @@
+# Board 3 refinements: step pitch in s1, card -> pills, top edge
+s1 edit-label | app/s1.png | bbox | 38 314 100 30 | 40 0,0,0
+s1 ran-label | app/s1.png | bbox | 38 350 33 30 | 40 0,0,0
+s1 edit-chev | app/s1.png | bbox | 370 314 20 30 | 30 0,0,0
+qd edit-icon | app/q-dismissed.png | bbox | 12 588 26 30 | 40 0,0,0
+qd ran-icon | app/q-dismissed.png | bbox | 12 624 26 30 | 40 0,0,0
+qd edit-label | app/q-dismissed.png | bbox | 38 588 100 30 | 40 0,0,0
+qd ran-label | app/q-dismissed.png | bbox | 38 624 33 30 | 40 0,0,0
+qc ran-label-ran | app/q-closed.png | bbox | 38 624 33 30 | 40 0,0,0
+s1 pill-top | app/s1.png | rows | 60 655 30 60 | 12 0,0,0
+qc pill-top | app/q-closed.png | rows | 60 640 30 60 | 12 0,0,0
+b3 pill-top | design/b3-3x.png | rows | 60 625 30 95 | 12 0,0,0
+b3 edited-after-card | design/b3-3x.png | bbox | 12 626 26 40 | 40 0,0,0
+s1 top-edge | app/s1.png | rows | 190 100 30 30 | 30 0,0,0
+s1 top-edge-a | app/s1.png | color | 200 112 20 1
+s1 top-edge-b | app/s1.png | color | 200 116 20 1
+s1 top-edge-c | app/s1.png | color | 200 120 20 1
+s1 top-edge-d | app/s1.png | color | 200 124 20 1
+s1 top-edge-e | app/s1.png | color | 200 128 20 1
+s1 top-edge-f | app/s1.png | color | 200 132 20 1
+s1 top-edge-g | app/s1.png | color | 200 140 20 1
+b3 top-area | design/b3-3x.png | bbox | 0 106 390 130 | 8 0,0,0

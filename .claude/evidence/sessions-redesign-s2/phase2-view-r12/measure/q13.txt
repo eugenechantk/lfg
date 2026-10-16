@@ -1,0 +1,23 @@
+w pill-top-1 | app/w.png | pct | 140 702.67 40 0.34
+w pill-top-2 | app/w.png | pct | 140 703.00 40 0.34
+w pill-top-3 | app/w.png | pct | 140 703.33 40 0.34
+w pill-top-4 | app/w.png | pct | 140 703.67 40 0.34
+w pill-top-5 | app/w.png | pct | 140 704.00 40 0.34
+w pill-top-6 | app/w.png | pct | 140 704.33 40 0.34
+w pill-top-7 | app/w.png | pct | 140 704.67 40 0.34
+w pill-bot-1 | app/w.png | pct | 140 739.00 40 0.34
+w pill-bot-2 | app/w.png | pct | 140 739.33 40 0.34
+w pill-bot-3 | app/w.png | pct | 140 739.67 40 0.34
+w pill-bot-4 | app/w.png | pct | 140 740.00 40 0.34
+w pill-bot-5 | app/w.png | pct | 140 740.33 40 0.34
+w pill-bot-6 | app/w.png | pct | 140 740.67 40 0.34
+w pill-rows-lowthr | app/w.png | rows | 140 695 40 52 | 6 0,0,0
+b1 pill-rows-lowthr | design/b1-3x.png | rows | 140 665 40 52 | 6 0,0,0
+w pill-left-cols | app/w.png | cols | 10 721 20 1 | 6 0,0,0
+b1 pill-left-cols | design/b1-3x.png | cols | 10 690 20 1 | 6 0,0,0
+qc pill-rows | app/q-closed.png | rows | 60 655 40 55 | 6 0,0,0
+qc pill-cols | app/q-closed.png | cols | 10 684 250 1 | 6 0,0,0
+w pills-cols | app/w.png | cols | 10 722 392 1 | 6 0,0,0
+b1 pills-cols | design/b1-3x.png | cols | 10 691 380 1 | 6 0,0,0
+w composer-rows | app/w.png | rows | 200 745 20 106 | 6 0,0,0
+b1 composer-rows | design/b1-3x.png | rows | 200 715 20 106 | 6 0,0,0

@@ -1,0 +1,7 @@
+w clock-ink | app/w.png | ink | 40 18 60 26 | 60 0,0,0
+w clock-pct | app/w.png | pct | 40 18 60 26
+w title-ink | app/w.png | ink | 120 64 162 18 | 60 0,0,0
+w backchev-ink | app/w.png | ink | 28 70 22 26 | 60 39,39,39
+w pill-label-ink | app/w.png | ink | 54 711 72 22 | 60 28,28,30
+q title-ink | app/question.png | ink | 90 64 230 18 | 60 0,0,0
+q clock-ink | app/question.png | ink | 40 18 60 26 | 60 0,0,0

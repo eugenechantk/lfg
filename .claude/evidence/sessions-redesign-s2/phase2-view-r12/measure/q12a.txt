@@ -1,0 +1,9 @@
+b6q rows-left | design/b6q-3x.png | rows | 14 120 40 724 | 30 0,0,0
+qq rows-left | app/question.png | rows | 14 120 40 754 | 30 0,0,0
+b6q panel | design/b6q-3x.png | bbox | 0 415 390 429 | 12 0,0,0
+qq panel | app/question.png | bbox | 0 445 402 429 | 12 0,0,0
+b6q panel-fill | design/b6q-3x.png | color | 200 470 10 5
+qq panel-fill | app/question.png | color | 200 520 10 5
+b6q panel-border | design/b6q-3x.png | pct | 150 426 100 0.34
+qq panel-top-rows | app/question.png | rows | 150 470 100 20 | 8 0,0,0
+b6q panel-inner-rows | design/b6q-3x.png | rows | 20 432 350 400 | 30 28,28,30

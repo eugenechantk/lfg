@@ -1,0 +1,38 @@
+s2-view.dc.html — DOM bounds in board pt (queried at zoom 3, divided by 3). tag|x,y,w,h|text
+div|56,378,318,84|when i tap fork on (bubble, 3 lines in Chrome)
+div|16,476,358,24|I'll trace how for
+button|16,514,358,22| (Read step)
+svg|16,516.5,17,17|
+span|41,516,313,18|Read 6 files, ran
+svg|362,519,12,12| (chevron)
+div|16,550,358,72|Small forks wait f
+svg|16,638.5,17,17|
+span|41,638,313,18|Edited 2 files
+svg|362,641,12,12|
+div|0,0,390,124| (top fade)
+a|16,59.67,44.67,44.67| (back)
+svg|28.33,72,20,20|
+span|110.11,63.17,169.77,20.33|Fork session feature
+span|109.56,90.17,7,7| (dot)
+span|122.56,86.5,101.1,14.33|Working · 3m 12s
+span|229.66,86.5,50.79,14.33|· Pro · lfg
+a|329.33,59.67,44.67,44.67| (tools)
+svg|341.67,72,20,20|
+div|0,648,390,196| (bottom fade)
+a|16,673.33,269.17,36.67| (Subagents pill)
+svg|24.33,680.67,22,22|
+span|54.33,683.33,72.22,16.67|Subagents
+span|134.55,683.33,62.09,16.67|1 running
+span|204.64,683.33,68.2,16.67|· 3/4 done
+a|293.17,673.33,92.15,36.67|Files
+svg|305.51,684.17,15,15|
+span|363.76,683.33,9.23,16.67|4
+a|393.32,673.33,103.41,36.67|Terminal
+svg|405.66,684.17,15,15|
+div|12,720,366,96| (composer)
+textarea|28.33,731.33,339.33,22|Add to this turn…
+svg|28.33,777.67,22,22| (paperclip)
+span|58.33,774.67,130.64,28|Opus 5.5 · High (chip)
+svg|169.97,784.17,9,9| (chip chevron)
+button|333.67,771.67,34,34| (Stop)
+span|345.17,783.17,11,11| (Stop square)

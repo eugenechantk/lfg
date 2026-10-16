@@ -1,0 +1,23 @@
+# Question panel header row; app offset +54 (panel top 428.67 -> 483)
+b6q dot | design/b6q-3x.png | bbox | 20 448 20 20 | 30 28,28,30
+question dot | app/question.png | bbox | 20 502 20 20 | 30 26,26,28
+b6q dot-core | design/b6q-3x.png | bbox | 20 448 20 20 | 150 28,28,30
+question dot-core | app/question.png | bbox | 20 502 20 20 | 150 26,26,28
+b6q dot-ink | design/b6q-3x.png | ink | 20 448 20 20 | 150 28,28,30
+question dot-ink | app/question.png | ink | 20 502 20 20 | 150 26,26,28
+b6q ring-ink | design/b6q-3x.png | color | 22 459 1 2
+question ring-ink | app/question.png | color | 22 513 1 2
+b6q label | design/b6q-3x.png | bbox | 38 446 160 22 | 40 28,28,30
+question label | app/question.png | bbox | 38 500 160 22 | 40 26,26,28
+b6q label-ink | design/b6q-3x.png | ink | 38 446 160 22 | 40 28,28,30
+question label-ink | app/question.png | ink | 38 500 160 22 | 40 26,26,28
+b6q dismiss | design/b6q-3x.png | bbox | 280 440 100 36 | 8 28,28,30
+question dismiss | app/question.png | bbox | 292 494 100 36 | 8 26,26,28
+b6q dismiss-text | design/b6q-3x.png | bbox | 296 448 64 20 | 60 44,44,46
+question dismiss-text | app/question.png | bbox | 308 502 64 20 | 60 42,42,45
+b6q dismiss-ink | design/b6q-3x.png | ink | 296 448 64 20 | 60 44,44,46
+question dismiss-ink | app/question.png | ink | 308 502 64 20 | 60 42,42,45
+b6q dismiss-fill | design/b6q-3x.png | color | 293 456 3 4
+question dismiss-fill | app/question.png | color | 305 510 3 4
+b6q panel-top-border | design/b6q-3x.png | pct | 150 428.67 100 0.34
+question panel-top-border | app/question.png | pct | 150 483 100 0.34

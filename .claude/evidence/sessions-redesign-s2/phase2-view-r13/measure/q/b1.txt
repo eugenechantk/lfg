@@ -1,0 +1,91 @@
+# Board 1 (s2-view) vs app/w.png. Expected app = board + (0|+12 right, +2 header | +30 bottom)
+b1 title | design/b1-3x.png | bbox | 90 60 210 26 | 60 0,0,0
+w title | app/w.png | bbox | 90 62 222 26 | 60 0,0,0
+b1 status | design/b1-3x.png | bbox | 90 84 210 18 | 30 0,0,0
+w status | app/w.png | bbox | 90 86 222 18 | 30 0,0,0
+b1 status-cols | design/b1-3x.png | cols | 90 84 210 18 | 30 0,0,0
+w status-cols | app/w.png | cols | 90 86 222 18 | 30 0,0,0
+b1 dot-rows | design/b1-3x.png | rows | 104 84 16 18 | 15 0,0,0
+w dot-rows | app/w.png | rows | 108 86 16 18 | 15 0,0,0
+b1 dot-core | design/b1-3x.png | bbox | 104 84 16 18 | 100 0,0,0
+w dot-core | app/w.png | bbox | 108 86 16 18 | 100 0,0,0
+b1 status-green | design/b1-3x.png | ink | 120 84 110 18 | 60 0,0,0
+w status-green | app/w.png | ink | 124 86 110 18 | 60 0,0,0
+b1 status-grey | design/b1-3x.png | ink | 228 84 60 18 | 40 0,0,0
+w status-grey | app/w.png | ink | 236 86 70 18 | 40 0,0,0
+b1 bubble | design/b1-3x.png | bbox | 40 370 345 100 | 40 0,0,0
+w bubble | app/w.png | bbox | 40 420 357 80 | 40 0,0,0
+b1 bubble-text | design/b1-3x.png | bbox | 60 380 310 80 | 60 9,110,224
+w bubble-text | app/w.png | bbox | 60 430 322 60 | 60 6,108,222
+b1 bubble-fill | design/b1-3x.png | color | 300 440 40 10
+w bubble-fill | app/w.png | color | 300 470 40 10
+b1 prose1 | design/b1-3x.png | bbox | 10 474 370 28 | 60 0,0,0
+w prose1 | app/w.png | bbox | 10 504 382 28 | 60 0,0,0
+b1 step1-icon | design/b1-3x.png | bbox | 12 512 26 26 | 40 0,0,0
+w step1-icon | app/w.png | bbox | 12 542 26 26 | 40 0,0,0
+b1 step1-label | design/b1-3x.png | bbox | 38 512 250 26 | 40 0,0,0
+w step1-label | app/w.png | bbox | 38 542 250 26 | 40 0,0,0
+b1 step1-label-ink | design/b1-3x.png | ink | 38 512 250 26 | 40 0,0,0
+w step1-label-ink | app/w.png | ink | 38 542 250 26 | 40 0,0,0
+b1 step1-chev | design/b1-3x.png | bbox | 350 512 30 26 | 30 0,0,0
+w step1-chev | app/w.png | bbox | 362 542 30 26 | 30 0,0,0
+b1 step1-chev-ink | design/b1-3x.png | ink | 350 512 30 26 | 30 0,0,0
+w step1-chev-ink | app/w.png | ink | 362 542 30 26 | 30 0,0,0
+b1 prose2-rows | design/b1-3x.png | rows | 10 548 370 76 | 60 0,0,0
+w prose2-rows | app/w.png | rows | 10 578 382 76 | 60 0,0,0
+b1 prose2-cols | design/b1-3x.png | bbox | 10 548 370 76 | 60 0,0,0
+w prose2-cols | app/w.png | bbox | 10 578 382 76 | 60 0,0,0
+b1 step2-icon | design/b1-3x.png | bbox | 12 634 26 26 | 40 0,0,0
+w step2-icon | app/w.png | bbox | 12 664 26 26 | 40 0,0,0
+b1 step2-label | design/b1-3x.png | bbox | 38 634 250 26 | 40 0,0,0
+w step2-label | app/w.png | bbox | 38 664 250 26 | 40 0,0,0
+b1 step2-chev | design/b1-3x.png | bbox | 350 634 30 26 | 30 0,0,0
+w step2-chev | app/w.png | bbox | 362 664 30 26 | 30 0,0,0
+b1 pill1 | design/b1-3x.png | bbox | 10 666 283 50 | 12 0,0,0
+w pill1 | app/w.png | bbox | 10 696 283 50 | 12 0,0,0
+b1 pills-cols | design/b1-3x.png | cols | 0 690 390 2 | 12 0,0,0
+w pills-cols | app/w.png | cols | 0 720 402 2 | 12 0,0,0
+b1 pill1-ring | design/b1-3x.png | bbox | 20 676 32 30 | 40 28,28,30
+w pill1-ring | app/w.png | bbox | 20 706 32 30 | 40 28,28,30
+b1 pill1-text-cols | design/b1-3x.png | cols | 52 680 236 22 | 40 28,28,30
+w pill1-text-cols | app/w.png | cols | 52 710 236 22 | 40 28,28,30
+b1 pill1-text-rows | design/b1-3x.png | rows | 52 680 236 22 | 40 28,28,30
+w pill1-text-rows | app/w.png | rows | 52 710 236 22 | 40 28,28,30
+b1 pill1-label-ink | design/b1-3x.png | ink | 55 680 72 22 | 60 28,28,30
+w pill1-label-ink | app/w.png | ink | 55 710 72 22 | 60 28,28,30
+b1 pill1-running-ink | design/b1-3x.png | ink | 135 680 62 22 | 60 28,28,30
+w pill1-running-ink | app/w.png | ink | 132 710 62 22 | 60 28,28,30
+b1 pill1-done-ink | design/b1-3x.png | ink | 212 680 62 22 | 40 28,28,30
+w pill1-done-ink | app/w.png | ink | 210 710 62 22 | 40 28,28,30
+b1 pill-fill | design/b1-3x.png | color | 240 674 20 4
+w pill-fill | app/w.png | color | 240 704 20 4
+b1 pill2-icon | design/b1-3x.png | bbox | 302 678 26 26 | 60 28,28,30
+w pill2-icon | app/w.png | bbox | 300 708 26 26 | 60 28,28,30
+b1 composer | design/b1-3x.png | bbox | 4 714 382 108 | 12 0,0,0
+w composer | app/w.png | bbox | 4 744 394 108 | 12 0,0,0
+b1 comp-fill | design/b1-3x.png | color | 200 760 40 6
+w comp-fill | app/w.png | color | 200 790 40 6
+b1 placeholder | design/b1-3x.png | bbox | 20 726 300 32 | 40 28,28,30
+w placeholder | app/w.png | bbox | 20 756 300 32 | 40 28,28,30
+b1 placeholder-ink | design/b1-3x.png | ink | 20 726 300 32 | 40 28,28,30
+w placeholder-ink | app/w.png | ink | 20 756 300 32 | 40 28,28,30
+b1 clip | design/b1-3x.png | bbox | 24 772 32 32 | 40 28,28,30
+w clip | app/w.png | bbox | 24 802 32 32 | 40 28,28,30
+b1 clip-ink | design/b1-3x.png | ink | 24 772 32 32 | 40 28,28,30
+w clip-ink | app/w.png | ink | 24 802 32 32 | 40 28,28,30
+b1 chip | design/b1-3x.png | bbox | 56 768 160 40 | 8 28,28,30
+w chip | app/w.png | bbox | 56 798 160 40 | 8 28,28,30
+b1 chip-text | design/b1-3x.png | bbox | 62 776 105 24 | 60 44,44,46
+w chip-text | app/w.png | bbox | 62 806 105 24 | 60 44,44,46
+b1 chip-chev | design/b1-3x.png | bbox | 166 778 18 18 | 60 44,44,46
+w chip-chev | app/w.png | bbox | 166 808 18 18 | 60 44,44,46
+b1 chip-ink | design/b1-3x.png | ink | 62 776 105 24 | 60 44,44,46
+w chip-ink | app/w.png | ink | 62 806 105 24 | 60 44,44,46
+b1 chip-fill | design/b1-3x.png | color | 62 772 4 4
+w chip-fill | app/w.png | color | 62 802 4 4
+b1 stop | design/b1-3x.png | bbox | 325 764 52 48 | 40 28,28,30
+w stop | app/w.png | bbox | 337 794 52 48 | 40 28,28,30
+b1 stop-fill | design/b1-3x.png | color | 337 785 4 4
+w stop-fill | app/w.png | color | 349 815 4 4
+b1 stop-square | design/b1-3x.png | bbox | 338 776 24 24 | 60 242,242,247
+w stop-square | app/w.png | bbox | 350 806 24 24 | 60 242,242,247

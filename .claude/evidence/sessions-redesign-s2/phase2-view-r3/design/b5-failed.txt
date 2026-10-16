@@ -1,0 +1,34 @@
+div [73.3,538,300.7,40] "list the top crawl errors for lfg.app" fs=17px fw=400 lh=22px ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=start lines=1 tb=[87.3,548,272.7,20] bg=rgb(10, 110, 224) r=20px pad=9px 14px
+div [16,592,358,72] "There are 3 crawl errors. Two are 404s from old release notes, and one" fs=17px fw=400 lh=24px ls=normal c=rgb(242, 242, 247) ff=-apple-syste ta=start lines=3 tb=[16,594,352.5,68] lineTops=594/618/642
+div [0,0,390,124] bgi=linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0))
+a [16,59,46,46] bg=rgba(44, 44, 46, 0.92) bt=1px rgba(255, 255, 255, 0.1) r=22px sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [29,72,20,20] stroke=#FFFFFF sw=2.4 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M15 5l-7 7 7 7
+span [106.3,63.5,177.3,20] "Search Console audit" fs=17px fw=600 lh=normal ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=start lines=1 tb=[106.3,63.5,177.3,20]
+span [123.5,90,7,7] bg=rgb(255, 159, 10) r=50%
+span [136.5,86.5,86.6,14] "Air offline · 2m" fs=12px fw=600 lh=normal ls=normal c=rgb(255, 159, 10) ff=-apple-syste ta=start lines=1 tb=[136.5,86.5,86.6,14]
+span [229.1,86.5,37.4,14] "· inbox" fs=12px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=start lines=1 tb=[229.1,86.5,37.4,14]
+a [328,59,46,46] bg=rgba(44, 44, 46, 0.92) bt=1px rgba(255, 255, 255, 0.1) r=22px sh=rgba(0, 0, 0, 0.5) 0px 2px 12px 0px
+svg [341,72,20,20] stroke=#FFFFFF sw=1.9 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M4 7h9M17 7h3M4 17h3M11 17h9 | circle(15 7 2.2) | circle(9 17 2.2)
+div [0,648,390,196] bgi=linear-gradient(rgba(0, 0, 0, 0), rgb(0, 0, 0) 30%)
+button [12,682,366,32] bg=rgba(118, 118, 128, 0.4) r=16px bdf=blur(12px) pad=0px 10px 0px 12px gap=8px
+svg [24,690.5,15,15] stroke=null sw=null fill=null c=rgb(0, 0, 0) vb=0 0 24 24 d=circle(12 12 10) f=#FF453A | M12 7v6 | circle(12 16.8 1.4) f=#FFFFFF
+span [47,690.5,239.7,15] "fix the redirect loop first, then the 404s" fs=13px fw=400 lh=normal ls=normal c=rgb(161, 161, 166) ff=-apple-syste ta=left lines=2 tb=[47,690.5,241.4,15] lineTops=690.5
+span [294.7,691,49.3,14] "Not sent" fs=12px fw=500 lh=normal ls=normal c=rgb(255, 105, 97) ff=-apple-syste ta=left lines=1 tb=[294.7,691,49.3,14]
+svg [352,690,16,16] stroke=#8E8E93 sw=1.8 fill=none c=rgb(0, 0, 0) vb=0 0 24 24 d=circle(12 12 9) | circle(8 12 0.9) f=#8E8E93 | circle(12 12 0.9) f=#8E8E93 | circle(16 12 0.9) f=#8E8E93
+div [12,720,366,96] bg=rgb(28, 28, 30) bt=1px rgb(56, 56, 58) r=24px pad=13px 10px 10px 16px
+span [29,734,338,20] "Message · sends when Air is back" fs=17px fw=400 lh=normal ls=normal c=rgb(142, 142, 147) ff=-apple-syste ta=start lines=1 tb=[29,734,269.9,20]
+svg [29,777,22,22] stroke=#A1A1A6 sw=1.7 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9
+span [59,774,135.7,28] "GPT-6 Astra · Med" fs=13px fw=500 lh=normal ls=normal c=rgb(209, 209, 214) ff=-apple-syste ta=start lines=1 tb=[69,780.5,115.7,15] bg=rgb(44, 44, 46) r=14px pad=0px 10px
+span [333,771,34,34] bg=rgb(58, 58, 60) r=17px
+svg [342,780,16,16] stroke=#8E8E93 sw=3 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M12 19V5M5 12l7-7 7 7
+button [0,0,390,672]
+div [148,546,230,128] bg=rgba(44, 44, 46, 0.97) r=16px sh=rgba(0, 0, 0, 0.6) 0px 12px 40px 0px
+button [148,546,230,43] bb=1px rgb(72, 72, 74) pad=11px 16px gap=10px
+span [164,557,42.5,20] "Retry" fs=17px fw=400 lh=normal ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=left lines=1 tb=[164,557,42.5,20]
+svg [345,558.5,17,17] stroke=currentColor sw=2.2 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M20 12a8 8 0 1 1-2.3-5.6 | M20 4v5h-5
+button [148,589,230,43] bb=1px rgb(72, 72, 74) pad=11px 16px gap=10px
+span [164,600,171,20] "Edit" fs=17px fw=400 lh=normal ls=normal c=rgb(255, 255, 255) ff=-apple-syste ta=left lines=1 tb=[164,600,31,20]
+svg [345,601.5,17,17] stroke=currentColor sw=2 fill=none c=rgb(255, 255, 255) vb=0 0 24 24 d=M4 20h4L19 9l-4-4L4 16z
+button [148,632,230,42] pad=11px 16px gap=10px
+span [164,643,51.8,20] "Delete" fs=17px fw=400 lh=normal ls=normal c=rgb(255, 69, 58) ff=-apple-syste ta=left lines=1 tb=[164,643,51.8,20]
+svg [345,644.5,17,17] stroke=currentColor sw=2 fill=none c=rgb(255, 69, 58) vb=0 0 24 24 d=M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13

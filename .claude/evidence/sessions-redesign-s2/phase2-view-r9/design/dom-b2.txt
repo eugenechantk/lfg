@@ -1,0 +1,29 @@
+s2-tools-group.dc.html — DOM bounds in board pt (zoom 3 / 3). tag|x,y,w,h|text
+div|16,178,358,24|I'll trace how for (prose)
+button|16,214,358,22| (group header)
+svg|16,216.5,17,17|
+span|41,216,238.79,18|Read 4 files, ran
+span|287.79,217.83,66.21,14.33|6 steps · 9s
+svg|362,219,12,12| (down chevron)
+button|39.33,242,334.67,26.67| (call row 1)
+svg|39.33,248.33,14,14|
+span|61.33,247,25.04,16.67|Ran
+span|94.38,248,263.4,14.67|rg -n "forkSession
+span|331.69,248.17,24.31,14.33|0.4s
+svg|364,250.33,10,10|
+button|39.33,270.67,334.67,26.67| (call row 2, open)
+svg|39.33,277,14,14|
+span|61.33,275.67,33.27,16.67|Read
+span|102.6,276.67,195.67,14.67|ios/LFG/SessionSto
+span|333.85,276.83,22.15,14.33|0.1s
+svg|364,279,10,10|
+div|39.33,301.33,334.67,236| (card)
+span|51.67,311.67,24.54,13|File (label)
+span|51.67,331.67,308.55,31.67|ios/LFG/SessionSto (input, 2 lines)
+span|51.67,374.67,106.38,13|Result · 61 lines (label)
+div|51.67,393.67,310,112| (output box)
+span|61.67,403,...,13.33|1611 ... (6 lines, 16 pitch)
+span|51.67,511.67,100.77,15.33|Show all 61 lines
+button|39.33,545.33,334.67,26.67| (call row 3)
+... rows at 28.67 pitch: 574, 602.67, 631.33
+rail: margin-left 8 => x 24..25.5 ; rows start x 39.33

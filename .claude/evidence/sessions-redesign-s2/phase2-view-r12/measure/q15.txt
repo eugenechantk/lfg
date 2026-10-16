@@ -1,0 +1,68 @@
+qq panel-inner-rows | app/question.png | rows | 20 488 362 375 | 30 26,26,28
+b6q panel-inner-rows | design/b6q-3x.png | rows | 20 432 350 400 | 30 28,28,30
+b6q dot-ring | design/b6q-3x.png | bbox | 18 446 22 26 | 30 28,28,30
+qq dot-ring | app/question.png | bbox | 18 502 22 26 | 30 26,26,28
+b6q dot-core | design/b6q-3x.png | bbox | 18 446 22 26 | 150 28,28,30
+qq dot-core | app/question.png | bbox | 18 502 22 26 | 150 26,26,28
+b6q dot-core-col | design/b6q-3x.png | color | 28 459 2 2
+qq dot-core-col | app/question.png | color | 28 514 2 2
+b6q dot-ring-col | design/b6q-3x.png | color | 25 451.5 1 1
+qq dot-ring-col | app/question.png | color | 25 507 1 1
+b6q hdr-label | design/b6q-3x.png | bbox | 39 448 200 22 | 40 28,28,30
+qq hdr-label | app/question.png | bbox | 39 503 200 22 | 40 26,26,28
+b6q hdr-label-ink | design/b6q-3x.png | ink | 39 448 140 22 | 40 28,28,30
+qq hdr-label-ink | app/question.png | ink | 39 503 140 22 | 40 26,26,28
+b6q hdr-label-cols | design/b6q-3x.png | cols | 39 448 100 22 | 40 28,28,30
+qq hdr-label-cols | app/question.png | cols | 39 503 100 22 | 40 26,26,28
+b6q dismiss | design/b6q-3x.png | bbox | 280 440 90 36 | 8 28,28,30
+qq dismiss | app/question.png | bbox | 290 497 92 36 | 8 26,26,28
+b6q dismiss-text | design/b6q-3x.png | bbox | 295 450 66 18 | 50 44,44,46
+qq dismiss-text | app/question.png | bbox | 307 505 66 18 | 50 42,42,44
+b6q dismiss-ink | design/b6q-3x.png | ink | 295 450 66 18 | 50 44,44,46
+qq dismiss-ink | app/question.png | ink | 307 505 66 18 | 50 42,42,44
+qq dismiss-fill | app/question.png | color | 304 514 2 2
+b6q dismiss-fill | design/b6q-3x.png | color | 292 459 2 2
+b6q title1 | design/b6q-3x.png | bbox | 22 488 345 26 | 60 28,28,30
+qq title1 | app/question.png | bbox | 22 543 357 26 | 60 26,26,28
+b6q title-ink | design/b6q-3x.png | ink | 22 488 300 26 | 60 28,28,30
+qq title-ink | app/question.png | ink | 22 543 300 26 | 60 26,26,28
+b6q sub | design/b6q-3x.png | bbox | 22 540 345 42 | 40 28,28,30
+qq sub | app/question.png | bbox | 22 568 357 42 | 40 26,26,28
+b6q sub-ink | design/b6q-3x.png | ink | 22 540 345 42 | 40 28,28,30
+qq sub-ink | app/question.png | ink | 22 568 357 42 | 40 26,26,28
+b6q opts-rows | design/b6q-3x.png | rows | 320 585 10 175 | 8 28,28,30
+qq opts-rows | app/question.png | rows | 332 614 10 175 | 8 26,26,28
+b6q opts-lr | design/b6q-3x.png | cols | 10 617 380 1 | 8 28,28,30
+qq opts-lr | app/question.png | cols | 10 646 392 1 | 8 26,26,28
+b6q opt-fill | design/b6q-3x.png | color | 300 600 4 4
+qq opt-fill | app/question.png | color | 312 630 4 4
+b6q num1 | design/b6q-3x.png | bbox | 39 603 24 24 | 50 44,44,46
+qq num1 | app/question.png | bbox | 39 634 24 24 | 50 42,42,44
+b6q num-ink | design/b6q-3x.png | ink | 39 603 24 24 | 50 44,44,46
+qq num-ink | app/question.png | ink | 39 634 24 24 | 50 42,42,44
+b6q opt1-lbl | design/b6q-3x.png | bbox | 70 603 200 26 | 50 44,44,46
+qq opt1-lbl | app/question.png | bbox | 70 633 200 26 | 50 42,42,44
+b6q opt1-ink | design/b6q-3x.png | ink | 70 603 200 26 | 50 44,44,46
+qq opt1-ink | app/question.png | ink | 70 633 200 26 | 50 42,42,44
+b6q field | design/b6q-3x.png | rows | 150 758 30 56 | 15 28,28,30
+qq field | app/question.png | rows | 150 788 30 56 | 15 26,26,28
+b6q field-lr | design/b6q-3x.png | cols | 10 786 380 1 | 15 28,28,30
+qq field-lr | app/question.png | cols | 10 816 392 1 | 15 26,26,28
+b6q field-border | design/b6q-3x.png | pct | 150 765 30 0.34
+qq field-border | app/question.png | pct | 150 794 30 1
+b6q field-ph | design/b6q-3x.png | bbox | 38 774 200 26 | 40 28,28,30
+qq field-ph | app/question.png | bbox | 38 804 200 26 | 40 26,26,28
+b6q field-ph-ink | design/b6q-3x.png | ink | 38 774 200 26 | 40 28,28,30
+qq field-ph-ink | app/question.png | ink | 38 804 200 26 | 40 26,26,28
+b6q field-send | design/b6q-3x.png | bbox | 320 766 42 42 | 20 28,28,30
+qq field-send | app/question.png | bbox | 332 796 42 42 | 20 26,26,28
+b6q field-send-fill | design/b6q-3x.png | color | 330 786 2 2
+qq field-send-fill | app/question.png | color | 342 816 2 2
+b6q field-arrow | design/b6q-3x.png | bbox | 330 776 24 22 | 60 72,72,74
+qq field-arrow | app/question.png | bbox | 342 806 24 22 | 60 72,72,74
+b6q prose-ink | design/b6q-3x.png | ink | 10 366 380 46 | 40 0,0,0
+qq prose-ink | app/question.png | ink | 10 420 392 46 | 40 0,0,0
+b6q step | design/b6q-3x.png | cols | 10 332 380 22 | 30 0,0,0
+qq step | app/question.png | cols | 10 383 392 22 | 30 0,0,0
+b6q bubble | design/b6q-3x.png | bbox | 100 275 290 54 | 40 0,0,0
+qq bubble | app/question.png | bbox | 100 325 302 54 | 40 0,0,0

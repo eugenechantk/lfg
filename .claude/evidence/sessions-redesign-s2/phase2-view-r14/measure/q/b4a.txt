@@ -1,0 +1,129 @@
+# Board 4 (s2-queued) vs app q-menu / q-closed. Expected app = board + (+2 header | +30 bottom-anchored | +12 right-anchored)
+b4 title | design/b4-3x.png | bbox | 90 58 210 28 | 60 0,0,0
+qm title | app/q-menu.png | bbox | 90 60 222 28 | 60 0,0,0
+b4 title-ink | design/b4-3x.png | ink | 90 58 210 28 | 60 0,0,0
+qm title-ink | app/q-menu.png | ink | 90 60 222 28 | 60 0,0,0
+qm clock-ink | app/q-menu.png | ink | 40 10 70 30 | 60 0,0,0
+b4 status | design/b4-3x.png | bbox | 80 84 230 18 | 30 0,0,0
+qm status | app/q-menu.png | bbox | 80 86 242 18 | 30 0,0,0
+b4 status-cols | design/b4-3x.png | cols | 80 84 230 18 | 30 0,0,0
+qm status-cols | app/q-menu.png | cols | 80 86 242 18 | 30 0,0,0
+b4 dot-core | design/b4-3x.png | bbox | 84 84 20 18 | 100 0,0,0
+qm dot-core | app/q-menu.png | bbox | 84 86 25 18 | 100 0,0,0
+b4 dot-glow | design/b4-3x.png | bbox | 84 84 20 18 | 15 0,0,0
+qm dot-glow | app/q-menu.png | bbox | 84 86 25 18 | 15 0,0,0
+b4 status-green | design/b4-3x.png | ink | 100 84 110 18 | 60 0,0,0
+qm status-green | app/q-menu.png | ink | 104 86 110 18 | 60 0,0,0
+b4 status-grey | design/b4-3x.png | ink | 212 84 95 18 | 40 0,0,0
+qm status-grey | app/q-menu.png | ink | 220 86 95 18 | 40 0,0,0
+b4 status-text-rows | design/b4-3x.png | rows | 100 84 210 18 | 60 0,0,0
+qm status-text-rows | app/q-menu.png | rows | 104 86 220 18 | 60 0,0,0
+# transcript, left of the menu
+b4 prose-rows | design/b4-3x.png | rows | 10 515 112 80 | 60 0,0,0
+qc prose-rows | app/q-closed.png | rows | 10 500 112 110 | 60 0,0,0
+b4 prose-x | design/b4-3x.png | bbox | 10 515 112 80 | 60 0,0,0
+qc prose-x | app/q-closed.png | bbox | 10 500 112 110 | 60 0,0,0
+b4 prose-ink | design/b4-3x.png | ink | 10 515 112 80 | 60 0,0,0
+qc prose-ink | app/q-closed.png | ink | 10 500 112 110 | 60 0,0,0
+b4 edit-icon | design/b4-3x.png | bbox | 12 600 26 32 | 40 0,0,0
+qc edit-icon | app/q-closed.png | bbox | 12 588 26 30 | 40 0,0,0
+qm edit-icon | app/q-menu.png | bbox | 12 588 26 30 | 40 0,0,0
+b4 edit-label | design/b4-3x.png | bbox | 38 600 86 32 | 40 0,0,0
+qc edit-label | app/q-closed.png | bbox | 38 588 100 30 | 40 0,0,0
+qm edit-label | app/q-menu.png | bbox | 38 588 100 30 | 40 0,0,0
+b4 ran-icon | design/b4-3x.png | bbox | 12 636 26 32 | 40 0,0,0
+qc ran-icon | app/q-closed.png | bbox | 12 624 26 30 | 40 0,0,0
+qm ran-icon | app/q-menu.png | bbox | 12 624 26 30 | 40 0,0,0
+b4 ran-label | design/b4-3x.png | bbox | 38 636 86 32 | 40 0,0,0
+qc ran-label | app/q-closed.png | bbox | 38 624 100 30 | 40 0,0,0
+qm ran-label | app/q-menu.png | bbox | 38 624 100 30 | 40 0,0,0
+qc ran-label-full | app/q-closed.png | bbox | 38 624 300 30 | 40 0,0,0
+qc ran-dur | app/q-closed.png | bbox | 330 624 30 30 | 40 0,0,0
+qc edit-chev | app/q-closed.png | bbox | 362 588 28 30 | 30 0,0,0
+qc ran-chev | app/q-closed.png | bbox | 362 624 28 30 | 30 0,0,0
+b4 icon-ink | design/b4-3x.png | ink | 12 600 26 32 | 40 0,0,0
+qc icon-ink | app/q-closed.png | ink | 12 588 26 30 | 40 0,0,0
+b4 label-ink | design/b4-3x.png | ink | 38 600 86 32 | 40 0,0,0
+qc label-ink | app/q-closed.png | ink | 38 588 100 30 | 40 0,0,0
+qc chev-ink | app/q-closed.png | ink | 362 588 28 30 | 30 0,0,0
+qc dur-ink | app/q-closed.png | ink | 330 624 30 30 | 40 0,0,0
+# pills (app only, accepted) and strip
+qc pills-rows | app/q-closed.png | rows | 14 655 4 50 | 12 0,0,0
+qc pills-cols | app/q-closed.png | cols | 0 680 402 2 | 12 0,0,0
+b4 strip-rows | design/b4-3x.png | rows | 200 640 10 80 | 20 0,0,0
+qm strip-rows | app/q-menu.png | rows | 212 670 10 80 | 20 0,0,0
+qc strip-rows | app/q-closed.png | rows | 212 700 10 50 | 12 0,0,0
+b4 strip-cols | design/b4-3x.png | cols | 0 696 390 2 | 12 0,0,0
+qm strip-cols | app/q-menu.png | cols | 0 726 402 2 | 12 0,0,0
+b4 strip-fill | design/b4-3x.png | color | 200 684 30 3
+qm strip-fill | app/q-menu.png | color | 212 714 30 3
+qc strip-fill | app/q-closed.png | color | 212 714 30 3
+b4 spinner | design/b4-3x.png | bbox | 20 686 22 24 | 30 47,47,51
+qm spinner | app/q-menu.png | bbox | 20 716 22 24 | 30 47,47,51
+b4 strip-text | design/b4-3x.png | bbox | 42 686 304 24 | 40 47,47,51
+qm strip-text | app/q-menu.png | bbox | 42 716 316 24 | 40 47,47,51
+b4 strip-text-ink | design/b4-3x.png | ink | 42 686 304 24 | 40 47,47,51
+qm strip-text-ink | app/q-menu.png | ink | 42 716 316 24 | 40 47,47,51
+b4 more | design/b4-3x.png | bbox | 348 686 26 24 | 30 47,47,51
+qm more | app/q-menu.png | bbox | 360 716 26 24 | 30 47,47,51
+b4 more-ink | design/b4-3x.png | ink | 348 686 26 24 | 30 47,47,51
+qm more-ink | app/q-menu.png | ink | 360 716 26 24 | 30 47,47,51
+# menu
+b4 menu-cols | design/b4-3x.png | cols | 100 668 290 2 | 20 0,0,0
+qm menu-cols | app/q-menu.png | cols | 100 698 302 2 | 20 0,0,0
+b4 menu-fill | design/b4-3x.png | color | 240 615 40 6
+qm menu-fill | app/q-menu.png | color | 252 645 40 6
+b4 menu-inner-rows | design/b4-3x.png | rows | 144 538 200 132 | 60 44,44,46
+qm menu-inner-rows | app/q-menu.png | rows | 156 568 200 132 | 60 44,44,46
+b4 sep-rows | design/b4-3x.png | rows | 330 580 10 60 | 12 44,44,46
+qm sep-rows | app/q-menu.png | rows | 342 610 10 60 | 12 44,44,46
+b4 sendnow | design/b4-3x.png | bbox | 140 540 120 24 | 60 44,44,46
+qm sendnow | app/q-menu.png | bbox | 152 570 120 24 | 60 44,44,46
+b4 sendnow-ink | design/b4-3x.png | ink | 140 540 120 24 | 60 44,44,46
+qm sendnow-ink | app/q-menu.png | ink | 152 570 120 24 | 60 44,44,46
+b4 sub | design/b4-3x.png | bbox | 140 563 190 18 | 40 44,44,46
+qm sub | app/q-menu.png | bbox | 152 593 190 18 | 40 44,44,46
+b4 sub-ink | design/b4-3x.png | ink | 140 563 190 18 | 40 44,44,46
+qm sub-ink | app/q-menu.png | ink | 152 593 190 18 | 40 44,44,46
+b4 edit | design/b4-3x.png | bbox | 140 596 80 28 | 60 44,44,46
+qm edit | app/q-menu.png | bbox | 152 626 80 28 | 60 44,44,46
+b4 remove | design/b4-3x.png | bbox | 140 638 100 30 | 60 44,44,46
+qm remove | app/q-menu.png | bbox | 152 668 100 30 | 60 44,44,46
+b4 remove-ink | design/b4-3x.png | ink | 140 638 100 30 | 60 44,44,46
+qm remove-ink | app/q-menu.png | ink | 152 668 100 30 | 60 44,44,46
+b4 arrow | design/b4-3x.png | bbox | 338 546 30 30 | 60 44,44,46
+qm arrow | app/q-menu.png | bbox | 350 576 30 30 | 60 44,44,46
+b4 pencil | design/b4-3x.png | bbox | 338 594 30 30 | 60 44,44,46
+qm pencil | app/q-menu.png | bbox | 350 624 30 30 | 60 44,44,46
+b4 trash | design/b4-3x.png | bbox | 338 637 30 30 | 60 44,44,46
+qm trash | app/q-menu.png | bbox | 350 667 30 30 | 60 44,44,46
+b4 trash-ink | design/b4-3x.png | ink | 338 637 30 30 | 60 44,44,46
+qm trash-ink | app/q-menu.png | ink | 350 667 30 30 | 60 44,44,46
+# composer
+b4 composer | design/b4-3x.png | bbox | 4 716 382 106 | 12 0,0,0
+qm composer | app/q-menu.png | bbox | 4 746 394 106 | 12 0,0,0
+b4 comp-fill | design/b4-3x.png | color | 200 760 40 6
+qm comp-fill | app/q-menu.png | color | 212 790 40 6
+b4 placeholder | design/b4-3x.png | bbox | 20 726 300 32 | 40 28,28,30
+qm placeholder | app/q-menu.png | bbox | 20 756 300 32 | 40 28,28,30
+b4 placeholder-ink | design/b4-3x.png | ink | 20 726 300 32 | 40 28,28,30
+qm placeholder-ink | app/q-menu.png | ink | 20 756 300 32 | 40 28,28,30
+b4 clip | design/b4-3x.png | bbox | 24 772 32 32 | 40 28,28,30
+qm clip | app/q-menu.png | bbox | 24 802 32 32 | 40 28,28,30
+b4 clip-ink | design/b4-3x.png | ink | 24 772 32 32 | 40 28,28,30
+qm clip-ink | app/q-menu.png | ink | 24 802 32 32 | 40 28,28,30
+b4 chip | design/b4-3x.png | bbox | 56 768 160 40 | 8 28,28,30
+qm chip | app/q-menu.png | bbox | 56 798 160 40 | 8 28,28,30
+b4 chip-text | design/b4-3x.png | bbox | 62 776 110 24 | 60 44,44,46
+qm chip-text | app/q-menu.png | bbox | 62 806 105 24 | 60 44,44,46
+qm chip-chev | app/q-menu.png | bbox | 166 808 18 18 | 60 44,44,46
+b4 chip-ink | design/b4-3x.png | ink | 62 776 105 24 | 60 44,44,46
+qm chip-ink | app/q-menu.png | ink | 62 806 105 24 | 60 44,44,46
+b4 chip-fill | design/b4-3x.png | color | 62 772 4 4
+qm chip-fill | app/q-menu.png | color | 62 802 4 4
+b4 stop | design/b4-3x.png | bbox | 325 764 52 48 | 40 28,28,30
+qm stop | app/q-menu.png | bbox | 337 794 52 48 | 40 28,28,30
+b4 stop-fill | design/b4-3x.png | color | 337 785 4 4
+qm stop-fill | app/q-menu.png | color | 349 815 4 4
+b4 stop-square | design/b4-3x.png | bbox | 338 776 24 24 | 60 242,242,247
+qm stop-square | app/q-menu.png | bbox | 350 806 24 24 | 60 242,242,247

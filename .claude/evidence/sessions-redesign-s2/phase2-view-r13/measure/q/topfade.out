@@ -1,0 +1,17 @@
+s1 r110: median (0, 0, 0) #000000
+s1 r112: median (0, 0, 0) #000000
+s1 r114: median (0, 0, 0) #000000
+s1 r116: median (14, 35, 59) #0E233B
+s1 r118: median (5, 75, 158) #054B9E
+s1 r120: median (8, 83, 173) #0853AD
+s1 r122: median (24, 94, 187) #185EBB
+s1 r124: median (86, 135, 204) #5687CC
+s1 r126: median (62, 110, 210) #3E6ED2
+s1 r130: median (6, 108, 220) #066CDC
+s1 r135: median (6, 108, 222) #066CDE
+g2 r110: median (0, 0, 0) #000000
+g2 r114: median (0, 0, 0) #000000
+g2 r118: median (0, 0, 0) #000000
+g2 r122: median (0, 0, 0) #000000
+g2 r126: median (24, 24, 26) #18181A
+g2 r130: median (26, 26, 28) #1A1A1C

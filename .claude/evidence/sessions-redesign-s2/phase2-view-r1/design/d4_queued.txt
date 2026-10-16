@@ -1,0 +1,36 @@
+div |  | 0 | 0 | 390 | 844 |  |  | rgb(0, 0, 0) |  |  |  | 
+div | Small forks wait for a transcript that | 16 | 520 | 358 | 72 | 17px/24px/400/lsnormal | rgb(242, 242, 247) op1 |  |  |  |  | none clip normal
+svg |  | 16 | 608.5 | 17 | 17 |  |  |  |  |  |  | 
+span | Edited 2 files | 41 | 608 | 313 | 18 | 15px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none clip normal
+svg |  | 362 | 611 | 12 | 12 |  |  |  |  |  |  | 
+svg |  | 16 | 644.5 | 17 | 17 |  |  |  |  |  |  | 
+span | Ran bun test src/sessions.test.ts | 41 | 644 | 313 | 18 | 15px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none clip normal
+svg |  | 362 | 647 | 12 | 12 |  |  |  |  |  |  | 
+div |  | 0 | 0 | 390 | 124 |  |  | rgba(0, 0, 0, 0) linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0)) |  |  |  | 
+a |  | 16 | 59 | 46 | 46 |  |  | rgba(44, 44, 46, 0.92) | 22px | bt1px rgba(255, 255, 255, 0.1) |  | 
+svg |  | 29 | 72 | 20 | 20 |  |  |  |  |  |  | 
+span | Fork session feature | 110.1 | 63.5 | 169.8 | 20 | 17px/normal/600/lsnormal | rgb(255, 255, 255) op1 |  |  |  |  | none clip normal
+span |  | 89.8 | 90 | 7 | 7 |  |  | rgb(48, 209, 88) | 50% |  |  | 
+span | Working · 3m 40s | 102.8 | 86.5 | 103.7 | 14 | 12px/normal/600/lsnormal | rgb(48, 209, 88) op1 |  |  |  |  | none clip nowrap
+span | · Pro | 212.5 | 86.5 | 87.7 | 14 | 12px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none clip nowrap
+span | · 1 queued | 212.5 | 86.5 | 58.3 | 14 | 12px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none clip nowrap
+a |  | 328 | 59 | 46 | 46 |  |  | rgba(44, 44, 46, 0.92) | 22px | bt1px rgba(255, 255, 255, 0.1) |  | 
+svg |  | 341 | 72 | 20 | 20 |  |  |  |  |  |  | 
+div |  | 0 | 648 | 390 | 196 |  |  | rgba(0, 0, 0, 0) linear-gradient(rgba(0, 0, 0, 0), rgb(0, 0, 0) 30%) |  |  |  | 
+button |  | 12 | 682 | 366 | 32 |  |  | rgba(118, 118, 128, 0.4) | 16px |  |  | 
+svg |  | 24 | 691.5 | 13 | 13 |  |  |  |  |  |  | 
+span | also open the fork in a new window on  | 45 | 690.5 | 299 | 15 | 13px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none ellipsis nowrap
+svg |  | 352 | 690 | 16 | 16 |  |  |  |  |  |  | 
+div |  | 12 | 720 | 366 | 96 |  |  | rgb(28, 28, 30) | 24px | bt1px rgb(56, 56, 58) |  | 
+svg |  | 29 | 777 | 22 | 22 |  |  |  |  |  |  | 
+span | Opus 5.5 · High | 59 | 774 | 116.6 | 28 | 13px/normal/500/lsnormal | rgb(209, 209, 214) op1 | rgb(44, 44, 46) | 14px |  |  | none clip normal
+button |  | 333 | 771 | 34 | 34 |  |  | rgb(242, 242, 247) | 17px |  |  | 
+span |  | 344.5 | 782.5 | 11 | 11 |  |  | rgb(0, 0, 0) | 3px |  |  | 
+div |  | 128 | 533 | 250 | 141 |  |  | rgba(44, 44, 46, 0.97) | 16px |  |  | 
+span | Send now | 144 | 543 | 190 | 20 | 17px/normal/400/lsnormal | rgb(255, 255, 255) op1 |  |  |  |  | none clip normal
+span | Stops the current step first | 144 | 563 | 190 | 15 | 13px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none clip normal
+svg |  | 344 | 551.5 | 18 | 18 |  |  |  |  |  |  | 
+span | Edit | 144 | 600 | 191 | 20 | 17px/normal/400/lsnormal | rgb(255, 255, 255) op1 |  |  |  |  | none clip normal
+svg |  | 345 | 601.5 | 17 | 17 |  |  |  |  |  |  | 
+span | Remove | 144 | 643 | 191 | 20 | 17px/normal/400/lsnormal | rgb(255, 69, 58) op1 |  |  |  |  | none clip normal
+svg |  | 345 | 644.5 | 17 | 17 |  |  |  |  |  |  | 

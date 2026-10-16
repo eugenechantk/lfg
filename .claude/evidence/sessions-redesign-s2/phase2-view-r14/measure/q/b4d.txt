@@ -1,0 +1,14 @@
+# Board 4: spinner ring, background dimming while the menu is open
+b4 spinner-ring | design/b4-3x.png | bbox | 20 686 22 24 | 25
+qm spinner-ring | app/q-menu.png | bbox | 20 716 22 24 | 25
+qc spinner-ring | app/q-closed.png | bbox | 20 716 22 24 | 25
+b4 spinner-mode | design/b4-3x.png | mode | 20 686 22 24
+qm spinner-mode | app/q-menu.png | mode | 20 716 22 24
+b4 spinner-track-ink | design/b4-3x.png | ink | 22 700 6 6 | 20
+qm spinner-ink | app/q-menu.png | ink | 20 716 22 24 | 25
+b4 spinner-arc-ink | design/b4-3x.png | ink | 30 690 8 8 | 25
+qm prose-ink | app/q-menu.png | ink | 10 500 112 75 | 60 0,0,0
+qc prose-ink2 | app/q-closed.png | ink | 10 500 112 75 | 60 0,0,0
+qm editlabel-ink | app/q-menu.png | ink | 38 588 100 30 | 40 0,0,0
+qm bubble-fill | app/q-menu.png | color | 200 395 40 6
+qc bubble-fill | app/q-closed.png | color | 200 395 40 6

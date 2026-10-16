@@ -1,0 +1,7 @@
+# Board 4: full spinner ring (track included) and strip fill at mid-height
+b4 spinner-ring15 | design/b4-3x.png | bbox | 20 686 22 24 | 15
+qm spinner-ring15 | app/q-menu.png | bbox | 20 716 22 24 | 15
+qm spinner-track-ink | app/q-menu.png | ink | 22 730 5 5 | 15
+b4 strip-mid | design/b4-3x.png | color | 341 694 10 8
+qm strip-mid | app/q-menu.png | color | 353 724 10 8
+qc strip-mid | app/q-closed.png | color | 353 724 10 8

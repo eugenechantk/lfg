@@ -1,0 +1,15 @@
+s2-queued.dc.html (menu open, default state) — DOM bounds in board pt (zoom 3 / 3). tag:x,y,w,h|text
+div:16,520,358,72|Small forks wait f (prose)
+svg:16,608.5,17,17| ; span:41,608,313,18|Edited 2 files ; svg:362,611,12,12|
+svg:16,644.5,17,17| ; span:41,644,313,18|Ran bun test src/s ; svg:362,647,12,12|
+header: title 110.11,63.17,169.77,20.33 ; dot 89.82,90.17 ; status 102.82,86.5,103.66 ; "· 1 queued · Pro" 212.47,86.5,87.7
+div:0,648,390,196| (bottom fade, #000 at 30%)
+button:12,682,366,32| (strip, rowBg 0.40 open)
+svg:24,691.5,13,13| (spinner) ; span:45,690.33,299,15.33|also open the fork ; svg:352,690,16,16| (more)
+div:12,720,366,96| (composer)
+textarea:28.33,731.33,339.33,22 ; svg:28.33,777.67,22,22 (clip) ; span:58.33,774.67,116.64,28 (chip, no chevron) ; button:333.67,771.67,34,34 (Stop)
+button:0,0,390,672| (close-menu scrim)
+div:128,533,250,141| (menu card)
+button:128,533,250,56| ; span:144,543,190,20.33|Send now ; span:144,563.33,190,15.33|Stops the current ; svg:344,551.83,18,18|
+button:128,589,250,42.67| ; span:144,600,191,20.33|Edit ; svg:345,601.67,17,17|
+button:128,631.67,250,42.33| ; span:144,642.67,191,20.33|Remove ; svg:345,644.33,17,17|

@@ -1,0 +1,24 @@
+b2 icons-col | design/b2-3x.png | rows | 38 240 16 420 | 30 0,0,0
+g1 icons-col | app/g1.png | rows | 38 300 16 300 | 30 0,0,0
+g3 icons-col | app/g3.png | rows | 38 150 16 520 | 30 0,0,0
+b2 blocktop | design/b2-3x.png | rows | 100 388 200 20 | 12 28,28,30
+g3 blocktop | app/g3.png | rows | 100 305 200 20 | 12 28,28,30
+b2 blockbot | design/b2-3x.png | rows | 100 500 200 14 | 12 28,28,30
+g3 blockbot | app/g3.png | rows | 100 410 200 20 | 12 28,28,30
+b2 block-lr | design/b2-3x.png | cols | 40 450 340 2 | 12 28,28,30
+g3 block-lr | app/g3.png | cols | 40 358 352 2 | 12 28,28,30
+b2 digits | design/b2-3x.png | bbox | 60 402 30 18 | 40 0,0,0
+g3 digits | app/g3.png | bbox | 60 320 30 18 | 40 0,0,0
+b2 code-col | design/b2-3x.png | cols | 60 404 300 14 | 40 0,0,0
+g3 code-col | app/g3.png | cols | 60 322 310 14 | 40 0,0,0
+g3 lastline-ink | app/g3.png | ink | 60 401 240 13 | 20 0,0,0
+g3 line5-ink | app/g3.png | ink | 60 385 240 13 | 20 0,0,0
+b2 link-ink | design/b2-3x.png | ink | 50 512 150 16 | 40 28,28,30
+g3 link | app/g3.png | bbox | 50 428 150 20 | 40 28,28,30
+g3 link-ink | app/g3.png | ink | 50 428 150 20 | 40 28,28,30
+g3 card-border | app/g3.png | color | 200 218.67 10 0.34
+b2 card-border2 | design/b2-3x.png | color | 200 301.33 10 0.34
+b2 label2 | design/b2-3x.png | bbox | 50 374 120 14 | 40 28,28,30
+g3 label2 | app/g3.png | bbox | 50 291 120 14 | 40 28,28,30
+b2 card-corner-row | design/b2-3x.png | cols | 34 302 60 1 | 20 0,0,0
+g3 card-corner-row | app/g3.png | cols | 34 219.33 60 1 | 20 0,0,0

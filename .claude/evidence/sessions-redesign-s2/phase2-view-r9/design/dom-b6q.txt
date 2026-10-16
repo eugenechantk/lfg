@@ -1,0 +1,15 @@
+s2-question.dc.html (kind question) — DOM bounds in board pt (zoom 3 / 3). tag:x,y,w,h|text
+div:175.61,282,198.39,40|ship 1.3.1 to (bubble)
+svg:16,334.5,17,17| ; span:41,334,313,18|Ran 7 commands ; svg:362,337,12,12|
+div:16,364,358,48|Build 205 pass (prose 2 lines)
+header: title 88.17,63.17,213.67,20.33 ; dot 110.21,90.17,7,7 (no ring) ; "Needs input · 2m" 123.21,86.5,99.8 ; "· Pro · lfg" 229.01,86.5,50.79
+div:8,428.67,374,407.33| (panel; bottom 836)
+span:24.33,456,8,8| (dot, ring 3px)
+span:40.33,452.83,171.29,14.33|Claude is aski (label)
+button:289.06,445,76.6,30|Dismiss
+span:24.33,487,341.33,50|Upload build 2 (title 2 lines in Chrome)
+span:24.33,541,341.33,40|It has the for (body 2 lines)
+button:24.33,593,341.33,48| ; span:38.33,605,24,24| (num badge) ; span:74.33,607.33,...|Yes, upload no
+button:24.33,649,341.33,48| ; span:38.33,661,24,24| ; span:74.33,663.33|Internal teste
+button:24.33,705,341.33,48| ; span:38.33,717,24,24| ; span:74.33,719.33|No, wait for m
+(field) div 24.33,765,341.33,44 implied ; span:40.67,777.67,278.67,19.33|Type something ; span:327.33,771.33,32,32| (send) ; svg:336.33,780.33,14,14|

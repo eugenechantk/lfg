@@ -1,0 +1,27 @@
+div |  | 0 | 0 | 390 | 844 |  |  | rgb(0, 0, 0) |  |  |  | 
+div | ship 1.3.1 to testflight | 175.6 | 282 | 198.4 | 40 | 17px/22px/400/lsnormal | rgb(255, 255, 255) op1 | rgb(10, 110, 224) | 20px |  |  | none clip normal
+svg |  | 16 | 334.5 | 17 | 17 |  |  |  |  |  |  | 
+span | Ran 7 commands, edited 1 file | 41 | 334 | 313 | 18 | 15px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none clip normal
+svg |  | 362 | 337 | 12 | 12 |  |  |  |  |  |  | 
+div | Build 205 passed all tests and is arch | 16 | 364 | 358 | 48 | 17px/24px/400/lsnormal | rgb(255, 255, 255) op1 |  |  |  |  | none clip normal
+div |  | 0 | 0 | 390 | 124 |  |  | rgba(0, 0, 0, 0) linear-gradient(rgb(0, 0, 0) 72%, rgba(0, 0, 0, 0)) |  |  |  | 
+a |  | 16 | 59 | 46 | 46 |  |  | rgba(44, 44, 46, 0.92) | 22px | bt1px rgba(255, 255, 255, 0.1) |  | 
+svg |  | 29 | 72 | 20 | 20 |  |  |  |  |  |  | 
+span | Ship lfg 1.3.1 to TestFlight | 88.2 | 63.5 | 213.7 | 20 | 17px/normal/600/lsnormal | rgb(255, 255, 255) op1 |  |  |  |  | none ellipsis nowrap
+span |  | 110.2 | 90 | 7 | 7 |  |  | rgb(255, 159, 10) | 50% |  |  | 
+span | Needs input · 2m | 123.2 | 86.5 | 99.8 | 14 | 12px/normal/600/lsnormal | rgb(255, 159, 10) op1 |  |  |  |  | none clip nowrap
+span | · Pro · lfg | 229 | 86.5 | 50.8 | 14 | 12px/normal/400/lsnormal | rgb(161, 161, 166) op1 |  |  |  |  | none clip nowrap
+a |  | 328 | 59 | 46 | 46 |  |  | rgba(44, 44, 46, 0.92) | 22px | bt1px rgba(255, 255, 255, 0.1) |  | 
+svg |  | 341 | 72 | 20 | 20 |  |  |  |  |  |  | 
+div |  | 8 | 525 | 374 | 311 |  |  | rgb(28, 28, 30) | 32px | bt1px rgba(255, 255, 255, 0.1) |  | 
+span |  | 25 | 553 | 8 | 8 |  |  | rgb(255, 159, 10) | 50% |  |  | 
+span | Plan ready for review | 41 | 550 | 165.3 | 14 | 12px/normal/700/ls0.4px | rgb(255, 179, 64) op1 |  |  |  |  | uppercase clip normal
+button | Dismiss | 288.4 | 542 | 76.6 | 30 | 14px/normal/500/lsnormal | rgb(209, 209, 214) op1 | rgb(44, 44, 46) | 15px |  |  | none clip normal
+span | Approve this plan? | 25 | 584 | 340 | 25 | 20px/25px/600/lsnormal | rgb(255, 255, 255) op1 |  |  |  |  | none clip normal
+div |  | 25 | 615 | 340 | 112 |  |  | rgb(44, 44, 46) | 14px |  |  | 
+span | 1. Bump the build to 205 and archive | 39 | 625 | 312 | 21 | 15px/21px/400/lsnormal | rgb(242, 242, 247) op1 |  |  |  |  | none clip normal
+span | 2. Run the release checklist on the si | 39 | 650 | 312 | 42 | 15px/21px/400/lsnormal | rgb(242, 242, 247) op1 |  |  |  |  | none clip normal
+span | 3. Upload with fastlane, then post the | 39 | 696 | 312 | 21 | 15px/21px/400/lsnormal | rgb(242, 242, 247) op1 |  |  |  |  | none clip normal
+a | Read the full plan › | 25 | 733 | 340 | 16 | 14px/normal/400/lsnormal | rgb(64, 156, 255) op1 |  |  |  |  | none clip normal
+button | Approve | 25 | 761 | 166 | 48 | 16px/normal/600/lsnormal | rgb(255, 255, 255) op1 | rgb(10, 110, 224) | 24px |  |  | none clip normal
+button | Keep planning | 199 | 761 | 166 | 48 | 16px/normal/600/lsnormal | rgb(242, 242, 247) op1 | rgb(44, 44, 46) | 24px |  |  | none clip normal

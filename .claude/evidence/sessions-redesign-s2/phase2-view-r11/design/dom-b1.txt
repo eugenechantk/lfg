@@ -1,0 +1,32 @@
+/s2-view.dc.html
+T "when i tap fork on desktop or phon" box 56.00,378.00 318.00x84.00 fs17px fw400 lh22px lsnormal -apple-system crgb(255, 255, 255) bgrgb(10, 110, 224) r20px pad9px 14px
+T "I’ll trace how fork works on both " box 16.00,476.00 358.00x24.00 fs17px fw400 lh24px lsnormal -apple-system crgb(242, 242, 247) pad0px
+S 16.00,516.50 17.00x17.00 crgb(161, 161, 166) sw1.9
+T "Read 6 files, ran 3 commands" box 41.00,516.00 313.00x18.00 fs15px fw400 lhnormal lsnormal -apple-system crgb(161, 161, 166) pad0px
+S 362.00,519.00 12.00x12.00 crgb(161, 161, 166) sw2.8
+T "Small forks wait for a transcript " box 16.00,550.00 358.00x72.00 fs17px fw400 lh24px lsnormal -apple-system crgb(242, 242, 247) pad0px
+S 16.00,638.50 17.00x17.00 crgb(161, 161, 166) sw1.9
+T "Edited 2 files" box 41.00,638.00 313.00x18.00 fs15px fw400 lhnormal lsnormal -apple-system crgb(161, 161, 166) pad0px
+S 362.00,641.00 12.00x12.00 crgb(161, 161, 166) sw2.8
+B A 16.00,59.67 44.67x44.67 bgrgba(44, 44, 46, 0.92) bd0.333333px rgba(255, 255, 255, 0.1) r22px pad0px
+S 28.33,72.00 20.00x20.00 crgb(255, 255, 255) sw2.4
+T "Fork session feature" box 110.11,63.17 169.77x20.33 fs17px fw600 lhnormal lsnormal -apple-system crgb(255, 255, 255) pad0px
+B SPAN 109.56,90.17 7.00x7.00 bgrgb(48, 209, 88) r50% pad0px
+T "Working · 3m 12s" box 122.56,86.50 101.10x14.33 fs12px fw600 lhnormal lsnormal -apple-system crgb(48, 209, 88) pad0px
+T "· Pro · lfg" box 229.66,86.50 50.79x14.33 fs12px fw400 lhnormal lsnormal -apple-system crgb(161, 161, 166) pad0px
+B A 329.33,59.67 44.67x44.67 bgrgba(44, 44, 46, 0.92) bd0.333333px rgba(255, 255, 255, 0.1) r22px pad0px
+S 341.67,72.00 20.00x20.00 crgb(255, 255, 255) sw1.9
+B A 16.00,673.33 269.17x36.67 bgrgb(28, 28, 30) bd0.333333px rgb(56, 56, 58) r18px pad0px 12px 0px 8px
+S 24.33,680.67 22.00x22.00 crgb(242, 242, 247) sw
+T "Subagents" box 54.33,683.33 72.22x16.67 fs14px fw500 lhnormal lsnormal -apple-system crgb(242, 242, 247) pad0px
+T "1 running" box 134.55,683.33 62.09x16.67 fs14px fw500 lhnormal lsnormal -apple-system crgb(48, 209, 88) pad0px
+T "· 3/4 done" box 204.64,683.33 68.20x16.67 fs14px fw500 lhnormal lsnormal -apple-system crgb(142, 142, 147) pad0px
+T "Files" box 293.17,673.33 92.15x36.67 fs14px fw500 lhnormal lsnormal -apple-system crgb(242, 242, 247) bgrgb(28, 28, 30) r18px pad0px 12px
+S 305.51,684.17 15.00x15.00 crgb(242, 242, 247) sw1.9
+T "4" box 363.76,683.33 9.23x16.67 fs14px fw500 lhnormal lsnormal -apple-system crgb(142, 142, 147) pad0px
+B DIV 12.00,720.00 366.00x96.00 bgrgb(28, 28, 30) bd0.333333px rgb(56, 56, 58) r24px pad11px 10px 10px 16px
+S 28.33,777.67 22.00x22.00 crgb(255, 255, 255) sw1.7
+T "Opus 5.5 · High" box 58.33,774.67 130.64x28.00 fs13px fw500 lhnormal lsnormal -apple-system crgb(209, 209, 214) bgrgb(44, 44, 46) r14px pad0px 10px
+S 169.97,784.17 9.00x9.00 crgb(209, 209, 214) sw3
+B BUTTON 333.67,771.67 34.00x34.00 bgrgb(242, 242, 247) r17px pad0px
+B SPAN 345.17,783.17 11.00x11.00 bgrgb(0, 0, 0) r3px pad0px

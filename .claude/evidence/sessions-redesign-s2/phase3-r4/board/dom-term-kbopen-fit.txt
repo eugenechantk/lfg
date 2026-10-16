@@ -1,0 +1,207 @@
+div |  |  | 12 | 54 | 366 | 52 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px
+a | Close terminal |  | 12 | 58 | 44 | 44 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(255, 255, 255, 0.12) | 22px
+svg |  |  | 26.5 | 72.5 | 15 | 15 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px
+path |  |  | 30.25 | 76.25 | 7.5 | 7.5 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px
+div |  |  | 64 | 63 | 214 | 34 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px
+span |  | Terminal | 137.27 | 63 | 67.47 | 19 | 16px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px
+span |  | Shell on Pro | 137.2 | 83 | 67.59 | 14 | 12px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(161, 161, 166) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 286 | 64 | 92 | 32 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(255, 255, 255, 0.12) | 16px
+button |  |  | 288 | 66 | 44 | 28 | 12px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(0, 0, 0) | rgb(255, 255, 255) | 14px
+span |  | Fit | 302.45 | 73 | 15.08 | 14 | 12px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px
+button |  |  | 332 | 66 | 44 | 28 | 12px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 14px
+span |  | Wide | 339.03 | 73 | 29.94 | 14 | 12px | 600 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+div |  |  | 0 | 116 | 390 | 408 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(209, 209, 214) | rgba(0, 0, 0, 0) | 0px
+span |  | % cd dev/personal/lfg | 12 | 270.53 | 366 | 17.39 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(209, 209, 214) | rgba(0, 0, 0, 0) | 0px
+span |  | eugene@Pro | 12 | 271.53 | 72.25 | 14 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(48, 209, 88) | rgba(0, 0, 0, 0) | 0px
+span |  | ~ | 91.48 | 271.53 | 7.23 | 14 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(64, 156, 255) | rgba(0, 0, 0, 0) | 0px
+span |  | % git status --short | 12 | 287.92 | 366 | 17.39 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(209, 209, 214) | rgba(0, 0, 0, 0) | 0px
+span |  | eugene@Pro | 12 | 288.92 | 72.25 | 14 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(48, 209, 88) | rgba(0, 0, 0, 0) | 0px
+span |  | lfg | 91.48 | 288.92 | 21.69 | 14 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(64, 156, 255) | rgba(0, 0, 0, 0) | 0px
+span |  | M ios/LFG/SessionStore.swift | 12 | 305.31 | 366 | 17.39 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(255, 159, 90) | rgba(0, 0, 0, 0) | 0px
+span |  | M desktop/LFGSessions.swift | 12 | 322.7 | 366 | 17.39 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(255, 159, 90) | rgba(0, 0, 0, 0) | 0px
+span |  | % tmux ls | 12 | 340.09 | 366 | 17.39 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(209, 209, 214) | rgba(0, 0, 0, 0) | 0px
+span |  | eugene@Pro | 12 | 341.09 | 72.25 | 14 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(48, 209, 88) | rgba(0, 0, 0, 0) | 0px
+span |  | lfg | 91.48 | 341.09 | 21.69 | 14 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(64, 156, 255) | rgba(0, 0, 0, 0) | 0px
+span |  | lfg-fork-3: 1 windows (attached) | 12 | 357.48 | 366 | 17.39 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(142, 142, 147) | rgba(0, 0, 0, 0) | 0px
+span |  | lfg-term-phone: 1 windows (attached) | 12 | 374.88 | 366 | 17.39 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(142, 142, 147) | rgba(0, 0, 0, 0) | 0px
+span |  | reelly-ads: 1 windows | 12 | 392.27 | 366 | 17.39 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(142, 142, 147) | rgba(0, 0, 0, 0) | 0px
+span |  | % bun test src/sessions.test.ts | 12 | 409.66 | 366 | 17.39 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(209, 209, 214) | rgba(0, 0, 0, 0) | 0px
+span |  | eugene@Pro | 12 | 410.66 | 72.25 | 14 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(48, 209, 88) | rgba(0, 0, 0, 0) | 0px
+span |  | lfg | 91.48 | 410.66 | 21.69 | 14 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(64, 156, 255) | rgba(0, 0, 0, 0) | 0px
+span |  | bun test v1.3.0 | 12 | 427.05 | 366 | 17.39 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(142, 142, 147) | rgba(0, 0, 0, 0) | 0px
+span |  | 42 pass | 12 | 444.44 | 366 | 17.39 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(48, 209, 88) | rgba(0, 0, 0, 0) | 0px
+span |  | 0 fail | 12 | 461.83 | 366 | 17.39 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(209, 209, 214) | rgba(0, 0, 0, 0) | 0px
+span |  | Ran 42 tests across 1 file. [1.80s] | 12 | 479.22 | 366 | 17.39 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(142, 142, 147) | rgba(0, 0, 0, 0) | 0px
+span |  | % | 12 | 496.61 | 366 | 17.39 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(209, 209, 214) | rgba(0, 0, 0, 0) | 0px
+span |  | eugene@Pro | 12 | 497.61 | 72.25 | 14 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(48, 209, 88) | rgba(0, 0, 0, 0) | 0px
+span |  | lfg | 91.48 | 497.61 | 21.69 | 14 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(64, 156, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 134.86 | 497.61 | 7.23 | 14 | 12px | 400 | 17.4px | ui-monospace, "SF Mono", Menlo | rgb(11, 11, 13) | rgb(209, 209, 214) | 0px
+div |  |  | 0 | 524 | 390 | 50 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgb(28, 28, 30) | 0px
+button | Escape |  | 8 | 531.5 | 43.3 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | esc | 17 | 541.5 | 25.3 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Tab |  | 57.3 | 531.5 | 43.3 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | tab | 66.3 | 541.5 | 25.3 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Control |  | 106.59 | 531.5 | 51.72 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | ctrl | 115.59 | 541.5 | 33.72 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Option |  | 164.31 | 531.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | ⌥ | 180.09 | 541.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Up |  | 210.31 | 531.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | ↑ | 226.09 | 541.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Down |  | 256.31 | 531.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | ↓ | 272.09 | 541.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Left |  | 302.31 | 531.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | ← | 318.09 | 541.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Right |  | 348.31 | 531.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | → | 364.09 | 541.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Pipe |  | 394.31 | 531.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | | | 410.09 | 541.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Slash |  | 440.31 | 531.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | / | 456.09 | 541.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Tilde |  | 486.31 | 531.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | ~ | 502.09 | 541.5 | 8.44 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Paste |  | 532.31 | 531.5 | 40 | 36 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgb(58, 58, 60) | 8px
+span |  | ⌘V | 543.88 | 541.5 | 16.86 | 16 | 14px | 600 | normal | ui-monospace, "SF Mono", Menlo | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+button | Hide keyboard |  | 578.31 | 531.5 | 44 | 36 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgb(58, 58, 60) | 8px
+svg |  |  | 590.31 | 541.5 | 20 | 16 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px
+rect |  |  | 591.08 | 542.58 | 18.46 | 9.23 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px
+path |  |  | 594.16 | 545.65 | 12.32 | 3.08 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px
+path |  |  | 598 | 554.12 | 4.62 | 2.31 | 13.3333px | 400 | normal | Arial | rgb(0, 0, 0) | rgba(0, 0, 0, 0) | 0px
+div |  |  | 0 | 574 | 390 | 270 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgb(42, 42, 44) | 0px
+div |  |  | 3 | 582 | 384 | 42 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 3 | 582 | 33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | q | 13.41 | 591 | 12.19 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 42 | 582 | 33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | w | 50.75 | 591 | 15.5 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 81 | 582 | 33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | e | 91.78 | 591 | 11.44 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 120 | 582 | 33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | r | 132.69 | 591 | 7.63 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 159 | 582 | 33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | t | 171.86 | 591 | 7.27 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 198 | 582 | 33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | y | 209.06 | 591 | 10.86 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 237 | 582 | 33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | u | 247.66 | 591 | 11.67 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 276 | 582 | 33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | i | 290.02 | 591 | 4.95 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 315 | 582 | 33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | o | 325.58 | 591 | 11.83 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 354 | 582 | 33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | p | 364.39 | 591 | 12.22 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+div |  |  | 3 | 635 | 384 | 42 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 21 | 635 | 33.33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | a | 32.14 | 644 | 11.05 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 60.33 | 635 | 33.34 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | s | 71.77 | 644 | 10.47 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 99.67 | 635 | 33.33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | d | 110.19 | 644 | 12.3 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 139 | 635 | 33.34 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | f | 152.05 | 644 | 7.25 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 178.34 | 635 | 33.33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | g | 188.91 | 644 | 12.19 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 217.67 | 635 | 33.34 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | h | 228.45 | 644 | 11.78 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 257.02 | 635 | 33.33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | j | 271.2 | 644 | 4.94 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 296.34 | 635 | 33.33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | k | 307.58 | 644 | 10.86 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 335.67 | 635 | 33.33 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | l | 349.8 | 644 | 5.06 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+div |  |  | 3 | 688 | 384 | 42 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 3 | 688 | 48 | 42 | 15px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(54, 54, 56) | 6px
+span |  | ⇧ | 19.63 | 700 | 14.73 | 18 | 15px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 57 | 688 | 34.3 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | z | 68.75 | 697 | 10.78 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 97.3 | 688 | 34.28 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | x | 109.19 | 697 | 10.5 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 137.58 | 688 | 34.3 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | c | 149.13 | 697 | 11.2 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 177.88 | 688 | 34.28 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | v | 189.59 | 697 | 10.84 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 218.16 | 688 | 34.28 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | b | 229.14 | 697 | 12.3 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 258.44 | 688 | 34.28 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | n | 269.73 | 697 | 11.67 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 298.72 | 688 | 34.28 | 42 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(74, 74, 77) | 6px
+span |  | m | 307.16 | 697 | 17.41 | 24 | 20px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 339 | 688 | 48 | 42 | 15px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(54, 54, 56) | 6px
+span |  | ⌫ | 355.38 | 700 | 15.25 | 18 | 15px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+div |  |  | 3 | 741 | 384 | 42 | 16px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(242, 242, 247) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 3 | 741 | 54.44 | 42 | 15px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(54, 54, 56) | 6px
+span |  | 123 | 17.5 | 753 | 25.42 | 18 | 15px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 63.44 | 741 | 226.83 | 42 | 15px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(54, 54, 56) | 6px
+span |  | space | 155.72 | 753 | 42.25 | 18 | 15px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+span |  |  | 296.27 | 741 | 90.73 | 42 | 15px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgb(54, 54, 56) | 6px
+span |  | return | 320.19 | 753 | 42.89 | 18 | 15px | 400 | normal | -apple-system, "SF Pro Text",  | rgb(255, 255, 255) | rgba(0, 0, 0, 0) | 0px
+---TEXT---
+"Terminal" | 137.27 | 63 | 67.47 | 19
+"Shell on Pro" | 137.2 | 83 | 67.59 | 14
+"Fit" | 302.45 | 73 | 15.08 | 14
+"Wide" | 339.03 | 73 | 29.94 | 14
+"eugene@Pro" | 12 | 271.53 | 72.25 | 14
+"~" | 91.48 | 271.53 | 7.23 | 14
+" % cd dev/personal/lfg" | 98.72 | 271.53 | 158.95 | 14
+"eugene@Pro" | 12 | 288.92 | 72.25 | 14
+"lfg" | 91.48 | 288.92 | 21.69 | 14
+" % git status --short" | 113.17 | 288.92 | 151.72 | 14
+" M ios/LFG/SessionStore.swift" | 12 | 306.31 | 209.52 | 14
+" M desktop/LFGSessions.swift" | 12 | 323.7 | 202.3 | 14
+"eugene@Pro" | 12 | 341.09 | 72.25 | 14
+"lfg" | 91.48 | 341.09 | 21.69 | 14
+" % tmux ls" | 113.17 | 341.09 | 72.25 | 14
+"lfg-fork-3: 1 windows (attached)" | 12 | 358.48 | 231.19 | 14
+"lfg-term-phone: 1 windows (attached)" | 12 | 375.88 | 260.09 | 14
+"reelly-ads: 1 windows" | 12 | 393.27 | 151.72 | 14
+"eugene@Pro" | 12 | 410.66 | 72.25 | 14
+"lfg" | 91.48 | 410.66 | 21.69 | 14
+" % bun test src/sessions.test.ts" | 113.17 | 410.66 | 231.19 | 14
+"bun test v1.3.0" | 12 | 428.05 | 108.38 | 14
+" 42 pass" | 12 | 445.44 | 57.8 | 14
+" 0 fail" | 12 | 462.83 | 50.58 | 14
+"Ran 42 tests across 1 file. [1.80s]" | 12 | 480.22 | 252.88 | 14
+"eugene@Pro" | 12 | 497.61 | 72.25 | 14
+"lfg" | 91.48 | 497.61 | 21.69 | 14
+" % " | 113.17 | 497.61 | 21.69 | 14
+"esc" | 17 | 541.5 | 25.3 | 16
+"tab" | 66.3 | 541.5 | 25.3 | 16
+"ctrl" | 115.59 | 541.5 | 33.72 | 16
+"⌥" | 180.09 | 541.5 | 8.44 | 16
+"↑" | 226.09 | 541.5 | 8.44 | 16
+"↓" | 272.09 | 541.5 | 8.44 | 16
+"←" | 318.09 | 541.5 | 8.44 | 16
+"→" | 364.09 | 541.5 | 8.44 | 16
+"|" | 410.09 | 541.5 | 8.44 | 16
+"/" | 456.09 | 541.5 | 8.44 | 16
+"~" | 502.09 | 541.5 | 8.44 | 16
+"⌘V" | 543.88 | 541.5 | 16.86 | 16
+"q" | 13.41 | 591 | 12.19 | 24
+"w" | 50.75 | 591 | 15.5 | 24
+"e" | 91.78 | 591 | 11.44 | 24
+"r" | 132.69 | 591 | 7.63 | 24
+"t" | 171.86 | 591 | 7.27 | 24
+"y" | 209.06 | 591 | 10.86 | 24
+"u" | 247.66 | 591 | 11.67 | 24
+"i" | 290.02 | 591 | 4.95 | 24
+"o" | 325.58 | 591 | 11.83 | 24
+"p" | 364.39 | 591 | 12.22 | 24
+"a" | 32.14 | 644 | 11.05 | 24
+"s" | 71.77 | 644 | 10.47 | 24
+"d" | 110.19 | 644 | 12.3 | 24
+"f" | 152.05 | 644 | 7.25 | 24
+"g" | 188.91 | 644 | 12.19 | 24
+"h" | 228.45 | 644 | 11.78 | 24
+"j" | 271.2 | 644 | 4.94 | 24
+"k" | 307.58 | 644 | 10.86 | 24
+"l" | 349.8 | 644 | 5.06 | 24
+"⇧" | 19.63 | 700 | 14.73 | 18
+"z" | 68.75 | 697 | 10.78 | 24
+"x" | 109.19 | 697 | 10.5 | 24
+"c" | 149.13 | 697 | 11.2 | 24
+"v" | 189.59 | 697 | 10.84 | 24
+"b" | 229.14 | 697 | 12.3 | 24
+"n" | 269.73 | 697 | 11.67 | 24
+"m" | 307.16 | 697 | 17.41 | 24
+"⌫" | 355.38 | 700 | 15.25 | 18
+"123" | 17.5 | 753 | 25.42 | 18
+"space" | 155.72 | 753 | 42.25 | 18
+"return" | 320.19 | 753 | 42.89 | 18
