@@ -6824,6 +6824,10 @@ enum WindowFitCLI {
         if let tasksHost, let taskID = value("--task") {
             let id = "\(tasksHost):\(taskID)"
             ScheduledTasksPane.launchPath = [.task(id)] + (args.contains("--edit") ? [.edit(id)] : [])
+        } else if let tasksHost, args.contains("--create-task") {
+            ScheduledTasksPane.launchPath = [.create(tasksHost)]
+        } else if let tasksHost, args.contains("--create-task-chat") {
+            ScheduledTasksPane.launchPath = [.createChat(tasksHost)]
         }
         let height = value("--height").flatMap(Double.init) ?? 560
         let live = args.contains("--live")
