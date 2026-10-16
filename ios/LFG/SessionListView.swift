@@ -1220,6 +1220,7 @@ struct SessionRow: View {
         .font(.system(size: 15))
         .foregroundStyle(color(for: line.tone))
         .frame(height: 20, alignment: .leading)
+        .accessibilityHidden(line.text.isEmpty)
     }
 
     private func color(for tone: SessionRowLine.Tone) -> Color {

@@ -115,12 +115,9 @@ public struct SessionRowLine: Equatable, Sendable {
         case .unread:
             return SessionRowLine(icon: .none, text: "New reply", tone: .primary)
         case .idle:
-            return SessionRowLine(icon: .none, text: "Ready for your next message", tone: .secondary)
-        case let .closed(last):
-            let when = last.map { endedPhrase(lastMs: $0, nowMs: nowMs, calendar: calendar) }
-            return SessionRowLine(icon: .none,
-                                  text: (when.map { "Ended \($0)" } ?? "Ended") + " · send a message to resume",
-                                  tone: .secondary)
+            return SessionRowLine(icon: .none, text: "", tone: .secondary)
+        case .closed:
+            return SessionRowLine(icon: .none, text: "", tone: .secondary)
         }
     }
 

@@ -88,7 +88,7 @@ struct SessionSheet: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .presentationDetents([.height(Self.height)])
-        .presentationDragIndicator(.visible)
+        .presentationDragIndicator(.hidden)
         .presentationBackground(S2.surface)
         .presentationCornerRadius(38)
         .task(id: messages.count) {
@@ -115,25 +115,20 @@ struct SessionSheet: View {
     private func header(_ m: SessionSheetModel) -> some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
+                Button { finish(.rename) } label: {
                     Text(session.title.isEmpty ? "Session" : session.title)
                         .font(.system(size: 22, weight: .bold))
                         .foregroundStyle(S2.white)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .cssLineBox(size: 22, lineHeight: 28)
-                    Button { finish(.rename) } label: {
-                        SheetGlyph(kind: .pencil)
-                            .stroke(Self.chromeInk, style: StrokeStyle(lineWidth: 2.2 * 14 / 24, lineCap: .round, lineJoin: .round))
-                            .frame(width: 14, height: 14)
-                            .frame(width: 30, height: 30)
-                            .background(Circle().fill(Self.chromeFill))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Rename")
-                    .accessibilityIdentifier("sessionSheetRename")
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
-                .frame(height: 30)
+                .buttonStyle(.plain)
+                .accessibilityHint("Edit the session title")
+                .accessibilityIdentifier("sessionSheetTitle")
+                .frame(height: 44)
                 if !m.subtitle.isEmpty {
                     Text(m.subtitle)
                         .font(.system(size: 14))
@@ -145,15 +140,7 @@ struct SessionSheet: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Button { dismiss() } label: {
-                SheetGlyph(kind: .close)
-                    .stroke(Self.chromeInk, style: StrokeStyle(lineWidth: 2.8 * 14 / 24, lineCap: .round))
-                    .frame(width: 14, height: 14)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Self.chromeFill))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close")
+            SheetCloseButton { dismiss() }
             .accessibilityIdentifier("sessionSheetClose")
         }
     }
@@ -355,23 +342,17 @@ struct SessionSheet: View {
     @ViewBuilder
     private func hostRow(_ host: SessionSheetModel.HostRow) -> some View {
         switch host {
-        case .moveTo(let current, let target):
-            Button {
-                if let t = transferTargets.first { requestMove(to: t) }
-            } label: {
-                hostLabel(value: checkingMove ? "Checking \(target)…" : "\(current) · move to \(target)", showsChevron: true)
-            }
-            .buttonStyle(.plain)
-            .disabled(checkingMove)
-            .accessibilityIdentifier("sessionSheetHost")
         case .choose(let current):
             Menu {
+                Label(current, systemImage: "checkmark")
                 ForEach(transferTargets, id: \.id) { t in
-                    Button("Move to \(t.label)") { requestMove(to: t) }
+                    Button(t.label) { requestMove(to: t) }
+                        .accessibilityIdentifier("sessionSheetHostOption-\(t.id)")
                 }
             } label: {
                 hostLabel(value: checkingMove ? "Checking…" : current, showsChevron: true)
             }
+            .menuOrder(.fixed)
             .disabled(checkingMove)
             .accessibilityIdentifier("sessionSheetHost")
         case .info(let current):

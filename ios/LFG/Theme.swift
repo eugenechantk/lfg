@@ -146,7 +146,29 @@ extension Glass {
     }
 }
 
-/// The scroll edge treatment for the lists and the session view, drawn by the
+/// A clear session-header transition. Every stop is translucent, so transcript
+/// text remains visible as it moves through the bar. This contains no material
+/// or blur effect; the navigation bar's own background is hidden separately.
+struct TranscriptTopFade: View {
+    let barHeight: CGFloat
+
+    var body: some View {
+        let bar = max(barHeight, 1)
+        let height = bar + 28
+        let base = Color(.systemBackground)
+        LinearGradient(stops: [
+            .init(color: base.opacity(0.78), location: 0),
+            .init(color: base.opacity(0.55), location: max(bar - 52, 0) / height),
+            .init(color: base.opacity(0.22), location: bar / height),
+            .init(color: base.opacity(0), location: 1),
+        ], startPoint: .top, endPoint: .bottom)
+        .frame(height: height)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The scroll edge treatment for the lists, drawn by the
 /// app instead of the system. Apple's default effect darkens hard when bare text
 /// sits in a bar (our host-status line), turning near-black and then clearing
 /// within a few points of the bar's edge. The session view's flipped transcript
@@ -315,6 +337,22 @@ extension View {
         } else {
             self.buttonStyle(.plain)
         }
+    }
+}
+
+/// Shared close control for the custom headers in session action sheets.
+struct SheetCloseButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button("Close", systemImage: "xmark", action: action)
+            .labelStyle(.iconOnly)
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(.primary)
+            .buttonBorderShape(.circle)
+            .controlSize(.large)
+            .glassButtonStyleOrPlain()
+            .frame(minWidth: 44, minHeight: 44)
     }
 }
 

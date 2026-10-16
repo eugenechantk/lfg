@@ -21,7 +21,7 @@ struct SessionSheetModelTests {
         #expect(m.tiles.map(\.tile) == [.terminal, .files, .subagents, .signIn, .browserPreview, .iPhonePreview])
         #expect(m.tiles.map(\.badge) == [nil, 6, 2, nil, nil, nil])
         #expect(m.tiles.map(\.enabled) == [true, true, true, true, false, true])
-        #expect(m.hostRow == .moveTo(current: "Pro", target: "Air"))
+        #expect(m.hostRow == .choose(current: "Pro"))
         #expect(m.footerTmux == "tmux lfg-fork-3")
         #expect(m.footerID == "id 7f3a…c21")
     }
@@ -52,11 +52,13 @@ struct SessionSheetModelTests {
         #expect(byTile[.browserPreview]?.enabled == true)
     }
 
-    @Test("the host row: one other host moves, several choose, none just names it")
+    @Test("the host row opens a menu for one or several alternatives")
     func hostRow() {
         var f = SessionSheetModel.Facts(sessionID: "s")
         f.hostLabel = "Air"
         #expect(SessionSheetModel(f, nowMs: now).hostRow == .info(current: "Air"))
+        f.otherHosts = ["Pro"]
+        #expect(SessionSheetModel(f, nowMs: now).hostRow == .choose(current: "Air"))
         f.otherHosts = ["Pro", "Mini"]
         #expect(SessionSheetModel(f, nowMs: now).hostRow == .choose(current: "Air"))
     }

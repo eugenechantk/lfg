@@ -148,6 +148,9 @@ public enum TranscriptStepGrouper {
             runStart = nil; lastWasEdit = nil; openIds = []; openAnonymous = 0
         }
         for (i, m) in messages.enumerated() {
+            // Hidden activity must not create a row or interrupt tool pairing,
+            // including legacy calls that have no provider-generated ids.
+            if m.kind == "thinking" { continue }
             if m.kind == "tool_use" {
                 let isEdit = classify(m).0 == .edit
                 if runStart != nil, lastWasEdit == true, !isEdit,
@@ -192,7 +195,7 @@ public enum TranscriptStepGrouper {
             if m.kind == "tool_use" {
                 if let uid = m.toolUseId { draftByUseId[uid] = drafts.count }
                 drafts.append(Draft(useIndex: i))
-            } else {
+            } else if m.kind == "tool_result" {
                 // Pair by id, else with the nearest unanswered call before it.
                 if let uid = m.toolUseId, let d = draftByUseId[uid], drafts[d].resultIndex == nil {
                     drafts[d].resultIndex = i

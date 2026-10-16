@@ -45,6 +45,7 @@ struct AttachmentsSheet: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(S2.surface.ignoresSafeArea())
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("attachmentsSheet")
         // Recompute when the session appends — a live agent adds files while
         // this is open, and a stale list is worse than a slow one.
@@ -74,15 +75,7 @@ struct AttachmentsSheet: View {
                     .frame(height: 16)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Button { dismiss() } label: {
-                SheetGlyph(kind: .close)
-                    .stroke(SessionSheet.chromeInk, style: StrokeStyle(lineWidth: 2.8 * 14 / 24, lineCap: .round))
-                    .frame(width: 14, height: 14)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(S2.chip))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close")
+            SheetCloseButton { dismiss() }
             .accessibilityIdentifier("attachmentsClose")
         }
     }

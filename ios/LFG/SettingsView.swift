@@ -222,7 +222,11 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Close", systemImage: "xmark") { dismiss() }
+                        .labelStyle(.iconOnly)
+                        .accessibilityIdentifier("settingsCloseButton")
+                }
             }
             .task {
                 if store.root.isEmpty { await store.loadCreateMetadata() }

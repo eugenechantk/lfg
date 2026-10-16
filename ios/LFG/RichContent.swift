@@ -201,10 +201,7 @@ extension MarkdownUI.Theme {
                     .markdownMargin(top: .em(0.25))
             }
             .codeBlock { configuration in
-                ScrollView(.horizontal) {
-                    SelectableProseView(code: configuration.content)
-                        .padding(16)
-                }
+                ScrollableCodeBlock(text: configuration.content)
                 .background(Color(.secondarySystemBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .markdownMargin(top: 0, bottom: 16)
@@ -238,10 +235,27 @@ extension MarkdownUI.Theme {
     }
 }
 
+/// Avoid reparsing immutable prose during scroll and composer updates.
+@MainActor
+private enum ProseCodeLayoutCache {
+    private static var entries: [String: Bool] = [:]
+
+    static func needsCodeViewport(_ markdown: String) -> Bool {
+        if let cached = entries[markdown] { return cached }
+        let containsCode = SelectableText.parse(markdown: markdown).contains { block in
+            if case .codeBlock = block { return true }
+            return false
+        }
+        if entries.count >= 1_200 { entries.removeAll(keepingCapacity: true) }
+        entries[markdown] = containsCode
+        return containsCode
+    }
+}
+
 /// Assistant GFM rendered as contiguous native selectable prose sections.
 /// Tables deliberately return to MarkdownUI: its grid preserves the shipping
 /// row/column layout and gives each cell its own selection surface. Fenced
-/// code gets its own horizontally scrolling box so its columns survive.
+/// code gets a viewport that scrolls on both axes so its columns survive.
 struct ProseView: View {
     let text: String
     @Environment(\.hostFiles) private var hostFiles
@@ -270,10 +284,19 @@ struct ProseView: View {
     private func sectionView(_ section: SelectableMarkdownSection) -> some View {
         switch section {
         case .prose(let markdown):
-            // One native text view owns this entire prose/list run, so UIKit can
-            // extend a selection across its paragraph and list-item boundaries.
-            SelectableProseView(markdown: markdown)
-                .fixedSize(horizontal: false, vertical: true)
+            if ProseCodeLayoutCache.needsCodeViewport(markdown) {
+                // Nested/quoted or tab-indented code may remain inside a prose
+                // run. MarkdownUI routes every such code block through the
+                // same bounded viewport used by standalone fenced code.
+                Markdown(markdown)
+                    .markdownImageProvider(HostImageProvider(hostFiles: hostFiles))
+                    .markdownTheme(.lfgFlat)
+            } else {
+                // Ordinary prose keeps one native selection surface across
+                // paragraphs and list items.
+                SelectableProseView(markdown: markdown)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         case .table(let markdown):
             // Restore the original MarkdownUI grid and per-cell selection. The
             // table itself does not need selection spanning multiple cells.
@@ -283,14 +306,10 @@ struct ProseView: View {
                 .markdownImageProvider(HostImageProvider(hostFiles: hostFiles))
                 .markdownTheme(.lfgFlat)
         case .code(let code, let depth):
-            // Unwrapped and scrolling sideways, so indentation and aligned
+            // Unwrapped and scrollable on both axes, so indentation and aligned
             // columns stay as written. The box's left edge lines up with the
             // paragraphs, or with the text of the list item that owns it.
-            ScrollView(.horizontal) {
-                SelectableProseView(code: code)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-            }
+            ScrollableCodeBlock(text: code)
             .background(Color(.secondarySystemBackground))
             .clipShape(.rect(cornerRadius: 8))
             .padding(.leading, CGFloat(depth) * SelectableTextRenderer.listIndent)

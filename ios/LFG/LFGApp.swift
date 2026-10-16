@@ -38,6 +38,11 @@ struct LFGApp: App {
     }
 
     private static func makeStore() -> (store: LFGStore?, isDurable: Bool) {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["LFG_SESSION_UI_FIXTURE"] == "1" {
+            return (try? LFGStore.inMemory(), false)
+        }
+        #endif
         let fileManager = FileManager.default
         guard let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return (try? LFGStore.inMemory(), false)
@@ -137,7 +142,7 @@ struct CrossProviderSwitchStatusFixture: View {
 /// merges their sessions, and routes each op to the owning host. The list
 /// migrates from the legacy single `lfg.baseURL` on first launch.
 @MainActor @Observable final class AppSettings {
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
     private let credentialStore = HostCredentialStore.shared
     private static let baseURLKey = "lfg.baseURL"   // legacy — migration source only
     private static let hostsKey = "lfg.hosts"
@@ -255,6 +260,12 @@ struct CrossProviderSwitchStatusFixture: View {
     var defaultHost: Host? { hosts.first(where: { $0.isDefault }) ?? hosts.first }
 
     init() {
+        #if DEBUG
+        let uiFixture = ProcessInfo.processInfo.environment["LFG_SESSION_UI_FIXTURE"] == "1"
+        defaults = uiFixture ? UserDefaults(suiteName: "lfg-session-ui-fixture")! : .standard
+        #else
+        defaults = .standard
+        #endif
         hosts = HostStore.migrate(
             hostsData: defaults.data(forKey: Self.hostsKey),
             legacyBaseURL: defaults.string(forKey: Self.baseURLKey))
@@ -267,6 +278,15 @@ struct CrossProviderSwitchStatusFixture: View {
             agentRawValue: defaults.string(forKey: Self.newSessionAgentKey),
             model: defaults.string(forKey: Self.newSessionModelKey)
         )
+        #if DEBUG
+        if uiFixture {
+            hosts = [
+                Host(url: "http://127.0.0.1:18891", hostId: "session-ui-pro", name: "Fixture Pro", isDefault: true),
+                Host(url: "http://127.0.0.1:18892", hostId: "session-ui-air", name: "Fixture Air", isDefault: false),
+            ]
+            return
+        }
+        #endif
         // Private builds may contain a generated, gitignored Service Auth
         // payload. Copy it into this device's Keychain before the first client
         // is created, and make a clean install usable without a setup form.
