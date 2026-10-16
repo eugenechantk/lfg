@@ -23,6 +23,24 @@ function rollout(content = event("task_started")): string {
 }
 
 describe("Codex without a terminal pane", () => {
+  test("fresh forks stay idle in journal and push observations until their first turn", async () => {
+    const transcriptPath = rollout(JSON.stringify({
+      type: "session_meta", payload: { id: "fork", forked_from_id: "source" },
+    }) + "\n");
+    appendFileSync(transcriptPath, event("thread_settings_applied"));
+    const session = { agent: "codex", sessionId: "fresh-fork", transcriptPath, tmuxTarget: null };
+    for (let read = 0; read < 3; read++) {
+      expect(await bareSessionBusy(session)).toBe(false);
+      expect((await observeSession(session)).busy).toBe(false);
+    }
+    appendFileSync(transcriptPath, event("task_started"));
+    expect(await bareSessionBusy(session)).toBe(true);
+    expect((await observeSession(session)).busy).toBe(true);
+    appendFileSync(transcriptPath, event("task_complete"));
+    expect(await bareSessionBusy(session)).toBe(false);
+    expect((await observeSession(session)).busy).toBe(false);
+  });
+
   test("the journal keeps an unchanged open turn running", async () => {
     const transcriptPath = rollout();
     for (let read = 0; read < 3; read++) {

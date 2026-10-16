@@ -58,7 +58,7 @@ type Line = {
   subtype?: unknown;
   isMeta?: unknown;
   message?: { role?: unknown; content?: unknown };
-  payload?: { type?: unknown };
+  payload?: { type?: unknown; forked_from_id?: unknown };
 };
 
 // codex rollouts (`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`) use a different
@@ -91,6 +91,15 @@ function classifyTurnEvidence(line: string): TranscriptTurnEvidence | null {
   // turn_duration to the old one. The old transcript is finished at this marker;
   // otherwise its last assistant/tool row keeps that session marked running.
   if (x.type === "continued-in") return { state: "idle", explicit: false };
+
+  // A new Codex fork contains only session_meta plus settings until its first
+  // prompt. Creating that rollout is not a running turn. Without this boundary
+  // the REST/journal fallbacks can mistake bootstrap or copied pane output for
+  // work. Newer task_started/task_complete records still win the reverse scan.
+  if (x.type === "session_meta" && typeof x.payload?.forked_from_id === "string"
+      && x.payload.forked_from_id.length > 0) {
+    return { state: "idle", explicit: false };
+  }
 
   if (x.type === "system") {
     // Only `turn_duration` is a boundary. `away_summary` is appended minutes
@@ -131,7 +140,7 @@ function classifyTurnEvidence(line: string): TranscriptTurnEvidence | null {
   }
 
   // `mode`, `ai-title`, `last-prompt`, `file-history-*`, codex `response_item` /
-  // `turn_context` / `session_meta` records…
+  // `turn_context`, and non-fork `session_meta` records…
   return null;
 }
 
