@@ -6,6 +6,8 @@ struct ScheduledTasksPane: View {
     @EnvironmentObject private var store: SessionStore
     @State private var error: String?
     @State private var openingSession = false
+    /// The host strip's "Hidden directories…" popover, the same panel Sessions uses.
+    @State private var showDirectoryFilter = false
     @Binding var path: [ScheduledTaskRoute]
     /// Reported up for the switcher's Tasks badge.
     @Binding var taskNeedsInput: Int
@@ -21,7 +23,9 @@ struct ScheduledTasksPane: View {
             return AnyView(DesktopConnectionStatusBar(compact: compact))
         },
            connectionWarning: AnyView(DesktopConnectionWarning()),
-           connectedHostIDs: Set(store.hosts.filter { $0.error == nil }.map(\.id))) { hostID, sessionID in
+           connectedHostIDs: Set(store.hosts.filter { $0.error == nil }.map(\.id)),
+           hiddenDirectories: store.hiddenDirs,
+           onHiddenDirectories: { showDirectoryFilter = true }) { hostID, sessionID in
             guard !openingSession else { return }
             openingSession = true
             Task {
@@ -51,6 +55,10 @@ struct ScheduledTasksPane: View {
             taskNeedsInput = count
         }
         .task { await store.refresh() }
+        .popover(isPresented: $showDirectoryFilter, arrowEdge: .top) {
+            HiddenDirectoriesSettingsView()
+                .environmentObject(store)
+        }
         .overlay(alignment: .bottom) {
             if openingSession {
                 ProgressView("Opening session…").padding().background(.background)

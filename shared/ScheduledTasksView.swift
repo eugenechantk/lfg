@@ -81,6 +81,12 @@ struct ScheduledTasksView: View {
     var connectionHeader: ((CGFloat) -> AnyView)? = nil
     var connectionWarning: AnyView? = nil
     var connectedHostIDs: Set<String>? = nil
+    #if os(macOS)
+    /// The Sessions list's hidden-directory rule, applied to tasks' folders.
+    var hiddenDirectories = HiddenDirs()
+    /// Opens the hidden-directories panel from the host strip's menu.
+    var onHiddenDirectories: (() -> Void)? = nil
+    #endif
     var embedsInNavigationStack = true
     var showsListActions = true
     var usesBottomCreate = false
@@ -95,9 +101,14 @@ struct ScheduledTasksView: View {
     @State private var path: [ScheduledTaskRoute] = []
     /// The task whose edit chat is starting (Mac), so its button can show progress.
     @State private var chatOpeningTaskID: String?
-    @State private var collapsedGroups: Set<TaskListSection> = [.closed]
+    /// Group ids: a status section's raw value, or "dir:<folder>" in directory mode.
+    @State private var collapsedGroups: Set<String> = [TaskListSection.closed.rawValue]
     /// nil shows every host.
     @State private var hostFilter: String?
+    #if os(macOS)
+    /// The host strip's Group by, the same control as on Sessions.
+    @State private var groupMode: GroupMode = .status
+    #endif
     @State private var localSearch = ""
     @State private var listWidth: CGFloat = 320
     @State private var desktopSearchShown = false
@@ -121,7 +132,7 @@ struct ScheduledTasksView: View {
         }
     }
     private var filtered: [HostedScheduledTask] {
-        model.tasks.filter { item in
+        let items = model.tasks.filter { item in
             let task = item.task
             guard hostFilter == nil || item.host.id == hostFilter else { return false }
             return (search.isEmpty || task.name.localizedCaseInsensitiveContains(search)
@@ -133,6 +144,11 @@ struct ScheduledTasksView: View {
             let rhs = $1.task.nextRunAt ?? .greatestFiniteMagnitude
             return lhs == rhs ? $0.id < $1.id : lhs < rhs
         }
+        #if os(macOS)
+        return TaskDirectoryGrouping.visible(items, hidden: hiddenDirectories) { $0.task }
+        #else
+        return items
+        #endif
     }
     var body: some View {
         taskNavigation
@@ -380,41 +396,30 @@ struct ScheduledTasksView: View {
     }
 
     #if os(macOS)
-    /// "● Pro ○ Air offline · 1 running        All hosts ⌄" under the toolbar.
+    /// The Sessions list's strip (board dA2-sessions): a dot per host, how many
+    /// run, and the capsule whose menu holds the host filter, Group by and
+    /// Hidden directories. Replaced the thin pre-S2 band on 2026-10-16.
     private var desktopHostStrip: some View {
         let running = model.tasks.filter { ["starting", "running"].contains($0.task.currentRun?.status ?? "") }.count
-        return HStack(spacing: 6) {
-            // Wide enough to keep host names: the strip has the whole width, unlike the toolbar.
-            connectionHeader?(700)
-            if running > 0 {
-                Text("· \(running) running").foregroundStyle(.secondary).lineLimit(1).fixedSize()
-            }
-            Spacer(minLength: 8)
-            if hosts.count > 1 {
-                Menu {
-                    Picker("Show tasks on", selection: $hostFilter) {
-                        Text("All hosts").tag(String?.none)
-                        ForEach(hosts) { host in Text(host.name).tag(Optional(host.id)) }
-                    }
-                    .pickerStyle(.inline)
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(hosts.first(where: { $0.id == hostFilter })?.name ?? "All hosts")
-                        Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
-                    }
-                    .font(.system(size: 12, weight: .medium))
-                    .padding(.horizontal, 9).frame(height: 22)
-                    .background(TaskPalette.control, in: Capsule())
+        return S2DeskHostStrip(
+            hosts: hosts.map { host in
+                S2DeskHostStrip.HostDot(id: host.id, label: host.name,
+                                        online: connectedHostIDs?.contains(host.id) ?? true)
+            },
+            workingCount: running,
+            workingLabel: "running",
+            groupMode: $groupMode,
+            onHiddenDirectories: { onHiddenDirectories?() },
+            leadingMenu: hosts.count > 1 ? AnyView(
+                Picker("Show tasks on", selection: $hostFilter) {
+                    Text("All hosts").tag(String?.none)
+                    ForEach(hosts) { host in Text(host.name).tag(Optional(host.id)) }
                 }
-                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                .pickerStyle(.inline)
                 .accessibilityIdentifier("tasks_host_strip_filter")
-            }
-        }
-        .font(.system(size: 12))
-        .padding(.leading, 16).padding(.trailing, 14)
-        .frame(height: 30)
-        .background(TaskColors.page)
-        .overlay(alignment: .bottom) { Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 1) }
+            ) : nil
+        )
+        .background(S2Desk.background)
         .accessibilityIdentifier("tasks_host_strip")
     }
 
@@ -521,6 +526,10 @@ struct ScheduledTasksView: View {
     }
     #endif
 
+    #if os(macOS)
+    private var hostStatusInToolbar: Bool { false }
+    #endif
+
     @ToolbarContentBuilder
     private var connectionToolbar: some ToolbarContent {
         if let connectionHeader {
@@ -532,7 +541,8 @@ struct ScheduledTasksView: View {
             ToolbarItem(placement: .topBarLeading) { connectionHeader(listWidth) }
         }
         #else
-        if listWidth >= 500 {
+        // Host status lives in the strip under the toolbar at every width, as on Sessions.
+        if hostStatusInToolbar {
         ToolbarItem(id: listWidth < 700 ? "compact_task_connection" : "labelled_task_connection", placement: .navigation) {
             connectionHeader(listWidth)
         }
@@ -603,7 +613,7 @@ struct ScheduledTasksView: View {
         VStack(spacing: 0) {
             #if os(macOS)
             // Below 500pt the toolbar has no room for host status; the board puts it in a strip instead.
-            if listWidth < 500, connectionHeader != nil { desktopHostStrip }
+            if connectionHeader != nil { desktopHostStrip }
             taskFeedback
             #else
             if model.loading || filtered.isEmpty { taskFeedback }
@@ -628,8 +638,8 @@ struct ScheduledTasksView: View {
                     #endif
                     ForEach(taskGroups) { group in
                         Section {
-                            sectionHeader(group.section, count: group.items.count)
-                            if !collapsedGroups.contains(group.section) {
+                            sectionHeader(group)
+                            if !collapsedGroups.contains(group.id) {
                                 ForEach(group.items) { item in
                                     taskRow(item)
                                         .accessibilityIdentifier("task_row_\(item.task.id)")
@@ -688,13 +698,25 @@ struct ScheduledTasksView: View {
     }
 
     private struct TaskGroup: Identifiable {
-        let section: TaskListSection
+        let id: String
+        let title: String
+        let hint: String?
+        let warning: Bool
         let items: [HostedScheduledTask]
-        var id: TaskListSection { section }
     }
 
     private var taskGroups: [TaskGroup] {
-        TaskListGrouping.sections(filtered) { $0.task }.map { TaskGroup(section: $0.section, items: $0.items) }
+        #if os(macOS)
+        if groupMode == .directory {
+            return TaskDirectoryGrouping.sections(filtered) { $0.task }.map {
+                TaskGroup(id: "dir:\($0.directory)", title: $0.directory, hint: nil, warning: false, items: $0.items)
+            }
+        }
+        #endif
+        return TaskListGrouping.sections(filtered) { $0.task }.map {
+            TaskGroup(id: $0.section.rawValue, title: $0.section.title, hint: $0.section.hint,
+                      warning: $0.section == .needsInput, items: $0.items)
+        }
     }
 
     @ViewBuilder
@@ -716,11 +738,12 @@ struct ScheduledTasksView: View {
         }
     }
 
-    private func sectionHeader(_ section: TaskListSection, count: Int) -> some View {
-        let collapsed = collapsedGroups.contains(section)
-        return TaskSectionHeader(section: section, count: count, collapsed: collapsed) {
+    private func sectionHeader(_ group: TaskGroup) -> some View {
+        let collapsed = collapsedGroups.contains(group.id)
+        return TaskSectionHeader(title: group.title, count: group.items.count, collapsed: collapsed,
+                                 hint: group.hint, warning: group.warning, identifier: "task_group_\(group.id)") {
             withAnimation(.easeInOut(duration: 0.2)) {
-                if collapsed { collapsedGroups.remove(section) } else { collapsedGroups.insert(section) }
+                if collapsed { collapsedGroups.remove(group.id) } else { collapsedGroups.insert(group.id) }
             }
         }
         .listRowSeparator(.hidden)

@@ -200,10 +200,27 @@ struct TaskResultGlyphView: View {
 
 /// A collapsible group header: chevron, label, count and an optional hint at the right.
 struct TaskSectionHeader: View {
-    let section: TaskListSection
+    let title: String
     let count: Int
     let collapsed: Bool
+    /// Shown at the right while expanded ("by next run").
+    let hint: String?
+    /// Needs input reads in the warning colour.
+    let warning: Bool
+    let identifier: String
     let toggle: () -> Void
+
+    init(section: TaskListSection, count: Int, collapsed: Bool, toggle: @escaping () -> Void) {
+        self.init(title: section.title, count: count, collapsed: collapsed, hint: section.hint,
+                  warning: section == .needsInput, identifier: "task_group_\(section.rawValue)", toggle: toggle)
+    }
+
+    /// A group that is not a status section: the desktop's "By directory" folders.
+    init(title: String, count: Int, collapsed: Bool, hint: String? = nil, warning: Bool = false,
+         identifier: String, toggle: @escaping () -> Void) {
+        self.title = title; self.count = count; self.collapsed = collapsed; self.hint = hint
+        self.warning = warning; self.identifier = identifier; self.toggle = toggle
+    }
     #if os(macOS)
     private static let chevronColumn: CGFloat = 9
     #else
@@ -217,14 +234,14 @@ struct TaskSectionHeader: View {
                     .font(.system(size: TaskListMetrics.header - 6, weight: .bold))
                     .foregroundStyle(.secondary)
                     .frame(width: Self.chevronColumn)
-                Text(section.title)
+                Text(title)
                     .font(.system(size: TaskListMetrics.header, weight: .semibold))
-                    .foregroundStyle(section == .needsInput ? TaskColors.warning : Color.secondary)
+                    .foregroundStyle(warning ? TaskColors.warning : Color.secondary)
                 Text("\(count)")
                     .font(.system(size: TaskListMetrics.header))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
-                if !collapsed, let hint = section.hint {
+                if !collapsed, let hint {
                     Text(hint).font(.system(size: TaskListMetrics.headerHint)).foregroundStyle(.secondary)
                 }
             }
@@ -238,8 +255,8 @@ struct TaskSectionHeader: View {
             #endif
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("task_group_\(section.rawValue)")
-        .accessibilityLabel("\(section.title), \(count) tasks")
+        .accessibilityIdentifier(identifier)
+        .accessibilityLabel("\(title), \(count) tasks")
         .accessibilityValue(collapsed ? "Collapsed" : "Expanded")
         .accessibilityHint("Double tap to \(collapsed ? "expand" : "collapse") this group")
     }
