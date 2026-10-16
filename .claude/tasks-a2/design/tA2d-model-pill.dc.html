@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Model pill with the agent logos</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 560px; height: 300px; box-sizing: border-box; display: flex; flex-direction: column; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; -webkit-font-smoothing: antialiased; color: #FFFFFF;">
+  <div style="flex: 1; background: #000000; padding: 24px 24px; display: flex; flex-direction: column; gap: 14px; justify-content: center;">
+    <span style="font-size: 13px; font-weight: 600; color: #A1A1A6;">Phone · task view chips (model names read as people write them)</span>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="font-size: 12px; font-weight: 600; color: #8A8A93; width: 110px; flex: none;">Claude Code</span>
+      <span style="height: 26px; padding: 0 9px 0 7px; border-radius: 8px; background: #1C1C1E; display: flex; align-items: center; gap: 5px; font-size: 13px; color: #D1D1D6;"><img src="agent-claude.svg" alt="" width="14" height="14" style="display: block;">Opus 5.5</span>
+      <span style="height: 26px; padding: 0 9px 0 7px; border-radius: 8px; background: #1C1C1E; display: flex; align-items: center; gap: 5px; font-size: 13px; color: #D1D1D6;"><img src="agent-claude.svg" alt="" width="14" height="14" style="display: block;">Claude default</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="font-size: 12px; font-weight: 600; color: #8A8A93; width: 110px; flex: none;">Codex</span>
+      <span style="height: 26px; padding: 0 9px 0 7px; border-radius: 8px; background: #1C1C1E; display: flex; align-items: center; gap: 5px; font-size: 13px; color: #D1D1D6;"><img src="agent-codex.svg" alt="" width="15" height="15" style="display: block;">GPT-6 Astra</span>
+      <span style="height: 26px; padding: 0 9px 0 7px; border-radius: 8px; background: #1C1C1E; display: flex; align-items: center; gap: 5px; font-size: 13px; color: #D1D1D6;"><img src="agent-codex.svg" alt="" width="15" height="15" style="display: block;">Codex default</span>
+    </div>
+  </div>
+  <div style="flex: 1; background: #1B1B1E; padding: 24px 24px; display: flex; flex-direction: column; gap: 14px; justify-content: center;">
+    <span style="font-size: 12px; font-weight: 600; color: #8A8A93;">Mac · task view chips (raw model ids)</span>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="font-size: 12px; font-weight: 600; color: #8A8A93; width: 110px; flex: none;">Claude Code</span>
+      <span style="height: 24px; display: flex; align-items: center; gap: 5px; padding: 0 8px 0 6px; border-radius: 7px; background: rgba(255,255,255,0.07); font-size: 12px; color: #C9CBD3"><img src="agent-claude.svg" alt="" width="13" height="13" style="display: block">opus</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="font-size: 12px; font-weight: 600; color: #8A8A93; width: 110px; flex: none;">Codex</span>
+      <span style="height: 24px; display: flex; align-items: center; gap: 5px; padding: 0 8px 0 6px; border-radius: 7px; background: rgba(255,255,255,0.07); font-size: 12px; color: #C9CBD3"><img src="agent-codex.svg" alt="" width="14" height="14" style="display: block">gpt-6-astra</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":560,"height":300}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

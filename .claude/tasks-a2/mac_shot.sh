@@ -11,8 +11,9 @@ APP=$OUT/lfg.app
 HOST=${TASKS_HOST:-http://127.0.0.1:8932}
 
 if [[ ${1:-} == build ]]; then
-  mkdir -p "$APP/Contents/MacOS" "$OUT/mc"
+  mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$OUT/mc"
   cp "$REPO/desktop/build/lfg.app/Contents/Info.plist" "$APP/Contents/" 2>/dev/null || true
+  cp "$REPO"/ios/LFG/Assets.xcassets/agent-{claude,codex}.imageset/*.svg "$APP/Contents/Resources/"
   (cd "$REPO/desktop" && swiftc -Onone -parse-as-library -module-cache-path "$OUT/mc" -target arm64-apple-macosx26.0 \
     -o "$APP/Contents/MacOS/lfg" LFGSessions.swift ScheduledTasksPane.swift ../shared/ScheduledTasksView.swift ../shared/Tasks/*.swift \
     ../ios/LFGCore/Sources/LFGCore/ScheduledTasks.swift ../ios/LFGCore/Sources/LFGCore/TaskPresentation.swift \

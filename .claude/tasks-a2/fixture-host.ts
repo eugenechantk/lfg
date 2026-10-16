@@ -85,6 +85,11 @@ if (process.env.FIXTURE_VARIANTS) {
   task({ name: "V custom", schedule: cron("15 9 1-7 * 1") });
   task({ name: "V after n", schedule: cron("0 9 * * 1-5", { maxRuns: 10 }) });
   task({ name: "V on date", schedule: cron("0 9 * * 1-5", { endsAt: iso(at(77, 23, 59)) }) });
+  // The runs boards (tA2d-runs-*): 23 past runs, the third newest failed, so both groups fold.
+  task({ name: "V long history", schedule: cron("0 9 * * *") },
+    Array.from({ length: 23 }, (_, i) => -22 + i).map(d => d === -2
+      ? { startedAt: at(d, 9), finishedAt: at(d, 9), status: "failed" as const, error: "Model unavailable. No session started." }
+      : { startedAt: at(d, 9), finishedAt: at(d, 9, 5), summary: `Reviewed ${5 + ((d + 30) % 9)} commits; no regressions`, sessionId: `fx-l${-d}` }));
 }
 for (const t of tasks) if (!t.enabled || t.cancelledAt) t.nextRunAt = t.cancelledAt ? null : (t.schedule.kind === "once" ? (Date.parse(t.schedule.at!) > now ? Date.parse(t.schedule.at!) : null) : t.nextRunAt ?? nextOccurrence(t.schedule, now));
 for (const t of tasks) if (t.schedule.kind === "repeat" && t.scheduledRunCount === t.schedule.occurrences) t.nextRunAt = null;
