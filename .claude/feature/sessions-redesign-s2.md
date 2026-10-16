@@ -9,7 +9,7 @@ https://claude.ai/artifact/F2B1MNbv5oxuscm237M9sD
 
 **Review surface:** the canvas page **S2 build plan (Oct 15)**. It has 13 boards, each showing a live S2 design with numbered pins and the FE/BE work for every pin. This file is the working copy of the same plan.
 
-Status (2026-10-16): **Phases 1–3 verified** (phone list, session view, sheets and menus; uncommitted). Phase 4 (desktop list) waits on merging `main`, which now holds the desktop narrow-window work. Worktree `worktree-sessions-redesign-s2`, based on local `main` at `8b0be91`.
+Status (2026-10-16): **Phases 1–3 verified and committed** (`7dd6046`, docs `2a29201`), **`main` merged** at `2672dad` (Tasks A2, desktop narrow window, runs fold). Phase 4 (desktop list) is next. Worktree `worktree-sessions-redesign-s2`, based on local `main` at `8b0be91`.
 
 Tier: **product** (lfg ships to TestFlight and both Macs).
 
@@ -508,6 +508,7 @@ Phase 2 took 10 verifier rounds because the verifier was my measuring tool. From
 | P3 | Round 4 fixes, self-measured | Board-drawn keyboard icon (20.0 × 15.33); the key hides/shows the keyboard with the board's labels, row at the board's height when hidden (840 / 840); 0.5pt row border; sign-in arrows keep `.disabled` with a non-fading style | `…/phase3-r4-selfcheck/selfcheck.md` |
 | P3 | **Visual verifier round 5 (terminal Fit/Wide × keyboard up/hidden, sign-in)** | **PASS** — nothing above 1.5pt. Observations: SF Mono vs Menlo widths and arrows (accepted), hidden key row 1.0pt high, "I'm signed in" label 6pt narrower (SF Pro). Not exercised: ctrl latch, review and result sheets (do-not-tap). With rounds 2–4 every Phase 3 board has passed | `…/phase3-r5/evidence.md` |
 | P3 | Tests after Phase 3 fixes | LFGCore 348 Swift Testing + 644 XCTest pass; bun subagents / sessions-last-user-at / sendq-delivery-policy 48 pass | — |
+| Merge | `main` (`2672dad`) into this branch | 5 conflicts, all additive (Models/SessionStore `task` + `purpose`; serve.ts origins then edit-chat tags; RootView: S2 dock + Sessions badge, main's Tasks badge count; improvement log). tsc clean; LFGCore 408 Swift Testing + 644 XCTest; iOS build green; bun 1230 pass after rewriting the 2 menu-safety tests for the S2 options button (`src/ios-session-menu-threading.test.ts`); remaining failures: 2 known resumable-closed timeouts, codexBin (a newer Homebrew/npm codex 0.159.2 is installed on this Mac). Smoke on the simulator against the real hosts: list, Tasks tab (main's A2) in the S2 dock, a real Codex session view | — |
 
 ## Bugs
 
