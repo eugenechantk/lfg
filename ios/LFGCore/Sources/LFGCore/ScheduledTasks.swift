@@ -546,7 +546,30 @@ public struct ScheduledTasksClient: Sendable {
         return task
     }
     public func save(_ draft: ScheduledTaskDraft, id: String? = nil) async throws { try await save(draft.payload, id: id) }
-    public func save(_ payload: ScheduledTaskPayload, id: String? = nil) async throws { let _: ScheduledTaskMutation = try await call("/api/scheduled-tasks" + (id.map { "/\($0)" } ?? ""), body: JSONEncoder().encode(payload)) }
+    @discardableResult
+    public func save(_ payload: ScheduledTaskPayload, id: String? = nil) async throws -> ScheduledTaskRecord? {
+        let result: ScheduledTaskMutation = try await call("/api/scheduled-tasks" + (id.map { "/\($0)" } ?? ""), body: JSONEncoder().encode(payload))
+        return result.task
+    }
+    /// Moves a task to another host. The copy is created there first, so a failure (the folder is
+    /// missing on that host, the host is offline) leaves the original untouched. Then the original
+    /// stops on this host and keeps its run history under Closed.
+    public func move(_ task: ScheduledTaskRecord, as payload: ScheduledTaskPayload,
+                     to destination: ScheduledTasksClient) async throws -> ScheduledTaskRecord {
+        var payload = payload
+        // Cron "after N runs" counts runs on its host. With the schedule unchanged, carry over what is left.
+        let s = task.schedule
+        if let limit = payload.schedule.maxRuns, s.maxRuns == limit, s.kind == payload.schedule.kind,
+           s.expression == payload.schedule.expression, s.timezone == payload.schedule.timezone {
+            payload.schedule.maxRuns = max(1, limit - (task.scheduledRunCount ?? 0))
+        }
+        guard let created = try await destination.save(payload) else {
+            throw ScheduledTaskClientError(message: "\(destination.host.name) did not return the new task.")
+        }
+        do { try await action(task.id, "cancel") }
+        catch { throw ScheduledTaskMoveError(task: created, from: host.name, reason: error.localizedDescription) }
+        return created
+    }
     public func action(_ id: String, _ action: String, enabled: Bool? = nil) async throws {
         let data = try JSONEncoder().encode(ScheduledTaskToggle(enabled: enabled))
         let _: ScheduledTaskMutation = try await call("/api/scheduled-tasks/\(id)" + (action.isEmpty ? "" : "/\(action)"), body: data)
@@ -588,3 +611,10 @@ public struct ScheduledTaskMutation: Decodable, Sendable { public let task: Sche
 private struct ScheduledTaskToggle: Encodable { let enabled: Bool? }
 private struct ScheduledTaskErrorBody: Decodable { let error: String? }
 public struct ScheduledTaskClientError: LocalizedError, Sendable { public let message: String; public init(message: String) { self.message = message }; public var errorDescription: String? { message } }
+/// The copy exists on the new host, but the original could not be stopped: both would run.
+public struct ScheduledTaskMoveError: LocalizedError, Sendable {
+    public let task: ScheduledTaskRecord
+    public let from: String
+    public let reason: String
+    public var errorDescription: String? { "Moved, but the original on \(from) is still on (\(reason)). Stop it there so it does not run twice." }
+}

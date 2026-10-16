@@ -89,14 +89,16 @@ test("pausing records when, resuming clears it, and a schedule change resets the
 test("upcoming runs: active, paused (as if resumed), passed one-time, cancelled", async () => withStore(async (store, dir) => {
   const now = Date.now();
   const active = await store.save(base(dir, { kind: "cron", expression: "0 9 * * *", timezone: "UTC" }), now);
-  expect(upcomingRuns(active, now)).toHaveLength(3);
+  expect(upcomingRuns(active, now)).toHaveLength(10);
   expect(upcomingRuns(active, now)[0]).toBe(active.nextRunAt!);
   const paused = await store.update(active.id, { enabled: false }, now);
   const runs = upcomingRuns(paused, now);
-  expect(runs).toHaveLength(3);
+  expect(runs).toHaveLength(10);
   expect(runs[0]).toBeGreaterThan(now);
   const once = await store.save(base(dir, { kind: "once", at: new Date(now + HOUR).toISOString(), timezone: "UTC" }, { enabled: false }), now);
   expect(upcomingRuns(once, now)).toEqual([now + HOUR]);
+  const onceOn = await store.save(base(dir, { kind: "once", at: new Date(now + HOUR).toISOString(), timezone: "UTC" }), now);
+  expect(upcomingRuns(onceOn, now)).toEqual([now + HOUR]);
   expect(upcomingRuns(once, now + 2 * HOUR)).toEqual([]);
   const cancelled = await store.cancel(active.id, now);
   expect(upcomingRuns(cancelled, now)).toEqual([]);
@@ -166,7 +168,7 @@ test("the list carries the new fields and embeds a waiting run's question; previ
   const route = scheduledTaskRoutes(store, scheduler, async (path: string) => path === "/api/sessions" ? { sessions: [{ sessionId: "s1", prompt }] } as any : {} as any, { root: dir, port: 1, defaultCwd: dir });
   const list = await (await route(new Request("http://x/api/scheduled-tasks")))!.json() as any;
   const t = list.tasks[0];
-  expect(t.upcomingRuns).toHaveLength(3);
+  expect(t.upcomingRuns).toHaveLength(10);
   expect(t.consecutiveFailures).toBe(0);
   expect(t.succeededCount).toBe(0);
   expect(t.currentRun.prompt).toEqual(prompt);

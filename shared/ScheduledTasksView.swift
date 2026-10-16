@@ -180,9 +180,11 @@ struct ScheduledTasksView: View {
     @ViewBuilder
     private func sheetContent(_ destination: TaskSheet) -> some View {
         switch destination {
-        case .manual(let host): ScheduledTaskEditor(client: .init(host: host), task: nil)
+        case .manual(let host): ScheduledTaskEditor(client: .init(host: host), hosts: hosts, task: nil)
         case .edit(let item):
-            ScheduledTaskEditor(client: .init(host: item.host), task: item.task, openSession: { hostID, sessionID in
+            ScheduledTaskEditor(client: .init(host: item.host), hosts: hosts, task: item.task,
+                                onMoved: { newID, warning in taskMoved(from: item.id, to: newID, warning: warning) },
+                                openSession: { hostID, sessionID in
                 pendingSession = (hostID, sessionID); sheet = nil
             })
         case .taskChat(let item, let first):
@@ -199,6 +201,21 @@ struct ScheduledTasksView: View {
             if let host = hosts.first {
                 ScheduledTaskChat(hosts: hosts, initialHost: host) { hostID, sessionID in
                     pendingSession = (hostID, sessionID); sheet = nil
+                }
+            }
+        }
+    }
+
+    /// A task moved to another host has a new id there: the open task page follows it.
+    private func taskMoved(from oldID: String, to newID: String, warning: String?) {
+        Task {
+            await model.refresh()
+            if let warning { model.error = warning }
+            pathBinding.wrappedValue = pathBinding.wrappedValue.compactMap { route in
+                switch route {
+                case .task(oldID): .task(newID)
+                case .edit(oldID): nil
+                default: route
                 }
             }
         }
@@ -289,10 +306,10 @@ struct ScheduledTasksView: View {
                 }
             case .edit(let id):
                 if let item = model.tasks.first(where: { $0.id == id }) {
-                    ScheduledTaskEditor(client: .init(host: item.host), task: item.task, embedded: true, onClose: {
+                    ScheduledTaskEditor(client: .init(host: item.host), hosts: hosts, task: item.task, embedded: true, onClose: {
                         if pathBinding.wrappedValue.last == .edit(id) { pathBinding.wrappedValue.removeLast() }
                         Task { await model.refresh() }
-                    }) { hostID, sessionID in openSession(hostID, sessionID) }
+                    }, onMoved: { newID, warning in taskMoved(from: id, to: newID, warning: warning) }) { hostID, sessionID in openSession(hostID, sessionID) }
                     .id("edit-\(item.id)")
                 } else {
                     ContentUnavailableView("Task unavailable", systemImage: "calendar.badge.exclamationmark",
@@ -786,7 +803,7 @@ private struct TaskInstructions: View {
         VStack(alignment: .leading, spacing: 6) {
             instructions(lineLimit: isExpanded ? nil : clamp)
                 .font(.system(size: TaskDetailMetrics.body))
-                .foregroundStyle(.primary.opacity(0.95))
+                .foregroundStyle(TaskColors.body)
                 .textSelection(.enabled)
                 .accessibilityIdentifier("task_instructions")
                 .background(alignment: .topLeading) {
@@ -852,14 +869,19 @@ private struct ScheduledTaskDetail: View {
     /// The answer just sent, kept until the host reports the run moving on.
     @State private var answered: (runID: String, label: String)?
     @State private var answering = false
-    @State private var showsOlderRuns = false
-    private static let visiblePastRuns = 6
+    /// Past runs the viewer has opened (two, then ten more per Show more).
+    @State private var olderRequested = 2
+    @State private var showsLaterRuns = false
     /// The Mac hides the switcher on task pages, so Back fits the toolbar down to this width; below it Back moves into •••.
     private static let backInMenuBelow: CGFloat = 300
     #if os(macOS)
     private static let runsHeaderGap: CGFloat = 12
+    private static let bottomPadding: CGFloat = 24
+    private static let pageInset: CGFloat = 18
     #else
     private static let runsHeaderGap: CGFloat = 8
+    private static let bottomPadding: CGFloat = 64
+    private static let pageInset: CGFloat = 20
     #endif
 
     private var answeredLabel: String? {
@@ -872,7 +894,10 @@ private struct ScheduledTaskDetail: View {
         let entries = RunTimelineEntry.entries(task: task, runs: runs)
         let upcoming = entries.filter { $0.node == .upcoming }
         let past = entries.filter { $0.node != .upcoming }
-        let hidden = showsOlderRuns ? 0 : max(0, past.count - Self.visiblePastRuns)
+        // Upcoming runs are furthest first, so the folded view keeps the nearest ones.
+        let laterFold = RunGroupFold.upcoming(count: upcoming.count, open: showsLaterRuns)
+        // Runs the host has not sent yet count as hidden past runs.
+        let earlierFold = RunGroupFold.past(loaded: past.count, total: past.count + max(0, total - runs.count), requested: olderRequested)
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 TaskDetailHeader(task: task, hostName: hostName)
@@ -887,7 +912,7 @@ private struct ScheduledTaskDetail: View {
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Instructions")
-                        .font(.system(size: TaskDetailMetrics.section, weight: .semibold)).foregroundStyle(.secondary)
+                        .font(.system(size: TaskDetailMetrics.section, weight: .semibold)).foregroundStyle(TaskColors.grey)
                     // When a run needs attention (failed, waiting, retrying) the card leads; the instructions shrink to two fixed lines.
                     let attention = card.kind == .failed || card.kind == .waiting
                         || (card.kind == .running && task.consecutiveFailures > 0)
@@ -904,10 +929,10 @@ private struct ScheduledTaskDetail: View {
                 let runsHidden = historyLoaded && error == nil && entries.isEmpty && task.currentRun != nil
                 if !runsHidden {
                     HStack(alignment: .firstTextBaseline) {
-                        Text("Runs").font(.system(size: TaskDetailMetrics.section, weight: .semibold)).foregroundStyle(.secondary)
+                        Text("Runs").font(.system(size: TaskDetailMetrics.section, weight: .semibold)).foregroundStyle(TaskColors.grey)
                             .accessibilityAddTraits(.isHeader).accessibilityIdentifier("task_sessions_heading")
                         Spacer()
-                        Text(RunTimelineEntry.countLine(task)).font(.system(size: 13)).foregroundStyle(.secondary)
+                        Text(RunTimelineEntry.countLine(task)).font(.system(size: TaskDetailMetrics.runTail)).foregroundStyle(TaskColors.grey)
                     }
                     .padding(.top, Self.runsHeaderGap)
                 }
@@ -917,20 +942,21 @@ private struct ScheduledTaskDetail: View {
                 } else if entries.isEmpty, error == nil, !runsHidden {
                     Text("Runs will appear here when this task runs.").foregroundStyle(.secondary).accessibilityIdentifier("task_history_empty")
                 }
-                RunTimelineView(entries: upcoming + past.dropLast(hidden), open: open)
-                if hidden > 0 || runs.count < total {
-                    Button(hidden > 0 ? "Show \(hidden) older run\(hidden == 1 ? "" : "s")" : "Load older runs") {
-                        if hidden > 0 { showsOlderRuns = true } else { Task { await load(more: true) } }
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 13)).foregroundStyle(TaskColors.accent)
-                    .padding(.leading, 28)
-                    .accessibilityIdentifier("task_runs_more")
-                }
+                RunTimelineView(
+                    entries: Array(upcoming.suffix(laterFold.shown)) + Array(past.prefix(earlierFold.shown)), open: open,
+                    later: laterFold.hasToggle ? RunsToggle(label: laterFold.label, count: laterFold.count(upcoming: true),
+                                                            opensUp: true, opens: laterFold.opens, identifier: "task_runs_later") {
+                        showsLaterRuns.toggle()
+                    } : nil,
+                    earlier: earlierFold.hasToggle ? RunsToggle(label: earlierFold.label, count: earlierFold.count(upcoming: false),
+                                                                opensUp: false, opens: earlierFold.opens, identifier: "task_runs_more") {
+                        showEarlier(earlierFold, loaded: past.count)
+                    } : nil)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, Self.pageInset)
             .padding(.top, 8)
-            .padding(.bottom, 24)
+            // The phone's last row must scroll clear of the Ask bar's fade, as on the board.
+            .padding(.bottom, Self.bottomPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityIdentifier("task_detail")
@@ -941,13 +967,17 @@ private struct ScheduledTaskDetail: View {
                 let afterFailure = card.kind == .failed || (card.kind == .running && task.consecutiveFailures > 0)
                 TaskAskBar(placeholder: afterFailure ? "Ask why it failed, or change it…" : "Ask to change this task…") { askToChange(nil) }
                     .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 6)
-                    // The board fades content over 130pt above the bar, not just behind it.
-                    .background(alignment: .bottom) {
-                        LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: Color(.systemBackground).opacity(0.96), location: 0.55)],
-                                       startPoint: .top, endPoint: .bottom)
-                            .frame(height: 130)
-                            .ignoresSafeArea()
-                            .allowsHitTesting(false)
+                    // As on the board: clear 50pt above the bar, 96% by 15pt below its top, then solid
+                    // down to the screen edge, so nothing shows at full strength beside the home indicator.
+                    .background(alignment: .top) {
+                        VStack(spacing: 0) {
+                            LinearGradient(colors: [.clear, Color(.systemBackground).opacity(0.96)], startPoint: .top, endPoint: .bottom)
+                                .frame(height: 65)
+                            Color(.systemBackground).opacity(0.96)
+                        }
+                        .padding(.top, -38)
+                        .ignoresSafeArea(edges: .bottom)
+                        .allowsHitTesting(false)
                     }
             }
         }
@@ -1046,6 +1076,13 @@ private struct ScheduledTaskDetail: View {
             do { answered = (runID, try await send()); await refresh() }
             catch { self.error = error.localizedDescription }
         }
+    }
+
+    /// Ten more past runs per tap, fetching the next page when the client runs out; Show less folds back to two.
+    private func showEarlier(_ fold: RunGroupFold, loaded: Int) {
+        guard fold.opens else { olderRequested = RunGroupFold.maxRows - 1; return }
+        olderRequested = fold.shown + RunGroupFold.pastStep
+        if olderRequested > loaded, runs.count < total { Task { await load(more: true) } }
     }
 
     private func open(_ entry: RunTimelineEntry) {
@@ -1231,9 +1268,12 @@ private struct TaskTimezonePicker: View {
 }
 
 private struct ScheduledTaskEditor: View {
-    let client: ScheduledTasksClient
+    /// The host the task lives on (or the one picked from +). Changing Host in the form moves it.
+    let origin: ScheduledTasksClient
+    let hosts: [ScheduledTaskHost]
     let task: ScheduledTaskRecord?
     let openSession: (String, String) -> Void
+    @State private var hostID: String
     @State private var currentTask: ScheduledTaskRecord?
     @State private var draft: ScheduledTaskDraft
     /// The schedule part of the form (Once / Repeat); `draft` keeps the other details.
@@ -1260,17 +1300,27 @@ private struct ScheduledTaskEditor: View {
     let embedded: Bool
     /// Leaves the page when embedded; a sheet dismisses itself.
     let onClose: (() -> Void)?
+    /// After a move: the task's new list id, and a warning when the original could not be stopped.
+    let onMoved: ((String, String?) -> Void)?
 
-    init(client: ScheduledTasksClient, task: ScheduledTaskRecord?, embedded: Bool = false, onClose: (() -> Void)? = nil,
+    init(client: ScheduledTasksClient, hosts: [ScheduledTaskHost] = [], task: ScheduledTaskRecord?, embedded: Bool = false,
+         onClose: (() -> Void)? = nil, onMoved: ((String, String?) -> Void)? = nil,
          openSession: @escaping (String, String) -> Void = { _, _ in }) {
-        self.client = client; self.task = task; self.openSession = openSession
-        self.embedded = embedded; self.onClose = onClose
+        self.origin = client; self.hosts = hosts; self.task = task; self.openSession = openSession
+        self.embedded = embedded; self.onClose = onClose; self.onMoved = onMoved
+        _hostID = State(initialValue: client.host.id)
         _currentTask = State(initialValue: task)
         _draft = State(initialValue: .init(task: task))
         _schedule = State(initialValue: ScheduleDraft(schedule: task?.schedule, nextRunAt: task?.nextRunAt))
     }
 
     private func close() { if let onClose { onClose() } else { dismiss() } }
+
+    /// The host picked in the form.
+    private var client: ScheduledTasksClient { .init(host: hosts.first(where: { $0.id == hostID }) ?? origin.host) }
+    /// An existing task with another host picked: saving creates it there and stops the original.
+    private var moving: Bool { task != nil && hostID != origin.host.id }
+    private var moveNote: String { "Saving moves this task to \(client.host.name). Its past runs stay on \(origin.host.name), under Closed." }
 
     var body: some View {
         Group {
@@ -1320,7 +1370,9 @@ private struct ScheduledTaskEditor: View {
             #if os(macOS)
             .navigationBarBackButtonHidden(embedded)
             #endif
-            .task { await loadChoices() }
+            // Folders and models come from the picked host.
+            .task(id: hostID) { await loadChoices() }
+            .onChange(of: hostID) { preview = nil }
             .sheet(item: $activePicker) { picker in
                 switch picker {
                 case .directory:
@@ -1332,7 +1384,7 @@ private struct ScheduledTaskEditor: View {
                     TaskTimezonePicker(selection: $schedule.timezone)
                 }
             }
-            .task(id: schedule.schedule) {
+            .task(id: [AnyHashable(schedule.schedule), AnyHashable(hostID)]) {
                 // Debounce typing, then ask the host what this schedule will do.
                 try? await Task.sleep(for: .milliseconds(300))
                 guard !Task.isCancelled else { return }
@@ -1353,7 +1405,20 @@ private struct ScheduledTaskEditor: View {
         Button {
             saving = true
             Task {
-                do { try await client.save(draft.payload(schedule: schedule.schedule), id: task?.id); close() }
+                do {
+                    let payload = draft.payload(schedule: schedule.schedule)
+                    if let task, moving {
+                        do {
+                            let moved = try await origin.move(task, as: payload, to: client)
+                            onMoved?("\(hostID):\(moved.id)", nil)
+                        } catch let partial as ScheduledTaskMoveError {
+                            onMoved?("\(hostID):\(partial.task.id)", partial.localizedDescription)
+                        }
+                    } else {
+                        try await client.save(payload, id: task?.id)
+                    }
+                    close()
+                }
                 catch { self.error = error.localizedDescription }
                 saving = false
             }
@@ -1424,12 +1489,7 @@ private struct ScheduledTaskEditor: View {
                 }
                 macSectionHeader("Runs on")
                 VStack(spacing: 0) {
-                    macRunsOnRow("Host", first: true) {
-                        HStack(spacing: 6) {
-                            Circle().fill(preview == nil ? Color.secondary : Color.green).frame(width: 7, height: 7)
-                            Text(client.host.name).foregroundStyle(.secondary)
-                        }
-                    }
+                    macRunsOnRow("Host", first: true) { macHostMenu }
                     macRunsOnRow("Folder") {
                         Button { activePicker = .directory } label: {
                             HStack(spacing: 6) {
@@ -1453,6 +1513,11 @@ private struct ScheduledTaskEditor: View {
                     macRunsOnRow("Model") { macModelMenu }
                 }
                 .background(TaskPalette.card, in: RoundedRectangle(cornerRadius: 14))
+                if moving {
+                    Text(moveNote).font(.system(size: 12)).foregroundStyle(.secondary)
+                        .padding(.horizontal, 4).padding(.top, 8)
+                        .accessibilityIdentifier("task_move_note")
+                }
                 if let error {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(error).font(.system(size: 12)).foregroundStyle(.red).accessibilityIdentifier("task_editor_error")
@@ -1487,6 +1552,32 @@ private struct ScheduledTaskEditor: View {
         .padding(.horizontal, 14)
         .overlay(alignment: .top) {
             if !first { Rectangle().fill(Color.primary.opacity(0.07)).frame(height: 1) }
+        }
+    }
+
+    /// The host's dot is green once it has answered for this form.
+    private var macHostMenu: some View {
+        let label = HStack(spacing: 6) {
+            Circle().fill(preview == nil ? Color.secondary : Color.green).frame(width: 7, height: 7)
+            Text(client.host.name).foregroundStyle(.secondary)
+        }
+        return Group {
+            if hosts.count > 1 {
+                Menu {
+                    Picker("Host", selection: $hostID) { ForEach(hosts) { Text($0.name).tag($0.id) } }
+                        .pickerStyle(.inline).labelsHidden()
+                } label: {
+                    HStack(spacing: 6) {
+                        label
+                        Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                .accessibilityIdentifier("task_host")
+            } else {
+                label
+            }
         }
     }
 
@@ -1537,8 +1628,13 @@ private struct ScheduledTaskEditor: View {
                 if let problem = schedule.problem() ?? preview?.error {
                     Section { Text(problem).foregroundStyle(.red).accessibilityIdentifier("task_schedule_problem") }
                 }
-                Section("Runs on") {
-                    LabeledContent("Host", value: client.host.name)
+                Section {
+                    if hosts.count > 1 {
+                        Picker("Host", selection: $hostID) { ForEach(hosts) { Text($0.name).tag($0.id) } }
+                            .pickerStyle(.menu).accessibilityIdentifier("task_host")
+                    } else {
+                        LabeledContent("Host", value: client.host.name)
+                    }
                     Button { activePicker = .directory } label: {
                         LabeledContent("Folder") {
                             HStack(spacing: 6) {
@@ -1550,6 +1646,10 @@ private struct ScheduledTaskEditor: View {
                         }
                     }.buttonStyle(.plain).accessibilityIdentifier("task_directory")
                     modelPicker
+                } header: {
+                    Text("Runs on")
+                } footer: {
+                    if moving { Text(moveNote).accessibilityIdentifier("task_move_note") }
                 }
                 if let error {
                     Section {
@@ -1643,7 +1743,7 @@ private struct ScheduledTaskEditor: View {
         refreshing = true; refreshFailed = true; error = nil
         defer { refreshing = false }
         do {
-            let saved = try await client.task(id)
+            let saved = try await origin.task(id)
             currentTask = saved; draft = .init(task: saved); schedule = ScheduleDraft(schedule: saved.schedule, nextRunAt: saved.nextRunAt); refreshFailed = false
         } catch is CancellationError {} catch { self.error = error.localizedDescription }
     }

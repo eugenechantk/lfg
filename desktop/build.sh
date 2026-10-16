@@ -74,6 +74,10 @@ if [[ -f "$MENU_ICON_SRC" ]]; then
   rm -f "$MENU_ICON_CROP"
 fi
 
+# The agent logos on task chips: the phone app's SVGs, which AppKit draws natively.
+cp ../ios/LFG/Assets.xcassets/agent-claude.imageset/agent-claude.svg \
+   ../ios/LFG/Assets.xcassets/agent-codex.imageset/agent-codex.svg "$APP/Contents/Resources/"
+
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -118,19 +118,45 @@ import Testing
         let e = RunTimelineEntry.entries(task: t, runs: runs, now: Self.now, timeZone: Self.hk, locale: Self.en)
         // The latest run failed, so only the next run is listed ahead of the history.
         #expect(e.count == 3)
-        #expect(e[0].node == .upcoming); #expect(plain(e[0].head) == "Fri, Oct 16 · 9:00 AM"); #expect(e[0].tail == "Next")
+        #expect(e[0].node == .upcoming); #expect(plain(e[0].head) == "Fri, Oct 16 · 9:00 AM"); #expect(e[0].tail.isEmpty)
         #expect(plain(e[1].head) == "Today · 9:00 AM"); #expect(e[1].tail == "6 min ›"); #expect(e[1].body == "Reviewed 14 commits")
         #expect(e[2].node == .failure); #expect(e[2].tail == "Retry"); #expect(e[2].tailIsAction)
         #expect(e[2].body == "Failed · Model unavailable · no session started")
         var healthy = t; healthy.lastRun = runs[0]
         let h = RunTimelineEntry.entries(task: healthy, runs: [], now: Self.now, timeZone: Self.hk, locale: Self.en)
-        #expect(h.count == 2); #expect(h[1].tail == "")
+        // Healthy: every upcoming run the host sent, furthest first, so the next run sits above the history.
+        #expect(h.map { plain($0.head) } == ["Tue, Oct 20 · 9:00 AM", "Mon, Oct 19 · 9:00 AM", "Fri, Oct 16 · 9:00 AM"])
+        #expect(h.allSatisfy { $0.node == .upcoming && $0.tail.isEmpty })
+    }
+
+    /// Upcoming: up to three show; past three, the nearest two and "Show more · 8 later", then all at once.
+    @Test func upcomingRunsFoldToTwoAndOpenAllAtOnce() {
+        #expect(RunGroupFold.upcoming(count: 3, open: false) == RunGroupFold(shown: 3, hidden: 0, hasToggle: false))
+        let closed = RunGroupFold.upcoming(count: 10, open: false)
+        #expect(closed == RunGroupFold(shown: 2, hidden: 8, hasToggle: true))
+        #expect(closed.label == "Show more"); #expect(closed.count(upcoming: true) == "8 later")
+        let open = RunGroupFold.upcoming(count: 10, open: true)
+        #expect(open == RunGroupFold(shown: 10, hidden: 0, hasToggle: true))
+        #expect(open.label == "Show less"); #expect(open.count(upcoming: true) == "")
+    }
+
+    /// Past: two and "Show more · 21 earlier"; each tap adds ten, counting runs the host has not sent yet.
+    @Test func pastRunsOpenTenAtATime() {
+        #expect(RunGroupFold.past(loaded: 3, total: 3, requested: 2) == RunGroupFold(shown: 3, hidden: 0, hasToggle: false))
+        let first = RunGroupFold.past(loaded: 20, total: 23, requested: 2)
+        #expect(first == RunGroupFold(shown: 2, hidden: 21, hasToggle: true)); #expect(first.count(upcoming: false) == "21 earlier")
+        #expect(RunGroupFold.past(loaded: 20, total: 23, requested: 12).hidden == 11)
+        // Asked for more than the client holds: show what is loaded until the next page arrives.
+        #expect(RunGroupFold.past(loaded: 20, total: 23, requested: 22) == RunGroupFold(shown: 20, hidden: 3, hasToggle: true))
+        let all = RunGroupFold.past(loaded: 23, total: 23, requested: 32)
+        #expect(all == RunGroupFold(shown: 23, hidden: 0, hasToggle: true)); #expect(all.label == "Show less")
     }
 
     @Test func pausedTimelineMarksTheSkippedRun() throws {
         let t = try task(#""enabled":false,"pausedAt":1,"upcomingRuns":[\#(Self.ms("2026-10-16T01:00:00Z")),\#(Self.ms("2026-10-19T01:00:00Z"))]"#)
         let e = RunTimelineEntry.entries(task: t, runs: [], now: Self.now, timeZone: Self.hk, locale: Self.en)
-        #expect(plain(e[0].head) == "Fri, Oct 16 · skipped while paused"); #expect(e[0].tail.isEmpty)
+        #expect(plain(e[1].head) == "Fri, Oct 16 · skipped while paused"); #expect(e[1].tail.isEmpty)
+        #expect(plain(e[0].head) == "Mon, Oct 19 · 9:00 AM")
     }
 
     @Test func countLine() throws {

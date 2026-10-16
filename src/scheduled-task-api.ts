@@ -2,11 +2,14 @@ import { join } from "node:path";
 import { TaskError, TaskScheduler, TaskStore, activeRun, finiteSchedule, lastOccurrence, nextOccurrences, validateSchedule, type TaskInput, type TaskRun, type RunSnapshot, type ScheduledTask, type TaskSchedule } from "./scheduled-tasks.ts";
 
 /** What a task will do next. Paused tasks show when they would run if resumed, so their row can
- * still say when; finished, cancelled and passed one-time tasks have none. */
-export function upcomingRuns(t: ScheduledTask, now: number, n = 3): number[] {
+ * still say when; finished, cancelled and passed one-time tasks have none. Up to ten: the task view
+ * shows two or three and opens the rest with "Show more". */
+export const UPCOMING_RUNS = 10;
+export function upcomingRuns(t: ScheduledTask, now: number, n = UPCOMING_RUNS): number[] {
   if (t.cancelledAt != null) return [];
   const done = t.scheduledRunCount ?? 0;
-  if (t.enabled && t.nextRunAt != null) return [t.nextRunAt, ...nextOccurrences(t.schedule, t.nextRunAt, n - 1, done + 1)];
+  // Only runs after the next one: a one-time schedule would otherwise list its single run twice.
+  if (t.enabled && t.nextRunAt != null) return [t.nextRunAt, ...nextOccurrences(t.schedule, t.nextRunAt, n - 1, done + 1).filter(at => at > t.nextRunAt!)];
   if (t.enabled) return [];
   if (t.schedule.kind === "once") return t.lastRunAt == null && Date.parse(t.schedule.at!) > now ? [Date.parse(t.schedule.at!)] : [];
   if (finiteSchedule(t.schedule) && t.nextRunAt == null && t.pausedAt == null) return [];

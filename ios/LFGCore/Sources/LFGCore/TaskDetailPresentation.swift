@@ -89,7 +89,8 @@ public struct RunTimelineEntry: Sendable, Equatable, Identifiable {
     public var sessionID: String?
     public var runID: String?
 
-    /// Upcoming runs (two, newest first), then past runs newest first.
+    /// Upcoming runs, then past runs, newest first throughout: the furthest run is on top and the
+    /// next one sits just above the history. The grey node marks a run as upcoming, so it has no label.
     /// While a run is live the card owns the moment: no upcoming rows, and a waiting run stays in the card.
     public static func entries(task: ScheduledTaskRecord, runs: [ScheduledTaskRun], now: Date = Date(),
                                timeZone: TimeZone = .current, locale: Locale = .current) -> [RunTimelineEntry] {
@@ -98,12 +99,12 @@ public struct RunTimelineEntry: Sendable, Equatable, Identifiable {
         let paused = task.isPaused
         if task.cancelledAt == nil {
             // After a failure the failed run matters more than the far future: show only the next run.
-            let upcoming = task.currentRun != nil ? 0 : task.latestRunFailed ? 1 : 2
-            for (i, at) in task.upcomingRuns.prefix(upcoming).enumerated() {
+            let upcoming = task.currentRun != nil ? 0 : task.latestRunFailed ? 1 : task.upcomingRuns.count
+            for (i, at) in task.upcomingRuns.prefix(upcoming).enumerated().reversed() {
                 let skipped = paused && i == 0
                 out.append(.init(id: "next-\(Int(at))", node: .upcoming,
                                  head: skipped ? "\(f.dayOnly(at)) · skipped while paused" : f.dayDotTime(at),
-                                 tail: !paused && i == 0 ? "Next" : "", tailTone: .accent, tailIsAction: false,
+                                 tail: "", tailTone: .secondary, tailIsAction: false,
                                  body: nil, bodyTone: .secondary, sessionID: nil, runID: nil))
             }
         }
@@ -155,6 +156,47 @@ public struct RunTimelineEntry: Sendable, Equatable, Identifiable {
         let runs = task.runCount == 1 ? "1 run" : "\(task.runCount) runs"
         guard let done = task.succeededCount else { return runs }
         return "\(runs) · \(done) completed"
+    }
+}
+
+/// How one group of runs folds. Each group shows at most three rows; with more, it shows the two
+/// nearest runs and a Show more row (above the upcoming runs, below the past ones).
+public struct RunGroupFold: Sendable, Equatable {
+    /// Runs to show.
+    public var shown: Int
+    /// Runs left out; the toggle row counts them.
+    public var hidden: Int
+    /// Whether the group has a Show more / Show less row.
+    public var hasToggle: Bool
+    public init(shown: Int, hidden: Int, hasToggle: Bool) { self.shown = shown; self.hidden = hidden; self.hasToggle = hasToggle }
+
+    public static let maxRows = 3
+    /// Past runs open ten at a time.
+    public static let pastStep = 10
+
+    /// The toggle reads Show more while runs are hidden, then Show less.
+    public var opens: Bool { hidden > 0 }
+    public var label: String { opens ? "Show more" : "Show less" }
+
+    /// Upcoming runs open all at once (the host lists up to ten).
+    public static func upcoming(count: Int, open: Bool) -> RunGroupFold {
+        guard count > maxRows else { return .init(shown: count, hidden: 0, hasToggle: false) }
+        return open ? .init(shown: count, hidden: 0, hasToggle: true)
+                    : .init(shown: maxRows - 1, hidden: count - (maxRows - 1), hasToggle: true)
+    }
+
+    /// Past runs: `loaded` are on the client, `total` exist on the host (loaded ones included),
+    /// `requested` is how many the viewer has opened.
+    public static func past(loaded: Int, total: Int, requested: Int) -> RunGroupFold {
+        let total = max(total, loaded)
+        guard total > maxRows else { return .init(shown: loaded, hidden: 0, hasToggle: false) }
+        let shown = min(loaded, max(maxRows - 1, requested))
+        return .init(shown: shown, hidden: total - shown, hasToggle: true)
+    }
+
+    /// "8 later" above the upcoming runs, "21 earlier" below the past ones; nothing once open.
+    public func count(upcoming: Bool) -> String {
+        opens ? "\(hidden) \(upcoming ? "later" : "earlier")" : ""
     }
 }
 

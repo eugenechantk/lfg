@@ -13,6 +13,12 @@ enum TaskPalette {
     static let card = TaskColors.adaptive(light: Color.primary.opacity(0.07), dark: Color(red: 0x26 / 255, green: 0x26 / 255, blue: 0x2B / 255))
     static let control = Color.primary.opacity(0.10)
     #endif
+    /// Header chips: the card fill on the phone; on the Mac the board's 7% white over the page (#2E2E32).
+    #if os(iOS)
+    static let chip = card
+    #else
+    static let chip = TaskColors.adaptive(light: Color.primary.opacity(0.07), dark: Color(red: 0x2E / 255, green: 0x2E / 255, blue: 0x32 / 255))
+    #endif
     /// Typed fields on a form card: darker than the card (#1C1C1E on the phone, #1E1E22 on the Mac).
     #if os(iOS)
     static let field = TaskColors.adaptive(light: Color(.systemBackground), dark: Color(red: 0x1C / 255, green: 0x1C / 255, blue: 0x1E / 255))
@@ -26,12 +32,15 @@ enum TaskDetailMetrics {
     static let title: CGFloat = 22, schedule: CGFloat = 14, chip: CGFloat = 12, chipHeight: CGFloat = 24
     static let cardLabel: CGFloat = 11, cardMain: CGFloat = 19, cardSub: CGFloat = 13, button: CGFloat = 13, buttonHeight: CGFloat = 34
     static let cardRadius: CGFloat = 16, cardPadding: CGFloat = 14, section: CGFloat = 12, body: CGFloat = 14
-    static let runHead: CGFloat = 13, runTail: CGFloat = 12, runBody: CGFloat = 13, runLine: CGFloat = 16
+    static let runHead: CGFloat = 13, runTail: CGFloat = 12, runBody: CGFloat = 13, runLine: CGFloat = 17.5
+    /// The rail column, its node, the line above the node, and the row's text padding.
+    static let runRail: CGFloat = 14, runNode: CGFloat = 11, runTopLine: CGFloat = 9, runPadTop: CGFloat = 4, runPadBottom: CGFloat = 11
     #else
     static let title: CGFloat = 28, schedule: CGFloat = 17, chip: CGFloat = 13, chipHeight: CGFloat = 26
     static let cardLabel: CGFloat = 12, cardMain: CGFloat = 22, cardSub: CGFloat = 15, button: CGFloat = 16, buttonHeight: CGFloat = 44
     static let cardRadius: CGFloat = 22, cardPadding: CGFloat = 16, section: CGFloat = 15, body: CGFloat = 16
     static let runHead: CGFloat = 15, runTail: CGFloat = 13, runBody: CGFloat = 15, runLine: CGFloat = 20
+    static let runRail: CGFloat = 16, runNode: CGFloat = 12, runTopLine: CGFloat = 10, runPadTop: CGFloat = 5, runPadBottom: CGFloat = 12
     #endif
 }
 
@@ -45,6 +54,7 @@ struct TaskDetailHeader: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(task.name)
                 .font(.system(size: TaskDetailMetrics.title, weight: .bold))
+                .foregroundStyle(TaskColors.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
                 .accessibilityAddTraits(.isHeader)
@@ -55,7 +65,7 @@ struct TaskDetailHeader: View {
                 Image(systemName: task.schedule.kind == "once" ? "clock" : "repeat")
             }
             .font(.system(size: TaskDetailMetrics.schedule))
-            .foregroundStyle(.primary.opacity(0.82))
+            .foregroundStyle(TaskColors.soft)
             .labelStyle(TaskIconLabelStyle(spacing: 7))
             .accessibilityIdentifier("task_schedule")
             HStack(spacing: 6) {
@@ -100,24 +110,49 @@ struct TaskChip: View {
             Text(text).lineLimit(1).truncationMode(.middle)
         }
         .font(.system(size: TaskDetailMetrics.chip))
-        .foregroundStyle(.primary.opacity(0.82))
-        .padding(.leading, agent == nil ? 9 : 4).padding(.trailing, 9)
+        .foregroundStyle(TaskColors.soft)
+        .padding(.leading, agent == nil ? 9 : TaskAgentMark.leadingPadding).padding(.trailing, 9)
         .frame(height: TaskDetailMetrics.chipHeight)
-        .background(TaskPalette.card, in: RoundedRectangle(cornerRadius: 8))
+        .background(TaskPalette.chip, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
-/// The agent's mark: Claude's clay square with "C", Codex's light square with "X".
+/// The agent's logo: Claude Code's clay starburst, Codex's app icon.
 struct TaskAgentMark: View {
     let agent: String
+    #if os(macOS)
+    static let leadingPadding: CGFloat = 6
+    private static let claudeSize: CGFloat = 13, codexSize: CGFloat = 14
+    @MainActor private static let claude = logo("agent-claude")
+    @MainActor private static let codex = logo("agent-codex")
+    /// build.sh copies the app's SVG logos into the bundle; AppKit draws SVG natively.
+    private static func logo(_ name: String) -> NSImage? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "svg"), let image = NSImage(contentsOf: url) else { return nil }
+        image.size = NSSize(width: 24, height: 24)
+        return image
+    }
+    #else
+    static let leadingPadding: CGFloat = 7
+    private static let claudeSize: CGFloat = 14, codexSize: CGFloat = 15
+    #endif
+
     var body: some View {
         let codex = agent.contains("codex")
-        Text(codex ? "X" : "C")
-            .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(codex ? Color.black : Color.white)
-            .frame(width: 18, height: 18)
-            .background(codex ? Color(white: 0.91) : Color(red: 0.85, green: 0.47, blue: 0.34), in: RoundedRectangle(cornerRadius: 5))
+        let size = codex ? Self.codexSize : Self.claudeSize
+        logo(codex: codex)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
             .accessibilityHidden(true)
+    }
+
+    private func logo(codex: Bool) -> Image {
+        #if os(macOS)
+        if let image = codex ? Self.codex : Self.claude { return Image(nsImage: image) }
+        return Image(systemName: codex ? "terminal" : "sparkle")
+        #else
+        Image(codex ? "agent-codex" : "agent-claude")
+        #endif
     }
 }
 
@@ -211,7 +246,7 @@ struct TaskStatusCard: View {
                     #endif
                 case .running: label(model.label, color: TaskColors.success, dot: true)
                 case .paused: label(model.label, color: TaskColors.warning)
-                default: label(model.label, color: .secondary)
+                default: label(model.label, color: TaskColors.grey)
                 }
                 Spacer(minLength: 0)
                 if let streak = model.streak {
@@ -408,23 +443,46 @@ struct TaskStatusCard: View {
 
 // MARK: - Runs timeline
 
+/// A Show more / Show less row on the timeline. The rail turns dashed where runs are hidden.
+struct RunsToggle {
+    var label: String
+    var count: String
+    /// Hidden runs lie above (upcoming) or below (past) this row.
+    var opensUp: Bool
+    var opens: Bool
+    var identifier: String
+    var action: () -> Void
+}
+
 struct RunTimelineView: View {
     let entries: [RunTimelineEntry]
     let open: (RunTimelineEntry) -> Void
+    /// Above the upcoming runs.
+    var later: RunsToggle? = nil
+    /// Below the past runs.
+    var earlier: RunsToggle? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+            if let later { RunsToggleRow(toggle: later, railAbove: later.opens, railBelow: !entries.isEmpty) }
+            runRows
+            if let earlier { RunsToggleRow(toggle: earlier, railAbove: !entries.isEmpty, railBelow: earlier.opens) }
+        }
+    }
+
+    private var runRows: some View {
+        ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
                 // Upcoming runs are not tappable. A disabled Button would grey them out, so they
                 // render as plain rows.
                 let tappable = entry.sessionID != nil || entry.tailIsAction || entry.runID != nil
                 let row = HStack(alignment: .top, spacing: 12) {
-                        node(entry, first: index == 0, last: index == entries.count - 1)
+                        // A toggle row continues the rail past the first and last run.
+                        node(entry, first: index == 0 && later == nil, last: index == entries.count - 1 && earlier == nil)
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 8) {
                                 Text(entry.head)
                                     .font(.system(size: TaskDetailMetrics.runHead, weight: .semibold))
-                                    .foregroundStyle(entry.node == .upcoming ? Color.secondary : Color.primary)
+                                    .foregroundStyle(entry.node == .upcoming ? TaskColors.grey : TaskColors.ink)
                                 Spacer(minLength: 0)
                                 Text(Self.tail(entry.tail))
                                     .font(.system(size: TaskDetailMetrics.runTail, weight: .semibold))
@@ -439,7 +497,7 @@ struct RunTimelineView: View {
                                     .frame(height: TaskDetailMetrics.runLine)
                             }
                         }
-                        .padding(.top, 5).padding(.bottom, 12)
+                        .padding(.top, TaskDetailMetrics.runPadTop).padding(.bottom, TaskDetailMetrics.runPadBottom)
                     }
                     .contentShape(Rectangle())
                 Group {
@@ -447,7 +505,6 @@ struct RunTimelineView: View {
                     else { row.accessibilityElement(children: .combine) }
                 }
                 .accessibilityIdentifier(entry.runID.map { "task_run_\($0)" } ?? "task_upcoming_\(index)")
-            }
         }
     }
 
@@ -461,10 +518,10 @@ struct RunTimelineView: View {
     }
 
     private func node(_ entry: RunTimelineEntry, first: Bool, last: Bool) -> some View {
-        let line = Color.secondary.opacity(0.45)
+        let line = TaskColors.rail
         let (stroke, fill): (Color, Color) = {
             switch entry.node {
-            case .upcoming: return (Color.secondary.opacity(0.7), .clear)
+            case .upcoming: return (TaskColors.upcomingNode, .clear)
             case .running: return (TaskColors.successNode, .clear)
             case .success: return (TaskColors.successNode, TaskColors.successNode)
             case .failure: return (TaskColors.dangerNode, TaskColors.dangerNode)
@@ -472,11 +529,93 @@ struct RunTimelineView: View {
             }
         }()
         return VStack(spacing: 0) {
-            Rectangle().fill(first ? Color.clear : line).frame(width: 2, height: 10)
-            Circle().strokeBorder(stroke, lineWidth: 2).background(Circle().fill(fill)).frame(width: 12, height: 12)
+            Rectangle().fill(first ? Color.clear : line).frame(width: 2, height: TaskDetailMetrics.runTopLine)
+            Circle().strokeBorder(stroke, lineWidth: 2).background(Circle().fill(fill))
+                .frame(width: TaskDetailMetrics.runNode, height: TaskDetailMetrics.runNode)
             Rectangle().fill(last ? Color.clear : line).frame(width: 2).frame(maxHeight: .infinity)
         }
-        .frame(width: 16)
+        .frame(width: TaskDetailMetrics.runRail)
+    }
+}
+
+/// The toggle row: a small disc with a chevron on the rail, "Show more" and the hidden count.
+struct RunsToggleRow: View {
+    let toggle: RunsToggle
+    let railAbove: Bool
+    let railBelow: Bool
+    #if os(macOS)
+    private let height: CGFloat = 34, disc: CGFloat = 16, glyph: CGFloat = 9, glyphStroke: CGFloat = 3.2
+    private let label: CGFloat = 13, count: CGFloat = 12
+    private let discFill = Color.white.opacity(0.09)
+    /// The boards' dashed border, as Chrome draws it at 2pt.
+    private let dash: [CGFloat] = [3.3, 2]
+    #else
+    private let height: CGFloat = 44, disc: CGFloat = 18, glyph: CGFloat = 11, glyphStroke: CGFloat = 3
+    private let label: CGFloat = 15, count: CGFloat = 13
+    private let discFill = TaskPalette.card
+    private let dash: [CGFloat] = [4, 0.5]
+    #endif
+
+    var body: some View {
+        Button(action: toggle.action) {
+            HStack(spacing: 12) {
+                VStack(spacing: 0) {
+                    // Dashes start at the end that meets a run, so no gap opens beside the solid rail.
+                    rail(railAbove, fromTop: !toggle.opensUp)
+                    Circle().fill(discFill).frame(width: disc, height: disc)
+                        .overlay {
+                            // Up while the hidden runs lie above, as the boards draw it.
+                            TaskChevronShape(up: toggle.opensUp == toggle.opens)
+                                .stroke(TaskColors.accent, style: StrokeStyle(lineWidth: glyph * glyphStroke / 24, lineCap: .round, lineJoin: .round))
+                                .frame(width: glyph, height: glyph)
+                        }
+                    rail(railBelow, fromTop: !toggle.opensUp)
+                }
+                .frame(width: TaskDetailMetrics.runRail)
+                Text(toggle.label)
+                    .font(.system(size: label, weight: .semibold))
+                    .foregroundStyle(TaskColors.accent)
+                Spacer(minLength: 8)
+                Text(toggle.count)
+                    .font(.system(size: count))
+                    .foregroundStyle(TaskColors.grey)
+            }
+            .frame(height: height)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(toggle.count.isEmpty ? toggle.label : "\(toggle.label), \(toggle.count)")
+        .accessibilityIdentifier(toggle.identifier)
+    }
+
+    /// Dashed, as the boards draw the rail beside a toggle.
+    private func rail(_ shown: Bool, fromTop: Bool) -> some View {
+        DashedRail(fromTop: fromTop)
+            .stroke(shown ? TaskColors.rail : .clear, style: StrokeStyle(lineWidth: 2, dash: dash))
+            .frame(width: 2)
+            .frame(maxHeight: .infinity)
+    }
+}
+
+private struct DashedRail: Shape {
+    var fromTop: Bool
+    func path(in rect: CGRect) -> Path {
+        let (start, end) = fromTop ? (rect.minY, rect.maxY) : (rect.maxY, rect.minY)
+        return Path { p in p.move(to: CGPoint(x: rect.midX, y: start)); p.addLine(to: CGPoint(x: rect.midX, y: end)) }
+    }
+}
+
+/// The boards' chevron (`M6 15l6-6 6 6` on a 24-unit grid), pointing up or down.
+struct TaskChevronShape: Shape {
+    var up: Bool
+    func path(in rect: CGRect) -> Path {
+        let s = min(rect.width, rect.height) / 24
+        let (outer, inner): (CGFloat, CGFloat) = up ? (15, 9) : (9, 15)
+        return Path { p in
+            p.move(to: CGPoint(x: 6 * s, y: outer * s))
+            p.addLine(to: CGPoint(x: 12 * s, y: inner * s))
+            p.addLine(to: CGPoint(x: 18 * s, y: outer * s))
+        }
     }
 }
 

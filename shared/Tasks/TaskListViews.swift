@@ -35,8 +35,8 @@ enum TaskColors {
     /// The boards' near-white ink (#F4F4F6), brighter than the Mac's primary label.
     static let ink = adaptive(light: .primary, dark: Color(red: 0xF4 / 255, green: 0xF4 / 255, blue: 0xF6 / 255))
     #else
-    // The tA2d boards use system red and amber, with a lighter pair only for the failed and waiting card labels.
-    static let danger = Color.red
+    // The tA2d boards use system amber and #FF453A red, with a lighter pair only for the failed and waiting card labels.
+    static let danger = adaptive(light: .red, dark: Color(red: 1, green: 0x45 / 255, blue: 0x3A / 255))
     static let warning = Color.orange
     static let success = Color.green
     static let dangerLabel = adaptive(light: .red, dark: Color(red: 1, green: 0x69 / 255, blue: 0x61 / 255))
@@ -46,6 +46,21 @@ enum TaskColors {
     static let successNode = success
     static let dangerNode = danger
     static let ink = Color.primary
+    #endif
+    // The boards' text greys and timeline rail, darker or lighter than the system label levels.
+    #if os(macOS)
+    static let grey = adaptive(light: .secondary, dark: Color(red: 0x8A / 255, green: 0x8A / 255, blue: 0x93 / 255))
+    static let soft = adaptive(light: Color.primary.opacity(0.82), dark: Color(red: 0xC9 / 255, green: 0xCB / 255, blue: 0xD3 / 255))
+    static let rail = adaptive(light: Color.primary.opacity(0.2), dark: Color.white.opacity(0.14))
+    static let upcomingNode = adaptive(light: Color.secondary.opacity(0.7), dark: Color(red: 0x5A / 255, green: 0x5A / 255, blue: 0x62 / 255))
+    /// Instructions text (#E4E5EA).
+    static let body = adaptive(light: Color.primary.opacity(0.95), dark: Color(red: 0xE4 / 255, green: 0xE5 / 255, blue: 0xEA / 255))
+    #else
+    static let grey = adaptive(light: .secondary, dark: Color(red: 0xA1 / 255, green: 0xA1 / 255, blue: 0xA6 / 255))
+    static let soft = adaptive(light: Color.primary.opacity(0.82), dark: Color(red: 0xD1 / 255, green: 0xD1 / 255, blue: 0xD6 / 255))
+    static let rail = adaptive(light: Color.primary.opacity(0.2), dark: Color(red: 0x48 / 255, green: 0x48 / 255, blue: 0x4A / 255))
+    static let upcomingNode = adaptive(light: Color.secondary.opacity(0.7), dark: Color(red: 0x63 / 255, green: 0x63 / 255, blue: 0x66 / 255))
+    static let body = Color.primary.opacity(0.95)
     #endif
     #if os(macOS)
     static let chevron = adaptive(light: Color(white: 0.7), dark: Color(red: 0x5A / 255, green: 0x5A / 255, blue: 0x62 / 255))
@@ -66,13 +81,13 @@ enum TaskColors {
 extension TaskTone {
     var color: Color {
         switch self {
-        case .primary: .primary
-        case .secondary: .secondary
+        case .primary: TaskColors.ink
+        case .secondary: TaskColors.grey
         case .warning: TaskColors.warning
         case .danger: TaskColors.danger
         case .success: TaskColors.success
         case .accent: TaskColors.accent
-        case .soft: .primary.opacity(0.82)
+        case .soft: TaskColors.soft
         }
     }
 }

@@ -248,10 +248,10 @@ struct ScheduleEditorSection: View {
             HStack {
                 Text("Every")
                 Spacer()
+                // Field and unit hug the right edge; the field moves with the unit's length.
                 TaskNumberField(value: everyBinding, range: 1...unit.limit, identifier: "task_every")
                 Text(everyBinding.wrappedValue == 1 ? unit.singular : unit.plural)
                     .foregroundStyle(TaskTone.soft.color)
-                    .frame(minWidth: 64, alignment: .leading)
             }
         }
     }
