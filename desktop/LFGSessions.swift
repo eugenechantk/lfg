@@ -157,7 +157,7 @@ struct APISession: Decodable, Identifiable, Hashable {
 
 /// The part of a session's `prompt` the S2 row line needs. Lenient: any field
 /// may be missing on an older host.
-struct DesktopPrompt: Decodable, Hashable {
+struct DesktopPrompt: Decodable, Hashable, Sendable {
     var question: String?
     var kind: String?
     var command: String?
@@ -428,6 +428,7 @@ enum DesktopAPI {
     static func request(_ url: URL, method: String = "GET") -> URLRequest {
         var request = URLRequest(url: url)
         request.httpMethod = method
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         if let credential = DesktopCredentialStore.load(for: url.absoluteString) {
             authorize(&request, credential: credential)
         }
@@ -1050,6 +1051,11 @@ final class SessionStore: ObservableObject {
     @Published var duplicateHostsByURL: [String: HostState] = [:]
     @Published var refreshing = false
     @Published var lastRefreshed: Date?
+    // App-owned synchronization survives closed windows and the Tasks view.
+    var statusFeed: DesktopSessionStatusFeed?
+    var statusPollingTask: Task<Void, Never>?
+    var statusReconciliation = DesktopStatusReconciliation()
+    private var refreshRequested = false
     @Published var movingIds: Set<String> = []
     @Published var closingIds: Set<String> = []
     @Published var creatingSession = false
@@ -1597,11 +1603,20 @@ final class SessionStore: ObservableObject {
     }
 
     func refresh() async {
-        guard !refreshing else { return }
+        guard !refreshing else { refreshRequested = true; return }
         refreshing = true
-        defer { refreshing = false; lastRefreshed = Date() }
+        let snapshotRevision = statusReconciliation.revision
+        defer {
+            refreshing = false
+            lastRefreshed = Date()
+            if refreshRequested {
+                refreshRequested = false
+                Task { [weak self] in await self?.refresh() }
+            }
+        }
         let entries = Config.loadHosts()
         applyConfiguration(entries)
+        statusFeed?.configure(urls: entries.map(\.url))
         // The hidden set rides along as `exclude` params so the host filters
         // BEFORE paginating. Filtering only client-side starves the closed
         // list: gbrain autopilot churn can own the entire newest-100 page,
@@ -1629,8 +1644,15 @@ final class SessionStore: ObservableObject {
             if state.error != nil, state.sessions.isEmpty, let last = previous[url] {
                 state.sessions = last.sessions.filter { !$0.closed }
                 state.info = state.info ?? last.info
-                state.needsInputSessionIds = []
+                // A healthy journal still proves these sessions are reachable;
+                // one failed REST request must not turn active rows into Idle.
+                if statusFeed?.connected.contains(url) == true {
+                    state.error = nil
+                    state.needsInputSessionIds = last.needsInputSessionIds
+                } else { state.needsInputSessionIds = [] }
             }
+            statusReconciliation.apply(to: &state, after: snapshotRevision)
+            if state.error == nil { statusReconciliation.discard(host: url, through: snapshotRevision) }
             state.isLocal = isLocalURL(url) || matchesLocalHostname(state.info?.hostName)
             ordered.append(state)
         }
@@ -2359,6 +2381,7 @@ enum DesktopFeatureTestCLI {
 
     @MainActor
     private static func run() throws {
+        assertionCount += try DesktopSessionSyncTests.run()
         let taskHost = HostState(url: "https://tasks.example", sshTarget: "tasks-host",
             remoteTransport: .ssh, displayName: "Tasks Host", isLocal: false)
         let oldTaskSession = ResumableAPISession(sessionId: "old-run", cwd: "/tmp/task",
@@ -4654,6 +4677,7 @@ struct MenuBarSessionRow: View {
         .disabled(!item.canOpen)
         .opacity(item.canOpen ? 1 : 0.55)
         .accessibilityIdentifier("menu_bar_session_\(item.id)")
+        .id("\(item.id):\(item.status.rawValue):\(item.hostOffline)")
     }
 }
 
@@ -4663,7 +4687,6 @@ struct MenuBarQuickAccessView: View {
     @State private var alertMessage: String?
     @State private var searchText = ""
     @FocusState private var searchFocused: Bool
-    private let timer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
     private let snapshotMode: Bool
 
     init(snapshotMode: Bool = false) {
@@ -4842,12 +4865,7 @@ struct MenuBarQuickAccessView: View {
         .frame(width: 380)
         .background(Color(nsColor: .windowBackgroundColor))
         .task {
-            if store.lastRefreshed == nil {
-                await store.refresh()
-            }
-        }
-        .onReceive(timer) { _ in
-            Task { await store.refresh() }
+            if !snapshotMode { await store.refresh() }
         }
         .alert("Can't open session", isPresented: .init(
             get: { alertMessage != nil },
@@ -5576,8 +5594,6 @@ struct ContentView: View {
         _taskNeedsInput = State(initialValue: taskNeedsInput)
         _collapsedGroups = State(initialValue: collapsedGroups)
     }
-    private let timer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
-
     private struct ListSection: Identifiable {
         let id: String
         let title: String
@@ -5943,6 +5959,9 @@ struct ContentView: View {
                 }
             }
         }
+        // Native Button labels can retain their previous content when a row
+        // moves between nested status groups. Rebuild that subtree on an edge.
+        .id("\(item.id):\(item.status.rawValue):\(item.hostOffline)")
     }
 
     private func requestClose(_ item: SessionItem) {
@@ -6373,9 +6392,6 @@ struct ContentView: View {
             .background(S2Desk.background)
         }
         .task { await store.refresh() }
-        .onReceive(timer) { _ in
-            Task { await store.refresh() }
-        }
         .alert("Can't open session", isPresented: .init(
             get: { alertMessage != nil },
             set: { if !$0 { alertMessage = nil } }
@@ -6844,6 +6860,12 @@ enum WindowFitCLI {
             if let wait = value("--refresh-twice").flatMap(Double.init) {
                 settle(wait)
                 liveRefresh(store)
+            }
+            // Exercise status changes in this same native view hierarchy.
+            if let wait = value("--stream-for").flatMap(Double.init) {
+                store.startStatusSync()
+                settle(wait)
+                store.stopStatusSync()
             }
         }
         window.setContentSize(NSSize(width: CGFloat(width), height: CGFloat(height)))
@@ -7361,10 +7383,13 @@ enum CloudflareCredentialCLI {
 
 @main
 struct LFGSessionsApp: App {
-    @StateObject private var store = SessionStore()
+    @StateObject private var store: SessionStore
     init() {
+        let sessionStore = SessionStore()
+        _store = StateObject(wrappedValue: sessionStore)
         CloudflareCredentialCLI.runIfRequested()
         DesktopFeatureTestCLI.runIfRequested()
+        DesktopStatusSyncProbeCLI.runIfRequested()
         HiddenDirsProbeCLI.runIfRequested()
         SearchProbeCLI.runIfRequested()
         DesktopStatusSnapshotCLI.runIfRequested()
@@ -7376,6 +7401,7 @@ struct LFGSessionsApp: App {
         ResumeCheckCLI.runIfRequested()
         OpenSessionCLI.runIfRequested()
         ForkSessionCLI.runIfRequested()
+        sessionStore.startStatusSync()
         Opener.warmTransportProbe()
     }
 

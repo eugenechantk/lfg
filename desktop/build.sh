@@ -22,6 +22,8 @@ swiftc -O -parse-as-library \
   -target arm64-apple-macosx26.0 \
   -o "$APP/Contents/MacOS/lfg" \
   LFGSessions.swift \
+  DesktopSessionSync.swift \
+  DesktopSessionSyncTests.swift \
   SessionsListS2.swift \
   ScheduledTasksPane.swift \
   ../shared/ScheduledTasksView.swift \
@@ -34,7 +36,8 @@ swiftc -O -parse-as-library \
   ../ios/LFGCore/Sources/LFGCore/SessionEffort.swift \
   ../ios/LFGCore/Sources/LFGCore/HiddenDirs.swift \
   ../ios/LFGCore/Sources/LFGCore/SessionListRow.swift \
-  ../ios/LFGCore/Sources/LFGCore/DesktopSessionList.swift
+  ../ios/LFGCore/Sources/LFGCore/DesktopSessionList.swift \
+  ../ios/LFGCore/Sources/LFGCore/SSEFrameParser.swift
 
 # App icon: reuse the iOS client's 1024px icon, converted to .icns.
 if [[ -f "$ICON_SRC" ]]; then
