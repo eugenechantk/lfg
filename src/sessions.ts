@@ -4019,7 +4019,7 @@ export function mayRefreshLiveLease(
   return !!sessionId && !closing(pid);
 }
 
-async function refreshLeasesForLiveSessions(): Promise<void> {
+async function refreshLeasesForLiveSessions(mark: (step: string) => void = () => {}): Promise<void> {
   try {
     // Reuse the shared session-list scan when there is a fresh or in-flight
     // one. In the server the journal pump lists sessions every second and the
@@ -4032,6 +4032,7 @@ async function refreshLeasesForLiveSessions(): Promise<void> {
     // starting the full enrichment one.
     const shared = sharedListSessions();
     const live = shared ? await shared : await listSessionsUncached({ enrichRunningWork: false });
+    mark(shared ? "scan-shared" : "scan-private");
     for (const s of live) {
       // listSessions is briefly cached. A close can tombstone the pid after the
       // cached row was produced but before resumable search refreshes leases.
@@ -4157,7 +4158,7 @@ export async function listResumable(
   const mark = (step: string) => opts.marks?.push([step, performance.now() - t0]);
   const limit = Math.max(1, Math.min(100, opts.limit ?? 30));
   const exclude = normalizeExcludes(opts.exclude);
-  await refreshLeasesForLiveSessions();
+  await refreshLeasesForLiveSessions(mark);
   mark("leases");
   const before = typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
   const total = before == null ? resumableTotals.get(JSON.stringify(exclude)) : undefined;
