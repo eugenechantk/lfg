@@ -4145,11 +4145,20 @@ async function enrichCandidate(
 }
 
 export async function listResumable(
-  opts: { limit?: number; before?: number | null; exclude?: string[] } = {},
+  opts: {
+    limit?: number;
+    before?: number | null;
+    exclude?: string[];
+    /** Filled with [step, ms since start] for the response's Server-Timing header. */
+    marks?: [string, number][];
+  } = {},
 ): Promise<ResumablePage> {
+  const t0 = performance.now();
+  const mark = (step: string) => opts.marks?.push([step, performance.now() - t0]);
   const limit = Math.max(1, Math.min(100, opts.limit ?? 30));
   const exclude = normalizeExcludes(opts.exclude);
   await refreshLeasesForLiveSessions();
+  mark("leases");
   const before = typeof opts.before === "number" && Number.isFinite(opts.before) ? opts.before : null;
   const total = before == null ? resumableTotals.get(JSON.stringify(exclude)) : undefined;
   // Excluding by cwd needs a cwd for every candidate BEFORE the page fills, and
@@ -4163,6 +4172,7 @@ export async function listResumable(
     const overrides = await readTitleOverrides();
     const index = applyTitleOverrides(await refreshSearchIndex(), overrides);
     const entries = matchingEntries(index, [], before).filter((e) => !hidesCwd(e.cwd, exclude));
+    mark("candidates");
     const page: IndexEntry[] = [];
     let nextBefore: number | null = null;
     for (let i = 0; i < entries.length; i++) {
@@ -4174,6 +4184,7 @@ export async function listResumable(
         break;
       }
     }
+    mark("fill");
     const out: ResumableSession[] = [];
     for (const e of page)
       out.push(
@@ -4182,11 +4193,13 @@ export async function listResumable(
           overrides,
         ),
       );
+    mark("enrich");
     return { sessions: out, nextBefore, ...(total !== undefined ? { total } : {}) };
   }
   const candidates = (await collectResumableCandidates()).filter(
     (c) => before == null || c.mtime < before,
   );
+  mark("candidates");
   const page: ResumableCandidate[] = [];
   let nextBefore: number | null = null;
   for (let i = 0; i < candidates.length; i++) {
@@ -4203,9 +4216,11 @@ export async function listResumable(
       break;
     }
   }
+  mark("fill");
   const overrides = await readTitleOverrides();
   const out: ResumableSession[] = [];
   for (const c of page) out.push(await enrichCandidate(c, overrides));
+  mark("enrich");
   return { sessions: out, nextBefore, ...(total !== undefined ? { total } : {}) };
 }
 

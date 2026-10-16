@@ -2399,13 +2399,24 @@ export async function cmdServe(options: {
         // starves the list: a churny population (gbrain autopilot) can own the
         // whole newest-mtime page, leaving a handful of visible rows out of 100.
         const exclude = url.searchParams.getAll("exclude");
+        // Step timings go out as Server-Timing, so a slow page can be read off
+        // the live server with `curl -D -` instead of a profiling build.
+        const t0 = performance.now();
+        const marks: [string, number][] = [];
         const page = q
           ? await searchResumable({ q, limit, before: cursor, exclude })
-          : await listResumable({ limit, before: cursor, exclude });
+          : await listResumable({ limit, before: cursor, exclude, marks });
         const origins = await taskOrigins();
         // A closed task edit chat has lost its managed record; the task store still knows it.
-        return json(tagEditChats({ ...page, sessions: page.sessions.map((s) => withTaskOrigin(s, origins)) },
-                                 await taskStore.editSessionIds()));
+        const body = tagEditChats({ ...page, sessions: page.sessions.map((s) => withTaskOrigin(s, origins)) },
+                                  await taskStore.editSessionIds());
+        marks.push(["total", performance.now() - t0]);
+        return json(body, {
+          headers: {
+            "Content-Type": "application/json",
+            "Server-Timing": marks.map(([step, ms]) => `${step};dur=${ms.toFixed(0)}`).join(", "),
+          },
+        });
       }
 
       if (path === "/api/sessions/search" && req.method === "GET") {
