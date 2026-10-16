@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   busyWithRunningWork,
   listSubagentSessions,
+  resetSubagentCacheForTests,
   resolveSubagentTranscript,
   runningBackgroundProcessCount,
   runningBackgroundProcessCounts,
@@ -380,6 +381,244 @@ describe("Claude subagent discovery", () => {
     expect(session.status).toBe("running");
     expect(session.finishedAt).toBeNull();
     expect(session.lastActivityAt).toBe(Date.parse("2026-08-20T04:04:00.000Z"));
+  });
+
+  // The child's own transcript is the authority on whether it is working. The
+  // parent's lifecycle record only stands while the child has been silent
+  // since it: a SendMessage resume writes `{resumedAgentId}` to the parent,
+  // which no lifecycle reader understood, so a resumed verifier read
+  // "completed" from its first notification while it worked for 15 minutes
+  // (2026-10-16).
+  function append(transcript: string, ...rows: unknown[]): void {
+    writeFileSync(transcript, readFileSync(transcript, "utf8") + rows.map(line).join(""));
+  }
+
+  function endTurn(text: string, timestamp: string) {
+    return {
+      type: "assistant",
+      timestamp,
+      message: { role: "assistant", stop_reason: "end_turn", content: [{ type: "text", text }] },
+    };
+  }
+
+  test("a resumed child reads running from its own transcript, whatever the parent last said", async () => {
+    const f = fixture();
+    const transcript = child(f.sidecars, {
+      id: "resumed-verifier",
+      toolUseId: "tool-verifier",
+      description: "Verify the session view",
+      lastTimestamp: "2026-08-20T04:02:00.000Z",
+    });
+    append(transcript, endTurn("PARTIAL: could not fetch the board", "2026-08-20T04:03:00.000Z"));
+    writeFileSync(f.parent, [
+      launch("tool-verifier", "Verify the session view", "2026-08-20T04:01:00.000Z"),
+      notification("resumed-verifier", "tool-verifier", "completed", "2026-08-20T04:03:01.000Z"),
+      // What SendMessage writes: no agentId, no status.
+      line({
+        type: "user",
+        timestamp: "2026-08-20T04:05:00.000Z",
+        toolUseResult: { success: true, message: "Resuming agent", resumedAgentId: "resumed-verifier" },
+        message: { content: [{ type: "tool_result", tool_use_id: "tool-send", content: "ok" }] },
+      }),
+    ].join(""));
+    append(transcript,
+      { type: "user", timestamp: "2026-08-20T04:05:00.000Z", message: { role: "user", content: "The coordinator sent a message while you were working:\nThe board is ready." } },
+      { type: "assistant", timestamp: "2026-08-20T04:06:00.000Z", message: { role: "assistant", stop_reason: "tool_use", content: [{ type: "tool_use", id: "t1", name: "Bash", input: {} }] } },
+      { type: "user", timestamp: "2026-08-20T04:06:05.000Z", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: "ok" }] } },
+    );
+
+    const [working] = await listSubagentSessions(f.parent, Date.parse("2026-08-20T04:07:00.000Z"));
+    expect(working.status).toBe("running");
+    expect(working.finishedAt).toBeNull();
+    expect(working.result).toBeNull();
+    expect(withSessionWorkActivity({ busy: false }, [working], 0)).toMatchObject({
+      busy: true,
+      runningChildAgentCount: 1,
+    });
+
+    // It finishes again before the second notification lands: done at once.
+    append(transcript, endTurn("PASS on every property", "2026-08-20T04:08:00.000Z"));
+    const [done] = await listSubagentSessions(f.parent, Date.parse("2026-08-20T04:08:30.000Z"));
+    expect(done.status).toBe("completed");
+    expect(done.finishedAt).toBe(Date.parse("2026-08-20T04:08:00.000Z"));
+    expect(done.result).toBe("PASS on every property");
+
+    // The notification that follows agrees and owns the finish time.
+    writeFileSync(f.parent, readFileSync(f.parent, "utf8")
+      + notification("resumed-verifier", "tool-verifier", "completed", "2026-08-20T04:08:01.000Z"));
+    const [notified] = await listSubagentSessions(f.parent, Date.parse("2026-08-20T04:09:00.000Z"));
+    expect(notified.status).toBe("completed");
+    expect(notified.finishedAt).toBe(Date.parse("2026-08-20T04:08:01.000Z"));
+  });
+
+  test("a child whose turn ended reads completed before the parent's notification lands", async () => {
+    const f = fixture();
+    const transcript = child(f.sidecars, {
+      id: "quick",
+      toolUseId: "tool-quick",
+      description: "Count callers",
+      lastTimestamp: "2026-08-20T04:02:00.000Z",
+    });
+    append(transcript, endTurn("Found 6 callers", "2026-08-20T04:03:00.000Z"));
+    writeFileSync(f.parent, [
+      launch("tool-quick", "Count callers", "2026-08-20T04:01:00.000Z"),
+      line({
+        type: "user",
+        timestamp: "2026-08-20T04:01:01.000Z",
+        toolUseResult: { isAsync: true, status: "async_launched", agentId: "quick" },
+        message: { content: [{ type: "tool_result", tool_use_id: "tool-quick", content: "launched" }] },
+      }),
+    ].join(""));
+
+    const [session] = await listSubagentSessions(f.parent, Date.parse("2026-08-20T04:03:10.000Z"));
+
+    expect(session.status).toBe("completed");
+    expect(session.finishedAt).toBe(Date.parse("2026-08-20T04:03:00.000Z"));
+    expect(session.result).toBe("Found 6 callers");
+  });
+
+  test("a system notification delivered into a finished child is not work until it answers", async () => {
+    // Four real children got a background-task notice a day after they
+    // finished and never ran again.
+    const f = fixture();
+    const transcript = child(f.sidecars, {
+      id: "noticed",
+      toolUseId: "tool-noticed",
+      description: "Scrape posts",
+      lastTimestamp: "2026-08-20T04:02:00.000Z",
+    });
+    append(transcript, endTurn("Zeta has 199 posts", "2026-08-20T04:03:00.000Z"));
+    writeFileSync(f.parent, [
+      launch("tool-noticed", "Scrape posts", "2026-08-20T04:01:00.000Z"),
+      notification("noticed", "tool-noticed", "completed", "2026-08-20T04:03:01.000Z"),
+    ].join(""));
+    append(transcript,
+      {
+        type: "user",
+        timestamp: "2026-08-21T19:30:05.000Z",
+        message: { role: "user", content: "[SYSTEM NOTIFICATION - NOT USER INPUT]\n<task-notification>\n<status>completed</status>\n</task-notification>" },
+      },
+      { type: "attachment", timestamp: "2026-08-21T19:30:05.000Z", attachment: { type: "date" } },
+    );
+
+    const [idle] = await listSubagentSessions(f.parent, Date.parse("2026-08-21T19:31:00.000Z"));
+    expect(idle.status).toBe("completed");
+
+    // If it does answer, it is working again.
+    append(transcript, {
+      type: "assistant",
+      timestamp: "2026-08-21T19:31:10.000Z",
+      message: { role: "assistant", stop_reason: null, content: [{ type: "thinking", thinking: "" }] },
+    });
+    const [answering] = await listSubagentSessions(f.parent, Date.parse("2026-08-21T19:31:20.000Z"));
+    expect(answering.status).toBe("running");
+  });
+
+  test("an interrupted child reads stopped without a parent notification", async () => {
+    const f = fixture();
+    const transcript = child(f.sidecars, {
+      id: "cut",
+      toolUseId: "tool-cut",
+      description: "Long sweep",
+      lastTimestamp: "2026-08-20T04:02:00.000Z",
+    });
+    append(transcript, {
+      type: "user",
+      timestamp: "2026-08-20T04:03:00.000Z",
+      message: { role: "user", content: [{ type: "text", text: "[Request interrupted by user for tool use]" }] },
+    });
+    writeFileSync(f.parent, launch("tool-cut", "Long sweep", "2026-08-20T04:01:00.000Z"));
+
+    const [session] = await listSubagentSessions(f.parent, Date.parse("2026-08-20T04:04:00.000Z"));
+
+    expect(session.status).toBe("stopped");
+    expect(session.finishedAt).toBe(Date.parse("2026-08-20T04:03:00.000Z"));
+  });
+
+  test("a child that ended its turn while its own background command runs is still working", async () => {
+    // Live probe 2026-10-16: a resumed child pushed `sleep 90` to the
+    // background and ended its turn; Claude Code notified "completed — stopped
+    // with background work of its own still running" and resumed it 87s later.
+    const f = fixture();
+    const outputFile = join(f.dir, "child-shell.output");
+    const transcript = child(f.sidecars, {
+      id: "waiting",
+      toolUseId: "tool-waiting",
+      description: "Wait for the build",
+      lastTimestamp: "2026-08-20T04:02:00.000Z",
+    });
+    append(transcript,
+      {
+        type: "user",
+        timestamp: "2026-08-20T04:02:30.000Z",
+        toolUseResult: { backgroundTaskId: "child-shell" },
+        message: {
+          role: "user",
+          content: [{ type: "tool_result", content: `Command running in background with ID: child-shell. Output is being written to: ${outputFile}` }],
+        },
+      },
+      endTurn("Waiting for the build to finish...", "2026-08-20T04:03:00.000Z"),
+    );
+    writeFileSync(f.parent, [
+      launch("tool-waiting", "Wait for the build", "2026-08-20T04:01:00.000Z"),
+      notification("waiting", "tool-waiting", "completed", "2026-08-20T04:03:01.000Z"),
+    ].join(""));
+    const at = Date.parse("2026-08-20T04:04:00.000Z");
+
+    const [waiting] = await listSubagentSessions(f.parent, at, () => new Set([outputFile]));
+    expect(waiting.status).toBe("running");
+    expect(waiting.finishedAt).toBeNull();
+    expect(waiting.result).toBeNull();
+
+    // Its command exits (output file closed): done.
+    resetSubagentCacheForTests();
+    const [exited] = await listSubagentSessions(f.parent, at, () => new Set());
+    expect(exited.status).toBe("completed");
+
+    // The command's notice lands in the child: no candidates left, no probe.
+    append(transcript, {
+      type: "user",
+      timestamp: "2026-08-20T04:05:00.000Z",
+      message: {
+        role: "user",
+        content: "[SYSTEM NOTIFICATION - NOT USER INPUT]\n<task-notification>\n<task-id>child-shell</task-id>\n<status>completed</status>\n</task-notification>",
+      },
+    });
+    let probed = false;
+    const [notified] = await listSubagentSessions(f.parent, at, () => {
+      probed = true;
+      return new Set([outputFile]);
+    });
+    expect(notified.status).toBe("completed");
+    expect(probed).toBe(false);
+  });
+
+  test("a notification is dated when it was queued, not when it was delivered", async () => {
+    // The parent records each notification twice: queue-operation enqueue,
+    // then remove when it reaches the model. A remove after a resume must not
+    // re-date the old "completed" past the resumed child's turn.
+    const f = fixture();
+    const transcript = child(f.sidecars, {
+      id: "redated",
+      toolUseId: "tool-redated",
+      description: "Verify again",
+      lastTimestamp: "2026-08-20T04:02:00.000Z",
+    });
+    append(transcript,
+      endTurn("first pass", "2026-08-20T04:03:00.000Z"),
+      { type: "user", timestamp: "2026-08-20T04:05:00.000Z", message: { role: "user", content: "The coordinator sent a message while you were working:\nagain" } },
+    );
+    const removed = JSON.parse(notification("redated", "tool-redated", "completed", "2026-08-20T04:05:30.000Z"));
+    removed.operation = "remove";
+    writeFileSync(f.parent, [
+      launch("tool-redated", "Verify again", "2026-08-20T04:01:00.000Z"),
+      notification("redated", "tool-redated", "completed", "2026-08-20T04:03:01.000Z"),
+      line(removed),
+    ].join(""));
+
+    const [session] = await listSubagentSessions(f.parent, Date.parse("2026-08-20T04:06:00.000Z"));
+
+    expect(session.status).toBe("running");
   });
 
   test("a synchronous subagent's tool_result completion terminates its status", async () => {

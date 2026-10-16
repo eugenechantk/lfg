@@ -191,7 +191,7 @@ function emptyParentEvents(): ParentEvents {
   };
 }
 
-function consumeParentEventLine(line: string, events: ParentEvents): void {
+function consumeParentEventLine(line: string, events: ParentEvents, deliveredNotifications = false): void {
   if (
     !line.includes('"Agent"')
     && !line.includes("<task-notification>")
@@ -244,7 +244,16 @@ function consumeParentEventLine(line: string, events: ParentEvents): void {
       });
     }
   }
-  const content = typeof row.content === "string" ? row.content : null;
+  // A notification is queued once (enqueue) and repeated when it reaches the
+  // model (remove). Date it when it happened: a remove that lands after a
+  // SendMessage resume would otherwise re-date an old "completed" past the
+  // resumed child's turn.
+  if (row.type === "queue-operation" && row.operation !== "enqueue") return;
+  // A child gets its own background commands' notices only as a delivered
+  // user message; the parent's queue rows above are the canonical copy there.
+  const content = typeof row.content === "string"
+    ? row.content
+    : deliveredNotifications && typeof message?.content === "string" ? message.content : null;
   if (!content?.includes("<task-notification>")) return;
   const event: Lifecycle = { status: mapStatus(xmlValue(content, "status")), timestamp: at };
   const agentIds = xmlValues(content, "task-id").map((id) => id.replace(/^agent-/, ""));
@@ -272,7 +281,7 @@ function fileSignature(path: string): string {
  * order), so folding only the appended bytes is equivalent to a full read.
  * A shrunken file (truncate/rewrite) resets and re-reads from zero.
  */
-async function parentEvents(path: string): Promise<ParentEvents> {
+async function parentEvents(path: string, deliveredNotifications = false): Promise<ParentEvents> {
   let size: number;
   try {
     size = statSync(path).size;
@@ -291,12 +300,66 @@ async function parentEvents(path: string): Promise<ParentEvents> {
   const lines = (entry.buf + chunk).split("\n");
   entry.buf = lines.pop() ?? "";
   for (const line of lines) {
-    if (line) consumeParentEventLine(line, entry.events);
+    if (line) consumeParentEventLine(line, entry.events, deliveredNotifications);
   }
   return entry.events;
 }
 
-type TranscriptTimes = { first: number | null; last: number | null; lastText: string | null };
+/** Output files of background commands this transcript started and has no end notice for. */
+function liveBackgroundCandidates(events: ParentEvents): string[] {
+  const candidates: string[] = [];
+  for (const [id, outputFile] of events.backgroundProcesses) {
+    const lifecycle = events.lifecycleByAgentId.get(id);
+    if (!lifecycle || !isTerminal(lifecycle.status)) candidates.push(outputFile);
+  }
+  return candidates;
+}
+
+/**
+ * Where the child's own turn stands: "none" before its first turn line, "open"
+ * while it works (or waits on the model), "closed" after a reply that ends the
+ * turn, "interrupted" after a user interrupt.
+ */
+type ChildTurn = "none" | "open" | "closed" | "interrupted";
+
+type TranscriptTimes = {
+  first: number | null;
+  last: number | null;
+  lastText: string | null;
+  turn: ChildTurn;
+  /** Timestamp of the last row that moved `turn`. */
+  turnAt: number | null;
+};
+
+const TURN_CLOSING_STOPS = new Set(["end_turn", "stop_sequence"]);
+
+function userText(row: Record<string, unknown>): string {
+  const content = (row.message as { content?: unknown } | undefined)?.content;
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return (content as Array<Record<string, unknown>>)
+    .filter((block) => block.type === "text" && typeof block.text === "string")
+    .map((block) => block.text as string)
+    .join("\n");
+}
+
+/**
+ * How one child transcript row moves the child's turn, or null when it says
+ * nothing about it (attachments, system rows, and notices delivered into the
+ * child: a background-task notice that lands after the child finished is not
+ * work until the child answers it, and its answer is an assistant row).
+ */
+function childTurnStep(row: Record<string, unknown>): ChildTurn | null {
+  if (row.type === "assistant") {
+    const stop = (row.message as { stop_reason?: unknown } | undefined)?.stop_reason;
+    return typeof stop === "string" && TURN_CLOSING_STOPS.has(stop) ? "closed" : "open";
+  }
+  if (row.type !== "user") return null;
+  const text = userText(row);
+  if (text.startsWith("[Request interrupted by user")) return "interrupted";
+  if (text.startsWith("[SYSTEM NOTIFICATION") || text.includes("<task-notification>")) return null;
+  return "open";
+}
 
 // Cached per (size, mtime): a parent's signature changes on every scan while
 // it is busy, and the sidecar cache miss used to re-stream EVERY child
@@ -306,7 +369,9 @@ async function transcriptTimes(path: string): Promise<TranscriptTimes> {
   let first: number | null = null;
   let last: number | null = null;
   let lastText: string | null = null;
-  if (!existsSync(path)) return { first, last, lastText };
+  let turn: ChildTurn = "none";
+  let turnAt: number | null = null;
+  if (!existsSync(path)) return { first, last, lastText, turn, turnAt };
   const signature = fileSignature(path);
   const cached = transcriptTimesCache.get(path);
   if (cached?.signature === signature) return cached.times;
@@ -317,12 +382,17 @@ async function transcriptTimes(path: string): Promise<TranscriptTimes> {
       const row = JSON.parse(line) as Record<string, unknown>;
       if (row.type === "assistant") lastText = assistantText(row) ?? lastText;
       const at = timestamp(row.timestamp);
+      const step = childTurnStep(row);
+      if (step) {
+        turn = step;
+        turnAt = at ?? turnAt;
+      }
       if (at == null) continue;
       first = first == null ? at : Math.min(first, at);
       last = last == null ? at : Math.max(last, at);
     } catch {}
   }
-  const times = { first, last, lastText };
+  const times = { first, last, lastText, turn, turnAt };
   transcriptTimesCache.set(path, { signature, times });
   return times;
 }
@@ -393,9 +463,36 @@ function withRunningStaleness(sessions: SubagentSession[], now: number): Subagen
   });
 }
 
+/**
+ * The child's own transcript says whether it is working; the parent's
+ * lifecycle record (notification or sync tool_result) only says how a turn
+ * ended. So the parent's word stands while the child has been silent since it
+ * — it carries failed/killed, and older Claude Code wrote the final reply with
+ * `stop_reason: null`, ~100-400ms before the notification. Any later child
+ * turn row (a SendMessage resume, which the parent records in a shape no
+ * lifecycle reader understands) overrides it.
+ */
+function childStatus(
+  lifecycle: Lifecycle | undefined,
+  child: TranscriptTimes,
+): { status: SubagentStatus; finishedAt: number | null } {
+  if (lifecycle && (child.turnAt == null || (lifecycle.timestamp ?? -Infinity) >= child.turnAt)) {
+    return {
+      status: lifecycle.status,
+      finishedAt: isTerminal(lifecycle.status) ? lifecycle.timestamp : null,
+    };
+  }
+  switch (child.turn) {
+    case "closed": return { status: "completed", finishedAt: child.turnAt };
+    case "interrupted": return { status: "stopped", finishedAt: child.turnAt };
+    default: return { status: "running", finishedAt: null };
+  }
+}
+
 export async function listSubagentSessions(
   parentTranscript: string,
   now: number = Date.now(),
+  probe: BackgroundProcessProbe = openBackgroundOutputFiles,
 ): Promise<SubagentSession[]> {
   const sidecars = sidecarDirectory(parentTranscript);
   if (!existsSync(sidecars)) return [];
@@ -411,6 +508,7 @@ export async function listSubagentSessions(
 
   const events = await parentEvents(parentTranscript);
   const sessions: SubagentSession[] = [];
+  const waitingOn: Array<{ index: number; files: string[] }> = [];
   for (const name of names.sort()) {
     const match = /^agent-([A-Za-z0-9_-]{1,128})\.meta\.json$/.exec(name);
     if (!match) continue;
@@ -428,7 +526,7 @@ export async function listSubagentSessions(
     const childPath = join(sidecars, `agent-${id}.jsonl`);
     if (!existsSync(childPath)) continue;
     const times = await transcriptTimes(childPath);
-    const status = lifecycle?.status ?? "running";
+    const { status, finishedAt } = childStatus(lifecycle, times);
     const startedAt = launch?.timestamp ?? times.first;
     const lastActivityAt = [times.last, lifecycle?.timestamp ?? null]
       .filter((value): value is number => value != null)
@@ -444,9 +542,27 @@ export async function listSubagentSessions(
       status,
       startedAt,
       lastActivityAt,
-      finishedAt: lifecycle && isTerminal(status) ? lifecycle.timestamp : null,
+      finishedAt,
       result: isTerminal(status) ? resultLine(times.lastText) : null,
     });
+    if (status === "completed") {
+      const files = liveBackgroundCandidates(await parentEvents(childPath, true));
+      if (files.length > 0) waitingOn.push({ index: sessions.length - 1, files });
+    }
+  }
+  // A child that ended its turn while a background command of its own still
+  // runs has not finished: Claude Code resumes it when the command reports
+  // (its notification says "stopped with background work of its own still
+  // running"). One `lsof` for every such child, and only when one exists.
+  // Cached with the rest: the command's end notice lands in the child's
+  // transcript, which changes the signature; a child that dies first falls to
+  // the staleness backstop below.
+  if (waitingOn.length > 0) {
+    const open = probe(waitingOn.flatMap((waiting) => waiting.files));
+    for (const { index, files } of waitingOn) {
+      if (!files.some((file) => open.has(file))) continue;
+      sessions[index] = { ...sessions[index], status: "running", finishedAt: null, result: null };
+    }
   }
   sessions.sort((a, b) =>
     (b.lastActivityAt ?? b.startedAt ?? 0) - (a.lastActivityAt ?? a.startedAt ?? 0)
@@ -497,13 +613,7 @@ export async function runningBackgroundProcessCounts(
   const unique = Array.from(new Set(parentTranscripts));
   const candidatesByTranscript = new Map<string, string[]>();
   await Promise.all(unique.map(async (parentTranscript) => {
-    const events = await parentEvents(parentTranscript);
-    const candidates: string[] = [];
-    for (const [id, outputFile] of events.backgroundProcesses) {
-      const lifecycle = events.lifecycleByAgentId.get(id);
-      if (!lifecycle || !isTerminal(lifecycle.status)) candidates.push(outputFile);
-    }
-    candidatesByTranscript.set(parentTranscript, candidates);
+    candidatesByTranscript.set(parentTranscript, liveBackgroundCandidates(await parentEvents(parentTranscript)));
   }));
   const open = probe(Array.from(candidatesByTranscript.values()).flat());
   return new Map(unique.map((parentTranscript) => [
