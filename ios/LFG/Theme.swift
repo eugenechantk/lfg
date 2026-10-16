@@ -364,6 +364,13 @@ enum S2 {
     static let chipInk = color(dark: 0xD1D1D6, light: 0x3A3A3C)
     static let ringTrack = color(dark: 0x3A3A3C, light: 0xE5E5EA)
     static let send = color(dark: 0x0A6EE0, light: 0x0A6EE0)
+    /// The user's message bubble (board `bub-soft`, picked 2026-10-16): a dimmer
+    /// blue with the prose off-white on dark, so the bubble stops glaring at
+    /// night. Light mode keeps the send blue with white text.
+    static let userBubble = color(dark: 0x355C8F, light: 0x0A6EE0)
+    static let userBubbleInkUI = UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(red: 0xF2 / 255, green: 0xF2 / 255, blue: 0xF7 / 255, alpha: 1) : .white }
+    static let userBubbleInk = Color(userBubbleInkUI)
     /// The Stop button inverts the surface: a light disc with a dark square.
     static let stopDisc = color(dark: 0xF2F2F7, light: 0x1C1C1E)
     static let stopSquare = color(dark: 0x000000, light: 0xFFFFFF)

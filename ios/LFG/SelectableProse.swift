@@ -479,10 +479,11 @@ enum SelectableTextRenderer {
             secondary: .secondaryLabel, link: .tintColor,
             linkUnderline: false, tint: nil, inlineCodeBackground: .secondarySystemBackground, rule: .tertiaryLabel
         )
-        /// White text on the accent-coloured user bubble.
+        /// Text on the user bubble: off-white on dark, white on light.
         static let onAccent = Palette(
-            id: "onAccent", text: .white, secondary: UIColor.white.withAlphaComponent(0.85), link: .white,
-            linkUnderline: true, tint: .white, inlineCodeBackground: UIColor.white.withAlphaComponent(0.22),
+            id: "onAccent", text: S2.userBubbleInkUI, secondary: S2.userBubbleInkUI.withAlphaComponent(0.85),
+            link: S2.userBubbleInkUI,
+            linkUnderline: true, tint: S2.userBubbleInkUI, inlineCodeBackground: UIColor.white.withAlphaComponent(0.22),
             rule: UIColor.white.withAlphaComponent(0.5)
         )
     }

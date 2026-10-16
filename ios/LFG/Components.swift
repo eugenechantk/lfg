@@ -125,7 +125,7 @@ private struct TextBubble: View {
                         // highlight, system Copy — in place. The tap that
                         // reveals the sent time comes back through `onTap`
                         // because the text view sees touches first.
-                        // S2 bubble (board `s2-view`): #0A6EE0, 20pt corners,
+                        // S2 bubble (board `s2-view`): `S2.userBubble`, 20pt corners,
                         // at most 290pt of text. A cap on the offered width, not
                         // a `maxWidth` frame, which would stretch short bubbles.
                         CappedWidth(290) {
@@ -137,7 +137,7 @@ private struct TextBubble: View {
                         // 9pt + the board's 22pt line + 9pt = 40; the text view's
                         // line is ~21pt, so the extra point goes above and below.
                         .padding(.horizontal, 14).padding(.vertical, 9.5)
-                        .background(S2.send, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .background(S2.userBubble, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                         .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
                     // Narrower than assistant attachments so the cards read as
@@ -1041,9 +1041,9 @@ struct OptimisticUserBubble: View {
                 Text(pending.displayText)
                     .textSelection(.enabled)
                     .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(mutedBubble ? Color(.secondarySystemFill) : Color.accentColor,
+                    .background(mutedBubble ? Color(.secondarySystemFill) : S2.userBubble,
                                 in: RoundedRectangle(cornerRadius: 14))
-                    .foregroundStyle(mutedBubble ? Color.primary : Color.white)
+                    .foregroundStyle(mutedBubble ? Color.primary : S2.userBubbleInk)
                     .opacity(pending.failed ? 0.5 : 1)
             }
             .animation(.easeInOut(duration: 0.25), value: pending.confirmed)
