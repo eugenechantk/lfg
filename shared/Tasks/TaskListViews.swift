@@ -111,6 +111,9 @@ enum TaskListMetrics {
 /// One task in the list: a time column, then title, schedule line and last result. No buttons.
 struct TaskRowView: View {
     let model: TaskRowModel
+    /// False in the iPad sidebar, where the selection shows what opened
+    /// (board `ip-task`, matching the Sessions sidebar).
+    var showsChevron = true
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -152,12 +155,14 @@ struct TaskRowView: View {
             // The hairline starts at the title column.
             .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
             // The system disclosure chevron is larger than the board's (and absent on the Mac); the row draws its own.
-            Image(systemName: "chevron.right")
-                .font(.system(size: TaskListMetrics.chevron, weight: .bold))
-                .foregroundStyle(TaskColors.chevron)
-                .frame(maxHeight: .infinity)
-                .padding(.leading, 6)
-                .accessibilityHidden(true)
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: TaskListMetrics.chevron, weight: .bold))
+                    .foregroundStyle(TaskColors.chevron)
+                    .frame(maxHeight: .infinity)
+                    .padding(.leading, 6)
+                    .accessibilityHidden(true)
+            }
         }
         .padding(.top, TaskListMetrics.rowTop)
         .padding(.bottom, TaskListMetrics.rowBottom)

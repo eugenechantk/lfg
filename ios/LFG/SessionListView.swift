@@ -106,6 +106,9 @@ struct SessionListView: View {
     var bottomSearchActive: Binding<Bool>? = nil
     var bottomSearchShown = false
     var listFooter: AnyView? = nil
+    /// The list is the floating sidebar card of an iPad split view. Passed in:
+    /// the sidebar column itself reports a COMPACT size class.
+    var inSidebarCard = false
     @State private var localSearchText = ""
     @State private var listWidth: CGFloat = 320
     private var searchText: String { searchQuery?.wrappedValue ?? localSearchText }
@@ -817,9 +820,11 @@ struct SessionListView: View {
 
     private var headerStatus: some View {
         // The system puts a leading toolbar item at x=20; the board's first
-        // host dot sits at x=16.
+        // host dot sits at x=16. The iPad sidebar card puts the item at its
+        // very edge, so the dot sat on the rounded corner; 12pt brings it 16pt
+        // in, as on the phone (board `ip-session`).
         HostConnectionHeader(listWidth: listWidth)
-            .padding(.leading, -4)
+            .padding(.leading, inSidebarCard ? 12 : -4)
             .accessibilityIdentifier("sessionListHeader")
     }
 

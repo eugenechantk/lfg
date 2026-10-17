@@ -98,11 +98,25 @@ struct CappedWidth: Layout {
     }
 }
 
+/// The width of the transcript's reading column (`ReadableColumn`), published by
+/// the session view. Defaults to a phone width, so a view outside a transcript
+/// keeps the phone's bubble cap.
+private struct TranscriptColumnWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 402
+}
+extension EnvironmentValues {
+    var transcriptColumnWidth: CGFloat {
+        get { self[TranscriptColumnWidthKey.self] }
+        set { self[TranscriptColumnWidthKey.self] = newValue }
+    }
+}
+
 private struct TextBubble: View {
     let message: SessionMessage
     var followsUserBubble: Bool = false
     var onFollowup: ((String) -> Void)? = nil
     var onOpenFile: ((MediaRef, [MediaRef]) -> Void)? = nil
+    @Environment(\.transcriptColumnWidth) private var columnWidth
     /// Sent time is hidden by default and toggled by tapping the bubble.
     @State private var showTimestamp = false
     private var isUser: Bool { message.role == "user" }
@@ -126,9 +140,10 @@ private struct TextBubble: View {
                         // reveals the sent time comes back through `onTap`
                         // because the text view sees touches first.
                         // S2 bubble (board `s2-view`): `S2.userBubble`, 20pt corners,
-                        // at most 290pt of text. A cap on the offered width, not
+                        // at most 290pt of text (480pt in an iPad reading column,
+                        // board `ip-session`). A cap on the offered width, not
                         // a `maxWidth` frame, which would stretch short bubbles.
-                        CappedWidth(290) {
+                        CappedWidth(ReadableColumn.userBubbleTextCap(columnWidth: columnWidth)) {
                             SelectableProseView(plain: displayText, palette: .onAccent, hugsContent: true) {
                                 withAnimation(.easeInOut(duration: 0.15)) { showTimestamp.toggle() }
                             }

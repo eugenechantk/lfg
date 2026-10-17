@@ -24,7 +24,17 @@ struct RootView: View {
     @State private var showNewSession = false
     @State private var focusNewSessionComposer = false
     @State private var newSessionPrefill: NewSessionPrefill?
-    @State private var columnVisibility = NavigationSplitViewVisibility.automatic
+    /// The list shows beside the detail from launch (canvas page "iPad (Oct 17)",
+    /// board `ip-launch`). `.automatic` hid it in iPad portrait, so a cold launch
+    /// showed only "No session selected" and one small button.
+    ///
+    /// iPad starts with the list hidden and the post-render `.task` below slides
+    /// it in. Any launch whose FIRST frame shows the sidebar — `.doubleColumn`,
+    /// or `.automatic` in landscape — laid both columns out 55pt low (the tab
+    /// container started 32pt down) until the next toggle (iOS 26.3). Showing a
+    /// hidden list is the one path measured to lay out right every time.
+    @State private var columnVisibility: NavigationSplitViewVisibility =
+        UIDevice.current.userInterfaceIdiom == .pad ? .detailOnly : .automatic
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var hSizeClass
 
@@ -86,7 +96,7 @@ struct RootView: View {
             // survive the trip back to full width with no sidebar and — until the
             // user finds the button — no list.
             if size != .regular, columnVisibility == .detailOnly {
-                columnVisibility = .automatic
+                columnVisibility = .doubleColumn
             }
         }
         // Inline host-file rendering resolves against the OPEN session's host
@@ -109,6 +119,14 @@ struct RootView: View {
             // during a view update — doing that is undefined behavior and renders
             // a blank/black screen. The plain onChange below covers taps that
             // arrive while the app is already running.
+            if UIDevice.current.userInterfaceIdiom == .pad, columnVisibility == .detailOnly {
+                await Task.yield()
+                if hSizeClass == .regular {
+                    withAnimation(.easeInOut(duration: 0.22)) { columnVisibility = .doubleColumn }
+                } else {
+                    columnVisibility = .doubleColumn
+                }
+            }
             if let pending = store.requestedSelection {
                 selectedTab = .sessions
                 selection = pending
@@ -347,7 +365,10 @@ struct RootView: View {
            bottomSearchShown: searchPresented && searchScope == .scheduledTasks,
            sidebarVisibility: usesSidebarDock ? $columnVisibility : nil,
            listFooter: listFooter,
-           connectionHeader: { width in AnyView(HostConnectionHeader(listWidth: width)) },
+           // In the iPad sidebar card, the host dot sits 16pt in, as on the
+           // Sessions header (board `ip-task`); the phone keeps the system inset.
+           connectionHeader: { width in AnyView(HostConnectionHeader(listWidth: width)
+               .offset(x: usesSidebarDock ? 12 : 0)) },
            connectionWarning: AnyView(HostConnectionWarning()),
            connectedHostIDs: Set(settings.hosts.filter { store.connectionStatus(forHost: $0.id) == .connected }.map(\.id)),
            usesBottomCreate: true,
@@ -396,7 +417,8 @@ struct RootView: View {
                             onSearch: { beginSearch(.sessions) },
                             bottomSearchActive: searchFocus(for: .sessions),
                             bottomSearchShown: searchPresented && searchScope == .sessions,
-                            listFooter: listFooter)
+                            listFooter: listFooter,
+                            inSidebarCard: usesSidebarDock)
                 .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 460)
                 // SwiftUI's own sidebar toggle only appears while the sidebar
                 // is HIDDEN — the half of the job that already worked. Left in,
@@ -441,17 +463,10 @@ struct RootView: View {
                                           onEnded: { selectedSession.wrappedValue = nil },
                                           onMarkedUnread: { selectedSession.wrappedValue = nil })
                             .id(selection)
-                            .toolbar {
-                                if isSideBySide {
-                                    ToolbarItem(placement: .topBarLeading) {
-                                        Button("Sessions", systemImage: "chevron.left") {
-                                            selectedSession.wrappedValue = nil
-                                            setSidebar(hidden: false)
-                                        }
-                                        .accessibilityIdentifier("session_back_to_list")
-                                    }
-                                }
-                            }
+                            // Side by side, the list button below is the only
+                            // top-left control. A back arrow here only showed
+                            // the list again (board `ip-session`); the phone
+                            // keeps its own back button.
                     } else {
                         // Selected (often via a notification tap) but not
                         // resolved yet — the live list is still loading or the

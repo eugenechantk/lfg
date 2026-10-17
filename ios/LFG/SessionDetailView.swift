@@ -543,6 +543,16 @@ struct SessionDetailView: View {
     }
 
     private var bottomChrome: some View {
+        bottomChromeStack
+            // The transcript's reading column: pills, strips, the needs-input
+            // panel and the composer line up with the text above them. Inside
+            // this view, so the measured height and the fade behind it still
+            // span the full width. Board `ip-session`.
+            .frame(maxWidth: ReadableColumn.maxWidth)
+            .frame(maxWidth: .infinity)
+    }
+
+    private var bottomChromeStack: some View {
         VStack(spacing: 0) {
             // Only active subagents float above the composer. Files and Terminal
             // remain available from the session sheet.
@@ -838,6 +848,12 @@ struct SessionDetailView: View {
                 // a second visual-bottom spacer reachable only by manual drag.
                 .padding(.horizontal)
                 .padding(.bottom)
+                // iPad: one centered reading column (padding included), so a
+                // line stays near 80 characters. A phone is narrower than the
+                // cap and is unchanged. Board `ip-session`.
+                .frame(maxWidth: ReadableColumn.maxWidth)
+                .frame(maxWidth: .infinity)
+                .environment(\.transcriptColumnWidth, ReadableColumn.width(in: geo.size.width))
             }
             // Structural top is the visual bottom. Reserve the floating chrome
             // outside the transcript so it cannot become a blank tail the user

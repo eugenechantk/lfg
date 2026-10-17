@@ -65,6 +65,12 @@ struct NewSessionView: View {
         return store.hostStateByHost[selectedHost.id]?.isLive == true
     }
 
+    private var emptyDraftState: some View {
+        EmptyDraftState(
+            title: purpose == .scheduledTask ? "What would you like to schedule?" : "Describe a task to start",
+            subtitle: purpose == .scheduledTask ? "Work out the details with your agent in a session." : "Your first message kicks off the session.")
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             NewSessionPalette.canvas
@@ -73,10 +79,15 @@ struct NewSessionView: View {
             VStack(spacing: 0) {
                 NavRow(title: purpose == .scheduledTask ? "New task" : "New session") { dismiss() }
 
-                EmptyDraftState(
-                    title: purpose == .scheduledTask ? "What would you like to schedule?" : "Describe a task to start",
-                    subtitle: purpose == .scheduledTask ? "Work out the details with your agent in a session." : "Your first message kicks off the session.")
-                    .padding(.top, 74)
+                // An iPad in landscape with the keyboard up leaves less height
+                // than the hint plus the composer need. A fixed hint overflowed
+                // the screen and pushed the composer's bottom row under the
+                // keyboard, so the hint steps down to what fits.
+                ViewThatFits(in: .vertical) {
+                    emptyDraftState.padding(.top, 74)
+                    emptyDraftState.padding(.top, 16)
+                    Color.clear.frame(height: 0)
+                }
 
                 Spacer(minLength: 0)
             }
@@ -105,6 +116,10 @@ struct NewSessionView: View {
                 Task { await start(text: text, attachments: attachments) }
             }
             .padding(.horizontal, 12)
+            // The session view's reading column, so the composer keeps its
+            // width when the session it starts opens. Board `ip-new`.
+            .frame(maxWidth: ReadableColumn.maxWidth)
+            .frame(maxWidth: .infinity)
         }
         .sheet(item: $activeSheet) { kind in
             sheet(for: kind)

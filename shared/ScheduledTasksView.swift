@@ -365,8 +365,18 @@ struct ScheduledTasksView: View {
                     #else
                     if let onSearch {
                         ToolbarItem(placement: scheduledTaskActionPlacement) {
-                            Button("Search tasks", systemImage: "magnifyingglass", action: onSearch)
+                            if sidebarVisibility != nil {
+                                // iPad sidebar: the Sessions header's glyphs, so the
+                                // header does not change when switching tabs.
+                                Button(action: onSearch) {
+                                    BoardGlyph(kind: .search, lineWidth: 2).frame(width: 21, height: 21)
+                                }
+                                .accessibilityLabel("Search tasks")
                                 .accessibilityIdentifier("tasks_search")
+                            } else {
+                                Button("Search tasks", systemImage: "magnifyingglass", action: onSearch)
+                                    .accessibilityIdentifier("tasks_search")
+                            }
                         }
                     }
                     if showsListActions {
@@ -377,7 +387,16 @@ struct ScheduledTasksView: View {
                                 Button("Set up manually on \(host.name)") { sheet = .manual(host) }
                                     .accessibilityIdentifier("tasks_create_manual_\(host.id)")
                             }
-                        } label: { Label("More task options", systemImage: "ellipsis") }
+                        } label: {
+                            if sidebarVisibility != nil {
+                                BoardGlyph(kind: .more).frame(width: 20, height: 20)
+                                    .foregroundStyle(.primary)
+                                    .accessibilityLabel("More task options")
+                            } else {
+                                Label("More task options", systemImage: "ellipsis")
+                            }
+                        }
+                        .tint(sidebarVisibility != nil ? Color(.label) : nil)
                         .disabled(hosts.isEmpty).accessibilityIdentifier("tasks_more")
                     }
                     }
@@ -671,6 +690,12 @@ struct ScheduledTasksView: View {
                 #if os(macOS)
                 .scrollContentBackground(.hidden)
                 .background(TaskColors.page)
+                #else
+                // iPad sidebar: the Sessions sidebar's fill (system background,
+                // which the sidebar's elevated level resolves to #1C1C1E), not
+                // the darker default glass. The phone keeps the default.
+                .scrollContentBackground(sidebarVisibility != nil ? .hidden : .automatic)
+                .background(sidebarVisibility != nil ? Color(.systemBackground) : Color.clear)
                 #endif
                 .accessibilityIdentifier("tasks_list")
             }
@@ -712,17 +737,25 @@ struct ScheduledTasksView: View {
 
     @ViewBuilder
     private func taskRow(_ item: HostedScheduledTask) -> some View {
-        let row = TaskRowView(model: TaskRowModel.make(task: item.task, hostName: item.host.name))
+        let model = TaskRowModel.make(task: item.task, hostName: item.host.name)
         if sidebarVisibility != nil {
+            let selected = selectedTaskID == item.id
+            // iPad sidebar: the Sessions sidebar's selection, an inset rounded
+            // wash with no chevron and no hairline under it (board `ip-task`).
             Button {
                 bottomSearchActive?.wrappedValue = false
                 pathBinding.wrappedValue = [.task(item.id)]
-            } label: { row }
+            } label: { TaskRowView(model: model, showsChevron: false) }
             .buttonStyle(.plain)
-            .listRowBackground(selectedTaskID == item.id ? Color.accentColor.opacity(0.12) : Color.clear)
-            .accessibilityAddTraits(selectedTaskID == item.id ? .isSelected : [])
+            .listRowBackground(selected
+                ? AnyView(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.14))
+                    .padding(.horizontal, 8))
+                : AnyView(Color.clear))
+            .listRowSeparator(selected ? .hidden : .automatic, edges: .bottom)
+            .accessibilityAddTraits(selected ? .isSelected : [])
         } else {
-            NavigationLink(value: ScheduledTaskRoute.task(item.id)) { row }
+            NavigationLink(value: ScheduledTaskRoute.task(item.id)) { TaskRowView(model: model) }
                 #if os(iOS)
                 .navigationLinkIndicatorVisibility(.hidden)
                 #endif
@@ -973,7 +1006,14 @@ private struct ScheduledTaskDetail: View {
             .padding(.top, 8)
             // The phone's last row must scroll clear of the Ask bar's fade, as on the board.
             .padding(.bottom, Self.bottomPadding)
+            #if os(iOS)
+            // iPad: the session view's reading column, centered (board `ip-task`).
+            // A phone is narrower than the cap and keeps the full width.
+            .frame(maxWidth: ReadableColumn.maxWidth, alignment: .leading)
+            .frame(maxWidth: .infinity)
+            #else
             .frame(maxWidth: .infinity, alignment: .leading)
+            #endif
         }
         .accessibilityIdentifier("task_detail")
         #if os(iOS)
@@ -982,7 +1022,10 @@ private struct ScheduledTaskDetail: View {
                 // A retry after a failure keeps the failure wording.
                 let afterFailure = card.kind == .failed || (card.kind == .running && task.consecutiveFailures > 0)
                 TaskAskBar(placeholder: afterFailure ? "Ask why it failed, or change it…" : "Ask to change this task…") { askToChange(nil) }
-                    .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 6)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: ReadableColumn.maxWidth)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 12).padding(.bottom, 6)
                     // As on the board: clear 50pt above the bar, 96% by 15pt below its top, then solid
                     // down to the screen edge, so nothing shows at full strength beside the home indicator.
                     .background(alignment: .top) {
