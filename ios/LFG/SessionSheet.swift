@@ -580,25 +580,17 @@ struct SessionSheet: View {
     static let stopInk = S2.color(dark: 0xF2F2F8, light: 0x1C1C1E)
 }
 
-/// The agent's mark beside the model name: Claude's clay "C" (board `s2-menu`),
-/// Codex's own logo tile.
+/// The provider's bundled logo beside the model name.
 private struct AgentMark: View {
     let agent: String
 
     var body: some View {
-        if agent.contains("codex") {
-            Image("agent-codex")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 18, height: 18)
-        } else {
-            Text("C")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Color.white)
-                .frame(width: 18, height: 18)
-                .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(Color(red: 0xB5 / 255, green: 0x56 / 255, blue: 0x2F / 255)))
-        }
+        Image(agent.contains("codex") ? "agent-codex" : "agent-claude")
+            .renderingMode(.original)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 18, height: 18)
+            .accessibilityHidden(true)
     }
 }
 
