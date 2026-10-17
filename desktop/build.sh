@@ -17,13 +17,16 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$MODULE_CACHE"
 # nobody would think to look for. Its unit tests live with LFGCore
 # (`cd ios/LFGCore && swift test`) and cover this build too. Foundation-only,
 # so it needs no other part of the package.
-swiftc -O -parse-as-library \
+swiftc "${LFG_DESKTOP_OPTIMIZATION:--O}" -parse-as-library \
   -module-cache-path "$MODULE_CACHE" \
   -target arm64-apple-macosx26.0 \
   -o "$APP/Contents/MacOS/lfg" \
   LFGSessions.swift \
   DesktopSessionSync.swift \
   DesktopSessionSyncTests.swift \
+  DesktopNotifications.swift \
+  DesktopITerm.swift \
+  DesktopNotificationTests.swift \
   SessionsListS2.swift \
   ScheduledTasksPane.swift \
   ../shared/ScheduledTasksView.swift \

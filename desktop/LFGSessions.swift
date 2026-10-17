@@ -1058,6 +1058,9 @@ final class SessionStore: ObservableObject {
     var statusFeed: DesktopSessionStatusFeed?
     var statusPollingTask: Task<Void, Never>?
     var statusReconciliation = DesktopStatusReconciliation()
+    var notificationTracker = DesktopNotificationTracker()
+    var onSessionNotification: ((DesktopSessionNotification) -> Void)?
+    var notificationSettleTask: Task<Void, Never>?
     private var refreshingHosts: Set<String> = []
     private var refreshRequestedHosts: Set<String> = []
     var hostSnapshots: [String: HostState] = [:]
@@ -1729,6 +1732,7 @@ final class SessionStore: ObservableObject {
         }
         duplicateHostsByURL = duplicates
         hosts = uniqueHosts
+        observeNotifications()
     }
 
     func moveTargets(for item: SessionItem) -> [MoveTarget] {
@@ -1839,7 +1843,7 @@ final class SessionStore: ObservableObject {
         excludes.map { URLQueryItem(name: "exclude", value: $0) }
     }
 
-    private static func fetchHost(entry: Config.HostEntry) async -> HostState {
+    static func fetchHost(entry: Config.HostEntry) async -> HostState {
         let url = entry.url
         var state = HostState(url: url, sshTarget: Config.sshTarget(for: entry),
                               remoteTransport: entry.transport,
@@ -1869,6 +1873,7 @@ final class SessionStore: ObservableObject {
                 throw URLError(.badServerResponse)
             }
             state.info = try JSONDecoder().decode(HostInfoResponse.self, from: infoData)
+            state.isLocal = Self.isLocal(url: url, reportedHostName: state.info?.hostName)
             let parsed = try JSONDecoder().decode(SessionsResponse.self, from: sessData)
             state.sessions = parsed.sessions.sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
             if let (data, response) = await statesResult,
@@ -2422,6 +2427,7 @@ enum DesktopFeatureTestCLI {
     @MainActor
     private static func run() throws {
         assertionCount += try DesktopSessionSyncTests.run()
+        assertionCount += try DesktopNotificationTests.run()
         let taskHost = HostState(url: "https://tasks.example", sshTarget: "tasks-host",
             remoteTransport: .ssh, displayName: "Tasks Host", isLocal: false)
         let oldTaskSession = ResumableAPISession(sessionId: "old-run", cwd: "/tmp/task",
@@ -4011,6 +4017,13 @@ enum Opener {
     /// Returns an error message, or nil on success.
     static func open(_ item: SessionItem) -> String? {
         let s = item.session
+        if let name = s.tmuxName, !name.isEmpty {
+            switch DesktopITerm.focus(item) {
+            case .focused: return nil
+            case .failed(let message): return message
+            case .notFound: break
+            }
+        }
         if item.hostIsLocal, let name = s.tmuxName {
             return runInNewITermWindow(attachCommand(tmuxCommand: shq(tmux), tmuxName: name))
         }
@@ -4023,7 +4036,8 @@ enum Opener {
                     sshTarget: target,
                     tmuxName: name,
                     moshPath: transportPath(for: item, availableMoshPath: mosh,
-                                            availableMoshBridgedPath: moshBridged)
+                                            availableMoshBridgedPath: moshBridged),
+                    trackTerminal: true
                 )
             )
         }
@@ -4389,10 +4403,15 @@ enum Opener {
     /// directly with NO shell in the loop — so `mosh host -- tmux attach`
     /// (what the `airt`/`prot` aliases do) dies instantly with tmux unfound.
     /// Hence the explicit `/bin/sh -c`.
-    static func remoteAttachCommand(sshTarget: String, tmuxName: String, moshPath: String?) -> String {
-        let attach = attachCommand(tmuxCommand: "PATH=\(remotePATH) exec tmux", tmuxName: tmuxName)
+    static func remoteAttachCommand(sshTarget: String, tmuxName: String, moshPath: String?, trackTerminal: Bool = false) -> String {
+        let marker = trackTerminal ? " LFG_ITERM_SESSION_ID=LFG_TERMINAL_ID_PLACEHOLDER" : ""
+        let attach = attachCommand(tmuxCommand: "PATH=\(remotePATH)\(marker) exec tmux", tmuxName: tmuxName)
+        // This expansion is local, before ssh/mosh carries the command across.
+        // iTerm's ID is constrained to its documented GUID/termid character set.
+        let quotedAttach = shq(attach).replacingOccurrences(of: "LFG_TERMINAL_ID_PLACEHOLDER",
+            with: "'\"${lfg_terminal_id:-}\"'")
         guard let moshPath else {
-            return "ssh -t -o ConnectTimeout=5 \(shq(sshTarget)) \(shq(attach))"
+            return "ssh -t -o ConnectTimeout=5 \(shq(sshTarget)) \(quotedAttach)"
         }
         // ConnectTimeout rides along via --ssh so a dead host fails fast the
         // same way the ssh path does.
@@ -4404,7 +4423,7 @@ enum Opener {
             "--",
             "/bin/sh",
             "-c",
-            shq(attach),
+            quotedAttach,
         ].joined(separator: " ")
     }
 
@@ -4431,6 +4450,8 @@ enum Opener {
         """
         rm -f "$0"
         export PATH=\(shq(agentPATH))
+        lfg_terminal_id=${ITERM_SESSION_ID:-}
+        case "$lfg_terminal_id" in *[!a-zA-Z0-9:.-]*) lfg_terminal_id= ;; esac
         \(command)
         s=$?
         if [ $s -ne 0 ]; then
@@ -4443,19 +4464,19 @@ enum Opener {
     }
 
     /// Single-quote a string for zsh.
-    private static func shq(_ s: String) -> String {
+    static func shq(_ s: String) -> String {
         "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     /// Escape for embedding inside an AppleScript double-quoted string.
-    private static func asq(_ s: String) -> String {
+    static func asq(_ s: String) -> String {
         s.replacingOccurrences(of: "\\", with: "\\\\")
          .replacingOccurrences(of: "\"", with: "\\\"")
     }
 
     /// Run an AppleScript via `osascript` (thread-safe, unlike NSAppleScript).
     /// Returns (stdout, errorMessage).
-    private static func runAppleScript(_ script: String) -> (out: String, err: String?) {
+    static func runAppleScript(_ script: String) -> (out: String, err: String?) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         p.arguments = ["-e", script]
@@ -5185,6 +5206,7 @@ struct HostsSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            DesktopNotificationSettingsView()
             List {
                 ForEach(rows) { row in
                     settingsRow(for: row)
@@ -7457,6 +7479,8 @@ struct LFGSessionsApp: App {
         ResumeCheckCLI.runIfRequested()
         OpenSessionCLI.runIfRequested()
         ForkSessionCLI.runIfRequested()
+        DesktopNotificationProbeCLI.runIfRequested()
+        DesktopNotificationController.shared.start(store: sessionStore)
         sessionStore.startStatusSync()
         Opener.warmTransportProbe()
     }

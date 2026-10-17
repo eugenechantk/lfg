@@ -241,6 +241,8 @@ extension SessionStore {
     }
 
     func stopStatusSync() {
+        notificationSettleTask?.cancel()
+        notificationSettleTask = nil
         statusPollingTask?.cancel()
         statusPollingTask = nil
         statusFeed?.stop()
@@ -249,6 +251,7 @@ extension SessionStore {
 
     func receiveStatus(_ event: DesktopStatusEvent, host url: String) {
         guard configuredHosts.contains(where: { $0.url == url }) else { return }
+        notificationTracker.seedMissing(notificationItems)
         statusReconciliation.record(event, host: url)
         if case .resync = event { return }
         if var snapshot = hostSnapshots[url] {
@@ -265,5 +268,7 @@ extension SessionStore {
         }
         hosts[index].error = nil
         statusReconciliation.apply(to: &hosts[index], after: 0)
+        if case .busy(_, false) = event { settleNotifications() }
+        else { observeNotifications() }
     }
 }

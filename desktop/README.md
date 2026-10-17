@@ -7,8 +7,8 @@ configured `lfg serve` hosts and reopens any of them in iTerm2 with one click.
 
 | Session | Action |
 | --- | --- |
-| On this Mac, has a tmux pane | New iTerm2 window attached to that tmux session (`tmux attach -t <name>`) |
-| On another host with a tmux pane | New iTerm2 window attached over the host profile's SSH or Mosh transport |
+| On this Mac, has a tmux pane | Focus its attached iTerm2 pane, or open a new window attached to that tmux session |
+| On another host with a tmux pane | Focus its attached local iTerm2 pane, or open a window through the host profile's SSH or Mosh transport |
 | Closed Claude or Codex session | New iTerm2 window with a fresh local tmux session running the agent's native resume command in the session's cwd |
 | Running without a tmux pane | Not openable; resuming would duplicate an already-running session |
 
@@ -19,6 +19,17 @@ are stretched to the full visible height of the display they open on.
 
 ## UI
 
+- **Session notifications** — while LFG runs, every configured host can alert
+  when an agent finishes or needs input. Alerts use the phone's transition
+  rules and ten-second duplicate suppression. Existing sessions do not alert
+  at startup. The menu-bar app keeps listening with its windows closed.
+  Click an alert to focus the attached iTerm pane or open a new window.
+  Closed sessions reopen on their source host; moved sessions follow their live host.
+  Settings shows notification permission and opens the macOS notification controls.
+  Remote attachments created by LFG carry the iTerm session identity through
+  SSH and Mosh. Existing interactive Mosh bridges are matched by their live
+  host and server port. Older direct attachments are matched by exact host and command
+  when unambiguous; an unidentifiable attachment opens a fresh window.
 - **Fork session** — right-click a Claude Code or Codex conversation and
   choose this action to branch its saved history into a new LFG-managed tmux
   session on the source host. The new session opens in a separate iTerm2 window;
@@ -200,6 +211,7 @@ To see the exact command a row would run, without opening a window:
 
 ```
 ./build.sh        # -> build/lfg.app
+LFG_DESKTOP_OPTIMIZATION=-Onone ./build.sh # faster development build
 ```
 
 Single-file SwiftUI (`LFGSessions.swift`) compiled with `swiftc` — no Xcode
