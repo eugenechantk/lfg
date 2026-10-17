@@ -134,6 +134,24 @@ public struct SessionRowLine: Equatable, Sendable {
         return "\(days / 7)w"
     }
 
+    /// Wake a row only when its compact age can change. A one-hour-old row
+    /// needs one update per hour, rather than 3,600 identical body updates.
+    public static func nextDurationUpdate(from startMs: Double, after nowMs: Double) -> Double? {
+        guard startMs.isFinite, nowMs.isFinite else { return nil }
+        let elapsed = max(0, (nowMs - startMs) / 1_000)
+        let unit: Double
+        switch elapsed {
+        case ..<60: unit = 1
+        case ..<3_600: unit = 60
+        case ..<86_400: unit = 3_600
+        case ..<604_800: unit = 86_400
+        default: unit = 604_800
+        }
+        // Date's seconds-to-milliseconds round trip can land just below an
+        // exact boundary. Always advance so TimelineView cannot repeat it.
+        return max(nowMs + 1, startMs + (floor(elapsed / unit) + 1) * unit * 1_000)
+    }
+
     /// Collapses whitespace and newlines to single spaces (shared with the desktop row).
     public static func oneLine(_ s: String) -> String {
         s.split(whereSeparator: \.isWhitespace).joined(separator: " ")

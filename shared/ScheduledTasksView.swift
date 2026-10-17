@@ -13,8 +13,8 @@ import LFGCore
 
     func refresh() async {
         let snapshot = hosts
-        loading = tasks.isEmpty
-        defer { loading = false }
+        if tasks.isEmpty { loading = true }
+        defer { if loading { loading = false } }
         var updated: [HostedScheduledTask] = []
         var failures: [String: String] = [:]
         await withTaskGroup(of: (String, [ScheduledTaskRecord]?, String?).self) { group in
@@ -40,8 +40,12 @@ import LFGCore
             }
         }
         guard !Task.isCancelled, hosts.map(\.id) == snapshot.map(\.id) else { return }
-        tasks = updated
-        loadErrors = failures
+        // Task groups finish in arbitrary host order. Normalize before comparing
+        // so an unchanged poll does not invalidate every row, including the
+        // retained Tasks tab while a transcript is visible.
+        updated.sort { $0.id < $1.id }
+        if tasks != updated { tasks = updated }
+        if loadErrors != failures { loadErrors = failures }
     }
     func act(_ item: HostedScheduledTask, _ action: String, enabled: Bool? = nil) async {
         guard !changing else { return }
@@ -755,28 +759,10 @@ struct ScheduledTasksView: View {
 
     @ViewBuilder
     private func taskRow(_ item: HostedScheduledTask) -> some View {
-        let model = TaskRowModel.make(task: item.task, hostName: item.host.name)
-        if sidebarVisibility != nil {
-            let selected = selectedTaskID == item.id
-            // iPad sidebar: the Sessions sidebar's selection, an inset rounded
-            // wash with no chevron and no hairline under it (board `ip-task`).
-            Button {
-                bottomSearchActive?.wrappedValue = false
-                pathBinding.wrappedValue = [.task(item.id)]
-            } label: { TaskRowView(model: model, showsChevron: false) }
-            .buttonStyle(.plain)
-            .listRowBackground(selected
-                ? AnyView(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.accentColor.opacity(0.14))
-                    .padding(.horizontal, 8))
-                : AnyView(Color.clear))
-            .listRowSeparator(selected ? .hidden : .automatic, edges: .bottom)
-            .accessibilityAddTraits(selected ? .isSelected : [])
-        } else {
-            NavigationLink(value: ScheduledTaskRoute.task(item.id)) { TaskRowView(model: model) }
-                #if os(iOS)
-                .navigationLinkIndicatorVisibility(.hidden)
-                #endif
+        ScheduledTaskListRow(item: item, inSidebar: sidebarVisibility != nil,
+                             selected: selectedTaskID == item.id) {
+            bottomSearchActive?.wrappedValue = false
+            pathBinding.wrappedValue = [.task(item.id)]
         }
     }
 
@@ -791,6 +777,68 @@ struct ScheduledTasksView: View {
         #if os(iOS)
         .listRowInsets(EdgeInsets())
         #endif
+    }
+}
+
+/// A concrete row boundary lets List count rows without evaluating the
+/// conditional navigation branches or formatting every offscreen task.
+private struct ScheduledTaskListRow: View {
+    let item: HostedScheduledTask
+    let inSidebar: Bool
+    let selected: Bool
+    let select: () -> Void
+
+    var body: some View {
+        if inSidebar {
+            // iPad sidebar: the Sessions sidebar's selection, an inset rounded
+            // wash with no chevron and no hairline under it (board `ip-task`).
+            Button(action: select) {
+                ScheduledTaskRowLabel(task: item.task, hostName: item.host.name, showsChevron: false)
+                    .equatable()
+            }
+            .buttonStyle(.plain)
+            .listRowBackground(selected
+                ? AnyView(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.14))
+                    .padding(.horizontal, 8))
+                : AnyView(Color.clear))
+            .listRowSeparator(selected ? .hidden : .automatic, edges: .bottom)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+        } else {
+            NavigationLink(value: ScheduledTaskRoute.task(item.id)) {
+                ScheduledTaskRowLabel(task: item.task, hostName: item.host.name, showsChevron: true)
+                    .equatable()
+            }
+                #if os(iOS)
+                .navigationLinkIndicatorVisibility(.hidden)
+                #endif
+        }
+    }
+
+}
+
+/// Parent navigation and host-status closures change independently of a task.
+/// Only compare presentation inputs here; keep the live button actions outside
+/// the equality boundary. The clock still updates without a new server record.
+private struct ScheduledTaskRowLabel: View, Equatable {
+    let task: ScheduledTaskRecord
+    let hostName: String
+    let showsChevron: Bool
+    @Environment(\.locale) private var locale
+    @Environment(\.timeZone) private var timeZone
+
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.task == rhs.task && lhs.hostName == rhs.hostName && lhs.showsChevron == rhs.showsChevron
+    }
+
+    var body: some View {
+        // Running durations display minutes; other date labels change at day
+        // boundaries. Anchor to the run start so its minutes change on time.
+        TimelineView(.periodic(from: Date(timeIntervalSince1970: (task.currentRun?.startedAt ?? 0) / 1_000), by: 60)) { context in
+            TaskRowView(model: TaskRowModel.make(task: task, hostName: hostName, now: context.date,
+                                                timeZone: timeZone, locale: locale),
+                        showsChevron: showsChevron)
+        }
     }
 }
 

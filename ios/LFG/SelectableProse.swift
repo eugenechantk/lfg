@@ -223,23 +223,40 @@ struct SelectableProseView: UIViewRepresentable {
         // `.unspecified` lay out at a generous width and report the natural size.
         let width = proposal.width.map { $0.isFinite && $0 > 0 ? $0 : 10_000 } ?? 10_000
         context.coordinator.render(content, palette: palette, semibold: semibold, into: uiView, width: width)
-        let fitted = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        let key = Coordinator.MeasurementKey(proposedWidth: proposal.width, hugsContent: hugsContent)
+        if let measured = context.coordinator.measuredSizes[key] { return measured }
         // An unspecified width is a request for the ideal size (a `Layout`
         // measuring a table cell, a horizontal ScrollView): answer with the
         // natural unwrapped width, not the 10_000pt scratch width.
+        let result: CGSize
         if hugsContent || proposal.width == nil {
             // Natural single-line width, capped at the proposal; re-fit at that
             // width so the height matches what will be laid out.
             let natural = ceil(uiView.sizeThatFits(CGSize(width: 10_000, height: CGFloat.greatestFiniteMagnitude)).width) + 1
             let hugged = min(width, natural)
             let refit = uiView.sizeThatFits(CGSize(width: hugged, height: .greatestFiniteMagnitude))
-            return CGSize(width: hugged, height: ceil(refit.height))
+            result = CGSize(width: hugged, height: ceil(refit.height))
+        } else {
+            let fitted = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+            result = CGSize(width: proposal.width ?? fitted.width, height: ceil(fitted.height))
         }
-        return CGSize(width: proposal.width ?? fitted.width, height: ceil(fitted.height))
+        // SwiftUI can ask for the same row's size several times per layout.
+        // Avoid repeating TextKit layout for identical proposals. Keep this
+        // local to the text view so recycled content cannot reuse a stale size.
+        if context.coordinator.measuredSizes.count >= 8 {
+            context.coordinator.measuredSizes.removeAll(keepingCapacity: true)
+        }
+        context.coordinator.measuredSizes[key] = result
+        return result
     }
 
     @MainActor
     final class Coordinator: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
+        struct MeasurementKey: Hashable {
+            let proposedWidth: CGFloat?
+            let hugsContent: Bool
+        }
+        var measuredSizes: [MeasurementKey: CGSize] = [:]
         var openURL: OpenURLAction?
         var onTap: (() -> Void)?
         private var renderedContent: Content?
@@ -249,6 +266,7 @@ struct SelectableProseView: UIViewRepresentable {
         private var rendered: NSAttributedString?
         private var parsedMarkdown: (source: String, blocks: [SelectableText.Block])?
         private var renderedDependsOnWidth = false
+        private var renderedContentSizeCategory: UIContentSizeCategory?
 
         /// Renders only when the inputs changed. Width matters because table
         /// columns are measured against it.
@@ -256,6 +274,7 @@ struct SelectableProseView: UIViewRepresentable {
             let sameInputs = renderedContent == content
                 && renderedPaletteID == palette.id
                 && renderedSemibold == semibold
+                && renderedContentSizeCategory == view.traitCollection.preferredContentSizeCategory
                 && rendered != nil
             let sameWidth = renderedWidth.map { abs($0 - width) < 0.5 } ?? false
 
@@ -308,6 +327,8 @@ struct SelectableProseView: UIViewRepresentable {
             renderedSemibold = semibold
             renderedWidth = width
             rendered = string
+            renderedContentSizeCategory = view.traitCollection.preferredContentSizeCategory
+            measuredSizes.removeAll(keepingCapacity: true)
             view.attributedText = string
             view.setNeedsDisplay()
         }

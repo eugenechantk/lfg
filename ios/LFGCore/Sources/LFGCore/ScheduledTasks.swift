@@ -351,7 +351,7 @@ public enum ScheduledTaskGroup: String, CaseIterable, Sendable {
     public var title: String { self == .pending ? "Pending" : "Completed" }
 }
 
-public struct HostedScheduledTask: Identifiable, Sendable {
+public struct HostedScheduledTask: Identifiable, Sendable, Equatable {
     public let task: ScheduledTaskRecord
     public let host: ScheduledTaskHost
     public var id: String { "\(host.id):\(task.id)" }
@@ -491,7 +491,7 @@ public struct ScheduledTaskDraft: Sendable {
     }
 }
 
-public struct ScheduledTaskHost: Identifiable, Sendable {
+public struct ScheduledTaskHost: Identifiable, Sendable, Equatable {
     public let id: String
     public let name: String
     public let baseURL: URL

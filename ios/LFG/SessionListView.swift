@@ -1177,7 +1177,7 @@ struct SessionRow: View {
                 .frame(width: 8, height: 8)
                 .padding(.top, showsStateLine ? 18 : 29)
                 .frame(width: 20, alignment: .leading)
-            TimelineView(.periodic(from: .now, by: 1)) { context in
+            TimelineView(SessionRowTimeline(sinceMs: clockStartMs)) { context in
                 let nowMs = context.date.timeIntervalSince1970 * 1_000
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
@@ -1210,6 +1210,14 @@ struct SessionRow: View {
 
     private var title: String {
         session.title.isEmpty ? "Untitled session" : session.title
+    }
+
+    private var clockStartMs: Double? {
+        if group == .working {
+            if case .working(let since) = lineState { return since }
+            return nil
+        }
+        return group == .restarting ? nil : session.lastActivityAt
     }
 
     private var lineState: SessionRowLine.State {
@@ -1303,6 +1311,25 @@ struct SessionRow: View {
         .font(.system(size: 13))
         .foregroundStyle(Tokens.metaInk)
         .frame(height: 18, alignment: .leading)
+    }
+}
+
+/// Retains second precision for a new turn, then follows the minute/hour/day
+/// boundaries actually displayed. Rows with no clock schedule no repeat work.
+private struct SessionRowTimeline: TimelineSchedule {
+    let sinceMs: Double?
+
+    func entries(from startDate: Date, mode: TimelineScheduleMode) -> AnySequence<Date> {
+        AnySequence {
+            var next: Date? = startDate
+            return AnyIterator<Date> {
+                guard let date = next else { return nil }
+                next = sinceMs.flatMap {
+                    SessionRowLine.nextDurationUpdate(from: $0, after: date.timeIntervalSince1970 * 1_000)
+                }.map { Date(timeIntervalSince1970: $0 / 1_000) }
+                return date
+            }
+        }
     }
 }
 
