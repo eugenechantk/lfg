@@ -1,4 +1,63 @@
 import { codexBin } from "./tmux.ts";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+export type CodexRequest = (method: string, params: Record<string, unknown>) => Promise<any>;
+
+/** Connect to the existing owner. Never resume or claim the running thread. */
+export async function withCodexDaemonRequest<T>(
+  body: (request: CodexRequest) => Promise<T>,
+  endpoint = `ws+unix://${join(process.env.CODEX_HOME || join(homedir(), ".codex"), "app-server-control", "app-server-control.sock")}`,
+): Promise<T> {
+  // The existing daemon's control socket speaks WebSocket, including over UDS.
+  // The CLI's proxy relays raw bytes; it is not the stdio JSONL transport.
+  const socket = new WebSocket(endpoint);
+  const pending = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void }>();
+  let id = 0;
+  const failPending = () => {
+    for (const waiter of pending.values()) waiter.reject(new Error("Codex queue connection closed"));
+    pending.clear();
+  };
+  socket.addEventListener("close", failPending);
+  socket.addEventListener("message", event => {
+    try {
+      const response = JSON.parse(String(event.data));
+      const waiter = pending.get(response.id);
+      if (!waiter) return;
+      pending.delete(response.id);
+      if (response.error) waiter.reject(new Error(response.error.message ?? "Codex queue request failed"));
+      else waiter.resolve(response.result);
+    } catch {}
+  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("Codex queue connection timed out")), 5_000);
+      socket.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
+      socket.addEventListener("error", () => { clearTimeout(timer); reject(new Error("Codex queue connection failed")); }, { once: true });
+    });
+    const request: CodexRequest = (method, params) => new Promise((resolve, reject) => {
+      const requestId = ++id;
+      const timer = setTimeout(() => {
+        pending.delete(requestId);
+        reject(new Error("Codex queue request timed out"));
+      }, 5_000);
+      pending.set(requestId, {
+        resolve: value => { clearTimeout(timer); resolve(value); },
+        reject: error => { clearTimeout(timer); reject(error); },
+      });
+      socket.send(JSON.stringify({ id: requestId, method, params }));
+    });
+    await request("initialize", {
+      clientInfo: { name: "lfg-queue", version: "1" },
+      capabilities: { experimentalApi: true },
+    });
+    socket.send(JSON.stringify({ method: "initialized", params: {} }));
+    return await body(request);
+  } finally {
+    socket.close();
+    failPending();
+  }
+}
 
 const UUID_EXACT = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

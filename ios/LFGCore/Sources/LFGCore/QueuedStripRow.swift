@@ -28,13 +28,13 @@ public struct QueuedStripRow: Equatable, Sendable {
     public let tag: String?
     public let tagIsError: Bool
     public let actions: [Action]
-    /// Why the menu is short: the agent already holds the message.
+    /// Optional context above the actions.
     public let menuNote: String?
     public let accessibilityLabel: String
 
     /// `serverStatus` is the host's queue status for this message: `pending`
     /// while lfg holds it, `queued` once the agent has it in its own queue
-    /// (the host then refuses removal, so Edit and Remove would fail).
+    /// (the host retracts it from the provider before confirming an action).
     public init(failed: Bool, queuedOffline: Bool, queuedForResume: Bool,
                 serverStatus: String?, agent: String) {
         if failed {
@@ -53,8 +53,7 @@ public struct QueuedStripRow: Equatable, Sendable {
             actions = [.remove]; menuNote = nil
         } else if serverStatus == "queued" {
             icon = .spinner; tag = nil
-            actions = [.sendNow]
-            menuNote = "Already with \(agent == "codex" ? "Codex" : "Claude")"
+            actions = [.sendNow, .edit, .remove]; menuNote = nil
         } else {
             icon = .spinner; tag = nil
             actions = [.sendNow, .edit, .remove]; menuNote = nil

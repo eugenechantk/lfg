@@ -41,6 +41,7 @@ import {
 import { PATHS } from "./config.ts";
 import type { Journal } from "./journal.ts";
 import { SendqStore, type SendqRow } from "./sendq-store.ts";
+import { retractNativeQueue, type NativeQueueRetraction } from "./native-queue.ts";
 
 export type QueuedMsg = {
   id: string;
@@ -72,7 +73,7 @@ export type EnqueueOptions = {
 export type EnqueuedMsg = QueuedMsg & { duplicate?: true };
 export type QueueListMsg = Omit<QueuedMsg, "clientId">;
 
-type SessionQueue = { msgs: QueuedMsg[]; running: boolean };
+type SessionQueue = { msgs: QueuedMsg[]; running: boolean; mutating?: boolean; sendNowRunning?: boolean };
 
 // Avoid writing the same intentional Codex hold on every one-second pump tick.
 // Weak keys disappear with pruned queue rows, so this needs no lifecycle sweep.
@@ -489,16 +490,19 @@ async function currentClaudeInterruptResolution(
 function kick(sessionId: string) {
   ensureRecovered();
   const s = q(sessionId);
-  if (s.running) return;
+  if (s.running || s.mutating) return;
   if (!s.msgs.some((m) => m.status === "pending")) return;
   s.running = true;
   (async () => {
     try {
       // eslint-disable-next-line no-constant-condition
       while (true) {
+        if (s.mutating) break;
         const next = s.msgs.find((m) => m.status === "pending");
         if (!next) break;
         const context = await deliveryContext(sessionId);
+        // A remove/edit can finish while discovery is awaiting filesystem I/O.
+        if (s.mutating || next.status !== "pending" || !s.msgs.includes(next)) break;
         const isSendNow = sendNowDeliveries.has(next.id);
         if (pendingDeliveryDisposition(context.agent, context.busy, isSendNow) === "hold") {
           if (!heldTraced.has(next)) {
@@ -569,9 +573,8 @@ export function stopQueuePump(): void {
 // removed cleanly, and so can a `delivered` one — that row is a receipt for a
 // turn the agent has already run, not a retraction of pending work, and the
 // client's only way to dismiss a stuck bubble is this call succeeding. Only
-// `sending` (mid-keystroke) and `queued` (already in the agent's native
-// next-turn queue) still have a future, so neither can be retracted truthfully.
-// Returns true only when the message will no longer execute.
+// `sending` and `queued` require the asynchronous provider-aware retraction
+// path below. This helper only deletes rows already safe to remove locally.
 export function removeMessage(sessionId: string, id: string): boolean {
   ensureRecovered();
   const s = queues.get(sessionId);
@@ -583,6 +586,100 @@ export function removeMessage(sessionId: string, id: string): boolean {
   return true;
 }
 
+type RetractionDependencies = {
+  session: (sessionId: string) => Promise<{ agent: string; tmuxTarget: string | null } | null>;
+  transcript: (sessionId: string) => Promise<string | null>;
+  retract: (opts: NativeQueueRetraction) => Promise<boolean>;
+  autoKick?: boolean;
+};
+
+/** Retract native work before deleting its durable receipt. */
+export async function retractMessage(
+  sessionId: string, id: string, forEditing = false,
+  deps: RetractionDependencies = {
+    session: async sid => (await listSessions()).find(s => s.sessionId === sid) ?? null,
+    transcript: resolveTranscript,
+    retract: retractNativeQueue,
+  },
+): Promise<boolean> {
+  ensureRecovered();
+  const s = queues.get(sessionId);
+  const msg = s?.msgs.find(m => m.id === id);
+  if (!s || !msg || s.mutating || s.sendNowRunning) return false;
+  if (msg.status === "delivered") return !forEditing && removeMessage(sessionId, id);
+  // Claims the session before any await. The delivery pump and send-now cannot
+  // type into the composer while native recall owns it.
+  s.mutating = true;
+  try {
+    // A different row may already be past the pump's mutation check and inside
+    // deliver(). Let that one finish before recall owns the shared composer.
+    const deliveryInFlight = () => s.running || s.msgs.some(row => row.status === "sending");
+    for (let i = 0; deliveryInFlight() && i < 150; i++) await Bun.sleep(100);
+    if (deliveryInFlight()) return false;
+    if (msg.status !== "queued") {
+      if ((msg as QueuedMsg).status === "delivered") return false;
+      return removeMessage(sessionId, id);
+    }
+    const session = await deps.session(sessionId);
+    if (!session?.tmuxTarget || msg.status !== "queued") return false;
+    const transcriptPath = await deps.transcript(sessionId);
+    if (msg.status !== "queued") return false;
+    const recalledRows = new Set<string>();
+    const retracted = await deps.retract({
+      agent: session.agent, sessionId, target: session.tmuxTarget, transcriptPath,
+      clientId: msg.clientId, text: msg.text,
+      queuedTexts: s.msgs.filter(m => m.status === "queued").map(m => m.text),
+      onRecalled(texts) {
+        const priorOrder = [...s.msgs];
+        const batch: QueuedMsg[] = [];
+        for (const text of texts) {
+          let row = s.msgs.find(m => m.status === "queued" && m.text === text && !recalledRows.has(m.id));
+          if (!row) {
+            // Claude recalls terminal-originated entries too. Keep their exact
+            // payloads and relative order ahead of unsent LFG work.
+            const pendingIndex = s.msgs.findIndex(m => m.status === "pending" && !recalledRows.has(m.id));
+            row = enqueueMessage(sessionId, text, { autoKick: false });
+            s.msgs = s.msgs.filter(m => m.id !== row!.id);
+            s.msgs.splice(pendingIndex < 0 ? s.msgs.length : pendingIndex, 0, row);
+          }
+          recalledRows.add(row.id);
+          row.status = "pending";
+          row.attempts = 0;
+          row.error = undefined;
+          row.updatedAt = Date.now();
+          persistMsg(sessionId, row);
+          traceQueue(sessionId, row, "native-recalled");
+          batch.push(row);
+        }
+        if (texts.length > 1) {
+          // A terminal-originated entry may sit between two LFG entries.
+          // Rebuild this batch in the provider's recall order, not enqueue order.
+          const ids = new Set(batch.map(row => row.id));
+          const first = priorOrder.findIndex(row => ids.has(row.id) || row.status === "pending");
+          const before = new Set(priorOrder.slice(0, first < 0 ? priorOrder.length : first).map(row => row.id));
+          const rest = s.msgs.filter(row => !ids.has(row.id));
+          const index = rest.filter(row => before.has(row.id)).length;
+          rest.splice(index, 0, ...batch);
+          s.msgs = rest;
+        }
+      },
+    });
+    // The journal may have confirmed consumption during the native operation.
+    // Never call that a cancellation or return the consumed text for editing.
+    if (!retracted || (msg as QueuedMsg).status === "delivered") return false;
+    msg.status = "pending";
+    traceQueue(sessionId, msg, "retracted");
+    return removeMessage(sessionId, id);
+  } catch (error) {
+    traceQueue(sessionId, msg, "retract-unconfirmed", { error: String(error) });
+    return false;
+  } finally {
+    s.mutating = false;
+    if (deps.autoKick !== false) kick(sessionId);
+    nudgeJournalPump(sessionId);
+  }
+}
+
 // "Send now + interrupt": move the selected message to the head and choose the
 // agent-specific safe sequence below. Claude interrupts before LFG delivery;
 // if Claude already absorbed the row into the turn being aborted, LFG re-drives
@@ -592,7 +689,16 @@ export function removeMessage(sessionId: string, id: string): boolean {
 export async function sendNow(sessionId: string, id: string): Promise<boolean> {
   ensureRecovered();
   const s = queues.get(sessionId);
-  if (!s) return false;
+  if (!s || s.mutating || s.sendNowRunning) return false;
+  s.sendNowRunning = true;
+  try { return await performSendNow(sessionId, id); }
+  finally { s.sendNowRunning = false; }
+}
+
+async function performSendNow(sessionId: string, id: string): Promise<boolean> {
+  ensureRecovered();
+  const s = queues.get(sessionId);
+  if (!s || s.mutating) return false;
   const m = s.msgs.find((x) => x.id === id);
   if (!m || (m.status !== "pending" && m.status !== "queued")) return false;
   // Capture the state the user acted on before the async session lookup. The
@@ -604,6 +710,7 @@ export async function sendNow(sessionId: string, id: string): Promise<boolean> {
   s.msgs = s.msgs.filter((x) => x.id !== id);
   s.msgs.unshift(m);
   const context = await deliveryContext(sessionId);
+  if (s.mutating || !s.msgs.includes(m)) return false;
   const plan = sendNowPlan(context.agent, context.busy, requestedStatus);
   const started = Date.now();
 
@@ -1148,7 +1255,7 @@ export function reconcileQueuedCore(
 export async function reconcileQueued(sessionId: string): Promise<boolean> {
   ensureRecovered();
   const s = queues.get(sessionId);
-  if (!s) return false;
+  if (!s || s.mutating) return false;
   const pending = s.msgs.filter((m) => m.status === "queued");
   if (!pending.length) return false;
   const transcriptPath = await resolveTranscript(sessionId);
@@ -1211,6 +1318,7 @@ export async function reconcileQueued(sessionId: string): Promise<boolean> {
       },
     ]),
   );
+  if (s.mutating) return false;
   const { changed, kick: needsKick } = reconcileQueuedCore(s.msgs, recentUserTexts, {
     idleConfirmed,
     now,

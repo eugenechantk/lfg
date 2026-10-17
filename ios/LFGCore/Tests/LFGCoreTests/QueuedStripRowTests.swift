@@ -15,15 +15,16 @@ struct QueuedStripRowTests {
         #expect(row.accessibilityLabel == "Queued message options")
     }
 
-    @Test("once the agent has it in its own queue only Send now is honest")
+    @Test("native queued messages remain editable and removable until delivered")
     func withAgent() {
         let claude = QueuedStripRow(failed: false, queuedOffline: false, queuedForResume: false,
                                     serverStatus: "queued", agent: "claude")
-        #expect(claude.actions == [.sendNow])
-        #expect(claude.menuNote == "Already with Claude")
+        #expect(claude.actions == [.sendNow, .edit, .remove])
+        #expect(claude.menuNote == nil)
         let codex = QueuedStripRow(failed: false, queuedOffline: false, queuedForResume: false,
                                    serverStatus: "queued", agent: "codex")
-        #expect(codex.menuNote == "Already with Codex")
+        #expect(codex.actions == [.sendNow, .edit, .remove])
+        #expect(codex.menuNote == nil)
     }
 
     @Test("a send the host never got says Not sent and offers Retry, Edit, Delete")

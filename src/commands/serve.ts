@@ -189,7 +189,7 @@ import {
   clearResolved,
   reconcileQueued,
   getMessage,
-  removeMessage,
+  retractMessage,
   sendNow,
   startQueuePump,
   setSendqJournal,
@@ -2887,10 +2887,8 @@ export async function cmdServe(options: {
         }
       }
 
-      // Remove a message that has no future: pending, failed, or already
-      // delivered (a receipt the client needs to be able to dismiss). Only a
-      // send that is mid-keystroke or sitting in the agent's native next-turn
-      // queue is rejected, because it can no longer be retracted truthfully.
+      // Native queued inputs remain actionable. Confirm provider retraction
+      // before dropping LFG's receipt; reject a lost delivery race.
       // A row the server has never heard of is 404 — also nothing that will
       // run, and the client removes it locally on that status.
       {
@@ -2899,8 +2897,8 @@ export async function cmdServe(options: {
         );
         if (m && req.method === "DELETE") {
           if (!getMessage(m[1], m[2])) return err(404, "queued message not found");
-          if (!removeMessage(m[1], m[2]))
-            return err(409, "message is in-flight or already queued with the agent");
+          if (!(await retractMessage(m[1], m[2], url.searchParams.get("action") === "edit")))
+            return err(409, "the message was delivered, or its removal could not be confirmed; it is still tracked");
           return json({ ok: true });
         }
       }

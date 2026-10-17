@@ -51,8 +51,7 @@ public enum QueuedMessageRemovalOutcome: Equatable, Sendable {
     /// 404 — the host has no message with that id (already pruned, or the
     /// queue was cleared). Nothing under that id can run.
     case unknownToServer
-    /// 409 — the message is mid-keystroke or already committed to the agent's
-    /// own next-turn queue, so it is still going to execute.
+    /// 409 — delivery won the race, or native retraction was not confirmed.
     case rejected
     /// The request itself failed (offline, timeout). Server state is unknown.
     case requestFailed
@@ -63,8 +62,7 @@ public enum QueuedMessageRemovalOutcome: Equatable, Sendable {
 /// A row with no server queue id is still local (for example, offline) and can
 /// be removed. Once the server has an id, local state may disappear only when
 /// the host confirms the message will not execute — either because it removed
-/// it, or because it has never heard of it. Native agent queues cannot retract
-/// a committed message, so a 409 must leave the row visible instead of
+/// it, or because it has never heard of it. A 409 must leave the row visible instead of
 /// pretending the message was cancelled; so must a failed request, which tells
 /// us nothing about what the host will do.
 public enum QueuedMessageRemovalResolution: Equatable, Sendable {

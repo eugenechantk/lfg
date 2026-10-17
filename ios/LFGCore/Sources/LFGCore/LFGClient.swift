@@ -278,8 +278,9 @@ public struct LFGClient: Sendable {
     }
 
     @discardableResult
-    private func send(_ method: String, _ path: String, json body: [String: Any?]? = nil, timeout: TimeInterval = 20) async throws -> Data {
-        var req = URLRequest(url: url(path))
+    private func send(_ method: String, _ path: String, json body: [String: Any?]? = nil, timeout: TimeInterval = 20,
+                      query: [URLQueryItem] = []) async throws -> Data {
+        var req = URLRequest(url: url(path, query: query))
         req.httpMethod = method
         req.timeoutInterval = timeout
         if let body {
@@ -751,9 +752,10 @@ public struct LFGClient: Sendable {
         return (try? JSONDecoder().decode(InterruptResponse.self, from: data))?.stopped
     }
 
-    /// Remove a message only if LFG has not committed it to the agent yet.
-    public func removeQueued(_ id: String, _ msgID: String) async throws {
-        _ = try await send("DELETE", "api/sessions/\(id)/queue/\(msgID)")
+    /// Retract a message from the host and provider before dropping its receipt.
+    public func removeQueued(_ id: String, _ msgID: String, forEditing: Bool = false) async throws {
+        _ = try await send("DELETE", "api/sessions/\(id)/queue/\(msgID)", timeout: 45,
+                           query: forEditing ? [URLQueryItem(name: "action", value: "edit")] : [])
     }
 
     /// Interrupt the current turn and deliver this queued message immediately.

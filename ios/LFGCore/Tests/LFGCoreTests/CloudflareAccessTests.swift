@@ -47,6 +47,22 @@ final class CloudflareAccessTests: XCTestCase {
         assertCredential(on: try XCTUnwrap(AccessCapturingURLProtocol.lastRequest))
     }
 
+    func testQueueEditRequestsRetractionAndPreservesAccessHeaders() async throws {
+        try await makeClient().removeQueued("session-1", "message-1", forEditing: true)
+        let request = try XCTUnwrap(AccessCapturingURLProtocol.lastRequest)
+        XCTAssertEqual(request.httpMethod, "DELETE")
+        XCTAssertEqual(request.url?.path, "/api/sessions/session-1/queue/message-1")
+        XCTAssertEqual(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems,
+                       [URLQueryItem(name: "action", value: "edit")])
+        XCTAssertEqual(request.timeoutInterval, 45)
+        assertCredential(on: request)
+    }
+
+    func testQueueRemovalCanStillDismissADeliveredReceipt() async throws {
+        try await makeClient().removeQueued("session-1", "message-1")
+        XCTAssertNil(AccessCapturingURLProtocol.lastRequest?.url?.query)
+    }
+
     func testSameOriginResourceRequestCarriesCredential() throws {
         let client = makeClient()
 

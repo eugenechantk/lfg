@@ -4699,7 +4699,7 @@ import LFGCore
     // MARK: Queued-message actions
 
     /// Remove a message only while LFG can still guarantee that it will not run.
-    /// A server rejection means it is already committed to the agent, so retain
+    /// The host confirms native retraction. If delivery wins the race, retain
     /// the local bubble and surface the request error.
     func removeQueued(_ sid: String, _ pending: PendingSend) async {
         let outcome = await askHostToRemoveQueued(sid, pending)
@@ -4718,12 +4718,12 @@ import LFGCore
     /// queue row the host had already pruned permanently undeletable — the exact
     /// dead end reported for `cy-011521-59885`.
     private func askHostToRemoveQueued(
-        _ sid: String, _ pending: PendingSend
+        _ sid: String, _ pending: PendingSend, forEditing: Bool = false
     ) async -> QueuedMessageRemovalOutcome {
         guard let qid = pending.serverQueueID else { return .noServerRow }
         guard let client = client(forSession: sid) else { return .requestFailed }
         do {
-            try await client.removeQueued(sid, qid)
+            try await client.removeQueued(sid, qid, forEditing: forEditing)
             await refresh()
             return .removed
         } catch LFGError.http(let status, _) where status == 404 {
@@ -4738,12 +4738,11 @@ import LFGCore
         }
     }
 
-    /// Pull a message back to edit only when server removal succeeds. A native-
-    /// queued message cannot be retracted, so a rejection keeps it visible and
-    /// returns nil instead of duplicating its text into the composer.
+    /// Return the original text only after the provider retracts it. A consumed
+    /// message stays visible instead of becoming a duplicate editable draft.
     @discardableResult
     func editQueued(_ sid: String, _ pending: PendingSend) async -> String? {
-        let outcome = await askHostToRemoveQueued(sid, pending)
+        let outcome = await askHostToRemoveQueued(sid, pending, forEditing: true)
         guard QueuedMessageRemovalResolution.resolve(outcome: outcome) == .removeLocally
         else { return nil }
         if let clientId = pending.clientId { await deleteOutbox(clientId) }
