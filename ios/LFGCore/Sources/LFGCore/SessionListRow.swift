@@ -110,8 +110,8 @@ public struct SessionRowLine: Equatable, Sendable {
         case .restarting:
             return SessionRowLine(icon: .liveDot, text: "Restarting…", tone: .live)
         case let .working(since):
-            let text = since.map { "Working · \(compactDuration(from: $0, to: nowMs))" } ?? "Working"
-            return SessionRowLine(icon: .liveDot, text: text, tone: .live)
+            let text = since.map { "Working \(compactDuration(from: $0, to: nowMs))" } ?? "Working"
+            return SessionRowLine(icon: .none, text: text, tone: .live)
         case .unread:
             return SessionRowLine(icon: .none, text: "New reply", tone: .primary)
         case .idle:

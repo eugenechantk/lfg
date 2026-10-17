@@ -1172,9 +1172,7 @@ struct SessionRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            Circle()
-                .fill(Theme.statusColor(group))
-                .frame(width: 8, height: 8)
+            SessionRowStatusDot(group: group, isOffline: isOffline)
                 .padding(.top, showsStateLine ? 18 : 29)
                 .frame(width: 20, alignment: .leading)
             TimelineView(SessionRowTimeline(sinceMs: clockStartMs)) { context in
@@ -1311,6 +1309,35 @@ struct SessionRow: View {
         .font(.system(size: 13))
         .foregroundStyle(Tokens.metaInk)
         .frame(height: 18, alignment: .leading)
+    }
+}
+
+/// Keep the pulse outside the row's clock and text updates. The solid core
+/// retains its size and position while only its halo breathes.
+private struct SessionRowStatusDot: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    let group: SessionStore.Group
+    let isOffline: Bool
+
+    var body: some View {
+        Circle()
+            .fill(Theme.statusColor(group))
+            .frame(width: 8, height: 8)
+            .background {
+                if group == .working && !isOffline && !reduceMotion && scenePhase == .active {
+                    Circle()
+                        .fill(Theme.statusColor(group))
+                        .phaseAnimator([false, true]) { halo, expanded in
+                            halo
+                                .scaleEffect(expanded ? 2.2 : 1.1)
+                                .opacity(expanded ? 0.05 : 0.35)
+                        } animation: { _ in
+                            .easeInOut(duration: 1)
+                        }
+                }
+            }
+            .accessibilityHidden(true)
     }
 }
 
@@ -1462,6 +1489,14 @@ struct SessionListTimeFixture: View {
                     group: .working
                 )
                 .accessibilityIdentifier("sessionRow-time-working")
+                Divider()
+                SessionRow(
+                    session: Session(sessionId: "time-working-minutes", title: "Working for minutes",
+                                     cwd: "/tmp/work", startedAt: nowMs - 3 * 60_000,
+                                     lastActivityAt: nowMs - 5_000),
+                    group: .working
+                )
+                .accessibilityIdentifier("sessionRow-time-working-minutes")
                 Divider()
                 Text("Unread").font(.caption).padding(.horizontal, 20)
                 SessionRow(

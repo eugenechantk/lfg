@@ -77,12 +77,12 @@ struct SessionRowLineTests {
                 == SessionRowLine(icon: .none, text: "Paused", tone: .attention))
     }
 
-    @Test("working shows the running time and no step text")
+    @Test("working shows the running time without inline dots")
     func working() {
         let line = SessionRowLine.resolve(.working(runningSinceMs: now - 3 * 60_000), nowMs: now)
-        #expect(line == SessionRowLine(icon: .liveDot, text: "Working · 3m", tone: .live))
+        #expect(line == SessionRowLine(icon: .none, text: "Working 3m", tone: .live))
         #expect(SessionRowLine.resolve(.working(runningSinceMs: nil), nowMs: now)
-                == SessionRowLine(icon: .liveDot, text: "Working", tone: .live))
+                == SessionRowLine(icon: .none, text: "Working", tone: .live))
     }
 
     @Test("restarting reads as on its way back")
