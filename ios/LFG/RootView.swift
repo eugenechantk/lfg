@@ -389,12 +389,29 @@ struct RootView: View {
         showNewTask = true
     }
 
+    private func openTask(_ id: String) {
+        endSearch()
+        // The task stack clears its session selection when this path changes.
+        // Updating both bindings here races their reciprocal observers during a pop.
+        taskPath = [.task(id)]
+        selectedTab = .scheduledTasks
+    }
+
+    private var currentTaskViewID: String? {
+        for route in taskPath.reversed() {
+            if case .task(let id) = route { return id }
+        }
+        return nil
+    }
+
     @ViewBuilder
     private func taskSessionView(_ id: String) -> some View {
         if let session = store.session(id) {
             SessionDetailView(session: session,
                 onEnded: { taskSessionID = nil },
-                onMarkedUnread: { taskSessionID = nil })
+                onMarkedUnread: { taskSessionID = nil },
+                onOpenTask: openTask,
+                parentTaskID: currentTaskViewID)
                 .id(id)
                 .environment(\.hostFiles, store.host(forSession: session.sessionId ?? id)
                     .flatMap { settings.client(for: $0) }.map { HostFiles(client: $0) }
@@ -461,7 +478,8 @@ struct RootView: View {
                     if let session = store.session(selection) {
                         SessionDetailView(session: session,
                                           onEnded: { selectedSession.wrappedValue = nil },
-                                          onMarkedUnread: { selectedSession.wrappedValue = nil })
+                                          onMarkedUnread: { selectedSession.wrappedValue = nil },
+                                          onOpenTask: openTask)
                             .id(selection)
                             // Side by side, the list button below is the only
                             // top-left control. A back arrow here only showed

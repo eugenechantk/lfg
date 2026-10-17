@@ -7,6 +7,7 @@ import UIKit
 /// has to wait for this sheet to finish dismissing first.
 enum SessionSheetAction {
     case rename, terminal, files, subagents, signIn, browserPreview, iPhonePreview, confirmEnd, markedUnread
+    case taskView(String)
 }
 
 /// S2 session sheet (board `s2-menu`). It replaces the old ••• menu: the tiles
@@ -39,6 +40,11 @@ struct SessionSheet: View {
     static let height: CGFloat = 732
 
     private var externallyOwned: Bool { session.isExternallyOwned }
+
+    private var taskViewID: String? {
+        guard let host = store.host(forSession: sid) else { return nil }
+        return session.task?.hostedTaskID(hostID: host.id)
+    }
 
     private var model: SessionSheetModel {
         var f = SessionSheetModel.Facts(sessionID: sid)
@@ -87,7 +93,7 @@ struct SessionSheet: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .presentationDetents([.height(Self.height)])
+        .presentationDetents([.height(Self.height + (taskViewID == nil ? 0 : 43))])
         .presentationDragIndicator(.hidden)
         .presentationBackground(S2.surface)
         .presentationCornerRadius(38)
@@ -214,12 +220,30 @@ struct SessionSheet: View {
 
     private func settingsRows(_ m: SessionSheetModel) -> [AnyView] {
         var rows: [AnyView] = []
+        if let taskViewID { rows.append(AnyView(taskViewRow(taskViewID))) }
         if !externallyOwned { rows.append(AnyView(modelRow)) }
         if let levels = effortLevels { rows.append(AnyView(effortRow(levels))) }
         if let host = m.hostRow { rows.append(AnyView(hostRow(host))) }
         if canFork { rows.append(AnyView(forkRow)) }
         if ManualUnread.canMarkUnread(sid) { rows.append(AnyView(unreadRow)) }
         return rows
+    }
+
+    private func taskViewRow(_ id: String) -> some View {
+        Button { finish(.taskView(id)) } label: {
+            row(height: 42) {
+                Image(systemName: "calendar.badge.clock")
+                    .frame(width: 18, height: 18)
+                Text("Go to task view")
+                    .font(.system(size: 17))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundStyle(Self.blue)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("sessionSheetGoToTask")
     }
 
     private var modelRow: some View {

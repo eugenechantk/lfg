@@ -175,4 +175,11 @@ public struct TaskOrigin: Codable, Sendable, Hashable {
     public var id: String
     public var name: String
     public init(id: String, name: String) { self.id = id; self.name = name }
+
+    /// The task list scopes its identities by configured host, not machine ID.
+    public func hostedTaskID(hostID: String) -> String? {
+        guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !hostID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return "\(hostID):\(id)"
+    }
 }

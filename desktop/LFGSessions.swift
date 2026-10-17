@@ -110,8 +110,9 @@ struct APISession: Decodable, Identifiable, Hashable {
     init(agent: String, pid: Int, cwd: String?, project: String, title: String,
          sessionId: String?, busy: Bool, lastActivityAt: Double?, tmuxName: String?,
          model: String?, status: String?, parentSessionId: String? = nil,
-         lastUserText: String?, closed: Bool = false, purpose: String? = nil) {
+         lastUserText: String?, closed: Bool = false, purpose: String? = nil, task: TaskOrigin? = nil) {
         self.purpose = purpose
+        self.task = task
         self.agent = agent
         self.pid = pid
         self.cwd = cwd
@@ -202,6 +203,7 @@ struct ResumableAPISession: Decodable {
     let lastRunHereAt: Double?
     /// "task-edit" for a closed scheduled-task edit chat; Sessions leaves it out.
     var purpose: String? = nil
+    var task: TaskOrigin? = nil
 
     init(
         sessionId: String,
@@ -231,7 +233,7 @@ struct ResumableAPISession: Decodable {
 
     private enum CodingKeys: String, CodingKey {
         case sessionId, cwd, project, title, lastActivityAt, lastUserText, agent, model, searchMatched, rank,
-             lastRunHereAt, purpose
+             lastRunHereAt, purpose, task
     }
 
     init(from decoder: Decoder) throws {
@@ -250,6 +252,7 @@ struct ResumableAPISession: Decodable {
         rank = try c.decodeIfPresent(Double.self, forKey: .rank)
         lastRunHereAt = try c.decodeIfPresent(Double.self, forKey: .lastRunHereAt)
         purpose = try? c.decodeIfPresent(String.self, forKey: .purpose)
+        task = try? c.decodeIfPresent(TaskOrigin.self, forKey: .task)
     }
 }
 
@@ -1878,7 +1881,8 @@ final class SessionStore: ObservableObject {
             status: nil,
             lastUserText: r.lastUserText,
             closed: true,
-            purpose: r.purpose
+            purpose: r.purpose,
+            task: r.task
         )
     }
 
@@ -2725,6 +2729,14 @@ enum DesktopFeatureTestCLI {
                    "a resumable Codex row keeps its agent identity")
         try expect(closedCodex.opensByResume && closedCodex.canOpen,
                    "a closed Codex session is openable by resume")
+
+        let taskRowData = Data(#"{"sessionId":"task-run","title":"Task run","task":{"id":"task-1","name":"Daily check"}}"#.utf8)
+        let taskResumable = try JSONDecoder().decode(ResumableAPISession.self, from: taskRowData)
+        let taskSession = SessionStore.closedSession(from: taskResumable)
+        try expect(taskSession.task?.hostedTaskID(hostID: "http://air.test") == "http://air.test:task-1",
+                   "a closed or search row retains the task destination on its owning host")
+        try expect(closedCodexSession.task?.hostedTaskID(hostID: "http://air.test") == nil,
+                   "ordinary session rows have no task destination")
 
         let legacyRowData = Data(#"{"sessionId":"legacy-claude","cwd":"/tmp/project","project":"project","title":"Legacy Claude","lastActivityAt":1,"lastUserText":null}"#.utf8)
         let legacyResumable = try JSONDecoder().decode(ResumableAPISession.self, from: legacyRowData)
@@ -5901,6 +5913,14 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .contextMenu {
+            if let taskID = item.session.task?.hostedTaskID(hostID: item.hostURL) {
+                Button("Go to task view") {
+                    taskPath = [.task(taskID)]
+                    store.showingScheduledTasks = true
+                }
+                .accessibilityIdentifier("go_to_task_view")
+                Divider()
+            }
             if !isMoving {
                 if item.session.sessionId != nil {
                     Button("Rename…") {

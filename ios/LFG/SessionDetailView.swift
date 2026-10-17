@@ -44,12 +44,16 @@ struct SessionDetailView: View {
     /// gets stuck on `DetailLoading` ("Opening session…").
     var onEnded: () -> Void = {}
     var onMarkedUnread: () -> Void = {}
+    var onOpenTask: (String) -> Void = { _ in }
+    /// A run opened from this task can return with the native navigation pop.
+    var parentTaskID: String? = nil
     #if DEBUG
     /// Deterministic wrapped draft for the network-free send-follow UI fixture.
     var debugInitialDraft = ""
     #endif
     @Environment(SessionStore.self) private var store
     @Environment(AppSettings.self) private var settings
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.hostFiles) private var hostFiles
 
     @Environment(\.scenePhase) private var scenePhase
@@ -997,6 +1001,9 @@ struct SessionDetailView: View {
         case .iPhonePreview: presentedSheet = .iPhonePreview
         case .confirmEnd: confirmEnd = true
         case .markedUnread: onMarkedUnread()
+        case .taskView(let id):
+            if id == parentTaskID { dismiss() }
+            else { onOpenTask(id) }
         }
     }
 
