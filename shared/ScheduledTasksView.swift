@@ -721,7 +721,6 @@ struct ScheduledTasksView: View {
                 }
                 }
             }
-            if model.loading || filtered.isEmpty { taskHostRequirement.padding() }
         }
         #if os(iOS)
         .listScrollChrome(footer: listFooter)
@@ -739,12 +738,6 @@ struct ScheduledTasksView: View {
                     .accessibilityIdentifier("tasks_request_error")
             }
         }
-    }
-
-    private var taskHostRequirement: some View {
-        Text("Tasks run while their host is awake and LFG is running.")
-            .font(.caption).foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private struct TaskGroup: Identifiable {
