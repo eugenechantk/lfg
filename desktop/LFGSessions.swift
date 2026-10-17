@@ -1058,7 +1058,10 @@ final class SessionStore: ObservableObject {
     var statusFeed: DesktopSessionStatusFeed?
     var statusPollingTask: Task<Void, Never>?
     var statusReconciliation = DesktopStatusReconciliation()
-    private var refreshRequested = false
+    private var refreshingHosts: Set<String> = []
+    private var refreshRequestedHosts: Set<String> = []
+    var hostSnapshots: [String: HostState] = [:]
+    private var historyTasks: [String: Task<Void, Never>] = [:]
     @Published var movingIds: Set<String> = []
     @Published var closingIds: Set<String> = []
     @Published var creatingSession = false
@@ -1295,7 +1298,7 @@ final class SessionStore: ObservableObject {
 
     // MARK: Closed-list paging (infinite scroll)
     //
-    // `fetchHost` loads each host's newest closed page on every refresh;
+    // `refreshHistory` loads each host's newest closed page independently;
     // reaching the bottom of the list pulls deeper pages here. Deeper pages
     // live OUTSIDE HostState so the periodic refresh replacing page 1 cannot
     // discard what the user scrolled down to. Cursor ownership: page 1's
@@ -1605,59 +1608,90 @@ final class SessionStore: ObservableObject {
         var id: String { hostId }
     }
 
-    func refresh() async {
-        guard !refreshing else { refreshRequested = true; return }
-        refreshing = true
-        let snapshotRevision = statusReconciliation.revision
-        defer {
-            refreshing = false
-            lastRefreshed = Date()
-            if refreshRequested {
-                refreshRequested = false
-                Task { [weak self] in await self?.refresh() }
-            }
-        }
+    func refresh(host requestedURL: String? = nil) async {
         let entries = Config.loadHosts()
         applyConfiguration(entries)
         statusFeed?.configure(urls: entries.map(\.url))
-        // The hidden set rides along as `exclude` params so the host filters
-        // BEFORE paginating. Filtering only client-side starves the closed
-        // list: gbrain autopilot churn can own the entire newest-100 page,
-        // leaving a handful of visible rows while real history sits behind a
-        // cursor this list never follows. The local `visible()` filter stays as
-        // the backstop for hosts that predate the param.
-        let excludes = hiddenDirs.paths
-        var results: [HostState] = []
-        await withTaskGroup(of: HostState.self) { group in
-            for entry in entries {
-                group.addTask { await Self.fetchHost(entry: entry, excludes: excludes) }
-            }
-            for await state in group { results.append(state) }
+        let wanted = Set(entries.map(\.url))
+        hostSnapshots = hostSnapshots.filter { wanted.contains($0.key) }
+        for url in historyTasks.keys where !wanted.contains(url) {
+            historyTasks.removeValue(forKey: url)?.cancel()
         }
-        // Preserve config order; mark local hosts.
-        // DF5 (board dA2-sessions): a host that stops answering keeps its last
-        // good live rows — dimmed, in Recent, "Air is offline" — instead of
-        // vanishing from the list. Its needs-input set is dropped: that state
-        // is no longer known.
-        let previous = Dictionary(hosts.map { ($0.url, $0) }, uniquingKeysWith: { first, _ in first })
-        var ordered: [HostState] = []
-        for entry in entries {
-            guard var state = results.first(where: { $0.url == entry.url }) else { continue }
-            let url = entry.url
-            if state.error != nil, state.sessions.isEmpty, let last = previous[url] {
-                state.sessions = last.sessions.filter { !$0.closed }
-                state.info = state.info ?? last.info
-                // A healthy journal still proves these sessions are reachable;
-                // one failed REST request must not turn active rows into Idle.
-                if statusFeed?.connected.contains(url) == true {
-                    state.error = nil
-                    state.needsInputSessionIds = last.needsInputSessionIds
-                } else { state.needsInputSessionIds = [] }
+        publishHostSnapshots()
+        // Each host owns its in-flight snapshot. A slow/offline host cannot
+        // hold up discovery or reconnect repair on a healthy host.
+        await withTaskGroup(of: (HostState, UInt64).self) { group in
+            for entry in entries where requestedURL == nil || entry.url == requestedURL {
+                guard refreshingHosts.insert(entry.url).inserted else {
+                    refreshRequestedHosts.insert(entry.url)
+                    continue
+                }
+                let revision = statusReconciliation.revision
+                group.addTask { (await Self.fetchHost(entry: entry), revision) }
             }
-            statusReconciliation.apply(to: &state, after: snapshotRevision)
-            if state.error == nil { statusReconciliation.discard(host: url, through: snapshotRevision) }
-            state.isLocal = isLocalURL(url) || matchesLocalHostname(state.info?.hostName)
-            ordered.append(state)
+            refreshing = !refreshingHosts.isEmpty
+            for await (result, revision) in group {
+                let url = result.url
+                refreshingHosts.remove(url)
+                if configuredHosts.contains(where: { $0.url == url }) {
+                    var state = result
+                    if let last = hostSnapshots[url] {
+                        // History has its own request and never delays live rows.
+                        state.closedSessions = last.closedSessions
+                        state.closedRanHereAt = last.closedRanHereAt
+                        state.closedNextBefore = last.closedNextBefore
+                        state.closedTotal = last.closedTotal
+                        if state.error != nil, state.sessions.isEmpty {
+                            state.sessions = last.sessions.filter { !$0.closed }
+                            state.info = state.info ?? last.info
+                            if statusFeed?.connected.contains(url) == true {
+                                state.error = nil
+                                state.needsInputSessionIds = last.needsInputSessionIds
+                            }
+                        }
+                    }
+                    statusReconciliation.apply(to: &state, after: revision)
+                    if state.error == nil { statusReconciliation.discard(host: url, through: revision) }
+                    hostSnapshots[url] = state
+                    publishHostSnapshots()
+                    lastRefreshed = Date()
+                    if let entry = configuredHosts.first(where: { $0.url == url }), state.error == nil {
+                        refreshHistory(entry: entry)
+                    }
+                }
+                refreshing = !refreshingHosts.isEmpty
+                if refreshRequestedHosts.remove(url) != nil {
+                    Task { [weak self] in await self?.refresh(host: url) }
+                }
+            }
+        }
+    }
+
+    private func refreshHistory(entry: Config.HostEntry) {
+        guard historyTasks[entry.url] == nil else { return }
+        let excludes = hiddenDirs.paths
+        historyTasks[entry.url] = Task { [weak self] in
+            let page = await Self.fetchHistory(entry: entry, excludes: excludes)
+            guard !Task.isCancelled, let self else { return }
+            self.historyTasks[entry.url] = nil
+            guard self.configuredHosts.contains(where: { $0.url == entry.url }),
+                  self.hiddenDirs.paths == excludes, let page,
+                  var state = self.hostSnapshots[entry.url] else { return }
+            state.closedSessions = page.sessions.map(Self.closedSession(from:))
+            state.closedRanHereAt = Self.ranHereAt(of: page.sessions)
+            state.closedNextBefore = page.nextBefore
+            state.closedTotal = page.total
+            self.hostSnapshots[entry.url] = state
+            self.publishHostSnapshots()
+        }
+    }
+
+    func publishHostSnapshots() {
+        let ordered = configuredHosts.compactMap { entry -> HostState? in
+            guard var state = hostSnapshots[entry.url] else { return nil }
+            state.displayName = Config.normalizedDisplayName(entry.displayName)
+            state.isLocal = isLocalURL(entry.url) || matchesLocalHostname(state.info?.hostName)
+            return state
         }
         // Dedupe two URLs that reached the same machine (Tailscale IP + localhost).
         var hostsById: [String: HostState] = [:]
@@ -1805,58 +1839,60 @@ final class SessionStore: ObservableObject {
         excludes.map { URLQueryItem(name: "exclude", value: $0) }
     }
 
-    private static func fetchHost(entry: Config.HostEntry, excludes: [String] = []) async -> HostState {
+    private static func fetchHost(entry: Config.HostEntry) async -> HostState {
         let url = entry.url
-        var state = HostState(
-            url: url,
-            sshTarget: Config.sshTarget(for: entry),
-            remoteTransport: entry.transport,
-            displayName: Config.normalizedDisplayName(entry.displayName)
-        )
-        // 10s, not 4: the Air's tunnel serves /api/sessions in up to ~6s
-        // (measured 2026-09-27), and a timeout here blanks the whole host —
-        // its live rows vanish and synced "closed" phantoms take their place.
+        var state = HostState(url: url, sshTarget: Config.sshTarget(for: entry),
+                              remoteTransport: entry.transport,
+                              displayName: Config.normalizedDisplayName(entry.displayName))
         let session = URLSession(configuration: {
             let c = URLSessionConfiguration.ephemeral
             c.timeoutIntervalForRequest = 10
             return c
         }())
+        defer { session.invalidateAndCancel() }
         do {
-            var resumableComps = URLComponents(string: url + "/api/sessions/resumable")
-            resumableComps?.queryItems =
-                [URLQueryItem(name: "limit", value: "100")] + excludeQueryItems(excludes)
             guard let infoURL = URL(string: url + "/api/info"),
                   let sessURL = URL(string: url + "/api/sessions"),
-                  let resumableURL = resumableComps?.url,
                   let statesURL = URL(string: url + "/api/session-states") else {
                 state.error = "bad URL"
                 return state
             }
-            let (infoData, _) = try await session.data(for: DesktopAPI.request(infoURL))
+            // Fetch independent live metadata together; history is not on
+            // the critical path to showing a running session.
+            async let infoResult = session.data(for: DesktopAPI.request(infoURL))
+            async let sessionsResult = session.data(for: DesktopAPI.request(sessURL))
+            async let statesResult = try? session.data(for: DesktopAPI.request(statesURL))
+            let (infoData, infoResponse) = try await infoResult
+            let (sessData, sessResponse) = try await sessionsResult
+            guard (infoResponse as? HTTPURLResponse)?.statusCode == 200,
+                  (sessResponse as? HTTPURLResponse)?.statusCode == 200 else {
+                throw URLError(.badServerResponse)
+            }
             state.info = try JSONDecoder().decode(HostInfoResponse.self, from: infoData)
-            let (sessData, _) = try await session.data(for: DesktopAPI.request(sessURL))
             let parsed = try JSONDecoder().decode(SessionsResponse.self, from: sessData)
-            state.sessions = parsed.sessions.sorted {
-                ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0)
-            }
-            // Older lfg hosts do not expose this lightweight endpoint yet.
-            // Keep the host usable; only its Needs Input section is absent.
-            if let (statesData, statesResponse) = try? await session.data(for: DesktopAPI.request(statesURL)),
-               (statesResponse as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) == true,
-               let states = try? JSONDecoder().decode(SessionStatesResponse.self, from: statesData) {
+            state.sessions = parsed.sessions.sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
+            if let (data, response) = await statesResult,
+               (response as? HTTPURLResponse)?.statusCode == 200,
+               let states = try? JSONDecoder().decode(SessionStatesResponse.self, from: data) {
                 state.needsInputSessionIds = Set(states.needsInputSessionIds)
-            }
-            if let (resumableData, _) = try? await session.data(for: DesktopAPI.request(resumableURL)),
-               let resumable = try? JSONDecoder().decode(ResumableResponse.self, from: resumableData) {
-                state.closedSessions = resumable.sessions.map(Self.closedSession(from:))
-                state.closedRanHereAt = Self.ranHereAt(of: resumable.sessions)
-                state.closedNextBefore = resumable.nextBefore
-                state.closedTotal = resumable.total
             }
         } catch {
             state.error = "unreachable"
         }
         return state
+    }
+
+    private static func fetchHistory(entry: Config.HostEntry, excludes: [String]) async -> ResumableResponse? {
+        var components = URLComponents(string: entry.url + "/api/sessions/resumable")
+        components?.queryItems = [URLQueryItem(name: "limit", value: "100")] + excludeQueryItems(excludes)
+        guard let url = components?.url else { return nil }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 10
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        guard let (data, response) = try? await session.data(for: DesktopAPI.request(url)),
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? JSONDecoder().decode(ResumableResponse.self, from: data)
     }
 
     private static func projectName(for cwd: String?) -> String {

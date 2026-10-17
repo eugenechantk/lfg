@@ -63,7 +63,9 @@ are stretched to the full visible height of the display they open on.
   (Working / Paused / Idle) or by directory (collapsible sections, most
   recently active first, running/idle tallies; ambiguous leaf names get their
   parent directory prefixed).
-- Auto-refreshes every 10 s; badge shows `tmux` (local attach), `mosh`/`ssh`
+- Streams running and waiting status changes, with a snapshot refresh every
+  10 seconds as recovery. Each host publishes live rows independently; closed
+  history loads separately. The badge shows `tmux` (local attach), `mosh`/`ssh`
   (remote attach, whichever transport that row will use), or `resume` for a
   closed Claude/Codex session. A running process never receives a Resume badge.
 

@@ -84,6 +84,22 @@ enum DesktopSessionSyncTests {
         try check(store.items.first?.status == .idle, "production store clears Working while no views exist")
         store.receiveStatus(.busy("active", true), host: "http://removed-host.invalid")
         try check(store.items.first?.status == .idle, "late events from a removed host are ignored")
+
+        // A history response or another host's snapshot republishes the list
+        // after the live event. It must retain the newest running state.
+        store.hostSnapshots[url] = store.hosts[0]
+        store.receiveStatus(.busy("active", true), host: url)
+        store.publishHostSnapshots()
+        try check(store.items.first?.status == .working, "history publication retains a streamed start")
+        store.receiveStatus(.busy("active", false), host: url)
+        store.publishHostSnapshots()
+        try check(store.items.first?.status == .idle, "history publication retains a streamed completion")
+        store.receiveStatus(.prompt("active", DesktopPrompt(question: "Approve?")), host: url)
+        store.publishHostSnapshots()
+        try check(store.items.first?.status == .needsInput, "history publication retains a streamed prompt")
+        store.receiveStatus(.prompt("active", nil), host: url)
+        store.publishHostSnapshots()
+        try check(store.items.first?.status == .idle, "history publication retains prompt clearing")
         return count
     }
 }

@@ -230,11 +230,11 @@ extension SessionStore {
         guard statusPollingTask == nil else { return }
         statusFeed = DesktopSessionStatusFeed(onEvent: { [weak self] host, event in
             self?.receiveStatus(event, host: host)
-        }, snapshotNeeded: { [weak self] _ in await self?.refresh() })
+        }, snapshotNeeded: { [weak self] host in await self?.refresh(host: host) })
         statusFeed?.configure(urls: configuredHosts.map(\.url))
         statusPollingTask = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.refresh()
+                Task { [weak self] in await self?.refresh() }
                 try? await Task.sleep(nanoseconds: 10_000_000_000)
             }
         }
@@ -251,12 +251,17 @@ extension SessionStore {
         guard configuredHosts.contains(where: { $0.url == url }) else { return }
         statusReconciliation.record(event, host: url)
         if case .resync = event { return }
+        if var snapshot = hostSnapshots[url] {
+            statusReconciliation.apply(to: &snapshot, after: 0)
+            snapshot.error = nil
+            hostSnapshots[url] = snapshot
+        }
         guard let index = hosts.firstIndex(where: { $0.url == url }) else {
-            Task { [weak self] in await self?.refresh() }
+            Task { [weak self] in await self?.refresh(host: url) }
             return
         }
         if let sid = event.sessionID, !hosts[index].sessions.contains(where: { $0.sessionId == sid && !$0.closed }) {
-            Task { [weak self] in await self?.refresh() }
+            Task { [weak self] in await self?.refresh(host: url) }
         }
         hosts[index].error = nil
         statusReconciliation.apply(to: &hosts[index], after: 0)
