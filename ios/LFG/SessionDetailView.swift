@@ -3,10 +3,12 @@ import LFGCore
 import UIKit
 
 struct SessionDetailView: View {
-    /// The 1pt newest-edge anchor and the stack's 14pt spacing already give
-    /// more than the boards' gap; `calculatedTranscriptBottomContentMargin`
-    /// trims the rest.
-    private static let bottomTranscriptClearance: CGFloat = 0
+    /// Extra room between the newest row and the chrome under it (pills,
+    /// strips, needs-input panel or composer), at rest and while typing.
+    /// The S2 boards' gap (which the 1pt anchor, the stack's 14pt spacing and
+    /// `bottomMarginTrim` reproduce) read as the transcript touching the
+    /// input; Eugene asked for more room on 2026-10-17.
+    private static let bottomTranscriptClearance: CGFloat = 12
 
     private enum PresentedSheet: Identifiable {
         case attachments

@@ -109,6 +109,9 @@ struct SessionListView: View {
     /// The list is the floating sidebar card of an iPad split view. Passed in:
     /// the sidebar column itself reports a COMPACT size class.
     var inSidebarCard = false
+    /// Bumped by the dock when the selected Sessions tab is tapped again.
+    var scrollToTopTrigger = 0
+    private static let listTopAnchor = "sessionListTop"
     @State private var localSearchText = ""
     @State private var listWidth: CGFloat = 320
     private var searchText: String { searchQuery?.wrappedValue ?? localSearchText }
@@ -647,8 +650,27 @@ struct SessionListView: View {
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
+            listBody
+                .onChange(of: scrollToTopTrigger) { _, _ in
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        proxy.scrollTo(Self.listTopAnchor, anchor: .top)
+                    }
+                }
+        }
+    }
+
+    private var listBody: some View {
         @Bindable var settings = settings
-        List(selection: $selection) {
+        return List(selection: $selection) {
+            // Zero-height target for "scroll to top" (re-tapping the Sessions tab).
+            Color.clear
+                .frame(height: 0)
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
+                .listRowBackground(Tokens.screen)
+                .accessibilityHidden(true)
+                .id(Self.listTopAnchor)
             if store.connectionStatus == .offline {
                 Section {
                     HostConnectionWarning()

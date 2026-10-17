@@ -20,6 +20,11 @@ struct RootView: View {
     /// Tasks waiting for an answer or with a failed latest run; the Tasks tab badge.
     @State private var taskNeedsInputCount = 0
     @State private var taskSessionID: String?
+    /// Bumped when the already-selected dock tab is tapped again: that tab's
+    /// list scrolls to its top (iOS's tab convention; a double tap on another
+    /// tab selects it, then scrolls).
+    @State private var sessionsScrollToTop = 0
+    @State private var tasksScrollToTop = 0
     @State private var showSettings = false
     @State private var showNewSession = false
     @State private var focusNewSessionComposer = false
@@ -315,7 +320,13 @@ struct RootView: View {
         : UIColor(red: 0, green: 0x7A / 255, blue: 1, alpha: 1) })
 
     private func dockTab(_ tab: AppTab, title: String, icon: String, id: String, badge: Int = 0) -> some View {
-        Button { selectedTab = tab } label: {
+        Button {
+            if selectedTab == tab {
+                if tab == .sessions { sessionsScrollToTop += 1 } else { tasksScrollToTop += 1 }
+            } else {
+                selectedTab = tab
+            }
+        } label: {
             VStack(spacing: 3) {
                 if tab == .scheduledTasks {
                     TasksTabGlyph().frame(width: 22, height: 20)
@@ -378,7 +389,8 @@ struct RootView: View {
            sessionDestination: { AnyView(taskSessionView($0)) }, openSession: { hostID, id in
             taskSessionID = store.navID(id)
             Task { await store.prepareSessionForDisplay(id, sourceHostID: hostID) }
-        }, onNeedsInputCountChange: { taskNeedsInputCount = $0 })
+        }, onNeedsInputCountChange: { taskNeedsInputCount = $0 },
+           scrollToTopTrigger: tasksScrollToTop)
     }
 
     private func beginTaskCreation() {
@@ -435,7 +447,8 @@ struct RootView: View {
                             bottomSearchActive: searchFocus(for: .sessions),
                             bottomSearchShown: searchPresented && searchScope == .sessions,
                             listFooter: listFooter,
-                            inSidebarCard: usesSidebarDock)
+                            inSidebarCard: usesSidebarDock,
+                            scrollToTopTrigger: sessionsScrollToTop)
                 .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 460)
                 // SwiftUI's own sidebar toggle only appears while the sidebar
                 // is HIDDEN — the half of the job that already worked. Left in,

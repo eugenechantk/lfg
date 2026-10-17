@@ -95,6 +95,9 @@ struct ScheduledTasksView: View {
     var openSession: (String, String) -> Void
     /// Reports the Needs input count for the Tasks tab badge.
     var onNeedsInputCountChange: ((Int) -> Void)? = nil
+    /// Bumped by the iOS dock when the selected Tasks tab is tapped again.
+    var scrollToTopTrigger = 0
+    private static let listTopAnchor = "taskListTop"
     @State private var model = ScheduledTasksModel()
     @State private var path: [ScheduledTaskRoute] = []
     /// The task whose edit chat is starting (Mac), so its button can show progress.
@@ -652,8 +655,17 @@ struct ScheduledTasksView: View {
                         .buttonStyle(.borderedProminent).disabled(hosts.isEmpty).accessibilityIdentifier("tasks_empty_chat")
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
+                ScrollViewReader { proxy in
                 List {
                     #if os(iOS)
+                    // Zero-height target for "scroll to top" (re-tapping the Tasks tab).
+                    Color.clear
+                        .frame(height: 0)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .accessibilityHidden(true)
+                        .id(Self.listTopAnchor)
                     taskFeedback
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets())
@@ -698,6 +710,12 @@ struct ScheduledTasksView: View {
                 .background(sidebarVisibility != nil ? Color(.systemBackground) : Color.clear)
                 #endif
                 .accessibilityIdentifier("tasks_list")
+                .onChange(of: scrollToTopTrigger) { _, _ in
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        proxy.scrollTo(Self.listTopAnchor, anchor: .top)
+                    }
+                }
+                }
             }
             if model.loading || filtered.isEmpty { taskHostRequirement.padding() }
         }
