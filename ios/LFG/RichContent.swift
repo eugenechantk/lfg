@@ -543,6 +543,9 @@ struct HostVideoPlayer: UIViewControllerRepresentable {
         let player = AVPlayer(playerItem: item)
         player.automaticallyWaitsToMinimizeStalling = true
         coordinator.controller.player = player
+        // Without an explicit category the session stays `.soloAmbient`, which obeys the
+        // ring/silent switch: inline videos played muted on a phone set to silent.
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         player.play()
     }
 }
