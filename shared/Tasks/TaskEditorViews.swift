@@ -592,23 +592,26 @@ struct TaskChipButtonStyle: ButtonStyle {
     var size: CGFloat = TaskFormMetrics.chipFont
     /// Shortcut chips are a little smaller than the preset chips on the Mac board.
     var compact = false
+    var unselectedFill: Color? = nil
+    var height: CGFloat? = nil
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: size, weight: .medium))
             .lineLimit(1)
             .foregroundStyle(selected ? Color.white : Color.primary)
-            .padding(.horizontal, compact ? 10 : 12).frame(height: compact ? TaskFormMetrics.chipHeight - 2 : TaskFormMetrics.chipHeight)
+            .padding(.horizontal, compact ? 10 : 12)
+            .frame(height: height ?? (compact ? TaskFormMetrics.chipHeight - 2 : TaskFormMetrics.chipHeight))
             .contentShape(Capsule())
-            .background(selected ? TaskColors.accentFill : TaskPalette.control, in: Capsule())
+            .background(selected ? TaskColors.accentFill : (unselectedFill ?? TaskPalette.control), in: Capsule())
             .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
 
 enum TaskEditorText {
     /// "Hong Kong time (GMT+8)".
-    static func zoneLabel(_ zone: TimeZone) -> String {
+    static func zoneLabel(_ zone: TimeZone, at date: Date = Date()) -> String {
         let name = zone.localizedName(for: .generic, locale: .current) ?? zone.identifier
-        let seconds = zone.secondsFromGMT()
+        let seconds = zone.secondsFromGMT(for: date)
         let h = seconds / 3600, m = abs(seconds % 3600) / 60
         let offset = m == 0 ? "GMT\(h >= 0 ? "+" : "")\(h)" : String(format: "GMT%@%d:%02d", h >= 0 ? "+" : "-", abs(h), m)
         let city = name.replacingOccurrences(of: " Standard Time", with: " time").replacingOccurrences(of: " Time", with: " time")

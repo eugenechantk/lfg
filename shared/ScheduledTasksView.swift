@@ -976,6 +976,8 @@ private struct ScheduledTaskDetail: View {
     @State private var answering = false
     /// A retry waiting for its session to open.
     @State private var retrying = false
+    @State private var showsRetryLater = false
+    @State private var cancellingRetry = false
     /// Past runs the viewer has opened (two, then ten more per Show more).
     @State private var olderRequested = 2
     @State private var showsLaterRuns = false
@@ -1008,7 +1010,7 @@ private struct ScheduledTaskDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 TaskDetailHeader(task: task, hostName: hostName)
-                TaskStatusCard(model: card, prompt: task.currentRun?.prompt, busy: changing || answering || retrying,
+                TaskStatusCard(model: card, prompt: task.currentRun?.prompt, busy: changing || answering || retrying || cancellingRetry,
                                answered: answeredLabel, hostName: hostName, perform: perform)
                     .padding(.top, 10)
                 if task.schedule.kind == "once", card.kind == .waiting || card.kind == .running {
@@ -1140,6 +1142,9 @@ private struct ScheduledTaskDetail: View {
                     if task.cancelledAt == nil {
                         Button("Run now", systemImage: "play.fill") { action("run", nil) }
                             .disabled(changing || task.currentRun != nil).accessibilityIdentifier("task_menu_run_now")
+                        Button(task.retryAt == nil ? "Retry later…" : "Change retry time…", systemImage: "clock") { showsRetryLater = true }
+                            .disabled(changing || task.currentRun != nil || retrying || cancellingRetry)
+                            .accessibilityIdentifier("task_menu_retry_later")
                         if task.canResume {
                             Button(task.enabled ? "Pause" : "Resume", systemImage: task.enabled ? "pause" : "play") { action("", !task.enabled) }
                                 .disabled(changing).accessibilityIdentifier("task_menu_pause_resume")
@@ -1158,6 +1163,9 @@ private struct ScheduledTaskDetail: View {
         .confirmationDialog("Stop future runs?", isPresented: $confirmCancel, titleVisibility: .visible) {
             Button("Stop future runs", role: .destructive) { action("cancel", nil) }
         } message: { Text("Previous runs stay in history. Any running session will continue.") }
+        .sheet(isPresented: $showsRetryLater) {
+            TaskRetryLaterSheet(task: task, hostName: hostName, client: client, saved: refresh)
+        }
         .sheet(item: $selectedRun) { run in
             NavigationStack {
                 ScheduledRunDetail(run: run, client: client) { sessionID in
@@ -1178,6 +1186,8 @@ private struct ScheduledTaskDetail: View {
         switch intent {
         case .action(.runNow): action("run", nil)
         case .action(.retry): retry()
+        case .action(.retryLater), .action(.changeRetryTime): showsRetryLater = true
+        case .action(.cancelRetry): cancelRetry()
         case .action(.pause): action("", false)
         case .action(.resume): action("", true)
         case .action(.askToFix): askToChange("Why did the last run fail? Fix the task if you can.")
@@ -1229,6 +1239,16 @@ private struct ScheduledTaskDetail: View {
                 }
                 await refresh()
             } catch is CancellationError {} catch { self.error = error.localizedDescription }
+        }
+    }
+
+    private func cancelRetry() {
+        guard !cancellingRetry else { return }
+        cancellingRetry = true; error = nil
+        Task {
+            defer { cancellingRetry = false }
+            do { try await client.scheduleRetry(task.id, at: nil); await refresh() }
+            catch { self.error = error.localizedDescription }
         }
     }
 

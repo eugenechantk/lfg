@@ -154,10 +154,14 @@ export function scheduledTaskRoutes(store: TaskStore, scheduler: TaskScheduler, 
         try { return reply(previewSchedule(body?.schedule, Date.now())); }
         catch (e) { if (e instanceof TaskError) return reply({ nextRuns: [], lastRun: null, error: e.message }); throw e; }
       }
-      const match = path.match(/^\/api\/scheduled-tasks\/([0-9a-f-]{36})(?:\/(runs|run|cancel|chat))?$/);
+      const match = path.match(/^\/api\/scheduled-tasks\/([0-9a-f-]{36})(?:\/(runs|run|retry|cancel|chat))?$/);
       if (!match) return reply({ error: "Unknown scheduled task endpoint." }, 404);
       const [, id, action] = match;
       if (action === "run" && req.method === "POST") return reply({ run: await scheduler.runNow(id!) }, 202);
+      if (action === "retry" && req.method === "POST") {
+        const body = await req.json() as any;
+        return reply({ task: await store.scheduleRetry(id!, body?.at) });
+      }
       if (action === "cancel" && req.method === "POST") return reply({ task: await store.cancel(id!) });
       if (!action && req.method === "POST") return reply({ task: await store.update(id!, await req.json() as Partial<TaskInput>) });
       const s = await store.read(); const task = s.tasks.find(t => t.id === id);

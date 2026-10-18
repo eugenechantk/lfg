@@ -32,6 +32,7 @@ public extension ScheduledTaskRecord {
         if cancelledAt != nil { return .closed }
         if isWaitingForInput { return .needsInput }
         if isRunInProgress { return .active }
+        if retryAt != nil { return .active }
         if isPaused { return .paused }
         if latestRunFailed { return .needsInput }
         if isScheduleActive { return .active }
@@ -40,6 +41,9 @@ public extension ScheduledTaskRecord {
 
     /// The next time this task will (or, when paused, would) run.
     var nextScheduledRun: Double? { upcomingRuns.first ?? (enabled ? nextRunAt : nil) }
+    var nextPlannedRun: Double? {
+        [retryAt, isScheduleActive ? nextScheduledRun : nil].compactMap { $0 }.min()
+    }
 
     /// When the task last asked for attention, for ordering the Needs input group.
     fileprivate var attentionAt: Double {
@@ -63,7 +67,7 @@ public enum TaskListGrouping {
                     if a.attentionAt != b.attentionAt { return a.attentionAt > b.attentionAt }
                 case .active:
                     if a.isRunInProgress != b.isRunInProgress { return a.isRunInProgress }
-                    let x = a.nextScheduledRun ?? .greatestFiniteMagnitude, y = b.nextScheduledRun ?? .greatestFiniteMagnitude
+                    let x = a.nextPlannedRun ?? .greatestFiniteMagnitude, y = b.nextPlannedRun ?? .greatestFiniteMagnitude
                     if x != y { return x < y }
                 case .paused:
                     let x = a.nextScheduledRun ?? .greatestFiniteMagnitude, y = b.nextScheduledRun ?? .greatestFiniteMagnitude
@@ -129,6 +133,10 @@ public struct TaskRowModel: Sendable, Equatable {
                 row.time = "Now"; row.timeDetail = f.elapsed(from: started, compact: true); row.timeTone = .success
                 row.glyph = .running; row.resultTone = .success
                 row.result = "Running · started \(f.time(started))"
+            } else if let retryAt = task.retryAt {
+                if let next = task.nextPlannedRun { (row.time, row.timeDetail) = f.clock(next) }
+                row.result = "Retry \(f.dayAndTime(retryAt, lowercaseDay: true))"
+                row.resultTone = .accent
             } else {
                 if let next = task.nextScheduledRun { (row.time, row.timeDetail) = f.clock(next) }
                 applyLastResult(task, format: f, to: &row)

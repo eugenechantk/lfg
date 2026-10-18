@@ -10,7 +10,7 @@ export type TaskInput = { name: string; prompt: string; cwd: string; agent: "cla
 export type TaskEditSessionConfig = Pick<TaskInput, "agent" | "model">;
 /** `scheduledRunCount` counts scheduled (not manual) runs since the schedule last changed; cron `maxRuns` reads it.
  * `pausedAt` is set when the user switches a task off and cleared on resume. */
-export type ScheduledTask = TaskInput & { id: string; enabled: boolean; createdAt: number; updatedAt: number; nextRunAt: number | null; lastRunAt?: number; cancelledAt?: number; pausedAt?: number; scheduledRunCount?: number; editSessionId?: string; editSessionIds?: string[]; editSessionConfig?: TaskEditSessionConfig };
+export type ScheduledTask = TaskInput & { id: string; enabled: boolean; createdAt: number; updatedAt: number; nextRunAt: number | null; retryAt?: number; lastRunAt?: number; cancelledAt?: number; pausedAt?: number; scheduledRunCount?: number; editSessionId?: string; editSessionIds?: string[]; editSessionConfig?: TaskEditSessionConfig };
 export type TaskRun = { id: string; taskId: string; taskName: string; agent: string; trigger: "scheduled" | "manual"; scheduledFor: number; startedAt: number; finishedAt?: number; status: "starting" | "running" | "needs_input" | "succeeded" | "failed" | "interrupted"; sessionId?: string; tmuxName?: string; summary?: string; error?: string; needsInputAt?: number };
 type State = { version: 1; tasks: ScheduledTask[]; runs: TaskRun[] };
 export const activeRun = (r: TaskRun) => ["starting", "running", "needs_input"].includes(r.status);
@@ -213,17 +213,30 @@ export class TaskStore {
   async cancel(id: string, now = Date.now()): Promise<ScheduledTask> {
     return this.transaction(s => {
       const t = s.tasks.find(t => t.id === id); if (!t) throw new TaskError("Task not found.", 404);
-      t.cancelledAt = now; t.enabled = false; t.nextRunAt = null; t.updatedAt = now; return t;
+      t.cancelledAt = now; t.enabled = false; t.nextRunAt = null; delete t.retryAt; t.updatedAt = now; return t;
     });
   }
-  async claim(id: string, now = Date.now(), manual = false): Promise<TaskRun | null> {
+  /** A durable extra run; null cancels it without changing the regular schedule. */
+  async scheduleRetry(id: string, at: string | null, now = Date.now()): Promise<ScheduledTask> {
+    if (at !== null && (!isoWithOffset(at) || Date.parse(at) <= now)) throw new TaskError("Choose a retry time in the future with a timezone offset.");
+    return this.transaction(s => {
+      const t = s.tasks.find(t => t.id === id); if (!t) throw new TaskError("Task not found.", 404);
+      if (t.cancelledAt) throw new TaskError("This task has been cancelled.", 409);
+      if (at !== null && s.runs.some(r => r.taskId === id && activeRun(r))) throw new TaskError("This task is already running.", 409);
+      if (at === null) delete t.retryAt; else t.retryAt = Date.parse(at);
+      t.updatedAt = now; return t;
+    });
+  }
+  async claim(id: string, now = Date.now(), manual: boolean | "retry" = false): Promise<TaskRun | null> {
     return this.transaction(s => {
       const t = s.tasks.find(t => t.id === id);
       if (!t || t.cancelledAt || s.runs.some(r => r.taskId === id && activeRun(r))) return null;
       if (!manual && (!t.enabled || t.nextRunAt == null || t.nextRunAt > now)) return null;
-      const run: TaskRun = { id: randomUUID(), taskId: id, taskName: t.name, agent: t.agent, trigger: manual ? "manual" : "scheduled", scheduledFor: manual ? now : t.nextRunAt!, startedAt: now, status: "starting" };
+      if (manual === "retry" && (t.retryAt == null || t.retryAt > now)) return null;
+      const run: TaskRun = { id: randomUUID(), taskId: id, taskName: t.name, agent: t.agent, trigger: manual ? "manual" : "scheduled", scheduledFor: manual === "retry" ? t.retryAt! : manual ? now : t.nextRunAt!, startedAt: now, status: "starting" };
       s.runs.push(run); t.lastRunAt = now;
-      if (t.schedule.kind === "once") { t.enabled = false; t.nextRunAt = null; }
+      if (manual) delete t.retryAt;
+      if (t.schedule.kind === "once" && manual !== "retry") { t.enabled = false; t.nextRunAt = null; }
       else if (!manual) {
         // Manual runs never use up a scheduled run.
         t.scheduledRunCount = (t.scheduledRunCount ?? 0) + 1;
@@ -290,8 +303,10 @@ export class TaskScheduler {
       // Bound launches per tick. Recurring jobs coalesce missed occurrences.
       let launched = 0;
       for (const t of state.tasks) {
-        if (!t.enabled || t.cancelledAt || t.nextRunAt == null || t.nextRunAt > this.now()) continue;
-        const run = await this.store.claim(t.id, this.now());
+        if (t.cancelledAt) continue;
+        const retryDue = t.retryAt != null && t.retryAt <= this.now();
+        if (!retryDue && (!t.enabled || t.nextRunAt == null || t.nextRunAt > this.now())) continue;
+        const run = await this.store.claim(t.id, this.now(), retryDue ? "retry" : false);
         if (run) { await this.launch(run); if (++launched >= 2) break; }
       }
     } finally { this.ticking = false; }

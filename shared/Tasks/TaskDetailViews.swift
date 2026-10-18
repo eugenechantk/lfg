@@ -246,7 +246,12 @@ struct TaskStatusCard: View {
                     #endif
                 case .running: label(model.label, color: TaskColors.success, dot: true)
                 case .paused: label(model.label, color: TaskColors.warning)
-                default: label(model.label, color: TaskColors.grey)
+                default:
+                    if model.secondary == .changeRetryTime {
+                        label(model.label, color: TaskColors.accent, icon: "clock")
+                    } else {
+                        label(model.label, color: TaskColors.grey)
+                    }
                 }
                 Spacer(minLength: 0)
                 if let streak = model.streak {
@@ -285,6 +290,12 @@ struct TaskStatusCard: View {
                 if let secondary = model.secondary { actionButton(secondary, prominent: false) }
             }
         }
+        if model.primary == .retry, model.secondary == .askToFix {
+            quietRetryAction(.retryLater)
+        }
+        if model.secondary == .changeRetryTime {
+            quietRetryAction(.cancelRetry)
+        }
         if let footnote = model.footnote {
             Divider().overlay(tint?.opacity(0.25) ?? .clear)
             Label(footnote, systemImage: "clock")
@@ -298,10 +309,32 @@ struct TaskStatusCard: View {
         switch action {
         case .runNow: ("Run now", "play.fill", "task_run_now")
         case .retry: ("Retry now", "arrow.clockwise", "task_retry")
+        case .retryLater: ("Retry later…", "clock", "task_retry_later")
+        case .changeRetryTime: ("Change time", "clock", "task_change_retry_time")
+        case .cancelRetry: ("Cancel retry", "xmark", "task_cancel_retry")
         case .pause: ("Pause", "pause.fill", "task_pause_resume")
         case .resume: ("Resume", "play.fill", "task_pause_resume")
         case .askToFix: ("Ask to fix", "sparkles", "task_ask_to_fix")
         }
+    }
+
+    private func quietRetryAction(_ action: TaskStatusCardModel.Action) -> some View {
+        let (text, icon, id) = title(for: action)
+        return Button { perform(.action(action)) } label: {
+            HStack(spacing: 7) {
+                if action != .cancelRetry {
+                    Image(systemName: icon).font(.system(size: TaskDetailMetrics.button, weight: .semibold))
+                }
+                Text(text).font(.system(size: TaskDetailMetrics.button, weight: action == .cancelRetry ? .medium : .semibold))
+            }
+            .foregroundStyle(action == .cancelRetry ? TaskColors.grey : TaskColors.accent)
+            .frame(minHeight: TaskDetailMetrics.buttonHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, -6).padding(.bottom, -8)
+        .disabled(busy).opacity(busy ? 0.5 : 1)
+        .accessibilityIdentifier(id)
     }
 
     private func actionButton(_ action: TaskStatusCardModel.Action, prominent: Bool) -> some View {
@@ -703,6 +736,348 @@ struct TaskAskBar: View {
         .glassOrRaised(in: Capsule(), interactive: true)
         #endif
         .accessibilityIdentifier("task_ask_bar")
+    }
+}
+
+/// Pick one extra run without editing the task's recurring schedule.
+struct TaskRetryLaterSheet: View {
+    let task: ScheduledTaskRecord
+    let hostName: String
+    let client: ScheduledTasksClient
+    let saved: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft: ScheduledTaskRetryDraft
+    @State private var customMinutes = "90"
+    @State private var usesCustomMinutes = false
+    @State private var saving = false
+    @State private var error: String?
+    @FocusState private var minutesFocused: Bool
+    #if os(iOS)
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    #endif
+
+    init(task: ScheduledTaskRecord, hostName: String, client: ScheduledTasksClient, saved: @escaping () async -> Void) {
+        self.task = task; self.hostName = hostName; self.client = client; self.saved = saved
+        _draft = State(initialValue: ScheduledTaskRetryDraft(retryAt: task.retryAt))
+    }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 15)) { context in
+            let presentation = ScheduledTaskRetryPresentation(draft: draft, now: context.date)
+            #if os(macOS)
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.system(size: 13, weight: .semibold))
+                    Text("\(task.name) · \(hostName)").font(.system(size: 11)).foregroundStyle(TaskColors.grey)
+                        .lineLimit(2)
+                }
+                configuration(presentation)
+                explanation
+                errorMessage
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
+                    Button("Cancel") { dismiss() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 13))
+                        .padding(.horizontal, 14).frame(height: 28)
+                        .background(TaskPalette.control, in: Capsule())
+                        .keyboardShortcut(.cancelAction)
+                        .disabled(saving).accessibilityIdentifier("task_retry_dismiss")
+                    confirmation(presentation)
+                        .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(16)
+            .frame(width: 360)
+            .background(TaskColors.adaptive(light: Color(nsColor: .windowBackgroundColor),
+                                           dark: Color(red: 35 / 255, green: 35 / 255, blue: 39 / 255)))
+            .fixedSize(horizontal: false, vertical: true)
+            #else
+            phoneContent(presentation)
+            #endif
+        }
+        .interactiveDismissDisabled(saving)
+        .accessibilityIdentifier("task_retry_sheet")
+        .onChange(of: draft.mode) { _, _ in minutesFocused = false }
+        .onChange(of: minutesFocused) { _, focused in
+            if !focused, usesCustomMinutes, let minutes = Int(draft.minutes), [35, 45, 60].contains(minutes) {
+                usesCustomMinutes = false
+            }
+        }
+        #if os(iOS)
+        .frame(idealWidth: 420, idealHeight: sheetHeight)
+        .presentationSizing(.fitted)
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(sheetHeight), .large])
+        .presentationDragIndicator(.visible)
+        #endif
+    }
+
+    private var title: String { task.retryAt == nil ? "Retry later" : "Change retry time" }
+    private var sheetHeight: CGFloat {
+        (draft.mode == .time || usesCustomMinutes ? 526 : 476) + (error == nil ? 0 : 46)
+    }
+    private var cardRadius: CGFloat {
+        #if os(macOS)
+        12
+        #else
+        20
+        #endif
+    }
+    private var cardFill: Color {
+        #if os(macOS)
+        TaskPalette.card
+        #else
+        Color(.secondarySystemGroupedBackground)
+        #endif
+    }
+    private var chipFill: Color {
+        #if os(macOS)
+        TaskPalette.control
+        #else
+        TaskColors.adaptive(light: Color(.tertiarySystemFill), dark: Color(.tertiarySystemGroupedBackground))
+        #endif
+    }
+    private var disabledConfirmationText: Color {
+        #if os(iOS)
+        Color(.systemGray)
+        #else
+        TaskColors.grey
+        #endif
+    }
+    private var contentInset: CGFloat {
+        #if os(macOS)
+        14
+        #else
+        16
+        #endif
+    }
+
+    #if os(iOS)
+    private func phoneContent(_ presentation: ScheduledTaskRetryPresentation) -> some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    configuration(presentation)
+                    explanation.padding(.horizontal, 6)
+                }
+                .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 10)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
+            .background(Color(.systemGroupedBackground))
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(alignment: .leading, spacing: 8) {
+                    errorMessage
+                    confirmation(presentation)
+                }
+                .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 12)
+                .background(Color(.systemGroupedBackground))
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.disabled(saving).accessibilityIdentifier("task_retry_dismiss")
+                }
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 1) {
+                        Text(title).font(.headline)
+                        Text(task.name).font(.caption).foregroundStyle(TaskColors.grey).lineLimit(1)
+                    }
+                    .frame(maxWidth: 190)
+                    .accessibilityElement(children: .combine).accessibilityIdentifier("task_retry_context")
+                }
+            }
+        }
+    }
+    #endif
+
+    private func configuration(_ presentation: ScheduledTaskRetryPresentation) -> some View {
+        let date = presentation.date
+        return VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                modePicker.padding(.horizontal, -2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(presentation.sentence)
+                        .font(.system(size: TaskFormMetrics.sentence, weight: .semibold))
+                        .foregroundStyle(TaskColors.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(presentation.preview)
+                        .font(.system(size: TaskFormMetrics.subline))
+                        .foregroundStyle(date == nil ? TaskColors.danger : TaskColors.grey)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier(date == nil ? "task_retry_validation" : "task_retry_preview")
+                }
+                .padding(.top, 12)
+                if draft.mode == .minutes {
+                    TaskFlowLayout(spacing: 6) {
+                        ForEach([35, 45, 60], id: \.self) { minutes in
+                            delayChip(minutes == 60 ? "1 hour" : "\(minutes) min",
+                                      selected: Int(draft.minutes) == minutes,
+                                      id: "task_retry_preset_\(minutes)") {
+                                minutesFocused = false; usesCustomMinutes = false; draft.minutes = String(minutes)
+                            }
+                        }
+                        delayChip("Custom", selected: usesCustomMinutes && ![35, 45, 60].contains(Int(draft.minutes) ?? 0),
+                                  id: "task_retry_preset_custom") {
+                            usesCustomMinutes = true; draft.minutes = customMinutes; minutesFocused = true
+                        }
+                    }
+                    .padding(.top, 10)
+                }
+            }
+            .padding(.horizontal, contentInset).padding(.top, 12).padding(.bottom, 12)
+            if draft.mode == .minutes, usesCustomMinutes {
+                Divider()
+                customRow(valid: date != nil)
+            }
+            if draft.mode == .time {
+                Divider()
+                dateRows
+            }
+            Divider()
+            Text(TaskEditorText.zoneLabel(.current, at: date ?? Date()))
+                .font(.system(size: TaskFormMetrics.caption - 1))
+                .foregroundStyle(TaskColors.grey)
+                .padding(.horizontal, contentInset).padding(.vertical, 9)
+                .accessibilityIdentifier("task_retry_timezone")
+        }
+        .background(cardFill, in: RoundedRectangle(cornerRadius: cardRadius))
+        .disabled(saving).opacity(saving ? 0.55 : 1)
+    }
+
+    @ViewBuilder private var modePicker: some View {
+        #if os(macOS)
+        TaskSegmentedPicker(selection: $draft.mode, options: [(.minutes, "In minutes"), (.time, "At a time")],
+                            identifier: "task_retry_mode", fills: true)
+        #else
+        Picker("Retry by", selection: $draft.mode) {
+            Text("In minutes").tag(ScheduledTaskRetryDraft.Mode.minutes)
+            Text("At a time").tag(ScheduledTaskRetryDraft.Mode.time)
+        }
+        .pickerStyle(.segmented).accessibilityIdentifier("task_retry_mode")
+        #endif
+    }
+
+    private func delayChip(_ title: String, selected: Bool, id: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(TaskChipButtonStyle(selected: selected, compact: TaskFormMetrics.compactShortcuts,
+                                            unselectedFill: chipFill, height: TaskFormMetrics.compactShortcuts ? 26 : 34))
+            #if os(iOS)
+            .frame(minHeight: 44).contentShape(Rectangle())
+            #endif
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            .accessibilityIdentifier(id)
+    }
+
+    private func customRow(valid: Bool) -> some View {
+        HStack(spacing: 8) {
+            Text("Minutes from now")
+            Spacer(minLength: 4)
+            TextField("90", text: $customMinutes)
+                .textFieldStyle(.plain)
+                .font(.system(size: TaskFormMetrics.sentence - 4, weight: .semibold).monospacedDigit())
+                .multilineTextAlignment(.center)
+                .focused($minutesFocused)
+                #if os(iOS)
+                .keyboardType(.numberPad)
+                .frame(width: 72, height: 34)
+                #else
+                .frame(width: 56, height: 28)
+                #endif
+                .background(TaskPalette.field, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(valid ? TaskColors.accentFill : TaskColors.danger, lineWidth: 1))
+                .onChange(of: customMinutes) { _, text in if usesCustomMinutes { draft.minutes = text } }
+                .accessibilityLabel("Minutes from now").accessibilityIdentifier("task_retry_minutes")
+            Text("min").foregroundStyle(TaskColors.soft)
+        }
+        .font(.system(size: TaskDetailMetrics.body))
+        .padding(.horizontal, contentInset).padding(.vertical, 8)
+    }
+
+    @ViewBuilder private var dateRows: some View {
+        #if os(macOS)
+        HStack { Text("Date"); Spacer(); TaskDatePill(date: $draft.date, identifier: "task_retry_date") }
+            .padding(.horizontal, contentInset).frame(minHeight: 40)
+        Divider()
+        HStack { Text("Time"); Spacer(); TaskTimePill(date: $draft.date, identifier: "task_retry_time") }
+            .padding(.horizontal, contentInset).frame(minHeight: 40)
+        #else
+        DatePicker("Date", selection: $draft.date, in: Calendar.current.startOfDay(for: Date())..., displayedComponents: .date)
+            .accessibilityIdentifier("task_retry_date")
+            .padding(.horizontal, contentInset).padding(.vertical, 7)
+        Divider()
+        DatePicker("Time", selection: $draft.date, displayedComponents: .hourAndMinute)
+            .accessibilityIdentifier("task_retry_time")
+            .padding(.horizontal, contentInset).padding(.vertical, 7)
+        #endif
+    }
+
+    private var explanation: some View {
+        Text("Runs once more at this time. The regular schedule stays as it is. \(hostName) must be awake; if it’s asleep, the retry runs when it wakes.")
+            #if os(macOS)
+            .font(.system(size: 11))
+            #else
+            .font(.system(size: TaskFormMetrics.caption))
+            #endif
+            .foregroundStyle(TaskColors.grey)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder private var errorMessage: some View {
+        if let error {
+            Text("\(error)\nYour choice is kept. Check the connection and try again.")
+                .font(.system(size: TaskFormMetrics.subline)).foregroundStyle(TaskColors.danger)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("task_retry_error")
+        }
+    }
+
+    private func confirmation(_ presentation: ScheduledTaskRetryPresentation) -> some View {
+        let date = presentation.date
+        return Button(action: schedule) {
+            HStack(spacing: 8) {
+                if saving { ProgressView().controlSize(.small).tint(.white) }
+                Text(saving ? "Scheduling…" : presentation.confirmationTitle)
+                    #if os(macOS)
+                    .font(.system(size: 13, weight: .semibold))
+                    #else
+                    .font(.system(size: 17, weight: .semibold))
+                    #endif
+                    .multilineTextAlignment(.center)
+            }
+            .foregroundStyle(date == nil ? disabledConfirmationText : Color.white)
+            .padding(.horizontal, 14)
+            #if os(macOS)
+            .frame(minHeight: 28)
+            #else
+            .frame(maxWidth: .infinity, minHeight: 50)
+            #endif
+            .background(date == nil ? chipFill : TaskColors.accentFill, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(TaskRetryConfirmationStyle()).disabled(saving || date == nil)
+        .accessibilityIdentifier("task_retry_schedule")
+    }
+
+    private func schedule() {
+        guard !saving else { return }
+        do {
+            let date = try draft.scheduledDate()
+            minutesFocused = false; saving = true; error = nil
+            Task {
+                defer { saving = false }
+                do { try await client.scheduleRetry(task.id, at: date); await saved(); dismiss() }
+                catch { self.error = error.localizedDescription }
+            }
+        } catch { self.error = error.localizedDescription }
+    }
+}
+
+/// Keep the progress button's fill and spinner visible while its action is disabled.
+private struct TaskRetryConfirmationStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
 

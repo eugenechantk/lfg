@@ -5,7 +5,7 @@ import Foundation
 /// The card at the top of the task view. One per state; the view only draws it.
 public struct TaskStatusCardModel: Sendable, Equatable {
     public enum Kind: Sendable, Equatable { case next, paused, running, waiting, failed, closed }
-    public enum Action: Sendable, Equatable { case runNow, pause, resume, retry, askToFix }
+    public enum Action: Sendable, Equatable { case runNow, pause, resume, retry, retryLater, changeRetryTime, cancelRetry, askToFix }
 
     public var kind: Kind
     /// Uppercase label at the top ("NEXT RUN", "LAST RUN FAILED").
@@ -40,6 +40,14 @@ public struct TaskStatusCardModel: Sendable, Equatable {
             return .init(kind: .closed, label: "Stopped", main: "Stopped by you",
                          sub: task.cancelledAt.map { f.dayAndTime($0) })
         }
+        if let at = task.retryAt {
+            let footnote = task.isScheduleActive && task.nextScheduledRun != nil
+                ? "One extra run. Regular schedule unchanged: next run \(f.dayAndTime(task.nextScheduledRun!, lowercaseDay: true))"
+                : "One extra run. The regular schedule stays unchanged."
+            return .init(kind: .next, label: "Retry scheduled", main: f.dayAndTime(at),
+                         sub: "\(f.fullDate(at)) · \(f.countdown(to: at))", footnote: footnote,
+                         primary: .retry, secondary: .changeRetryTime)
+        }
         if task.isPaused {
             let resume = TaskScheduleSummary.resumePhrase(sentence)
             return .init(kind: .paused, label: "Paused", main: "No runs scheduled",
@@ -71,6 +79,43 @@ public struct TaskStatusCardModel: Sendable, Equatable {
         }
         let total = task.schedule.occurrences ?? task.schedule.maxRuns ?? task.scheduledRunCount ?? task.runCount
         return .init(kind: .closed, label: "Finished", main: "Ran all \(total) times", sub: ended.map { "Last run \(f.dayAndTime($0, lowercaseDay: true))" }, primary: .runNow)
+    }
+}
+
+/// Copy for the retry sheet, resolved from one clock and local time zone.
+public struct ScheduledTaskRetryPresentation: Sendable {
+    public let date: Date?
+    public let sentence: String
+    public let preview: String
+    public let confirmationTitle: String
+
+    public init(draft: ScheduledTaskRetryDraft, now: Date = Date(), timeZone: TimeZone = .current, locale: Locale = .current) {
+        date = try? draft.scheduledDate(now: now)
+        guard let date else {
+            sentence = draft.mode == .minutes ? "Retry in … minutes" : "Choose a retry time"
+            preview = draft.mode == .minutes ? "Enter 1 to 525,600 whole minutes." : "Choose a future date and time."
+            confirmationTitle = "Retry later"
+            return
+        }
+        let f = TaskTimeFormat(now: now, timeZone: timeZone, locale: locale)
+        let ms = date.timeIntervalSince1970 * 1000
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = timeZone
+        var fullDate = f.fullDate(ms)
+        if calendar.component(.year, from: date) != calendar.component(.year, from: now) {
+            fullDate += ", \(calendar.component(.year, from: date))"
+        }
+        if draft.mode == .minutes, let minutes = Int(draft.minutes.trimmingCharacters(in: .whitespaces)) {
+            let amount = minutes % 60 == 0 ? minutes / 60 : minutes
+            let unit = minutes % 60 == 0 ? (amount == 1 ? "hour" : "hours") : (amount == 1 ? "minute" : "minutes")
+            sentence = "Retry in \(amount) \(unit)"
+            preview = "\(f.dayAndTime(ms, joiner: " at ")) · \(fullDate)"
+        } else {
+            sentence = "Retry \(f.dayAndTime(ms, lowercaseDay: true, joiner: " at "))"
+            preview = "\(fullDate) · \(f.countdown(to: ms))"
+        }
+        confirmationTitle = calendar.isDate(date, inSameDayAs: now)
+            ? "Retry at \(f.time(ms))"
+            : "Retry \(f.dayAndTime(ms, lowercaseDay: true, joiner: " at "))"
     }
 }
 

@@ -284,6 +284,8 @@ public struct ScheduledTaskRecord: Decodable, Identifiable, Hashable, Sendable {
     public var schedule: ScheduledTaskSchedule
     public var enabled: Bool
     public var nextRunAt: Double?
+    /// A single extra retry, independent of the recurring schedule.
+    public var retryAt: Double?
     public var lastRunAt: Double?
     public var cancelledAt: Double?
     public var currentRun: ScheduledTaskRun?
@@ -299,7 +301,7 @@ public struct ScheduledTaskRecord: Decodable, Identifiable, Hashable, Sendable {
     public var updatedAt: Double?
     /// The task's edit chat, reused while it is alive.
     public var editSessionId: String?
-    enum CodingKeys: String, CodingKey { case id, name, prompt, cwd, agent, model, schedule, enabled, nextRunAt, lastRunAt, cancelledAt, currentRun, lastRun, recentRuns, runCount, upcomingRuns, consecutiveFailures, succeededCount, pausedAt, scheduledRunCount, updatedAt, editSessionId }
+    enum CodingKeys: String, CodingKey { case id, name, prompt, cwd, agent, model, schedule, enabled, nextRunAt, retryAt, lastRunAt, cancelledAt, currentRun, lastRun, recentRuns, runCount, upcomingRuns, consecutiveFailures, succeededCount, pausedAt, scheduledRunCount, updatedAt, editSessionId }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
@@ -311,6 +313,7 @@ public struct ScheduledTaskRecord: Decodable, Identifiable, Hashable, Sendable {
         schedule = try c.decodeIfPresent(ScheduledTaskSchedule.self, forKey: .schedule) ?? .init()
         enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
         nextRunAt = try c.decodeIfPresent(Double.self, forKey: .nextRunAt)
+        retryAt = try c.decodeIfPresent(Double.self, forKey: .retryAt)
         lastRunAt = try c.decodeIfPresent(Double.self, forKey: .lastRunAt)
         cancelledAt = try c.decodeIfPresent(Double.self, forKey: .cancelledAt)
         currentRun = try c.decodeIfPresent(ScheduledTaskRun.self, forKey: .currentRun)
@@ -336,11 +339,12 @@ public struct ScheduledTaskRecord: Decodable, Identifiable, Hashable, Sendable {
     public var isScheduleActive: Bool { enabled && canResume }
     public var listGroup: ScheduledTaskGroup {
         let running = ["starting", "running", "needs_input"].contains(currentRun?.status ?? "")
-        return running || canResume ? .pending : .completed
+        return running || canResume || (retryAt != nil && cancelledAt == nil) ? .pending : .completed
     }
     public var statusLabel: String {
         if let currentRun { return currentRun.statusLabel }
         if cancelledAt != nil { return "Cancelled" }
+        if retryAt != nil { return "Retry scheduled" }
         if !canResume { return lastRun?.statusLabel ?? "Completed" }
         return enabled ? "Scheduled" : "Paused"
     }
@@ -580,6 +584,12 @@ public struct ScheduledTasksClient: Sendable {
         let result: ScheduledTaskMutation = try await call("/api/scheduled-tasks/\(id)/run", body: data)
         return result.run
     }
+    /// nil cancels only the extra retry. The task's recurring schedule stays unchanged.
+    public func scheduleRetry(_ id: String, at date: Date?) async throws {
+        let at = date.map { ISO8601DateFormatter().string(from: $0) }
+        let data = try JSONEncoder().encode(ScheduledTaskRetryRequest(at: at))
+        let _: ScheduledTaskMutation = try await call("/api/scheduled-tasks/\(id)/retry", body: data)
+    }
     public func runs(_ id: String, offset: Int = 0) async throws -> ScheduledTaskRuns { try await call("/api/scheduled-tasks/\(id)/runs?offset=\(offset)") }
     /// Sends a change request to the task's edit chat; the host reuses a live chat or starts one.
     public func startChat(_ id: String, prompt: String) async throws -> String {
@@ -615,8 +625,41 @@ public struct ScheduledTaskList: Decodable, Sendable { public let tasks: [Schedu
 public struct ScheduledTaskRuns: Decodable, Sendable { public let runs: [ScheduledTaskRun]; public let total: Int }
 public struct ScheduledTaskMutation: Decodable, Sendable { public let task: ScheduledTaskRecord?; public let run: ScheduledTaskRun? }
 private struct ScheduledTaskToggle: Encodable { let enabled: Bool? }
+private struct ScheduledTaskRetryRequest: Encodable {
+    let at: String?
+    enum CodingKeys: String, CodingKey { case at }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(at, forKey: .at)
+    }
+}
 private struct ScheduledTaskErrorBody: Decodable { let error: String? }
 public struct ScheduledTaskClientError: LocalizedError, Sendable { public let message: String; public init(message: String) { self.message = message }; public var errorDescription: String? { message } }
+
+public struct ScheduledTaskRetryDraft: Sendable {
+    public enum Mode: String, CaseIterable, Sendable { case minutes, time }
+    public var mode: Mode = .minutes
+    public var minutes = "60"
+    public var date: Date
+    public init(now: Date = Date(), retryAt: Double? = nil) {
+        date = retryAt.map { Date(timeIntervalSince1970: $0 / 1000) } ?? now.addingTimeInterval(3600)
+        if retryAt != nil { mode = .time }
+    }
+    public func scheduledDate(now: Date = Date()) throws -> Date {
+        switch mode {
+        case .minutes:
+            guard let value = Int(minutes.trimmingCharacters(in: .whitespaces)), (1...525600).contains(value) else {
+                throw ScheduledTaskClientError(message: "Enter 1 to 525,600 whole minutes.")
+            }
+            return now.addingTimeInterval(Double(value) * 60)
+        case .time:
+            guard date.timeIntervalSince1970.isFinite, date > now else {
+                throw ScheduledTaskClientError(message: "Choose a retry time in the future.")
+            }
+            return date
+        }
+    }
+}
 /// The copy exists on the new host, but the original could not be stopped: both would run.
 public struct ScheduledTaskMoveError: LocalizedError, Sendable {
     public let task: ScheduledTaskRecord
