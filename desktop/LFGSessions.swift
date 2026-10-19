@@ -591,13 +591,15 @@ struct MenuBarSessionProjection {
     let recentCount: Int
 
     init(items: [SessionItem], query: String = "") {
+        let terms = SessionSearch.terms(query)
+        let searchFirst: (SessionItem, SessionItem) -> Bool = { SessionSearch.precedes($0, $1, terms: terms) }
         let matchingItems = items.filter { SessionSearch.matches($0, query: query) }
         let actionable = matchingItems.filter { $0.status == .needsInput }
-            .sorted(by: Self.oldestFirst)
+            .sorted(by: terms.isEmpty ? Self.oldestFirst : searchFirst)
         let active = matchingItems.filter { $0.status == .working }
-            .sorted(by: Self.newestFirst)
+            .sorted(by: terms.isEmpty ? Self.newestFirst : searchFirst)
         let remainder = matchingItems.filter { $0.status != .needsInput && $0.status != .working }
-            .sorted(by: Self.newestFirst)
+            .sorted(by: terms.isEmpty ? Self.newestFirst : searchFirst)
 
         needsInputCount = actionable.count
         runningCount = active.count
@@ -653,6 +655,20 @@ enum SessionSearch {
         return matches(fields: [session.title, session.project, session.cwd, session.lastUserText,
                          session.model, session.agent, session.sessionId],
                 terms: terms)
+    }
+
+    static func precedes(_ lhs: SessionItem, _ rhs: SessionItem, terms: [String]) -> Bool {
+        SessionSearchOrder.precedes(
+            priority: SessionSearchOrder.priority(terms: terms, cwd: lhs.session.cwd,
+                                                 project: lhs.session.project, title: lhs.session.title),
+            activity: lhs.session.lastActivityAt, id: lhs.id,
+            otherPriority: SessionSearchOrder.priority(terms: terms, cwd: rhs.session.cwd,
+                                                      project: rhs.session.project, title: rhs.session.title),
+            otherActivity: rhs.session.lastActivityAt, otherID: rhs.id)
+    }
+
+    static func ordered(_ items: [SessionItem], terms: [String]) -> [SessionItem] {
+        items.sorted { precedes($0, $1, terms: terms) }
     }
 
     private static func matches(fields: [String?], terms: [String]) -> Bool {
@@ -1091,7 +1107,6 @@ final class SessionStore: ObservableObject {
     private var searchTask: Task<Void, Never>?
     private var searchPagesByHost: [String: [ResumableAPISession]] = [:]
     private var searchNextCursorByHost: [String: String] = [:]
-    private(set) var searchRankByID: [String: Double] = [:]
 
     /// Debounce before a typed query hits the network — a normal word becomes
     /// one request per host instead of six.
@@ -1113,7 +1128,6 @@ final class SessionStore: ObservableObject {
         searchTask?.cancel()
         searchPagesByHost = [:]
         searchNextCursorByHost = [:]
-        searchRankByID = [:]
         guard !q.isEmpty else {
             searchClosed = []
             searchLoading = false
@@ -1377,7 +1391,7 @@ final class SessionStore: ObservableObject {
     /// page 1 plus deeper pages every time, so a row moves to its owner as soon
     /// as the owner lists it, even if another host listed it first.
     private func placeClosedRows(_ hostStates: inout [HostState]) {
-        let liveIds = Set(hostStates.flatMap { $0.sessions.filter { !$0.closed }.compactMap(\.sessionId) })
+        let liveIds = Self.liveSessionIDs(in: hostStates)
         let listed = hostStates.map { $0.closedSessions + (moreClosedByHost[$0.url] ?? []) }
         let owners = ClosedRowOwner.assign(hosts: hostStates.indices.map { i in
             let ranAt = closedRanHereAt[hostStates[i].url] ?? [:]
@@ -1402,6 +1416,12 @@ final class SessionStore: ObservableObject {
                    uniquingKeysWith: { _, newer in newer })
     }
 
+    /// Published host lists include loaded history. Only actual live rows can
+    /// suppress a closed search result or a synced transcript from another host.
+    static func liveSessionIDs(in hosts: [HostState]) -> Set<String> {
+        Set(hosts.flatMap { $0.sessions.filter { !$0.closed }.compactMap(\.sessionId) })
+    }
+
     /// Collapse every host's search page into one list.
     ///
     /// Same three jobs as the normal closed merge — dedupe the transcripts both
@@ -1412,7 +1432,7 @@ final class SessionStore: ObservableObject {
     /// and those rows would otherwise be shown as though they had matched.
     private func rebuildSearchResults() {
         let terms = SessionSearch.terms(searchQuery)
-        let liveIds = Set(hosts.flatMap { $0.sessions.compactMap(\.sessionId) })
+        let liveIds = Self.liveSessionIDs(in: hosts)
         let hostByURL = Dictionary(uniqueKeysWithValues: hosts.map { ($0.url, $0) })
         let entries = Config.loadHosts()
         for (url, page) in searchPagesByHost {
@@ -1449,15 +1469,8 @@ final class SessionStore: ObservableObject {
         // Search reaches every transcript each host has, not the pages already
         // loaded, so it needs the mute list applied independently — otherwise a
         // muted directory reappears the moment you type.
-        searchRankByID = Dictionary(searchPagesByHost.values.flatMap { $0 }.map {
-            ($0.sessionId, $0.rank ?? 0)
-        }, uniquingKeysWith: max)
         searchClosed = Self.visible(
-            out.sorted {
-                let lhs = searchRankByID[$0.session.sessionId ?? ""] ?? 0
-                let rhs = searchRankByID[$1.session.sessionId ?? ""] ?? 0
-                return lhs == rhs ? ($0.session.lastActivityAt ?? 0) > ($1.session.lastActivityAt ?? 0) : lhs > rhs
-            },
+            SessionSearch.ordered(out, terms: terms),
             hiddenDirs: hiddenDirs)
     }
 
@@ -3469,6 +3482,32 @@ enum DesktopFeatureTestCLI {
                    "ranked search cursor and score decode")
         try expect(SessionSearch.matches(rankedPage.sessions[0], terms: ["spread", "across", "messages"]),
                    "verified prose matches survive local metadata filtering")
+
+        let searchRows = [
+            menuTestItem(id: "amber-directory-old", lastActivity: 100, cwd: "/work/amber"),
+            menuTestItem(id: "amber-title-old", lastActivity: 100),
+            menuTestItem(id: "directory-new", lastActivity: 1000, cwd: "/work/amber"),
+            menuTestItem(id: "amber-title-new", lastActivity: 2000),
+        ]
+        let expected = ["directory-new", "amber-directory-old", "amber-title-new", "amber-title-old"]
+        try expect(SessionSearch.ordered(searchRows, terms: ["amber"]).compactMap(\.session.sessionId) == expected,
+                   "desktop ranks directories before titles and sorts each group newest first")
+        try expect(MenuBarSessionProjection(items: searchRows, query: "AMBER").recent.compactMap(\.session.sessionId) == expected,
+                   "menu-bar search uses the same directory-first recency order")
+        let questions = [
+            menuTestItem(id: "amber-old-question", lastActivity: 100, needsInput: true),
+            menuTestItem(id: "amber-new-question", lastActivity: 1000, needsInput: true),
+        ]
+        try expect(MenuBarSessionProjection(items: questions, query: "amber").needsInput.first?.session.sessionId == "amber-new-question",
+                   "search shows newest questions first")
+        try expect(MenuBarSessionProjection(items: questions).needsInput.first?.session.sessionId == "amber-old-question",
+                   "clearing search restores the ordinary question order")
+
+        let mixedHost = HostState(url: "http://fixture", sshTarget: nil, remoteTransport: .ssh,
+            displayName: "Fixture",
+            sessions: [searchRows[0].session, SessionStore.closedSession(from: genuine)], isLocal: false)
+        try expect(SessionStore.liveSessionIDs(in: [mixedHost]) == ["amber-directory-old"],
+                   "loaded closed history never suppresses matching search results")
     }
 
     private static func resumableRow(
@@ -5712,13 +5751,7 @@ struct ContentView: View {
     }
 
     private func searchOrdered(_ items: [SessionItem]) -> [SessionItem] {
-        items.sorted {
-            let lhs = store.searchRankByID[$0.session.sessionId ?? ""] ?? 0
-            let rhs = store.searchRankByID[$1.session.sessionId ?? ""] ?? 0
-            return lhs == rhs
-                ? ($0.session.lastActivityAt ?? 0) > ($1.session.lastActivityAt ?? 0)
-                : lhs > rhs
-        }
+        SessionSearch.ordered(items, terms: SessionSearch.terms(searchText))
     }
 
     private var sections: [ListSection] {
@@ -5762,9 +5795,8 @@ struct ContentView: View {
             }
             // Most-recently-active directory first, like the iOS client.
             .sorted {
-                if isSearching {
-                    return (store.searchRankByID[$0.items.first?.session.sessionId ?? ""] ?? 0)
-                        > (store.searchRankByID[$1.items.first?.session.sessionId ?? ""] ?? 0)
+                if isSearching, let lhs = $0.items.first, let rhs = $1.items.first {
+                    return SessionSearch.precedes(lhs, rhs, terms: SessionSearch.terms(searchText))
                 }
                 return ($0.items.first?.session.lastActivityAt ?? 0)
                     > ($1.items.first?.session.lastActivityAt ?? 0)

@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -29,12 +29,13 @@ afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-function write(id: number, title: string, assistant: string) {
+function write(id: number, title: string, assistant: string, cwd = "/tmp/noto", mtime?: number) {
   const sid = `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`;
   writeFileSync(join(projects, "p", `${sid}.jsonl`), [
-    { type: "user", cwd: "/tmp/noto", message: { role: "user", content: title } },
-    { type: "assistant", cwd: "/tmp/noto", message: { role: "assistant", content: assistant } },
+    { type: "user", cwd, message: { role: "user", content: title } },
+    { type: "assistant", cwd, message: { role: "assistant", content: assistant } },
   ].map((row) => JSON.stringify(row)).join("\n") + "\n");
+  if (mtime != null) utimesSync(join(projects, "p", `${sid}.jsonl`), mtime / 1000, mtime / 1000);
   return sid;
 }
 
@@ -55,6 +56,22 @@ test("ranked API searches assistant prose across the corpus and pages a stable s
   expect(directory?.sessions).toHaveLength(3);
   const hidden = await rankedSearchResumable({ q: "ultramarine", limit: 5, exclude: ["/tmp/noto"] });
   expect(hidden?.sessions).toEqual([]);
+}, 30_000);
+
+test("directory-first recency ordering is applied before pagination", async () => {
+  const now = Date.now();
+  const old = now - 10 * 7 * 86400_000;
+  const directoryOld = write(10, "ochre", "ochre repeated prose", "/tmp/ochre", old);
+  const directoryNew = write(11, "New unrelated title", "ordinary", "/tmp/ochre", now - 1000);
+  const titleOld = write(12, "ochre", "ochre repeated prose", "/tmp/other", old);
+  const titleNew = write(13, "Discuss ochre", "ordinary", "/tmp/other", now);
+  const proseNew = write(14, "Unrelated title", "ochre", "/tmp/other", now + 1000);
+  const first = (await rankedSearchResumable({ q: "ochre", limit: 2 }))!;
+  const second = (await rankedSearchResumable({ q: "ochre", limit: 2, cursor: first.nextCursor }))!;
+  const third = (await rankedSearchResumable({ q: "ochre", limit: 2, cursor: second.nextCursor }))!;
+  expect([...first.sessions, ...second.sessions, ...third.sessions].map(row => row.sessionId))
+    .toEqual([directoryNew, directoryOld, titleNew, titleOld, proseNew]);
+  expect(third.nextCursor).toBeNull();
 }, 30_000);
 
 test("startup reconciliation exposes a warming state until it completes", async () => {

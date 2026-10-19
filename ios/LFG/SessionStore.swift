@@ -2393,7 +2393,6 @@ import LFGCore
     private var searchTask: Task<Void, Never>?
     private var searchPagesByHost: [String: [ResumableSession]] = [:]
     private var searchNextCursorByHost: [String: String] = [:]
-    private(set) var searchRankByID: [String: Double] = [:]
 
     var canLoadMoreSearch: Bool {
         !searchQuery.isEmpty
@@ -2412,7 +2411,6 @@ import LFGCore
         searchTask?.cancel()
         searchPagesByHost = [:]
         searchNextCursorByHost = [:]
-        searchRankByID = [:]
         guard !q.isEmpty else {
             searchResults = []
             isSearchLoading = false
@@ -2497,9 +2495,6 @@ import LFGCore
             perHost: settings.hosts.map { searchPagesByHost[$0.id] ?? [] },
             terms: SessionSearch.terms(searchQuery),
             liveIds: liveIds)
-            .sorted { ($0.rank ?? 0, $0.mtime ?? 0) > ($1.rank ?? 0, $1.mtime ?? 0) }
-        searchRankByID = Dictionary(reconciled.map { ($0.sessionId, $0.rank ?? 0) },
-                                    uniquingKeysWith: max)
         searchResults = reconciled
             .filter { !resumedIds.contains($0.sessionId) }
             .map(Self.closedSession(from:))

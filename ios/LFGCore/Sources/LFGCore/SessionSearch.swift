@@ -46,6 +46,18 @@ public enum SessionSearch {
                          session.lastUserText, session.sessionId])
     }
 
+    public static func precedes(_ lhs: Session, _ rhs: Session, terms: [String]) -> Bool {
+        SessionSearchOrder.precedes(
+            priority: SessionSearchOrder.priority(terms: terms, cwd: lhs.cwd, project: lhs.project, title: lhs.title),
+            activity: lhs.lastActivityAt, id: lhs.id,
+            otherPriority: SessionSearchOrder.priority(terms: terms, cwd: rhs.cwd, project: rhs.project, title: rhs.title),
+            otherActivity: rhs.lastActivityAt, otherID: rhs.id)
+    }
+
+    public static func ordered(_ sessions: [Session], terms: [String]) -> [Session] {
+        sessions.sorted { precedes($0, $1, terms: terms) }
+    }
+
     /// Merge the search pages returned by every host into one result list.
     ///
     /// Search fans out to all hosts, so this has the same job as the unsearched
@@ -64,5 +76,12 @@ public enum SessionSearch {
         MultiHost.reconcileResumable(
             perHost: perHost.map { $0.filter { matches(terms: terms, session: $0) } },
             liveIds: liveIds)
+            .sorted {
+                SessionSearchOrder.precedes(
+                    priority: SessionSearchOrder.priority(terms: terms, cwd: $0.cwd, project: $0.project, title: $0.title),
+                    activity: $0.mtime, id: $0.sessionId,
+                    otherPriority: SessionSearchOrder.priority(terms: terms, cwd: $1.cwd, project: $1.project, title: $1.title),
+                    otherActivity: $1.mtime, otherID: $1.sessionId)
+            }
     }
 }

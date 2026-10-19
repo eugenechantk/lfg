@@ -29,7 +29,7 @@ function excerpt(text: string, terms: string[]): string {
   return `${start ? "…" : ""}${oneLine}${end < text.length ? "…" : ""}`;
 }
 
-/** One deterministic score per session, with the strongest visible message as preview. */
+/** Directory matches, then titles, then other matches; newest first in each group. */
 export function rankSessions(
   entries: IndexEntry[],
   hits: Iterable<ContentHit>,
@@ -38,13 +38,12 @@ export function rankSessions(
 ): RankedSession[] {
   const terms = queryTerms(query);
   if (!terms.length) return [];
-  const content = new Map<string, { terms: Set<string>; best: ContentHit | null; count: number }>();
+  const content = new Map<string, { terms: Set<string>; best: ContentHit | null }>();
   for (const hit of hits) {
     const covered = terms.filter((term) => hit.text.toLowerCase().includes(term));
     if (!covered.length) continue;
-    const state = content.get(hit.sessionId) ?? { terms: new Set<string>(), best: null, count: 0 };
+    const state = content.get(hit.sessionId) ?? { terms: new Set<string>(), best: null };
     covered.forEach((term) => state.terms.add(term));
-    state.count++;
     const quality = (hit.role === "user" ? 2 : 0) - hit.rank;
     const prior = state.best;
     if (!prior || quality > (prior.role === "user" ? 2 : 0) - prior.rank) state.best = hit;
@@ -58,20 +57,10 @@ export function rankSessions(
     const haystack = fields.join("\n").toLowerCase();
     const body = content.get(entry.sessionId);
     if (!terms.every((term) => haystack.includes(term) || body?.terms.has(term))) continue;
-    const title = entry.title.toLowerCase();
-    const path = (entry.cwd ?? "").toLowerCase();
-    const titleAll = terms.every((term) => title.includes(term));
-    const pathAll = terms.every((term) => path.includes(term));
-    const exactTitle = title === query.trim().toLowerCase();
-    const phraseTitle = title.includes(query.trim().toLowerCase());
+    const directory = [entry.cwd ?? "", entry.project].join("\n").toLowerCase();
+    const directoryAll = terms.every((term) => directory.includes(term));
+    const titleAll = terms.every((term) => entry.title.toLowerCase().includes(term));
     const best = body?.best ?? null;
-    let score = exactTitle ? 1200 : phraseTitle ? 700 : titleAll ? 420 : 0;
-    if (pathAll) score += 300;
-    if (terms.every((term) => (entry.project ?? "").toLowerCase().includes(term))) score += 180;
-    if (best) score += 80 + (best.role === "user" ? 12 : 0) + Math.min(30, -best.rank);
-    if (body) score += Math.min(20, body.count * 2);
-    // Recency breaks near ties without burying an older exact match.
-    score += Math.max(0, Math.min(20, (entry.mtime / Date.now()) * 20));
     result.push({
       agent: entry.agent,
       sessionId: entry.sessionId,
@@ -81,7 +70,7 @@ export function rankSessions(
       lastActivityAt: entry.mtime,
       lastUserText: best ? `${best.role === "user" ? "You" : "Assistant"}: ${excerpt(best.text, terms)}` : entry.lastUserText,
       matchRole: best?.role ?? null,
-      rank: score,
+      rank: directoryAll ? 3 : titleAll ? 2 : 1,
       searchMatched: true,
       closed: true,
     });

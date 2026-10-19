@@ -8,7 +8,7 @@ const entry = (sessionId: string, title: string, mtime: number): IndexEntry => (
 });
 
 describe("ranked session search", () => {
-  test("exact title leads, assistant prose is searchable, and user hit wins close prose ties", () => {
+  test("title matches lead prose, and prose matches sort newest first regardless of role", () => {
     const rows = rankSessions([
       entry("assistant", "unrelated", 300),
       entry("title", "Amber notebook", 100),
@@ -17,9 +17,36 @@ describe("ranked session search", () => {
       { sessionId: "assistant", role: "assistant", text: "The amber notebook is here", rank: -1, ts: null },
       { sessionId: "user", role: "user", text: "Find my amber notebook", rank: -1, ts: null },
     ], "amber notebook");
-    expect(rows.map((row) => row.sessionId)).toEqual(["title", "user", "assistant"]);
-    expect(rows[1].lastUserText).toContain("You: Find my amber notebook");
-    expect(rows[2].lastUserText).toContain("Assistant: The amber notebook");
+    expect(rows.map((row) => row.sessionId)).toEqual(["title", "assistant", "user"]);
+    expect(rows[2].lastUserText).toContain("You: Find my amber notebook");
+    expect(rows[1].lastUserText).toContain("Assistant: The amber notebook");
+  });
+
+  test("directories lead titles and each match group is newest first", () => {
+    const now = Date.now();
+    const tenWeeksAgo = now - 10 * 7 * 86400_000;
+    const rows = rankSessions([
+      { ...entry("directory-old", "Amber notebook", tenWeeksAgo), cwd: "/work/amber-notebook" },
+      { ...entry("directory-new", "Recent unrelated title", now - 1000), cwd: "/work/amber-notebook" },
+      entry("title-old", "Amber notebook", tenWeeksAgo),
+      entry("title-new", "Discuss notebook and amber", now),
+      entry("prose-new", "Unrelated", now + 1000),
+    ], [
+      { sessionId: "directory-old", role: "user", text: "amber notebook", rank: -100, ts: null },
+      { sessionId: "prose-new", role: "assistant", text: "amber notebook", rank: -1, ts: null },
+    ], "  AMBER   notebook ");
+    expect(rows.map((row) => row.sessionId)).toEqual([
+      "directory-new", "directory-old", "title-new", "title-old", "prose-new",
+    ]);
+  });
+
+  test("project labels count as directory matches and timestamp ties use session id", () => {
+    const rows = rankSessions([
+      entry("title", "Amber", 1000),
+      { ...entry("b", "Unrelated", 100), cwd: null, project: "Amber" },
+      { ...entry("a", "Unrelated", 100), cwd: "/work/amber" },
+    ], [], "amber");
+    expect(rows.map((row) => row.sessionId)).toEqual(["a", "b", "title"]);
   });
 
   test("terms can be spread across messages and metadata", () => {

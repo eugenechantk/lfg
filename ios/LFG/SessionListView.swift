@@ -215,9 +215,8 @@ struct SessionListView: View {
             }
             // Most-recently-active directory first, so where the action is floats up.
             .sorted {
-                if isSearching && settings.sortMode == .recentActivity {
-                    return (store.searchRankByID[$0.items.first?.id ?? ""] ?? 0)
-                        > (store.searchRankByID[$1.items.first?.id ?? ""] ?? 0)
+                if isSearching, let lhs = $0.items.first, let rhs = $1.items.first {
+                    return SessionSearch.precedes(lhs, rhs, terms: SessionSearch.terms(searchText))
                 }
                 return ($0.items.first?.lastActivityAt ?? 0) > ($1.items.first?.lastActivityAt ?? 0)
             }
@@ -258,12 +257,8 @@ struct SessionListView: View {
     }
 
     private func sortedSessions(_ sessions: [Session]) -> [Session] {
-        if isSearching && settings.sortMode == .recentActivity {
-            return sessions.sorted {
-                let lhs = store.searchRankByID[$0.id] ?? 0
-                let rhs = store.searchRankByID[$1.id] ?? 0
-                return lhs == rhs ? ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) : lhs > rhs
-            }
+        if isSearching {
+            return SessionSearch.ordered(sessions, terms: SessionSearch.terms(searchText))
         }
         switch settings.sortMode {
         case .recentActivity:
