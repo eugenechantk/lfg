@@ -47,11 +47,11 @@ An actual stopped-host check found an integration bug missed by direct URLError 
 - Code: three review passes before visual verification, followed by affected-pass rechecks for findings. Source hashes in `account-usage-review-hashes.txt`.
 - Tests/builds: 22 relevant Bun tests, TypeScript no-emit check, 502 current Swift tests in 76 suites, final native iOS and Mac builds, final custom desktop build and diff check pass. Live sanitized provider proof in `account-usage-live-proof.txt`.
 
-This is a local implementation. The production hosts and installed/distributed apps were not replaced.
+The implementation review finished locally. The user then authorized a commit and a new build. Release 1.4.1 (202610210031) reached internal TestFlight, and the Pro desktop app was installed and launched. Both hosts now serve the usage endpoint while preserving their other live changes. The signed Air desktop app is staged but was not installed or launched because its screen is locked and its unlock plug-in is absent. Release evidence and remaining Air limitations are recorded in `.codex/releases/202610210031.md`.
 
 ## Residual risks
 
-Live provider endpoints and auth storage can change. The UI reports missing or unavailable data honestly. Command-R injection, full keyboard focus order and spoken VoiceOver output were not verified; they are outside the visual PASS. This work is local and does not deploy hosts or distribute a release. Audit apps/servers are stopped and the screen lock is restored.
+Live provider endpoints and auth storage can change. The UI reports missing or unavailable data honestly. Command-R injection, full keyboard focus order and spoken VoiceOver output were not verified; they are outside the visual PASS. During the release check, Pro returned successful readings for both providers; Air returned explicit provider read failures. Audit apps/servers are stopped and the Pro screen lock is restored.
 
 ## Bugs
 
