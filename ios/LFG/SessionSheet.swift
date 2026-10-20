@@ -6,7 +6,7 @@ import UIKit
 /// Anything that presents something else (a sheet, the terminal, an alert)
 /// has to wait for this sheet to finish dismissing first.
 enum SessionSheetAction {
-    case rename, terminal, files, subagents, signIn, browserPreview, iPhonePreview, confirmEnd, markedUnread
+    case rename, terminal, files, subagents, signIn, browserPreview, iPhonePreview, end, markedUnread
     case taskView(String)
 }
 
@@ -460,9 +460,9 @@ struct SessionSheet: View {
                 .accessibilityIdentifier("sessionSheetStop")
             ))
         }
-        if !externallyOwned {
+        if SessionCloseTracking.canEnd(session) {
             rows.append(AnyView(
-                Button { finish(.confirmEnd) } label: {
+                Button { finish(.end) } label: {
                     row(height: 42) {
                         SheetGlyph(kind: .endCircle)
                             .stroke(S2.failed, style: StrokeStyle(lineWidth: 2 * 18 / 24, lineCap: .round, lineJoin: .round))
@@ -474,6 +474,7 @@ struct SessionSheet: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .disabled(store.isEnding(sid))
                 .accessibilityIdentifier("sessionSheetEnd")
             ))
         }

@@ -75,10 +75,11 @@ public struct SessionListCollapse: Equatable, Sendable {
 /// cost server work).
 public struct SessionRowLine: Equatable, Sendable {
     public enum Icon: Equatable, Sendable { case none, question, signIn, liveDot }
-    /// attention = amber, live = green, primary = near-white ink, secondary = grey.
-    public enum Tone: Equatable, Sendable { case attention, live, primary, secondary }
+    /// Attention is amber, live is green, ending is red, and secondary is grey.
+    public enum Tone: Equatable, Sendable { case attention, live, ending, primary, secondary }
 
     public enum State: Equatable, Sendable {
+        case ending
         case needsInput(question: String?, signInSite: String?)
         case paused(reason: String?)
         case restarting
@@ -98,6 +99,8 @@ public struct SessionRowLine: Equatable, Sendable {
 
     public static func resolve(_ state: State, nowMs: Double, calendar: Calendar = .current) -> SessionRowLine {
         switch state {
+        case .ending:
+            return SessionRowLine(icon: .none, text: "Ending session…", tone: .ending)
         case let .needsInput(question, site):
             if let site = site?.trimmingCharacters(in: .whitespacesAndNewlines), !site.isEmpty {
                 return SessionRowLine(icon: .signIn, text: "Sign in to \(site)", tone: .attention)

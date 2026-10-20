@@ -4,10 +4,11 @@ import Foundation
 /// shows here — "Working · 3m 12s · Pro · lfg", "Needs input · 2m", "Air offline
 /// · 2m", "· 1 queued" — instead of as banners in the transcript.
 public struct SessionStatusLine: Equatable, Sendable {
-    /// live = green dot + label, attention = amber, none = no dot or label.
-    public enum Tone: Equatable, Sendable { case live, attention, none }
+    /// Live is green, attention is amber, ending is red, and none has no label.
+    public enum Tone: Equatable, Sendable { case live, attention, ending, none }
 
     public enum State: Equatable, Sendable {
+        case ending
         case working(sinceMs: Double?)
         case needsInput(sinceMs: Double?)
         case needsSignIn(sinceMs: Double?)
@@ -46,6 +47,8 @@ public struct SessionStatusLine: Equatable, Sendable {
         let tone: Tone
         let label: String?
         switch state {
+        case .ending:
+            tone = .ending; label = "Ending session…"
         case let .working(since):
             tone = .live; label = labelled("Working", elapsed(since, seconds: true))
         case let .needsInput(since):

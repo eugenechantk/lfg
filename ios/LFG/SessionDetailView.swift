@@ -67,7 +67,6 @@ struct SessionDetailView: View {
     /// The queued-strip row whose menu is open (S2: drawn at the row).
     @State private var openStripMenuID: String?
     @State private var newTitle = ""
-    @State private var confirmEnd = false
     @State private var isAtBottom = true
     @State private var composerFocused = false
     @State private var followupFocusRequest = 0
@@ -454,18 +453,6 @@ struct SessionDetailView: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") { Task { await store.rename(sid, newTitle) } }
                 .accessibilityIdentifier("sessionRenameSave")
-        }
-        .confirmationDialog("End this session?", isPresented: $confirmEnd, titleVisibility: .visible) {
-            // Gated on the result: `close` returns false and sets `lastError` when
-            // the server could not reap the agent. Dismissing regardless made a
-            // failed close indistinguishable from a successful one — the view
-            // closed, the row stayed, and the session was still running.
-            Button("End session", role: .destructive) {
-                Task { if await store.close(sid) { onEnded() } }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The agent's tmux session will be closed.")
         }
     }
 
@@ -1001,7 +988,8 @@ struct SessionDetailView: View {
         case .signIn: presentedSheet = .phoneSignIn(requestID: nil)
         case .browserPreview: dismissedBrowserFrameID = nil
         case .iPhonePreview: presentedSheet = .iPhonePreview
-        case .confirmEnd: confirmEnd = true
+        case .end:
+            Task { if await store.close(sid) { onEnded() } }
         case .markedUnread: onMarkedUnread()
         case .taskView(let id):
             if id == parentTaskID { dismiss() }
@@ -1282,6 +1270,7 @@ struct SessionDetailView: View {
     /// an unreachable host, a waiting question or sign-in, an API pause, the
     /// running turn, else idle.
     private var statusLineState: SessionStatusLine.State {
+        if store.isEnding(sid) { return .ending }
         if let activity = SessionTitleActivity.resolve(
             modelSwitchStatus: crossProviderSwitchStatus,
             forking: store.isForking(sid),
@@ -1409,7 +1398,12 @@ struct SessionTitleBarContent: View {
     private func statusRow(_ line: SessionStatusLine) -> some View {
         HStack(spacing: 6) {
             if line.tone != .none {
-                let tint = line.tone == .live ? Self.live : Self.attention
+                let tint: Color = switch line.tone {
+                case .live: Self.live
+                case .attention: Self.attention
+                case .ending: .red
+                case .none: Self.grey
+                }
                 Circle()
                     .fill(tint)
                     .frame(width: 7, height: 7)

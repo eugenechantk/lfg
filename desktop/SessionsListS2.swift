@@ -268,6 +268,7 @@ struct S2DeskRow: View {
 
     private var lineColor: Color {
         switch line.tone {
+        case .ending: return .red
         case .attention: return S2Desk.attention
         case .primary: return S2Desk.title
         case .live, .secondary: return S2Desk.meta

@@ -121,6 +121,7 @@ struct SessionListView: View {
     @State private var showDirectoryFilter = false
     /// Full-screen shell on the default host (`TerminalScreen`).
     @State private var showTerminal = false
+    @State private var closeError: SessionStore.StoreErrorEvent?
 
     /// Directory and host sections fold in memory for the current run. Status
     /// sections fold persistently (below): Idle and Closed start folded, and the
@@ -188,7 +189,7 @@ struct SessionListView: View {
         // search PAGE arrives, this one when the MUTE LIST changes — toggling a
         // directory while a search is on screen otherwise leaves stale rows up.
         for s in store.searchResults
-        where !seen.contains(s.id) && !settings.hiddenDirs.hides(cwd: s.cwd) {
+        where !seen.contains(s.id) && !store.sessionCloses.isEnded(s.id) && !settings.hiddenDirs.hides(cwd: s.cwd) {
             seen.insert(s.id)
             out.append(s)
         }
@@ -548,7 +549,26 @@ struct SessionListView: View {
         // Build the mute list from the thing that's annoying you, in one gesture.
         // Typing `/Users/…/.gbrain` into Settings is the same operation, but no
         // one does it — this is where you actually notice the noise.
-        .swipeActions(edge: .trailing) {
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            if SessionCloseTracking.canEnd(row.session) {
+                // A destructive role optimistically removes the native row.
+                // Keep it present and dimmed until the host confirms closure.
+                Button {
+                    let sid = row.session.sessionId ?? ""
+                    Task {
+                        let previousErrorID = store.errorEvent?.id
+                        if await store.close(sid) {
+                            if isSelected(row) { selection = nil }
+                        } else if let event = store.errorEvent, event.id != previousErrorID {
+                            closeError = event
+                        }
+                    }
+                } label: {
+                    Label("End", systemImage: "xmark.circle")
+                }
+                .tint(.red)
+                .accessibilityIdentifier("endSession-\(row.session.id)")
+            }
             if let dir = row.session.cwd.flatMap(HiddenDirs.normalize) {
                 Button {
                     settings.hideDirectory(dir)
@@ -558,21 +578,9 @@ struct SessionListView: View {
                 .tint(.secondary)
                 .accessibilityIdentifier("hideDirectory-\(row.session.id)")
 
-                // A scratch directory whose name ends in a pid — `gbrain` autopilot
-                // works out of `$TMPDIR/gbrain-claude-cli-cwd-<pid>`. Hiding the
-                // literal path would mute exactly one run, so offer the pattern
-                // that mutes the whole family. Only ever offered, never applied.
-                if let pattern = HiddenDirs.suggestedPattern(for: dir) {
-                    Button {
-                        settings.hideDirectory(pattern)
-                    } label: {
-                        Label("Hide all like this", systemImage: "eye.slash.circle")
-                    }
-                    .tint(.orange)
-                    .accessibilityIdentifier("hideDirectoryPattern-\(row.session.id)")
-                }
             }
         }
+        .disabled(store.isEnding(row.session.id))
     }
 
     private func agentDisclosure(parentId: String, children: [Session]) -> some View {
@@ -653,6 +661,19 @@ struct SessionListView: View {
                     }
                 }
         }
+        .overlay(alignment: .top) {
+            if let event = closeError {
+                SessionErrorBanner(message: event.message) { closeError = nil }
+                    .id(event.id)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .task(id: event.id) {
+                        try? await Task.sleep(for: .milliseconds(Int(event.remainingLifetimeMs())))
+                        guard !Task.isCancelled else { return }
+                        closeError = nil
+                    }
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: closeError?.id)
     }
 
     private var listBody: some View {
@@ -1156,13 +1177,14 @@ struct SessionRow: View {
     /// renders as a healthy session and tapping it opens a composer whose sends
     /// can never land.
     private var isOffline: Bool { store.isOffline(session.id) }
+    private var isEnding: Bool { store.isEnding(session.id) }
 
     private var isEmphasized: Bool {
         group == .needsInput || group == .blocked || group == .unread
     }
 
     private var showsStateLine: Bool {
-        group != .unread && group != .idle && group != .closed
+        isEnding || (group != .unread && group != .idle && group != .closed)
     }
 
     var body: some View {
@@ -1197,7 +1219,8 @@ struct SessionRow: View {
         // Dim the row so a stale (unreachable) session doesn't compete with live
         // ones. The orange host label dims with it, but stays the only warm-colored
         // element in the row, so it still reads as the reason for the dimming.
-        .opacity(isOffline ? 0.55 : 1)
+        .opacity(isEnding || isOffline ? 0.55 : 1)
+        .accessibilityValue(isEnding ? "Ending session" : "")
         .accessibilityElement(children: .combine)
     }
 
@@ -1206,6 +1229,7 @@ struct SessionRow: View {
     }
 
     private var clockStartMs: Double? {
+        if isEnding { return nil }
         if group == .working {
             if case .working(let since) = lineState { return since }
             return nil
@@ -1214,6 +1238,7 @@ struct SessionRow: View {
     }
 
     private var lineState: SessionRowLine.State {
+        if isEnding { return .ending }
         switch group {
         case .needsInput:
             let prompt = session.sessionId.flatMap { store.prompts[$0] }
@@ -1262,6 +1287,7 @@ struct SessionRow: View {
 
     private func color(for tone: SessionRowLine.Tone) -> Color {
         switch tone {
+        case .ending: return .red
         case .attention: return Tokens.attention
         case .live: return Tokens.live
         case .primary: return Tokens.ink

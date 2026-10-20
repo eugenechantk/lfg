@@ -14,6 +14,10 @@ import LFGCore
     private let localStoreIsDurable: Bool
 
     private(set) var sessions: [Session] = []
+    private(set) var sessionCloses = SessionCloseTracking()
+    private var endingGroups: [String: Group] = [:]
+
+    func isEnding(_ id: String) -> Bool { sessionCloses.isEnding(id) }
     /// Aggregate fleet health: `.live` if ANY configured host is live, else a
     /// representative failure, `nil` when nothing has been observed yet. The
     /// list/banner read this; per-host detail lives in `hostStateByHost`.
@@ -2752,7 +2756,8 @@ import LFGCore
             resumedIds: resumedIds,
             unreachableHostIds: Set(settings.hosts.filter { !isNotKnownDown($0) }.map(\.id)))
         let fresh = reconciled.live.sessions
-        hostBySession = reconciled.live.hostBySession
+        let endingRoutes = hostBySession.filter { sessionCloses.isEnding($0.key) }
+        hostBySession = reconciled.live.hostBySession.merging(endingRoutes) { current, _ in current }
         liveIds = reconciled.liveIds
         // A host reporting the id live IS the end of a restart. Pruning here too
         // means a revival that never lands falls back to "Closed" on the same
@@ -2767,7 +2772,7 @@ import LFGCore
         // away this run, so ended sessions stay in the list.
         closedCache = reconciled.visibleClosed.map(Self.closedSession(from:))
         let closed = closedCache
-        sessions = fresh + optimistic + closed
+        sessions = sessionCloses.preservingPending(in: fresh + optimistic + closed)
         // Seed child agents from the rows that carry the 👥 badge, so the detail
         // view has the same data the list counted even when the owner is not
         // live and the per-session read cannot reach it. `seed` never blanks and
@@ -3568,6 +3573,7 @@ import LFGCore
         // shared with `FleetActivitySnapshot` and mirrored on the server — so the
         // list and the Live Activity can no longer disagree.
         let sid = s.sessionId
+        if let sid, isEnding(sid), let group = endingGroups[sid] { return group }
         // Ahead of `closed` for the same reason `closed` sits outside the shared
         // ladder — only this client knows a revival is in flight. Without it, a
         // session you just woke reads "Closed" for the whole resume round-trip
@@ -3601,7 +3607,7 @@ import LFGCore
 
     var filteredSessions: [Session] {
         // A scheduled task's edit chat lives in the task's chat sheet, not in Sessions.
-        sessions.filter { settings.userFilter.matches($0) && !settings.hiddenDirs.hides(cwd: $0.cwd) && $0.purpose != "task-edit" }
+        sessions.filter { !sessionCloses.isEnded($0.id) && settings.userFilter.matches($0) && !settings.hiddenDirs.hides(cwd: $0.cwd) && $0.purpose != "task-edit" }
     }
 
     /// How many LIVE sessions the directory mute list is holding back — the same
@@ -4235,6 +4241,8 @@ import LFGCore
     /// `/api/sessions`.
     private func carryForwardResume(from old: String, to returnedId: String?, on hostId: String) {
         let new = (returnedId?.isEmpty == false ? returnedId : nil) ?? old
+        sessionCloses.clearEnded(old)
+        sessionCloses.clearEnded(new)
         // A closed session is host-agnostic, but the resume response tells us
         // exactly which host now owns the revived pane. Persist that ownership
         // before any follow-up action can run. Codex resumes with the SAME id;
@@ -4791,12 +4799,28 @@ import LFGCore
     /// failure (see `SessionDetailView`'s "End session" button).
     @discardableResult
     func close(_ id: String) async -> Bool {
-        let ok = await run("End session", for: id) { try await $0.close(id) }
-        // Closed by hand → no longer owed a deferred close from a past transfer.
-        // Only on success: a close that failed (host still down) leaves the
-        // orphan in place, and the replay is what will clean it up.
-        if ok { deferredSourceCloses.forget(session: id) }
-        return ok
+        guard !isEnding(id), let session = session(id), SessionCloseTracking.canEnd(session) else { return false }
+        guard let client = client(forSession: id) else {
+            lastError = "End session failed: no host is currently routed for this session."
+            return false
+        }
+        let originalGroup = group(for: session)
+        guard sessionCloses.begin(session) else { return false }
+        endingGroups[id] = originalGroup
+        defer { endingGroups[id] = nil }
+        do {
+            try await client.close(id)
+            sessionCloses.finish(id, succeeded: true)
+            deferredSourceCloses.forget(session: id)
+            // The acknowledgement is enough to dismiss. A slow unrelated host
+            // must not hold the detail open during the fleet refresh.
+            Task { await refresh() }
+            return true
+        } catch {
+            sessionCloses.finish(id, succeeded: false)
+            lastError = "End session failed: \(error.localizedDescription)"
+            return false
+        }
     }
     func retry(_ id: String, _ messageID: String) async { await run("Retry", for: id) { try await $0.retryQueued(id, messageID: messageID) } }
 

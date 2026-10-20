@@ -6,6 +6,14 @@ import Testing
 struct SessionStatusLineTests {
     private let now: Double = 1_760_500_000_000
 
+    @Test("ending is red and keeps the host and project context")
+    func ending() {
+        #expect(SessionStatusLine.resolve(.ending, queued: 0, host: "Pro", project: "lfg", nowMs: now)
+            == SessionStatusLine(tone: .ending, label: "Ending session…", detail: "· Pro · lfg"))
+        #expect(SessionRowLine.resolve(.ending, nowMs: now)
+            == SessionRowLine(icon: .none, text: "Ending session…", tone: .ending))
+    }
+
     @Test("working shows minutes and seconds since the turn started, then host and project")
     func working() {
         let line = SessionStatusLine.resolve(.working(sinceMs: now - (3 * 60 + 12) * 1000),
