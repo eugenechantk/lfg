@@ -144,7 +144,7 @@ import {
 // repos at runtime; defaults to ~/repos. The lfg repo itself (PATHS.root) is
 // always offered as a target since it is present and trusted.
 const REPOS_ROOT = process.env.LFG_REPOS_ROOT ?? join(homedir(), "repos");
-const SELF_REPO = PATHS.root;
+const SELF_REPO = process.env.LFG_REPO?.trim() || PATHS.root;
 
 function transcriptFamily(path: string): "claude" | "codex" | null {
   const claudeRoot = process.env.LFG_CLAUDE_PROJECTS_DIR ?? join(homedir(), ".claude", "projects");
