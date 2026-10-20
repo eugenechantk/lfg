@@ -58,7 +58,7 @@ A late retry holds later occurrences until it finishes. Those occurrences keep t
 
 ## Scope and limits
 
-This is a local implementation. It applies when a future run becomes incomplete after deployment; historical runs were not rewritten.
+Released on Pro and TestFlight in build 202610201357. Air deployment remains blocked by connectivity. Historical runs were not rewritten.
 The Mac build passed and shares the verified presentation models. A separate Mac GUI audit was not run.
 
 ## Bugs

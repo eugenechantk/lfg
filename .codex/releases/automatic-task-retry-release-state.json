@@ -1,0 +1,80 @@
+{
+  "build": "202610201357",
+  "branch": "codex/automatic-task-retry-202610201352",
+  "source": "/Users/eugenechan/dev/personal/lfg/.codex/evidence/automatic-task-retry-release-202610201352/source",
+  "evidence": "/Users/eugenechan/dev/personal/lfg/.codex/evidence/automatic-task-retry-release-202610201352",
+  "status": "complete_with_air_deployment_blocked",
+  "pushed": false,
+  "base_commit": "463e1557d82f4af9c8a2b515c0f295a8c82c9ab9",
+  "outcome_commit": "9602074953cfe65c1813032584053338176ca7ec",
+  "commit": "1f1bbf45464355623e31cfcfabb0823789803950",
+  "retry_commit": "03ba6d90e7450c9ac608d5a0d9220e9d6e123a60",
+  "default_repository_commit": "1f1bbf45464355623e31cfcfabb0823789803950",
+  "main_integrated": true,
+  "desktop": {
+    "pro": {
+      "host": "Eugenes-MacBook-Pro",
+      "installed": "/Applications/lfg.app",
+      "version": "1.4.1",
+      "build": "202610201357",
+      "source_revision": "1f1bbf45464355623e31cfcfabb0823789803950",
+      "sha256": "5db9631e38706200b3c9d782691267ad3f7a9f547181f6f5fb6d986822206b61",
+      "running": [
+        "86824 /Applications/lfg.app/Contents/MacOS/lfg"
+      ],
+      "stopped_prior_apps": [
+        14568
+      ],
+      "backup": "/Users/eugenechan/Library/Application Support/lfg-desktop-backups/202610201357/lfg.app",
+      "signature_valid": true,
+      "feature_tests": {
+        "ok": true,
+        "tests": 259
+      }
+    },
+    "air": {
+      "status": "blocked_offline",
+      "reason": "Cloudflare 530/1033; SSH Cloudflare and known LAN/tailnet/mDNS routes unavailable"
+    }
+  },
+  "hosts": {
+    "pro": {
+      "host": "Eugenes-MacBook-Pro",
+      "commit": "1f1bbf45464355623e31cfcfabb0823789803950",
+      "source": "/Users/eugenechan/dev/personal/lfg/.codex/evidence/automatic-task-retry-release-202610201352/source",
+      "old_pid": 45453,
+      "old_supervisor": 1124,
+      "new_pid": 82578,
+      "new_supervisor": 82556,
+      "wrapper": "/Users/eugenechan/.lfg/releases/202610201357/run-host.sh",
+      "runtime_files_verified": 102,
+      "host_identity_preserved": true,
+      "task_state_preserved": true,
+      "previous_session_ids_preserved": true
+    },
+    "air": {
+      "status": "not_deployed",
+      "reason": "Host unreachable"
+    }
+  },
+  "testflight": {
+    "version": "1.4.1",
+    "build": "202610201357",
+    "ipa_ground_truth": true,
+    "status": "verified",
+    "processing": "VALID",
+    "highest_train": true,
+    "internal_state": "IN_BETA_TESTING"
+  },
+  "tests": {
+    "host": 128,
+    "host_assertions": 641,
+    "swift": 486,
+    "swift_suites": 74,
+    "desktop": 259,
+    "typecheck": "PASS",
+    "frozen_default_repository_probe": "PASS"
+  },
+  "release_record": "/Users/eugenechan/dev/personal/lfg/.codex/releases/202610201357.md",
+  "coordination_skill": ".agents/skills/lfg-sessions/SKILL.md"
+}
