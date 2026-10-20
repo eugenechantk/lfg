@@ -484,6 +484,20 @@ public struct LFGClient: Sendable {
         try await get("api/claude/usage", as: Usage.self)
     }
 
+    public func accountUsage() async throws -> AccountUsageResponse {
+        do { return try await get("api/account-usage", as: AccountUsageResponse.self) }
+        catch let error as LFGError {
+            try Task.checkCancellation()
+            // The shared usage store classifies network failures separately
+            // from HTTP/provider errors. Other reads retain their error API.
+            switch error {
+            case .notReachable: throw URLError(.cannotConnectToHost)
+            case .transport(let code, _): throw URLError(code.map(URLError.Code.init(rawValue:)) ?? .cannotConnectToHost)
+            default: throw error
+            }
+        }
+    }
+
     /// Host identity for the multi-host client — resolves this host's stable id
     /// and friendly name so the session list can label + dedupe by machine.
     public func info() async throws -> HostInfo {

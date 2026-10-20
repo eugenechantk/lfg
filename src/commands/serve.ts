@@ -12,6 +12,7 @@ import { switchCodexEffort, switchCodexModel } from "../codex-model-switch.ts";
 import { effortSwitchBlocker, launchFlag, validateEffortForAgent } from "../session-effort.ts";
 import { panePromptSuppressed } from "../pane-drive.ts";
 import { hostInfo } from "../hostinfo.ts";
+import { accountUsage, claudeAccountUsage } from "../account-usage.ts";
 import { currentModelCatalog, isSafeModelId } from "../model-catalog.ts";
 import { claudeModelSwitchBlocker } from "../claude-model-switch.ts";
 import { Journal } from "../journal.ts";
@@ -639,9 +640,6 @@ type RunState = {
 
 const RUNS = new Map<string, RunState>();
 const RUN_TTL_MS = 60 * 60 * 1000;
-
-// Last successful /api/claude/usage payload (60s TTL).
-let usageCache: { at: number; data: unknown } | null = null;
 
 function evictOldRuns() {
   const cutoff = Date.now() - RUN_TTL_MS;
@@ -2205,39 +2203,19 @@ export async function cmdServe(options: {
         });
       }
 
-      // Claude subscription usage (5-hour + 7-day windows) via the OAuth usage
-      // endpoint, authed with the local Claude Code credentials. Cached for a
-      // minute so reopening the new-session dialog doesn't hammer Anthropic.
+      if (path === "/api/account-usage" && req.method === "GET") {
+        return json(await accountUsage(), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+      }
+
+      // Compatibility for older clients, using the same current credentials
+      // and account-scoped cache as the new account usage screen.
       if (path === "/api/claude/usage") {
-        if (usageCache && Date.now() - usageCache.at < 60_000)
-          return json(usageCache.data);
-        try {
-          const creds = await Bun.file(
-            join(process.env.HOME || "", ".claude", ".credentials.json"),
-          ).json();
-          const token = creds?.claudeAiOauth?.accessToken;
-          if (!token) return err(503, "no Claude credentials on this box");
-          const r = await fetch("https://api.anthropic.com/api/oauth/usage", {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "anthropic-beta": "oauth-2025-04-20",
-            },
-          });
-          if (!r.ok) return err(502, `usage endpoint returned ${r.status}`);
-          const u = (await r.json()) as {
-            five_hour?: { utilization?: number; resets_at?: string | null };
-            seven_day?: { utilization?: number; resets_at?: string | null };
-          };
-          const data = {
-            ok: true,
-            fiveHour: { pct: u.five_hour?.utilization ?? null, resetsAt: u.five_hour?.resets_at ?? null },
-            sevenDay: { pct: u.seven_day?.utilization ?? null, resetsAt: u.seven_day?.resets_at ?? null },
-          };
-          usageCache = { at: Date.now(), data };
-          return json(data);
-        } catch (e) {
-          return err(502, e instanceof Error ? e.message : String(e));
-        }
+        const usage = await claudeAccountUsage();
+        const legacyWindow = (duration: number) => {
+          const window = usage.windows.find(window => window.durationMinutes === duration && !window.name);
+          return { pct: window?.usedPercent ?? null, resetsAt: window?.resetsAt ?? null };
+        };
+        return json({ ok: usage.status === "ok", fiveHour: legacyWindow(300), sevenDay: legacyWindow(10080) });
       }
 
       // ---- push notifications (APNs device registry) ----

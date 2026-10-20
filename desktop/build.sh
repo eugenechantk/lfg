@@ -31,6 +31,8 @@ swiftc "${LFG_DESKTOP_OPTIMIZATION:--O}" -parse-as-library \
   ScheduledTasksPane.swift \
   ../shared/ScheduledTasksView.swift \
   ../shared/Tasks/*.swift \
+  ../shared/Usage/*.swift \
+  ../ios/LFGCore/Sources/LFGCore/AccountUsage.swift \
   ../ios/LFGCore/Sources/LFGCore/ScheduledTasks.swift \
   ../ios/LFGCore/Sources/LFGCore/TaskPresentation.swift \
   ../ios/LFGCore/Sources/LFGCore/TaskDetailPresentation.swift \

@@ -139,6 +139,10 @@ struct S2DeskHostStrip: View {
     let workingCount: Int
     @Binding var groupMode: GroupMode
     var onHiddenDirectories: () -> Void
+    var usageStore: AccountUsageStore
+    var refreshUsage: () async -> Void
+    @State private var showUsage = false
+    @State private var usageHeight: CGFloat = 430
 
     var body: some View {
         HStack(spacing: 0) {
@@ -169,6 +173,9 @@ struct S2DeskHostStrip: View {
             }
             Spacer(minLength: 8)
             Menu {
+                Button("Usage limits", systemImage: "gauge.with.needle") { showUsage = true }
+                    .accessibilityIdentifier("sessions_usage_limits")
+                Divider()
                 Picker("Group by", selection: $groupMode) {
                     ForEach(GroupMode.allCases) { mode in
                         Text("By \(mode.title.lowercased())").tag(mode)
@@ -196,6 +203,13 @@ struct S2DeskHostStrip: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .accessibilityIdentifier("group_mode_menu")
+            .popover(isPresented: $showUsage, arrowEdge: .top) {
+                AccountUsageContent(store: usageStore, desktop: true, close: { showUsage = false },
+                                    measured: { usageHeight = $0 }, refresh: refreshUsage)
+                    .frame(width: 320, height: min(520, max(180, usageHeight)))
+                    .task { await refreshUsage() }
+                    .onExitCommand { showUsage = false }
+            }
         }
         .frame(height: 22)
         .padding(.horizontal, 16)

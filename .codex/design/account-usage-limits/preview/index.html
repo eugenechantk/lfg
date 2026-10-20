@@ -1,0 +1,1023 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<title>LFG · Usage limits — design proposal</title>
+<style>
+/* ---------------------------------------------------------------- theme -- */
+:root {
+  color-scheme: dark;
+  --page: #0E0E10;
+  --panel: #151518;
+  --panel-2: #1C1C20;
+  --edge: rgba(255,255,255,0.10);
+  --ink: #F4F4F6;
+  --ink-2: #C3C3CA;
+  --ink-3: #8E8E96;
+  --link: #6FB0FF;
+  --chip: rgba(255,255,255,0.08);
+
+  /* mock tokens — dark (the design's hexes) */
+  --m-screen: #000000;
+  --m-sheet: #1C1C1E;
+  --m-card: #2C2C2E;
+  --m-ink: #FFFFFF;
+  --m-soft: #D1D1D6;
+  --m-grey: #A1A1A6;
+  --m-meta: #8E8E93;
+  --m-sep: rgba(255,255,255,0.08);
+  --m-track: rgba(235,235,245,0.16);
+  --m-accent: #409CFF;
+  --m-accent-fill: #0A6EE0;
+  --m-warn: #FF9F0A;
+  --m-danger: #FF453A;
+  --m-danger-tint: rgba(255,69,58,0.14);
+  --m-danger-edge: rgba(255,69,58,0.30);
+  --m-quiet: rgba(255,255,255,0.05);
+  --m-scrim: rgba(0,0,0,0.42);
+  --m-glass: rgba(44,44,46,0.92);
+  --m-glass-edge: rgba(255,255,255,0.10);
+  --m-chip: rgba(255,255,255,0.08);
+  --m-control: rgba(255,255,255,0.10);
+  --m-shadow: 0 -10px 40px rgba(0,0,0,0.45);
+
+  /* mock tokens — Mac dark (S2Desk) */
+  --d-screen: #1B1B1E;
+  --d-sheet: #232327;
+  --d-card: #26262B;
+  --d-ink: #F4F4F6;
+  --d-grey: #8A8A93;
+  --d-accent: #8FB8FF;
+  --d-accent-fill: #3B8EFF;
+  --d-warn: #FFB340;
+  --d-danger: #FF6B61;
+  --d-control: rgba(255,255,255,0.07);
+  --d-sep: rgba(255,255,255,0.06);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page: #F6F6F8;
+  --panel: #FFFFFF;
+  --panel-2: #F0F0F3;
+  --edge: rgba(0,0,0,0.12);
+  --ink: #16161A;
+  --ink-2: #44444C;
+  --ink-3: #6C6C76;
+  --link: #0062CC;
+  --chip: rgba(0,0,0,0.06);
+
+  --m-screen: #FFFFFF;
+  --m-sheet: #F2F2F7;
+  --m-card: #FFFFFF;
+  --m-ink: #000000;
+  --m-soft: #3A3A3C;
+  --m-grey: #6C6C70;
+  --m-meta: #6C6C70;
+  --m-sep: rgba(0,0,0,0.09);
+  --m-track: rgba(60,60,67,0.16);
+  --m-accent: #0071E3;
+  --m-accent-fill: #0088FF;
+  --m-warn: #B35100;
+  --m-danger: #D70015;
+  --m-danger-tint: rgba(215,0,21,0.08);
+  --m-danger-edge: rgba(215,0,21,0.26);
+  --m-quiet: rgba(0,0,0,0.04);
+  --m-scrim: rgba(0,0,0,0.22);
+  --m-glass: rgba(255,255,255,0.94);
+  --m-glass-edge: rgba(0,0,0,0.10);
+  --m-chip: rgba(0,0,0,0.06);
+  --m-control: rgba(0,0,0,0.08);
+  --m-shadow: 0 -10px 40px rgba(0,0,0,0.18);
+
+  --d-screen: #FFFFFF;
+  --d-sheet: #FFFFFF;
+  --d-card: #EFEFEF;
+  --d-ink: #262626;
+  --d-grey: #737377;
+  --d-accent: #0071E3;
+  --d-accent-fill: #007AFF;
+  --d-warn: #B35100;
+  --d-danger: #D70015;
+  --d-control: #E9E9E9;
+  --d-sep: rgba(0,0,0,0.07);
+}
+
+/* ----------------------------------------------------------------- page -- */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+a { color: var(--link); }
+
+header.masthead { padding: 40px 0 26px; border-bottom: 1px solid var(--edge); }
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8px; margin: 0 0 12px;
+  padding: 5px 11px; border-radius: 999px; background: var(--chip);
+  font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2);
+}
+.eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--m-warn); }
+h1 { margin: 0 0 10px; font-size: clamp(27px, 5vw, 40px); line-height: 1.12; letter-spacing: -0.02em; }
+.lede { margin: 0; max-width: 62ch; color: var(--ink-2); font-size: 17px; }
+
+/* sticky contents bar */
+nav.toc {
+  position: sticky; top: 0; z-index: 40;
+  background: color-mix(in srgb, var(--page) 92%, transparent);
+  backdrop-filter: saturate(150%) blur(14px);
+  border-bottom: 1px solid var(--edge);
+}
+nav.toc .inner {
+  display: flex; align-items: center; gap: 14px;
+  max-width: 1180px; margin: 0 auto; padding: 0 16px;
+  overflow-x: auto; scrollbar-width: none;
+}
+nav.toc .inner::-webkit-scrollbar { display: none; }
+nav.toc a {
+  flex: 0 0 auto; padding: 13px 2px; border-bottom: 2px solid transparent;
+  color: var(--ink-3); text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap;
+}
+nav.toc a:hover { color: var(--ink); }
+nav.toc a[aria-current="true"] { color: var(--ink); border-bottom-color: var(--m-accent); }
+nav.toc .spacer { flex: 1 1 auto; min-width: 10px; }
+nav.toc .themeBtn {
+  flex: 0 0 auto; margin: 7px 0; padding: 7px 12px; border: 1px solid var(--edge);
+  border-radius: 999px; background: var(--panel); color: var(--ink);
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+nav.toc .themeBtn:hover { background: var(--panel-2); }
+:focus-visible { outline: 2px solid var(--m-accent); outline-offset: 2px; border-radius: 6px; }
+
+/* Scoped to the page’s own outer sections. A bare `section` rule also matched
+   <section class="sheet"> and <section class="formsheet"> inside the mocks and
+   pushed their headers apart. */
+.wrap > section { padding: 44px 0 10px; scroll-margin-top: 64px; }
+.wrap > section > h2 { margin: 0 0 6px; font-size: clamp(21px, 3.2vw, 27px); letter-spacing: -0.015em; }
+.wrap > section > p.sub { margin: 0 0 22px; max-width: 66ch; color: var(--ink-2); }
+
+.cols { display: grid; gap: 26px; grid-template-columns: 1fr; align-items: start; }
+@media (min-width: 900px) {
+  .cols.two { grid-template-columns: minmax(0,390px) minmax(0,1fr); }
+  .cols.mac-cols { grid-template-columns: minmax(0,400px) minmax(0,1fr); }
+}
+
+.notecard {
+  background: var(--panel); border: 1px solid var(--edge); border-radius: 14px; padding: 16px 18px;
+}
+.notecard h3 { margin: 0 0 8px; font-size: 15px; letter-spacing: 0.01em; }
+.notecard ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 14.5px; }
+.notecard li { margin-bottom: 7px; }
+.notecard li:last-child { margin-bottom: 0; }
+.notecard.flag { border-color: color-mix(in srgb, var(--m-warn) 45%, var(--edge)); }
+
+table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--edge); border-radius: 14px; background: var(--panel); }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--edge); vertical-align: top; }
+th { font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); }
+tr:last-child td { border-bottom: 0; }
+td code { font-size: 13px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--chip); padding: 1px 5px; border-radius: 5px; }
+
+/* scenario controls */
+.controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; }
+.controls button {
+  padding: 8px 13px; border: 1px solid var(--edge); border-radius: 999px;
+  background: var(--panel); color: var(--ink-2); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
+}
+.controls button:hover { color: var(--ink); }
+.controls button[aria-pressed="true"] { background: var(--m-accent-fill); border-color: transparent; color: #fff; }
+.blurb { margin: -10px 0 20px; max-width: 70ch; color: var(--ink-2); font-size: 14.5px; }
+
+/* ---------------------------------------------------------------- mocks -- */
+.stage { display: flex; flex-wrap: wrap; gap: 26px; align-items: flex-start; }
+figure { margin: 0; }
+figcaption { margin-top: 10px; font-size: 13px; color: var(--ink-3); max-width: 42ch; }
+
+.phone {
+  width: min(390px, 100%); border-radius: 34px; overflow: hidden;
+  background: var(--m-screen); color: var(--m-ink);
+  border: 1px solid var(--edge); position: relative;
+  font-size: 16px; line-height: 1.4;
+}
+#menuPhone { min-height: 440px; }
+.phone .listbar { display: flex; align-items: center; gap: 10px; padding: 16px 16px 10px; }
+.phone .hosts { flex: 1 1 auto; display: flex; gap: 12px; font-size: 15px; font-weight: 600; }
+.phone .hosts span { display: inline-flex; align-items: center; gap: 6px; }
+.led { width: 8px; height: 8px; border-radius: 50%; background: #30D158; flex: 0 0 8px; }
+.glasscap {
+  display: flex; align-items: center; padding: 0 4px; height: 44px; border-radius: 22px;
+  background: var(--m-glass); border: 0.5px solid var(--m-glass-edge);
+}
+.glasscap .gbtn {
+  width: 40px; height: 40px; border: 0; background: transparent; color: var(--m-ink);
+  display: grid; place-items: center; cursor: pointer; padding: 0; border-radius: 20px;
+}
+.ghosts { padding: 6px 20px 22px; display: flex; flex-direction: column; gap: 16px; }
+.ghosts .g1, .ghosts .g2 { display: block; border-radius: 6px; background: var(--m-chip); }
+.ghosts .g1 { height: 13px; } .ghosts .g2 { height: 11px; }
+.scrim { position: absolute; inset: 0; background: var(--m-scrim); pointer-events: none; }
+
+/* sheet */
+.sheet {
+  position: relative; margin-top: -1px; border-radius: 34px 34px 0 0;
+  background: var(--m-sheet); box-shadow: var(--m-shadow); padding-bottom: 28px;
+}
+.sheet .grab { height: 20px; display: grid; place-items: center; }
+.sheet .grab span { width: 36px; height: 5px; border-radius: 3px; background: var(--m-track); }
+.sheet .head, .formsheet .head {
+  display: flex; align-items: center; gap: 8px; padding: 0 16px; min-height: 48px; flex: 0 0 auto;
+}
+.sheet .head h3, .formsheet .head h3 {
+  flex: 1 1 auto; margin: 0; text-align: center; font-size: 17px; font-weight: 600;
+}
+.sheetbtn {
+  min-width: 64px; min-height: 44px; border: 0; background: transparent; padding: 0;
+  color: var(--m-accent); font: inherit; font-size: 17px; cursor: pointer;
+}
+.sheetbtn.lead { text-align: left; }
+.sheetbtn.trail { text-align: right; display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.sheetbtn[disabled] { color: var(--m-grey); cursor: default; }
+.sheet .body, .formsheet .body { padding: 0 20px; }
+.sampleline {
+  margin: 14px 0 0; display: flex; align-items: center; gap: 7px;
+  font-size: 12px; color: var(--m-meta);
+}
+.sampletag {
+  padding: 2px 7px; border-radius: 5px; background: var(--m-chip); color: var(--m-grey);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+}
+
+/* cards */
+.provhead {
+  margin: 22px 0 8px; font-size: 13px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--m-meta);
+}
+.ucard { border-radius: 20px; background: var(--m-card); overflow: hidden; }
+.ucard.off { opacity: 0.58; }
+.ucard .idrow { padding: 13px 16px; display: flex; flex-direction: column; gap: 2px; }
+.ucard .plan { font-size: 17px; font-weight: 600; }
+.ucard .who { font-size: 13px; color: var(--m-grey); }
+.notice {
+  margin: 0 16px 13px; padding: 13px 14px; border-radius: 12px;
+  background: var(--m-quiet); border: 1px solid transparent;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.notice.err { background: var(--m-danger-tint); border-color: var(--m-danger-edge); }
+.notice.err button { background: var(--m-card); }
+.popover .notice.err button { background: var(--d-card); }
+.notice .nt { font-size: 16px; font-weight: 600; }
+.notice.err .nt { color: var(--m-danger); }
+.notice .nb { font-size: 13px; color: var(--m-grey); }
+.notice button {
+  align-self: flex-start; margin-top: 4px; min-height: 34px; padding: 0 14px; border: 0;
+  border-radius: 17px; background: var(--m-control); color: var(--m-accent);
+  font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.qrow { padding: 13px 16px; border-top: 1px solid var(--m-sep); display: flex; flex-direction: column; gap: 8px; }
+.qrow .top { display: flex; align-items: baseline; gap: 10px; }
+.qrow .lbl { flex: 1 1 auto; min-width: 0; font-size: 16px; }
+.qrow .val { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.qrow .val.missing { font-weight: 400; color: var(--m-meta); }
+.bar { height: 6px; border-radius: 3px; background: var(--m-track); overflow: hidden; }
+.bar > i { display: block; height: 6px; border-radius: 3px; }
+.qrow .sub { font-size: 13px; color: var(--m-grey); }
+.tone-high .val, .tone-high .sub { color: var(--m-warn); }
+.tone-critical .val, .tone-critical .sub { color: var(--m-warn); }
+.tone-exhausted .val, .tone-exhausted .sub { color: var(--m-danger); }
+.tone-normal .val { color: var(--m-accent-fill); }
+.tone-normal .sub { color: var(--m-grey); }
+.ucard .cardnote { padding: 11px 16px; border-top: 1px solid var(--m-sep); font-size: 13px; color: var(--m-grey); }
+.ucard .foot { padding: 10px 16px; border-top: 1px solid var(--m-sep); font-size: 12px; color: var(--m-meta); }
+.ucard .foot.warn { color: var(--m-warn); }
+
+/* menu */
+.menu {
+  position: absolute; top: 66px; right: 16px; width: 254px; border-radius: 14px; overflow: hidden;
+  background: var(--m-glass); border: 0.5px solid var(--m-glass-edge);
+  box-shadow: 0 16px 44px rgba(0,0,0,0.45); z-index: 2;
+}
+.menu button {
+  width: 100%; min-height: 48px; padding: 0 15px; border: 0; border-bottom: 0.5px solid var(--m-glass-edge);
+  background: transparent; color: var(--m-ink); font: inherit; font-size: 17px; text-align: left;
+  display: flex; align-items: center; gap: 12px; cursor: pointer;
+}
+.menu button span { flex: 1 1 auto; }
+.menu button.pick { background: var(--m-chip); color: var(--m-accent); font-weight: 600; }
+.menu .grp { padding: 9px 15px 2px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; color: var(--m-meta); }
+.menu .opts { padding: 0 15px 10px; font-size: 15px; color: var(--m-grey); }
+
+/* mac */
+.mac {
+  width: min(400px, 100%); border-radius: 12px; overflow: hidden; position: relative;
+  background: var(--d-screen); color: var(--d-ink); border: 1px solid var(--edge);
+  font-size: 13px; line-height: 1.35; min-height: 600px;
+}
+.mac .bar { display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 12px 0 14px; }
+.mac .lights { display: flex; gap: 8px; }
+.mac .lights i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+.mac .pill { width: 28px; height: 28px; border-radius: 14px; background: var(--d-control); display: grid; place-items: center; }
+.mac .hosts { padding: 0 14px; display: flex; gap: 12px; font-size: 12px; font-weight: 600; color: var(--d-grey); }
+.mac .hosts span { display: inline-flex; align-items: center; gap: 5px; }
+.mac .ghosts { padding: 14px; gap: 14px; }
+.popover {
+  position: absolute; top: 44px; right: 10px; width: 320px; max-width: calc(100% - 20px);
+  border-radius: 14px; background: var(--d-sheet); border: 1px solid var(--edge);
+  box-shadow: 0 18px 50px rgba(0,0,0,0.42); padding: 12px 14px 14px; z-index: 2;
+  /* The spec caps the popover at 520pt and scrolls past it. */
+  max-height: 520px; overflow-y: auto; overscroll-behavior: contain;
+}
+.popover .beak { position: absolute; }
+.popover .beak {
+  position: absolute; top: -7px; right: 22px; width: 13px; height: 13px; transform: rotate(45deg);
+  background: var(--d-sheet); border-left: 1px solid var(--edge); border-top: 1px solid var(--edge);
+}
+.popover .phead { display: flex; align-items: center; gap: 8px; }
+.popover .phead h3 { flex: 1 1 auto; margin: 0; font-size: 13px; font-weight: 600; }
+.popover .refresh {
+  width: 24px; height: 24px; border: 0; border-radius: 12px; background: var(--d-control);
+  color: var(--d-accent); display: grid; place-items: center; cursor: pointer; padding: 0;
+}
+/* Mac metrics override the phone card metrics inside a popover */
+.popover .provhead { margin: 14px 0 5px; font-size: 10px; color: var(--d-grey); }
+.popover .ucard { border-radius: 10px; background: var(--d-card); }
+.popover .ucard .idrow { padding: 9px 12px; }
+.popover .ucard .plan { font-size: 13px; }
+.popover .ucard .who { font-size: 11px; color: var(--d-grey); }
+.popover .notice { margin: 0 12px 9px; padding: 9px 10px; border-radius: 7px; }
+.popover .notice .nt { font-size: 12px; }
+.popover .notice .nb { font-size: 11px; color: var(--d-grey); }
+.popover .notice button { min-height: 24px; padding: 0 10px; font-size: 12px; background: var(--d-control); color: var(--d-accent); }
+.popover .qrow { padding: 9px 12px; gap: 6px; border-top-color: var(--d-sep); }
+.popover .qrow .lbl, .popover .qrow .val { font-size: 12px; }
+.popover .qrow .sub { font-size: 11px; }
+.popover .bar, .popover .bar > i { height: 5px; border-radius: 2px; }
+.popover .ucard .cardnote { padding: 7px 12px; font-size: 11px; border-top-color: var(--d-sep); color: var(--d-grey); }
+.popover .ucard .foot { padding: 6px 12px; font-size: 10px; border-top-color: var(--d-sep); }
+.popover .tone-normal .val { color: var(--d-accent-fill); }
+.popover .tone-high .val, .popover .tone-high .sub,
+.popover .tone-critical .val, .popover .tone-critical .sub { color: var(--d-warn); }
+.popover .tone-exhausted .val, .popover .tone-exhausted .sub { color: var(--d-danger); }
+.popover .ucard .foot.warn { color: var(--d-warn); }
+
+/* ipad */
+/* The iPad is drawn at its true 1210×834 and the whole board is scaled down to
+   fit, so every size inside it is a real point value. */
+.ipadframe {
+  width: 100%; max-width: 920px; aspect-ratio: 1210 / 834; position: relative;
+  overflow: hidden; border-radius: 18px; border: 1px solid var(--edge); background: var(--m-screen);
+}
+.ipad {
+  position: absolute; top: 0; left: 0; width: 1210px; height: 834px;
+  transform-origin: top left; background: var(--m-screen); overflow: hidden;
+}
+.ipad .side {
+  position: absolute; top: 24px; left: 20px; width: 320px; bottom: 24px; border-radius: 22px;
+  background: var(--m-sheet); padding: 18px; overflow: hidden;
+}
+.ipad .detail { position: absolute; top: 24px; left: 360px; right: 20px; bottom: 24px; border-radius: 22px; background: var(--m-sheet); }
+.formsheet {
+  position: absolute; top: 40px; left: 50%; transform: translateX(-50%);
+  width: 460px; max-height: 754px;
+  border-radius: 22px; background: var(--m-sheet); box-shadow: 0 24px 70px rgba(0,0,0,0.42);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.formsheet .head { border-bottom: 1px solid var(--m-sep); min-height: 54px; }
+.formsheet .body { flex: 1 1 auto; overflow-y: auto; padding-bottom: 20px; }
+
+footer.foot { margin-top: 48px; padding: 24px 0 50px; border-top: 1px solid var(--edge); color: var(--ink-3); font-size: 13.5px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow"><span class="dot"></span>Design proposal · Sample data</p>
+    <h1>Usage limits</h1>
+    <p class="lede">A new row in the session list menu opens one focused screen that answers a single question:
+      how much of each account’s quota is gone, and when does it come back. Every number on this page is invented.
+      Nothing here is a live reading, and no real account or credential is quoted.</p>
+  </header>
+</div>
+
+<nav class="toc" aria-label="Contents">
+  <div class="inner" id="tocInner">
+    <a href="#recommendation">Recommendation</a>
+    <a href="#menu">Menu</a>
+    <a href="#sheet">The sheet</a>
+    <a href="#honest">Honest states</a>
+    <a href="#ipad">iPad</a>
+    <a href="#mac">Mac</a>
+    <a href="#rules">Rules &amp; tokens</a>
+    <span class="spacer"></span>
+    <button class="themeBtn" id="themeBtn" type="button" aria-pressed="false">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.4"></circle><path d="M12 2.5v2.6M12 18.9v2.6M21.5 12h-2.6M5.1 12H2.5M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8M18.7 18.7l-1.8-1.8M7.1 7.1L5.3 5.3"></path></svg>
+      <span id="themeLabel">Light theme</span>
+    </button>
+  </div>
+</nav>
+
+<div class="wrap">
+
+  <!-- ------------------------------------------------ recommendation -- -->
+  <section id="recommendation">
+    <h2>The recommendation</h2>
+    <p class="sub">One sheet, one card per account, one refresh. It borrows the retry-later sheet’s shape and the
+      S2 list’s colours, so it adds no new visual system.</p>
+    <div class="cols" style="grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));">
+      <div class="notecard">
+        <h3>Grouped by account, not by host</h3>
+        <ul>
+          <li>A provider heading, then one card per account underneath it.</li>
+          <li>Hosts are a line inside the card. Two hosts never become two quotas when they share one sign-in.</li>
+          <li>They are only merged on proof. An unidentified host gets its own card and says so.</li>
+        </ul>
+      </div>
+      <div class="notecard">
+        <h3>Windows named by their duration</h3>
+        <ul>
+          <li>“Current window · 5 h” and “Weekly · 7 days”, taken from the duration the provider reported.</li>
+          <li>Never from the API’s own key name. <code>primary</code> is not a promise of five hours.</li>
+          <li>A window that was not reported says so, and draws no bar.</li>
+        </ul>
+      </div>
+      <div class="notecard">
+        <h3>A reading, with its provenance</h3>
+        <ul>
+          <li>Every card footer says when the reading was taken and which host took it.</li>
+          <li>One Refresh in the header. Opening the sheet refreshes.</li>
+          <li>A refresh never blanks the numbers already on screen.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------- menu -- -->
+  <section id="menu">
+    <h2>Where it lives</h2>
+    <p class="sub">A plain row in the session list ••• menu, between Terminal and Settings — with the other read-only
+      destinations, above the Group by and Sort by sections. The desktop host-strip menu gets the same row.</p>
+    <div class="cols two">
+      <figure>
+        <div class="phone" id="menuPhone"></div>
+        <figcaption>Phone · the ••• menu. The row is a normal menu item, not a badge or a status readout —
+          the list header stays about sessions.</figcaption>
+      </figure>
+      <div class="notecard">
+        <h3>Why here, and not in Settings or the header</h3>
+        <ul>
+          <li><strong>Not the header.</strong> The header says which hosts are up. A percentage there competes with
+            the thing Eugene actually scans the list for.</li>
+          <li><strong>Not Settings.</strong> Nothing here is a setting. It is a reading he checks before starting
+            expensive work, which is a destination, not a preference.</li>
+          <li><strong>Not a tab.</strong> Two tabs already carry badges. A third destination for a number he looks at
+            a few times a day is too much furniture.</li>
+          <li><strong>Icon:</strong> <code>gauge.with.needle</code>. <strong>Identifier:</strong>
+            <code>sessions_usage_limits</code>.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- -------------------------------------------------------- sheet -- -->
+  <section id="sheet">
+    <h2>The sheet</h2>
+    <p class="sub">Pick a scenario to inspect each state. The same six scenarios drive the canvas boards.</p>
+    <div class="controls" id="scenCtl" role="group" aria-label="Scenario"></div>
+    <p class="blurb" id="scenBlurb"></p>
+    <div class="cols two">
+      <figure>
+        <div class="phone" id="sheetPhone"></div>
+        <figcaption id="sheetCap">Phone · 390 pt. The sheet hugs its content: about 700 pt in the normal state,
+          with <code>.large</code> as a second detent.</figcaption>
+      </figure>
+      <div class="notecard">
+        <h3>Anatomy, top to bottom</h3>
+        <ul>
+          <li><strong>Header, 48 pt.</strong> Close on the left, “Usage limits” centred at 17 semibold, Refresh on the
+            right. No other controls.</li>
+          <li><strong>Provider heading, 13 pt</strong> semibold uppercase, 0.04em tracking, at <code>tertiaryLabel</code>.</li>
+          <li><strong>Account card</strong>, radius 20, <code>tertiarySystemGroupedBackground</code>. Plan at 17
+            semibold, identity and hosts at 13 grey.</li>
+          <li><strong>Quota row, ~83 pt.</strong> Label and percentage on one baseline, a 6 pt capacity bar, then the
+            reset line at 13 pt.</li>
+          <li><strong>Footer, 34 pt.</strong> When the reading was taken, and from where.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------ honest -- -->
+  <section id="honest">
+    <h2>Honest states</h2>
+    <p class="sub">The states that matter most are the ones where there is no good number. Each gets its own
+      sentence rather than a plausible-looking zero.</p>
+    <div class="cols" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+      <div class="notecard flag">
+        <h3>A missing window is never 0%</h3>
+        <ul>
+          <li>The live Codex login returns a weekly window and nothing else. That shape must survive the design.</li>
+          <li>Such a row reads <strong>Not reported</strong> in grey and <strong>draws no bar at all</strong>. An
+            empty track reads as “0% used”, which would be a lie in the most expensive direction.</li>
+          <li>Each window is classified by its own reported duration, so a provider that adds a third bucket
+            appears without a code change.</li>
+        </ul>
+      </div>
+      <div class="notecard flag">
+        <h3>A failed read is not a signed-out account</h3>
+        <ul>
+          <li>Copy names the host in plain words: “LFG couldn’t reach Air for an update. This does not mean the
+            account is signed out.”</li>
+          <li>No status codes in the UI. The last good reading stays visible underneath, with its age.</li>
+          <li>Sign-in copy appears only when the provider itself says the credential was rejected.</li>
+        </ul>
+      </div>
+      <div class="notecard flag">
+        <h3>Stale data stays readable</h3>
+        <ul>
+          <li>The footer turns amber and says how old the reading is. The numbers are never dimmed — a stale
+            reading is still the best information there is.</li>
+          <li>An offline host keeps its card at 58% opacity rather than disappearing, so the account does not
+            silently lose a window.</li>
+        </ul>
+      </div>
+      <div class="notecard flag">
+        <h3>Pay-per-token has nothing to draw</h3>
+        <ul>
+          <li>An API-key account shows a short explanation and <strong>no bars</strong>. There is no subscription
+            window, so none is invented.</li>
+          <li>Claude with no observation yet says “No reading yet”, not 0% and not an error.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 style="margin: 30px 0 10px; font-size: 17px;">Thresholds</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Used</th><th>Bar and value</th><th>Copy</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>0–74%</td><td>Accent blue</td><td>“Resets 4:10 PM · in 1 h 12 m”</td><td>Information, not a warning.</td></tr>
+          <tr><td>75–89%</td><td>Amber</td><td>Unchanged</td><td>Attention without alarm — the same amber the list uses for “needs input”.</td></tr>
+          <tr><td>90–99%</td><td>Amber</td><td>“Little left · resets …”</td><td>A word, so colour is never the only carrier.</td></tr>
+          <tr><td>100%</td><td>Red, full</td><td>“Used up · back at 4:10 PM”</td><td>The reset time becomes the headline, because it is the only thing left to act on.</td></tr>
+          <tr><td>Not reported</td><td>No bar</td><td>“Not reported”</td><td>A zero-length bar would read as 0% used.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------- ipad -- -->
+  <section id="ipad">
+    <h2>iPad</h2>
+    <p class="sub">A fitted form sheet about 460 pt wide, centred over the split view, with the same two-column
+      content. It does not stretch to fill a regular-width sheet — half an empty sheet was the retry-later mistake.</p>
+    <figure>
+      <div class="ipadframe"><div class="ipad" id="ipadMock"></div></div>
+      <figcaption>iPad · landscape. <code>.presentationSizing(.fitted)</code>. The sidebar and detail stay visible
+        behind the scrim, so the sheet reads as a scoped detour rather than a new screen.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ---------------------------------------------------------- mac -- -->
+  <section id="mac">
+    <h2>Mac</h2>
+    <p class="sub">A 320 pt popover anchored to the ••• button in the host strip — not a sheet. This is a glance,
+      and a popover dismisses on an outside click with nothing to confirm.</p>
+    <div class="cols mac-cols">
+      <figure>
+        <div class="mac" id="macMock"></div>
+        <figcaption>Mac · the narrow 400 pt window the desktop app is actually used in. The popover fits with
+          10 pt to spare on each side.</figcaption>
+      </figure>
+      <div class="notecard">
+        <h3>Mac specifics</h3>
+        <ul>
+          <li><strong>Width 320 pt</strong>, content height about 430 pt, capped at 520 pt with a scroll.
+            Metrics drop to the desktop scale: 13 / 12 / 11 / 10 pt.</li>
+          <li><strong>Refresh</strong> is a 24 pt circular button in the popover header; <kbd>⌘R</kbd> also refreshes.</li>
+          <li><strong>Esc</strong> closes. Tab reaches Refresh, then any Try again button.</li>
+          <li>A sheet would have been consistent with Retry later, but Retry later is a task with a commit step.
+            This has no commit step, so a modal is a cost with no payoff.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- -------------------------------------------------------- rules -- -->
+  <section id="rules">
+    <h2>Rules, tokens and accessibility</h2>
+    <div class="tablewrap" style="margin-bottom: 22px;">
+      <table>
+        <thead><tr><th>Role</th><th>Phone dark / light</th><th>Mac dark / light</th><th>Code</th></tr></thead>
+        <tbody>
+          <tr><td>Sheet ground</td><td>#1C1C1E / #F2F2F7</td><td>#232327 / #FFFFFF</td><td>grouped background · <code>TaskPalette</code></td></tr>
+          <tr><td>Account card</td><td>#2C2C2E / #FFFFFF</td><td>#26262B / #EFEFEF</td><td><code>tertiarySystemGroupedBackground</code></td></tr>
+          <tr><td>Bar fill, normal</td><td>#0A6EE0 / #0088FF</td><td>#3B8EFF / #007AFF</td><td><code>TaskColors.accentFill</code></td></tr>
+          <tr><td>Bar fill, 75%+</td><td>#FF9F0A / #B35100</td><td>#FFB340 / #B35100</td><td>S2 <code>attention</code></td></tr>
+          <tr><td>Bar fill, 100%</td><td>#FF453A / #D70015</td><td>#FF6B61 / #D70015</td><td><code>TaskColors.danger</code></td></tr>
+          <tr><td>Bar track</td><td>label ink 16%</td><td>label ink 16%</td><td>derived, no semantic twin</td></tr>
+          <tr><td>Reset line</td><td>#A1A1A6 / #6C6C70</td><td>#8A8A93 / #737377</td><td>S2 <code>secondaryInk</code> · <code>S2Desk.secondary</code></td></tr>
+          <tr><td>Footer / provider head</td><td>#8E8E93 both</td><td>#8E8E93 both</td><td>S2 <code>metaInk</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cols" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+      <div class="notecard">
+        <h3>Accessibility</h3>
+        <ul>
+          <li>Each quota row is <strong>one combined element</strong>: “Claude Code, Max 20×, current window,
+            5 hours, 62 percent used, resets in 1 hour 12 minutes.”</li>
+          <li>The bar is hidden from VoiceOver. A gauge that repeats the row’s own value just double-speaks it;
+            Apple’s gauge guidance is satisfied by the row text, which names the value and the range.</li>
+          <li>Every warning state carries a <strong>word</strong> as well as a colour, and blue / amber / red differ
+            in lightness, not only hue.</li>
+          <li>Dynamic Type scales the text; the bar stays 6 pt and the row wraps to two lines at accessibility sizes.</li>
+          <li>Targets are at least 44 pt on the phone, including Try again.</li>
+        </ul>
+      </div>
+      <div class="notecard">
+        <h3>Keyboard</h3>
+        <ul>
+          <li><kbd>Esc</kbd> closes. <kbd>⌘R</kbd> refreshes on iPad and Mac.</li>
+          <li>Tab order: Close → Refresh → each Try again in card order.</li>
+          <li>The sheet traps focus while open and restores it to the menu button on close.</li>
+        </ul>
+      </div>
+      <div class="notecard">
+        <h3>Refresh behaviour</h3>
+        <ul>
+          <li>Opening the sheet refreshes every host. A short cache stops a reopen from hammering them.</li>
+          <li>While refreshing: the header reads “Refreshing”, card footers read “Refreshing…”, and
+            <strong>the numbers stay</strong>.</li>
+          <li>A per-card <em>Try again</em> appears only in the error state. There is no per-card refresh otherwise —
+            with at most four cards, two taps for one job is noise.</li>
+        </ul>
+      </div>
+      <div class="notecard">
+        <h3>What this is not</h3>
+        <ul>
+          <li>Not context-window fullness, and not token spend for one conversation. These quotas belong to the
+            account and span every conversation on it.</li>
+          <li>Not an analytics dashboard. No history, no burn-rate chart, no projections — those need data nobody
+            is collecting yet.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p>Mockup for review, not runtime evidence. Sample data fixed at Tuesday, Oct 20 2026, 2:58 PM Hong Kong time.
+      Canvas page: <strong>Usage limits (Oct 20)</strong>, boards <code>usage-*</code>, on the LFG UI Map.</p>
+  </footer>
+</div>
+
+<script>
+/* ---------------------------------------------------------- scenarios -- */
+var USAGE_SCENARIOS = {
+  normal: {
+    label: 'Normal',
+    blurb: 'Both providers answered. One account each, proven the same on Pro and Air.',
+    cards: [
+      { provider: 'Claude Code', plan: 'Max 20×', identity: 'Sample account A · Pro, Air',
+        rows: [
+          { label: 'Current window', window: '5 h', pct: 62, sub: 'Resets 4:10 PM · in 1 h 12 m' },
+          { label: 'Weekly', window: '7 days', pct: 41, sub: 'Resets Sat, Oct 24 · in 4 d' }
+        ],
+        footer: 'Seen 1 min ago · Shared across Pro and Air' },
+      { provider: 'Codex', plan: 'ChatGPT Pro', identity: 'Sample account B · Pro, Air',
+        rows: [
+          { label: 'Current window', window: '5 h', pct: 18, sub: 'Resets 6:40 PM · in 3 h 42 m' },
+          { label: 'Weekly', window: '7 days', pct: 1, sub: 'Resets Sat, Oct 24 · in 4 d' }
+        ],
+        footer: 'Seen 1 min ago · Shared across Pro and Air' }
+    ]
+  },
+  weekly: {
+    label: 'Weekly only',
+    blurb: 'The response shape the live Codex login returned — a weekly window and nothing else. The values here are samples, not a live reading. Claude has not answered yet.',
+    cards: [
+      { provider: 'Claude Code', plan: 'Max 20×', identity: 'Sample account A · Pro, Air',
+        notice: { kind: 'quiet', title: 'No reading yet',
+          body: 'Claude reports limits with its next reply on this account. Nothing has come back since LFG started.' },
+        rows: [], footer: 'Never read · Pro, Air' },
+      { provider: 'Codex', plan: 'ChatGPT Pro', identity: 'Sample account B · Pro',
+        rows: [
+          { label: 'Current window', window: null, pct: null, missing: 'Not reported',
+            sub: 'Codex sent no short window for this account.' },
+          { label: 'Weekly', window: '7 days', pct: 1, sub: 'Resets Sat, Oct 24 · in 4 d' }
+        ],
+        footer: 'Seen 12 s ago · Pro' }
+    ]
+  },
+  states: {
+    label: 'Stale · used up · error',
+    blurb: 'Three honest states at once: a stale reading kept visible, a window used up, and a host that could not be read.',
+    cards: [
+      { provider: 'Claude Code', plan: 'Max 20×', identity: 'Sample account A · Pro, Air',
+        rows: [
+          { label: 'Current window', window: '5 h', pct: 100, sub: 'Used up · back at 4:10 PM, in 1 h 12 m' },
+          { label: 'Weekly', window: '7 days', pct: 93, sub: 'Little left · resets Sat, Oct 24' }
+        ],
+        footer: 'Seen 3 h ago — may be out of date', footerTone: 'warn' },
+      { provider: 'Codex', plan: 'ChatGPT Pro', identity: 'Sample account B · Air',
+        notice: { kind: 'error', title: 'Couldn’t read limits from Air',
+          body: 'LFG couldn’t reach Air for an update. This does not mean the account is signed out. Last good reading, 2 h ago: weekly 1% used.',
+          action: 'Try again' },
+        rows: [], footer: 'Last good reading 2 h ago · Air' }
+    ]
+  },
+  identity: {
+    label: 'Two sign-ins',
+    blurb: 'Pro and Air report different Codex sign-ins, so they stay apart. Air didn’t identify its account, so it is never merged on a guess.',
+    cards: [
+      { provider: 'Codex', plan: 'ChatGPT Pro', identity: 'Sample account B · Pro',
+        rows: [
+          { label: 'Current window', window: '5 h', pct: 18, sub: 'Resets 6:40 PM · in 3 h 42 m' },
+          { label: 'Weekly', window: '7 days', pct: 1, sub: 'Resets Sat, Oct 24 · in 4 d' }
+        ], footer: 'Seen 40 s ago · Pro' },
+      { provider: 'Codex', plan: 'Plan not reported', identity: 'Air · account not identified',
+        rows: [ { label: 'Weekly', window: '7 days', pct: 77, sub: 'Resets Fri, Oct 23 · in 3 d' } ],
+        note: 'Air didn’t identify its account, so it is shown on its own. It may be the same account as Pro.',
+        footer: 'Seen 40 s ago · Air' }
+    ]
+  },
+  billing: {
+    label: 'API billing · offline host',
+    blurb: 'Pay-per-token has no window to draw, and an offline host keeps its last reading instead of vanishing.',
+    cards: [
+      { provider: 'Claude Code', plan: 'API key', identity: 'Sample key ending ·4f21 · Pro',
+        notice: { kind: 'quiet', title: 'API billing',
+          body: 'This account pays per token. There is no subscription window to show.' },
+        rows: [], footer: 'Checked 1 min ago · Pro' },
+      { provider: 'Codex', plan: 'ChatGPT Pro', identity: 'Sample account B · Air', offline: true,
+        rows: [
+          { label: 'Current window', window: '5 h', pct: 18, sub: 'Reset 2:40 PM — may already have rolled over' },
+          { label: 'Weekly', window: '7 days', pct: 1, sub: 'Resets Sat, Oct 24 · in 4 d' }
+        ],
+        footer: 'Air is offline — last read 14 min ago', footerTone: 'warn' }
+    ]
+  },
+  refreshing: {
+    label: 'Refreshing',
+    blurb: 'The numbers stay on screen while a refresh runs. Nothing is blanked and nothing is replaced by a spinner.',
+    refreshing: true,
+    cards: [
+      { provider: 'Claude Code', plan: 'Max 20×', identity: 'Sample account A · Pro, Air',
+        rows: [
+          { label: 'Current window', window: '5 h', pct: 62, sub: 'Resets 4:10 PM · in 1 h 12 m' },
+          { label: 'Weekly', window: '7 days', pct: 41, sub: 'Resets Sat, Oct 24 · in 4 d' }
+        ], footer: 'Refreshing…' },
+      { provider: 'Codex', plan: 'ChatGPT Pro', identity: 'Sample account B · Pro, Air',
+        rows: [
+          { label: 'Current window', window: '5 h', pct: 18, sub: 'Resets 6:40 PM · in 3 h 42 m' },
+          { label: 'Weekly', window: '7 days', pct: 1, sub: 'Resets Sat, Oct 24 · in 4 d' }
+        ], footer: 'Refreshing…' }
+    ]
+  }
+};
+
+/* ------------------------------------------------------------ helpers -- */
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+  });
+}
+function tone(p) { return p >= 100 ? 'exhausted' : p >= 90 ? 'critical' : p >= 75 ? 'high' : 'normal'; }
+function rowA11y(r) {
+  var w = r.window ? ', ' + r.window : '';
+  if (r.pct === null || r.pct === undefined) return r.label + w + ', not reported. ' + r.sub;
+  return r.label + w + ', ' + r.pct + ' percent used. ' + r.sub;
+}
+function barVar(k) {
+  return k === 'exhausted' ? 'var(--m-danger)'
+       : (k === 'critical' || k === 'high') ? 'var(--m-warn)' : 'var(--m-accent-fill)';
+}
+
+function cardHTML(c) {
+  var h = '<h4 class="provhead">' + esc(c.provider) + '</h4>';
+  h += '<div class="ucard' + (c.offline ? ' off' : '') + '">';
+  h += '<div class="idrow"><span class="plan">' + esc(c.plan) + '</span>'
+     + '<span class="who">' + esc(c.identity) + '</span></div>';
+  if (c.notice) {
+    h += '<div class="notice' + (c.notice.kind === 'error' ? ' err' : '') + '">'
+       + '<span class="nt">' + esc(c.notice.title) + '</span>'
+       + '<span class="nb">' + esc(c.notice.body) + '</span>'
+       + (c.notice.action ? '<button type="button">' + esc(c.notice.action) + '</button>' : '')
+       + '</div>';
+  }
+  (c.rows || []).forEach(function (r) {
+    var missing = r.pct === null || r.pct === undefined;
+    var k = missing ? 'missing' : tone(r.pct);
+    h += '<div class="qrow tone-' + k + '" role="group" aria-label="' + esc(rowA11y(r)) + '">'
+       + '<div class="top"><span class="lbl">' + esc(r.label + (r.window ? ' · ' + r.window : ''))
+       + '</span><span class="val' + (missing ? ' missing' : '') + '">'
+       + esc(missing ? (r.missing || 'Not reported') : r.pct + '%') + '</span></div>';
+    if (!missing) {
+      h += '<div class="bar" aria-hidden="true"><i style="width:' + Math.max(2, Math.min(100, r.pct))
+         + '%;background:' + barVar(tone(r.pct)) + '"></i></div>';
+    }
+    h += '<span class="sub"' + (missing ? ' style="color:var(--m-meta)"' : '') + '>' + esc(r.sub) + '</span></div>';
+  });
+  if (c.note) h += '<div class="cardnote">' + esc(c.note) + '</div>';
+  h += '<div class="foot' + (c.footerTone === 'warn' ? ' warn' : '') + '">' + esc(c.footer) + '</div>';
+  return h + '</div>';
+}
+
+var SEARCH_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg>';
+var DOTS_SVG = '<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.9"></circle><circle cx="12" cy="12" r="1.9"></circle><circle cx="19" cy="12" r="1.9"></circle></svg>';
+var SPIN_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"></path></svg>';
+
+function listBackdrop(widths) {
+  var g = widths.map(function (w) {
+    return '<div><span class="g1" style="width:' + w[0] + '"></span>'
+         + '<span class="g2" style="width:' + w[1] + ';margin-top:7px"></span></div>';
+  }).join('');
+  return '<div class="listbar"><div class="hosts">'
+    + '<span><i class="led"></i>Pro</span><span><i class="led"></i>Air</span></div>'
+    + '<div class="glasscap"><span class="gbtn" aria-hidden="true">' + SEARCH_SVG + '</span>'
+    + '<span class="gbtn" aria-hidden="true">' + DOTS_SVG + '</span></div></div>'
+    + '<div class="ghosts">' + g + '</div>';
+}
+
+var GHOSTS = [['62%', '44%'], ['48%', '56%'], ['70%', '38%'], ['55%', '48%']];
+
+/* ------------------------------------------------------------- render -- */
+function renderSheetPhone(key) {
+  var s = USAGE_SCENARIOS[key];
+  var body = s.cards.map(cardHTML).join('');
+  document.getElementById('sheetPhone').innerHTML =
+    listBackdrop(GHOSTS.slice(0, 3))
+    + '<div class="scrim"></div>'
+    + '<section class="sheet" role="dialog" aria-label="Usage limits">'
+    + '<div class="grab"><span></span></div>'
+    + '<div class="head"><button type="button" class="sheetbtn lead">Close</button>'
+    + '<h3>Usage limits</h3>'
+    + '<button type="button" class="sheetbtn trail"' + (s.refreshing ? ' disabled' : '')
+    + ' aria-label="Refresh usage limits">' + (s.refreshing ? SPIN_SVG : '')
+    + '<span>' + (s.refreshing ? 'Refreshing' : 'Refresh') + '</span></button></div>'
+    + '<div class="body">' + body
+    + '<p class="sampleline"><span class="sampletag">Sample</span>'
+    + '<span>Quotas belong to the account, not to one session.</span></p>'
+    + '</div></section>';
+  document.getElementById('scenBlurb').textContent = s.blurb;
+}
+
+var MENU_ROWS = [['Filter directories', 0], ['Terminal', 0], ['Usage limits', 1], ['Settings', 0]];
+var MENU_ICONS = {
+  'Filter directories': '<path d="M3 3l18 18"></path><path d="M10.6 5.3A9.6 9.6 0 0 1 12 5c5 0 9 4.5 9 7a11 11 0 0 1-2.3 3.4"></path><path d="M6.4 7.1A11.6 11.6 0 0 0 3 12c0 2.5 4 7 9 7 1.5 0 2.9-.4 4.1-1"></path>',
+  'Terminal': '<rect x="3" y="4" width="18" height="16" rx="2.5"></rect><path d="M7.5 9.5l3 2.5-3 2.5M13 15h4"></path>',
+  'Usage limits': '<path d="M4.2 18a9 9 0 1 1 15.6 0"></path><path d="M12 14l4-4"></path><circle cx="12" cy="14" r="1.4" fill="currentColor" stroke="none"></circle>',
+  'Settings': '<circle cx="12" cy="12" r="3.2"></circle><path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2L5.5 5.5"></path>'
+};
+function renderMenuPhone() {
+  var items = MENU_ROWS.map(function (r) {
+    return '<button type="button" class="' + (r[1] ? 'pick' : '') + '"><span>' + r[0] + '</span>'
+      + '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+      + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + MENU_ICONS[r[0]] + '</svg></button>';
+  }).join('');
+  document.getElementById('menuPhone').innerHTML =
+    listBackdrop(GHOSTS)
+    + '<div class="scrim"></div>'
+    + '<div class="menu" role="menu" aria-label="More session options">' + items
+    + '<div class="grp">GROUP BY</div><div class="opts">Status · Host · Project</div>'
+    + '<div class="grp">SORT BY</div><div class="opts">Recent · Name</div></div>';
+}
+
+function renderMac(key) {
+  var s = USAGE_SCENARIOS[key];
+  var g = GHOSTS.map(function (w) {
+    return '<div><span class="g1" style="width:' + w[0] + '"></span>'
+         + '<span class="g2" style="width:' + w[1] + ';margin-top:6px"></span></div>';
+  }).join('');
+  document.getElementById('macMock').innerHTML =
+    '<div class="bar"><div class="lights"><i style="background:#FF5F57"></i>'
+    + '<i style="background:#FEBC2E"></i><i style="background:#28C840"></i></div>'
+    + '<span style="flex:1"></span><span class="pill" aria-hidden="true">' + SEARCH_SVG + '</span>'
+    + '<span class="pill" aria-hidden="true">' + DOTS_SVG + '</span></div>'
+    + '<div class="hosts"><span><i class="led"></i>Pro</span><span><i class="led"></i>Air</span></div>'
+    + '<div class="ghosts">' + g + '</div>'
+    + '<div class="popover" role="dialog" aria-label="Usage limits"><span class="beak"></span>'
+    + '<div class="phead"><h3>Usage limits</h3><span class="sampletag">Sample</span>'
+    + '<button type="button" class="refresh" aria-label="Refresh usage limits">'
+    + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" '
+    + 'stroke-linecap="round" aria-hidden="true"><path d="M20.5 11A8.5 8.5 0 1 0 19 16.4"></path>'
+    + '<path d="M20.5 5.5V11H15"></path></svg></button></div>'
+    + s.cards.map(cardHTML).join('') + '</div>';
+}
+
+function renderIpad(key) {
+  var s = USAGE_SCENARIOS[key];
+  var g = GHOSTS.map(function (w) {
+    return '<div><span class="g1" style="width:' + w[0] + '"></span>'
+         + '<span class="g2" style="width:' + w[1] + ';margin-top:7px"></span></div>';
+  }).join('');
+  document.getElementById('ipadMock').innerHTML =
+    '<div class="side"><div class="hosts" style="display:flex;gap:12px;font-size:15px;font-weight:600;'
+    + 'color:var(--m-soft)"><span style="display:inline-flex;align-items:center;gap:6px">'
+    + '<i class="led"></i>Pro</span><span style="display:inline-flex;align-items:center;gap:6px">'
+    + '<i class="led"></i>Air</span></div><div class="ghosts" style="padding:20px 0 0">' + g + '</div></div>'
+    + '<div class="detail"></div><div class="scrim"></div>'
+    + '<section class="formsheet" role="dialog" aria-label="Usage limits">'
+    + '<div class="head"><button type="button" class="sheetbtn lead">Close</button><h3>Usage limits</h3>'
+    + '<button type="button" class="sheetbtn trail" aria-label="Refresh usage limits"><span>Refresh</span></button></div>'
+    + '<div class="body">' + s.cards.map(cardHTML).join('')
+    + '<p class="sampleline"><span class="sampletag">Sample</span>'
+    + '<span>Quotas belong to the account, not to one session.</span></p></div></section>';
+}
+
+/* ----------------------------------------------------------- controls -- */
+var current = 'normal';
+var ctl = document.getElementById('scenCtl');
+Object.keys(USAGE_SCENARIOS).forEach(function (k) {
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = USAGE_SCENARIOS[k].label;
+  b.setAttribute('aria-pressed', String(k === current));
+  b.addEventListener('click', function () { pick(k); });
+  ctl.appendChild(b);
+});
+function pick(k) {
+  current = k;
+  Array.prototype.forEach.call(ctl.children, function (b, i) {
+    b.setAttribute('aria-pressed', String(Object.keys(USAGE_SCENARIOS)[i] === k));
+  });
+  renderSheetPhone(k);
+  renderMac(k);
+  renderIpad(k);
+}
+
+var themeBtn = document.getElementById('themeBtn');
+var themeLabel = document.getElementById('themeLabel');
+function setTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  themeBtn.setAttribute('aria-pressed', String(t === 'light'));
+  themeLabel.textContent = t === 'light' ? 'Dark theme' : 'Light theme';
+  try { localStorage.setItem('usagePreviewTheme', t); } catch (e) {}
+}
+themeBtn.addEventListener('click', function () {
+  setTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+});
+(function () {
+  var t = null;
+  try { t = localStorage.getItem('usagePreviewTheme'); } catch (e) {}
+  if (!t && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) t = 'light';
+  setTheme(t === 'light' ? 'light' : 'dark');
+})();
+
+renderMenuPhone();
+pick('normal');
+
+/* --------------------------------------------------- iPad board scale -- */
+(function () {
+  var frame = document.querySelector('.ipadframe');
+  var board = document.getElementById('ipadMock');
+  function fit() {
+    var w = frame.clientWidth;
+    if (w) board.style.transform = 'scale(' + (w / 1210) + ')';
+  }
+  if (window.ResizeObserver) new ResizeObserver(fit).observe(frame);
+  window.addEventListener('resize', fit);
+  fit();
+})();
+
+/* ---------------------------------------------------------- scrollspy -- */
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+  var secs = links.map(function (a) { return document.querySelector(a.getAttribute('href')); });
+  var bar = document.querySelector('nav.toc');
+  var inner = document.getElementById('tocInner');
+  var ticking = false;
+  function spy() {
+    ticking = false;
+    var cut = bar.getBoundingClientRect().height + 8;
+    var active = 0;
+    for (var i = 0; i < secs.length; i++) {
+      if (secs[i] && secs[i].getBoundingClientRect().top <= cut) active = i;
+    }
+    if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 4) active = secs.length - 1;
+    links.forEach(function (a, i) {
+      if (i === active) {
+        if (a.getAttribute('aria-current') !== 'true') {
+          a.setAttribute('aria-current', 'true');
+          var r = a.getBoundingClientRect(), p = inner.getBoundingClientRect();
+          if (r.left < p.left + 8 || r.right > p.right - 8) {
+            inner.scrollTo({ left: inner.scrollLeft + (r.left - p.left) - 24, behavior: 'smooth' });
+          }
+        }
+      } else { a.removeAttribute('aria-current'); }
+    });
+  }
+  function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(spy); } }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', onScroll);
+  spy();
+})();
+</script>
+</body>
+</html>

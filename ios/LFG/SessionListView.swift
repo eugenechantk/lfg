@@ -121,6 +121,7 @@ struct SessionListView: View {
     @State private var showDirectoryFilter = false
     /// Full-screen shell on the default host (`TerminalScreen`).
     @State private var showTerminal = false
+    @State private var showUsageLimits = false
     @State private var closeError: SessionStore.StoreErrorEvent?
 
     /// Directory and host sections fold in memory for the current run. Status
@@ -814,6 +815,9 @@ struct SessionListView: View {
             }
         }
         .fullScreenCover(isPresented: $showTerminal) { TerminalScreen() }
+        .sheet(isPresented: $showUsageLimits) {
+            AccountUsageSheet(store: store.accountUsage) { await store.refreshAccountUsage() }
+        }
         .bottomSearchChrome(text: searchBinding, enabled: !usesTabSearch) {
             openNewSession(focusComposer: false)
         }
@@ -883,6 +887,8 @@ struct SessionListView: View {
                 }.accessibilityIdentifier("directoryFilterButton")
                 Button("Terminal", systemImage: "apple.terminal") { showTerminal = true }
                     .accessibilityIdentifier("terminalButton")
+                Button("Usage limits", systemImage: "gauge.with.needle") { showUsageLimits = true }
+                    .accessibilityIdentifier("sessions_usage_limits")
                 Button("Settings", systemImage: "gearshape") { showSettings = true }
                     .accessibilityIdentifier("sessionSettingsButton")
             }

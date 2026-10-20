@@ -822,8 +822,18 @@ enum DesktopNewSessionPlanner {
 
 enum Config {
     static var dir: URL {
-        directory(
-            environment: ProcessInfo.processInfo.environment,
+        var environment = ProcessInfo.processInfo.environment
+        #if DEBUG
+        // FlowDeck's macOS launcher currently omits custom environment and
+        // arguments. A development-only wrapper can scope verification through
+        // its own Info.plist, without editing the user's host list.
+        if environment["LFG_DESKTOP_CONFIG_DIR"] == nil,
+           let path = Bundle.main.object(forInfoDictionaryKey: "LFGDevelopmentConfigDirectory") as? String {
+            environment["LFG_DESKTOP_CONFIG_DIR"] = path
+        }
+        #endif
+        return directory(
+            environment: environment,
             homeDirectory: FileManager.default.homeDirectoryForCurrentUser
         )
     }
@@ -1069,6 +1079,26 @@ final class SessionStore: ObservableObject {
     @Published var hosts: [HostState] = []
     @Published var duplicateHostsByURL: [String: HostState] = [:]
     @Published var refreshing = false
+    let accountUsage = AccountUsageStore()
+
+    func refreshAccountUsage() async {
+        let entries = configuredHosts
+        let hosts = entries.map { AccountUsageHost(id: $0.url, label: displayLabel(for: $0)) }
+        // Build authorized requests on the main actor; credentials stay in the
+        // existing credential store rather than a parallel usage client.
+        let requests = Dictionary(uniqueKeysWithValues: entries.compactMap { entry -> (String, URLRequest)? in
+            guard let base = URL(string: entry.url) else { return nil }
+            var request = DesktopAPI.request(base.appendingPathComponent("api/account-usage"))
+            request.timeoutInterval = 20
+            return (entry.url, request)
+        })
+        await accountUsage.refresh(hosts: hosts) { host in
+            guard let request = requests[host.id] else { throw URLError(.badURL) }
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+            return try JSONDecoder().decode(AccountUsageResponse.self, from: data)
+        }
+    }
     @Published var lastRefreshed: Date?
     // App-owned synchronization survives closed windows and the Tasks view.
     var statusFeed: DesktopSessionStatusFeed?
@@ -6311,7 +6341,9 @@ struct ContentView: View {
             },
             workingCount: store.runningCount,
             groupMode: $groupMode,
-            onHiddenDirectories: { showDirectoryFilter = true }
+            onHiddenDirectories: { showDirectoryFilter = true },
+            usageStore: store.accountUsage,
+            refreshUsage: { await store.refreshAccountUsage() }
         )
     }
 

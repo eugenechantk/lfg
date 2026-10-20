@@ -373,6 +373,18 @@ import LFGCore
     private(set) var inbox: String = ""
     private(set) var users: [String] = []
     private(set) var usage: Usage?
+    let accountUsage = AccountUsageStore()
+
+    func refreshAccountUsage() async {
+        let hosts = settings.hosts
+        let clients = Dictionary(uniqueKeysWithValues: hosts.compactMap { host in
+            settings.client(for: host).map { (host.id, $0) }
+        })
+        await accountUsage.refresh(hosts: hosts.map { AccountUsageHost(id: $0.id, label: $0.label) }) { host in
+            guard let client = clients[host.id] else { throw URLError(.badURL) }
+            return try await client.accountUsage()
+        }
+    }
     /// Account/version-specific CLI catalogs, keyed by host id. Restored from the
     /// device at launch and saved on every answer (`modelCatalogCache`), so the
     /// bundled compatibility catalog only covers a host never reached yet.
