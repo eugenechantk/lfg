@@ -22,7 +22,7 @@ public extension ScheduledTaskRecord {
     var isRunInProgress: Bool { ["starting", "running", "needs_input"].contains(currentRun?.status ?? "") }
     var isWaitingForInput: Bool { currentRun?.status == "needs_input" }
     /// The newest run failed or was interrupted and nothing is running now.
-    var latestRunFailed: Bool { currentRun == nil && ["failed", "interrupted"].contains(lastRun?.status ?? "") }
+    var latestRunFailed: Bool { currentRun == nil && ["failed", "interrupted", "incomplete"].contains(lastRun?.status ?? "") }
     /// Switched off by the user, and able to resume.
     var isPaused: Bool { cancelledAt == nil && !enabled && canResume }
 
@@ -123,7 +123,7 @@ public struct TaskRowModel: Sendable, Equatable {
                 (row.time, row.timeDetail) = f.clock(run.finishedAt ?? run.startedAt ?? run.scheduledFor ?? now.ms)
                 row.timeTone = .danger
                 row.glyph = .failure; row.resultTone = .danger
-                let verb = run.status == "interrupted" ? "Interrupted" : "Failed"
+                let verb = run.statusLabel
                 let streak = task.consecutiveFailures >= 2 ? " \(TaskTimeFormat.ordinal(task.consecutiveFailures)) time" : ""
                 row.result = "\(verb)\(streak) · \(RunErrorText.short(run.error))"
             }
@@ -174,9 +174,9 @@ public struct TaskRowModel: Sendable, Equatable {
             row.glyph = .success
             let day = (run.finishedAt ?? run.startedAt).map { f.relativeDay($0) }
             row.result = [relativeDay ? day : nil, summary ?? "Completed"].compactMap { $0 }.joined(separator: " · ")
-        case "failed", "interrupted":
+        case "failed", "interrupted", "incomplete":
             row.glyph = .failure; row.resultTone = .danger
-            row.result = "\(run.status == "failed" ? "Failed" : "Interrupted") · \(RunErrorText.short(run.error))"
+            row.result = "\(run.statusLabel) · \(RunErrorText.short(run.error))"
         default:
             row.result = run.statusLabel
         }

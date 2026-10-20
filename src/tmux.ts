@@ -643,6 +643,7 @@ type ManagedSessionOptions = {
   name: string;
   cwd: string;
   prompt?: string;
+  systemPrompt?: string;
   model?: string;
   useConfiguredModelDefault?: boolean;
   resume?: string;
@@ -666,6 +667,7 @@ function managedSessionLaunch(opts: ManagedSessionOptions): TmuxLaunch {
   // known-good fallback when the caller didn't pick one.
   // Desktop tool switching explicitly requests the CLI's configured default.
   if (opts.model || !opts.useConfiguredModelDefault) argv.push("--model", opts.model || DEFAULT_MODEL);
+  if (opts.systemPrompt) argv.push("--append-system-prompt", opts.systemPrompt);
   // `--` terminates option parsing so the variadic --add-dir can't swallow the
   // positional prompt as a second directory (which strands the new session at
   // an empty composer — the first message never gets submitted).
@@ -681,6 +683,7 @@ export function spawnManagedSession(opts: {
   name: string;
   cwd: string;
   prompt?: string;
+  systemPrompt?: string;
   model?: string;
   useConfiguredModelDefault?: boolean;
   // When set, resume the on-disk transcript with this sessionId (`claude
@@ -718,6 +721,7 @@ export function claudeRelaunchArgv(opts: {
   sessionId: string;
   model?: string | null;
   effort?: string | null;
+  systemPrompt?: string;
 }): string[] {
   const argv = [
     "tmux", "respawn-pane", "-k", "-c", opts.cwd, "-t", opts.tmuxTarget,
@@ -726,6 +730,7 @@ export function claudeRelaunchArgv(opts: {
   ];
   if (opts.model) argv.push("--model", opts.model);
   if (opts.effort) argv.push("--effort", opts.effort);
+  if (opts.systemPrompt) argv.push("--append-system-prompt", opts.systemPrompt);
   return argv;
 }
 
@@ -735,6 +740,7 @@ export function relaunchSessionWithModel(opts: {
   sessionId: string;
   model?: string | null;
   effort?: string | null;
+  systemPrompt?: string;
 }): { ok: boolean; error?: string } {
   const dec = new TextDecoder();
   ensureFolderTrusted(opts.cwd);
@@ -748,6 +754,7 @@ type ManagedCodexSessionOptions = {
   name: string;
   cwd: string;
   prompt?: string;
+  systemPrompt?: string;
   model?: string;
   resume?: string;
   fork?: boolean;
@@ -785,6 +792,7 @@ function managedCodexSessionLaunch(opts: ManagedCodexSessionOptions): TmuxLaunch
     "--add-dir",
     reposRoot(),
   ];
+  if (opts.systemPrompt) argv.push("-c", `developer_instructions=${JSON.stringify(opts.systemPrompt)}`);
   if (opts.model && !(opts.resume && !opts.fork)) argv.push("--model", opts.model);
   if (opts.resume && opts.resume.trim()) {
     argv.push(opts.fork ? "fork" : "resume", opts.resume.trim());
@@ -843,6 +851,7 @@ export function spawnManagedCodexSession(opts: {
   name: string;
   cwd: string;
   prompt?: string;
+  systemPrompt?: string;
   model?: string;
   resume?: string;
   fork?: boolean;

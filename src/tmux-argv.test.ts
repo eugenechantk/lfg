@@ -11,6 +11,24 @@ import {
 
 const ID = "11111111-2222-3333-4444-555555555555";
 
+describe("managed execution policy", () => {
+  const systemPrompt = 'Check completion.\nUse "evidence" and preserve \\ paths.';
+  it("appends Claude system instructions without changing the user prompt", () => {
+    const argv = managedSessionArgv({ name: "policy", cwd: "/tmp", prompt: "Do the work", systemPrompt });
+    expect(argv[argv.indexOf("--append-system-prompt") + 1]).toBe(systemPrompt);
+    expect(argv[argv.indexOf("--") + 1]).toBe("Do the work");
+  });
+  it("passes Codex developer instructions as an escaped config string", () => {
+    const argv = managedCodexSessionArgv({ name: "policy", cwd: "/tmp", prompt: "Do the work", systemPrompt });
+    expect(argv).toContain(`developer_instructions=${JSON.stringify(systemPrompt)}`);
+    expect(argv[argv.indexOf("--") + 1]).toBe("Do the work");
+  });
+  it("leaves ordinary sessions without execution instructions", () => {
+    expect(managedSessionArgv({ name: "normal", cwd: "/tmp" })).not.toContain("--append-system-prompt");
+    expect(managedCodexSessionArgv({ name: "normal", cwd: "/tmp" }).some(a => a.startsWith("developer_instructions="))).toBe(false);
+  });
+});
+
 describe("managedSessionArgv — fork vs resume vs fresh", () => {
   it("a fresh session carries no --resume or --fork-session", () => {
     const argv = managedSessionArgv({ name: "lfg-a", cwd: "/tmp" });
@@ -172,5 +190,15 @@ describe("claudeRelaunchArgv — model and effort changes", () => {
     const argv = claudeRelaunchArgv({ ...base, model: null, effort: null });
     expect(argv).not.toContain("--model");
     expect(argv).not.toContain("--effort");
+  });
+
+  it("keeps the scheduled execution policy on model and effort respawns", () => {
+    const systemPrompt = 'Judge this run.\nUse "evidence" before reporting completion.';
+    for (const change of [{ model: "sonnet" }, { effort: "max" }]) {
+      const argv = claudeRelaunchArgv({ ...base, ...change, systemPrompt });
+      expect(flag(argv, "--append-system-prompt")).toBe(systemPrompt);
+      expect(flag(argv, "--resume")).toBe(ID);
+    }
+    expect(claudeRelaunchArgv(base)).not.toContain("--append-system-prompt");
   });
 });

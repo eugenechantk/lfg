@@ -2,6 +2,7 @@ import { Cron } from "croner";
 import { mkdir, readFile, rename, writeFile, stat } from "node:fs/promises";
 import { dirname, isAbsolute } from "node:path";
 import { randomUUID } from "node:crypto";
+import type { TaskOutcome } from "./scheduled-task-outcome.ts";
 
 /** `at` anchors once/repeat, and optionally interval (an exact gap counted from `at`).
  * `maxRuns` (cron) and `endsAt` (cron, interval) end an otherwise open schedule. */
@@ -11,7 +12,7 @@ export type TaskEditSessionConfig = Pick<TaskInput, "agent" | "model">;
 /** `scheduledRunCount` counts scheduled (not manual) runs since the schedule last changed; cron `maxRuns` reads it.
  * `pausedAt` is set when the user switches a task off and cleared on resume. */
 export type ScheduledTask = TaskInput & { id: string; enabled: boolean; createdAt: number; updatedAt: number; nextRunAt: number | null; retryAt?: number; lastRunAt?: number; cancelledAt?: number; pausedAt?: number; scheduledRunCount?: number; editSessionId?: string; editSessionIds?: string[]; editSessionConfig?: TaskEditSessionConfig };
-export type TaskRun = { id: string; taskId: string; taskName: string; agent: string; trigger: "scheduled" | "manual"; scheduledFor: number; startedAt: number; finishedAt?: number; status: "starting" | "running" | "needs_input" | "succeeded" | "failed" | "interrupted"; sessionId?: string; tmuxName?: string; summary?: string; error?: string; needsInputAt?: number };
+export type TaskRun = { id: string; taskId: string; taskName: string; agent: string; trigger: "scheduled" | "manual"; scheduledFor: number; startedAt: number; finishedAt?: number; status: "starting" | "running" | "needs_input" | "succeeded" | "incomplete" | "failed" | "interrupted"; sessionId?: string; tmuxName?: string; summary?: string; error?: string; needsInputAt?: number; outcome?: TaskOutcome };
 type State = { version: 1; tasks: ScheduledTask[]; runs: TaskRun[] };
 export const activeRun = (r: TaskRun) => ["starting", "running", "needs_input"].includes(r.status);
 export class TaskError extends Error { constructor(message: string, readonly status = 400) { super(message); } }
@@ -251,12 +252,12 @@ export class TaskStore {
   }
 }
 
-export type RunSnapshot = { state: "working" | "idle" | "needs_input" | "failed" | "missing"; summary?: string; error?: string };
+export type RunSnapshot = { state: "working" | "idle" | "needs_input" | "failed" | "missing"; summary?: string; error?: string; outcome?: TaskOutcome };
 export type TaskExecutor = { launch(task: ScheduledTask, run: TaskRun): Promise<{ sessionId: string; tmuxName?: string }>; inspect(run: TaskRun): Promise<RunSnapshot> };
 export class TaskScheduler {
   private ticking = false;
   private launching = new Set<string>();
-  private idleSince = new Map<string, number>();
+  private idleSince = new Map<string, { since: number; fingerprint: string }>();
   constructor(readonly store: TaskStore, private executor: TaskExecutor, private now = () => Date.now()) {}
   async recover() {
     for (const r of (await this.store.read()).runs) if (r.status === "starting" && !r.sessionId && !this.launching.has(r.id)) {
@@ -293,11 +294,23 @@ export class TaskScheduler {
         const now = this.now();
         if (snap.state === "needs_input") { this.idleSince.delete(r.id); await this.store.record(r.id, { status: "needs_input", needsInputAt: r.needsInputAt ?? now }); }
         else if (snap.state === "failed" || snap.state === "missing") {
+          this.idleSince.delete(r.id);
           await this.store.record(r.id, { status: snap.state === "failed" ? "failed" : "interrupted", finishedAt: now, error: snap.error ?? "The session is no longer running. Open its conversation to inspect the result." });
-        } else if (snap.state === "idle" && snap.summary) {
-          const since = this.idleSince.get(r.id);
-          if (since == null) this.idleSince.set(r.id, now);
-          else if (now - since >= 5000) { await this.store.record(r.id, { status: "succeeded", finishedAt: now, summary: snap.summary.slice(0, 8000) }); this.idleSince.delete(r.id); }
+        } else if (snap.state === "idle") {
+          if (r.status === "needs_input") await this.store.record(r.id, { status: "running", needsInputAt: undefined });
+          const fingerprint = JSON.stringify([snap.summary, snap.outcome, snap.error]);
+          const idle = this.idleSince.get(r.id);
+          if (!idle || idle.fingerprint !== fingerprint) this.idleSince.set(r.id, { since: now, fingerprint });
+          // Empty startup transcripts get longer to become visible. Neither an empty
+          // turn nor ordinary prose can ever earn success without a verdict.
+          else if (now - idle.since >= (snap.summary || snap.outcome ? 5000 : 60_000)) {
+            const status = snap.outcome?.status === "completed" ? "succeeded" : snap.outcome?.status === "error" ? "failed" : "incomplete";
+            await this.store.record(r.id, { status, finishedAt: now,
+              summary: (snap.summary ?? snap.outcome?.summary)?.slice(0, 8000), outcome: snap.outcome,
+              error: status === "succeeded" ? undefined : snap.outcome?.summary ?? snap.error ?? "The agent ended without a completion verdict. Open the session to review what remains.",
+              needsInputAt: undefined });
+            this.idleSince.delete(r.id);
+          }
         } else { this.idleSince.delete(r.id); if (r.status === "needs_input") await this.store.record(r.id, { status: "running", needsInputAt: undefined }); }
       }
       // Bound launches per tick. Recurring jobs coalesce missed occurrences.

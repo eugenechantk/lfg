@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { TaskError, TaskScheduler, TaskStore, activeRun, finiteSchedule, lastOccurrence, nextOccurrences, validateSchedule, type TaskInput, type TaskRun, type RunSnapshot, type ScheduledTask, type TaskSchedule } from "./scheduled-tasks.ts";
+import { parseTaskOutcome, scheduledTaskSystemPrompt } from "./scheduled-task-outcome.ts";
 
 /** What a task will do next. Paused tasks show when they would run if resumed, so their row can
  * still say when; finished, cancelled and passed one-time tasks have none. Up to ten: the task view
@@ -16,19 +17,19 @@ export function upcomingRuns(t: ScheduledTask, now: number, n = UPCOMING_RUNS): 
   return nextOccurrences(t.schedule, now, n, done);
 }
 
-/** Failed or interrupted runs in a row, newest first, ignoring a run still in progress. */
 /** Marks a session page's rows that are task edit chats, so clients keep them out of Sessions. */
 export function tagEditChats<P extends { sessions: { sessionId: string }[] }>(page: P, editIds: Set<string>): P {
   if (editIds.size === 0) return page;
   return { ...page, sessions: page.sessions.map(s => editIds.has(s.sessionId) ? { ...s, purpose: "task-edit" as const } : s) };
 }
 
+/** Unsuccessful runs in a row, newest first, ignoring runs still in progress. */
 export function consecutiveFailures(runs: TaskRun[]): number {
   let count = 0;
   for (let i = runs.length - 1; i >= 0; i--) {
     const status = runs[i]!.status;
     if (activeRun(runs[i]!)) continue;
-    if (status === "failed" || status === "interrupted") count++; else break;
+    if (status === "failed" || status === "interrupted" || status === "incomplete") count++; else break;
   }
   return count;
 }
@@ -41,7 +42,14 @@ export function previewSchedule(schedule: TaskSchedule, now: number) {
 }
 
 export type TaskApiCall = <T = any>(path: string, body?: unknown) => Promise<T>;
-export function taskRuntime(store: TaskStore, call: TaskApiCall) {
+
+/** Same-session Claude respawns must keep the scheduled run's reporting contract. */
+export async function taskRunSystemPrompt(store: TaskStore, sessionId: string): Promise<string | undefined> {
+  const run = (await store.read()).runs.find(run => run.sessionId === sessionId);
+  return run ? scheduledTaskSystemPrompt(run.id) : undefined;
+}
+
+export function taskRuntime(store: TaskStore, call: TaskApiCall, now = () => Date.now()) {
   return new TaskScheduler(store, {
     launch: async (task, run) => {
       const repeatNote = task.schedule.kind === "repeat"
@@ -50,23 +58,34 @@ export function taskRuntime(store: TaskStore, call: TaskApiCall) {
           + " The host manages this finite repeat. Do not create, re-arm, or modify this task's schedule.\n\n"
         : "";
       const result = await call("/api/sessions/new", { cwd: task.cwd, agent: task.agent, model: task.model,
+        systemPrompt: scheduledTaskSystemPrompt(run.id),
         prompt: `Scheduled task: ${task.name}\nRun ID: ${run.id}\nScheduled for: ${new Date(run.scheduledFor).toISOString()}\n\n${repeatNote}Carry out these saved instructions. This is one execution; do not create another schedule. Follow the project's existing permissions and report the outcome.\n\n${task.prompt}` });
       return result;
     },
     inspect: async (run): Promise<RunSnapshot> => {
       const { sessions } = await call("/api/sessions");
       const session = sessions?.find((s: any) => s.sessionId === run.sessionId);
-      if (!session) return { state: "missing" };
-      if (session.prompt) return { state: "needs_input" };
-      if (session.status === "blocked") return { state: "failed", error: session.statusDetail ?? "The agent reported an error." };
-      if (session.busy) return { state: "working" };
-      const { messages } = await call(`/api/sessions/${run.sessionId}/messages?limit=20`);
+      if (session?.prompt) return { state: "needs_input" };
+      if (session?.status === "blocked") return { state: "failed", error: session.statusDetail ?? "The agent reported an error." };
+      if (session?.busy) return { state: "working" };
+      // The process can exit after writing a verdict. Its transcript still owns
+      // the result, so inspect it even when the live session list has no row.
+      let messages;
+      try { ({ messages } = await call(`/api/sessions/${run.sessionId}/messages?limit=20`)); }
+      catch (error) {
+        if (!session && error instanceof TaskError && error.status === 404) return { state: "missing" };
+        throw error;
+      }
       const meaningful = (messages ?? []).filter((m: any) => (m.role === "user" || m.role === "assistant") && m.kind === "text");
       const last = meaningful.at(-1);
       if (last?.apiError) return { state: "failed", error: last.text };
-      return { state: "idle", ...(last?.role === "assistant" && last.text ? { summary: last.text } : {}) };
+      if (last?.role === "assistant" && last.text) {
+        const result = parseTaskOutcome(last.text, run.id);
+        return { state: "idle", summary: result.report ?? last.text, outcome: result.outcome, error: result.error };
+      }
+      return { state: session ? "idle" : "missing" };
     },
-  });
+  }, now);
 }
 
 export function taskAuthoringPrompt(options: { prompt: string; cwd: string; agent: string; model?: string; timezone: string; port: number; root: string }) {

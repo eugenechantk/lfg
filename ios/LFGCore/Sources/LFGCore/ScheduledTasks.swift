@@ -267,6 +267,7 @@ public struct ScheduledTaskRun: Codable, Identifiable, Hashable, Sendable {
         case "running": "Running"
         case "needs_input": "Needs input"
         case "succeeded": "Completed"
+        case "incomplete": "Incomplete"
         case "failed": "Failed"
         case "interrupted": "Interrupted"
         default: "Unknown"

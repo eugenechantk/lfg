@@ -857,7 +857,7 @@ private struct ScheduledSessionRow: View {
         switch status {
         case "Running", "Starting", "Scheduled": .green
         case "Needs input", "Paused": .orange
-        case "Failed", "Interrupted": .red
+        case "Failed", "Interrupted", "Incomplete": .red
         default: .secondary.opacity(0.35)
         }
     }
@@ -1076,7 +1076,7 @@ private struct ScheduledTaskDetail: View {
             if task.cancelledAt == nil {
                 // A retry after a failure keeps the failure wording.
                 let afterFailure = card.kind == .failed || (card.kind == .running && task.consecutiveFailures > 0)
-                TaskAskBar(placeholder: afterFailure ? "Ask why it failed, or change it…" : "Ask to change this task…") { askToChange(nil) }
+                TaskAskBar(placeholder: afterFailure ? (task.lastRun?.status == "incomplete" ? "Ask what remains, or change it…" : "Ask why it failed, or change it…") : "Ask to change this task…") { askToChange(nil) }
                     .padding(.horizontal, 16)
                     .frame(maxWidth: ReadableColumn.maxWidth)
                     .frame(maxWidth: .infinity)
@@ -1229,7 +1229,7 @@ private struct ScheduledTaskDetail: View {
                     try await Task.sleep(for: .seconds(1))
                     guard let current = try await client.runs(task.id).runs.first(where: { $0.id == run.id }) else { continue }
                     if let sid = current.sessionId, !sid.isEmpty { openSession(sid); break }
-                    if current.status == "failed" { break }
+                    if ["failed", "incomplete", "interrupted"].contains(current.status ?? "") { break }
                 }
                 await refresh()
             } catch is CancellationError {} catch { self.error = error.localizedDescription }

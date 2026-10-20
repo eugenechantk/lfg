@@ -43,9 +43,9 @@ import {
 } from "../auto/store.ts";
 import { runAutoAgent } from "../auto/runner.ts";
 import { startAutoScheduler } from "../auto/scheduler.ts";
-import { TaskStore } from "../scheduled-tasks.ts";
+import { TaskError, TaskStore } from "../scheduled-tasks.ts";
 import { cachedTaskOrigins, withTaskOrigin } from "../task-origin.ts";
-import { scheduledTaskRoutes, tagEditChats, taskRuntime, type TaskApiCall } from "../scheduled-task-api.ts";
+import { scheduledTaskRoutes, tagEditChats, taskRuntime, taskRunSystemPrompt, type TaskApiCall } from "../scheduled-task-api.ts";
 import { startAutopilot } from "../autopilot/tick.ts";
 import {
   listSessions,
@@ -1311,7 +1311,7 @@ export async function cmdServe(options: {
     }), server);
     if (!response) throw new Error("No response from session API");
     const data = await response.json() as any;
-    if (!response.ok) throw new Error(data.error ?? `Session API returned ${response.status}`);
+    if (!response.ok) throw new TaskError(data.error ?? `Session API returned ${response.status}`, response.status);
     return data;
   };
   const scheduledTasks = taskRuntime(taskStore, taskCall);
@@ -2478,6 +2478,7 @@ export async function cmdServe(options: {
         const body = (await req.json().catch(() => null)) as {
           cwd?: string;
           prompt?: string;
+          systemPrompt?: unknown;
           user?: string;
           voice?: boolean;
           model?: string;
@@ -2491,6 +2492,9 @@ export async function cmdServe(options: {
         if (isHandoff && body?.agent !== "codex" && body?.agent !== "claude")
           return err(400, "handoff requires a target agent (claude or codex)");
         const agent = body?.agent === "codex" ? "codex" : "claude";
+        if (body?.systemPrompt != null && (typeof body.systemPrompt !== "string" || body.systemPrompt.length > 20_000))
+          return err(400, "systemPrompt must be a string of at most 20,000 characters");
+        const systemPrompt = typeof body?.systemPrompt === "string" ? body.systemPrompt : undefined;
         if (isHandoff && body?.model != null && typeof body.model !== "string")
           return err(400, "model must be a string");
         const model = typeof body?.model === "string" ? body.model.trim() || undefined : undefined;
@@ -2555,8 +2559,8 @@ export async function cmdServe(options: {
         const spawnStartedAt = Date.now();
         const r =
           agent === "codex"
-            ? spawnManagedCodexSession({ name: tmuxName, cwd, prompt, model })
-            : spawnManagedSession({ name: tmuxName, cwd, prompt, model,
+            ? spawnManagedCodexSession({ name: tmuxName, cwd, prompt, model, systemPrompt })
+            : spawnManagedSession({ name: tmuxName, cwd, prompt, model, systemPrompt,
                 useConfiguredModelDefault: isHandoff && !model });
         if (!r.ok) return err(502, r.error || "failed to start session");
         addManaged({
@@ -2771,6 +2775,7 @@ export async function cmdServe(options: {
               // Without a flag the effort is Claude's per-model default, which
               // should follow the new model rather than be pinned.
               effort: launchFlag(sess.cmd, "--effort") ? sess.effort : null,
+              systemPrompt: await taskRunSystemPrompt(taskStore, sess.sessionId),
             });
             if (!r.ok) return err(500, r.error || "relaunch failed");
             await awaitRelaunched(m[1], sess.pid);
@@ -2824,6 +2829,7 @@ export async function cmdServe(options: {
               sessionId: sess.sessionId,
               model: await liveClaudeModelId(sess),
               effort,
+              systemPrompt: await taskRunSystemPrompt(taskStore, sess.sessionId),
             });
             if (!r.ok) return err(500, r.error || "relaunch failed");
             await awaitRelaunched(m[1], sess.pid);

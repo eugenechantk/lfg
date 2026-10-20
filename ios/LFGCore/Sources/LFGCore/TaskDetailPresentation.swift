@@ -61,7 +61,11 @@ public struct TaskStatusCardModel: Sendable, Equatable {
             if task.isScheduleActive, let next = task.nextScheduledRun { footnote = "Schedule still on. Next run: \(f.dayAndTime(next, lowercaseDay: true))" }
             else if task.schedule.kind == "once" { footnote = "One-time task. Retry runs it again." }
             else { footnote = nil }
-            let verb = run.status == "interrupted" ? "Last run was interrupted" : "Last run failed"
+            let verb = switch run.status {
+            case "interrupted": "Last run was interrupted"
+            case "incomplete": "Last run incomplete"
+            default: "Last run failed"
+            }
             return .init(kind: .failed, label: verb,
                          main: f.dayAndTime(run.finishedAt ?? run.startedAt ?? run.scheduledFor ?? now.ms),
                          sub: RunErrorText.sentence(run.error, sessionStarted: run.sessionId != nil),
@@ -176,6 +180,9 @@ public struct RunTimelineEntry: Sendable, Equatable, Identifiable {
             case "interrupted":
                 entry.node = .warning; entry.bodyTone = .warning
                 entry.body = RunErrorText.firstLine(run.error) ?? "Interrupted"
+            case "incomplete":
+                entry.node = .failure; entry.bodyTone = .danger
+                entry.body = "Incomplete · \(RunErrorText.short(run.error))"
             default: // failed
                 entry.node = .failure; entry.bodyTone = .danger
                 let reason = RunErrorText.short(run.error)
@@ -183,7 +190,7 @@ public struct RunTimelineEntry: Sendable, Equatable, Identifiable {
                 entry.body = "Failed · \(reason)" + (run.sessionId == nil && !saysNoSession ? " · no session started" : "")
             }
             if entry.tail.isEmpty {
-                if run.status == "failed", !offeredRetry {
+                if ["failed", "incomplete"].contains(run.status ?? ""), !offeredRetry {
                     offeredRetry = true
                     entry.tail = "Retry"; entry.tailTone = .accent; entry.tailIsAction = true
                 } else if run.sessionId != nil, let start = run.startedAt, let end = run.finishedAt {

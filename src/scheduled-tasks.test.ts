@@ -88,11 +88,46 @@ describe("durable task lifecycle", () => {
     expect((await s.read()).runs[0]!.status).toBe("running");
     snapshot = { state: "idle" }; time += 30_000; await runtime.tick();
     expect((await s.read()).runs[0]!.status).toBe("running");
-    snapshot = { state: "idle", summary: "Review complete." }; time += 10_000; await runtime.tick(); time += 10_000; await runtime.tick();
+    snapshot = { state: "idle", summary: "Review complete.", outcome: { status: "completed", summary: "Review and checks verified." } }; time += 10_000; await runtime.tick(); time += 10_000; await runtime.tick();
     expect((await s.read()).runs[0]!.status).toBe("succeeded");
     const broken = new TaskScheduler(s, { launch: async () => { throw Error("agent unavailable"); }, inspect: async () => ({ state: "working" }) }, () => now + 600_000);
     await broken.tick();
     expect((await s.read()).runs.at(-1)!.error).toBe("agent unavailable");
+  });
+  test("an idle reply without an agent verdict is incomplete", async () => {
+    const s = await store(); await s.save(interval, now); let time = now + 300_000;
+    const runtime = new TaskScheduler(s, { launch: async () => ({ sessionId: "partial" }), inspect: async () => ({ state: "idle", summary: "I could not sign in." }) }, () => time);
+    await runtime.tick(); await runtime.tick(); time += 6000; await runtime.tick();
+    const run = (await s.read()).runs[0]!;
+    expect(run.status).toBe("incomplete"); expect(run.error).toContain("verdict");
+    expect(run.summary).toBe("I could not sign in.");
+  });
+  test("agent verdicts persist independently of a clean session end", async () => {
+    for (const [outcome, status] of [["completed", "succeeded"], ["incomplete", "incomplete"], ["error", "failed"]] as const) {
+      const s = await store(); const task = await s.save(interval, now); let time = now + 300_000;
+      const runtime = new TaskScheduler(s, { launch: async () => ({ sessionId: "judged" }), inspect: async () => ({ state: "idle", summary: "Full report", outcome: { status: outcome, summary: "What happened and what remains." } }) }, () => time);
+      await runtime.tick(); await runtime.tick(); time += 6000; await runtime.tick();
+      const run = (await new TaskStore(s.path).read()).runs[0]!;
+      expect(run.status).toBe(status); expect(run.outcome?.status).toBe(outcome);
+      expect(run.summary).toBe("Full report");
+      if (status !== "succeeded") expect(run.error).toBe("What happened and what remains.");
+      expect((await s.read()).tasks[0]!.nextRunAt).toBe(task.nextRunAt! + 300_000);
+    }
+  });
+  test("a changing idle response must settle before its verdict is accepted", async () => {
+    const s = await store(); await s.save(interval, now); let time = now + 300_000;
+    let summary = "First report";
+    const runtime = new TaskScheduler(s, { launch: async () => ({ sessionId: "stream" }), inspect: async () => ({ state: "idle", summary, outcome: { status: "completed", summary } }) }, () => time);
+    await runtime.tick(); await runtime.tick(); time += 6000; summary = "Changed report"; await runtime.tick();
+    expect((await s.read()).runs[0]!.status).toBe("running");
+    time += 6000; await runtime.tick(); expect((await s.read()).runs[0]!.status).toBe("succeeded");
+  });
+  test("an empty idle session eventually flags a missing verdict", async () => {
+    const s = await store(); await s.save(interval, now); let time = now + 300_000;
+    const runtime = new TaskScheduler(s, { launch: async () => ({ sessionId: "empty" }), inspect: async () => ({ state: "idle" }) }, () => time);
+    await runtime.tick(); await runtime.tick(); time += 6000; await runtime.tick();
+    expect((await s.read()).runs[0]!.status).toBe("running");
+    time += 60_000; await runtime.tick(); expect((await s.read()).runs[0]!.status).toBe("incomplete");
   });
   test("uncertain launch after restart is interrupted rather than duplicated", async () => {
     const s = await store(); const a = await s.save(interval, now); await s.claim(a.id, now + 300_000);
