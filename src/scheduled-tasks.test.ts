@@ -111,7 +111,7 @@ describe("durable task lifecycle", () => {
       expect(run.status).toBe(status); expect(run.outcome?.status).toBe(outcome);
       expect(run.summary).toBe("Full report");
       if (status !== "succeeded") expect(run.error).toBe("What happened and what remains.");
-      expect((await s.read()).tasks[0]!.nextRunAt).toBe(task.nextRunAt! + 300_000);
+      expect((await s.read()).tasks[0]!.nextRunAt).toBe(task.nextRunAt! + (status === "incomplete" ? 600_000 : 300_000));
     }
   });
   test("a changing idle response must settle before its verdict is accepted", async () => {

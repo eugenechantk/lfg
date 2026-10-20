@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { TaskError, TaskScheduler, TaskStore, activeRun, finiteSchedule, lastOccurrence, nextOccurrences, validateSchedule, type TaskInput, type TaskRun, type RunSnapshot, type ScheduledTask, type TaskSchedule } from "./scheduled-tasks.ts";
+import { TaskError, TaskScheduler, TaskStore, activeRun, effectiveSchedule, finiteSchedule, lastOccurrence, nextOccurrences, validateSchedule, type TaskInput, type TaskRun, type RunSnapshot, type ScheduledTask, type TaskSchedule } from "./scheduled-tasks.ts";
 import { parseTaskOutcome, scheduledTaskSystemPrompt } from "./scheduled-task-outcome.ts";
 
 /** What a task will do next. Paused tasks show when they would run if resumed, so their row can
@@ -10,11 +10,11 @@ export function upcomingRuns(t: ScheduledTask, now: number, n = UPCOMING_RUNS): 
   if (t.cancelledAt != null) return [];
   const done = t.scheduledRunCount ?? 0;
   // Only runs after the next one: a one-time schedule would otherwise list its single run twice.
-  if (t.enabled && t.nextRunAt != null) return [t.nextRunAt, ...nextOccurrences(t.schedule, t.nextRunAt, n - 1, done + 1).filter(at => at > t.nextRunAt!)];
+  if (t.enabled && t.nextRunAt != null) return [t.nextRunAt, ...nextOccurrences(effectiveSchedule(t), t.nextRunAt, n - 1, done + 1).filter(at => at > t.nextRunAt!)];
   if (t.enabled) return [];
   if (t.schedule.kind === "once") return t.lastRunAt == null && Date.parse(t.schedule.at!) > now ? [Date.parse(t.schedule.at!)] : [];
   if (finiteSchedule(t.schedule) && t.nextRunAt == null && t.pausedAt == null) return [];
-  return nextOccurrences(t.schedule, now, n, done);
+  return nextOccurrences(effectiveSchedule(t), now, n, done);
 }
 
 /** Marks a session page's rows that are task edit chats, so clients keep them out of Sessions. */
@@ -53,8 +53,8 @@ export function taskRuntime(store: TaskStore, call: TaskApiCall, now = () => Dat
   return new TaskScheduler(store, {
     launch: async (task, run) => {
       const repeatNote = task.schedule.kind === "repeat"
-        ? (run.trigger === "manual" ? "Manual run; this does not consume a scheduled occurrence."
-          : `Occurrence ${Math.floor((run.scheduledFor - Date.parse(task.schedule.at!)) / (task.schedule.everyMinutes! * 60_000)) + 1} of ${task.schedule.occurrences}.`)
+        ? (run.trigger === "manual" && !run.retryOfRunId ? "Manual run; this does not consume a scheduled occurrence."
+          : `Occurrence ${run.occurrence ?? Math.floor((run.scheduledFor - Date.parse(effectiveSchedule(task).at!)) / (task.schedule.everyMinutes! * 60_000)) + 1} of ${task.schedule.occurrences}.${run.retryOfRunId ? " Retry of the same occurrence; no additional scheduled occurrence is consumed." : ""}`)
           + " The host manages this finite repeat. Do not create, re-arm, or modify this task's schedule.\n\n"
         : "";
       const result = await call("/api/sessions/new", { cwd: task.cwd, agent: task.agent, model: task.model,

@@ -250,6 +250,8 @@ public struct ScheduledTaskRun: Codable, Identifiable, Hashable, Sendable {
     public var taskId: String?
     public var taskName: String?
     public var trigger: String?
+    public var retryOfRunId: String?
+    public var occurrence: Int?
     public var scheduledFor: Double?
     public var startedAt: Double?
     public var finishedAt: Double?
@@ -285,8 +287,11 @@ public struct ScheduledTaskRecord: Decodable, Identifiable, Hashable, Sendable {
     public var schedule: ScheduledTaskSchedule
     public var enabled: Bool
     public var nextRunAt: Double?
-    /// A single extra retry, independent of the recurring schedule.
+    /// One pending retry. A recovery retry keeps its original scheduled occurrence.
     public var retryAt: Double?
+    public var retryOfRunId: String?
+    public var retryAutomatic: Bool?
+    public var scheduleDelayMs: Double?
     public var lastRunAt: Double?
     public var cancelledAt: Double?
     public var currentRun: ScheduledTaskRun?
@@ -302,7 +307,7 @@ public struct ScheduledTaskRecord: Decodable, Identifiable, Hashable, Sendable {
     public var updatedAt: Double?
     /// The task's edit chat, reused while it is alive.
     public var editSessionId: String?
-    enum CodingKeys: String, CodingKey { case id, name, prompt, cwd, agent, model, schedule, enabled, nextRunAt, retryAt, lastRunAt, cancelledAt, currentRun, lastRun, recentRuns, runCount, upcomingRuns, consecutiveFailures, succeededCount, pausedAt, scheduledRunCount, updatedAt, editSessionId }
+    enum CodingKeys: String, CodingKey { case id, name, prompt, cwd, agent, model, schedule, enabled, nextRunAt, retryAt, retryOfRunId, retryAutomatic, scheduleDelayMs, lastRunAt, cancelledAt, currentRun, lastRun, recentRuns, runCount, upcomingRuns, consecutiveFailures, succeededCount, pausedAt, scheduledRunCount, updatedAt, editSessionId }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
@@ -315,6 +320,9 @@ public struct ScheduledTaskRecord: Decodable, Identifiable, Hashable, Sendable {
         enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
         nextRunAt = try c.decodeIfPresent(Double.self, forKey: .nextRunAt)
         retryAt = try c.decodeIfPresent(Double.self, forKey: .retryAt)
+        retryOfRunId = try c.decodeIfPresent(String.self, forKey: .retryOfRunId)
+        retryAutomatic = try c.decodeIfPresent(Bool.self, forKey: .retryAutomatic)
+        scheduleDelayMs = try c.decodeIfPresent(Double.self, forKey: .scheduleDelayMs)
         lastRunAt = try c.decodeIfPresent(Double.self, forKey: .lastRunAt)
         cancelledAt = try c.decodeIfPresent(Double.self, forKey: .cancelledAt)
         currentRun = try c.decodeIfPresent(ScheduledTaskRun.self, forKey: .currentRun)
@@ -334,7 +342,8 @@ public struct ScheduledTaskRecord: Decodable, Identifiable, Hashable, Sendable {
         return chosen.isEmpty ? "\(agent == "codex" ? "Codex" : "Claude") default" : chosen
     }
     public var canResume: Bool {
-        cancelledAt == nil && !(schedule.kind == "once" && lastRunAt != nil && nextRunAt == nil)
+        if cancelledAt == nil, retryOfRunId != nil, pausedAt != nil { return true }
+        return cancelledAt == nil && !(schedule.kind == "once" && lastRunAt != nil && nextRunAt == nil)
             && !(schedule.isFinite && nextRunAt == nil)
     }
     public var isScheduleActive: Bool { enabled && canResume }
@@ -345,6 +354,7 @@ public struct ScheduledTaskRecord: Decodable, Identifiable, Hashable, Sendable {
     public var statusLabel: String {
         if let currentRun { return currentRun.statusLabel }
         if cancelledAt != nil { return "Cancelled" }
+        if retryAutomatic == true, retryAt != nil, pausedAt != nil { return "Paused" }
         if retryAt != nil { return "Retry scheduled" }
         if !canResume { return lastRun?.statusLabel ?? "Completed" }
         return enabled ? "Scheduled" : "Paused"

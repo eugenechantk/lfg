@@ -40,8 +40,10 @@ public struct TaskStatusCardModel: Sendable, Equatable {
             return .init(kind: .closed, label: "Stopped", main: "Stopped by you",
                          sub: task.cancelledAt.map { f.dayAndTime($0) })
         }
-        if let at = task.retryAt {
-            let footnote = task.isScheduleActive && task.nextScheduledRun != nil
+        if let at = task.retryAt, !task.isAutomaticRetryPaused {
+            let footnote = task.retryOfRunId != nil
+                ? "This retry keeps its scheduled occurrence. " + (task.nextRunAt.map { "Following run: \(f.dayAndTime($0, lowercaseDay: true))." } ?? "This is the final occurrence.")
+                : task.isScheduleActive && task.nextScheduledRun != nil
                 ? "One extra run. Regular schedule unchanged: next run \(f.dayAndTime(task.nextScheduledRun!, lowercaseDay: true))"
                 : "One extra run. The regular schedule stays unchanged."
             return .init(kind: .next, label: "Retry scheduled", main: f.dayAndTime(at),

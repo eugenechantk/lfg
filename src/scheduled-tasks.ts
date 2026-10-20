@@ -11,8 +11,8 @@ export type TaskInput = { name: string; prompt: string; cwd: string; agent: "cla
 export type TaskEditSessionConfig = Pick<TaskInput, "agent" | "model">;
 /** `scheduledRunCount` counts scheduled (not manual) runs since the schedule last changed; cron `maxRuns` reads it.
  * `pausedAt` is set when the user switches a task off and cleared on resume. */
-export type ScheduledTask = TaskInput & { id: string; enabled: boolean; createdAt: number; updatedAt: number; nextRunAt: number | null; retryAt?: number; lastRunAt?: number; cancelledAt?: number; pausedAt?: number; scheduledRunCount?: number; editSessionId?: string; editSessionIds?: string[]; editSessionConfig?: TaskEditSessionConfig };
-export type TaskRun = { id: string; taskId: string; taskName: string; agent: string; trigger: "scheduled" | "manual"; scheduledFor: number; startedAt: number; finishedAt?: number; status: "starting" | "running" | "needs_input" | "succeeded" | "incomplete" | "failed" | "interrupted"; sessionId?: string; tmuxName?: string; summary?: string; error?: string; needsInputAt?: number; outcome?: TaskOutcome };
+export type ScheduledTask = TaskInput & { id: string; enabled: boolean; createdAt: number; updatedAt: number; nextRunAt: number | null; retryAt?: number; retryOfRunId?: string; retryAutomatic?: boolean; scheduleDelayMs?: number; scheduleRevision?: number; lastRunAt?: number; cancelledAt?: number; pausedAt?: number; scheduledRunCount?: number; editSessionId?: string; editSessionIds?: string[]; editSessionConfig?: TaskEditSessionConfig };
+export type TaskRun = { id: string; taskId: string; taskName: string; agent: string; trigger: "scheduled" | "manual"; scheduledFor: number; startedAt: number; finishedAt?: number; retryOfRunId?: string; retryFallbackAt?: number; retryFallbackAutomatic?: boolean; occurrence?: number; scheduleRevision?: number; status: "starting" | "running" | "needs_input" | "succeeded" | "incomplete" | "failed" | "interrupted"; sessionId?: string; tmuxName?: string; summary?: string; error?: string; needsInputAt?: number; outcome?: TaskOutcome };
 type State = { version: 1; tasks: ScheduledTask[]; runs: TaskRun[] };
 export const activeRun = (r: TaskRun) => ["starting", "running", "needs_input"].includes(r.status);
 export class TaskError extends Error { constructor(message: string, readonly status = 400) { super(message); } }
@@ -26,6 +26,32 @@ function cron(schedule: TaskSchedule) {
 
 /** A schedule that stops on its own: a finite repeat, or cron/interval with an end. */
 export const finiteSchedule = (s: TaskSchedule) => s.kind === "repeat" || s.maxRuns != null || s.endsAt != null;
+
+/** Recovery moves remaining occurrences, while preserving the user's saved schedule. */
+export function effectiveSchedule(t: ScheduledTask): TaskSchedule {
+  return t.scheduleDelayMs && t.schedule.at && t.schedule.kind === "repeat"
+    ? { ...t.schedule, at: new Date(Date.parse(t.schedule.at) + t.scheduleDelayMs).toISOString() }
+    : t.schedule;
+}
+
+/** The next interval, including the recovery window after a repeat's final occurrence. */
+function nextRetryWindow(t: ScheduledTask, after: number): number | null {
+  const schedule = effectiveSchedule(t);
+  if (schedule.kind !== "repeat" && schedule.kind !== "interval") return null;
+  return nextOccurrence({ ...schedule, kind: "interval", occurrences: undefined }, after);
+}
+
+function deferFollowingRuns(t: ScheduledTask, at: number) {
+  if (t.nextRunAt == null || t.nextRunAt > at) return;
+  const next = nextRetryWindow(t, at);
+  if (next != null && t.schedule.kind === "repeat") t.scheduleDelayMs = (t.scheduleDelayMs ?? 0) + next - t.nextRunAt;
+  t.nextRunAt = next;
+  if (finiteSchedule(t.schedule) && next == null) t.enabled = false;
+}
+
+function clearRetry(t: ScheduledTask) {
+  delete t.retryAt; delete t.retryOfRunId; delete t.retryAutomatic;
+}
 
 /** `done` = scheduled runs already claimed under this schedule (for cron `maxRuns`). */
 export function nextOccurrence(s: TaskSchedule, after: number, done = 0): number | null {
@@ -173,20 +199,25 @@ export class TaskStore {
       if (t.cancelledAt) throw new TaskError("This task has been cancelled.", 409);
       const changesSchedule = patch.schedule != null && !sameSchedule(patch.schedule, t.schedule);
       const resuming = patch.enabled === true && !t.enabled;
-      const pausing = patch.enabled === false && t.enabled;
-      if (resuming && !changesSchedule && t.schedule.kind === "repeat" && t.nextRunAt == null) throw new TaskError("This repeat schedule has finished. Choose a future first start for a new series.", 409);
+      const pausing = patch.enabled === false;
+      const pendingRecovery = !changesSchedule && t.retryOfRunId != null;
+      if (resuming && !changesSchedule && !pendingRecovery && t.schedule.kind === "repeat" && t.nextRunAt == null) throw new TaskError("This repeat schedule has finished. Choose a future first start for a new series.", 409);
       const requested = patch.schedule ?? t.schedule;
       const sameRepeatStart = t.schedule.kind === "repeat" && requested.kind === "repeat" && Date.parse(t.schedule.at!) === Date.parse(requested.at!);
       const clean = validateTask({ ...t, ...patch }, now, (!changesSchedule && !resuming) || sameRepeatStart);
       const done = changesSchedule ? 0 : (t.scheduledRunCount ?? 0);
-      const next = changesSchedule || resuming ? nextOccurrence(clean.schedule, now, done) : t.nextRunAt;
-      if (clean.schedule.kind === "repeat" && clean.enabled && next == null) throw new TaskError("This repeat schedule has finished. Choose a future first start for a new series.");
-      if (finiteSchedule(clean.schedule) && clean.enabled && next == null) throw new TaskError("This schedule has finished. Choose a later end or more runs to continue.", 409);
+      const next = changesSchedule || (resuming && !pendingRecovery) ? nextOccurrence(changesSchedule ? clean.schedule : effectiveSchedule(t), now, done) : t.nextRunAt;
+      if (clean.schedule.kind === "repeat" && clean.enabled && next == null && !pendingRecovery) throw new TaskError("This repeat schedule has finished. Choose a future first start for a new series.");
+      if (finiteSchedule(clean.schedule) && clean.enabled && next == null && !pendingRecovery) throw new TaskError("This schedule has finished. Choose a later end or more runs to continue.", 409);
       if (!(await stat(clean.cwd).catch(() => null))?.isDirectory()) throw new TaskError("That directory does not exist on this host.");
       Object.assign(t, clean, { updatedAt: now });
       if (clean.model == null) delete t.model;
       if (changesSchedule || resuming) t.nextRunAt = next;
-      if (changesSchedule) t.scheduledRunCount = 0;
+      if (changesSchedule) {
+        t.scheduledRunCount = 0; delete t.scheduleDelayMs;
+        t.scheduleRevision = (t.scheduleRevision ?? 0) + 1;
+        if (t.retryOfRunId != null) clearRetry(t);
+      }
       if (pausing) t.pausedAt = now;
       if (t.enabled) delete t.pausedAt;
       return t;
@@ -214,7 +245,7 @@ export class TaskStore {
   async cancel(id: string, now = Date.now()): Promise<ScheduledTask> {
     return this.transaction(s => {
       const t = s.tasks.find(t => t.id === id); if (!t) throw new TaskError("Task not found.", 404);
-      t.cancelledAt = now; t.enabled = false; t.nextRunAt = null; delete t.retryAt; t.updatedAt = now; return t;
+      t.cancelledAt = now; t.enabled = false; t.nextRunAt = null; clearRetry(t); t.updatedAt = now; return t;
     });
   }
   /** A durable extra run; null cancels it without changing the regular schedule. */
@@ -224,7 +255,11 @@ export class TaskStore {
       const t = s.tasks.find(t => t.id === id); if (!t) throw new TaskError("Task not found.", 404);
       if (t.cancelledAt) throw new TaskError("This task has been cancelled.", 409);
       if (at !== null && s.runs.some(r => r.taskId === id && activeRun(r))) throw new TaskError("This task is already running.", 409);
-      if (at === null) delete t.retryAt; else t.retryAt = Date.parse(at);
+      if (at === null) clearRetry(t);
+      else {
+        t.retryAt = Date.parse(at); delete t.retryAutomatic;
+        if (t.retryOfRunId != null) deferFollowingRuns(t, t.retryAt);
+      }
       t.updatedAt = now; return t;
     });
   }
@@ -232,23 +267,58 @@ export class TaskStore {
     return this.transaction(s => {
       const t = s.tasks.find(t => t.id === id);
       if (!t || t.cancelledAt || s.runs.some(r => r.taskId === id && activeRun(r))) return null;
+      if (!manual && t.retryOfRunId != null) return null;
       if (!manual && (!t.enabled || t.nextRunAt == null || t.nextRunAt > now)) return null;
       if (manual === "retry" && (t.retryAt == null || t.retryAt > now)) return null;
+      if (manual === "retry" && t.retryAutomatic && t.pausedAt != null) return null;
       const run: TaskRun = { id: randomUUID(), taskId: id, taskName: t.name, agent: t.agent, trigger: manual ? "manual" : "scheduled", scheduledFor: manual === "retry" ? t.retryAt! : manual ? now : t.nextRunAt!, startedAt: now, status: "starting" };
+      run.scheduleRevision = t.scheduleRevision ?? 0;
+      if (manual && t.retryOfRunId != null) {
+        run.retryOfRunId = t.retryOfRunId;
+        if (manual === true) { run.retryFallbackAt = t.retryAt; run.retryFallbackAutomatic = t.retryAutomatic === true; }
+        run.occurrence = s.runs.find(r => r.id === t.retryOfRunId)?.occurrence;
+        deferFollowingRuns(t, now);
+        if (finiteSchedule(t.schedule) && t.nextRunAt == null) t.enabled = false;
+      } else if (!manual && t.schedule.kind === "repeat") {
+        run.occurrence = Math.floor((run.scheduledFor - Date.parse(effectiveSchedule(t).at!)) / (t.schedule.everyMinutes! * 60_000)) + 1;
+      }
       s.runs.push(run); t.lastRunAt = now;
-      if (manual) delete t.retryAt;
+      if (manual) clearRetry(t);
       if (t.schedule.kind === "once" && manual !== "retry") { t.enabled = false; t.nextRunAt = null; }
       else if (!manual) {
         // Manual runs never use up a scheduled run.
         t.scheduledRunCount = (t.scheduledRunCount ?? 0) + 1;
-        t.nextRunAt = nextOccurrence(t.schedule, now, t.scheduledRunCount);
+        t.nextRunAt = nextOccurrence(effectiveSchedule(t), now, t.scheduledRunCount);
         if (finiteSchedule(t.schedule) && t.nextRunAt == null) t.enabled = false;
       }
       return run;
     });
   }
   async record(id: string, patch: Partial<TaskRun>): Promise<void> {
-    await this.transaction(s => { const r = s.runs.find(r => r.id === id); if (r) Object.assign(r, patch, { id: r.id, taskId: r.taskId }); });
+    await this.transaction(s => {
+      const r = s.runs.find(r => r.id === id); if (!r) return;
+      const wasActive = activeRun(r);
+      Object.assign(r, patch, { id: r.id, taskId: r.taskId });
+      const t = s.tasks.find(t => t.id === r.taskId);
+      if (!wasActive || activeRun(r) || !t || t.cancelledAt || (r.scheduleRevision ?? 0) !== (t.scheduleRevision ?? 0)) return;
+      const now = r.finishedAt ?? Date.now();
+      if (r.retryOfRunId && r.status === "succeeded") { deferFollowingRuns(t, now); return; }
+      if (!(r.status === "incomplete" && r.trigger === "scheduled") && !(r.retryOfRunId && ["incomplete", "failed", "interrupted"].includes(r.status))) return;
+      const fallbackAt = r.retryFallbackAt != null && r.retryFallbackAt > now ? r.retryFallbackAt : undefined;
+      const at = t.retryAt ?? fallbackAt ?? (t.nextRunAt != null && t.nextRunAt > now ? t.nextRunAt : nextRetryWindow(t, now));
+      if (at == null || (t.schedule.kind !== "interval" && t.schedule.kind !== "repeat")) return;
+      // Runs launched by an older host do not yet carry their occurrence number.
+      // Capture it before moving the effective anchor, so earlier retries keep it.
+      if (r.occurrence == null && r.trigger === "scheduled" && t.schedule.kind === "repeat") {
+        r.occurrence = Math.floor((r.scheduledFor - Date.parse(effectiveSchedule(t).at!)) / (t.schedule.everyMinutes! * 60_000)) + 1;
+      }
+      if (t.retryAt == null) {
+        if (fallbackAt != null && r.retryFallbackAutomatic === false) delete t.retryAutomatic;
+        else t.retryAutomatic = true;
+      }
+      t.retryAt = at; t.retryOfRunId = r.retryOfRunId ?? r.id;
+      deferFollowingRuns(t, at); t.updatedAt = now;
+    });
   }
 }
 
@@ -315,7 +385,7 @@ export class TaskScheduler {
       }
       // Bound launches per tick. Recurring jobs coalesce missed occurrences.
       let launched = 0;
-      for (const t of state.tasks) {
+      for (const t of (await this.store.read()).tasks) {
         if (t.cancelledAt) continue;
         const retryDue = t.retryAt != null && t.retryAt <= this.now();
         if (!retryDue && (!t.enabled || t.nextRunAt == null || t.nextRunAt > this.now())) continue;

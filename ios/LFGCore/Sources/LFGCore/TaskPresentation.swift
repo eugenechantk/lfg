@@ -25,6 +25,7 @@ public extension ScheduledTaskRecord {
     var latestRunFailed: Bool { currentRun == nil && ["failed", "interrupted", "incomplete"].contains(lastRun?.status ?? "") }
     /// Switched off by the user, and able to resume.
     var isPaused: Bool { cancelledAt == nil && !enabled && canResume }
+    var isAutomaticRetryPaused: Bool { retryAt != nil && retryAutomatic == true && pausedAt != nil }
 
     /// Precedence: stopped → waiting for an answer → running → paused by the user →
     /// a failed latest run → scheduled → finished.
@@ -32,6 +33,7 @@ public extension ScheduledTaskRecord {
         if cancelledAt != nil { return .closed }
         if isWaitingForInput { return .needsInput }
         if isRunInProgress { return .active }
+        if isAutomaticRetryPaused { return .paused }
         if retryAt != nil { return .active }
         if isPaused { return .paused }
         if latestRunFailed { return .needsInput }
@@ -235,9 +237,13 @@ public enum TaskScheduleSummary {
     public static func runProgress(_ task: ScheduledTaskRecord) -> String? {
         let s = task.schedule
         guard task.listSection == .active, task.currentRun == nil else { return nil }
+        if s.kind == "repeat", let total = s.occurrences, task.retryAt != nil,
+           task.retryOfRunId != nil, let occurrence = task.lastRun?.occurrence {
+            return "retry of run \(occurrence) of \(total)"
+        }
         if s.kind == "repeat", let total = s.occurrences, let minutes = s.everyMinutes, minutes > 0,
            let at = s.at.flatMap(ISODate.parse), let next = task.nextScheduledRun {
-            let index = Int(((next / 1000 - at.timeIntervalSince1970) / Double(minutes * 60)).rounded()) + 1
+            let index = Int(((next / 1000 - at.timeIntervalSince1970 - (task.scheduleDelayMs ?? 0) / 1000) / Double(minutes * 60)).rounded()) + 1
             return (1...total).contains(index) ? "run \(index) of \(total)" : nil
         }
         if let total = s.maxRuns { return "run \(min(total, (task.scheduledRunCount ?? 0) + 1)) of \(total)" }

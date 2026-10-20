@@ -1014,7 +1014,10 @@ struct TaskRetryLaterSheet: View {
     }
 
     private var explanation: some View {
-        Text("Runs once more at this time. The regular schedule stays as it is. \(hostName) must be awake; if it’s asleep, the retry runs when it wakes.")
+        Text((task.retryOfRunId != nil
+              ? "Retries the incomplete occurrence. Following runs wait for this retry. Moving it later can move those runs later. "
+              : "Runs once more at this time. The regular schedule stays as it is. ")
+             + "\(hostName) must be awake; if it’s asleep, the retry runs when it wakes.")
             #if os(macOS)
             .font(.system(size: 11))
             #else
