@@ -9,6 +9,7 @@ struct ScheduledTasksPane: View {
     @Binding var path: [ScheduledTaskRoute]
     /// Reported up for the switcher's Tasks badge.
     @Binding var taskNeedsInput: Int
+    var onCreate: (() -> Void)? = nil
     var body: some View {
         ScheduledTasksView(hosts: store.hosts.compactMap { host in
             guard let url = URL(string: host.url) else { return nil }
@@ -21,7 +22,8 @@ struct ScheduledTasksPane: View {
             return AnyView(DesktopConnectionStatusBar(compact: compact))
         },
            connectionWarning: AnyView(DesktopConnectionWarning()),
-           connectedHostIDs: Set(store.hosts.filter { $0.error == nil }.map(\.id))) { hostID, sessionID in
+           connectedHostIDs: Set(store.hosts.filter { $0.error == nil }.map(\.id)),
+           onCreate: onCreate) { hostID, sessionID in
             guard !openingSession else { return }
             openingSession = true
             Task {
@@ -71,5 +73,38 @@ enum ScheduledTaskSessionLookup {
             hostURL: host.url, hostId: host.info?.hostId ?? host.url, hostLabel: host.label,
             hostIsLocal: host.isLocal, hostSSHTarget: host.sshTarget,
             hostRemoteTransport: host.remoteTransport)
+    }
+}
+
+/// Both list plus buttons present this same composer, seeded from their origin.
+struct DesktopCreationSheet: View {
+    @EnvironmentObject private var store: SessionStore
+    let isTask: Bool
+    let searchQuery: String
+    let openSession: (String, String) -> Void
+
+    private var plan: DesktopNewSessionPlan? {
+        DesktopNewSessionPlanner.plan(query: searchQuery, items: store.items + store.searchClosed,
+            defaultHostURL: store.hosts.first?.url ?? "", inbox: nil)
+    }
+
+    private var hosts: [ScheduledTaskHost] {
+        store.hosts.compactMap { host in
+            guard let url = URL(string: host.url) else { return nil }
+            return ScheduledTaskHost(id: host.id, name: host.label, baseURL: url,
+                headers: DesktopAPI.request(url).allHTTPHeaderFields ?? [:])
+        }
+    }
+
+    var body: some View {
+        if let host = hosts.first(where: { $0.baseURL.absoluteString == plan?.hostURL }) ?? hosts.first {
+            ScheduledTaskChat(hosts: hosts, initialHost: host, initiallyTask: isTask,
+                initialDirectory: plan?.cwd ?? "", initialAgent: plan?.agent ?? "claude",
+                initialModel: plan?.model ?? "opus", openSession: openSession)
+        } else {
+            ContentUnavailableView("No host configured", systemImage: "desktopcomputer",
+                description: Text("Add a host in Settings to start a session or task."))
+                .frame(width: 500, height: 400)
+        }
     }
 }

@@ -5694,6 +5694,8 @@ struct ContentView: View {
     @State private var taskNeedsInput = 0
     @State private var compactSearchShown: Bool
     @State private var showDirectoryFilter = false
+    @State private var showingCreation = false
+    @State private var creationIsTask = false
     @FocusState private var searchFieldFocused: Bool
 
     /// `compactSearchShown` is seedable only so the off-screen `--window-shot`
@@ -6224,9 +6226,8 @@ struct ContentView: View {
             Menu {
                 if windowWidth < 500 {
                     Button("Create session", systemImage: "plus") {
-                        Task {
-                            if let error = await store.createSession(searchQuery: searchText) { alertMessage = error }
-                        }
+                        creationIsTask = false
+                        showingCreation = true
                     }
                     .disabled(store.creatingSession)
                     Button("Search sessions", systemImage: "magnifyingglass") {
@@ -6256,11 +6257,8 @@ struct ContentView: View {
 
     private var createSessionButton: some View {
         Button {
-            Task {
-                if let error = await store.createSession(searchQuery: searchText) {
-                    alertMessage = error
-                }
-            }
+            creationIsTask = false
+            showingCreation = true
         } label: {
             if store.creatingSession {
                 ProgressView().controlSize(.small)
@@ -6271,7 +6269,7 @@ struct ContentView: View {
         .disabled(store.creatingSession)
         .buttonStyle(.glass)
         .buttonBorderShape(.circle)
-        .help(isSearching ? "Create session from search" : "Create session in Inbox")
+        .help("New session or task")
         .accessibilityLabel("Create session")
         .accessibilityIdentifier("create_session_button")
     }
@@ -6384,10 +6382,34 @@ struct ContentView: View {
     var body: some View {
         Group {
             if store.showingScheduledTasks {
-                ScheduledTasksPane(path: $taskPath, taskNeedsInput: $taskNeedsInput)
+                ScheduledTasksPane(path: $taskPath, taskNeedsInput: $taskNeedsInput, onCreate: {
+                    creationIsTask = true
+                    showingCreation = true
+                })
             } else {
                 sessionsBody
             }
+        }
+        .sheet(isPresented: $showingCreation) {
+            DesktopCreationSheet(isTask: creationIsTask, searchQuery: creationIsTask ? "" : searchText) { hostID, sessionID in
+                showingCreation = false
+                Task {
+                    await store.refresh()
+                    if let item = store.liveItem(sessionId: sessionID) {
+                        alertMessage = await Task.detached { Opener.open(item) }.value
+                    } else {
+                        alertMessage = "The session started but is not available yet. Refresh Sessions before trying again."
+                    }
+                }
+            }
+        }
+        .alert("Can't open session", isPresented: .init(
+            get: { alertMessage != nil },
+            set: { if !$0 { alertMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(alertMessage ?? "")
         }
         // Let the system overflow toolbar controls when the user wants a slim list.
         .frame(minWidth: 180, minHeight: 420)
@@ -6472,11 +6494,12 @@ struct ContentView: View {
         // it only ever sees each host's newest 100 closed rows.
         .onChange(of: searchText) { _, q in store.setSearchQuery(q) }
         .navigationTitle("")
-        // Board dA2-sessions: the title bar holds the window controls, the
-        // switcher and the round search button, nothing else. Host status and
-        // grouping moved to the strip under it; the desktop does not create
-        // sessions, so there is no "+".
+        // The plus button opens the shared session/task composer.
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                createSessionButton
+            }
+            .sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .primaryAction) {
                 compactSearchButton
             }
@@ -6502,14 +6525,6 @@ struct ContentView: View {
             .background(S2Desk.background)
         }
         .task { await store.refresh() }
-        .alert("Can't open session", isPresented: .init(
-            get: { alertMessage != nil },
-            set: { if !$0 { alertMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(alertMessage ?? "")
-        }
         .alert("Session is working — move anyway?", isPresented: .init(
             get: { pendingMove != nil },
             set: { if !$0 { pendingMove = nil } }

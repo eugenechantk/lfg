@@ -29,6 +29,8 @@ struct NewSessionView: View {
 
     var autofocusComposer = false
     var purpose: SessionCreationPurpose = .conversation
+    @State private var selectedPurpose: SessionCreationPurpose?
+    private var activePurpose: SessionCreationPurpose { selectedPurpose ?? purpose }
     /// Set by an `lfg://new` link; applied once, then cleared.
     @Binding var prefill: NewSessionPrefill?
     /// The link being applied, so a slower earlier link can't overwrite a newer one.
@@ -67,8 +69,8 @@ struct NewSessionView: View {
 
     private var emptyDraftState: some View {
         EmptyDraftState(
-            title: purpose == .scheduledTask ? "What would you like to schedule?" : "Describe a task to start",
-            subtitle: purpose == .scheduledTask ? "Work out the details with your agent in a session." : "Your first message kicks off the session.")
+            title: activePurpose == .scheduledTask ? "What would you like to schedule?" : "Describe a task to start",
+            subtitle: activePurpose == .scheduledTask ? "Work out the details with your agent in a session." : "Your first message kicks off the session.")
     }
 
     var body: some View {
@@ -77,7 +79,28 @@ struct NewSessionView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                NavRow(title: purpose == .scheduledTask ? "New task" : "New session") { dismiss() }
+                HStack(spacing: 10) {
+                    CircularBackButton { dismiss() }
+
+                    Picker("Create", selection: Binding(
+                        get: { activePurpose }, set: { selectedPurpose = $0 }
+                    )) {
+                        Text("New session").tag(SessionCreationPurpose.conversation)
+                        Text("New task").tag(SessionCreationPurpose.scheduledTask)
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(starting)
+                    .accessibilityIdentifier("creationPurposePicker")
+                    .frame(maxWidth: 320)
+                    .frame(maxWidth: .infinity)
+
+                    Color.clear
+                        .frame(width: 38, height: 38)
+                        .accessibilityHidden(true)
+                }
+                .frame(height: 38)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 8)
 
                 // An iPad in landscape with the keyboard up leaves less height
                 // than the hint plus the composer need. A fixed hint overflowed
@@ -238,6 +261,7 @@ struct NewSessionView: View {
         guard let request = prefill else { return }
         prefill = nil
         appliedPrefillID = request.id
+        selectedPurpose = .conversation
         let link = request.link
         draft = link.prompt ?? ""
         selectedHost = NewSessionLinkHints.host(for: link.host, in: settings.hosts) ?? fallbackHost
@@ -463,7 +487,7 @@ struct NewSessionView: View {
         model = selection.model
         let req = NewSessionRequest(cwd: dir, prompt: text, agent: selection.agent.rawValue,
                                     model: selection.model, user: settings.defaultOwner,
-                                    purpose: purpose, timezone: purpose == .scheduledTask ? TimeZone.current.identifier : nil)
+                                    purpose: activePurpose, timezone: activePurpose == .scheduledTask ? TimeZone.current.identifier : nil)
         // Preserve the load-bearing optimistic path and its navigation order.
         // Promote this cwd in the MRU list so it surfaces under RECENT next time.
         settings.noteRecentDir(dir)

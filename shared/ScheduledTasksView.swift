@@ -469,17 +469,22 @@ struct ScheduledTasksView: View {
         .accessibilityIdentifier("tasks_host_strip")
     }
 
-    /// Task creation lives in More; the desktop list has no standalone add button.
+    /// Both lists expose the same creation composer from a standalone plus button.
     @ToolbarContentBuilder
     private var desktopListActions: some ToolbarContent {
         ToolbarItem(placement: scheduledTaskActionPlacement) {
+            Button(action: createTask) { Label("New task", systemImage: "plus") }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .disabled(hosts.isEmpty)
+                .accessibilityIdentifier("tasks_add")
+        }
+        .sharedBackgroundVisibility(.hidden)
+        ToolbarItem(placement: scheduledTaskActionPlacement) {
             Menu {
-                Button("New scheduled task", systemImage: "plus", action: createTask)
-                    .accessibilityIdentifier("tasks_add")
-                Button("Create with chat", systemImage: "bubble.left.and.bubble.right") {
-                    if let host = creationHost { pathBinding.wrappedValue.append(.createChat(host.id)) }
-                }
-                .accessibilityIdentifier("tasks_create_chat")
+                Button("New task", systemImage: "plus", action: createTask)
+                    .accessibilityIdentifier("tasks_create_menu")
                 if listWidth < 360 {
                     Button("Search tasks", systemImage: "magnifyingglass") { toggleDesktopSearch() }
                         .accessibilityIdentifier("tasks_search")
@@ -603,7 +608,7 @@ struct ScheduledTasksView: View {
     private func createTask() {
         if let onCreate { onCreate(); return }
         #if os(macOS)
-        if let host = creationHost { pathBinding.wrappedValue.append(.create(host.id)) }
+        if let host = creationHost { pathBinding.wrappedValue.append(.createChat(host.id)) }
         #else
         sheet = .chat
         #endif
@@ -896,23 +901,19 @@ private struct ScheduledSessionRow: View {
 
 private struct TaskInstructions: View {
     let text: String
-    /// Lines shown while collapsed; nil shows everything.
-    var clamp: Int? = 3
-    /// Whether "Show more" appears when the text is longer than the clamp.
-    var expandable = true
     @State private var isExpanded = false
     @State private var fullHeight: CGFloat = 0
     @State private var collapsedHeight: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            instructions(lineLimit: isExpanded ? nil : clamp)
+            instructions(lineLimit: isExpanded ? nil : 3)
                 .font(.system(size: TaskDetailMetrics.body))
                 .foregroundStyle(TaskColors.body)
                 .textSelection(.enabled)
                 .accessibilityIdentifier("task_instructions")
                 .background(alignment: .topLeading) {
-                    instructions(lineLimit: clamp)
+                    instructions(lineLimit: 3)
                         .hidden()
                         .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { collapsedHeight = $0 }
                         .accessibilityHidden(true)
@@ -924,7 +925,7 @@ private struct TaskInstructions: View {
                         .accessibilityHidden(true)
                 }
             // Only when a whole line is hidden: equal texts can measure a point apart.
-            if expandable, fullHeight > collapsedHeight + 8 {
+            if fullHeight > collapsedHeight + 1 {
                 Button(isExpanded ? "Show less" : "Show more") {
                     isExpanded.toggle()
                 }
@@ -941,6 +942,8 @@ private struct TaskInstructions: View {
 
     private func instructions(lineLimit: Int?) -> some View {
         Text(text)
+            .font(.system(size: TaskDetailMetrics.body))
+            .truncationMode(.tail)
             .lineSpacing(3)
             .lineLimit(lineLimit)
             .fixedSize(horizontal: false, vertical: true)
@@ -1022,16 +1025,7 @@ private struct ScheduledTaskDetail: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Instructions")
                         .font(.system(size: TaskDetailMetrics.section, weight: .semibold)).foregroundStyle(TaskColors.grey)
-                    // When a run needs attention (failed, waiting, retrying) the card leads; the instructions shrink to two fixed lines.
-                    let attention = card.kind == .failed || card.kind == .waiting
-                        || (card.kind == .running && task.consecutiveFailures > 0)
-                    // Keyed on the clamp too, so a state change re-measures instead of comparing against stale heights.
-                    // The Mac boards show the whole text in these states; the phone boards cut it to two lines.
-                    #if os(macOS)
-                    TaskInstructions(text: task.prompt, clamp: attention ? nil : 3, expandable: !attention).id("\(task.id)-\(attention)")
-                    #else
-                    TaskInstructions(text: task.prompt, clamp: attention ? 2 : 3, expandable: !attention).id("\(task.id)-\(attention)")
-                    #endif
+                    TaskInstructions(text: task.prompt).id(task.id)
                 }
                 .padding(.top, 12)
                 // A waiting run lives in the card; with nothing else to list, the section is left out.
@@ -1910,14 +1904,20 @@ private struct ScheduledTaskEditor: View {
     }
 }
 
-private struct TaskChatStart: Encodable { let prompt: String; let cwd: String; let agent: String; let timezone: String }
+private struct TaskChatStart: Encodable { let prompt: String; let cwd: String; let agent: String; let model: String; let timezone: String }
 private struct TaskChatCreated: Decodable, Sendable { let sessionId: String? }
-private struct ScheduledTaskChat: View {
+struct ScheduledTaskChat: View {
     let hosts: [ScheduledTaskHost]
     let initialHost: ScheduledTaskHost
     var embedded = false
     var onClose: (() -> Void)? = nil
+    var initiallyTask = true
+    var initialDirectory = ""
+    var initialAgent = "claude"
+    var initialModel = "opus"
     let openSession: (String, String) -> Void
+    @State private var selectedIsTask: Bool?
+    private var isTask: Bool { selectedIsTask ?? initiallyTask }
     @State private var draft = TaskChatDraft()
     @Environment(\.dismiss) private var dismiss
     var body: some View {
@@ -1931,13 +1931,15 @@ private struct ScheduledTaskChat: View {
 
     private var content: some View {
         ScheduledTaskChatContent(hosts: hosts, initialHost: initialHost, task: nil,
-            draft: $draft, openSession: openSession)
-            .navigationTitle("New scheduled task")
+            draft: $draft, isTask: Binding(get: { isTask }, set: { selectedIsTask = $0 }),
+            initialDirectory: initialDirectory, initialAgent: initialAgent, initialModel: initialModel,
+            openSession: openSession)
+            .navigationTitle(isTask ? "New task" : "New session")
             #if os(macOS)
             .navigationBarBackButtonHidden(embedded)
             #endif
             .toolbar { ToolbarItem(placement: .cancellationAction) {
-                Button(embedded ? "Cancel" : "Done") {
+                Button("Cancel") {
                     if let onClose { onClose() } else { dismiss() }
                 }
                 .disabled(draft.starting).accessibilityIdentifier("task_chat_done")
@@ -1950,6 +1952,11 @@ private struct ScheduledTaskChatContent: View {
     let initialHost: ScheduledTaskHost
     let task: ScheduledTaskRecord?
     @Binding var draft: TaskChatDraft
+    @Binding var isTask: Bool
+    let initialDirectory: String
+    @State private var agent: AgentKind
+    @State private var model: String
+    @State private var catalog: ModelCatalogResponse = .fallback
     let openSession: (String, String) -> Void
     @State private var hostID: String
     @State private var repos: [TaskRepo] = []
@@ -1958,15 +1965,31 @@ private struct ScheduledTaskChatContent: View {
     private var savedChatKey: String { context.savedSessionKey(hostID: client.host.id) }
 
     init(hosts: [ScheduledTaskHost], initialHost: ScheduledTaskHost, task: ScheduledTaskRecord?,
-         draft: Binding<TaskChatDraft>, openSession: @escaping (String, String) -> Void) {
+         draft: Binding<TaskChatDraft>, isTask: Binding<Bool>, initialDirectory: String,
+         initialAgent: String, initialModel: String, openSession: @escaping (String, String) -> Void) {
         self.hosts = hosts; self.initialHost = initialHost; self.task = task
-        self._draft = draft; self.openSession = openSession
+        self._draft = draft; self._isTask = isTask; self.initialDirectory = initialDirectory
+        self._agent = State(initialValue: AgentKind(rawValue: initialAgent) ?? .claude)
+        self._model = State(initialValue: initialModel)
+        self.openSession = openSession
         _hostID = State(initialValue: initialHost.id)
     }
 
     var body: some View {
-        Group {
-                Form {
+        VStack(spacing: 0) {
+            if task == nil {
+                Picker("Create", selection: $isTask) {
+                    Text("New session").tag(false)
+                        .accessibilityIdentifier("creationSessionMode")
+                    Text("New task").tag(true)
+                        .accessibilityIdentifier("creationTaskMode")
+                }
+                .pickerStyle(.segmented)
+                .disabled(draft.starting)
+                .accessibilityIdentifier("creationPurposePicker")
+                .padding(20)
+            }
+            Form {
                     Section {
                         if let task {
                             Text(task.name).font(.headline).accessibilityIdentifier("task_chat_edit_title")
@@ -1975,9 +1998,9 @@ private struct ScheduledTaskChatContent: View {
                             TextField("What would you like to change?", text: $draft.prompt, axis: .vertical)
                                 .lineLimit(4...8).accessibilityIdentifier("task_chat_request")
                         } else {
-                            Label("Describe it. Work out the details together.", systemImage: "bubble.left.and.bubble.right").font(.headline)
-                            Text("Claude Code will help choose the timing, model, and instructions, then save your task.").foregroundStyle(.secondary)
-                            TextField("Tomorrow morning, review changes in…", text: $draft.prompt, axis: .vertical)
+                            Label(isTask ? "What would you like to schedule?" : "Describe a task to start", systemImage: "bubble.left.and.bubble.right").font(.headline)
+                            Text(isTask ? "Work out the details with your agent in a session." : "Your first message kicks off the session.").foregroundStyle(.secondary)
+                            TextField(isTask ? "Tomorrow morning, review changes in…" : "What would you like to work on?", text: $draft.prompt, axis: .vertical)
                                 .lineLimit(4...8).accessibilityIdentifier("task_chat_request")
                         }
                     }
@@ -1993,7 +2016,13 @@ private struct ScheduledTaskChatContent: View {
                         Section("On this host") {
                             Picker("Host", selection: $hostID) { ForEach(hosts) { Text($0.name).tag($0.id) } }
                                 .disabled(draft.starting).accessibilityIdentifier("task_chat_host")
-                            LabeledContent("Setup agent", value: "Claude Code")
+                            Picker("Agent", selection: $agent) {
+                                ForEach(AgentKind.allCases) { Text($0.displayName).tag($0) }
+                            }.disabled(draft.starting).accessibilityIdentifier("creationAgentPicker")
+                            Picker("Model", selection: $model) {
+                                ForEach(catalog.models(for: agent), id: \.self) { Text($0).tag($0) }
+                                if !catalog.models(for: agent).contains(model) { Text(model).tag(model) }
+                            }.disabled(draft.starting).accessibilityIdentifier("creationModelPicker")
                             if !repos.isEmpty {
                                 Menu("Choose a directory") { ForEach(repos) { repo in Button(repo.name ?? repo.cwd) { draft.cwd = repo.cwd } } }
                                     .accessibilityIdentifier("task_chat_directory_picker")
@@ -2005,7 +2034,7 @@ private struct ScheduledTaskChatContent: View {
                         Button(draft.starting ? "Starting conversation…" : "Start conversation", systemImage: "arrow.up.message") { start() }
                             .disabled(draft.starting || draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                             .accessibilityIdentifier("task_chat_start")
-                        if let saved = UserDefaults.standard.string(forKey: savedChatKey) {
+                        if isTask, let saved = UserDefaults.standard.string(forKey: savedChatKey) {
                             Button(task == nil ? "Continue previous setup" : "Continue editing conversation") { openSession(client.host.id, saved) }
                                 .accessibilityIdentifier("task_chat_continue")
                         }
@@ -2018,7 +2047,20 @@ private struct ScheduledTaskChatContent: View {
         .task(id: client.host.id) {
             guard task == nil else { return }
             draft.cwd = ""
-            repos = (try? await client.call("/api/repos", as: TaskRepos.self))?.repos ?? []
+            async let loadedRepos = try? client.call("/api/repos", as: TaskRepos.self)
+            async let loadedDirs = try? client.call("/api/dirs", as: TaskDirectories.self)
+            async let loadedCatalog = try? client.call("/api/models", as: ModelCatalogResponse.self)
+            let (repoList, dirs, models) = await (loadedRepos, loadedDirs, loadedCatalog)
+            guard !Task.isCancelled else { return }
+            repos = repoList?.repos ?? []
+            if draft.cwd.isEmpty {
+                draft.cwd = client.host.id == initialHost.id && !initialDirectory.isEmpty
+                    ? initialDirectory : (dirs?.inbox ?? "")
+            }
+            catalog = models ?? .fallback
+        }
+        .onChange(of: agent) { _, _ in
+            model = catalog.models(for: agent).first ?? agent.defaultModel
         }
     }
 
@@ -2026,11 +2068,11 @@ private struct ScheduledTaskChatContent: View {
         draft.starting = true; draft.error = nil
         Task {
             do {
-                let result: TaskChatCreated = try await client.call(context.endpoint,
+                let result: TaskChatCreated = try await client.call(isTask ? context.endpoint : "/api/sessions/new",
                     body: JSONEncoder().encode(TaskChatStart(prompt: draft.prompt, cwd: task?.cwd ?? draft.cwd,
-                        agent: "claude", timezone: task?.schedule.timezone ?? TimeZone.current.identifier)))
+                        agent: agent.rawValue, model: model, timezone: task?.schedule.timezone ?? TimeZone.current.identifier)))
                 guard let id = result.sessionId else { throw ScheduledTaskClientError(message: "The conversation started without an ID. Check Sessions before starting again.") }
-                UserDefaults.standard.set(id, forKey: savedChatKey); draft.sessionID = id
+                if isTask { UserDefaults.standard.set(id, forKey: savedChatKey) }; draft.sessionID = id
                 openSession(client.host.id, id)
             } catch { draft.error = error.localizedDescription }
             draft.starting = false

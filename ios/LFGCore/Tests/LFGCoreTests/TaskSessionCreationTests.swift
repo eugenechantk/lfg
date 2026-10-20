@@ -31,6 +31,27 @@ final class TaskSessionCreationTests: XCTestCase {
         XCTAssertEqual(restored.timezone, "UTC")
     }
 
+    func testSwitchingCreationModeKeepsDraftAndUsesSelectedRoute() async throws {
+        TaskCreationProtocol.status = 200
+        TaskCreationProtocol.body = Data(#"{"sessionId":"created"}"#.utf8)
+        let api = client()
+        var request = NewSessionRequest(cwd: "/chosen/project", prompt: "Keep this draft",
+            agent: "codex", model: "gpt-6.1-sol", user: "Eugene", timezone: "Asia/Hong_Kong")
+        for (purpose, endpoint) in [(SessionCreationPurpose.conversation, "/api/sessions/new"),
+                                    (.scheduledTask, "/api/scheduled-tasks/chat"),
+                                    (.conversation, "/api/sessions/new")] {
+            request.purpose = purpose
+            _ = try await api.newSession(request)
+            XCTAssertEqual(TaskCreationProtocol.request?.url?.path, endpoint)
+            let payload = try XCTUnwrap(JSONSerialization.jsonObject(
+                with: XCTUnwrap(TaskCreationProtocol.sentBody)) as? [String: Any])
+            XCTAssertEqual(payload["prompt"] as? String, "Keep this draft")
+            XCTAssertEqual(payload["cwd"] as? String, "/chosen/project")
+            XCTAssertEqual(payload["agent"] as? String, "codex")
+            XCTAssertEqual(payload["model"] as? String, "gpt-6.1-sol")
+        }
+    }
+
     func testUnsupportedHostDoesNotExecuteRequestAsOrdinarySession() async throws {
         TaskCreationProtocol.status = 404
         TaskCreationProtocol.body = Data(#"{"error":"not found"}"#.utf8)
