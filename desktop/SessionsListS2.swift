@@ -122,7 +122,7 @@ struct S2DeskSearchButton: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Search sessions")
         .accessibilityIdentifier("compact_search_toggle")
-        .help("Search sessions")
+        .help("Search sessions (⌘K)")
     }
 }
 

@@ -5698,6 +5698,34 @@ struct ForkProgressSheet: View {
     }
 }
 
+/// ⌘K reaches the window through the focused scene: `SearchSessionsCommands`
+/// reads the action `ContentView` publishes, so the shortcut works wherever
+/// focus sits in the window and the menu item greys out when no lfg window
+/// is in front (or a sheet covers the list).
+private struct SearchSessionsActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
+extension FocusedValues {
+    var searchSessions: (() -> Void)? {
+        get { self[SearchSessionsActionKey.self] }
+        set { self[SearchSessionsActionKey.self] = newValue }
+    }
+}
+
+struct SearchSessionsCommands: Commands {
+    @FocusedValue(\.searchSessions) private var searchSessions
+
+    var body: some Commands {
+        // The Edit menu, beside Find, is where Mac apps keep search.
+        CommandGroup(after: .textEditing) {
+            Button("Search Sessions") { searchSessions?() }
+                .keyboardShortcut("k", modifiers: .command)
+                .disabled(searchSessions == nil)
+        }
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject private var store: SessionStore
     @State private var alertMessage: String?
@@ -6331,6 +6359,16 @@ struct ContentView: View {
         }
     }
 
+    /// ⌘K: show Sessions with the search row open and its field focused, so
+    /// typing searches at once. It only opens — unlike the button, a second
+    /// press refocuses the field instead of hiding it. From Tasks it switches
+    /// to Sessions and leaves the Tasks page stack as it was.
+    private func focusSearch() {
+        store.showingScheduledTasks = false
+        compactSearchShown = true
+        searchFieldFocused = true
+    }
+
     /// Board dA2-sessions: a dot per host (an offline one a hollow amber ring),
     /// how many work, and the grouping menu.
     private var hostStrip: some View {
@@ -6422,6 +6460,7 @@ struct ContentView: View {
                 sessionsBody
             }
         }
+        .focusedSceneValue(\.searchSessions, showingCreation || forkModal != nil ? nil : focusSearch)
         .sheet(isPresented: $showingCreation) {
             DesktopCreationSheet(isTask: creationIsTask, searchQuery: creationIsTask ? "" : searchText) { hostID, sessionID in
                 showingCreation = false
@@ -7570,6 +7609,7 @@ struct LFGSessionsApp: App {
                 .environmentObject(store)
         }
         .windowResizability(.contentMinSize)
+        .commands { SearchSessionsCommands() }
         MenuBarExtra {
             MenuBarQuickAccessView()
                 .environmentObject(store)
