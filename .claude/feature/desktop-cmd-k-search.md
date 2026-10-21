@@ -68,6 +68,10 @@ Escape design: a first try put `.onExitCommand` on the field. It closed search w
 
 ## Install (2026-10-21)
 
+**Current: `6beaf29` (⌘K + Escape).** Same recipe as below. Executable SHA-256 `e35ed0f7af10b0dc9709d999d49b788875a9703360188cdc867bf5264b1cb5f9` on both Macs, 259/259 checks on each. On the Pro, a smoke test of the installed app passed: ⌘K opened a focused field, and Escape closed it. On the Air, it runs from `/Applications` (`lsappinfo`). Backups of the `8aa93ca` app: `~/Library/Application Support/lfg-desktop-backups/20261021-esc-6beaf29/` on each Mac. Staged copy on the Air: `~/.lfg/releases/6beaf29/lfg.app`.
+
+**First install: `8aa93ca` (⌘K only).**
+
 Built from a clean `git archive` of `8aa93ca` (other sessions' uncommitted desktop edits excluded). Developer ID signed, `codesign --verify --deep --strict` passes, 259/259 desktop checks pass on both Macs. Executable SHA-256 `70566e4e7490f5f6a4fc2c4e2cd40aecaad582afc8dc16b233f489da48d10210` on both.
 
 - **Pro:** installed at `/Applications/lfg.app`, running pid from that path, Edit ▸ Search Sessions ⌘K present. Previous app: `~/Library/Application Support/lfg-desktop-backups/20261021-cmd-k-8aa93ca/lfg.app`.
