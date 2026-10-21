@@ -6369,6 +6369,14 @@ struct ContentView: View {
         searchFieldFocused = true
     }
 
+    /// Escape: leave search — hide the row and clear the query, as the
+    /// search button does when it closes the row.
+    private func closeSearch() {
+        compactSearchShown = false
+        searchFieldFocused = false
+        searchText = ""
+    }
+
     /// Board dA2-sessions: a dot per host (an offline one a hollow amber ring),
     /// how many work, and the grouping menu.
     private var hostStrip: some View {
@@ -6411,6 +6419,16 @@ struct ContentView: View {
         .padding(.vertical, 7)
         .background(.bar)
         .accessibilityIdentifier("compact_search_row")
+        // Escape leaves search wherever focus is. A modifier on the field
+        // alone would miss the common case: Return in the field drops focus.
+        .background {
+            Button("Close search", action: closeSearch)
+                .keyboardShortcut(.cancelAction)
+                .buttonStyle(.plain)
+                .opacity(0)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 
     @ViewBuilder

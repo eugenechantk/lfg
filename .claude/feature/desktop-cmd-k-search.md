@@ -17,6 +17,7 @@ As Eugene using the lfg Mac app, I want Command-K to open session search with th
 - [x] SC2: Command-K with the search row already open never closes it; it refocuses the field (focus moved elsewhere first) — **Verify by:** live app: open search, move focus off the field, press ⌘K, type, read the value.
 - [x] SC3: Command-K while Tasks is showing switches to Sessions and opens the focused search row — **Verify by:** live app: switch to Tasks, press ⌘K, check Sessions shows and typed text lands in the session field.
 - [x] SC4: The command is in the menu bar (Edit ▸ Search Sessions ⌘K), so it is discoverable — **Verify by:** read the Edit menu items through System Events.
+- [x] SC6: Escape leaves search — hides the row and clears the query — whether the cursor is in the field or Return moved it out; Escape with search closed does nothing — **Verify by:** live app: ⌘K, type, Escape; ⌘K shows an empty field; type, Return, Escape; Escape with the row closed.
 - [x] SC5: Existing desktop feature tests still pass — **Verify by:** the app's built-in test CLI.
 
 ## Platform & Stack
@@ -61,7 +62,9 @@ Screenshots stay local and untracked (`.claude/feature/evidence-desktop-cmd-k/`)
 | SC1 | close row via the toggle → ⌘K → type `alpha` | no text field → field focused, value `''` → value `alpha` | `evidence-desktop-cmd-k/03-sc1-cmdk-closed-row.png` |
 | SC2 | Return (unfocuses, row stays) → ⌘K → type `beta`; then ⌘K again | focused=False → focused=True → value `beta` (old query selected and replaced); second ⌘K: row still open, focused | `evidence-desktop-cmd-k/04-sc2-refocus.png` |
 | SC3 | press `destination_tasks` → ⌘K → type `gamma` | Tasks showing, no field → Tasks gone, `Search sessions` field focused → value `gamma`, "Searching every session…" | `evidence-desktop-cmd-k/05-sc3-tasks-before.png`, `06-sc3-after-cmdk-from-tasks.png` |
+| SC6 | ⌘K, type `esc1`, Escape → ⌘K → type `esc2`, Return, Escape → toggle button open/close → Escape with row closed | field focused `esc1` → row closed → field `''` (query cleared) → unfocused `esc2` → row closed → button still opens/closes → window unchanged. The Escape helper button is hidden from the AX tree | `evidence-desktop-cmd-k/08-esc-before.png`, `09-esc-after.png` (local) |
 
+Escape design: a first try put `.onExitCommand` on the field. It closed search while typing, but did nothing after Return, because Return drops focus from the field. The shipped version is a hidden `.cancelAction` button that exists only while the row shows, so Escape works wherever focus is. It has `allowsHitTesting(false)` so the invisible button can never take a click on the row.
 
 ## Install (2026-10-21)
 
