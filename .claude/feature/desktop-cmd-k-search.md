@@ -63,6 +63,13 @@ Screenshots stay local and untracked (`.claude/feature/evidence-desktop-cmd-k/`)
 | SC3 | press `destination_tasks` → ⌘K → type `gamma` | Tasks showing, no field → Tasks gone, `Search sessions` field focused → value `gamma`, "Searching every session…" | `evidence-desktop-cmd-k/05-sc3-tasks-before.png`, `06-sc3-after-cmdk-from-tasks.png` |
 
 
+## Install (2026-10-21)
+
+Built from a clean `git archive` of `8aa93ca` (other sessions' uncommitted desktop edits excluded). Developer ID signed, `codesign --verify --deep --strict` passes, 259/259 desktop checks pass on both Macs. Executable SHA-256 `70566e4e7490f5f6a4fc2c4e2cd40aecaad582afc8dc16b233f489da48d10210` on both.
+
+- **Pro:** installed at `/Applications/lfg.app`, running pid from that path, Edit ▸ Search Sessions ⌘K present. Previous app: `~/Library/Application Support/lfg-desktop-backups/20261021-cmd-k-8aa93ca/lfg.app`.
+- **Air:** installed at `/Applications/lfg.app` (replacing 1.4.1, SHA `74554d2c…`), launched from its GUI tmux server, `lsappinfo` reports it running from `/Applications`. Previous app in the same backup folder name on the Air. Staged copy: `~/.lfg/releases/8aa93ca/lfg.app`.
+
 ## Bugs
 
 _None yet._
