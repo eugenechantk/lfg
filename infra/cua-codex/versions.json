@@ -1,0 +1,12 @@
+{
+  "base": "ghcr.io/trycua/linux@sha256:fd00735ceb6c65ab628d962640068c9f63076a49a62d86f6b6eb5ac4bbcbbf6b",
+  "platform": "linux/arm64",
+  "node": "24.21.0",
+  "codex-acp": "1.13.1",
+  "codex": "0.156.1",
+  "acp-sdk": "1.5.0",
+  "mcp-remote": "0.14.3",
+  "gog": "0.45.0",
+  "python": "3.12.3",
+  "git": "2.43.0"
+}

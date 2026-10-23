@@ -1,3 +1,7 @@
+import { loadCuaContainers } from '../cua-container.ts';
+import type { CuaStream } from '../cua-stream.ts';
+import { CuaMCP } from "../cua-mcp.ts";
+import { messageRoutes } from "../cua-message.ts";
 import { BrowserSignInHub, signInHTTP, allowsSignInAdapter } from "../browser-sign-in.ts";
 import { phoneSignInPrompt, type SignInPrompt } from "../phone-sign-in-requests.ts";
 import { classifyPanePrompt, permissionFromToolUse, type PromptDetails } from "../prompt-kind.ts";
@@ -1239,7 +1243,7 @@ function sseHeaders(): Record<string, string> {
 
 // Per-socket state for the browser terminal: which tmux session it attaches to
 // and the initial geometry the client reported at connect time.
-type TermSocketData = { sessionName: string; cols: number; rows: number; browserSignIn?: boolean };
+type TermSocketData = { sessionName: string; cols: number; rows: number; browserSignIn?: boolean; cuaStream?: CuaStream };
 
 // Live PTY bridges keyed by their websocket, so message/close handlers can find
 // the bridge to write to / tear down.
@@ -1350,6 +1354,10 @@ export async function cmdServe(options: {
     });
   };
 
+  const cua = new CuaMCP();
+  const cuaContainers = await loadCuaContainers(cua);
+  const cuaRoutes = messageRoutes(cua, join(PATHS.data, "cua-messages"), (req, cuaStream) => server.upgrade(req, { data: { cuaStream, sessionName: "", cols: 0, rows: 0 } }), cuaContainers);
+
   const server = Bun.serve({
     port: PORT,
     hostname: HOST,
@@ -1361,6 +1369,7 @@ export async function cmdServe(options: {
       // as binary frames — the full raw VT byte stream a faithful renderer wants.
       idleTimeout: 600,
       open(ws: ServerWebSocket<TermSocketData>) {
+        if (ws.data.cuaStream) { ws.data.cuaStream.open(ws); return; }
         if (ws.data.browserSignIn) { browserSignIn.open(ws); return; }
         try {
           const { sessionName, cols, rows } = ws.data;
@@ -1389,6 +1398,7 @@ export async function cmdServe(options: {
         }
       },
       message(ws: ServerWebSocket<TermSocketData>, message) {
+        if (ws.data.cuaStream) { ws.data.cuaStream.message(message); return; }
         if (ws.data.browserSignIn) { browserSignIn.message(ws, message); return; }
         const bridge = termBridges.get(ws);
         if (!bridge) return;
@@ -1417,6 +1427,7 @@ export async function cmdServe(options: {
         else bridge.write(bytes);
       },
       close(ws: ServerWebSocket<TermSocketData>) {
+        if (ws.data.cuaStream) { ws.data.cuaStream.close(); return; }
         if (ws.data.browserSignIn) { browserSignIn.close(ws); return; }
         const bridge = termBridges.get(ws);
         termBridges.delete(ws);
@@ -1451,6 +1462,8 @@ export async function cmdServe(options: {
   ): Promise<Response | undefined> {
       const url = new URL(req.url);
       const path = url.pathname;
+
+      if (path.startsWith("/api/message/")) return await cuaRoutes(req);
 
       if (path.startsWith("/api/iphone-preview/")) return iphonePreviewHTTP(req);
 
