@@ -36,7 +36,9 @@ LFG uses Docker to create a container with those mounts and a loopback-only Cua 
 
 New profile Spaces default to Codex when the API caller omits agent. The current native New Space sheet still requires choosing Codex in its existing agent picker. No client update is required to use the profile.
 
-Turn Space off pauses the managed container. Turn Space on resumes it. Neither operation deletes its files. Paused containers retain memory. Removing a profile file does not remove any container; keep the host profile available for lifecycle control.
+Turn Space off stops the managed container and releases its memory. Turn Space on restarts it with its files intact. LFG also stops local Spaces after five minutes of confirmed inactivity, while protecting active agents, live viewers and unconfirmed sends. The next message starts a fresh agent run with saved conversation context. Removing a profile file does not remove any container.
+
+Failed setup stops the newly created container and retains its disk for inspection. LFG does not leave a failed desktop running merely to preserve its files.
 
 ## Sign-ins
 

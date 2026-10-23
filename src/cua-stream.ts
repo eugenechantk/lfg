@@ -64,4 +64,5 @@ export class CuaStreams {
   current.add(stream);this.viewers.set(space,current);return stream;
  }
  stop(space:string){for(const stream of this.viewers.get(space)??[])stream.close();this.endpoints.delete(space);}
+ hasViewers(space:string){return (this.viewers.get(space)?.size??0)>0;}
 }

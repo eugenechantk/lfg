@@ -1,4 +1,4 @@
-import { loadCuaContainers } from '../cua-container.ts';
+import { CuaContainerRuntime, loadCuaContainers } from '../cua-container.ts';
 import type { CuaStream } from '../cua-stream.ts';
 import { CuaMCP } from "../cua-mcp.ts";
 import { messageRoutes } from "../cua-message.ts";
@@ -1356,7 +1356,8 @@ export async function cmdServe(options: {
 
   const cua = new CuaMCP();
   const cuaContainers = await loadCuaContainers(cua);
-  const cuaRoutes = messageRoutes(cua, join(PATHS.data, "cua-messages"), (req, cuaStream) => server.upgrade(req, { data: { cuaStream, sessionName: "", cols: 0, rows: 0 } }), cuaContainers);
+  const cuaRoutes = messageRoutes(cua, join(PATHS.data, "cua-messages"), (req, cuaStream) => server.upgrade(req, { data: { cuaStream, sessionName: "", cols: 0, rows: 0 } }), cuaContainers, { runtime: cuaContainers ?? new CuaContainerRuntime() });
+  cuaRoutes.startIdleCleanup();
 
   const server = Bun.serve({
     port: PORT,

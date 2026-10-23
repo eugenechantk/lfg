@@ -274,7 +274,7 @@ test('takeover waits through queued cancellation and sends only one interrupt',a
 test('configured image profile provisions Codex, preserves mount context, and owns power lifecycle',async()=>{
  const root=await mkdtemp(join(tmpdir(),'lfg-profile-route-'));const calls:any[]=[];let power='running';
  const cua={call:async(name:string,args:any)=>{calls.push({name,args});if(name==='list_spaces')return [{id:'direct:127.0.0.1:4321',phase:'ready'}];if(name==='agent_capabilities')return {harnesses:[{id:'openai-codex',auth:'missing'}]};if(name==='agent_start')return {run_id:'codex-run'};return {};}};
- const containers={profile:{codexModel:'gpt-6.1-sol'},create:async()=>({id:'direct:127.0.0.1:4321',containerName:'lfg-owned',guestCodexAuth:true,sharedPaths:[{path:'/pro/projects',readOnly:true}]}),state:async()=>power,power:async(_name:string,action:string)=>{power=action==='stop'?'suspended':'running';}} as any;
+ const containers={profile:{codexModel:'gpt-6.1-sol'},create:async()=>({id:'direct:127.0.0.1:4321',containerName:'lfg-owned',guestCodexAuth:true,sharedPaths:[{path:'/pro/projects',readOnly:true}]}),state:async()=>power,power:async(_name:string,action:string)=>{power=action==='stop'?'stopped':'running';}} as any;
  const route=messageRoutes(cua,root,undefined,containers);
  const req=(path:string,body?:any)=>route(new Request('http://test/api/message'+path,{method:body?'POST':'GET',...(body?{body:JSON.stringify(body)}:{})}));
  const space=(await (await req('/spaces',{name:'Ready'}))!.json() as any).space;
@@ -282,5 +282,5 @@ test('configured image profile provisions Codex, preserves mount context, and ow
  expect((await req(`/spaces/${space.id}/messages`,{text:'Read a file',requestID:'one'}))!.status).toBe(200);
  const start=calls.find(c=>c.name==='agent_start');expect(start.args.model).toBe('gpt-6.1-sol');expect(start.args.prompt).toContain('/pro/projects (read-only)');expect(start.args.mcp_servers).toBeUndefined();
  expect((await req(`/spaces/${space.id}/power`,{action:'stop'}))!.status).toBe(200);
- const list=await (await req('/spaces'))!.json() as any;expect(list.spaces[0].powerState).toBe('suspended');expect(calls.some(c=>c.name==='stop_space')).toBe(false);
+ const list=await (await req('/spaces'))!.json() as any;expect(list.spaces[0].powerState).toBe('stopped');expect(calls.some(c=>c.name==='stop_space')).toBe(false);
 });

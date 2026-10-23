@@ -21,9 +21,13 @@ The first image download takes longer than later creations. Space creation can r
 - Send a task from Chat. LFG follows Cua's event cursor and preserves the run for follow-ups.
 - Open Browser to navigate, inspect the desktop image, click, type, and send Enter or Tab.
 - Pause the agent before manual browser input. The API refuses input while the agent still runs or its state is unknown.
-- Turn the Space off when finished. Closing Message does not stop it.
+- Turn the Space off when finished. Local Spaces also stop after five minutes of confirmed inactivity. Closing Message ends its live view; an active agent keeps working.
 
-The bot's persistent home uses Cua Volume. This version keeps each Space until you manage it explicitly. It does not create and delete desktops automatically per task.
+The bot's persistent home uses Cua Volume. Stopping a local container releases memory and keeps its files. LFG never deletes the desktop automatically.
+
+Idle cleanup protects active agents, connected live viewers, pending sends and operations with unknown outcomes. Reading chat does not keep an unused desktop running. Browser input resets the idle timer. A failed status check starts a new grace period after recovery.
+
+Turning the Space on restarts its desktop. Its previous agent process ended when the container stopped. The next message starts a fresh run with saved conversation context. Completed replies remain available while the Space is off.
 
 ## Authentication and connectors
 
@@ -55,7 +59,9 @@ Real acceptance requires creating a desktop, controlling its browser, and obtain
 Spaces components use FSL-1.1-MIT. Review Cua's commercial policy before offering a hosted or managed product to customers:
 https://github.com/trycua/cua/blob/main/legal/COMMERCIAL.md
 
-For local containers, Cua's off operation suspends execution while retaining memory. It reduces CPU activity but does not guarantee RAM reclamation. The current UI does not delete Spaces.
+For local containers, LFG uses Docker stop rather than Cua's suspend operation. Previously paused local Spaces are stopped without resuming their agents. This applies to the standard local desktop and custom image profile. Remote Spaces continue through Cua's own lifecycle and are excluded from local idle cleanup.
+
+Keep Docker Desktop Resource Saver enabled. Once all containers stop, Docker can shut down its idle Linux virtual machine while Desktop remains available. Resource Saver cannot reclaim a paused container's memory.
 
 ## Live Space
 
