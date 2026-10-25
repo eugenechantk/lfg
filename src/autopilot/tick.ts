@@ -30,6 +30,7 @@ import {
   type TaskResult,
 } from "./registry.ts";
 import { retitleStep } from "./retitle.ts";
+import { recoveryStep } from "./recovery.ts";
 
 /** The autopilot's one and only cadence. Every step runs on every tick. */
 export const TICK_MS = Number(process.env.LFG_AUTOPILOT_TICK_MS ?? 10 * 60 * 1000);
@@ -38,7 +39,7 @@ export const STATE_PATH = join(PATHS.data, "autopilot-state.json");
 export const LOG_PATH = join(PATHS.data, "autopilot.log");
 
 /** Every step the autopilot performs, in run order. */
-export const STEPS: AutopilotStep[] = [retitleStep];
+export const STEPS: AutopilotStep[] = [recoveryStep, retitleStep];
 
 export function findStep(name: string): AutopilotStep | undefined {
   return STEPS.find((s) => s.name === name);

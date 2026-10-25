@@ -42,6 +42,7 @@ import { PATHS } from "./config.ts";
 import type { Journal } from "./journal.ts";
 import { SendqStore, type SendqRow } from "./sendq-store.ts";
 import { retractNativeQueue, type NativeQueueRetraction } from "./native-queue.ts";
+import { isRecoveryMessage, recoveryDeliverySafe, recoverySubmissionSafe } from "./autopilot/recovery.ts";
 
 export type QueuedMsg = {
   id: string;
@@ -161,7 +162,9 @@ function ensureRecovered(): void {
   for (const row of store.recoverable()) {
     const msg = fromRow(row);
     if (msg.status === "sending") {
-      msg.status = "pending";
+      // A recovery may already have reached Claude before the host stopped.
+      // Reconcile against the transcript; never automatically type it again.
+      msg.status = isRecoveryMessage(msg) ? "queued" : "pending";
       msg.updatedAt = Date.now();
       persistMsg(row.sessionId, msg);
     }
@@ -1223,7 +1226,12 @@ export function reconcileQueuedCore(
     } else if (!covered) {
       continue;
     } else if (opts.idleConfirmed && opts.now - m.updatedAt > grace) {
-      if ((m.redeliveries ?? 0) < MAX_REDELIVERIES) {
+      if (isRecoveryMessage(m)) {
+        m.status = "failed";
+        m.error = "connection recovery delivery uncertain — inspect session before retrying";
+        m.updatedAt = opts.now;
+        changed = true;
+      } else if ((m.redeliveries ?? 0) < MAX_REDELIVERIES) {
         // Re-drive on the now-idle agent. Reset attempts so deliver()'s per-call
         // retry budget starts fresh; bump redeliveries to bound the outer loop.
         m.redeliveries = (m.redeliveries ?? 0) + 1;
@@ -1389,9 +1397,18 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<{ userTurnId:
   const needle = norm(msg.text).slice(0, NEEDLE_LEN);
   const transcriptMatchesBefore = await transcriptUserMatches(transcriptPath, needle);
 
+  // Autopilot must never dismiss a dialog or clear a user's draft. Its claims
+  // survive restart, so validate the exact failed turn again at delivery time.
+  const recovery = isRecoveryMessage(msg);
+  if (recovery && (!sess || !await recoveryDeliverySafe(sess, msg))) {
+    msg.status = "failed";
+    msg.error = "connection recovery superseded or session no longer safely idle";
+    return { userTurnId: null };
+  }
+
   // Clear any session-rating overlay first — it swallows Enter and would
   // otherwise swallow the Enter of every send.
-  if (clearFeedbackPrompt(target)) await sleep(300);
+  if (!recovery && clearFeedbackPrompt(target)) await sleep(300);
 
   // "Chat about this": when a selector (permission / plan / question dialog) is
   // open, sending a message means the user chose to type a reply instead of
@@ -1412,7 +1429,7 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<{ userTurnId:
   // never left the input box after retries" (pre-2026-09-17 policy). The
   // footer-based detector fixes it.
   const selectorOpen = (p: string) => !!parsePrompt(p) || questionSelectorOpen(p);
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; !recovery && attempt < 2; attempt++) {
     const pane = capturePane(target);
     if (!pane || !selectorOpen(pane)) break;
     tmuxInterrupt(target); // single Escape — cancels the open selector
@@ -1441,8 +1458,10 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<{ userTurnId:
   // Wipe any foreign draft first. The composer may already hold text the user
   // (or a stranded earlier send) left there; insertion appends, so without this
   // our message fuses onto it. Ctrl-U on an empty box is a harmless no-op.
-  tmuxClearInput(target);
-  await sleep(120);
+  if (!recovery) {
+    tmuxClearInput(target);
+    await sleep(120);
+  }
   if (multiline) tmuxPaste(target, msg.text);
   else tmuxType(target, msg.text);
   msg.attempts = 1;
@@ -1457,7 +1476,7 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<{ userTurnId:
   // window; a further round only happens when the composer POSITIVELY still
   // shows the draft, and an extra Enter on an already-empty box is a no-op, so
   // a misread here costs a keystroke, never the message.
-  const ENTER_ROUNDS = 3;
+  const ENTER_ROUNDS = recovery ? 1 : 3;
   const isCommand = msg.text.trimStart().startsWith("/");
   for (let round = 0; round < ENTER_ROUNDS; round++) {
     if (round > 0) {
@@ -1467,7 +1486,13 @@ async function deliver(sessionId: string, msg: QueuedMsg): Promise<{ userTurnId:
     }
     // The rating overlay can surface between turns, right as we're about to
     // submit; clear it again so this Enter isn't swallowed.
-    if (clearFeedbackPrompt(target)) await sleep(300);
+    if (recovery && !await recoverySubmissionSafe(sess!, msg)) {
+      msg.status = "queued";
+      msg.error = "connection recovery submission stopped by newer activity, prompt or draft";
+      persistMsg(sessionId, msg);
+      return { userTurnId: null };
+    }
+    if (!recovery && clearFeedbackPrompt(target)) await sleep(300);
     tmuxEnter(target);
     for (let i = 0; i < 24; i++) {
       await sleep(150);
