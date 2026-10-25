@@ -25,6 +25,8 @@ struct RootView: View {
     /// tab selects it, then scrolls).
     @State private var sessionsScrollToTop = 0
     @State private var tasksScrollToTop = 0
+    @State private var showPendingShares = false
+    @State private var shareBridge = ShareAppBridge.shared
     @State private var showSettings = false
     @State private var showNewSession = false
     @State private var focusNewSessionComposer = false
@@ -108,8 +110,24 @@ struct RootView: View {
         // (multi-host), falling back to the default host.
         .environment(\.hostFiles, hostFilesForSelection)
         .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showPendingShares) { PendingSharesView() }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if !shareBridge.pending.isEmpty {
+                Button { showPendingShares = true } label: {
+                    HStack {
+                        Image(systemName: "square.and.arrow.up")
+                        Text("\(shareBridge.pending.count) pending \(shareBridge.pending.count == 1 ? "share" : "shares")")
+                        Spacer()
+                        Text("Review").fontWeight(.semibold)
+                    }.font(.subheadline).padding(.horizontal, 16).padding(.vertical, 9)
+                }
+                .background(.bar).accessibilityIdentifier("share_pending_banner")
+            }
+        }
         .task(id: settings.hosts) {
             guard settings.hasConfiguredHost else { return }
+            shareBridge.publish(settings: settings, store: store)
+            shareBridge.resume(settings: settings, store: store)
             store.start()
             await store.resolveHostIdentities()
             await store.loadCreateMetadata()
@@ -170,6 +188,7 @@ struct RootView: View {
             guard settings.hasConfiguredHost else { return }
             switch phase {
             case .active:
+                shareBridge.resume(settings: settings, store: store)
                 store.enterForeground()
                 FleetActivityController.shared.syncNow()
             case .background:

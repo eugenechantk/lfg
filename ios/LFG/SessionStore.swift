@@ -2535,6 +2535,7 @@ import LFGCore
         await task.value
         if refreshTask == task { refreshTask = nil }
         FleetActivityController.shared.syncNow()
+        ShareAppBridge.shared.resume(settings: settings, store: self)
     }
 
     private func performRefresh() async {
@@ -2743,6 +2744,7 @@ import LFGCore
     /// Rebuild the merged session list + routing table from each host's last-known
     /// snapshot. Cheap and idempotent, so it can run once per arriving host result.
     private func rebuildSessions() {
+        defer { ShareAppBridge.shared.publish(settings: settings, store: self) }
         // Merge last-known snapshots, suppressing moved-away source copies.
         // Reachable duplicates win over offline snapshots without reordering rows.
         let perHostLive = settings.hosts.map {

@@ -28,6 +28,14 @@ final class HostCredentialStore: @unchecked Sendable {
     static let shared = HostCredentialStore()
 
     private let service = "dev.omg.lfg.cloudflare-access"
+    // Reuse the app's original default access group. Existing items remain
+    // readable without moving or deleting credentials on upgrade.
+    private var accessGroup: String? { Bundle.main.object(forInfoDictionaryKey: "LFGSharedKeychainGroup") as? String }
+    private func scoped(_ query: [String: Any]) -> [String: Any] {
+        var query = query
+        if let accessGroup, !accessGroup.contains("$(") { query[kSecAttrAccessGroup as String] = accessGroup }
+        return query
+    }
 
     private struct Record: Codable {
         let clientID: String
@@ -44,7 +52,7 @@ final class HostCredentialStore: @unchecked Sendable {
             kSecReturnData as String: true,
         ]
         var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+        guard SecItemCopyMatching(scoped(query) as CFDictionary, &item) == errSecSuccess,
               let data = item as? Data,
               let record = try? JSONDecoder().decode(Record.self, from: data) else { return nil }
         return CloudflareAccessCredential(
@@ -72,11 +80,11 @@ final class HostCredentialStore: @unchecked Sendable {
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
         ]
-        let status = SecItemUpdate(identity as CFDictionary, update as CFDictionary)
+        let status = SecItemUpdate(scoped(identity) as CFDictionary, update as CFDictionary)
         if status == errSecItemNotFound {
             var add = identity
             for (key, value) in update { add[key] = value }
-            let addStatus = SecItemAdd(add as CFDictionary, nil)
+            let addStatus = SecItemAdd(scoped(add) as CFDictionary, nil)
             guard addStatus == errSecSuccess else { throw HostCredentialStoreError.keychain(addStatus) }
         } else if status != errSecSuccess {
             throw HostCredentialStoreError.keychain(status)
@@ -90,7 +98,7 @@ final class HostCredentialStore: @unchecked Sendable {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
-        let status = SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(scoped(query) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw HostCredentialStoreError.keychain(status)
         }

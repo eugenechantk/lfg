@@ -654,12 +654,25 @@ public struct LFGClient: Sendable {
     // MARK: Create / resume
 
     public func newSession(_ r: NewSessionRequest) async throws -> NewSessionResponse {
+        let data = try await performRaw(newSessionRequest(r))
+        return try JSONDecoder().decode(NewSessionResponse.self, from: data)
+    }
+
+    /// Shared request construction for the app and its share extension. The
+    /// extension transport preserves URLError codes to distinguish offline work
+    /// from an ambiguous POST and must not duplicate the create body.
+    public func newSessionRequest(_ r: NewSessionRequest) throws -> URLRequest {
         let path = r.purpose == .scheduledTask ? "api/scheduled-tasks/chat" : "api/sessions/new"
-        let data = try await send("POST", path, json: [
+        var request = URLRequest(url: url(path))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any?] = [
             "cwd": r.cwd, "prompt": r.prompt, "agent": r.agent, "model": r.model, "user": r.user,
             "timezone": r.purpose == .scheduledTask ? r.timezone : nil,
-        ])
-        return try JSONDecoder().decode(NewSessionResponse.self, from: data)
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body.mapValues { $0 ?? NSNull() })
+        return authenticated(request)
     }
 
     public func resume(_ r: ResumeRequest) async throws -> NewSessionResponse {
@@ -816,6 +829,16 @@ public struct LFGClient: Sendable {
         contentType: String,
         filename: String? = nil
     ) async throws -> String {
+        var req = uploadRequest(sessionID, contentType: contentType, filename: filename)
+        req.httpBody = data
+        let respData = try await performRaw(req)
+        struct UploadResponse: Decodable { let path: String }
+        return try JSONDecoder().decode(UploadResponse.self, from: respData).path
+    }
+
+    /// File-backed transports reuse these exact headers without retaining large
+    /// attachment bodies in the share extension's limited memory.
+    public func uploadRequest(_ sessionID: String, contentType: String, filename: String? = nil) -> URLRequest {
         var req = URLRequest(url: url("api/sessions/\(sessionID)/upload"))
         req.httpMethod = "POST"
         // Videos and large documents are far heavier than the photos this
@@ -828,10 +851,7 @@ public struct LFGClient: Sendable {
             ) ?? filename
             req.setValue(encoded, forHTTPHeaderField: "X-LFG-Filename")
         }
-        req.httpBody = data
-        let respData = try await performRaw(req)
-        struct UploadResponse: Decodable { let path: String }
-        return try JSONDecoder().decode(UploadResponse.self, from: respData).path
+        return authenticated(req)
     }
 
     // MARK: Push notifications

@@ -30,6 +30,7 @@ targets:
         excludes:
           - ".syncthing.*.tmp"
       - path: Shared
+      - path: ShareSupport
       - path: ../shared/ScheduledTasksView.swift
       # A2 task views shared with the Mac app (desktop/build.sh compiles the same folder).
       - path: ../shared/Tasks
@@ -50,6 +51,8 @@ targets:
       - sdk: ActivityKit.framework
       - sdk: Security.framework
       - target: LFGWidgets
+        embed: true
+      - target: LFGShare
         embed: true
     settings:
       base:
@@ -73,10 +76,15 @@ targets:
         # Driven by APS_ENVIRONMENT (Debug=development, Release=production) so the
         # archived TestFlight/App Store build uses the production APNs environment.
         aps-environment: $(APS_ENVIRONMENT)
+        com.apple.security.application-groups:
+          - group.com.eugenechan.lfg
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.eugenechan.lfg
     info:
       path: LFG/Info.plist
       properties:
         CFBundleDisplayName: lfg
+        LFGSharedKeychainGroup: $(AppIdentifierPrefix)com.eugenechan.lfg
         # Without these, xcodegen bakes static "1"/"1.0" into the generated
         # Info.plist -- so the deploy lane's `xcargs CURRENT_PROJECT_VERSION=`
         # build number never reached the binary, and App Store Connect
@@ -113,6 +121,60 @@ targets:
         NSPhotoLibraryAddUsageDescription: Save images and videos from session files to your photo library.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+  LFGShare:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: LFGShare
+        excludes:
+          - SharePreprocessor.js
+      - path: LFGShare/SharePreprocessor.js
+        buildPhase: resources
+      - path: ShareSupport
+      - path: LFG/HostCredentialStore.swift
+      - path: LFG/Assets.xcassets
+    dependencies:
+      - package: LFGCore
+        product: LFGCore
+      - sdk: Security.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.eugenechan.lfg.Share
+        MARKETING_VERSION: 1.4.1
+        CURRENT_PROJECT_VERSION: 1
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 39GJBP8V5A
+        APPLICATION_EXTENSION_API_ONLY: true
+        SKIP_INSTALL: true
+    entitlements:
+      path: LFGShare/LFGShare.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.eugenechan.lfg
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.eugenechan.lfg
+    info:
+      path: LFGShare/Info.plist
+      properties:
+        CFBundleDisplayName: LFG
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        LFGSharedKeychainGroup: $(AppIdentifierPrefix)com.eugenechan.lfg
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionJavaScriptPreprocessingFile: SharePreprocessor
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 10
+              NSExtensionActivationSupportsWebPageWithMaxCount: 1
+              NSExtensionActivationSupportsImageWithMaxCount: 10
+              NSExtensionActivationSupportsMovieWithMaxCount: 10
+              NSExtensionActivationSupportsFileWithMaxCount: 10
   LFGWidgets:
     type: app-extension
     platform: iOS

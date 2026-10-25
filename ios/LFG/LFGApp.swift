@@ -59,7 +59,9 @@ struct LFGApp: App {
     var body: some Scene {
         WindowGroup {
             #if DEBUG
-            if ProcessInfo.processInfo.environment["LFG_MARKDOWN_TABLE_FIXTURE"] == "1" {
+            if ProcessInfo.processInfo.environment["LFG_SHARE_FIXTURE"] == "1" {
+                ShareSheetFixture().environment(settings).environment(store)
+            } else if ProcessInfo.processInfo.environment["LFG_MARKDOWN_TABLE_FIXTURE"] == "1" {
                 NavigationStack {
                     MarkdownTableLayoutFixture()
                 }
