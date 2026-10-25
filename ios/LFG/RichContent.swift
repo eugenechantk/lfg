@@ -361,7 +361,7 @@ private struct HostImageProvider: ImageProvider {
     }
 }
 
-private struct AuthenticatedImage: View {
+struct AuthenticatedImage: View {
     let url: URL
     let client: LFGClient?
 
@@ -413,6 +413,8 @@ struct MediaAttachmentsView: View {
     var onOpen: ((MediaRef, [MediaRef]) -> Void)? = nil
     @Environment(\.hostFiles) private var hostFiles
     @Environment(\.transcriptPreviewFiles) private var transcriptPreviewFiles
+    @Environment(\.openFilePaneID) private var openFilePaneID
+    @Environment(\.colorScheme) private var colorScheme
     @State private var viewing: MediaRef?
 
     var body: some View {
@@ -446,11 +448,20 @@ struct MediaAttachmentsView: View {
                 Image(systemName: icon(ref.kind)).font(.title3).foregroundStyle(.secondary)
                 Text(ref.filename).font(.subheadline).lineLimit(1)
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                if openFilePaneID == ref.id {
+                    Text("Open").font(.system(size: 13, weight: .semibold)).foregroundStyle(.blue)
+                }
+                Image(systemName: "chevron.right").font(.caption)
+                    .foregroundStyle(openFilePaneID == ref.id ? Color.blue : Color(.tertiaryLabel))
             }
-            .padding(10)
+            .padding(.horizontal, 10).padding(.vertical, openFilePaneID == ref.id ? 8 : 10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+            .background(openFilePaneID == ref.id ? (colorScheme == .dark ? Color(red: 24 / 255, green: 43 / 255, blue: 62 / 255) : Color.blue.opacity(0.12)) : Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+            .overlay {
+                if openFilePaneID == ref.id {
+                    RoundedRectangle(cornerRadius: 10).stroke(Color.blue, lineWidth: 1)
+                }
+            }
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("inlineFileCard_\(ref.filename)")
@@ -493,24 +504,96 @@ struct MediaAttachmentsView: View {
 struct HostVideoPlayer: UIViewControllerRepresentable {
     let url: URL
     let client: LFGClient?
+    var allowsPictureInPicture = false
 
-    @MainActor final class Coordinator {
+    @MainActor final class Coordinator: NSObject, @MainActor AVPlayerViewControllerDelegate, UIAdaptivePresentationControllerDelegate {
         let controller = AVPlayerViewController()
         var url: URL?
         /// Retained here: `AVAssetResourceLoader` holds its delegate weakly.
         var loader: StreamingResourceLoader?
+        private static var floating: [ObjectIdentifier: Coordinator] = [:]
+        private var pictureInPictureActive = false
+        private var detached = false
+        private var restoredNavigation: UINavigationController?
+
+        override init() {
+            super.init()
+            controller.delegate = self
+        }
+
+        static func attach(url: URL) -> Coordinator {
+            if let owner = floating.values.first(where: { $0.url == url && $0.pictureInPictureActive && $0.restoredNavigation == nil }) {
+                owner.detached = false
+                return owner
+            }
+            return Coordinator()
+        }
+
+        func detach() {
+            detached = true
+            if !pictureInPictureActive { finish() }
+        }
+
+        private func finish() {
+            controller.player?.pause()
+            controller.player = nil
+            loader?.invalidate()
+            loader = nil
+            restoredNavigation = nil
+            Self.floating[ObjectIdentifier(self)] = nil
+        }
+
+        func playerViewControllerWillStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
+            pictureInPictureActive = true
+            Self.floating[ObjectIdentifier(self)] = self
+        }
+        func playerViewControllerDidStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
+            pictureInPictureActive = false
+            if detached && restoredNavigation == nil { finish() }
+            else if !detached { Self.floating[ObjectIdentifier(self)] = nil }
+        }
+        func playerViewController(_ playerViewController: AVPlayerViewController, failedToStartPictureInPictureWithError error: Error) {
+            pictureInPictureActive = false
+            if detached { finish() }
+            else { Self.floating[ObjectIdentifier(self)] = nil }
+        }
+        func playerViewController(_ playerViewController: AVPlayerViewController,
+                                  restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
+            if playerViewController.view.window != nil { completionHandler(true); return }
+            guard var presenter = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
+                .flatMap(\.windows).first(where: \.isKeyWindow)?.rootViewController else { completionHandler(false); return }
+            while let presented = presenter.presentedViewController { presenter = presented }
+            playerViewController.willMove(toParent: nil)
+            playerViewController.view.removeFromSuperview()
+            playerViewController.removeFromParent()
+            let navigation = UINavigationController(rootViewController: playerViewController)
+            navigation.modalPresentationStyle = .fullScreen
+            playerViewController.navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .done, primaryAction: UIAction { [weak self] _ in
+                guard let self else { return }
+                self.restoredNavigation?.dismiss(animated: true) {
+                    self.restoredNavigation = nil
+                    if !self.pictureInPictureActive { self.finish() }
+                }
+            })
+            restoredNavigation = navigation
+            presenter.present(navigation, animated: false) { completionHandler(true) }
+            navigation.presentationController?.delegate = self
+        }
+        func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+            restoredNavigation = nil
+            if !pictureInPictureActive { finish() }
+        }
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator { allowsPictureInPicture ? Coordinator.attach(url: url) : Coordinator() }
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let vc = context.coordinator.controller
         vc.showsPlaybackControls = true
         vc.videoGravity = .resizeAspect
         vc.view.backgroundColor = .clear
-        // PiP would need the `audio` background mode, which this app doesn't
-        // declare — the button would appear and then stall on backgrounding.
-        vc.allowsPictureInPicturePlayback = false
+        vc.allowsPictureInPicturePlayback = allowsPictureInPicture
+        vc.canStartPictureInPictureAutomaticallyFromInline = false
         vc.updatesNowPlayingInfoCenter = false
         load(into: context.coordinator)
         return vc
@@ -521,8 +604,7 @@ struct HostVideoPlayer: UIViewControllerRepresentable {
     }
 
     static func dismantleUIViewController(_ vc: AVPlayerViewController, coordinator: Coordinator) {
-        vc.player?.pause()
-        coordinator.loader?.invalidate()
+        coordinator.detach()
     }
 
     private func load(into coordinator: Coordinator) {
@@ -545,6 +627,7 @@ struct HostVideoPlayer: UIViewControllerRepresentable {
         // Without an explicit category the session stays `.soloAmbient`, which obeys the
         // ring/silent switch: inline videos played muted on a phone set to silent.
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        if allowsPictureInPicture { try? AVAudioSession.sharedInstance().setActive(true) }
         player.play()
     }
 }
@@ -918,12 +1001,13 @@ struct FileShareFixture: View {
 
 /// One page in the file preview. The pager only constructs its current page,
 /// so hidden videos cannot start playing beside the one the user is watching.
-private struct FileViewerPage: View {
+struct FileViewerPage: View {
     let ref: MediaRef
     let url: URL?
     let originalURL: URL?
     let client: LFGClient?
     let onImageZoomChanged: (Bool) -> Void
+    var allowsPictureInPicture = false
 
     enum Phase: Equatable { case loading, failed(String), data(Data), video(URL) }
     @State private var phase: Phase = .loading
@@ -946,7 +1030,7 @@ private struct FileViewerPage: View {
                 case .video(let url):
                     // Streams from the host; the player shows its own buffering
                     // state, so there is no app-level "Preparing…" phase.
-                    HostVideoPlayer(url: url, client: client).ignoresSafeArea(edges: .bottom)
+                    HostVideoPlayer(url: url, client: client, allowsPictureInPicture: allowsPictureInPicture).ignoresSafeArea(edges: .bottom)
                 }
             }
         }
@@ -1030,13 +1114,22 @@ private struct FileViewerPage: View {
 
 struct PDFDataView: UIViewRepresentable {
     let data: Data
+    func makeCoordinator() -> Coordinator { Coordinator() }
     func makeUIView(context: Context) -> PDFView {
         let v = PDFView()
         v.autoScales = true
         v.document = PDFDocument(data: data)
+        context.coordinator.data = data
         return v
     }
-    func updateUIView(_ view: PDFView, context: Context) {}
+    func updateUIView(_ view: PDFView, context: Context) {
+        guard context.coordinator.data != data else { return }
+        let page = view.currentPage.flatMap { view.document?.index(for: $0) }
+        context.coordinator.data = data
+        view.document = PDFDocument(data: data)
+        if let page, let restored = view.document?.page(at: page) { view.go(to: restored) }
+    }
+    final class Coordinator { var data: Data? }
 }
 
 /// Pinch-to-zoom image viewer backed by `UIScrollView`. Opens fit-to-width,
@@ -1210,17 +1303,27 @@ struct QuickLookView: UIViewControllerRepresentable {
         c.dataSource = context.coordinator
         return c
     }
-    func updateUIViewController(_ controller: QLPreviewController, context: Context) {}
+    func updateUIViewController(_ controller: QLPreviewController, context: Context) {
+        guard context.coordinator.data != data else { return }
+        context.coordinator.data = data
+        try? data.write(to: context.coordinator.fileURL, options: .atomic)
+        controller.reloadData()
+    }
 
     final class Coordinator: NSObject, QLPreviewControllerDataSource {
         let fileURL: URL
+        var data: Data
         init(data: Data, filename: String) {
+            self.data = data
             let safe = filename.replacingOccurrences(of: "/", with: "_")
             let name = safe.isEmpty ? "file" : safe
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("lfg-preview-\(UUID().uuidString)", isDirectory: true)
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let url = directory.appendingPathComponent(name)
             try? data.write(to: url)
             fileURL = url
         }
+        deinit { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
         func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
         func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
             fileURL as NSURL

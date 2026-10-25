@@ -7,7 +7,7 @@ import Foundation
 // in LFGCore (not the SwiftUI layer) because it is pure string work with a lot
 // of edge cases, and those deserve tests that run without a simulator.
 
-public enum MediaKind: Equatable, Hashable, Sendable {
+public enum MediaKind: String, Codable, Equatable, Hashable, Sendable {
     case image, video, pdf, markdown, other
 
     public static func from(ext: String) -> MediaKind? {
@@ -15,13 +15,14 @@ public enum MediaKind: Equatable, Hashable, Sendable {
         case "png", "jpg", "jpeg", "gif", "webp", "heic", "bmp", "tiff": return .image
         case "mp4", "mov", "m4v", "webm": return .video
         case "pdf": return .pdf
+        case "html", "htm": return .other
         case "md", "markdown", "txt": return .markdown
         default: return nil
         }
     }
 }
 
-public struct MediaRef: Identifiable, Equatable, Hashable, Sendable {
+public struct MediaRef: Codable, Identifiable, Equatable, Hashable, Sendable {
     public let raw: String          // original path or URL string
     public let kind: MediaKind
     public var label: String?       // friendly name from a markdown link, if any
@@ -273,20 +274,22 @@ public enum LinkScanner {
 public struct TranscriptAttachment: Identifiable, Equatable, Hashable, Sendable {
     public let ref: MediaRef
     public let ts: Double?
+    public let messageID: String?
     public var id: String { ref.raw }
 
-    public init(ref: MediaRef, ts: Double?) {
-        self.ref = ref; self.ts = ts
+    public init(ref: MediaRef, ts: Double?, messageID: String? = nil) {
+        self.ref = ref; self.ts = ts; self.messageID = messageID
     }
 }
 
 public struct TranscriptLink: Identifiable, Equatable, Hashable, Sendable {
     public let link: WebLink
     public let ts: Double?
+    public let messageID: String?
     public var id: String { link.url }
 
-    public init(link: WebLink, ts: Double?) {
-        self.link = link; self.ts = ts
+    public init(link: WebLink, ts: Double?, messageID: String? = nil) {
+        self.link = link; self.ts = ts; self.messageID = messageID
     }
 }
 
@@ -373,11 +376,11 @@ public enum TranscriptResourceIndex {
             let claimed = Set(refs.map(\.raw))
             for ref in refs where !seenFiles.contains(ref.raw) {
                 seenFiles.insert(ref.raw)
-                files.append(TranscriptAttachment(ref: ref, ts: ts))
+                files.append(TranscriptAttachment(ref: ref, ts: ts, messageID: message.stableID))
             }
             for link in LinkScanner.scan(message.text, excluding: claimed) where !seenLinks.contains(link.url) {
                 seenLinks.insert(link.url)
-                links.append(TranscriptLink(link: link, ts: ts))
+                links.append(TranscriptLink(link: link, ts: ts, messageID: message.stableID))
             }
         }
         return TranscriptResources(

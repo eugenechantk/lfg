@@ -57,6 +57,12 @@ struct SessionDetailView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(\.dismiss) private var dismiss
     @Environment(\.hostFiles) private var hostFiles
+    @Environment(\.filePaneNavigation) private var paneNavigation
+    @State private var filePane = FilePaneState()
+    @State private var paneResources = TranscriptResources()
+    @State private var paneLoaded = false
+    @State private var paneRevision = ""
+    @State private var paneRevisionPath: String?
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var signInRequests: [PhoneSignInAgentRequest] = []
@@ -90,6 +96,7 @@ struct SessionDetailView: View {
     /// still holds the whole conversation — this bounds only what SwiftUI has to
     /// place. See `TranscriptWindow` for the profile that motivates it.
     @State private var window = TranscriptWindow.pageSize
+    @State private var revealingFileSource = false
     /// True from the moment a page is added until the reader's position has been
     /// restored — see `extendWindow` for why this gate is load-bearing.
     @State private var extending = false
@@ -252,7 +259,18 @@ struct SessionDetailView: View {
     }
 
     var body: some View {
-        sessionSurface
+        FilePaneContainer(state: $filePane, resources: paneResources, messages: messages,
+                          revision: paneRevisionPath == filePane.selection?.id ? paneRevision : "",
+                          sessionTitle: displayTitle, sessionIsBusy: isBusy,
+                          hostFiles: resolvedHostFiles, keyboardVisible: keyboardOcclusionHeight > 0,
+                          onReveal: revealFileSource, header: { filePaneTranscriptHeader }, content: { sessionSurface })
+            .environment(\.openURL, OpenURLAction { url in
+                guard UIDevice.current.userInterfaceIdiom == .pad,
+                      ["https", "http"].contains(url.scheme?.lowercased() ?? "") else { return .systemAction }
+                filePane.open(MediaRef(raw: url.absoluteString,
+                    kind: MediaKind.from(ext: url.pathExtension) ?? .other))
+                return .handled
+            })
             .environment(\.transcriptPreviewFiles, transcriptPreviewFiles)
             // Full title, revealed by tapping the (truncated) nav-bar title. An overlay
             // card rather than an expanded bar, because these titles are whole
@@ -306,6 +324,10 @@ struct SessionDetailView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar { toolbarMenu }
         .task(id: sid) {
+            if !paneLoaded {
+                filePane = FilePaneMemory.load(paneMemoryKey)
+                paneLoaded = true
+            }
             // Opening is now just state: the inverted list rests at the newest
             // message because that is `contentOffset == 0`. There is nothing to
             // pin, settle or confirm.
@@ -332,11 +354,27 @@ struct SessionDetailView: View {
         }
         .task(id: "inline-file-index-\(sid)-\(store.transcriptVersion[sid] ?? 0)") {
             let snapshot = messages
-            let files = await Task.detached(priority: .utility) {
-                TranscriptResourceIndex.collect(from: snapshot).files.map(\.ref)
+            let resources = await Task.detached(priority: .utility) {
+                TranscriptResourceIndex.collect(from: snapshot)
             }.value
             guard !Task.isCancelled else { return }
-            transcriptPreviewFiles = files
+            paneResources = resources
+            transcriptPreviewFiles = resources.files.map(\.ref)
+            if !snapshot.isEmpty { filePane.observe(resources) }
+        }
+        .task(id: "pane-revision-\(sid)-\(store.transcriptVersion[sid] ?? 0)-\(filePane.selection?.id ?? "")") {
+            let snapshot = messages
+            let path = filePane.selection?.raw ?? ""
+            let revision = await Task.detached(priority: .utility) {
+                FilePaneRevision.token(for: path, messages: snapshot)
+            }.value
+            guard !Task.isCancelled else { return }
+            paneRevision = revision
+            paneRevisionPath = path
+        }
+        .onChange(of: filePane) { _, state in
+            guard paneLoaded else { return }
+            FilePaneMemory.save(state, key: paneMemoryKey)
         }
         .task(id: "model-catalog-\(sid)") {
             await store.loadModelCatalog(forSession: sid)
@@ -384,7 +422,7 @@ struct SessionDetailView: View {
                 presentedSheet = .childSessions(selectedID: nil)
             case "files":
                 try? await Task.sleep(for: .seconds(1))
-                presentedSheet = .attachments
+                openFilesIndex()
             default: break
             }
         }
@@ -466,7 +504,7 @@ struct SessionDetailView: View {
                 // This reader stays in the navigation-safe content region. Its
                 // global top is therefore the exact status + navigation chrome
                 // height, even though the transcript inside expands behind it.
-                let topChromeHeight = max(safeAreaProxy.frame(in: .global).minY, 0)
+                let topChromeHeight = filePaneInline ? 0 : max(safeAreaProxy.frame(in: .global).minY, 0)
 
                 // Keep keyboard avoidance local to the composer. When both
                 // layers were one overlay chain, every keyboard animation step
@@ -520,7 +558,7 @@ struct SessionDetailView: View {
             }
         } else {
             GeometryReader { safeAreaProxy in
-                let topChromeHeight = max(safeAreaProxy.frame(in: .global).minY, 0)
+                let topChromeHeight = filePaneInline ? 0 : max(safeAreaProxy.frame(in: .global).minY, 0)
                 transcript
                     .ignoresSafeArea(.container, edges: .top)
                     .overlay(alignment: .top) {
@@ -554,7 +592,11 @@ struct SessionDetailView: View {
             if (prompt == nil || session.isExternallyOwned) && hasPills {
             ComposerPillRow(
                 agents: childAgents,
-                onSubagents: { presentedSheet = .childSessions(selectedID: nil) }
+                onSubagents: { presentedSheet = .childSessions(selectedID: nil) },
+                fileCount: UIDevice.current.userInterfaceIdiom == .pad ? paneResources.files.count : 0,
+                showsFiles: UIDevice.current.userInterfaceIdiom == .pad && !paneResources.isEmpty,
+                hasNewFiles: !filePane.unseen.isEmpty,
+                onFiles: openFilesIndex
             )
             .padding(.bottom, 10)
             }
@@ -644,7 +686,7 @@ struct SessionDetailView: View {
                     onStop: isBusy ? { Task { await store.interrupt(sid) } } : nil,
                     // The board's bar sits 28pt off the bottom edge, inside the
                     // home-indicator inset; above the keyboard it keeps a gap.
-                    bottomPadding: composerFocused ? 8 : -6,
+                    bottomPadding: composerFocused ? 8 : (filePaneInline ? 4 : -6),
                     onFocusChange: { isFocused in
                         composerFocused = isFocused
                         applyKeyboardTransition(
@@ -840,7 +882,9 @@ struct SessionDetailView: View {
                 // add structural-top padding here: after inversion that becomes
                 // a second visual-bottom spacer reachable only by manual drag.
                 .padding(.horizontal)
-                .padding(.bottom)
+                // Let an explicit file-source jump center even the oldest row
+                // below the overlaid header. The inverted list puts this at its visual top.
+                .padding(.bottom, revealingFileSource ? geo.size.height / 2 : 16)
                 // iPad: one centered reading column (padding included), so a
                 // line stays near 80 characters. A phone is narrower than the
                 // cap and is unchanged. Board `ip-session`.
@@ -892,6 +936,7 @@ struct SessionDetailView: View {
                     await Task.yield()
                     guard isAtBottom else { return }
                     frozenTranscriptBottomContentMargin = nil
+                    revealingFileSource = false
                     applyKeyboardTransition(
                         occlusionHeight: keyboardOcclusionHeight,
                         animation: .easeOut(duration: 0.25)
@@ -983,7 +1028,7 @@ struct SessionDetailView: View {
             newTitle = session.title
             renaming = true
         case .terminal: showTerminal = true
-        case .files: presentedSheet = .attachments
+        case .files: openFilesIndex()
         case .subagents: presentedSheet = .childSessions(selectedID: nil)
         case .signIn: presentedSheet = .phoneSignIn(requestID: nil)
         case .browserPreview: dismissedBrowserFrameID = nil
@@ -998,7 +1043,61 @@ struct SessionDetailView: View {
     }
 
     private func openInlineFile(_ selected: MediaRef, rowFiles: [MediaRef]) {
-        presentedSheet = .filePreview(selected: selected, rowFiles: rowFiles)
+        if UIDevice.current.userInterfaceIdiom == .pad { filePane.open(selected) }
+        else { presentedSheet = .filePreview(selected: selected, rowFiles: rowFiles) }
+    }
+
+    private var paneMemoryKey: String { "\(store.host(forSession: sid)?.id ?? "host")-\(sid)" }
+
+    private func openFilesIndex() {
+        if UIDevice.current.userInterfaceIdiom == .pad { filePane.showFiles() }
+        else { presentedSheet = .attachments }
+    }
+
+    private func revealFileSource(_ id: String) {
+        filePane.fullWidth = false
+        if !filePane.portraitDocked && paneNavigation.windowSize.height > paneNavigation.windowSize.width {
+            filePane.close()
+        }
+        guard let index = messages.firstIndex(where: { $0.stableID == id }) else { return }
+        window = max(window, messages.count - index)
+        revealingFileSource = true
+        isAtBottom = false
+        Task { @MainActor in
+            await Task.yield()
+            scrollProxy?.scrollTo(id, anchor: .center)
+        }
+    }
+
+    private var filePaneInline: Bool {
+        filePane.isOpen && FilePaneLayout.presentation(width: paneNavigation.windowSize.width,
+            height: paneNavigation.windowSize.height, isPad: UIDevice.current.userInterfaceIdiom == .pad,
+            portraitDocked: filePane.portraitDocked) != .sheet
+    }
+
+    private var filePaneTranscriptHeader: some View {
+        HStack(spacing: 12) {
+            Button(action: paneNavigation.showList) {
+                Image(systemName: "sidebar.leading").frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain).glassOrRaised(in: Circle(), interactive: true)
+            .overlay(alignment: .topTrailing) {
+                if paneNavigation.needsInputCount > 0 {
+                    Text("\(paneNavigation.needsInputCount)").font(.caption2.bold())
+                        .padding(4).background(.orange, in: Circle())
+                }
+            }
+            .accessibilityLabel("Show sessions").accessibilityIdentifier("filePaneShowSessions")
+            SessionTitleBarContent(title: displayTitle, status: statusLineState,
+                queued: pendingBars.filter { !$0.failed }.count, hostLabel: hostLabel,
+                project: SessionRowMeta.projectLabel(cwd: session.cwd, project: session.project)) {
+                    showFullTitle.toggle()
+                }.frame(maxWidth: .infinity)
+            Button { presentedSheet = .session } label: {
+                Image(uiImage: SessionOptionsGlyph.image).frame(width: 44, height: 44)
+            }.buttonStyle(.plain).glassOrRaised(in: Circle(), interactive: true)
+                .accessibilityLabel("Session").accessibilityIdentifier("filePaneSessionOptions")
+        }.padding(.horizontal, 10)
     }
 
     private var resolvedHostFiles: HostFiles? {
@@ -1254,7 +1353,7 @@ struct SessionDetailView: View {
 
     /// Keep the row and its spacing only while subagents are running.
     private var hasPills: Bool {
-        SubagentPill(agents: childAgents).isVisible
+        SubagentPill(agents: childAgents).isVisible || (UIDevice.current.userInterfaceIdiom == .pad && !paneResources.isEmpty)
     }
 
     /// S2 boards: "Add to this turn…" while working (`s2-view`), and "Message ·
@@ -1801,10 +1900,25 @@ struct ExternalSessionComposerNotice: View {
 private struct ComposerPillRow: View {
     let agents: [ChildAgentSession]
     let onSubagents: () -> Void
+    var fileCount = 0
+    var showsFiles = false
+    var hasNewFiles = false
+    var onFiles: () -> Void = {}
 
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
+                if showsFiles {
+                    Button(action: onFiles) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "doc")
+                            Text("Files")
+                            Text("\(fileCount)").foregroundStyle(hasNewFiles ? Color.blue : S2.metaInk)
+                            if hasNewFiles { Circle().fill(.blue).frame(width: 5, height: 5) }
+                        }.padding(.horizontal, 12).modifier(ComposerPillChrome())
+                    }.buttonStyle(.plain).accessibilityIdentifier("composerPill.files")
+                        .accessibilityLabel("Files, \(fileCount)\(hasNewFiles ? ", new files" : "")")
+                }
                 let pill = SubagentPill(agents: agents)
                 if pill.isVisible {
                     Button(action: onSubagents) {

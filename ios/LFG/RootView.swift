@@ -6,6 +6,11 @@ struct RootView: View {
     @Environment(SessionStore.self) private var store
 
     @State private var selection: String?
+    @State private var paneWindowSize = CGSize.zero
+    @State private var paneSidebarWidth: CGFloat = 360
+    @State private var paneActive = false
+    @State private var paneSidebarOverlay = false
+    @State private var sidebarBeforePane: NavigationSplitViewVisibility?
     private enum AppTab { case sessions, scheduledTasks }
     @State private var selectedTab = AppTab.sessions
     @State private var searchScope = AppTab.sessions
@@ -109,6 +114,39 @@ struct RootView: View {
         // Inline host-file rendering resolves against the OPEN session's host
         // (multi-host), falling back to the default host.
         .environment(\.hostFiles, hostFilesForSelection)
+        .environment(\.filePaneNavigation, FilePaneNavigation(
+            windowSize: paneWindowSize, needsInputCount: needsInputCount,
+            update: updateFilePaneNavigation, showList: { paneSidebarOverlay = true }))
+        .background {
+            GeometryReader { geometry in
+                Color.clear.onGeometryChange(for: CGSize.self) { $0.size } action: { paneWindowSize = $0 }
+            }.ignoresSafeArea(.keyboard)
+        }
+        .overlay(alignment: .leading) {
+            if paneSidebarOverlay {
+                ZStack(alignment: .leading) {
+                    Color.black.opacity(0.45).ignoresSafeArea().onTapGesture { paneSidebarOverlay = false }
+                        .accessibilityIdentifier("filePaneListScrim")
+                    NavigationStack {
+                        SessionListView(selection: $selection, showSettings: $showSettings,
+                            showNewSession: $showNewSession, focusNewSessionComposer: $focusNewSessionComposer,
+                            searchQuery: $sessionSearchText, usesTabSearch: true,
+                            onSearch: { beginSearch(.sessions) },
+                            bottomSearchActive: searchFocus(for: .sessions),
+                            bottomSearchShown: searchPresented && searchScope == .sessions,
+                            listFooter: searchPresented ? nil : AnyView(listDock), inSidebarCard: true)
+                    }
+                    .frame(width: min(320, paneWindowSize.width - 40))
+                    .clipShape(RoundedRectangle(cornerRadius: 26))
+                    .padding(.horizontal, 10).padding(.top, 10).padding(.bottom, -10)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("filePaneSessionOverlay")
+                }
+            }
+        }
+        .onChange(of: selection) { _, _ in paneSidebarOverlay = false }
+        .onChange(of: selectedTab) { _, _ in paneSidebarOverlay = false }
+        .onChange(of: paneSidebarOverlay) { _, shown in if !shown { endSearch() } }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showPendingShares) { PendingSharesView() }
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -469,6 +507,7 @@ struct RootView: View {
                             inSidebarCard: usesSidebarDock,
                             scrollToTopTrigger: sessionsScrollToTop)
                 .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 460)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { if $0 >= 300 { paneSidebarWidth = $0 } }
                 // SwiftUI's own sidebar toggle only appears while the sidebar
                 // is HIDDEN — the half of the job that already worked. Left in,
                 // it sits beside ours and duplicates it. Removed here (the
@@ -544,6 +583,21 @@ struct RootView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+    }
+
+    private func updateFilePaneNavigation(_ active: Bool, _ full: Bool) {
+        if active {
+            if sidebarBeforePane == nil { sidebarBeforePane = columnVisibility }
+            paneActive = true
+            let keep = !full && paneWindowSize.width > paneWindowSize.height &&
+                FilePaneLayout.keepsSidebar(windowWidth: paneWindowSize.width, sidebarWidth: paneSidebarWidth)
+            columnVisibility = keep ? (sidebarBeforePane ?? .doubleColumn) : .detailOnly
+        } else if paneActive {
+            paneActive = false
+            paneSidebarOverlay = false
+            if let sidebarBeforePane { columnVisibility = sidebarBeforePane }
+            sidebarBeforePane = nil
+        }
     }
 
     /// A drag that has committed to one horizontal direction — dominant in x and

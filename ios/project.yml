@@ -103,6 +103,8 @@ targets:
         # for a journal delta sync; BGAppRefresh covers push-less gaps. The task
         # id must match AppDelegate.refreshTaskID.
         UIBackgroundModes:
+          # Video previews support user-started Picture in Picture.
+          - audio
           - remote-notification
           - fetch
         NSSupportsLiveActivities: true
