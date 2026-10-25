@@ -135,4 +135,29 @@ struct TaskNotificationFixture: View {
         .accessibilityIdentifier("taskNotificationFixture")
     }
 }
+/// Network-free harness for tagged output disclosure interactions.
+struct TaggedOutputFixture: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                TranscriptMessageView(message: SessionMessage(id: "tagged-output", text: """
+                The task finished successfully.
+                <lfg_task_result>{"run_id":"fixture-run","status":"completed","summary":"Verified all 45 minutes."}</lfg_task_result>
+                The result is ready to review.
+                <custom_output>Only the enclosed content appears here.</custom_output>
+                """))
+                TranscriptMessageView(message: SessionMessage(id: "tagged-example", text: """
+                Example:
+                ```xml
+                <lfg_task_result>Example stays visible.</lfg_task_result>
+                ```
+                """))
+                TranscriptMessageView(message: SessionMessage(id: "tagged-user", role: "user", text: "<user_tag>User text stays visible.</user_tag>"))
+            }
+            .padding()
+        }
+        .navigationTitle("Tagged outputs")
+        .accessibilityIdentifier("taggedOutputFixture")
+    }
+}
 #endif

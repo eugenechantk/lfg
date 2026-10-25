@@ -37,13 +37,36 @@ struct TranscriptMessageView: View {
         case "memory_citation":
             MemoryCitationView(text: message.text)
         default:
-            TextBubble(
-                message: message,
-                followsUserBubble: followsUserBubble,
-                onFollowup: onFollowup,
-                onOpenFile: onOpenFile
-            )
+            if message.role == "assistant", message.kind == "text" {
+                let parts = TaggedOutput.split(message.text)
+                ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
+                    switch part {
+                    case .prose(let text):
+                        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            TextBubble(message: displayMessage(text, index: index),
+                                       onFollowup: onFollowup, onOpenFile: onOpenFile)
+                        }
+                    case .tag(let name, let content):
+                        ToolLineView(message: displayMessage(content, index: index), title: name)
+                    }
+                }
+            } else {
+                TextBubble(
+                    message: message,
+                    followsUserBubble: followsUserBubble,
+                    onFollowup: onFollowup,
+                    onOpenFile: onOpenFile
+                )
+            }
         }
+    }
+    private func displayMessage(_ text: String, index: Int) -> SessionMessage {
+        if text == message.text { return message }
+        var projected = message
+        projected.id = "\(message.stableID)-tag-part-\(index)"
+        projected.text = text
+        projected.html = nil
+        return projected
     }
 }
 
@@ -310,12 +333,13 @@ private struct MemoryCitationView: View {
 
 private struct ToolLineView: View {
     let message: SessionMessage
+    var title: String? = nil
     @State private var expanded = false
     /// Roughly three lines of caption-monospaced text plus slack.
     private static let collapsedMaxHeight: CGFloat = 64
 
-    private var content: String { message.text.isEmpty ? message.kind : message.text }
-    private var isUse: Bool { message.kind == "tool_use" }
+    private var content: String { title != nil ? message.text : (message.text.isEmpty ? message.kind : message.text) }
+    private var isUse: Bool { title != nil || message.kind == "tool_use" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -325,7 +349,7 @@ private struct ToolLineView: View {
                 HStack(alignment: .top, spacing: 8) {
                 Image(systemName: isUse ? "wrench.and.screwdriver" : "arrow.turn.down.right")
                     .font(.caption).foregroundStyle(.secondary)
-                Text(content)
+                Text(title ?? content)
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
@@ -346,6 +370,7 @@ private struct ToolLineView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("legacyToolDisclosure-\(message.stableID)")
+            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
             if expanded {
                 ScrollableCodeBlock(text: content, fontSize: 12, foregroundColor: .secondaryLabel,
                                     accessibilityID: "legacyToolCode-\(message.stableID)")

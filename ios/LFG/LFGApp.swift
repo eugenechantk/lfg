@@ -79,6 +79,10 @@ struct LFGApp: App {
                 CrossProviderSwitchStatusFixture()
                     .environment(settings)
                     .environment(store)
+            } else if ProcessInfo.processInfo.environment["LFG_TAGGED_OUTPUT_FIXTURE"] == "1" {
+                NavigationStack {
+                    TaggedOutputFixture()
+                }
             } else if ProcessInfo.processInfo.environment["LFG_LOCAL_COMMAND_OUTPUT_FIXTURE"] == "1" {
                 NavigationStack {
                     LocalCommandOutputFixture()
