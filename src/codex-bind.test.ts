@@ -21,6 +21,7 @@ type Thread = {
   lastRecordAt?: number | null;
   firstUserText: string | null;
   forkedFromId: string | null;
+  parentThreadId?: string | null;
 };
 
 const T0 = 1_782_885_876_000; // process startedAt used across cases
@@ -167,6 +168,18 @@ describe("pickCodexThread — promptless (interactive codex)", () => {
 });
 
 describe("pickOpenCodexThread — live process ownership", () => {
+  it("keeps the parent bound while its in-process child writes newer records", () => {
+    const parent = thread({ id: "parent", lastRecordAt: T0 });
+    const child = thread({ id: "child", parentThreadId: parent.id, forkedFromId: parent.id });
+    for (const newest of [T0 + 1_000, T0 + 2_000, T0 + 3_000]) {
+      child.lastRecordAt = newest;
+      expect(pickOpenCodexThread(new Set([parent.path, child.path]), [parent, child], new Set())?.id)
+        .toBe(parent.id);
+    }
+    expect(pickCodexThread({ cwd: child.cwd, startedAt: T0, prompt: null }, [child], new Set())).toBeNull();
+    expect(pickCodexForkThread({ forkedFromId: parent.id, spawnedAt: T0 }, [child], new Set())).toBeNull();
+    expect(pickKnownCodexThread(child.id, [parent, child], new Set())).toBeNull();
+  });
   it("prefers the freshest rollout the process actually has open over launch proximity", () => {
     const staleNearest = thread({
       id: "stale-nearest",

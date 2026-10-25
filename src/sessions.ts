@@ -973,7 +973,7 @@ export function pickCodexThread(
   if (!cwd) return null;
   const minTime = (startedAt ?? 0) - CODEX_BIND_SKEW_MS;
   const inCwd = threads.filter(
-    (t) => t.cwd === cwd && !claimed.has(t.id) && (codexBindingCreatedAt(t) ?? 0) >= minTime,
+    (t) => !t.parentThreadId && t.cwd === cwd && !claimed.has(t.id) && (codexBindingCreatedAt(t) ?? 0) >= minTime,
   );
   if (inCwd.length === 0) return null;
   if (prompt) {
@@ -1009,7 +1009,7 @@ export function pickKnownCodexThread(
   claimed: Set<string>,
 ): CodexThread | null {
   if (!sessionId || claimed.has(sessionId)) return null;
-  return threads.find((t) => t.id === sessionId) ?? null;
+  return threads.find((t) => t.id === sessionId && !t.parentThreadId) ?? null;
 }
 
 /**
@@ -1029,7 +1029,9 @@ export function pickOpenCodexThread(
 ): CodexThread | null {
   return (
     threads
-      .filter((thread) => openPaths.has(thread.path) && !claimed.has(thread.id))
+      // Codex runs subagents inside the same process and holds their rollouts
+      // open too. Their writes must never steal the parent's terminal binding.
+      .filter((thread) => !thread.parentThreadId && openPaths.has(thread.path) && !claimed.has(thread.id))
       .sort(
         (a, b) =>
           (b.lastRecordAt ?? b.updatedAt ?? 0) - (a.lastRecordAt ?? a.updatedAt ?? 0) ||
@@ -1050,7 +1052,7 @@ export function pickCodexForkThread(
     threads
       .filter(
         (t) =>
-          t.forkedFromId === forkedFromId &&
+          !t.parentThreadId && t.forkedFromId === forkedFromId &&
           !claimed.has(t.id) &&
           t.createdAt != null &&
           t.createdAt >= spawnedAt,
@@ -3555,6 +3557,12 @@ async function listSessionsUncached(
     if (thread) {
       claimedCodex.add(thread.id);
       if (thread.cwd) cwd = thread.cwd;
+      // Repair bindings saved by older hosts that let an in-process subagent
+      // steal this pane. A known child ID is rejected above and the parent's
+      // actual open rollout supplies the replacement.
+      if (managedCodex && managedCodex.sessionId !== thread.id) {
+        patchManaged(managedCodex.tmuxName, { sessionId: thread.id });
+      }
     }
 
     const transcriptPath = thread?.path ?? (sessionId ? await findCodexTranscriptById(sessionId) : null);
