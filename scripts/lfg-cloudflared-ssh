@@ -1,0 +1,36 @@
+#!/bin/sh
+# ssh ProxyCommand for the lfg Macs behind Cloudflare Access.
+# Installed copy: ~/.local/bin/lfg-cloudflared-ssh on both hosts (repo: scripts/).
+set -eu
+
+credential_file="${LFG_CLOUDFLARE_ACCESS_FILE:-$HOME/.cloudflared/lfg-access-service-token.private.json}"
+
+if [ ! -r "$credential_file" ]; then
+    echo "Missing Cloudflare Access credential: $credential_file" >&2
+    exit 1
+fi
+
+TUNNEL_SERVICE_TOKEN_ID=$(/usr/bin/jq -er '.clientID' "$credential_file")
+TUNNEL_SERVICE_TOKEN_SECRET=$(/usr/bin/jq -er '.clientSecret' "$credential_file")
+# Bypass stale macOS negative DNS caching for newly-created tunnel hostnames.
+GODEBUG="${GODEBUG:-netdns=go}"
+export TUNNEL_SERVICE_TOKEN_ID TUNNEL_SERVICE_TOKEN_SECRET GODEBUG
+
+# Per-host binary override (the Pro points this at the Homebrew binary since
+# 2026-09-16). Default is the app bundle.
+bin="$HOME/Applications/Cloudflared.app/Contents/MacOS/cloudflared"
+override="$HOME/.cloudflared/lfg-client-cloudflared"
+if [ -r "$override" ] && [ -x "$(cat "$override")" ]; then bin="$(cat "$override")"; fi
+
+# Keep the edge connection off the VPN: a loopback CONNECT proxy bound to en0's
+# address carries cloudflared's TLS to the nearest Cloudflare PoP (~10 ms) instead
+# of the Surfshark exit (~170 ms, and every VPN blink killed the stream). Falls
+# back to a plain exec when en0 can't reach the edge. See the wrapper's docstring.
+direct="$HOME/.local/bin/cloudflared-en0-connect.py"
+[ -x "$direct" ] || direct="$HOME/dev/personal/lfg/scripts/cloudflared-en0-connect.py"
+for py in /usr/bin/python3 /Library/Developer/CommandLineTools/usr/bin/python3 /opt/homebrew/bin/python3; do
+    if [ -x "$direct" ] && [ -x "$py" ] && "$py" -c pass >/dev/null 2>&1; then
+        exec "$py" "$direct" -- "$bin" access ssh "$@"
+    fi
+done
+exec "$bin" access ssh "$@"

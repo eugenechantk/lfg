@@ -50,7 +50,14 @@ target="$1"; shift
 if (( $# )) && [[ "$1" == "--" ]]; then shift; fi
 
 ssh_words=(${=ssh_cmd})
-ssh_run=("${ssh_words[@]}" -T -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
+# ControlMaster: the bootstrap (mosh-server new) and the carrier are two ssh
+# sessions seconds apart; one Access+ssh handshake instead of two saves ~1-4 s
+# per connect (2026-10-17: each handshake was ~4 s at VPN RTT). ControlPersist
+# keeps the master briefly after the bootstrap exits; a carrier respawn later
+# finds no master and dials fresh (auto), so a dead path never wedges a respawn.
+mkdir -p "$HOME/.ssh"
+ssh_mux=(-o ControlMaster=auto -o ControlPersist=20 -o "ControlPath=$HOME/.ssh/cm-mosh-%C")
+ssh_run=("${ssh_words[@]}" -T -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "${ssh_mux[@]}")
 
 # LAN fast path. Both Macs sit on the same LAN much of the time, yet the
 # Cloudflare path detours every keystroke through the VPN exit and a CF edge
@@ -131,29 +138,65 @@ lan_discover() {
   print -r -- "$user@$found"
 }
 
+# gateway_mac — identifies the LAN we are on (the router's MAC), independent of
+# the DHCP range: two different routers can both hand out 192.168.0.x.
+gateway_mac() {
+  local gw
+  gw=$(netstat -rn -f inet 2>/dev/null | awk '$1=="default" && $NF !~ /^utun/ {print $2; exit}')
+  [[ -n "$gw" ]] || return 1
+  arp -n "$gw" 2>/dev/null | awk '/ at /{print $4; exit}'
+}
+
 lan_ssh=""
 lan_cands=()
 if [[ -z "${LFG_MOSH_NO_LAN:-}" && -n "${direct_hosts[$target]:-}" ]]; then
   lan_cands=(${=direct_hosts[$target]})
   cached=""
   [[ -f "$cache_dir/$target.lan" ]] && cached=$(<"$cache_dir/$target.lan")
-  # Last address that worked goes first (leases flip between known values;
-  # each miss costs a 1s probe).
+  # Last address that worked goes first (leases flip between known values).
   if [[ -n "$cached" ]]; then
     lan_cands=("$cached" "${(@)lan_cands:#$cached}")
   fi
+  # All candidates probed at once: the probe costs 1 s total instead of 1 s per
+  # dead address. First candidate in priority order that answered wins.
+  mkdir -p "$cache_dir"
+  probe_tmp="$cache_dir/$target.probe.$$"
+  : >| "$probe_tmp"
+  ( for lan_cand in "${lan_cands[@]}"; do
+      ( nc -z -G 1 "${lan_cand#*@}" 22 >/dev/null 2>&1 && print -r -- "$lan_cand" >> "$probe_tmp" ) &
+    done; wait )
+  probe_hits=("${(@f)$(<"$probe_tmp")}")
+  rm -f "$probe_tmp"
   for lan_cand in "${lan_cands[@]}"; do
-    if nc -z -G 1 "${lan_cand#*@}" 22 2>/dev/null; then
+    if (( ${probe_hits[(Ie)$lan_cand]} )); then
       lan_ssh="$lan_cand"
       if [[ "$lan_cand" != "$cached" ]]; then
-        mkdir -p "$cache_dir" && print -r -- "$lan_cand" >| "$cache_dir/$target.lan"
+        print -r -- "$lan_cand" >| "$cache_dir/$target.lan"
       fi
       break
     fi
   done
   if [[ -z "$lan_ssh" ]]; then
-    discovered=$(lan_discover "$target" 2>/dev/null || true)
-    if [[ -n "$discovered" ]]; then
+    # Sweep only on a LAN where the peer has been found before (gateway MAC
+    # recorded on the last LAN success), or on a never-seen LAN at most once
+    # per 10 min. Any other network — different router, same subnet numbers —
+    # is skipped: the peer is provably not there and the sweep is ~3 s.
+    gw_mac=$(gateway_mac || true)
+    known_mac=""
+    [[ -f "$cache_dir/$target.gw" ]] && known_mac=$(<"$cache_dir/$target.gw")
+    if [[ -n "$gw_mac" && -n "$known_mac" && "$gw_mac" != "$known_mac" ]]; then
+      stamp=0
+      [[ -f "$cache_dir/$target.sweep.$gw_mac" ]] && stamp=$(<"$cache_dir/$target.sweep.$gw_mac")
+      if (( EPOCHSECONDS - stamp < 600 )); then
+        print -r -- "$(date '+%F %T') $target: gateway $gw_mac is not the LAN the peer was last seen on ($known_mac); skipping sweep" >>| "$log"
+      else
+        print -r -- "$EPOCHSECONDS" >| "$cache_dir/$target.sweep.$gw_mac"
+        discovered=$(lan_discover "$target" 2>/dev/null || true)
+      fi
+    else
+      discovered=$(lan_discover "$target" 2>/dev/null || true)
+    fi
+    if [[ -n "${discovered:-}" ]]; then
       lan_ssh="$discovered"
       lan_cands=("$discovered" "${lan_cands[@]}")
     fi
@@ -163,8 +206,13 @@ fi
 # could hold one of these RFC1918 addresses, and TOFU-ing its key would poison
 # known_hosts for the real host. The legit LAN host keys are pre-seeded (ssh
 # fails fast on anything else and we fall back to the tunnel).
+# IPQoS=none: OpenSSH 10 marks its socket DSCP EF from the SYN on, and on
+# 2026-10-21 the home router's Wi-Fi leg to the Pro silently dropped every
+# frame whose WMM priority was odd (EF/CS5, CS3/AF31, CS1/AF11) while unmarked
+# traffic passed — nc probed fine, ssh timed out, every session fell back to
+# the tunnel. Unmarked best-effort is the one class every LAN delivers.
 lan_run=(ssh -T -o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=yes \
-  -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
+  -o IPQoS=none -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "${ssh_mux[@]}")
 
 if [[ -z "$lport" ]]; then
   lport=$(/usr/bin/python3 -c 'import socket;s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
@@ -242,8 +290,12 @@ if [[ -n "$lan_ssh" ]]; then
   if [[ -z "$line" ]]; then
     # LAN answered TCP but ssh couldn't finish (key mismatch, sshd config…) —
     # fall back to the Cloudflare path rather than dying on the fast path.
-    print -r -- "$(date '+%F %T') $target: LAN bootstrap via $lan_ssh failed, falling back to tunnel" >>| "$HOME/Library/Logs/mosh-bridge.log"
+    print -r -- "$(date '+%F %T') $target: LAN bootstrap via $lan_ssh failed, falling back to tunnel (${${(f)bootstrap}[-1]})" >>| "$HOME/Library/Logs/mosh-bridge.log"
     lan_ssh=""
+  else
+    # Remember which LAN (router MAC) the peer lives on, for the sweep gate.
+    gw_mac=$(gateway_mac || true)
+    [[ -n "$gw_mac" ]] && print -r -- "$gw_mac" >| "$cache_dir/$target.gw"
   fi
 fi
 if [[ -z "$line" ]]; then

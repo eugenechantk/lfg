@@ -15,6 +15,16 @@ flash.
 
 Client honours env LFG_BRIDGE_READY: a path it `touch`es once the carrier's first
 frame arrives (proof the far side is reachable).
+
+The carrier's stderr never reaches the terminal. mosh-client owns the screen, so
+ssh's death rattle ("Connection closed by remote host", "client_loop: send
+disconnect", "websocket: bad handshake" while the path is down) only ever
+garbled the session — every one of those is a routine respawn (2026-10-17: a
+dozen a day, each a VPN blink). They go to ~/Library/Logs/mosh-bridge.log with
+the carrier pid. The terminal hears about it only when the carrier has been down
+for LFG_BRIDGE_QUIET_SECS (default 45) — i.e. we really cannot reach the host —
+and then once a minute, with the last error, so a hard failure (host key, auth,
+no python on the far side) is still diagnosable without opening the log.
 """
 import os, select, socket, struct, subprocess, sys, time
 
@@ -76,21 +86,65 @@ def client(lport, carrier):
             pass
         ready_done = True
 
+    quiet = float(os.environ.get("LFG_BRIDGE_QUIET_SECS") or 45)
+    down_since = None     # when the carrier last stopped delivering frames
+    last_err = ""         # last stderr line from the carrier, for the notice
+    notified_at = 0.0
+    errbuf = bytearray()
+
+    def drain_stderr():
+        nonlocal last_err
+        try:
+            chunk = os.read(proc.stderr.fileno(), 65536)
+        except OSError:
+            return
+        if not chunk:
+            return
+        errbuf.extend(chunk)
+        while b"\n" in errbuf:
+            line, _, rest = bytes(errbuf).partition(b"\n")
+            errbuf[:] = rest
+            text = line.decode("utf-8", "replace").rstrip("\r")
+            if text:
+                last_err = text
+                log.write(f"{time.strftime('%F %T')} carrier[{proc.pid}] stderr: {text}\n")
+
+    def notice(now):
+        """Only when the host has been unreachable for `quiet` seconds, at most once a minute."""
+        nonlocal notified_at
+        if down_since is None or now - down_since < quiet or now - notified_at < 60:
+            return
+        notified_at = now
+        sys.stderr.write(
+            f"\r\nmosh-bridge: no carrier to the host for {now - down_since:.0f}s"
+            f"{' — ' + last_err if last_err else ''}; still retrying\r\n")
+        sys.stderr.flush()
+
     def spawn():
         nonlocal proc, buf
         buf = bytearray()
-        proc = subprocess.Popen(carrier, stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0)
+        errbuf.clear()
+        proc = subprocess.Popen(carrier, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, bufsize=0)
         log.write(f"{time.strftime('%F %T')} carrier pid {proc.pid} started\n")
 
     spawn()
     while True:
         if proc.poll() is not None:
-            log.write(f"{time.strftime('%F %T')} carrier exited {proc.returncode}; respawn in {backoff:.0f}s\n")
+            drain_stderr()
+            now = time.time()
+            if down_since is None:
+                down_since = now
+            log.write(f"{time.strftime('%F %T')} carrier exited {proc.returncode}; respawn in {backoff:.0f}s"
+                      f"{' (last stderr: ' + last_err + ')' if last_err else ''}\n")
+            notice(now)
             time.sleep(backoff)
             backoff = min(backoff * 2, 10)
             spawn()
             continue
-        r, _, _ = select.select([udp, proc.stdout], [], [], 1.0)
+        r, _, _ = select.select([udp, proc.stdout, proc.stderr], [], [], 1.0)
+        if proc.stderr in r:
+            drain_stderr()
         if udp in r:
             dg, peer = udp.recvfrom(65536)
             try:
@@ -103,6 +157,14 @@ def client(lport, carrier):
                 proc.wait()
                 continue
             backoff = 1.0
+            if down_since is not None:
+                if notified_at:
+                    sys.stderr.write("\r\nmosh-bridge: carrier restored\r\n")
+                    sys.stderr.flush()
+                log.write(f"{time.strftime('%F %T')} carrier back after {time.time() - down_since:.0f}s down\n")
+                down_since = None
+                notified_at = 0.0
+                last_err = ""
             for dg in frames_from(buf, chunk):
                 mark_ready()          # any frame (incl. hello) means the far side answered
                 if dg and peer:       # zero-length hello is never forwarded to mosh-client
