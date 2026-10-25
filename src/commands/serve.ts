@@ -1,4 +1,5 @@
 import { BrowserSignInHub, signInHTTP, allowsSignInAdapter } from "../browser-sign-in.ts";
+import { claudePaneNotice } from "../claude-system-notices.ts";
 import { phoneSignInPrompt, type SignInPrompt } from "../phone-sign-in-requests.ts";
 import { classifyPanePrompt, permissionFromToolUse, type PromptDetails } from "../prompt-kind.ts";
 import { readdir, realpath, stat } from "node:fs/promises";
@@ -1178,7 +1179,7 @@ async function voiceStatusSnapshot(): Promise<string> {
 // permission, plan-approval (ExitPlanMode) and trust dialogs. Both shapes share
 // { question, options:[{index,label,selected}] }, so the SSE `prompt` event and
 // the client render either identically.
-async function resolveSessionPrompt(
+export async function resolveSessionPrompt(
   tp: string | null,
   pane: string | null,
   // A waiting phone sign-in request for this session, already looked up by the
@@ -1187,6 +1188,9 @@ async function resolveSessionPrompt(
   // permission dialog, that dialog is what needs answering first.
   signIn: SignInPrompt | null = null,
 ): Promise<(PanePrompt & PromptDetails) | (PendingPrompt & { kind: "question" }) | SignInPrompt | null> {
+  // Native retry mode cannot accept a stale transcript question. The status
+  // banner and error row explain the wait; it isn't an unanswered selector.
+  if (claudePaneNotice(pane)) return null;
   if (tp) {
     const pending = await pendingToolPrompt(tp);
     if (pending) return { ...pending, kind: "question" };

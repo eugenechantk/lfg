@@ -201,9 +201,11 @@ export function resolveBusy(args: {
   verdict: StateVerdict | null;
   paneBusy: boolean;
   delegated?: boolean;
+  /** A recognized native retry meter remains in flight across long quota waits. */
+  nativeRetry?: boolean;
 }): boolean {
   const decided = args.verdict != null ? args.verdict.state === "running" : args.paneBusy;
-  return decided || !!args.delegated;
+  return decided || !!args.delegated || !!args.nativeRetry;
 }
 
 // ---- the display ladder ----

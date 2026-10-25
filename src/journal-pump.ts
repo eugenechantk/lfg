@@ -17,6 +17,7 @@
 
 import { Journal, PumpDeltas } from "./journal.ts";
 import { PromptClock } from "./prompt-kind.ts";
+import { claudePaneNotice, observeClaudePaneNotice } from "./claude-system-notices.ts";
 import {
   listSessions,
   resolveTranscript,
@@ -55,6 +56,25 @@ const MSG_TICK_MS = 700;
 const POLL_TICK_MS = 1000;
 // Freshness is only a fallback when neither state layer recognizes the file.
 const BARE_BUSY_WINDOW_MS = 4000;
+
+/** List discovery can persist a notice before the pump polls it. Publish the
+ * active stable ID, rather than only freshly-created sidecar records. */
+export function publishClaudeSystemNotice(
+  j: Pick<Journal, "append">,
+  sid: string,
+  path: string,
+  pane: string | null,
+  previousId: string | null,
+  transcriptCaughtUp = true,
+): string | null {
+  if (pane == null) return previousId;
+  const { active } = observeClaudePaneNotice(path, pane);
+  // The client appends live messages in delivery order. Let the independent
+  // tail loop publish earlier provider rows before publishing this notice.
+  if (active && !transcriptCaughtUp) return previousId;
+  if (active && active.id !== previousId) j.append(sid, "msg", { sid, m: active });
+  return active?.id ?? null;
+}
 
 /** Observe a live session without a pane through the shared turn reader. */
 export async function bareSessionBusy(args: {
@@ -357,6 +377,7 @@ export function appendDisappearanceRetractions(
 export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
   const deltas = new PumpDeltas();
   const promptClock = new PromptClock();
+  const systemNoticeIds = new Map<string, string | null>();
   const watched = new Map<string, Watched>();
   let bootSids: Set<string> | null = null; // sessions alive at pump boot: may trust pump_state
   let stopped = false;
@@ -440,6 +461,7 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
         watched.delete(sid);
         deltas.forget(sid); // if it comes back, it re-states its baseline
         promptClock.forget(sid);
+        systemNoticeIds.delete(sid);
         tailStep.forget(sid);
         pollStep.forget(sid);
         lastResizeAttempt.delete(sid);
@@ -508,6 +530,12 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       // double the tmux spawns on this 1 Hz per-session path.
       const styled = await capturePaneAsyncStyled(w.target);
       const pane = styled == null ? null : stripAnsi(styled);
+      if (w.agent === "claude") {
+        systemNoticeIds.set(w.sid, publishClaudeSystemNotice(
+          j, w.sid, w.tp, pane, systemNoticeIds.get(w.sid) ?? null,
+          (j.getOffset(w.sid) ?? 0) >= Bun.file(w.tp).size && !w.buf,
+        ));
+      }
       reconcilePaneRows(w.sid, w.target, pane);
       // Retain what this capture is about to lose. A question's preamble is
       // routinely taller than the pane (78x59 for an iTerm-hosted session), so
@@ -535,7 +563,7 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       // answer "is a turn in flight", not "is this alive".
       const verdict = await sessionTurnState({ sessionId: w.sid, transcriptPath: w.tp });
       const busy = busyWithRunningWork(
-        resolveBusy({ verdict, paneBusy, delegated }),
+        resolveBusy({ verdict, paneBusy, delegated, nativeRetry: w.agent === "claude" && (claudePaneNotice(pane) != null || systemNoticeIds.get(w.sid) != null) }),
         w.runningChildAgentCount,
       );
       noteTurnEdge(w, busy);

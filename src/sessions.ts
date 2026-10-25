@@ -2,6 +2,7 @@
 // their on-disk transcripts (~/.claude/projects/<proj>/<sessionId>.jsonl).
 import { readdir, rename } from "node:fs/promises";
 import { scanBack, tail } from "./transcript.ts";
+import { mergeClaudeNotices, observeClaudePaneNotice } from "./claude-system-notices.ts";
 import { resolveBusy, sessionTurnState } from "./session-state.ts";
 import { statSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, basename, relative } from "node:path";
@@ -217,7 +218,7 @@ export type Session = {
   // session reads as an explained pause, not a silent stall. See computeStatus.
   status: "ok" | "blocked";
   // Machine-readable reason when status === "blocked"; null when ok.
-  statusReason: "model_unavailable" | "out_of_credits" | "auth_required" | "unknown" | null;
+  statusReason: "model_unavailable" | "out_of_credits" | "usage_limit" | "auth_required" | "unknown" | null;
   // Human-readable one-liner for the banner (e.g. the dead model id), or null.
   statusDetail: string | null;
   // Present only for orchestrator-spawned worker sessions. Omitted for
@@ -299,6 +300,9 @@ function computeStatus(
   // onto the existing reasons so no client needs a protocol change; the detail
   // keeps codex's own sentence, which is where the reset time lives.
   const firstLine = (max: number) => text.split("\n")[0].trim().slice(0, max);
+  if (code === "rate_limit" || httpStatus === 429) {
+    return { status: "blocked", statusReason: "usage_limit", statusDetail: firstLine(240) };
+  }
   if (code === "usage_limit_exceeded") {
     return { status: "blocked", statusReason: "out_of_credits", statusDetail: firstLine(240) };
   }
@@ -3410,7 +3414,7 @@ async function listSessionsUncached(
       transcriptAt: lastTurn?.at ?? null,
       processStartedAt: e.startedAt,
     });
-    const health = computeStatus(lastAssistant, liveModel);
+    let health = computeStatus(lastAssistant, liveModel);
     const project = projectName(e.cwd);
     let title = (sessionId && overrides[sessionId]) || null;
     if (!title && transcriptPath) title = await firstPromptTitle(transcriptPath);
@@ -3418,6 +3422,15 @@ async function listSessionsUncached(
     const tmuxTarget =
       isHeadless(e.cmd) || !e.authoritative ? null : tmuxTargetForPid(e.pid);
     const tmuxName = tmuxTarget ? tmuxTarget.split(":")[0] : null;
+    let nativeRetry = false;
+    if (transcriptPath && tmuxTarget) {
+      const observation = observeClaudePaneNotice(transcriptPath, await capturePaneAsync(tmuxTarget));
+      if (observation.active) {
+        nativeRetry = true;
+        health = computeStatus(observation.active, liveModel);
+        last = observation.active;
+      }
+    }
     const managedFields = managedFieldsForTmuxName(tmuxName, managedByName);
     const transcriptRecent =
       lastActivityAt != null && Date.now() - lastActivityAt < REST_BUSY_WINDOW_MS;
@@ -3457,7 +3470,7 @@ async function listSessionsUncached(
       startedAt: e.startedAt,
       transcriptPath,
       lastActivityAt,
-      busy: resolveBusy({ verdict: turn, paneBusy: paneBusy ?? transcriptRecent, delegated }),
+      busy: resolveBusy({ verdict: turn, paneBusy: paneBusy ?? transcriptRecent, delegated, nativeRetry }),
       last,
       // A headless `claude -p` (the report runner, or a dispatched agent
       // before it moved to its own tmux session) is a *descendant* of
@@ -4608,7 +4621,7 @@ export async function recentMessages(
   const maxBytes = opts.maxBytes === undefined ? 256 * 1024 : opts.maxBytes;
   if (maxBytes == null) {
     const msgs = await streamNormalizedMessages(file, createCodexNormalizationState());
-    const collapsed = collapseCodexLifecycleMessages(msgs);
+    const collapsed = mergeClaudeNotices(path, collapseCodexLifecycleMessages(msgs));
     return limit > 0 ? collapsed.slice(-limit) : collapsed;
   }
   const start = Math.max(0, size - maxBytes);
@@ -4627,7 +4640,7 @@ export async function recentMessages(
   for (const l of lines) {
     msgs.push(...normalizeLineMessages(l, codexState));
   }
-  const collapsed = collapseCodexLifecycleMessages(msgs);
+  const collapsed = mergeClaudeNotices(path, collapseCodexLifecycleMessages(msgs));
   return limit > 0 ? collapsed.slice(-limit) : collapsed;
 }
 

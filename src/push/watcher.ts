@@ -8,6 +8,7 @@
 // classifying it done-vs-needs-input — lives in the pure `reduceTransition`
 // reducer below, which is unit-tested in isolation (no tmux, no network).
 import { FleetSlicePublisher, aggregatorConfig } from "./fleet-slice.ts";
+import { claudePaneNotice } from "../claude-system-notices.ts";
 import {
   listSessions,
   resolveTranscript,
@@ -506,19 +507,21 @@ export async function observeSession(
     return { busy, promptPresent: !!signIn, promptQuestion: signIn?.question ?? null };
   }
   const pane = await capturePaneAsync(s.tmuxTarget);
+  const nativeRetry = s.agent === "claude" && claudePaneNotice(pane) != null;
   const tp = s.sessionId ? await resolveTranscript(s.sessionId) : null;
   let prompt: PendingPrompt | PanePrompt | { question: string } | null = tp ? await pendingToolPrompt(tp) : null;
   // A selector lfg itself is driving (model/effort change) is not a question.
   if (!prompt && pane && !panePromptSuppressed(s.tmuxTarget)) prompt = parsePrompt(pane);
   // Same precedence as serve.ts's resolveSessionPrompt: a real dialog first.
   if (!prompt) prompt = signIn;
+  if (nativeRetry) prompt = null;
   // The SAME derivation the journal pump runs (`journal-pump.ts`), through the
   // same two functions — not a second implementation of the same idea. This used
   // to call `transcriptTurnState` directly, which skipped the hook layer and the
   // STALL_MS demotion, so this card counted a session working long after the app's
   // own list had let it go. See `session-state.ts`'s `resolveBusy`.
   const verdict = await sessionTurnState({ sessionId: s.sessionId, transcriptPath: tp });
-  const busy = resolveBusy({ verdict, paneBusy: pane ? isBusy(pane) : false, delegated });
+  const busy = resolveBusy({ verdict, paneBusy: pane ? isBusy(pane) : false, delegated, nativeRetry });
   return { busy, promptPresent: !!prompt, promptQuestion: prompt?.question ?? null };
 }
 
