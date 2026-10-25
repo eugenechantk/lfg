@@ -29,6 +29,8 @@ export type TranscriptTurnEvidence = {
   state: TurnState;
   /** Paired Codex lifecycle records, rather than an inferred open Claude turn. */
   explicit: boolean;
+  /** Timestamp of the deciding turn record, excluding later bookkeeping. */
+  at?: number;
 };
 
 /** The answer is nearly always the last line; `scanBack` grows this on a miss. */
@@ -54,10 +56,12 @@ const INTERRUPT_RE = /^\[Request interrupted/;
 const LOCAL_COMMAND_RE = /^<(command-name|local-command-(stdout|stderr|caveat))>/;
 
 type Line = {
+  timestamp?: unknown;
+  isApiErrorMessage?: unknown;
   type?: unknown;
   subtype?: unknown;
   isMeta?: unknown;
-  message?: { role?: unknown; content?: unknown };
+  message?: { role?: unknown; content?: unknown; stop_reason?: unknown };
   payload?: { type?: unknown; forked_from_id?: unknown };
 };
 
@@ -86,11 +90,15 @@ function classifyTurnEvidence(line: string): TranscriptTurnEvidence | null {
     return null;
   }
   if (!x || typeof x !== "object") return null;
+  const parsedAt = typeof x.timestamp === "string" ? Date.parse(x.timestamp) : NaN;
+  const evidence = (state: TurnState, explicit = false): TranscriptTurnEvidence => ({
+    state, explicit, ...(Number.isFinite(parsedAt) ? { at: parsedAt } : {}),
+  });
 
   // Claude can continue a conversation in a new transcript without writing a
   // turn_duration to the old one. The old transcript is finished at this marker;
   // otherwise its last assistant/tool row keeps that session marked running.
-  if (x.type === "continued-in") return { state: "idle", explicit: false };
+  if (x.type === "continued-in") return evidence("idle");
 
   // A new Codex fork contains only session_meta plus settings until its first
   // prompt. Creating that rollout is not a running turn. Without this boundary
@@ -98,17 +106,23 @@ function classifyTurnEvidence(line: string): TranscriptTurnEvidence | null {
   // work. Newer task_started/task_complete records still win the reverse scan.
   if (x.type === "session_meta" && typeof x.payload?.forked_from_id === "string"
       && x.payload.forked_from_id.length > 0) {
-    return { state: "idle", explicit: false };
+    return evidence("idle");
   }
 
   if (x.type === "system") {
     // Only `turn_duration` is a boundary. `away_summary` is appended minutes
     // later and `stop_hook_summary` sits just before the boundary — neither may
     // re-open or close a turn on its own.
-    return x.subtype === "turn_duration" ? { state: "idle", explicit: false } : null;
+    return x.subtype === "turn_duration" ? evidence("idle") : null;
   }
 
-  if (x.type === "assistant") return { state: "running", explicit: false };
+  if (x.type === "assistant") {
+    // These are harness fields, not text printed by the model. Some exits omit
+    // turn_duration or Stop; the final reply/error already closes the turn.
+    const stop = x.message?.stop_reason;
+    return evidence(x.isApiErrorMessage === true || stop === "end_turn" || stop === "stop_sequence"
+      ? "idle" : "running");
+  }
 
   if (x.type === "user") {
     const c = x.message?.content;
@@ -121,11 +135,14 @@ function classifyTurnEvidence(line: string): TranscriptTurnEvidence | null {
         : Array.isArray(c) && typeof (c[0] as { text?: unknown })?.text === "string"
           ? ((c[0] as { text: string }).text)
           : null;
-    if (text != null && INTERRUPT_RE.test(text.trim())) return { state: "idle", explicit: false };
+    if (text != null && INTERRUPT_RE.test(text.trim())) return evidence("idle");
     if (x.isMeta === true) return null; // injected context, not a turn signal
     if (text != null && LOCAL_COMMAND_RE.test(text.trimStart())) return null;
+    // Delivery alone does not start a model turn. A later assistant row does.
+    if (text != null && (text.trimStart().startsWith("<task-notification>")
+      || text.trimStart().startsWith("[SYSTEM NOTIFICATION"))) return null;
     if (c == null || (Array.isArray(c) && c.length === 0)) return null;
-    return { state: "running", explicit: false }; // typed prompt or tool_result — either way, mid-turn
+    return evidence("running"); // typed prompt or tool_result — either way, mid-turn
   }
 
   if (x.type === "event_msg") {
@@ -136,7 +153,7 @@ function classifyTurnEvidence(line: string): TranscriptTurnEvidence | null {
     // "running" would be redundant (a `task_started` always precedes them when
     // scanning back) and would risk out-voting a newer `turn_aborted`.
     const state = typeof t === "string" ? (CODEX_TURN[t] ?? null) : null;
-    return state == null ? null : { state, explicit: true };
+    return state == null ? null : evidence(state, true);
   }
 
   // `mode`, `ai-title`, `last-prompt`, `file-history-*`, codex `response_item` /

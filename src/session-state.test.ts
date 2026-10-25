@@ -126,6 +126,54 @@ describe("quiet Codex turns", () => {
 });
 
 describe("sessionTurnState arbitration", () => {
+  test("bookkeeping cannot refresh an abandoned Claude prompt", async () => {
+    const timestamp = new Date(at(-2 * STALL_MS)).toISOString();
+    hook("abandoned-prompt", "running", -2 * STALL_MS);
+    const tp = transcript([
+      { type: "user", timestamp, message: { content: "Implement the paywall" } },
+      { type: "queue-operation", timestamp: new Date().toISOString() },
+      { type: "artifact-autoreact-ledger" },
+    ], 9_000);
+    expect(await sessionTurnState({ sessionId: "abandoned-prompt", transcriptPath: tp }))
+      .toEqual({ state: "idle", source: "transcript", stalled: true });
+  });
+
+  test("metadata appended after Stop cannot outvote the idle hook", async () => {
+    hook("stop-then-metadata", "idle", 5_000);
+    const tp = transcript([
+      { ...assistantRec, timestamp: new Date(at(1_000)).toISOString() },
+      { type: "ai-title", timestamp: new Date(at(9_000)).toISOString() },
+    ], 9_000);
+    expect(await sessionTurnState({ sessionId: "stop-then-metadata", transcriptPath: tp }))
+      .toEqual({ state: "idle", source: "hook" });
+  });
+
+  for (const message of [
+    { stop_reason: "end_turn", content: [{ type: "text", text: "Done" }] },
+    { stop_reason: "stop_sequence", content: [{ type: "text", text: "Done" }] },
+  ]) {
+    test(`Claude ${message.stop_reason} closes without turn_duration or a Stop hook`, async () => {
+      const tp = transcript([{ type: "assistant", message }], 9_000);
+      expect((await sessionTurnState({ transcriptPath: tp }))?.state).toBe("idle");
+    });
+  }
+
+  test("a terminal Claude API failure closes a turn without waiting fifteen minutes", async () => {
+    const tp = transcript([
+      assistantRec,
+      { type: "assistant", isApiErrorMessage: true, error: "server_error", message: { content: [] } },
+    ], 9_000);
+    expect((await sessionTurnState({ transcriptPath: tp }))?.state).toBe("idle");
+  });
+
+  test("a delivered background notification cannot reopen a finished turn", async () => {
+    const tp = transcript([
+      assistantRec, turnEnd,
+      { type: "user", message: { content: "<task-notification>Completed</task-notification>" } },
+    ], 9_000);
+    expect((await sessionTurnState({ transcriptPath: tp }))?.state).toBe("idle");
+  });
+
   test("neither layer has an opinion → null (caller keeps its pane fallback)", async () => {
     expect(await sessionTurnState({ sessionId: "absent", transcriptPath: null })).toBeNull();
   });

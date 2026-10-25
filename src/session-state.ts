@@ -17,11 +17,10 @@
 // the transcript records `[Request interrupted` after the stale hook write, so the
 // transcript is newer and wins.
 //
-// Note this compares two clocks on ONE host — the hook's `at` and the transcript's
-// mtime, both stamped locally. That is deliberate and different from the reasoning
-// inside `turn-state.ts`, which refuses to compare timestamps because `~/.claude`
-// is SYNCED between machines and record timestamps can come from a peer. File
-// mtime is local metadata; sync rewrites it on arrival.
+// Compare the hook transition with the deciding transcript record's timestamp.
+// File mtime is only a fallback for older records without a timestamp. Metadata
+// and queue writes can touch a transcript long after its turn ended; they must
+// not make an old running row newer than Stop or reset the stall backstop.
 
 import { stat } from "node:fs/promises";
 import { hookState } from "./hook-state.ts";
@@ -123,8 +122,8 @@ async function arbitrate(
   // moment its own layer last spoke.
   //
   // Both candidates are agent-sourced. `hook.at` is `stateAt`, stamped by the hook
-  // when the agent transitioned; the transcript's is its mtime, stamped when the
-  // agent last wrote. Deliberately NOT the lease's `heartbeatAt`: that is written
+  // when the agent transitioned; the transcript clock belongs to its deciding
+  // record, never a later bookkeeping write. Deliberately NOT the lease's `heartbeatAt`: that is written
   // by `startLeaseHeartbeat` from lfg's own enumeration, so it proves only that
   // this host can still see the pane.
   // An explicit open Codex turn also corroborates a newer running hook. Which
@@ -140,13 +139,10 @@ async function arbitrate(
   // is `closed`, computed elsewhere.
   const hookTurn: TurnState | null = hook ? (hook.state === "ended" ? "idle" : hook.state) : null;
 
-  // A transcript-only verdict still needs a timestamp to be stall-checked, so the
-  // stat that used to happen only in the arbitration branch now happens whenever
-  // the transcript has an opinion. It is one stat per session per poll against a
-  // file `transcriptTurnState` just read — cheap next to the `ps`/`tmux` spawns in
-  // the same pass.
-  let transcriptAt: number | null = null;
-  if (transcript != null && transcriptPath) {
+  // Prefer the deciding record's clock. Older timestamp-less records retain the
+  // file-mtime fallback; inability to stat is not evidence that work stopped.
+  let transcriptAt: number | null = transcript?.at ?? null;
+  if (transcriptAt == null && transcript != null && transcriptPath) {
     try {
       transcriptAt = (await stat(transcriptPath)).mtimeMs;
     } catch {

@@ -500,9 +500,7 @@ export async function observeSession(
   const delegated = s.sessionId ? codexDelegationSessionIds().has(s.sessionId) : false;
   const signIn = s.sessionId ? (signInPrompt?.(s.sessionId) ?? null) : null;
   if (!s.tmuxTarget) {
-    const tp = s.agent === "codex"
-      ? s.transcriptPath ?? (s.sessionId ? await resolveTranscript(s.sessionId) : null)
-      : null;
+    const tp = s.transcriptPath ?? (s.sessionId ? await resolveTranscript(s.sessionId) : null);
     const verdict = tp ? await sessionTurnState({ sessionId: s.sessionId, transcriptPath: tp }) : null;
     const busy = resolveBusy({ verdict, paneBusy: false, delegated });
     return { busy, promptPresent: !!signIn, promptQuestion: signIn?.question ?? null };

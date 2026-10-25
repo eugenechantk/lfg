@@ -53,11 +53,10 @@ import {
 
 const MSG_TICK_MS = 700;
 const POLL_TICK_MS = 1000;
-// Freshness is only a fallback for Codex without lifecycle records. Bare Claude
-// keeps the old per-connection rule.
+// Freshness is only a fallback when neither state layer recognizes the file.
 const BARE_BUSY_WINDOW_MS = 4000;
 
-/** Observe a live session without a pane, preserving explicit Codex turns. */
+/** Observe a live session without a pane through the shared turn reader. */
 export async function bareSessionBusy(args: {
   agent: string;
   sessionId?: string | null;
@@ -68,9 +67,7 @@ export async function bareSessionBusy(args: {
   try {
     recent = Date.now() - statSync(args.transcriptPath).mtimeMs < BARE_BUSY_WINDOW_MS;
   } catch {}
-  const verdict = args.agent === "codex"
-    ? await sessionTurnState({ sessionId: args.sessionId, transcriptPath: args.transcriptPath })
-    : null;
+  const verdict = await sessionTurnState({ sessionId: args.sessionId, transcriptPath: args.transcriptPath });
   return resolveBusy({ verdict, paneBusy: recent, delegated: args.delegated });
 }
 // Don't re-attempt a pane resize more often than this. A pane we can't grow

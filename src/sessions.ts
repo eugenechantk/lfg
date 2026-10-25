@@ -3427,10 +3427,8 @@ async function listSessionsUncached(
     const paneBusy = sessionId ? lastPaneBusy(sessionId) : null;
     // The agent's own turn boundary beats the pane scrape when it has an opinion
     // (see turn-state.ts — the pane can be spoofed by an agent's own output).
-    // Pane-backed sessions ONLY: a live pane is the proof the process still
-    // exists. Without it, a transcript that simply ends mid-turn — crashed, or a
-    // stale row sitting on a recycled pid — would read "running" forever, which
-    // is the exact latch this change exists to remove.
+    // Enumeration has already established a live process. The same reader must
+    // answer for pane-less processes too, matching the journal and push watcher.
     //
     // `sessionTurnState`, not `transcriptTurnState`: this site used to read the
     // transcript alone while `journal-pump.ts` read hook+transcript, so the REST
@@ -3438,7 +3436,7 @@ async function listSessionsUncached(
     // disagree about the same session. It also carries the stall guard, and a
     // guard only one of the two consumers has is not a guard.
     const turn =
-      tmuxTarget && transcriptPath
+      transcriptPath
         ? await sessionTurnState({ sessionId, transcriptPath })
         : null;
     out.push({

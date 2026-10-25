@@ -64,11 +64,27 @@ describe("Codex without a terminal pane", () => {
     expect(await bareSessionBusy({ agent: "codex", transcriptPath })).toBe(true);
   });
 
-  test("bare Claude keeps its existing freshness rule", async () => {
+  test("bare Claude uses the shared state rule", async () => {
     const transcriptPath = rollout(JSON.stringify({ type: "assistant", message: { content: [] } }) + "\n");
     expect(await bareSessionBusy({ agent: "claude", transcriptPath })).toBe(false);
     appendFileSync(transcriptPath, JSON.stringify({ type: "assistant" }) + "\n");
     expect(await bareSessionBusy({ agent: "claude", transcriptPath })).toBe(true);
+  });
+
+  test("bare Claude completion and errors agree between journal and push", async () => {
+    for (const end of [
+      { type: "assistant", message: { stop_reason: "end_turn", content: [] } },
+      { type: "assistant", isApiErrorMessage: true, message: { content: [] } },
+    ]) {
+      const transcriptPath = rollout(JSON.stringify({ type: "user", message: { content: "Work" } }) + "\n");
+      appendFileSync(transcriptPath, JSON.stringify({ type: "assistant", message: { content: [] } }) + "\n");
+      const session = { agent: "claude", transcriptPath, tmuxTarget: null };
+      expect(await bareSessionBusy(session)).toBe(true);
+      expect((await observeSession(session)).busy).toBe(true);
+      appendFileSync(transcriptPath, JSON.stringify(end) + "\n");
+      expect(await bareSessionBusy(session)).toBe(false);
+      expect((await observeSession(session)).busy).toBe(false);
+    }
   });
 
   test("delegation keeps a bare session busy even when its own turn has ended", async () => {
