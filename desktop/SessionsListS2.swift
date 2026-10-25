@@ -137,12 +137,18 @@ struct S2DeskHostStrip: View {
 
     let hosts: [HostDot]
     let workingCount: Int
+    /// "working" on Sessions, "running" on Tasks.
+    var workingLabel: String = "working"
     @Binding var groupMode: GroupMode
     var onHiddenDirectories: () -> Void
-    var usageStore: AccountUsageStore
-    var refreshUsage: () async -> Void
+    /// Sessions passes the account usage store; the Tasks strip has none and
+    /// shows no Usage limits item.
+    var usageStore: AccountUsageStore? = nil
+    var refreshUsage: () async -> Void = {}
     @State private var showUsage = false
     @State private var usageHeight: CGFloat = 430
+    /// A page's own menu section, above Group by (Tasks: the host filter).
+    var leadingMenu: AnyView? = nil
 
     var body: some View {
         HStack(spacing: 0) {
@@ -165,7 +171,7 @@ struct S2DeskHostStrip: View {
                 .accessibilityElement(children: .combine)
             }
             if workingCount > 0 {
-                Text("· \(workingCount) working")
+                Text("· \(workingCount) \(workingLabel)")
                     .font(.system(size: 12))
                     .foregroundStyle(S2Desk.secondary)
                     .s2Line(16.2)
@@ -173,9 +179,15 @@ struct S2DeskHostStrip: View {
             }
             Spacer(minLength: 8)
             Menu {
-                Button("Usage limits", systemImage: "gauge.with.needle") { showUsage = true }
-                    .accessibilityIdentifier("sessions_usage_limits")
-                Divider()
+                if let leadingMenu {
+                    leadingMenu
+                    Divider()
+                }
+                if usageStore != nil {
+                    Button("Usage limits", systemImage: "gauge.with.needle") { showUsage = true }
+                        .accessibilityIdentifier("sessions_usage_limits")
+                    Divider()
+                }
                 Picker("Group by", selection: $groupMode) {
                     ForEach(GroupMode.allCases) { mode in
                         Text("By \(mode.title.lowercased())").tag(mode)
@@ -204,11 +216,13 @@ struct S2DeskHostStrip: View {
             .fixedSize()
             .accessibilityIdentifier("group_mode_menu")
             .popover(isPresented: $showUsage, arrowEdge: .top) {
-                AccountUsageContent(store: usageStore, desktop: true, close: { showUsage = false },
-                                    measured: { usageHeight = $0 }, refresh: refreshUsage)
-                    .frame(width: 320, height: min(520, max(180, usageHeight)))
-                    .task { await refreshUsage() }
-                    .onExitCommand { showUsage = false }
+                if let usageStore {
+                    AccountUsageContent(store: usageStore, desktop: true, close: { showUsage = false },
+                                        measured: { usageHeight = $0 }, refresh: refreshUsage)
+                        .frame(width: 320, height: min(520, max(180, usageHeight)))
+                        .task { await refreshUsage() }
+                        .onExitCommand { showUsage = false }
+                }
             }
         }
         .frame(height: 22)

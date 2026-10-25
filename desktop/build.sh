@@ -43,7 +43,8 @@ swiftc "${LFG_DESKTOP_OPTIMIZATION:--O}" -parse-as-library \
   ../ios/LFGCore/Sources/LFGCore/HiddenDirs.swift \
   ../ios/LFGCore/Sources/LFGCore/SessionListRow.swift \
   ../ios/LFGCore/Sources/LFGCore/DesktopSessionList.swift \
-  ../ios/LFGCore/Sources/LFGCore/SSEFrameParser.swift
+  ../ios/LFGCore/Sources/LFGCore/SSEFrameParser.swift \
+  ../ios/LFGCore/Sources/LFGCore/TaskDirectoryGrouping.swift
 
 # App icon: reuse the iOS client's 1024px icon, converted to .icns.
 if [[ -f "$ICON_SRC" ]]; then
