@@ -6,11 +6,10 @@ import { prepareHandoff } from "./handoff.ts";
 import { managedSessionArgv, managedCodexSessionArgv } from "./tmux.ts";
 
 describe("cross-tool handoff", () => {
-  test("desktop uses configured defaults while explicit iOS selections are retained", () => {
+  test("CLI defaults apply to both tools while explicit choices are retained", () => {
     const base = { name: "handoff-test", cwd: "/tmp", prompt: "read context" };
-    expect(managedSessionArgv({ ...base, useConfiguredModelDefault: true })).not.toContain("--model");
-    expect(managedSessionArgv(base)).toContain("--model");
-    const explicit = managedSessionArgv({ ...base, useConfiguredModelDefault: true, model: "sonnet" });
+    expect(managedSessionArgv(base)).not.toContain("--model");
+    const explicit = managedSessionArgv({ ...base, model: "sonnet" });
     expect(explicit[explicit.indexOf("--model") + 1]).toBe("sonnet");
     expect(managedCodexSessionArgv(base)).not.toContain("--model");
     expect(managedCodexSessionArgv({ ...base, model: "gpt-5.6-sol" })).toContain("gpt-5.6-sol");

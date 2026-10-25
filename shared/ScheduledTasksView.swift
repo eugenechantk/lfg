@@ -1914,7 +1914,7 @@ struct ScheduledTaskChat: View {
     var initiallyTask = true
     var initialDirectory = ""
     var initialAgent = "claude"
-    var initialModel = "opus"
+    var initialModel = ""
     let openSession: (String, String) -> Void
     @State private var selectedIsTask: Bool?
     private var isTask: Bool { selectedIsTask ?? initiallyTask }
@@ -2020,8 +2020,9 @@ private struct ScheduledTaskChatContent: View {
                                 ForEach(AgentKind.allCases) { Text($0.displayName).tag($0) }
                             }.disabled(draft.starting).accessibilityIdentifier("creationAgentPicker")
                             Picker("Model", selection: $model) {
+                                Text("Default").tag("")
                                 ForEach(catalog.models(for: agent), id: \.self) { Text($0).tag($0) }
-                                if !catalog.models(for: agent).contains(model) { Text(model).tag(model) }
+                                if !model.isEmpty, !catalog.models(for: agent).contains(model) { Text(model).tag(model) }
                             }.disabled(draft.starting).accessibilityIdentifier("creationModelPicker")
                             if !repos.isEmpty {
                                 Menu("Choose a directory") { ForEach(repos) { repo in Button(repo.name ?? repo.cwd) { draft.cwd = repo.cwd } } }
@@ -2060,7 +2061,7 @@ private struct ScheduledTaskChatContent: View {
             catalog = models ?? .fallback
         }
         .onChange(of: agent) { _, _ in
-            model = catalog.models(for: agent).first ?? agent.defaultModel
+            model = ""
         }
     }
 

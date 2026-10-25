@@ -3,7 +3,7 @@ import XCTest
 
 final class NewSessionModelDefaultsTests: XCTestCase {
 
-    private let fallback = AgentModelSelection(agent: .claude, model: "claude-opus-5")
+    private let fallback = AgentModelSelection(agent: .codex, model: "gpt-6.1-sol")
 
     private func session(
         _ id: String, cwd: String?, agent: String, model: String?, at: Double
@@ -38,19 +38,19 @@ final class NewSessionModelDefaultsTests: XCTestCase {
         XCTAssertEqual(s.model, "haiku")
     }
 
-    // SC3: nothing to learn from → the remembered pair stands.
+    // A fresh directory uses Claude Default despite a remembered Codex choice.
     func testFallsBackWhenTheDirectoryHasNoSessions() {
         let sessions = [session("b1", cwd: "/b", agent: "codex", model: "gpt-5.6-sol", at: 5)]
         let s = AgentModelSelection.inferred(forCwd: "/untouched", in: sessions, fallback: fallback)
-        XCTAssertEqual(s, fallback)
+        XCTAssertEqual(s, .default)
     }
 
     func testFallsBackOnAnEmptyDirectoryString() {
         let sessions = [session("a1", cwd: "/a", agent: "codex", model: "gpt-5.6-sol", at: 5)]
         XCTAssertEqual(
-            AgentModelSelection.inferred(forCwd: "", in: sessions, fallback: fallback), fallback)
+            AgentModelSelection.inferred(forCwd: "", in: sessions, fallback: fallback), .default)
         XCTAssertEqual(
-            AgentModelSelection.inferred(forCwd: "   ", in: sessions, fallback: fallback), fallback)
+            AgentModelSelection.inferred(forCwd: "   ", in: sessions, fallback: fallback), .default)
     }
 
     // A closed row from an older server carries no model, but its agent is still
@@ -62,7 +62,7 @@ final class NewSessionModelDefaultsTests: XCTestCase {
         ]
         let s = AgentModelSelection.inferred(forCwd: "/a", in: sessions, fallback: fallback)
         XCTAssertEqual(s.agent, .codex)
-        XCTAssertEqual(s.model, AgentKind.codex.defaultModel)
+        XCTAssertEqual(s.model, "")
     }
 
     // A newer session with no model must not shadow the model we can actually read.
@@ -78,16 +78,16 @@ final class NewSessionModelDefaultsTests: XCTestCase {
     // A model newer than the bundled list is still the directory's model. The
     // bundle stopped at gpt-5.6, so this used to come back as gpt-5.6-sol.
     func testModelNewerThanTheBundledListSurvivesInference() {
-        let sessions = [session("a1", cwd: "/a", agent: "codex", model: "gpt-6.1-sol", at: 10)]
+        let sessions = [session("a1", cwd: "/a", agent: "codex", model: "gpt-99-future", at: 10)]
         let s = AgentModelSelection.inferred(forCwd: "/a", in: sessions, fallback: fallback)
-        XCTAssertFalse(AgentKind.codex.models.contains("gpt-6.1-sol"))
-        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: "gpt-6.1-sol"))
+        XCTAssertFalse(AgentKind.codex.models.contains("gpt-99-future"))
+        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: "gpt-99-future"))
 
         let live = ModelCatalogResponse(agents: [
-            "codex": AgentModelCatalog(defaultModel: "gpt-6.1-sol",
-                                       models: ["gpt-6.1-sol", "gpt-6-sol", "gpt-5.6-sol"]),
+            "codex": AgentModelCatalog(defaultModel: "gpt-99-future",
+                                       models: ["gpt-99-future", "gpt-6-sol", "gpt-5.6-sol"]),
         ])
-        XCTAssertEqual(s.reconciled(with: live).model, "gpt-6.1-sol")
+        XCTAssertEqual(s.reconciled(with: live).model, "gpt-99-future")
     }
 
     // SC6: catalogs evolve; a retired model must never reach a create request.
@@ -105,27 +105,26 @@ final class NewSessionModelDefaultsTests: XCTestCase {
     func testUnsafeModelDegradesToTheAgentDefault() {
         let sessions = [session("a1", cwd: "/a", agent: "codex", model: "gpt; rm -rf /", at: 10)]
         let s = AgentModelSelection.inferred(forCwd: "/a", in: sessions, fallback: fallback)
-        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: AgentKind.codex.defaultModel))
+        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: ""))
     }
 
     private let hostCatalog = ModelCatalogResponse(agents: [
         "codex": AgentModelCatalog(defaultModel: "gpt-6.1-sol", models: ["gpt-6.1-sol", "gpt-5.6-sol"]),
     ])
 
-    // SC4: "the agent's default" is the host's default, not this build's. A
-    // codex directory with no readable model used to open on gpt-5.6-sol.
-    func testAgentOnlyDirectoryUsesTheHostsDefault() {
+    // Missing model metadata keeps the known agent on its CLI Default policy.
+    func testAgentOnlyDirectoryUsesCLIDefaultPolicy() {
         let sessions = [session("a1", cwd: "/a", agent: "codex", model: nil, at: 10)]
         let s = AgentModelSelection.inferred(
             forCwd: "/a", in: sessions, fallback: fallback, catalog: hostCatalog)
-        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: "gpt-6.1-sol"))
+        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: ""))
     }
 
-    func testUnsafeModelDegradesToTheHostsDefault() {
+    func testUnsafeModelDegradesToCLIDefaultPolicy() {
         let sessions = [session("a1", cwd: "/a", agent: "codex", model: "gpt; rm -rf /", at: 10)]
         let s = AgentModelSelection.inferred(
             forCwd: "/a", in: sessions, fallback: fallback, catalog: hostCatalog)
-        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: "gpt-6.1-sol"))
+        XCTAssertEqual(s, AgentModelSelection(agent: .codex, model: ""))
     }
 
     // An agent this build doesn't know is not a runtime we can propose.
@@ -148,7 +147,7 @@ final class NewSessionModelDefaultsTests: XCTestCase {
     func testDoesNotWalkUpToAParentDirectory() {
         let sessions = [session("a1", cwd: "/a/b/sub", agent: "codex", model: "gpt-5.6-sol", at: 10)]
         let s = AgentModelSelection.inferred(forCwd: "/a/b", in: sessions, fallback: fallback)
-        XCTAssertEqual(s, fallback)
+        XCTAssertEqual(s, .default)
     }
 
     // SC2 (client half): the closed rows this inference reads from must decode

@@ -197,7 +197,7 @@ final class ModelsTests: XCTestCase {
 
     func testAgentKindModels() {
         XCTAssertEqual(AgentKind.claude.defaultModel, "opus")
-        XCTAssertEqual(AgentKind.codex.defaultModel, "gpt-5.6-sol")
+        XCTAssertEqual(AgentKind.codex.defaultModel, "gpt-6.1-sol")
         XCTAssertTrue(AgentKind.claude.models.contains("claude-fable-5"))
         XCTAssertTrue(AgentKind.claude.models.contains("opus"))
         XCTAssertTrue(AgentKind.claude.pickerModels.contains("opus"))
@@ -240,12 +240,12 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(selection, AgentModelSelection(agent: .codex, model: "gpt-5.6-terra"))
     }
 
-    func testAgentModelSelectionDefaultsFirstUseToClaudeOpus() {
+    func testAgentModelSelectionDefaultsFirstUseToClaudeCLI() {
         let selection = AgentModelSelection.restoring(agentRawValue: nil, model: nil)
 
         XCTAssertEqual(selection, .default)
         XCTAssertEqual(selection.agent, .claude)
-        XCTAssertEqual(selection.model, "opus")
+        XCTAssertEqual(selection.model, "")
     }
 
     func testAgentModelSelectionReplacesStaleModelWithAgentsCurrentDefault() {
@@ -267,7 +267,7 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(
             AgentModelSelection(agent: .codex, model: "gpt-6-astra")
                 .reconciled(with: .fallback),
-            AgentModelSelection(agent: .codex, model: "gpt-5.6-sol")
+            AgentModelSelection(agent: .codex, model: "gpt-6.1-sol")
         )
     }
 

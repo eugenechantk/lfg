@@ -27,6 +27,7 @@ struct SheetScaffold<Content: View>: View {
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(34)
         .presentationBackground(.regularMaterial)
+        .preferredColorScheme(.dark)
     }
 }
 
@@ -306,9 +307,9 @@ struct ModelSheet: View {
 
     private func models(for kind: AgentKind) -> [String] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        let models = catalog.models(for: kind)
+        let models = [""] + catalog.models(for: kind)
         guard !q.isEmpty else { return models }
-        return models.filter { $0.lowercased().contains(q) }
+        return models.filter { ModelChipLabel.model($0).lowercased().contains(q) || $0.lowercased().contains(q) }
     }
 
     var body: some View {
@@ -339,7 +340,7 @@ struct ModelSheet: View {
         Button { onSelect(kind, model) } label: {
             HStack(spacing: 12) {
                 SelectionCheck(selected: kind == selectedAgent && model == selectedModel)
-                Text(model)
+                Text(ModelChipLabel.model(model))
                     .font(.system(size: 17))
                     .foregroundStyle(NewSessionPalette.labelPrimary)
                 Spacer(minLength: 0)
@@ -349,6 +350,6 @@ struct ModelSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("sheet.row.\(kind.rawValue).\(model)")
+        .accessibilityIdentifier("sheet.row.\(kind.rawValue).\(model.isEmpty ? "default" : model)")
     }
 }

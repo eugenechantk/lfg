@@ -40,7 +40,7 @@ struct NewSessionView: View {
     // Agent remains part of creation state even though the standalone picker is
     // intentionally absent. Phase B's grouped model picker will update it.
     @State private var agent: AgentKind = .claude
-    @State private var model = AgentKind.claude.defaultModel
+    @State private var model = ""
     @State private var cwd = ""
     @State private var cwdLabel = "Directory"
     @State private var draft = ""
@@ -132,7 +132,7 @@ struct NewSessionView: View {
                 directoryLabel: cwdLabel,
                 hostLabel: selectedHost?.label ?? "Host",
                 hostIsReachable: selectedHostIsReachable,
-                modelLabel: model,
+                modelLabel: ModelChipLabel.model(model),
                 sending: starting,
                 autofocus: autofocusComposer
             ) { text, attachments in
@@ -205,11 +205,9 @@ struct NewSessionView: View {
         // made all ten child ids report "newSession.root" and left the whole
         // automation contract unqueryable.
         .task {
-            // Restore before the first suspension so asynchronous directory
-            // metadata loading cannot leave the picker on its hard-coded default.
-            let rememberedSelection = settings.lastNewSessionModelSelection
-            agent = rememberedSelection.agent
-            model = rememberedSelection.model
+            // A fresh directory starts on Claude Default while metadata loads.
+            agent = .claude
+            model = ""
             if store.repos.isEmpty || store.root.isEmpty {
                 await store.loadCreateMetadata()
             }
@@ -265,9 +263,8 @@ struct NewSessionView: View {
         let link = request.link
         draft = link.prompt ?? ""
         selectedHost = NewSessionLinkHints.host(for: link.host, in: settings.hosts) ?? fallbackHost
-        let remembered = settings.lastNewSessionModelSelection
-        agent = remembered.agent
-        model = remembered.model
+        agent = .claude
+        model = ""
         modelPickedExplicitly = false
         let target = NewSessionDirectoryHint.directory(
             for: link.directory,
@@ -425,8 +422,7 @@ struct NewSessionView: View {
     }
 
     /// Directory-derived default. A no-op once the model has been picked by hand,
-    /// and a no-op in effect when the directory has no usable history (the
-    /// inference returns the remembered pair it was handed as the fallback).
+    /// with Claude Default when this directory has no usable history.
     private func applyInferredModel(for path: String) {
         guard !modelPickedExplicitly else { return }
         let inferred = AgentModelSelection.inferred(

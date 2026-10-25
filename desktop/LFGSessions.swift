@@ -698,12 +698,12 @@ enum DesktopNewSessionPlanner {
     private static let modelsByAgent: [String: [String]] = [
         "claude": ["claude-opus-5", "claude-fable-5", "claude-sonnet-5",
                    "claude-haiku-4-5", "opus", "fable", "sonnet", "haiku"],
-        "codex": ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+        "codex": ["gpt-6.1-sol", "gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
                   "gpt-5.3-codex-spark"],
     ]
 
     static let defaultAgent = "claude"
-    static var defaultModel: String { modelsByAgent[defaultAgent]!.first! }
+    static var defaultModel: String { "" }
 
     static func plan(
         query rawQuery: String,
@@ -780,14 +780,14 @@ enum DesktopNewSessionPlanner {
 
     private static func restoredSelection(for item: SessionItem) -> (agent: String, model: String) {
         let agent = item.session.agent
-        guard let models = modelsByAgent[agent], let fallback = models.first else {
+        guard modelsByAgent[agent] != nil else {
             return (defaultAgent, defaultModel)
         }
         // Keep any id the server accepts, not just this build's list. The row
         // ran on that host, so its model exists there; checking the hardcoded
         // list swapped every newer model (gpt-6.1-sol) for the agent default.
         guard let model = nonempty(item.session.model), isSafeModelID(model) else {
-            return (agent, fallback)
+            return (agent, "")
         }
         return (agent, model)
     }
@@ -3257,8 +3257,8 @@ enum DesktopFeatureTestCLI {
             hostURL: "http://default:8766",
             cwd: "/Users/me/repos/_inbox",
             agent: "claude",
-            model: "claude-opus-5"
-        ), "empty search uses the default host Inbox and the iOS default model")
+            model: ""
+        ), "empty search uses the default host Inbox and the CLI default")
 
         let exactDirectory = newSessionTestItem(
             id: "exact-directory", title: "older work", project: "lfg",
@@ -3308,7 +3308,7 @@ enum DesktopFeatureTestCLI {
         try expect(DesktopNewSessionPlanner.plan(
             query: "render", items: [noModel],
             defaultHostURL: "http://default:8766", inbox: "/inbox"
-        )?.model == "gpt-6-astra", "known agent without model uses that agent's iOS default")
+        )?.model == "", "known agent without model uses that agent's iOS default")
 
         let readableOlderModel = newSessionTestItem(
             id: "render-known-model", title: "older render", project: "render",
@@ -3337,7 +3337,7 @@ enum DesktopFeatureTestCLI {
         try expect(DesktopNewSessionPlanner.plan(
             query: "unsafe", items: [unsafeModel],
             defaultHostURL: "http://default:8766", inbox: "/inbox"
-        )?.model == "gpt-6-astra", "an unsafe model id falls back to the agent default")
+        )?.model == "", "an unsafe model id falls back to the agent default")
 
         try expect(DesktopNewSessionPlanner.plan(
             query: "missing", items: [exactDirectory],

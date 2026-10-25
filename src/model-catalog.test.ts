@@ -93,8 +93,8 @@ describe("automatic CLI model catalog", () => {
     });
     expect(BUNDLED_MODEL_CATALOG.agents.codex).toEqual({
       version: null,
-      defaultModel: "gpt-5.6-sol",
-      models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
+      defaultModel: "gpt-6.1-sol",
+      models: ["gpt-6.1-sol", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
       efforts: {},
     });
     expect(BUNDLED_MODEL_CATALOG.agents.claude.models).not.toContain("claude-opus-5-5");
@@ -176,4 +176,12 @@ describe("last successful discovery", () => {
     expect(await readLastGoodCatalog(path)).toEqual({});
     expect(readFileSync(path, "utf8")).toBe("{ truncated");
   });
+});
+
+// A CLI override outranks the account catalog's suggested default.
+it("uses the configured Codex model instead of the provider recommendation", () => {
+  const output = JSON.stringify({ id: 2, result: { data: [
+    { model: "provider-model", isDefault: true }, { model: "configured-model" },
+  ] } });
+  expect(parseCodexModelListOutput(output, "test", "configured-model")?.defaultModel).toBe("configured-model");
 });

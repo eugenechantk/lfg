@@ -268,12 +268,13 @@ struct SessionSheet: View {
                                 }
                             } label: {
                                 if session.agent == section.agent.rawValue && session.model == name {
-                                    Label(name, systemImage: "checkmark")
+                                    Label(ModelChipLabel.model(name), systemImage: "checkmark")
                                 } else {
-                                    Text(name)
+                                    Text(ModelChipLabel.model(name))
                                 }
                             }
                             .disabled(switching || sid.hasPrefix("local-"))
+                            .accessibilityIdentifier("session_model_\(section.agent.rawValue)_\(name.isEmpty ? "default" : name)")
                         }
                     }
                 }

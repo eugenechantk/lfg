@@ -3,50 +3,18 @@ import Foundation
 // MARK: - Per-directory agent/model default
 
 extension AgentModelSelection {
-    /// The agent/model a new session in `cwd` should default to, inferred from the
-    /// newest session that directory already has.
-    ///
-    /// The globally-remembered pair (`AppSettings.lastNewSessionModelSelection`) is
-    /// the wrong default the moment you work across projects with different
-    /// runtimes: start one codex session in repo A and every new session in repo B
-    /// silently proposes codex too. A directory, by contrast, is a strong signal —
-    /// the work in it has a runtime, and the last session there is the best
-    /// available statement of what it is.
-    ///
-    /// Two tiers, because a session can be known without its model being known:
-    ///
-    /// 1. The newest session in `cwd` whose model is readable — that pair, kept
-    ///    as-is when the id is syntactically safe. This deliberately does NOT
-    ///    check the app's bundled model list: that list is a compatibility floor
-    ///    for old hosts, so every model newer than this build (gpt-6.1-sol, when
-    ///    the bundle stops at gpt-5.6) used to be swapped for the bundled default.
-    ///    Whether the host still offers the id is decided by `reconciled(with:)`
-    ///    against that host's live catalog, at the chip and at the create request.
-    /// 2. Failing that, the newest session in `cwd` with a recognizable agent, on
-    ///    that agent's default model. A transcript with no assistant turn (or a
-    ///    server too old to report `model` on closed rows) still tells us the
-    ///    runtime, and "codex on its default model" beats "claude" for a codex
-    ///    directory.
-    ///
-    /// "Default model" is `catalog`'s — the host's own answer — so it moves with
-    /// the host's CLIs. The compiled default only applies when no catalog is
-    /// known (`.fallback`).
-    ///
-    /// Falls back to `fallback` when the directory has no usable history at all.
-    ///
-    /// Matching is on the exact directory, with only trailing slashes normalized —
-    /// deliberately no ancestor walk. `~/dev/foo/sub` is its own workspace and may
-    /// well run a different runtime than `~/dev/foo`; guessing across that boundary
-    /// would be a claim this function cannot support, and the fallback is already
-    /// a reasonable answer.
+    /// Use this exact directory's history, otherwise Claude with the CLI default.
+    /// Global remembered choices never supply a fresh directory's defaults.
+    /// Keep explicit historical models; missing metadata uses the known agent's
+    /// CLI default. The caller preserves choices made explicitly in the composer.
     public static func inferred(
         forCwd cwd: String,
         in sessions: [Session],
-        fallback: AgentModelSelection,
-        catalog: ModelCatalogResponse = .fallback
+        fallback _: AgentModelSelection,
+        catalog _: ModelCatalogResponse = .fallback
     ) -> AgentModelSelection {
         let target = normalizedPath(cwd)
-        guard !target.isEmpty else { return fallback }
+        guard !target.isEmpty else { return .default }
 
         // Sorted newest-first here rather than trusting the caller's order: the
         // session list is grouped/sorted for display (by status, by unread, by
@@ -61,9 +29,9 @@ extension AgentModelSelection {
             return AgentModelSelection(agent: agent, model: model)
         }
         if let (_, agent) = candidates.first {
-            return AgentModelSelection(agent: agent, model: catalog.defaultModel(for: agent))
+            return AgentModelSelection(agent: agent, model: "")
         }
-        return fallback
+        return .default
     }
 
     /// Trailing-slash-insensitive path comparison. `/repo` and `/repo/` are the

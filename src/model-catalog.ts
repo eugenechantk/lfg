@@ -34,10 +34,9 @@ export const BUNDLED_MODEL_CATALOG: ModelCatalogResponse = {
     },
     codex: {
       version: null,
-      // Compatibility IDs accepted by the previous host generation. A current
-      // host replaces these with its live CLI-discovered catalog.
-      defaultModel: "gpt-5.6-sol",
-      models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
+      // Current default plus compatibility choices for offline discovery.
+      defaultModel: "gpt-6.1-sol",
+      models: ["gpt-6.1-sol", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
       efforts: {},
     },
   },
@@ -91,7 +90,7 @@ export function parseClaudeCatalog(raw: string, version: string | null): AgentMo
   }
 }
 
-export function parseCodexModelListOutput(raw: string, version: string | null): AgentModelCatalog | null {
+export function parseCodexModelListOutput(raw: string, version: string | null, configuredModel?: unknown): AgentModelCatalog | null {
   let response: {
     id?: unknown;
     result?: { data?: Array<{
@@ -115,7 +114,8 @@ export function parseCodexModelListOutput(raw: string, version: string | null): 
   const models = uniqueSafeModels(visible.map(entry => entry.model));
   if (models.length === 0) return null;
   const providerDefault = visible.find(entry => entry.isDefault === true)?.model;
-  const defaultModel = isSafeModelId(providerDefault) && models.includes(providerDefault)
+  const defaultModel = isSafeModelId(configuredModel) ? configuredModel
+    : isSafeModelId(providerDefault) && models.includes(providerDefault)
     ? providerDefault
     : models[0]!;
   const efforts: Record<string, string[]> = {};
@@ -162,7 +162,7 @@ function sanitizeAgentCatalog(value: unknown): AgentModelCatalog | null {
   const raw = value as { version?: unknown; defaultModel?: unknown; models?: unknown; efforts?: unknown };
   const models = Array.isArray(raw.models) ? uniqueSafeModels(raw.models) : [];
   if (models.length === 0) return null;
-  const defaultModel = isSafeModelId(raw.defaultModel) && models.includes(raw.defaultModel)
+  const defaultModel = isSafeModelId(raw.defaultModel)
     ? raw.defaultModel
     : models[0]!;
   const efforts: Record<string, string[]> = {};
@@ -274,7 +274,7 @@ async function readProtocolLine(
   throw new Error("Codex model discovery timed out");
 }
 
-async function discoverCodexModels(): Promise<AgentModelCatalog | null> {
+async function discoverCodexModels(cwd?: string): Promise<AgentModelCatalog | null> {
   const bin = codexBin();
   const version = await executableVersion(bin, /\b(\d+\.\d+\.\d+)\b/);
   let proc: ReturnType<typeof Bun.spawn> | null = null;
@@ -297,6 +297,10 @@ async function discoverCodexModels(): Promise<AgentModelCatalog | null> {
     }) + "\n");
     await readProtocolLine(reader, state, value => (value as { id?: unknown })?.id === 1, deadline);
     input.write(JSON.stringify({ method: "initialized" }) + "\n");
+    input.write(JSON.stringify({ id: 3, method: "config/read", params: { includeLayers: false, ...(cwd ? { cwd } : {}) } }) + "\n");
+    const configuration = await readProtocolLine(reader, state,
+      value => (value as { id?: unknown })?.id === 3, deadline) as { error?: unknown; result?: { config?: { model?: unknown } } };
+    if (configuration.error || !configuration.result?.config) return null;
     input.write(JSON.stringify({
       id: 2,
       method: "model/list",
@@ -308,7 +312,7 @@ async function discoverCodexModels(): Promise<AgentModelCatalog | null> {
       value => (value as { id?: unknown })?.id === 2,
       deadline,
     );
-    return parseCodexModelListOutput(JSON.stringify(response), version);
+    return parseCodexModelListOutput(JSON.stringify(response), version, configuration.result?.config?.model);
   } catch {
     return null;
   } finally {
@@ -318,6 +322,11 @@ async function discoverCodexModels(): Promise<AgentModelCatalog | null> {
     } catch {}
     try { proc?.kill(); } catch {}
   }
+}
+
+/** Resolve Default for an in-place switch, where the native picker needs an ID. */
+export async function configuredCodexModel(cwd?: string): Promise<string | null> {
+  return (await discoverCodexModels(cwd))?.defaultModel ?? null;
 }
 
 let cached: { expiresAt: number; value: ModelCatalogResponse } | null = null;

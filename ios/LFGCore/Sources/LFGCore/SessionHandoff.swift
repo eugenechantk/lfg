@@ -16,10 +16,10 @@ public enum SessionHandoff {
         return [
             ModelSection(agent: current,
                          title: closed ? "Resume with model" : "Switch in place",
-                         models: catalog.models(for: current)),
+                         models: [""] + catalog.models(for: current)),
             ModelSection(agent: other,
                          title: "Switch to \(other == .claude ? "Claude Code" : "Codex")",
-                         models: catalog.models(for: other)),
+                         models: [""] + catalog.models(for: other)),
         ]
     }
 

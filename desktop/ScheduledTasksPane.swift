@@ -100,7 +100,7 @@ struct DesktopCreationSheet: View {
         if let host = hosts.first(where: { $0.baseURL.absoluteString == plan?.hostURL }) ?? hosts.first {
             ScheduledTaskChat(hosts: hosts, initialHost: host, initiallyTask: isTask,
                 initialDirectory: plan?.cwd ?? "", initialAgent: plan?.agent ?? "claude",
-                initialModel: plan?.model ?? "opus", openSession: openSession)
+                initialModel: plan?.model ?? "", openSession: openSession)
         } else {
             ContentUnavailableView("No host configured", systemImage: "desktopcomputer",
                 description: Text("Add a host in Settings to start a session or task."))

@@ -8,7 +8,7 @@ import Testing
             #expect(sections.count == 2)
             #expect(sections[0].agent == current)
             #expect(sections[0].title == "Switch in place")
-            #expect(sections[0].models == current.pickerModels)
+            #expect(sections[0].models == [""] + current.pickerModels)
             #expect(sections[1].agent != current)
             #expect(sections[1].title == (current == .claude ? "Switch to Codex" : "Switch to Claude Code"))
             for target in AgentKind.allCases {
@@ -34,8 +34,8 @@ import Testing
 
         let sections = SessionHandoff.modelSections(current: .codex, catalog: catalog)
         #expect(sections.map(\.agent) == [.codex, .claude])
-        #expect(sections[0].models == ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"])
-        #expect(sections[1].models == ["claude-opus-5-5", "claude-fable-5-1"])
+        #expect(sections[0].models == ["", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna"])
+        #expect(sections[1].models == ["", "claude-opus-5-5", "claude-fable-5-1"])
     }
 
     @Test func crossProviderSwitchStatusNamesTheDestinationProvider() {

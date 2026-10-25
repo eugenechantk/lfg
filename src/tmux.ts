@@ -7,12 +7,6 @@ import { ppidOf as procPpidOf, ttyOf, normalizeTty } from "./procinfo";
 import { spawnTmuxLaunch, tmuxLaunchArgv, type TmuxLaunch } from "./tmux-launch";
 export { tmuxLiteral } from "./tmux-launch";
 
-// Known-good Claude model to launch with when a caller doesn't specify one.
-// Never launch a managed `claude` bare — see spawnManagedSession. Pin the
-// current Opus ID instead of the alias so new sessions don't inherit a stale
-// provider default.
-export const DEFAULT_MODEL = "claude-opus-5";
-
 // Geometry for every tmux session lfg owns. NOT cosmetic — it is the only
 // reason a question's preamble is readable in the client at all.
 //
@@ -645,7 +639,6 @@ type ManagedSessionOptions = {
   prompt?: string;
   systemPrompt?: string;
   model?: string;
-  useConfiguredModelDefault?: boolean;
   resume?: string;
   fork?: boolean;
 };
@@ -659,14 +652,8 @@ function managedSessionLaunch(opts: ManagedSessionOptions): TmuxLaunch {
     // Branch instead of revive: fork mints a new id from the resumed history.
     if (opts.fork) argv.push("--fork-session");
   }
-  // Normally pin a model. A bare `claude` inherits Claude Code's saved global
-  // default, which can silently rot — when Anthropic retires/disables that
-  // model (e.g. the Fable off-switch), every inheriting session boots straight
-  // into "model unavailable" and freezes, replaying the error on every turn.
-  // An explicit --model is the only thing that overrides it. DEFAULT_MODEL is a
-  // known-good fallback when the caller didn't pick one.
-  // Desktop tool switching explicitly requests the CLI's configured default.
-  if (opts.model || !opts.useConfiguredModelDefault) argv.push("--model", opts.model || DEFAULT_MODEL);
+  // No override means the CLI owns model resolution, including project settings.
+  if (opts.model) argv.push("--model", opts.model);
   if (opts.systemPrompt) argv.push("--append-system-prompt", opts.systemPrompt);
   // `--` terminates option parsing so the variadic --add-dir can't swallow the
   // positional prompt as a second directory (which strands the new session at
@@ -685,7 +672,6 @@ export function spawnManagedSession(opts: {
   prompt?: string;
   systemPrompt?: string;
   model?: string;
-  useConfiguredModelDefault?: boolean;
   // When set, resume the on-disk transcript with this sessionId (`claude
   // --resume <id>`) instead of starting a fresh conversation — the way lfg
   // brings a closed/dead session back after the box (and its tmux server +

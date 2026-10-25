@@ -11,6 +11,7 @@ public enum ModelChipLabel {
     }
 
     public static func model(_ id: String) -> String {
+        if id.isEmpty { return "Default" }
         let lower = id.lowercased()
         if lower.hasPrefix("gpt-") {
             let rest = id.dropFirst(4).split(separator: "-")

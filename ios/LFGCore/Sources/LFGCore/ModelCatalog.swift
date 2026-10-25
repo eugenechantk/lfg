@@ -24,9 +24,7 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable {
             // so they remain valid when the host predates GET /api/models.
             return ["opus", "fable", "sonnet", "haiku"]
         case .codex:
-            // Compatibility IDs accepted by the previous host generation. A
-            // current host replaces these with its live CLI-discovered catalog.
-            return ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]
+            return ["gpt-6.1-sol", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]
         }
     }
 
@@ -95,7 +93,7 @@ public struct ModelCatalogResponse: Codable, Sendable, Equatable {
     public func defaultModel(for agent: AgentKind) -> String {
         let available = models(for: agent)
         guard let preferred = agents[agent.rawValue]?.defaultModel,
-              available.contains(preferred) else { return available.first ?? agent.defaultModel }
+              AgentModelSelection.isSafeModelName(preferred) else { return available.first ?? agent.defaultModel }
         return preferred
     }
 
@@ -140,13 +138,14 @@ public struct AgentModelSelection: Equatable, Sendable {
 
     public static let `default` = AgentModelSelection(
         agent: .claude,
-        model: AgentKind.claude.defaultModel
+        model: ""
     )
 
     public static func restoring(agentRawValue: String?, model: String?) -> AgentModelSelection {
         guard let agentRawValue, let agent = AgentKind(rawValue: agentRawValue) else {
             return .default
         }
+        if model == "" { return AgentModelSelection(agent: agent, model: "") }
         guard let model, agent.models.contains(model) else {
             return AgentModelSelection(agent: agent, model: agent.defaultModel)
         }
@@ -160,6 +159,7 @@ public struct AgentModelSelection: Equatable, Sendable {
         guard let agentRawValue, let agent = AgentKind(rawValue: agentRawValue) else {
             return .default
         }
+        if model == "" { return AgentModelSelection(agent: agent, model: "") }
         guard let model, isSafeModelName(model) else {
             return AgentModelSelection(agent: agent, model: agent.defaultModel)
         }
@@ -167,6 +167,9 @@ public struct AgentModelSelection: Equatable, Sendable {
     }
 
     public func reconciled(with catalog: ModelCatalogResponse) -> AgentModelSelection {
+        // Empty means let the CLI resolve its configuration at launch. Never
+        // replace this policy with today's concrete catalog default.
+        if model.isEmpty { return self }
         let available = catalog.models(for: agent)
         guard available.contains(model) else {
             return AgentModelSelection(agent: agent, model: catalog.defaultModel(for: agent))

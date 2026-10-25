@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
   CODEX_PANE_STYLES,
-  DEFAULT_MODEL,
   claudeRelaunchArgv,
   codexPaneStyle,
   managedCodexSessionArgv,
@@ -34,8 +33,7 @@ describe("managedSessionArgv — fork vs resume vs fresh", () => {
     const argv = managedSessionArgv({ name: "lfg-a", cwd: "/tmp" });
     expect(argv).not.toContain("--resume");
     expect(argv).not.toContain("--fork-session");
-    expect(argv).toContain("--model");
-    expect(argv[argv.indexOf("--model") + 1]).toBe(DEFAULT_MODEL);
+    expect(argv).not.toContain("--model");
   });
 
   it("resume carries --resume <id> but NOT --fork-session", () => {

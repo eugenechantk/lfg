@@ -14,7 +14,7 @@ import { effortSwitchBlocker, launchFlag, validateEffortForAgent } from "../sess
 import { panePromptSuppressed } from "../pane-drive.ts";
 import { hostInfo } from "../hostinfo.ts";
 import { accountUsage, claudeAccountUsage } from "../account-usage.ts";
-import { currentModelCatalog, isSafeModelId } from "../model-catalog.ts";
+import { currentModelCatalog, configuredCodexModel, isSafeModelId } from "../model-catalog.ts";
 import { claudeModelSwitchBlocker } from "../claude-model-switch.ts";
 import { Journal } from "../journal.ts";
 import { journalEventStream } from "../events-stream.ts";
@@ -356,7 +356,7 @@ async function resumeClosedSession(opts: {
   }
   // Relaunch on the model the conversation was last using (read from the
   // transcript) so a resume doesn't silently bump the session to opus.
-  const model = opts.model || (await modelAliasForTranscript(transcript)) || undefined;
+  const model = opts.model === "" ? undefined : opts.model || (await modelAliasForTranscript(transcript)) || undefined;
   const tmuxName = `lfg-${randomBytes(3).toString("hex")}`;
   const r = spawnManagedSession({ name: tmuxName, cwd, model, resume: sessionId, prompt: opts.prompt });
   if (!r.ok) return { ok: false, status: 502, error: r.error || "failed to resume session" };
@@ -405,11 +405,13 @@ async function forkSession(opts: {
   if (modelError) return { ok: false, status: 400, error: modelError };
   const cwd = (await cwdForTranscript(transcript)) ?? SELF_REPO;
   if (agent === "codex") {
+    const model = opts.model === "" ? await configuredCodexModel(cwd) : opts.model;
+    if (model === null) return { ok: false, status: 503, error: "Could not read the Codex default. Try again." };
     const live = (await listSessions()).find((session) => session.sessionId === sessionId);
     if (live?.control === "external") {
       let newId: string;
       try {
-        newId = await forkCodexThreadViaAppServer({ threadId: sessionId, cwd, model: opts.model });
+        newId = await forkCodexThreadViaAppServer({ threadId: sessionId, cwd, model });
         console.log(`[fork] codex external ${sessionId} → ${newId}`);
       } catch (error) {
         return {
@@ -454,7 +456,7 @@ async function forkSession(opts: {
     const r = spawnManagedCodexSession({
       name: tmuxName,
       cwd,
-      model: opts.model,
+      model,
       resume: sessionId,
       fork: true,
     });
@@ -490,7 +492,7 @@ async function forkSession(opts: {
     return { ok: true, tmuxName, cwd, newId, agent: "codex" };
   }
   // Branch on the model the conversation was last using, unless overridden.
-  const model = opts.model || (await modelAliasForTranscript(transcript)) || undefined;
+  const model = opts.model === "" ? undefined : opts.model || (await modelAliasForTranscript(transcript)) || undefined;
   const forkSourceBytes = statSync(transcript).size;
   const tmuxName = `lfg-${randomBytes(3).toString("hex")}`;
   const r = spawnManagedSession({ name: tmuxName, cwd, model, resume: sessionId, fork: true });
@@ -2429,7 +2431,7 @@ export async function cmdServe(options: {
         } | null;
         const sessionId = body?.sessionId?.trim();
         if (!sessionId) return err(400, "sessionId required");
-        const model = body?.model?.trim() || undefined;
+        const model = typeof body?.model === "string" ? body.model.trim() : undefined;
         const out = await resumeClosedSession({
           sessionId, model, user: body?.user, prompt: body?.prompt, force: body?.force === true,
         });
@@ -2451,7 +2453,7 @@ export async function cmdServe(options: {
         } | null;
         const sessionId = body?.sessionId?.trim();
         if (!sessionId) return err(400, "sessionId required");
-        const model = body?.model?.trim() || undefined;
+        const model = typeof body?.model === "string" ? body.model.trim() : undefined;
         const out = await forkSession({ sessionId, model, user: body?.user });
         if (!out.ok) return err(out.status, out.error, out.liveOn ? { liveOn: out.liveOn } : undefined);
         if (out.newId) {
@@ -2552,8 +2554,7 @@ export async function cmdServe(options: {
         const r =
           agent === "codex"
             ? spawnManagedCodexSession({ name: tmuxName, cwd, prompt, model, systemPrompt })
-            : spawnManagedSession({ name: tmuxName, cwd, prompt, model, systemPrompt,
-                useConfiguredModelDefault: isHandoff && !model });
+            : spawnManagedSession({ name: tmuxName, cwd, prompt, model, systemPrompt });
         if (!r.ok) return err(502, r.error || "failed to start session");
         addManaged({
           tmuxName,
@@ -2738,8 +2739,8 @@ export async function cmdServe(options: {
           const body = (await req.json().catch(() => null)) as {
             model?: string;
           } | null;
-          const model = typeof body?.model === "string" ? body.model.trim() : "";
-          if (!model) return err(400, "expected { model }");
+          if (typeof body?.model !== "string") return err(400, "expected { model }");
+          let model = body.model.trim();
           const sess = (await listSessions()).find((s) => s.sessionId === m[1]);
           if (!sess) return err(404, "session not found");
           if (sess.agent !== "claude" && sess.agent !== "codex")
@@ -2778,6 +2779,11 @@ export async function cmdServe(options: {
               return err(409, "Wait for queued messages to finish before switching models.");
             }
             if (sess.busy) return err(409, "Wait for Codex to finish its current turn before switching models.");
+            if (!model) {
+              const configured = await configuredCodexModel(sess.cwd ?? undefined);
+              if (!configured) return err(503, "Could not read the Codex default. Try again.");
+              model = configured;
+            }
             const switched = await switchCodexModel(sess.tmuxTarget, model);
             if (!switched.ok) return err(409, switched.error || "Codex model switch failed");
             await noteConfirmedSessionModel(m[1], sess.pid, model);
