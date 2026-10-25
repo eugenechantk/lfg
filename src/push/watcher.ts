@@ -857,7 +857,7 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
         ...state,
         busy: busyWithRunningWork(
           state.busy,
-          (s.runningChildAgentCount ?? 0) + (s.runningChildSessionCount ?? 0),
+          s.runningChildAgentCount ?? 0,
         ),
       };
     } catch {

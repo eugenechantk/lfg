@@ -405,10 +405,9 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
       if (existing) {
         existing.target = s.tmuxTarget ?? null; // pane can (re)appear
         existing.agent = s.agent;
-        // Spawned delegate sessions count as running child work here too, so
-        // the journal's busy matches the REST snapshot's fold.
+        // Only inline agents belong to this turn; linked sessions own theirs.
         existing.runningChildAgentCount =
-          (s.runningChildAgentCount ?? 0) + (s.runningChildSessionCount ?? 0);
+          s.runningChildAgentCount ?? 0;
         existing.runningBackgroundProcessCount = s.runningBackgroundProcessCount ?? 0;
         continue;
       }
@@ -428,7 +427,7 @@ export function startJournalPump(j: Journal, deps: PumpDeps): () => void {
         stitcher: new PaneStitcher(),
         wasBusy: false,
         runningChildAgentCount:
-          (s.runningChildAgentCount ?? 0) + (s.runningChildSessionCount ?? 0),
+          s.runningChildAgentCount ?? 0,
         runningBackgroundProcessCount: s.runningBackgroundProcessCount ?? 0,
       });
     }

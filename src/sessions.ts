@@ -185,10 +185,8 @@ export type Session = {
   // synced sidecars lag (see withSessionWorkActivity).
   childAgents?: SubagentSession[];
   // Number of SPAWNED child sessions (separate live sessions carrying this
-  // session's id as `parentSessionId`) currently busy. A delegated worker
-  // session is the parent's work in flight exactly like a subagent, so these
-  // promote the parent's `busy` too — without this the parent read Idle the
-  // whole time its delegate ran.
+  // session's id as `parentSessionId`) currently busy. This is context only:
+  // separate sessions own their turn state and may later run unrelated work.
   runningChildSessionCount?: number;
   // Active background shell processes: Claude derives these from transcript
   // task lifecycle; Codex derives them from its live pane status.
@@ -3759,8 +3757,8 @@ async function listSessionsUncached(
     );
   }));
   resolvePaneOwners(workEnriched);
-  // Spawned delegate sessions promote their parent's busy — same contract as
-  // running subagents, discovered from the list itself rather than transcripts.
+  // Separate linked sessions expose a work count, while each row retains its
+  // own turn state. Later child turns must not revive a completed parent.
   return withChildSessionActivity(workEnriched);
 }
 

@@ -280,7 +280,7 @@ describe("Claude subagent discovery", () => {
     });
   });
 
-  test("a busy spawned child session promotes its parent (Eugene: parent read Idle while its delegate ran)", () => {
+  test("a busy linked session leaves its parent idle and reports linked work", () => {
     const rows = withChildSessionActivity([
       { sessionId: "parent", parentSessionId: null, busy: false },
       { sessionId: "delegate", parentSessionId: "parent", busy: true },
@@ -288,10 +288,29 @@ describe("Claude subagent discovery", () => {
     ]);
 
     expect(rows.find((r) => r.sessionId === "parent")).toMatchObject({
-      busy: true,
+      busy: false,
       runningChildSessionCount: 1,
     });
     expect(rows.find((r) => r.sessionId === "bystander")?.busy).toBe(false);
+  });
+
+  test("a linked child restarting never revives its completed parent", () => {
+    for (const childBusy of [true, false, true, false, true]) {
+      const rows = withChildSessionActivity([
+        { sessionId: "parent", parentSessionId: null, busy: false },
+        { sessionId: "child", parentSessionId: "parent", busy: childBusy },
+      ]);
+      expect(rows[0].busy).toBe(false);
+      expect(rows[1].busy).toBe(childBusy);
+    }
+  });
+
+  test("a parent's own turn stays running with linked sessions", () => {
+    const rows = withChildSessionActivity([
+      { sessionId: "parent", parentSessionId: null, busy: true },
+      { sessionId: "child", parentSessionId: "parent", busy: true },
+    ]);
+    expect(rows[0].busy).toBe(true);
   });
 
   test("an idle child session does not promote, and completion releases the parent", () => {

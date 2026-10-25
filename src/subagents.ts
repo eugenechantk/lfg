@@ -81,11 +81,10 @@ type ChildSessionRow = {
 };
 
 /**
- * Fold SPAWNED child sessions (rows carrying `parentSessionId`) into their
- * parents: a busy delegate promotes the parent's `busy` the same way a running
- * subagent does. One level, single pass — a busy grandchild promotes its
- * parent here and the grandparent on the next scan, which converges within a
- * poll interval and cannot cycle. A row claiming itself as parent is ignored.
+ * Count running linked sessions without changing the parent's own turn state.
+ * These delegates have independent rows and can receive unrelated later turns;
+ * their permanent lineage must not revive a parent that has already finished.
+ * Inline subagents still contribute through withSessionWorkActivity above.
  */
 export function withChildSessionActivity<T extends ChildSessionRow>(rows: T[]): T[] {
   const busyChildren = new Map<string, number>();
@@ -98,7 +97,7 @@ export function withChildSessionActivity<T extends ChildSessionRow>(rows: T[]): 
   return rows.map((row) => {
     const count = row.sessionId ? busyChildren.get(row.sessionId) ?? 0 : 0;
     if (count === 0) return row;
-    return { ...row, busy: true, runningChildSessionCount: count };
+    return { ...row, runningChildSessionCount: count };
   });
 }
 
