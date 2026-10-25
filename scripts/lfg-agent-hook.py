@@ -19,6 +19,50 @@ import os
 import sys
 import tempfile
 import time
+import re
+import uuid
+
+
+def atomic_json(target, value):
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(target), prefix=".tmp-")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            json.dump(value, fh)
+        os.replace(tmp, target)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def queue_review(payload, record):
+    """Durable bookkeeping only: never block, call HTTP, or continue the agent."""
+    root = os.environ.get("LFG_TASK_REVIEW_QUEUE_DIR") or os.path.join(
+        os.environ.get("LFG_AGENT_STATE_DIR") or os.path.join(os.path.expanduser("~"), ".lfg"),
+        "task-review-queue")
+    marker = os.path.join(root, "turns", record["sessionId"] + ".json")
+    if record["event"] == "UserPromptSubmit":
+        atomic_json(marker, {"at": record["at"], "turnId": record["turnId"]})
+        return
+    if record["event"] not in ("Stop", "SessionEnd") or record["reason"] in ("clear", "resume"):
+        return
+    turn = {}
+    try:
+        with open(marker) as fh:
+            turn = json.load(fh)
+    except Exception:
+        pass
+    if record["turnId"] and turn.get("turnId") != record["turnId"]:
+        turn = {}
+    message = payload.get("last_assistant_message")
+    blocks = re.findall(r"<lfg_task_result>.*?</lfg_task_result>", message, re.S) if isinstance(message, str) else []
+    expected = blocks[0] if len(blocks) == 1 and len(blocks[0]) <= 16384 else None
+    identity = str(uuid.uuid4())
+    atomic_json(os.path.join(root, record["sessionId"] + "." + identity + ".json"), {
+        "id": identity, "sessionId": record["sessionId"], "event": record["event"],
+        "at": record["at"], "notBefore": turn.get("at"), "expectedVerdict": expected,
+        "turnId": record["turnId"],
+    })
 
 # Claude Code fires Stop only on a clean turn end — an ESC interrupt fires
 # nothing at all, leaving "running" behind. That stale value is expected and is
@@ -66,6 +110,10 @@ def main() -> int:
         # those apart, nor tell either from a host that just went offline.
         "reason": payload.get("reason") or None,
     }
+    try:
+        queue_review(payload, record)
+    except Exception:
+        pass
 
     # Preferred target: the LEASE, next to the transcript. `transcript_path` is
     # in our payload, and the lease path is a pure function of it — so we can

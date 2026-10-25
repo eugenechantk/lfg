@@ -1,8 +1,9 @@
 import { Cron } from "croner";
 import { mkdir, readFile, rename, writeFile, stat } from "node:fs/promises";
-import { dirname, isAbsolute } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { TaskOutcome } from "./scheduled-task-outcome.ts";
+import { TaskPostReviewQueue } from "./task-post-review.ts";
 
 /** `at` anchors once/repeat, and optionally interval (an exact gap counted from `at`).
  * `maxRuns` (cron) and `endsAt` (cron, interval) end an otherwise open schedule. */
@@ -12,7 +13,11 @@ export type TaskEditSessionConfig = Pick<TaskInput, "agent" | "model">;
 /** `scheduledRunCount` counts scheduled (not manual) runs since the schedule last changed; cron `maxRuns` reads it.
  * `pausedAt` is set when the user switches a task off and cleared on resume. */
 export type ScheduledTask = TaskInput & { id: string; enabled: boolean; createdAt: number; updatedAt: number; nextRunAt: number | null; retryAt?: number; retryOfRunId?: string; retryAutomatic?: boolean; scheduleDelayMs?: number; scheduleRevision?: number; lastRunAt?: number; cancelledAt?: number; pausedAt?: number; scheduledRunCount?: number; editSessionId?: string; editSessionIds?: string[]; editSessionConfig?: TaskEditSessionConfig };
-export type TaskRun = { id: string; taskId: string; taskName: string; agent: string; trigger: "scheduled" | "manual"; scheduledFor: number; startedAt: number; finishedAt?: number; retryOfRunId?: string; retryFallbackAt?: number; retryFallbackAutomatic?: boolean; occurrence?: number; scheduleRevision?: number; status: "starting" | "running" | "needs_input" | "succeeded" | "incomplete" | "failed" | "interrupted"; sessionId?: string; tmuxName?: string; summary?: string; error?: string; needsInputAt?: number; outcome?: TaskOutcome };
+export type TaskRun = { id: string; taskId: string; taskName: string; agent: string; trigger: "scheduled" | "manual"; scheduledFor: number; startedAt: number; finishedAt?: number; retryOfRunId?: string; retryFallbackAt?: number; retryFallbackAutomatic?: boolean; occurrence?: number; scheduleRevision?: number; status: "starting" | "running" | "needs_input" | "succeeded" | "incomplete" | "failed" | "interrupted"; sessionId?: string; tmuxName?: string; summary?: string; error?: string; needsInputAt?: number; outcome?: TaskOutcome; outcomeReviews?: TaskOutcomeReview[] };
+type RunAssessment = Pick<TaskRun, "status" | "summary" | "error" | "outcome">;
+export type TaskOutcomeReview = { at: number; reason: string; sessionId: string; source: "session_final_verdict"; previous: RunAssessment; outcome: TaskOutcome; report: string };
+const assessment = (r: RunAssessment): RunAssessment => ({ status: r.status, outcome: r.outcome, summary: r.summary, error: r.error });
+const reviewVersion = (r: TaskRun) => JSON.stringify([assessment(r), r.sessionId, r.outcomeReviews?.length ?? 0]);
 type State = { version: 1; tasks: ScheduledTask[]; runs: TaskRun[] };
 export const activeRun = (r: TaskRun) => ["starting", "running", "needs_input"].includes(r.status);
 export class TaskError extends Error { constructor(message: string, readonly status = 400) { super(message); } }
@@ -294,6 +299,25 @@ export class TaskStore {
       return run;
     });
   }
+  /** An explicit review changes the displayed assessment, never scheduling or execution identity. */
+  async reviewOutcome(taskId: string, id: string, expected: TaskRun, outcome: TaskOutcome, report: string, reason: string, now: number) {
+    return this.transaction(s => {
+      const r = s.runs.find(r => r.id === id && r.taskId === taskId);
+      if (!r || !s.tasks.some(t => t.id === taskId)) throw new TaskError("Task run not found.", 404);
+      if (activeRun(r) || !r.sessionId) throw new TaskError("Only a finalized run with a source session can be reviewed.", 409);
+      if (!["completed", "incomplete", "error"].includes(outcome.status) || !outcome.summary?.trim() || outcome.summary.length > 8000)
+        throw new TaskError("A valid structured outcome is required.");
+      const next: RunAssessment = { status: outcome.status === "completed" ? "succeeded" : outcome.status === "error" ? "failed" : "incomplete",
+        outcome, summary: report.slice(0, 8000), error: outcome.status === "completed" ? undefined : outcome.summary };
+      if (JSON.stringify(assessment(r)) === JSON.stringify(next)) return { run: r, changed: false };
+      if (reviewVersion(r) !== reviewVersion(expected)) throw new TaskError("The run changed during review. Read its latest outcome and review again.", 409);
+      const review: TaskOutcomeReview = { at: now, reason, sessionId: r.sessionId, source: "session_final_verdict",
+        previous: assessment(r), outcome, report: next.summary! };
+      r.outcomeReviews = [...(r.outcomeReviews ?? []), review];
+      Object.assign(r, next);
+      return { run: r, changed: true };
+    });
+  }
   async record(id: string, patch: Partial<TaskRun>): Promise<void> {
     await this.transaction(s => {
       const r = s.runs.find(r => r.id === id); if (!r) return;
@@ -322,13 +346,27 @@ export class TaskStore {
   }
 }
 
-export type RunSnapshot = { state: "working" | "idle" | "needs_input" | "failed" | "missing"; summary?: string; error?: string; outcome?: TaskOutcome };
+export type RunSnapshot = { state: "working" | "idle" | "needs_input" | "failed" | "missing"; summary?: string; error?: string; outcome?: TaskOutcome; verdictAt?: number };
 export type TaskExecutor = { launch(task: ScheduledTask, run: TaskRun): Promise<{ sessionId: string; tmuxName?: string }>; inspect(run: TaskRun): Promise<RunSnapshot> };
 export class TaskScheduler {
   private ticking = false;
   private launching = new Set<string>();
   private idleSince = new Map<string, { since: number; fingerprint: string }>();
   constructor(readonly store: TaskStore, private executor: TaskExecutor, private now = () => Date.now()) {}
+  async reviewOutcome(taskId: string, runId: string, reason: unknown, expected?: { verdictAtOrAfter?: number; outcome?: TaskOutcome }) {
+    if (typeof reason !== "string" || !reason.trim() || reason.length > 2000) throw new TaskError("Give a review reason of 1–2000 characters.");
+    const state = await this.store.read();
+    const run = state.runs.find(r => r.id === runId && r.taskId === taskId);
+    if (!run || !state.tasks.some(t => t.id === taskId)) throw new TaskError("Task run not found.", 404);
+    if (activeRun(run) || !run.sessionId) throw new TaskError("Only a finalized run with a source session can be reviewed.", 409);
+    const snapshot = await this.executor.inspect(run);
+    if (snapshot.state !== "idle" || !snapshot.outcome) throw new TaskError(snapshot.error ?? "The source session must be idle with a valid final verdict for this run.", 409);
+    if (expected?.verdictAtOrAfter != null && (snapshot.verdictAt == null || snapshot.verdictAt < expected.verdictAtOrAfter))
+      throw new TaskError("Waiting for the triggering turn's final transcript.", 409);
+    if (expected?.outcome && JSON.stringify(snapshot.outcome) !== JSON.stringify(expected.outcome))
+      throw new TaskError("Waiting for the hook's final verdict to appear in the transcript.", 409);
+    return this.store.reviewOutcome(taskId, runId, run, snapshot.outcome, snapshot.summary ?? snapshot.outcome.summary, reason.trim(), this.now());
+  }
   async recover() {
     for (const r of (await this.store.read()).runs) if (r.status === "starting" && !r.sessionId && !this.launching.has(r.id)) {
       await this.store.record(r.id, { status: "interrupted", finishedAt: this.now(), error: "The host restarted during launch. Check sessions before running again." });
@@ -395,9 +433,11 @@ export class TaskScheduler {
     } finally { this.ticking = false; }
   }
   start(log: (message: string) => void = console.log) {
+    const reviews = new TaskPostReviewQueue(this, join(dirname(this.store.path), "task-review-queue"), this.now);
+    const stopReviews = reviews.start(log);
     let stopped = false; let timer: ReturnType<typeof setTimeout>;
     const loop = async () => { try { await this.tick(); } catch (e) { log(`[tasks] ${e}`); } if (!stopped) timer = setTimeout(loop, 60_000); };
     void this.recover().then(() => { if (!stopped) timer = setTimeout(loop, 2000); }).catch(e => log(`[tasks] recovery failed: ${e}`));
-    return () => { stopped = true; clearTimeout(timer); };
+    return () => { stopped = true; clearTimeout(timer); stopReviews(); };
   }
 }

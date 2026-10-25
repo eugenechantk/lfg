@@ -81,7 +81,8 @@ export function taskRuntime(store: TaskStore, call: TaskApiCall, now = () => Dat
       if (last?.apiError) return { state: "failed", error: last.text };
       if (last?.role === "assistant" && last.text) {
         const result = parseTaskOutcome(last.text, run.id);
-        return { state: "idle", summary: result.report ?? last.text, outcome: result.outcome, error: result.error };
+        return { state: "idle", summary: result.report ?? last.text, outcome: result.outcome, error: result.error,
+          verdictAt: typeof last.ts === "number" ? last.ts : undefined };
       }
       return { state: session ? "idle" : "missing" };
     },
@@ -172,6 +173,12 @@ export function scheduledTaskRoutes(store: TaskStore, scheduler: TaskScheduler, 
         const body = await req.json() as any;
         try { return reply(previewSchedule(body?.schedule, Date.now())); }
         catch (e) { if (e instanceof TaskError) return reply({ nextRuns: [], lastRun: null, error: e.message }); throw e; }
+      }
+      const review = path.match(/^\/api\/scheduled-tasks\/([0-9a-f-]{36})\/runs\/([0-9a-f-]{36})\/review$/);
+      if (review) {
+        if (req.method !== "POST") return reply({ error: "Method not allowed." }, 405);
+        const body = await req.json() as any;
+        return reply(await scheduler.reviewOutcome(review[1]!, review[2]!, body?.reason));
       }
       const match = path.match(/^\/api\/scheduled-tasks\/([0-9a-f-]{36})(?:\/(runs|run|retry|cancel|chat))?$/);
       if (!match) return reply({ error: "Unknown scheduled task endpoint." }, 404);
