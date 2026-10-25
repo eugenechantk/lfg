@@ -204,6 +204,28 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+  LFGUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: LFGUITests
+    dependencies:
+      - target: LFG
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.eugenechan.lfg.UITests
+        GENERATE_INFOPLIST_FILE: true
+  LFGTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: LFGTests
+    dependencies:
+      - target: LFG
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.eugenechan.lfg.Tests
+        GENERATE_INFOPLIST_FILE: true
 schemes:
   LFG:
     build:
@@ -212,5 +234,18 @@ schemes:
         LFGWidgets: all
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - LFGTests
     archive:
       config: Release
+  LFGImagePreviewTests:
+    build:
+      targets:
+        LFG: all
+    test:
+      config: Debug
+      targets:
+        - LFGTests
+        - LFGUITests

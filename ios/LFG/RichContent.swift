@@ -20,8 +20,8 @@ struct HostFiles: Sendable {
 
     /// Rendition widths the app asks the server for (`w=`; see
     /// `file-thumbs.ts`). Inline transcript images are read at phone width;
-    /// the full-screen viewer gets enough pixels for a 3× screen at 2× pinch.
-    /// Both are 5–40× fewer bytes than the PNG the agent wrote.
+    /// the full-screen viewer first shows a small rendition, then replaces it
+    /// with the original for zooming. Inline images remain bandwidth-efficient.
     static let inlineImageWidth = 1200
     static let viewerImageWidth = 2400
 
@@ -57,9 +57,8 @@ struct HostFiles: Sendable {
     }
 
     /// The URL `FileViewerSheet` opens for an attachment. The ONE place that
-    /// decides an image opens as a 2400 px rendition (the viewer is for
-    /// reading a screenshot, not archiving the PNG) — every card that opens
-    /// the viewer goes through here, so no call site can forget the width.
+    /// decides which small image rendition appears first. The viewer then
+    /// loads `shareURL` (the unsized original) for full-resolution inspection.
     func viewerURL(for ref: MediaRef) -> URL? {
         resolve(rawPath: ref.raw, maxWidth: ref.kind == .image ? Self.viewerImageWidth : nil)
     }
@@ -738,6 +737,7 @@ struct FileViewerSheet: View {
                     FileViewerPage(
                         ref: ref,
                         url: hostFiles?.viewerURL(for: ref),
+                        originalURL: hostFiles?.shareURL(for: ref),
                         client: hostFiles?.client,
                         onImageZoomChanged: { imageIsZoomed = $0 }
                     )
@@ -902,10 +902,15 @@ struct FileShareFixture: View {
 
     var body: some View {
         let ref = ref
+        let environment = ProcessInfo.processInfo.environment
+        let host = environment["LFG_FILE_SHARE_FIXTURE_HOST"] ?? ref.raw
+        let next = environment["LFG_FILE_SHARE_FIXTURE_NEXT"].map { raw in
+            MediaRef(raw: raw, kind: MediaKind.from(ext: URL(string: raw)?.pathExtension ?? "") ?? .other)
+        }
         FileViewerSheet(
             ref: ref,
-            files: [ref],
-            hostFiles: HostFiles(client: LFGClient(baseURL: URL(string: ref.raw)!))
+            files: [ref] + (next.map { [$0] } ?? []),
+            hostFiles: HostFiles(client: LFGClient(baseURL: URL(string: host)!))
         )
     }
 }
@@ -916,34 +921,73 @@ struct FileShareFixture: View {
 private struct FileViewerPage: View {
     let ref: MediaRef
     let url: URL?
+    let originalURL: URL?
     let client: LFGClient?
     let onImageZoomChanged: (Bool) -> Void
 
     enum Phase: Equatable { case loading, failed(String), data(Data), video(URL) }
     @State private var phase: Phase = .loading
+    @State private var imagePreview = ProgressiveImagePreview()
 
     var body: some View {
         Group {
-            switch phase {
-            case .loading:
-                ProgressView("Loading…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .failed(let message):
-                ContentUnavailableView("Can't load file", systemImage: "exclamationmark.triangle",
-                                       description: Text(message))
-            case .data(let data):
-                rendered(data)
-            case .video(let url):
-                // Streams from the host; the player shows its own buffering
-                // state, so there is no app-level "Preparing…" phase.
-                HostVideoPlayer(url: url, client: client).ignoresSafeArea(edges: .bottom)
+            if ref.kind == .image {
+                imageBody
+            } else {
+                switch phase {
+                case .loading:
+                    ProgressView("Loading…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .failed(let message):
+                    ContentUnavailableView("Can't load file", systemImage: "exclamationmark.triangle",
+                                           description: Text(message))
+                case .data(let data):
+                    rendered(data)
+                case .video(let url):
+                    // Streams from the host; the player shows its own buffering
+                    // state, so there is no app-level "Preparing…" phase.
+                    HostVideoPlayer(url: url, client: client).ignoresSafeArea(edges: .bottom)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task {
-            await load()
+        .task(id: url) {
+            if ref.kind == .image, let url, let originalURL {
+                await imagePreview.load(previewURL: url, originalURL: originalURL) { resource in
+                    if let client { return try await client.resourceData(from: resource) }
+                    return try await URLSession.shared.data(from: resource).0
+                }
+            } else {
+                await load()
+            }
         }
         .onDisappear { onImageZoomChanged(false) }
+    }
+
+    @ViewBuilder private var imageBody: some View {
+        if let image = imagePreview.image {
+            ZoomableImageView(image: image, isOriginal: imagePreview.isOriginal,
+                              onZoomChanged: onImageZoomChanged)
+                .ignoresSafeArea(edges: .bottom)
+                .overlay(alignment: .topTrailing) {
+                    if imagePreview.isLoadingOriginal {
+                        ProgressView("Loading full resolution…")
+                            .font(.caption)
+                            .padding(10)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                            .padding(12)
+                            .accessibilityIdentifier("filePreviewOriginalLoading")
+                    }
+                }
+        } else if let error = imagePreview.error {
+            ContentUnavailableView("Can't load file", systemImage: "exclamationmark.triangle",
+                                   description: Text(error))
+        } else if url == nil || originalURL == nil {
+            ContentUnavailableView("Can't load file", systemImage: "exclamationmark.triangle",
+                                   description: Text("This file isn't available on the host."))
+        } else {
+            ProgressView("Loading…")
+        }
     }
 
     @ViewBuilder private func rendered(_ data: Data) -> some View {
@@ -1000,6 +1044,7 @@ struct PDFDataView: UIViewRepresentable {
 /// toggles between fit-to-width and a 2.5x detail zoom centered on the tap.
 struct ZoomableImageView: UIViewRepresentable {
     let image: UIImage
+    var isOriginal = true
     var onZoomChanged: (Bool) -> Void = { _ in }
 
     func makeUIView(context: Context) -> ZoomableScrollView {
@@ -1015,6 +1060,7 @@ struct ZoomableImageView: UIViewRepresentable {
         imageView.contentMode = .scaleAspectFit
         scrollView.imageView = imageView
         scrollView.addSubview(imageView)
+        scrollView.replaceImage(image, isOriginal: isOriginal)
 
         let doubleTap = UITapGestureRecognizer(
             target: context.coordinator, action: #selector(Coordinator.handleDoubleTap(_:)))
@@ -1025,7 +1071,9 @@ struct ZoomableImageView: UIViewRepresentable {
         return scrollView
     }
 
-    func updateUIView(_ uiView: ZoomableScrollView, context: Context) {}
+    func updateUIView(_ uiView: ZoomableScrollView, context: Context) {
+        uiView.replaceImage(image, isOriginal: isOriginal)
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(onZoomChanged: onZoomChanged) }
 
@@ -1076,6 +1124,28 @@ final class ZoomableScrollView: UIScrollView {
     var imageView: UIImageView?
     private(set) var fitWidthScale: CGFloat = 1
     private var hasConfigured = false
+    private var logicalImageSize: CGSize = .zero
+
+    /// Retain the first image's coordinate system. Replacing only its pixels
+    /// leaves an in-progress pinch, zoom scale and scroll position untouched.
+    func replaceImage(_ image: UIImage, isOriginal: Bool) {
+        guard let imageView else { return }
+        if imageView.image !== image { imageView.image = image }
+        imageView.isAccessibilityElement = true
+        imageView.accessibilityIdentifier = "filePreviewImage"
+        imageView.accessibilityLabel = "Image preview"
+        let width = image.cgImage?.width ?? Int(image.size.width * image.scale)
+        let height = image.cgImage?.height ?? Int(image.size.height * image.scale)
+        imageView.accessibilityValue = "\(isOriginal ? "Full resolution" : "Preview"), \(width) by \(height) pixels"
+        if hasConfigured { updateMaximumZoom() }
+    }
+
+    private func updateMaximumZoom() {
+        guard logicalImageSize.width > 0, let image = imageView?.image else { return }
+        let pixelWidth = CGFloat(image.cgImage?.width ?? Int(image.size.width * image.scale))
+        // Permit at least one source pixel per point, including huge canvases.
+        maximumZoomScale = max(fitWidthScale * 4, pixelWidth / logicalImageSize.width)
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -1104,8 +1174,9 @@ final class ZoomableScrollView: UIScrollView {
               image.size.width > 0, image.size.height > 0 else { return }
         hasConfigured = true
 
-        imageView.frame = CGRect(origin: .zero, size: image.size)
-        contentSize = image.size
+        logicalImageSize = image.size
+        imageView.frame = CGRect(origin: .zero, size: logicalImageSize)
+        contentSize = logicalImageSize
 
         let widthScale = bounds.width / image.size.width
         let heightScale = bounds.height / image.size.height
@@ -1113,7 +1184,7 @@ final class ZoomableScrollView: UIScrollView {
 
         fitWidthScale = widthScale
         minimumZoomScale = min(fitWhole, widthScale)   // zoom out to whole image
-        maximumZoomScale = max(widthScale, fitWhole) * 4
+        updateMaximumZoom()
         zoomScale = widthScale                          // open fit-to-width
     }
 
