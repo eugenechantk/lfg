@@ -14,7 +14,8 @@ const data = join(tmpdir(), `lfg-titles-${Date.now()}-${Math.random().toString(1
 process.env.LFG_DATA = data;
 mkdirSync(data, { recursive: true });
 
-const { readTitleRecords, setSessionTitle, updateTitleRecord } = await import("./sessions.ts");
+const { readTitleRecords, setSessionTitle, updateTitleRecord, seedForkSessionTitle } = await import("./sessions.ts");
+const { selectRetitleCandidates } = await import("./autopilot/retitle.ts");
 // Read the live value rather than recomputing from `data`: under the full suite
 // another test file's LFG_DATA may already have won the first config.ts import.
 const { PATHS } = await import("./config.ts");
@@ -85,5 +86,56 @@ describe("title override writes", () => {
       }),
     ).rejects.toThrow("boom");
     expect(Object.keys(await readTitleRecords())).toEqual(["human"]);
+  });
+});
+
+describe("fork session titles", () => {
+  test("a manually named source gives its branch an automatic, retitleable name", async () => {
+    seed({ source: "Session naming" });
+    expect(await seedForkSessionTitle("branch", "source")).toBe("Fork of Session naming");
+    const titles = await readTitleRecords();
+    expect(titles.source).toEqual({ title: "Session naming", source: "user", setAt: 0 });
+    expect(titles.branch.source).toBe("auto");
+    expect(selectRetitleCandidates([{
+      sessionId: "branch", path: "/branch.jsonl", mtime: Date.now(), bytes: 5000,
+      cwd: "/repo", title: titles.branch.title, live: true, leaseHost: "this-host",
+    }], titles, {}, Date.now(), { hostId: "this-host" }).map((c) => c.sessionId)).toEqual(["branch"]);
+  });
+
+  test("uses the source prompt when no title override exists", async () => {
+    seed({});
+    const transcript = join(data, "fork-source.jsonl");
+    writeFileSync(transcript, JSON.stringify({
+      type: "user", message: { content: "Fix the keyboard" },
+    }) + "\n");
+    expect(await seedForkSessionTitle("branch", "source", transcript)).toBe("Fork of Fix the keyboard");
+  });
+
+  test("a source with no usable prompt still gives the branch a name", async () => {
+    seed({});
+    expect(await seedForkSessionTitle("branch", "source")).toBe("Forked session");
+  });
+
+  test("seeding never resets a branch's later automatic or manual rename", async () => {
+    seed({ source: "Original work" });
+    await seedForkSessionTitle("branch", "source");
+    await setSessionTitle("branch", "New workstream", { source: "auto" });
+    expect(await seedForkSessionTitle("branch", "source")).toBe("New workstream");
+    await setSessionTitle("branch", "My branch");
+    expect(await seedForkSessionTitle("branch", "source")).toBe("My branch");
+    expect((await readTitleRecords()).branch.source).toBe("user");
+  });
+
+  test("rejects a source ID masquerading as the branch", async () => {
+    seed({ source: "Keep this name" });
+    await expect(seedForkSessionTitle("source", "source")).rejects.toThrow(/distinct/);
+    expect((await readTitleRecords()).source.title).toBe("Keep this name");
+  });
+
+  test("refuses to seed over an unreadable title store", async () => {
+    const corrupt = '{"source":"Keep this name"';
+    writeFileSync(path, corrupt);
+    await expect(seedForkSessionTitle("branch", "source")).rejects.toThrow(/unreadable/);
+    expect(readFileSync(path, "utf8")).toBe(corrupt);
   });
 });

@@ -470,6 +470,32 @@ export async function setSessionTitle(
   });
 }
 
+/** Give a new branch a display name without pinning it against autopilot. */
+export async function seedForkSessionTitle(
+  sessionId: string,
+  sourceId: string,
+  sourceTranscript?: string | null,
+): Promise<string> {
+  if (sessionId === sourceId) throw new Error("fork must have a distinct session ID");
+  const titles = await readTitleRecords();
+  if (titles[sessionId]) return titles[sessionId].title;
+  const transcript = sourceTranscript ?? await resolveTranscript(sourceId);
+  const sourceTitle = titles[sourceId]?.title
+    || (transcript ? await firstPromptTitle(transcript) : null);
+  const title = sourceTitle ? `Fork of ${sourceTitle}`.slice(0, 200) : "Forked session";
+  let result = title;
+  await updateTitleRecord(sessionId, (prev) => {
+    // Discovery and the fork response may race with each other or a rename.
+    // A seed must never restore an old title after either writer has named it.
+    if (prev.title) {
+      result = prev.title;
+      return prev as TitleRecord;
+    }
+    return { title, source: "auto", setAt: Date.now(), basis: `forked from ${sourceId}` };
+  });
+  return result;
+}
+
 /**
  * Read-modify-write one row. `mutate` returns the next record, or null to drop
  * the row; returning the previous record unchanged is a no-op write.
@@ -3727,6 +3753,19 @@ async function listSessionsUncached(
       (a.sessionId ?? "").localeCompare(b.sessionId ?? ""),
   );
   const deduped = resolveSessionOwners(out, (pid) => claimByPid.get(pid) ?? null);
+  // Claude can bind its id after the fork request's wait window. Persist the
+  // initial name on discovery too; later scans leave existing titles alone.
+  for (const session of deduped) {
+    const sourceId = session.tmuxName ? managedByName.get(session.tmuxName)?.forkedFrom : null;
+    if (sourceId && session.sessionId && session.sessionId !== sourceId && !overrides[session.sessionId]) {
+      try {
+        session.title = await seedForkSessionTitle(session.sessionId, sourceId);
+      } catch (error) {
+        // A title-store failure must not hide every session in this snapshot.
+        console.warn(`[fork] could not name ${session.sessionId}: ${error}`);
+      }
+    }
+  }
   // Lease refresh needs only the authoritative live (sessionId, pid) claims.
   // Child-agent/background-process enrichment can walk large live transcripts,
   // so do not put that unrelated work on the resumable-list critical path.

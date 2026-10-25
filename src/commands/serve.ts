@@ -65,6 +65,7 @@ import {
   byteBoundedPageStart,
   normalizeLineMessages,
   setSessionTitle,
+  seedForkSessionTitle,
   sessionIdForPid,
   pendingToolPrompt,
   pendingToolUse,
@@ -494,7 +495,7 @@ async function forkSession(opts: {
   const tmuxName = `lfg-${randomBytes(3).toString("hex")}`;
   const r = spawnManagedSession({ name: tmuxName, cwd, model, resume: sessionId, fork: true });
   if (!r.ok) return { ok: false, status: 502, error: r.error || "failed to fork session" };
-  addManaged({ tmuxName, cwd, createdAt: Date.now(), agent: "claude" });
+  addManaged({ tmuxName, cwd, createdAt: Date.now(), agent: "claude", forkedFrom: sessionId, forkSourceBytes });
   if (opts.user) assignUser(tmuxName, opts.user);
   // The fork gets a fresh sessionId/transcript — wait for the pidfile.
   let newId: string | null = null;
@@ -2453,6 +2454,15 @@ export async function cmdServe(options: {
         const model = body?.model?.trim() || undefined;
         const out = await forkSession({ sessionId, model, user: body?.user });
         if (!out.ok) return err(out.status, out.error, out.liveOn ? { liveOn: out.liveOn } : undefined);
+        if (out.newId) {
+          try {
+            await seedForkSessionTitle(out.newId, sessionId);
+          } catch (error) {
+            // The branch exists already. Reporting failure here would invite a
+            // duplicate fork on retry; discovery can retry the title later.
+            console.warn(`[fork] could not name ${out.newId}: ${error}`);
+          }
+        }
         return json({ ok: true, tmuxName: out.tmuxName, cwd: out.cwd, sessionId: out.newId, forkedFrom: sessionId, agent: out.agent });
       }
 
