@@ -1,0 +1,4 @@
+# Shared defaults; account credentials are supplied separately at runtime.
+[mcp_servers.google]
+command = "/usr/local/bin/gog"
+args = ["mcp"]

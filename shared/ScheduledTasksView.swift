@@ -52,7 +52,7 @@ import LFGCore
         error = nil
         changing = true; defer { changing = false }
         do {
-            try await ScheduledTasksClient(host: item.host).action(item.task.id, action, enabled: enabled)
+            try await ScheduledTasksClient(host: item.host).action(item.task.id, action, enabled: enabled, revision: item.task.revision)
             await refresh()
         } catch { self.error = error.localizedDescription }
     }
@@ -61,6 +61,7 @@ import LFGCore
 enum ScheduledTaskRoute: Hashable {
     case task(String)
     case session(String)
+    case chat(hostID: String, sessionID: String)
     /// The Mac pushes the edit form as a page; iOS presents it as a sheet.
     case edit(String)
     #if os(macOS)
@@ -102,6 +103,7 @@ struct ScheduledTasksView: View {
     var onCreate: (() -> Void)? = nil
     var sessionSelection: Binding<String?>? = nil
     var sessionDestination: ((String) -> AnyView)? = nil
+    var onChatRead: ((String) -> Void)? = nil
     var openSession: (String, String) -> Void
     /// Reports the Needs input count for the Tasks tab badge.
     var onNeedsInputCountChange: ((Int) -> Void)? = nil
@@ -311,8 +313,21 @@ struct ScheduledTasksView: View {
             switch route {
             case .session(let id):
                 if let sessionDestination { sessionDestination(id) }
+            case .chat(let hostID, let sessionID):
+                if let host = hosts.first(where: { $0.id == hostID }) {
+                    ChatSessionScreen(host: host, sessionID: sessionID, onRead: onChatRead)
+                        .id(sessionID)
+                } else {
+                    ContentUnavailableView("Chat host unavailable", systemImage: "bubble.left.and.bubble.right",
+                        description: Text("Add this chat's host in Settings to open it."))
+                }
             case .task(let id):
                 if let item = model.tasks.first(where: { $0.id == id }) {
+                    if item.task.isChatTask, let chatId = item.task.chatId {
+                        ChatJobsView(host: item.host, chatId: chatId, taskID: item.task.id,
+                                     openChat: { pathBinding.wrappedValue.append(.chat(hostID: item.host.id, sessionID: chatId)) })
+                            .id(item.id)
+                    } else {
                     ScheduledTaskDetail(task: item.task, hostName: item.host.name, client: .init(host: item.host), changing: model.changing,
                         edit: {
                             #if os(macOS)
@@ -327,6 +342,7 @@ struct ScheduledTasksView: View {
                         refresh: { await model.refresh() },
                         chatOpening: chatOpeningTaskID == item.id)
                         .id(item.id)
+                    }
                 } else {
                     ContentUnavailableView("Task unavailable", systemImage: "calendar.badge.exclamationmark",
                         description: Text("Return to Scheduled Tasks and refresh the list."))

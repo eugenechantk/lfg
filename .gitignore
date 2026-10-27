@@ -63,3 +63,7 @@ macos/unlock/build/
 # Existing tracked evidence remains in history.
 .claude/evidence/
 .claude/tasks-a2/evidence/
+
+# Local dependencies and isolated Cua installation.
+/node_modules
+/.codex/tools/

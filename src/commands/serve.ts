@@ -1,3 +1,12 @@
+import { CuaContainerRuntime, loadCuaContainers } from '../cua-container.ts';
+import type { CuaStream } from '../cua-stream.ts';
+import { CuaMCP } from "../cua-mcp.ts";
+import { ChatSessions } from "../chat-sessions.ts";
+import { NativeClaudeRunner } from "../chat-native.ts";
+import { chatRoutes } from "../chat-api.ts";
+import {ChatJobs} from '../chat-jobs.ts';
+import {chatJobRoutes} from '../chat-job-api.ts';
+import { messageRoutes } from "../cua-message.ts";
 import { BrowserSignInHub, signInHTTP, allowsSignInAdapter } from "../browser-sign-in.ts";
 import { claudePaneNotice } from "../claude-system-notices.ts";
 import { phoneSignInPrompt, type SignInPrompt } from "../phone-sign-in-requests.ts";
@@ -126,10 +135,10 @@ import { assignUser, userRoster } from "../users.ts";
 import { acquireLease, ensureLease, foreignFresh, releaseLease } from "../leases.ts";
 import { noteRunningHere } from "../ran-here.ts";
 import { aggregatorConfig, aggregatorRequest } from "../push/fleet-slice.ts";
-import { registerDevice, unregisterDevice, deviceCount } from "../push/store.ts";
+import { registerDevice, unregisterDevice, deviceCount, listDevices } from "../push/store.ts";
 import { upsertLiveActivityToken } from "../push/liveactivity-store.ts";
 import { ensureBroadcastChannel } from "../push/broadcast.ts";
-import { apnsConfigFromEnv } from "../push/apns.ts";
+import { apnsConfigFromEnv, sendApns } from "../push/apns.ts";
 import {
   startPushWatcher,
   pushConfigured,
@@ -1244,7 +1253,7 @@ function sseHeaders(): Record<string, string> {
 
 // Per-socket state for the browser terminal: which tmux session it attaches to
 // and the initial geometry the client reported at connect time.
-type TermSocketData = { sessionName: string; cols: number; rows: number; browserSignIn?: boolean };
+type TermSocketData = { sessionName: string; cols: number; rows: number; browserSignIn?: boolean; cuaStream?: CuaStream };
 
 // Live PTY bridges keyed by their websocket, so message/close handlers can find
 // the bridge to write to / tear down.
@@ -1328,6 +1337,19 @@ export async function cmdServe(options: {
   // busy/prompt fix lands in one place instead of two. See src/journal.ts.
   const journalPath = join(PATHS.data, "journal.db");
   const journal = Journal.open(journalPath);
+  const chats = new ChatSessions(join(PATHS.data, "chat-sessions"), new NativeClaudeRunner(), {
+    emit: (sid, type, payload) => { journal.append(sid, type, payload); },
+    jobMcpURL: id=>`http://127.0.0.1:${PORT}/api/scheduled-tasks/mcp/${id}`,
+  });
+  await chats.ready;
+  const chatJobs=new ChatJobs(taskStore,chats,{scheduler:scheduledTasks,migrateFrom:join(PATHS.data,'chat-jobs.json'),push:{devices:listDevices,hostId:()=>hostInfo().hostId,retire:unregisterDevice,send:async(device,payload)=>{if(!pushWatcherEnabled(PORT))return {ok:false,status:503,reason:'Push delivery is disabled for this host port.'};const cfg=apnsConfigFromEnv();return cfg?sendApns(device,payload,cfg):{ok:false,status:503,reason:'Push is not configured on this host.'};}}});
+  await chatJobs.ready;
+  const jobAPI=chatJobRoutes(chatJobs,taskRoutes);
+  const stopChats = () => { void scheduledTasks.close().then(()=>chats.close()).finally(() => process.exit(0)); };
+  process.once("SIGTERM", stopChats);
+  process.once("SIGINT", stopChats);
+  const chatAPI = chatRoutes(chats);
+  const allSessions = async () => [...await listSessions(), ...await chats.sessions()];
   const browserFrames = new BrowserFrameStore();
   const browserSignIn = new BrowserSignInHub(undefined, {historyPath: options.browserSignInHistoryPath ?? join(homedir(), ".lfg", "phone-sign-in-history.json")});
   setSendqJournal(journal);
@@ -1348,12 +1370,18 @@ export async function cmdServe(options: {
   const ensurePushWatcher = () => {
     if (!backgroundTasks || !pushWatcherEnabled(PORT)) return;
     startPushWatcher((l) => console.log(l), {
+      sessions: allSessions,
       head: () => journal.head(),
       hostId: () => hostInfo().hostId,
       hostName: () => hostInfo().hostName,
       signInPrompt,
     });
   };
+
+  const cua = new CuaMCP();
+  const cuaContainers = await loadCuaContainers(cua);
+  const cuaRoutes = messageRoutes(cua, join(PATHS.data, "cua-messages"), (req, cuaStream) => server.upgrade(req, { data: { cuaStream, sessionName: "", cols: 0, rows: 0 } }), cuaContainers, { runtime: cuaContainers ?? new CuaContainerRuntime() });
+  cuaRoutes.startIdleCleanup();
 
   const server = Bun.serve({
     port: PORT,
@@ -1366,6 +1394,7 @@ export async function cmdServe(options: {
       // as binary frames — the full raw VT byte stream a faithful renderer wants.
       idleTimeout: 600,
       open(ws: ServerWebSocket<TermSocketData>) {
+        if (ws.data.cuaStream) { ws.data.cuaStream.open(ws); return; }
         if (ws.data.browserSignIn) { browserSignIn.open(ws); return; }
         try {
           const { sessionName, cols, rows } = ws.data;
@@ -1394,6 +1423,7 @@ export async function cmdServe(options: {
         }
       },
       message(ws: ServerWebSocket<TermSocketData>, message) {
+        if (ws.data.cuaStream) { ws.data.cuaStream.message(message); return; }
         if (ws.data.browserSignIn) { browserSignIn.message(ws, message); return; }
         const bridge = termBridges.get(ws);
         if (!bridge) return;
@@ -1422,6 +1452,7 @@ export async function cmdServe(options: {
         else bridge.write(bytes);
       },
       close(ws: ServerWebSocket<TermSocketData>) {
+        if (ws.data.cuaStream) { ws.data.cuaStream.close(); return; }
         if (ws.data.browserSignIn) { browserSignIn.close(ws); return; }
         const bridge = termBridges.get(ws);
         termBridges.delete(ws);
@@ -1456,6 +1487,14 @@ export async function cmdServe(options: {
   ): Promise<Response | undefined> {
       const url = new URL(req.url);
       const path = url.pathname;
+
+      const jobResponse=await jobAPI(req);
+      if(jobResponse)return jobResponse;
+
+      const chatResponse = await chatAPI(req);
+      if (chatResponse) return chatResponse;
+
+      if (path.startsWith("/api/message/")) return await cuaRoutes(req);
 
       if (path.startsWith("/api/iphone-preview/")) return iphonePreviewHTTP(req);
 
@@ -2186,7 +2225,7 @@ export async function cmdServe(options: {
         // panel and no preamble (the turn isn't in the transcript yet either).
         // Reading the pump's last durable statement costs one indexed row per
         // session; re-scraping panes here would not be affordable.
-        const sessions = await listSessions();
+        const sessions = await allSessions();
         const origins = await taskOrigins();
         return json({
           sessions: sessions.map((s) =>

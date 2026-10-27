@@ -148,6 +148,10 @@ const clip = (t: string, n: number): string => {
 // A session as seen by buildPayload — a subset of the full Session that carries
 // just what the client needs to render the session screen on tap.
 export type PayloadSessionInput = {
+  kind?: "terminal" | "chat";
+  busy?: boolean;
+  turnOutcome?: "completed" | "failed" | "interrupted";
+  suppressCompletionNotification?: boolean;
   sessionId?: string | null;
   title?: string | null;
   tmuxName?: string | null;
@@ -491,6 +495,8 @@ export type SignInPromptLookup = (sid: string) => { question: string } | null;
 // counts either way.
 export async function observeSession(
   s: {
+    kind?: "terminal" | "chat";
+    busy?: boolean;
     sessionId?: string | null;
     tmuxTarget?: string | null;
     agent?: string | null;
@@ -498,6 +504,7 @@ export async function observeSession(
   },
   signInPrompt?: SignInPromptLookup,
 ): Promise<SessionState> {
+  if (s.kind === "chat") return { busy: s.busy === true, promptPresent: false };
   const delegated = s.sessionId ? codexDelegationSessionIds().has(s.sessionId) : false;
   const signIn = s.sessionId ? (signInPrompt?.(s.sessionId) ?? null) : null;
   if (!s.tmuxTarget) {
@@ -882,6 +889,7 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
     const { event, state: nextState } = reduceTransition(prev, state, observedAt);
     prior.set(sid, nextState);
     if (!event) continue;
+    if (s.kind === "chat" && (s.turnOutcome !== "completed" || s.suppressCompletionNotification)) continue;
     const payload = withWakeMetadata(buildPayload(s, event, state.promptQuestion), deps);
     for (const d of devices) {
       const r = await deps.send(d, payload, deps.cfg);
@@ -926,7 +934,7 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
-type StartPushWatcherDeps = Pick<Partial<TickDeps>, "head" | "hostId" | "hostName"> & {
+type StartPushWatcherDeps = Pick<Partial<TickDeps>, "head" | "hostId" | "hostName" | "sessions"> & {
   signInPrompt?: SignInPromptLookup;
 };
 
@@ -1084,7 +1092,7 @@ export function startPushWatcher(
       fleetActiveLoaded = true;
     });
   const deps: TickDeps = {
-    sessions: listSessions,
+    sessions: injected.sessions ?? listSessions,
     observe: (s) => observeSession(s, injected.signInPrompt),
     devices: listDevices,
     cfg,

@@ -11,12 +11,14 @@ struct RootView: View {
     @State private var paneActive = false
     @State private var paneSidebarOverlay = false
     @State private var sidebarBeforePane: NavigationSplitViewVisibility?
-    private enum AppTab { case sessions, scheduledTasks }
+    private enum AppTab { case sessions, scheduledTasks, message }
     @State private var selectedTab = AppTab.sessions
+    @State private var messageDetailVisible = false
     @State private var searchScope = AppTab.sessions
     @State private var sessionSearchText = ""
     @State private var taskSearchText = ""
     @State private var searchPresented = false
+    @State private var messageCreateTrigger = 0
     @State private var searchActive = false
     @State private var bottomSafeArea: CGFloat = 0
     @State private var showNewTask = false
@@ -251,6 +253,10 @@ struct RootView: View {
                         isPresented: $showNewTask, autofocusComposer: $focusNewTaskComposer,
                         prefill: .constant(nil), purpose: .scheduledTask)
             }
+            Tab("Message", systemImage: "bubble.left.and.bubble.right", value: AppTab.message) {
+                messageContent()
+                    .toolbar(.hidden, for: .tabBar)
+            }
         }
         .tabViewStyle(.tabBarOnly)
         .toolbar(.hidden, for: .tabBar)
@@ -286,6 +292,10 @@ struct RootView: View {
 
     private var listFooter: AnyView? {
         guard usesSidebarDock ? showsSidebarDock : showsListDock else { return nil }
+        return positionedListDock
+    }
+
+    private var positionedListDock: AnyView {
         // Preserve the dock's home-indicator spacing without shortening the
         // TabView and preventing rows from scrolling behind the controls.
         let lowering = UIDevice.current.userInterfaceIdiom == .phone
@@ -328,12 +338,16 @@ struct RootView: View {
                             badge: needsInputCount)
                     dockTab(.scheduledTasks, title: "Tasks", icon: "calendar.badge.clock", id: "scheduled_tasks_tab",
                             badge: taskNeedsInputCount)
+                    dockTab(.message, title: "Message", icon: "text.bubble", id: "message_tab",
+                            badge: store.filteredSessions.filter { $0.isChat && !$0.closed && SessionListSection(store.group(for: $0).rowGroup) == .needsInput }.count)
                 }
                 .padding(4)
                 .glassOrRaised(in: Capsule(), interactive: true)
                 Spacer(minLength: usesSidebarDock ? 0 : 12)
                 Button {
-                    if selectedTab == .scheduledTasks {
+                    if selectedTab == .message {
+                        messageCreateTrigger += 1
+                    } else if selectedTab == .scheduledTasks {
                         beginTaskCreation()
                     } else {
                         focusNewSessionComposer = true
@@ -350,13 +364,13 @@ struct RootView: View {
                 // `safeAreaBar`, interactive glass on the label itself took
                 // the touch and the button's action never ran.
                 .glassOrRaised(in: Circle(), interactive: true)
-                .accessibilityLabel(selectedTab == .scheduledTasks ? "New scheduled task" : "New session")
-                .accessibilityIdentifier("list_create")
+                .accessibilityLabel(selectedTab == .message ? "New chat" : selectedTab == .scheduledTasks ? "New scheduled task" : "New session")
+                .accessibilityIdentifier(selectedTab == .message ? "chat_create" : "list_create")
             }
         }
         // S2 board `s2-list`: the dock and plus sit 20 pt from the sides and
         // 28 pt from the bottom edge of the screen.
-        .padding(.horizontal, usesSidebarDock ? 12 : 20)
+        .padding(.horizontal, usesSidebarDock ? 12 : selectedTab == .message ? 16 : 20)
         .padding(.top, 8)
         .padding(.bottom, 10)
         .frame(maxWidth: .infinity)
@@ -388,7 +402,7 @@ struct RootView: View {
                 if tab == .scheduledTasks {
                     TasksTabGlyph().frame(width: 22, height: 20)
                 } else if tab == .sessions {
-                    SessionsTabGlyph().frame(width: 24, height: 20)
+                    SessionsTabGlyph(ink: selectedTab == .sessions ? Self.selectedTabInk : selectedTab == .message ? .white : .primary).frame(width: 24, height: 20)
                 } else {
                     Image(systemName: icon).font(.system(size: 20))
                 }
@@ -397,7 +411,7 @@ struct RootView: View {
             // The board's selected blue (#409CFF), the same ink as "Mark all
             // read". accentColor resolves to iOS 26's #0091FF, a second blue.
             .foregroundStyle(selectedTab == tab ? Self.selectedTabInk : .primary)
-            .frame(width: 88, height: 48)
+            .frame(width: selectedTab == .message && !usesSidebarDock ? 84 : 70, height: 48)
             // The board's solid selected fill (#3A3A3C), not a tint on the glass.
             .background(selectedTab == tab ? S2.color(dark: 0x3A3A3C, light: 0xE5E5EA) : .clear, in: Capsule())
             .overlay(alignment: .topTrailing) {
@@ -419,6 +433,16 @@ struct RootView: View {
         .accessibilityLabel(badge > 0 ? "\(title), \(badge) need input" : title)
         .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
         .accessibilityIdentifier(id)
+    }
+
+    private func messageContent() -> some View {
+        ChatSessionsView(hosts: settings.hosts.compactMap { host in
+            guard let client = settings.client(for: host) else { return nil }
+            return ScheduledTaskHost(id: host.id, name: host.label, baseURL: client.baseURL,
+                headers: client.resourceRequest(for: client.baseURL).allHTTPHeaderFields ?? [:])
+        }, onDetailChange: { messageDetailVisible = $0 }, onRead: { store.markRead($0) },
+           onCreated: { Task { await store.refreshSessionMembership() } }, createTrigger: messageCreateTrigger, showsCreateInToolbar: false,
+           listFooter: positionedListDock, unreadIDs: Set(store.sessions.filter { $0.isChat && store.group(for: $0) == .unread }.compactMap(\.sessionId)))
     }
 
     private func tasksContent() -> some View {
@@ -443,7 +467,7 @@ struct RootView: View {
            onSearch: { beginSearch(.scheduledTasks) },
            onCreate: beginTaskCreation,
            sessionSelection: $taskSessionID,
-           sessionDestination: { AnyView(taskSessionView($0)) }, openSession: { hostID, id in
+           sessionDestination: { AnyView(taskSessionView($0)) }, onChatRead: { store.markRead($0) }, openSession: { hostID, id in
             taskSessionID = store.navID(id)
             Task { await store.prepareSessionForDisplay(id, sourceHostID: hostID) }
         }, onNeedsInputCountChange: { taskNeedsInputCount = $0 },
@@ -547,11 +571,19 @@ struct RootView: View {
             Group {
                 if let selection = selectedSession.wrappedValue {
                     if let session = store.session(selection) {
+                        if session.isChat {
+                            if let host = store.host(forSession: session.sessionId ?? selection), let client = settings.client(for: host) {
+                                ChatSessionScreen(host: ScheduledTaskHost(id: host.id, name: host.label, baseURL: client.baseURL,
+                                    headers: client.resourceRequest(for: client.baseURL).allHTTPHeaderFields ?? [:]), sessionID: session.sessionId ?? selection, onRead: { store.markRead($0) })
+                                    .id(session.sessionId ?? selection)
+                            } else { DetailLoading() }
+                        } else {
                         SessionDetailView(session: session,
                                           onEnded: { selectedSession.wrappedValue = nil },
                                           onMarkedUnread: { selectedSession.wrappedValue = nil },
                                           onOpenTask: openTask)
                             .id(selection)
+                        }
                             // Side by side, the list button below is the only
                             // top-left control. A back arrow here only showed
                             // the list again (board `ip-session`); the phone
@@ -907,6 +939,7 @@ private struct TasksTabGlyph: View {
 /// The board's Sessions tab glyph (`s2-list`): two filled speech bubbles, the
 /// left one in front. Drawn from its SVG (26×22 box, fit into 24×20).
 private struct SessionsTabGlyph: View {
+    var ink: Color = .primary
     var body: some View {
         GeometryReader { geo in
             let k = min(geo.size.width / 26, geo.size.height / 22)
@@ -942,7 +975,7 @@ private struct SessionsTabGlyph: View {
                 p.addArc(center: pt(15.5, 11.2), radius: 4 * k, startAngle: .degrees(90), endAngle: .degrees(0), clockwise: true)
                 p.closeSubpath()
             }
-            .fill()
+            .fill(ink)
         }
         .accessibilityHidden(true)
     }

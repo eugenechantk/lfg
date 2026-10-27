@@ -1,6 +1,7 @@
 // Running Claude Code sessions: enumerate live `claude` processes and tail
 // their on-disk transcripts (~/.claude/projects/<proj>/<sessionId>.jsonl).
 import { readdir, rename } from "node:fs/promises";
+import { isChatRuntimePid, isChatProviderSession, isChatProviderDirectory, isChatProviderCommand } from "./chat-claude.ts";
 import { scanBack, tail } from "./transcript.ts";
 import { mergeClaudeNotices, observeClaudePaneNotice } from "./claude-system-notices.ts";
 import { resolveBusy, sessionTurnState } from "./session-state.ts";
@@ -147,6 +148,9 @@ export function toolTarget(name: string, input: unknown): string | undefined {
 }
 
 export type Session = {
+  kind?: "terminal" | "chat";
+  turnOutcome?: "completed" | "failed" | "interrupted";
+  suppressCompletionNotification?: boolean;
   agent: "claude" | "codex";
   // Whether LFG can send directly to the owning frontend. `external` means the
   // transcript is readable, but another app/process owns the writer; callers
@@ -362,7 +366,7 @@ const UUID_EXACT = new RegExp(`^${UUID.source}$`);
 // details (pgrep on Linux, ps on macOS) live in ./procinfo; the include gate
 // (argv[0] basename must be the tool) is identical across platforms.
 function listClaudeProcs(): { pid: number; cmd: string }[] {
-  return listProcs("claude");
+  return listProcs("claude").filter(p => !isChatRuntimePid(p.pid) && !isChatProviderCommand(p.cmd));
 }
 
 function listCodexProcs(): { pid: number; cmd: string }[] {
@@ -1108,6 +1112,7 @@ async function newestUnclaimedInCwd(
   cwd: string,
   claimed: Set<string>,
 ): Promise<{ path: string; id: string } | null> {
+  if (isChatProviderDirectory(cwd)) return null;
   let best: { path: string; id: string; mtime: number } | null = null;
   let newestAny = 0; // freshest transcript regardless of claim status
   const projectsDir = claudeProjectsDir();
@@ -4126,6 +4131,7 @@ export async function collectResumableCandidates(): Promise<ResumableCandidate[]
   } catch {}
   const byId = new Map<string, ResumableCandidate>();
   for (const d of dirs) {
+    if (isChatProviderDirectory(d)) continue;
     let files: string[];
     try {
       files = await readdir(join(projectsDir, d));
@@ -4138,7 +4144,7 @@ export async function collectResumableCandidates(): Promise<ResumableCandidate[]
       // Whole-name UUID match, not UUID.test: a Syncthing conflict copy
       // ("<uuid>.sync-conflict-<stamp>.jsonl") contains a UUID substring but is
       // a duplicate of the real transcript and can't be `--resume`d by its name.
-      if (!UUID_EXACT.test(id)) continue;
+      if (!UUID_EXACT.test(id) || isChatProviderSession(id)) continue;
       const path = join(projectsDir, d, f);
       let mtime = 0;
       try {

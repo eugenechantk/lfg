@@ -1748,7 +1748,7 @@ private struct UserMessageScrubberAccessibilityProxy: UIViewRepresentable {
 }
 
 /// The top bar's tools glyph. Its SwiftUI button owns the full toolbar hit area.
-private enum SessionOptionsGlyph {
+enum SessionOptionsGlyph {
     /// The board's tools glyph (`s2-view`): two sliders, drawn from its SVG
     /// (24-unit box, 1.9 stroke) at 20pt as a template image.
     static let image: UIImage = {

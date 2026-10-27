@@ -33,6 +33,11 @@ swiftc "${LFG_DESKTOP_OPTIMIZATION:--O}" -parse-as-library \
   ../shared/Tasks/*.swift \
   ../shared/Usage/*.swift \
   ../ios/LFGCore/Sources/LFGCore/AccountUsage.swift \
+  ../shared/Message/*.swift \
+  ../ios/LFGCore/Sources/LFGCore/MessageSpaces.swift \
+  ../ios/LFGCore/Sources/LFGCore/ChatSessions.swift \
+  ../ios/LFGCore/Sources/LFGCore/ChatJobs.swift \
+  ../ios/LFGCore/Sources/LFGCore/SpaceVideoPacket.swift \
   ../ios/LFGCore/Sources/LFGCore/ScheduledTasks.swift \
   ../ios/LFGCore/Sources/LFGCore/TaskPresentation.swift \
   ../ios/LFGCore/Sources/LFGCore/TaskDetailPresentation.swift \

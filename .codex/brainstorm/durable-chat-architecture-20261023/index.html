@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="en" data-theme="blueprint" data-mode="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Answer me with HTML 0.4.4">
+<title>Durable chat architecture</title>
+<style>
+html[data-theme="blueprint"], html[data-theme="blueprint"][data-mode="light"] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 0px;
+  --shadow: none;
+  --bw: 1.5px;
+  --head-font: var(--font-sans);
+  --bg: #f6f6f3;
+  --paper: #ffffff;
+  --ink: #16181d;
+  --ink-2: #4b5260;
+  --ink-3: #8b929e;
+  --line: #1d2026;
+  --line-2: #d6dae1;
+  --fill: #f3f5f8;
+  --accent: #1d5fbf;
+  --accent-bg: #e4ecf8;
+  --ok: #1d5fbf;
+  --ok-bg: #e4ecf8;
+  --err: #c62828;
+  --err-bg: #fbeaea;
+  --warn: #a8620a;
+  --warn-bg: #fdf3e2;
+  --head-bg: #16181d;
+  --head-fg: #ffffff;
+}
+html[data-theme="blueprint"][data-mode="dark"] {
+  --bg: #081322;
+  --paper: #0d1c31;
+  --ink: #e6edf7;
+  --ink-2: #a9b8cc;
+  --ink-3: #6b7f99;
+  --line: #c9d6e8;
+  --line-2: #23385a;
+  --fill: #12253f;
+  --accent: #6ea8ff;
+  --accent-bg: #16305a;
+  --ok: #6ea8ff;
+  --ok-bg: #16305a;
+  --err: #ff7070;
+  --err-bg: #3b1620;
+  --warn: #f0b14a;
+  --warn-bg: #3a2a10;
+  --head-bg: #e6edf7;
+  --head-fg: #081322;
+}
+@media (prefers-color-scheme: dark) {
+html[data-theme="blueprint"][data-mode="auto"] {
+  --bg: #081322;
+  --paper: #0d1c31;
+  --ink: #e6edf7;
+  --ink-2: #a9b8cc;
+  --ink-3: #6b7f99;
+  --line: #c9d6e8;
+  --line-2: #23385a;
+  --fill: #12253f;
+  --accent: #6ea8ff;
+  --accent-bg: #16305a;
+  --ok: #6ea8ff;
+  --ok-bg: #16305a;
+  --err: #ff7070;
+  --err-bg: #3b1620;
+  --warn: #f0b14a;
+  --warn-bg: #3a2a10;
+  --head-bg: #e6edf7;
+  --head-fg: #081322;
+}
+}
+
+html[data-theme="shadcn"], html[data-theme="shadcn"][data-mode="light"] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 8px;
+  --shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+  --bw: 1px;
+  --head-font: var(--font-sans);
+  --bg: #fafafa;
+  --paper: #ffffff;
+  --ink: #09090b;
+  --ink-2: #71717a;
+  --ink-3: #a1a1aa;
+  --line: #e4e4e7;
+  --line-2: #f0f0f2;
+  --fill: #f4f4f5;
+  --accent: #2563eb;
+  --accent-bg: #eff6ff;
+  --ok: #16a34a;
+  --ok-bg: #f0fdf4;
+  --err: #dc2626;
+  --err-bg: #fef2f2;
+  --warn: #d97706;
+  --warn-bg: #fffbeb;
+  --head-bg: #18181b;
+  --head-fg: #fafafa;
+}
+html[data-theme="shadcn"][data-mode="dark"] {
+  --bg: #09090b;
+  --paper: #121215;
+  --ink: #fafafa;
+  --ink-2: #a1a1aa;
+  --ink-3: #71717a;
+  --line: #27272a;
+  --line-2: #1c1c1f;
+  --fill: #18181b;
+  --accent: #60a5fa;
+  --accent-bg: #172554;
+  --ok: #4ade80;
+  --ok-bg: #052e16;
+  --err: #f87171;
+  --err-bg: #450a0a;
+  --warn: #fbbf24;
+  --warn-bg: #451a03;
+  --head-bg: #fafafa;
+  --head-fg: #18181b;
+}
+@media (prefers-color-scheme: dark) {
+html[data-theme="shadcn"][data-mode="auto"] {
+  --bg: #09090b;
+  --paper: #121215;
+  --ink: #fafafa;
+  --ink-2: #a1a1aa;
+  --ink-3: #71717a;
+  --line: #27272a;
+  --line-2: #1c1c1f;
+  --fill: #18181b;
+  --accent: #60a5fa;
+  --accent-bg: #172554;
+  --ok: #4ade80;
+  --ok-bg: #052e16;
+  --err: #f87171;
+  --err-bg: #450a0a;
+  --warn: #fbbf24;
+  --warn-bg: #451a03;
+  --head-bg: #fafafa;
+  --head-fg: #18181b;
+}
+}
+
+/* Answer me with HTML base — 只引用主题变量，禁止写死颜色（主题 token 见 themes/index.js） */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, kbd { font-family: var(--font-mono); }
+
+/* ── 工具栏 ─────────────────────────────── */
+.am-toolbar {
+  position: fixed; top: 12px; right: 12px; z-index: 10; display: flex; gap: 6px;
+}
+.am-btn {
+  font: 12px/1 var(--font-sans); color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line-2); border-radius: var(--radius); padding: 7px 10px; cursor: pointer;
+}
+.am-btn:hover { border-color: var(--ink-3); }
+.am-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── 页头 ───────────────────────────────── */
+.am-head { margin: 0 0 20px; padding-right: 260px; }
+.am-head h1 { margin: 0; font-size: 24px; line-height: 1.25; letter-spacing: -0.01em; }
+.am-sub { margin: 4px 0 0; color: var(--ink-2); }
+.am-head-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 12px; color: var(--ink-2); }
+.am-head-meta b { font-family: var(--font-mono); font-weight: 400; color: var(--ink-3); margin-right: 6px; }
+.am-intro { margin-top: 12px; max-width: 80ch; }
+
+/* ── sheet 图纸板 ────────────────────────── */
+.am-sheet { max-width: 1680px; margin: 0 auto; padding: 32px 28px 40px; }
+.am-frame { position: relative; }
+.am-grid {
+  display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  gap: 20px; align-items: start;
+}
+.am-ruler { display: none; }
+html[data-theme="blueprint"] .am-frame { border: 1px solid var(--line); padding: 30px; }
+html[data-theme="blueprint"] .am-frame::before {
+  content: ""; position: absolute; inset: 18px; border: 1px solid var(--line); pointer-events: none;
+}
+html[data-theme="blueprint"] .am-ruler {
+  display: flex; position: absolute; font: 10px/1 var(--font-mono); color: var(--ink-3);
+}
+.am-ruler span { flex: 1; display: flex; align-items: center; justify-content: center; }
+.am-ruler--top, .am-ruler--bottom { left: 18px; right: 18px; height: 18px; }
+.am-ruler--top { top: 0; }
+.am-ruler--bottom { bottom: 0; }
+.am-ruler--left, .am-ruler--right { top: 18px; bottom: 18px; width: 18px; flex-direction: column; }
+.am-ruler--left { left: 0; }
+.am-ruler--right { right: 0; }
+.am-ruler--top span + span, .am-ruler--bottom span + span { border-left: 1px solid var(--line); }
+.am-ruler--left span + span, .am-ruler--right span + span { border-top: 1px solid var(--line); }
+
+/* ── 面板 ───────────────────────────────── */
+.am-panel {
+  background: var(--paper); border: var(--bw) solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); min-width: 0; overflow: hidden;
+}
+.am-panel-head {
+  display: flex; align-items: stretch; gap: 0; border-bottom: var(--bw) solid var(--line); min-height: 34px;
+}
+.am-panel-id {
+  display: flex; align-items: center; justify-content: center; min-width: 34px; padding: 0 8px;
+  background: var(--head-bg); color: var(--head-fg); font-weight: 600; font-size: 14px;
+}
+html[data-theme="shadcn"] .am-panel-id { border-radius: 6px; min-width: 24px; height: 24px; margin: 9px 0 9px 14px; font-size: 12px; }
+html[data-theme="shadcn"] .am-panel-head { border-bottom-width: 1px; }
+.am-panel-head h2 { margin: 0; padding: 7px 12px; font-size: 15px; font-weight: 600; flex: 1; display: flex; align-items: center; }
+.am-panel-meta { align-self: center; padding: 0 12px; font: 11px/1.3 var(--font-mono); color: var(--ink-2); text-align: right; }
+.am-panel-body { padding: 14px 16px 16px; }
+.am-panel-body > * + * { margin-top: 12px; }
+
+/* ── Markdown 正文 ───────────────────────── */
+.am-md > :first-child { margin-top: 0; }
+.am-md > :last-child { margin-bottom: 0; }
+.am-md p { margin: 0 0 8px; }
+.am-md ul, .am-md ol { margin: 0 0 8px; padding-left: 20px; }
+.am-md li + li { margin-top: 3px; }
+.am-md h3, .am-md h4 { margin: 14px 0 6px; font-size: 13px; }
+.am-md a { color: var(--accent); }
+.am-md blockquote { margin: 0 0 8px; padding: 2px 12px; border-left: 3px solid var(--line-2); color: var(--ink-2); }
+.am-md :not(pre) > code { font-size: 0.9em; background: var(--fill); padding: 1px 5px; border-radius: 4px; }
+.am-md hr { border: 0; border-top: 1px solid var(--line-2); margin: 12px 0; }
+.am-md table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.am-md th {
+  text-align: left; font: 11px/1.3 var(--font-mono); color: var(--ink-2); font-weight: 400;
+  padding: 6px 10px; border-bottom: 1px solid var(--line-2);
+}
+.am-md td { padding: 7px 10px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+.am-md tbody tr:nth-child(even) td { background: var(--fill); }
+.am-table-wrap { overflow-x: auto; }
+.am-code {
+  margin: 0; padding: 12px 14px; background: var(--fill); border: 1px solid var(--line-2);
+  border-radius: var(--radius); overflow-x: auto; font-size: 12.5px; line-height: 1.5;
+}
+
+/* ── 状态徽章 ok / no / warn ──────────────── */
+.am-status { white-space: nowrap; font-weight: 500; }
+.am-status--ok { color: var(--ok); }
+.am-status--no { color: var(--err); }
+.am-status--warn { color: var(--warn); }
+.am-status-icon { display: inline-block; width: 1.1em; font-weight: 700; }
+
+/* ── callout ─────────────────────────────── */
+.am-callout {
+  border: 1px solid var(--line-2); border-left: 3px solid var(--accent); background: var(--accent-bg);
+  padding: 10px 14px; border-radius: var(--radius);
+}
+.am-callout--ok { border-left-color: var(--ok); background: var(--ok-bg); }
+.am-callout--warn { border-left-color: var(--warn); background: var(--warn-bg); }
+.am-callout--err { border-left-color: var(--err); background: var(--err-bg); }
+.am-callout-title { font-weight: 600; margin-bottom: 4px; }
+
+/* ── kv 标题栏格 ─────────────────────────── */
+.am-kv {
+  display: grid; grid-template-columns: repeat(var(--kv-cols, 2), minmax(0, 1fr)); margin: 0;
+  border-top: var(--bw) solid var(--line); border-left: var(--bw) solid var(--line);
+}
+.am-kv-cell { border-right: var(--bw) solid var(--line); border-bottom: var(--bw) solid var(--line); padding: 6px 10px 8px; min-width: 0; }
+.am-kv-cell--wide { grid-column: 1 / -1; }
+.am-kv dt { font: 11px/1.4 var(--font-mono); color: var(--ink-2); }
+.am-kv dd { margin: 2px 0 0; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.am-kv-cell--wide dd { font-size: 17px; font-weight: 600; }
+html[data-theme="shadcn"] .am-kv { border-color: var(--line); border-radius: var(--radius); overflow: hidden; }
+
+/* ── timeline ────────────────────────────── */
+.am-timeline { list-style: none; margin: 0; padding: 0; }
+.am-timeline--h { display: grid; grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr)); padding-top: 4px; }
+.am-timeline--h li { position: relative; text-align: center; padding: 0 6px; }
+.am-timeline--h li::before {
+  content: ""; position: absolute; top: 31px; left: 0; right: 0; border-top: var(--bw) solid var(--line);
+}
+.am-timeline--h li:first-child::before { left: 50%; }
+.am-timeline--h li:last-child::before { right: 50%; }
+.am-tl-when { display: block; font-size: 15px; font-weight: 500; height: 24px; }
+.am-tl-dot {
+  position: relative; display: block; width: 11px; height: 11px; margin: 2px auto 8px;
+  border: var(--bw) solid var(--line); border-radius: 50%; background: var(--paper);
+}
+.am-tl-item--hi .am-tl-dot { background: var(--accent); border-color: var(--accent); }
+.am-tl-title { display: block; font-size: 12.5px; font-weight: 500; }
+.am-tl-text { display: block; font-size: 12px; color: var(--ink-2); line-height: 1.45; }
+.am-timeline--v li { position: relative; padding: 0 0 14px 22px; }
+.am-timeline--v li::before { content: ""; position: absolute; left: 5px; top: 6px; bottom: -6px; border-left: var(--bw) solid var(--line-2); }
+.am-timeline--v li:last-child::before { display: none; }
+.am-timeline--v .am-tl-dot { position: absolute; left: 0; top: 4px; margin: 0; }
+.am-timeline--v .am-tl-when { display: inline; height: auto; font: 12px var(--font-mono); color: var(--ink-2); margin-right: 8px; }
+.am-timeline--v .am-tl-title { display: inline; font-size: 14px; }
+.am-timeline--v .am-tl-text { margin-top: 2px; }
+
+/* ── annot 句子标注 ──────────────────────── */
+.am-annot + .am-annot { border-top: 1px solid var(--line-2); padding-top: 12px; }
+.am-annot-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.am-annot-meta { font: 11px var(--font-mono); font-weight: 400; color: var(--ink-2); }
+.am-annot-scroll { overflow-x: auto; }
+.am-annot-line {
+  position: relative; display: inline-block; white-space: pre; font: 14px/1.6 var(--font-mono);
+  padding-bottom: calc(var(--rows, 0) * 17px + 14px);
+}
+.am-annot-line--wrap { display: block; white-space: normal; padding-bottom: 10px; }
+.am-annot-line--wrap .am-seg { white-space: nowrap; }
+.am-seg { position: relative; }
+.am-seg::after {
+  content: ""; position: absolute; left: 1px; right: 1px; top: calc(100% + 1px); height: 5px;
+  border: 1px solid var(--accent); border-top: 0;
+}
+.am-seg-n {
+  position: absolute; left: 0; top: calc(100% + 8px + var(--row, 0) * 17px);
+  font: 11px/16px var(--font-sans); color: var(--accent); white-space: nowrap;
+}
+.am-seg--err { color: var(--err); }
+.am-seg--err::after { border-color: var(--err); }
+.am-seg--err .am-seg-n { color: var(--err); }
+.am-annot-caption { font-size: 12px; color: var(--ink-2); }
+
+/* ── limits 限值条 ───────────────────────── */
+.am-lim + .am-lim { margin-top: 14px; }
+.am-lim-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; margin-bottom: 4px; }
+.am-lim-val { font: 12px var(--font-mono); color: var(--accent); white-space: nowrap; }
+.am-lim-track { position: relative; height: 12px; border: 1px solid var(--line-2); background: var(--fill); border-radius: calc(var(--radius) / 2); }
+.am-lim-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-bg); border-right: 1px solid var(--accent); }
+.am-lim-mark { position: absolute; top: -4px; bottom: -4px; border-left: 2px solid var(--accent); }
+.am-lim.is-over .am-lim-fill { background: var(--err-bg); border-right-color: var(--err); }
+.am-lim.is-over .am-lim-val { color: var(--err); }
+.am-lim-ticks { position: relative; height: 16px; font: 10px/16px var(--font-mono); color: var(--ink-3); }
+.am-lim-ticks span { position: absolute; transform: translateX(-50%); }
+.am-lim-ticks span:first-child { transform: none; }
+.am-lim-note { font-size: 11px; color: var(--ink-2); margin-left: 6px; }
+
+/* ── tree 结构树 ─────────────────────────── */
+.am-tree { font-size: 13px; }
+.am-tree-root { display: flex; justify-content: center; position: relative; padding-bottom: 18px; }
+.am-tree-root::after { content: ""; position: absolute; bottom: 0; left: 50%; height: 18px; border-left: var(--bw) solid var(--line); }
+.am-tree-root--solo { padding-bottom: 12px; }
+.am-tree-root--solo::after { display: none; }
+.am-tree-box {
+  border: var(--bw) solid var(--line); background: var(--paper); padding: 6px 14px; text-align: center;
+  border-radius: var(--radius); font-weight: 600;
+}
+.am-tree-box small { display: block; font-weight: 400; color: var(--ink-2); font-size: 12px; }
+.am-tree-box--root { background: var(--accent-bg); font-size: 15px; padding: 8px 28px; }
+.am-tree-cols { display: grid; grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr)); }
+.am-tree-col { position: relative; padding: 18px 8px 0; min-width: 0; }
+.am-tree-col::before { content: ""; position: absolute; top: 0; left: 0; right: 0; border-top: var(--bw) solid var(--line); }
+.am-tree-col:first-child::before { left: 50%; }
+.am-tree-col:last-child::before { right: 50%; }
+.am-tree-col::after { content: ""; position: absolute; top: 0; left: 50%; height: 18px; border-left: var(--bw) solid var(--line); }
+.am-tree-list, .am-tree-list ul { list-style: none; margin: 0; padding: 0; }
+.am-tree-col > .am-tree-list { margin: 8px 0 0 14px; }
+.am-tree-list ul { margin-left: 16px; }
+.am-tree-list li { position: relative; padding: 3px 0 3px 18px; }
+.am-tree-list li::before { content: ""; position: absolute; left: 0; top: 0.95em; width: 12px; border-top: 1px solid var(--ink-3); }
+.am-tree-list li::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; border-left: 1px solid var(--ink-3); }
+.am-tree-list li:last-child::after { bottom: auto; height: 0.95em; }
+.am-tree-tag { font: 11px var(--font-mono); color: var(--ink-3); margin-right: 4px; }
+.am-tree code { font: 12px var(--font-mono); }
+.am-tree-sub { display: block; font-size: 11.5px; color: var(--ink-2); }
+.am-tree-hi > .am-tree-label { color: var(--accent); font-weight: 600; }
+
+/* ── 图（flow / sequence）───────────────── */
+.am-diagram { margin: 0; overflow-x: auto; text-align: center; }
+.am-diagram svg { max-width: 100%; height: auto; font-family: var(--font-sans); }
+.am-diagram text { fill: var(--ink); font-size: 13px; }
+.am-node-shape { fill: var(--paper); stroke: var(--line); stroke-width: var(--bw); }
+.am-node--hi .am-node-shape { fill: var(--accent-bg); stroke: var(--accent); }
+.am-node--hi text { fill: var(--accent); font-weight: 600; }
+.am-edge { fill: none; stroke: var(--ink-2); stroke-width: 1.3; }
+.am-edge--dashed { stroke-dasharray: 5 4; }
+.am-arrow { fill: var(--ink-2); }
+.am-edge-label rect { fill: var(--paper); }
+.am-diagram .am-edge-label text { fill: var(--accent); font-size: 11.5px; }
+.am-cluster { fill: var(--fill); stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 4 3; }
+.am-diagram .am-cluster-label { fill: var(--ink-2); font: 11px var(--font-mono); }
+.am-lifeline { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 4 4; }
+.am-actor { fill: var(--paper); stroke: var(--line); stroke-width: var(--bw); }
+.am-note { fill: var(--warn-bg); stroke: var(--warn); stroke-width: 1; }
+.am-diagram .am-step { fill: var(--ink-3); font: 10px var(--font-mono); }
+
+/* ── doc 线性讲解 ────────────────────────── */
+.am-doc { max-width: 1120px; margin: 0 auto; padding: 40px 28px 64px; }
+.am-doc-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; align-items: start; }
+.am-doc-layout--notoc { grid-template-columns: minmax(0, 1fr); max-width: 860px; }
+.am-toc { position: sticky; top: 24px; font-size: 13px; }
+.am-toc a { display: block; color: var(--ink-2); text-decoration: none; padding: 4px 0 4px 10px; border-left: 2px solid var(--line-2); }
+.am-toc a:hover { color: var(--ink); border-left-color: var(--accent); }
+.am-doc-body > .am-panel + .am-panel { margin-top: 20px; }
+
+/* ── 响应式与打印 ─────────────────────────── */
+@media (max-width: 1100px) {
+  .am-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .am-grid > .am-panel { grid-column: auto !important; }
+  .am-grid > .am-panel.am-span-wide { grid-column: 1 / -1 !important; }
+}
+@media (max-width: 760px) {
+  .am-sheet, .am-doc { padding: 56px 12px 24px; }
+  .am-head { padding-right: 0; }
+  .am-grid { grid-template-columns: minmax(0, 1fr); }
+  .am-grid > .am-panel.am-span-wide { grid-column: auto !important; }
+  html[data-theme="blueprint"] .am-frame { padding: 0; border: 0; }
+  html[data-theme="blueprint"] .am-frame::before, html[data-theme="blueprint"] .am-ruler { display: none; }
+  .am-doc-layout { grid-template-columns: minmax(0, 1fr); }
+  .am-toc { position: static; }
+  .am-timeline--h { grid-template-columns: minmax(0, 1fr); }
+  .am-tree-cols { grid-template-columns: minmax(0, 1fr); }
+}
+.am-colophon { text-align: center; padding: 0 0 28px; font: 11px var(--font-mono); color: var(--ink-3); }
+
+@media print {
+  .am-toolbar { display: none; }
+  body { background: var(--paper); }
+  .am-panel { break-inside: avoid; box-shadow: none; }
+}
+.am-panel--bare { border: 0; background: transparent; box-shadow: none; }
+.am-panel--bare > .am-panel-body { padding: 0; }
+.am-panel--bare .am-kv { background: var(--paper); }
+
+</style>
+</head>
+<body>
+<div class="am-toolbar">
+<button class="am-btn" type="button" data-am="theme" data-labels="{&quot;blueprint&quot;:&quot;Theme: Blueprint&quot;,&quot;shadcn&quot;:&quot;Theme: Cards&quot;}">Theme: Blueprint</button>
+<button class="am-btn" type="button" data-am="mode" data-labels="{&quot;auto&quot;:&quot;Mode: Auto&quot;,&quot;light&quot;:&quot;Mode: Light&quot;,&quot;dark&quot;:&quot;Mode: Dark&quot;}">Mode: Auto</button>
+<button class="am-btn" type="button" data-am="copy" data-done="Copied ✓">Copy source</button>
+</div>
+<main class="am-doc">
+<header class="am-head"><h1>Durable chat architecture</h1><p class="am-sub">LFG owns the conversation. The provider runs one turn at a time.</p><div class="am-head-meta"><span><b>source</b>Verified against codex/cua-message on 23 October 2026</span></div><div class="am-intro am-md"><div class="am-md"><p>The chat survives the provider process. Its host stores instructions, memory, summaries, and complete history. An idle chat needs no provider process or Space.</p>
+</div></div></header>
+<div class="am-doc-layout">
+<nav class="am-toc" aria-label="目录"><a href="#panel-A">A · What connects to what</a><a href="#panel-B">B · Three separate kinds of context</a><a href="#panel-C">C · What persists</a><a href="#panel-D">D · What happens when you send</a><a href="#panel-E">E · What the backend adds</a><a href="#panel-F">F · How existing primitives fit</a><a href="#panel-G">G · Reliability and scope</a></nav><div class="am-doc-body">
+<section class="am-panel" id="panel-A">
+<header class="am-panel-head"><span class="am-panel-id">A</span><h2>What connects to what</h2></header>
+<div class="am-panel-body"><figure class="am-diagram am-flow"><svg viewBox="0 0 790 360" width="790" height="360" role="img" aria-label="流程图：Native app、Host chat API、Chat service、Chat files、Claude worker、Shared Session view、Event journal" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am1-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M399.4,49 L399.4,65 Q399.4,81 399.4,97 L399.4,113" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="314.3" y="72" width="170.3" height="18" rx="3"/><text x="399.4" y="81" text-anchor="middle" dominant-baseline="central">create, send, settings, history</text></g></g><g data-step="1"><path class="am-edge" d="M399.4,148 L399.4,164 Q399.4,180 399.4,196 L399.4,212" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="331.7" y="171" width="135.6" height="18" rx="3"/><text x="399.4" y="180" text-anchor="middle" dominant-baseline="central">validate and coordinate</text></g></g><g data-step="2"><path class="am-edge" d="M451.5,237.7 L583.3,258.3 Q715.1,279 715.1,295 L715.1,311" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="655.4" y="270" width="119.3" height="18" rx="3"/><text x="715.1" y="279" text-anchor="middle" dominant-baseline="central">persist conversation</text></g></g><g data-step="3"><path class="am-edge" d="M399.4,247 L399.4,263 Q399.4,279 375.1,295 L350.8,311" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="333.2" y="270" width="132.6" height="18" rx="3"/><text x="399.4" y="279" text-anchor="middle" dominant-baseline="central">run one text-only reply</text></g></g><g data-step="4"><path class="am-edge" d="M297.6,311 L273.3,295 Q249,279 298.2,262.8 L347.4,246.6" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="186.8" y="270" width="124.3" height="18" rx="3"/><text x="249" y="279" text-anchor="middle" dominant-baseline="central">partial text and result</text></g></g><g data-step="5"><path class="am-edge" d="M451.5,245.8 L504.4,262.4 Q557.2,279 557.2,295 L557.2,311" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="502.3" y="270" width="109.8" height="18" rx="3"/><text x="557.2" y="279" text-anchor="middle" dominant-baseline="central">identity and status</text></g></g><g data-step="6"><path class="am-edge" d="M347.4,237.8 L218.6,258.4 Q89.9,279 89.9,295 L89.9,311" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="15" y="270" width="149.8" height="18" rx="3"/><text x="89.9" y="279" text-anchor="middle" dominant-baseline="central">message and busy events</text></g></g></g><g><g class="am-node am-node--rect" data-key="Native app" data-step="0"><rect class="am-node-shape" x="353.1" y="14" width="92.7" height="35" rx="3"/><text x="399.4" y="31.5" text-anchor="middle" dominant-baseline="central">Native app</text></g><g class="am-node am-node--rect" data-key="Host chat API" data-step="0"><rect class="am-node-shape" x="343.8" y="113" width="111.2" height="35" rx="3"/><text x="399.4" y="130.5" text-anchor="middle" dominant-baseline="central">Host chat API</text></g><g class="am-node am-node--rect" data-key="Chat service" data-step="1"><rect class="am-node-shape" x="347.4" y="212" width="104.2" height="35" rx="3"/><text x="399.4" y="229.5" text-anchor="middle" dominant-baseline="central">Chat service</text></g><g class="am-node am-node--rect" data-key="Chat files" data-step="2"><rect class="am-node-shape" x="671.8" y="311" width="86.5" height="35" rx="3"/><text x="715.1" y="328.5" text-anchor="middle" dominant-baseline="central">Chat files</text></g><g class="am-node am-node--rect" data-key="Claude worker" data-step="3"><rect class="am-node-shape" x="266.5" y="311" width="115.4" height="35" rx="3"/><text x="324.2" y="328.5" text-anchor="middle" dominant-baseline="central">Claude worker</text></g><g class="am-node am-node--rect" data-key="Shared Session view" data-step="5"><rect class="am-node-shape" x="478.6" y="311" width="157.2" height="35" rx="3"/><text x="557.2" y="328.5" text-anchor="middle" dominant-baseline="central">Shared Session view</text></g><g class="am-node am-node--rect" data-key="Event journal" data-step="6"><rect class="am-node-shape" x="35.8" y="311" width="108.3" height="35" rx="3"/><text x="89.9" y="328.5" text-anchor="middle" dominant-baseline="central">Event journal</text></g></g></svg></figure>
+<div class="am-md"><p>The worker uses the host&#39;s existing Claude sign-in. It starts in a temporary directory with tools and MCP disabled. LFG keeps the canonical history.</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-B">
+<header class="am-panel-head"><span class="am-panel-id">B</span><h2>Three separate kinds of context</h2></header>
+<div class="am-panel-body"><div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>Context</th>
+<th>Who changes it</th>
+<th>How a reply uses it</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Standing instructions</td>
+<td>The user edits chat settings</td>
+<td>LFG adds them to the system prompt for every reply.</td>
+</tr>
+<tr>
+<td>Private memory notes</td>
+<td>The user edits chat settings</td>
+<td>LFG supplies current facts and preferences in a separate context field.</td>
+</tr>
+<tr>
+<td>Conversation summary</td>
+<td>LFG generates it from older turns</td>
+<td>LFG combines it with recent turns and the current message.</td>
+</tr>
+</tbody></table></div>
+<p>Updated memory takes precedence over conflicting older conversation. Instruction and memory edits affect the next turn. Settings cannot change during an active turn.</p>
+<p>Memory notes are currently user-edited. The model does not automatically rewrite them. Automatic summaries provide continuity from older conversation.</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-C">
+<header class="am-panel-head"><span class="am-panel-id">C</span><h2>What persists</h2></header>
+<div class="am-panel-body"><div class="am-tree"><div class="am-tree-root"><div class="am-tree-box am-tree-box--root" data-key="~/.lfg/chat-sessions/" data-step="0">~/.lfg/chat-sessions/</div></div><div class="am-tree-cols" style="--n: 2"><div class="am-tree-col"><div class="am-tree-box" data-key=".owners/" data-step="1">.owners/<small>Prevent two live hosts from opening the same store</small></div></div><div class="am-tree-col"><div class="am-tree-box" data-key="chat-&lt;uuid&gt;/" data-step="2">chat-<uuid>/<small>One durable identity</small></div><ul class="am-tree-list"><li data-key="session.json" data-step="3"><span class="am-tree-label">session.json</span><span class="am-tree-sub">Settings, summary, revision, status, and summary cursor</span></li><li data-key="turns/" data-step="4"><span class="am-tree-label">turns/</span><span class="am-tree-sub">Complete ordered conversation</span><ul><li data-key="&lt;request-hash&gt;.json" data-step="5"><span class="am-tree-label"><request-hash>.json</span><span class="am-tree-sub">User text, assistant text, request receipt, and outcome</span></li></ul></li></ul></div></div></div>
+<div class="am-md"><p><code>LFG_DATA</code> can change the storage root. This adds JSON files, rather than a new SQL database. Atomic file replacement prevents readers from seeing half-written JSON.</p>
+<p>The host retains all original turns after summarizing them. A startup index supports history pages without reading every turn for each page.</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-D">
+<header class="am-panel-head"><span class="am-panel-id">D</span><h2>What happens when you send</h2></header>
+<div class="am-panel-body"><div class="am-md"><ol>
+<li>The app sends text with a stable request ID.</li>
+<li>The host saves the user turn and marks the chat working.</li>
+<li>The host loads current instructions, memory, summary, and recent turns.</li>
+<li>The host summarizes older turns when recent context exceeds its character budget.</li>
+<li>A fresh Claude worker receives that context and the new message.</li>
+<li>The host saves partial text and emits shared message events.</li>
+<li>The host saves the outcome, clears busy status, and removes the worker.</li>
+</ol>
+<p>The native chat currently polls its detail endpoint for updates. The host also publishes messages into the existing journal for shared consumers.</p>
+<p>Summaries use the same text-only runner. A summary failure pauses the turn instead of silently dropping older context.</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-E">
+<header class="am-panel-head"><span class="am-panel-id">E</span><h2>What the backend adds</h2></header>
+<div class="am-panel-body"><div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Responsibility</th>
+<th>Main operations</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>src/chat-sessions.ts</code></td>
+<td>Durable store and turn coordinator</td>
+<td>Create, settings, history, send, stop, summarize, and recover</td>
+</tr>
+<tr>
+<td><code>src/chat-claude.ts</code></td>
+<td>Temporary provider worker</td>
+<td>Launch Claude, enforce empty tools, parse text, stop, and clean up</td>
+</tr>
+<tr>
+<td><code>src/chat-api.ts</code></td>
+<td>Chat endpoints</td>
+<td>List/create, detail/history, send, settings, and interrupt</td>
+</tr>
+<tr>
+<td><code>src/commands/serve.ts</code></td>
+<td>Host wiring</td>
+<td>Open the store, mount routes, append events, and combine Session snapshots</td>
+</tr>
+</tbody></table></div>
+<p><code>ChatRunner</code> is the provider interface. Claude is its first implementation. A future provider can use that interface without owning the durable history.</p>
+<p>The API lives under <code>/api/sessions</code>. Chat creation uses <code>/api/sessions/chats</code>; individual actions use <code>/api/sessions/&lt;chat-id&gt;/...</code>.</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-F">
+<header class="am-panel-head"><span class="am-panel-id">F</span><h2>How existing primitives fit</h2></header>
+<div class="am-panel-body"><div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>Primitive</th>
+<th>Relationship to chat</th>
+<th>Current boundary</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Session</td>
+<td>A chat appears as <code>kind: chat</code> in the shared Session API.</td>
+<td>A separate chat store backs this projection; terminal sessions remain unchanged.</td>
+</tr>
+<tr>
+<td>Host</td>
+<td>One host stores the chat and executes replies.</td>
+<td>No cross-host transfer or cloud replication yet.</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Chat tracks idle, working, or blocked; the UI shows Ready, Working, or Paused.</td>
+<td>Host connectivity and each turn&#39;s outcome remain separate.</td>
+</tr>
+<tr>
+<td>Journal and notifications</td>
+<td>Message and busy events use the existing journal and completion watcher.</td>
+<td>Production APNs delivery was not exercised.</td>
+</tr>
+<tr>
+<td>Terminal process</td>
+<td>A temporary provider process executes a reply.</td>
+<td>The scanner excludes it from terminal discovery; terminal controls cannot target a chat.</td>
+</tr>
+<tr>
+<td>Space</td>
+<td>No dependency for chat.</td>
+<td>The separate Space prototype remains available to its existing clients.</td>
+</tr>
+<tr>
+<td>Scheduled task</td>
+<td>No attachment to a chat yet.</td>
+<td>Scheduling and chat ownership remain separate.</td>
+</tr>
+</tbody></table></div>
+<p>The design separates durable conversation from execution. This implementation does not introduce general-purpose Attachment or Run records across LFG.</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-G">
+<header class="am-panel-head"><span class="am-panel-id">G</span><h2>Reliability and scope</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>One turn runs per chat. Different chats can run independently. Repeating an accepted request ID returns its existing receipt; different text with that ID fails.</p>
+<p>Stop ends the worker and retains partial text. After a host crash, startup marks unfinished turns interrupted. It preserves history and never automatically replays them.</p>
+<p>Settings carry a revision number. A stale settings editor must reload before it can overwrite newer changes.</p>
+<p>This version supports text-only Claude chat, private settings, summaries, and local persistence. Shared project memory, automatic memory-note editing, tools, Spaces, and cross-host ownership are later extensions.</p>
+<p>The chat worktree contains the locally verified implementation. Production hosts and releases remain unchanged.</p>
+</div></div>
+</section>
+</div>
+</div>
+</main>
+<footer class="am-colophon">Generated by Answer me with HTML 0.4.4 · 2026-10-23 20:47</footer>
+<textarea id="am-source" hidden readonly aria-hidden="true">---
+title: Durable chat architecture
+subtitle: LFG owns the conversation. The provider runs one turn at a time.
+template: doc
+theme: blueprint
+lang: en
+source: Verified against codex/cua-message on 23 October 2026
+---
+
+The chat survives the provider process. Its host stores instructions, memory, summaries, and complete history. An idle chat needs no provider process or Space.
+
+## A What connects to what
+
+```flow
+Native app -&gt; Host chat API: create, send, settings, history
+Host chat API -&gt; Chat service: validate and coordinate
+Chat service -&gt; Chat files: persist conversation
+Chat service -&gt; Claude worker: run one text-only reply
+Claude worker -&gt; Chat service: partial text and result
+Chat service -&gt; Shared Session view: identity and status
+Chat service -&gt; Event journal: message and busy events
+```
+
+The worker uses the host&#39;s existing Claude sign-in. It starts in a temporary directory with tools and MCP disabled. LFG keeps the canonical history.
+
+## B Three separate kinds of context
+
+| Context | Who changes it | How a reply uses it |
+|---|---|---|
+| Standing instructions | The user edits chat settings | LFG adds them to the system prompt for every reply. |
+| Private memory notes | The user edits chat settings | LFG supplies current facts and preferences in a separate context field. |
+| Conversation summary | LFG generates it from older turns | LFG combines it with recent turns and the current message. |
+
+Updated memory takes precedence over conflicting older conversation. Instruction and memory edits affect the next turn. Settings cannot change during an active turn.
+
+Memory notes are currently user-edited. The model does not automatically rewrite them. Automatic summaries provide continuity from older conversation.
+
+## C What persists
+
+```tree
+~/.lfg/chat-sessions/
+  .owners/ | Prevent two live hosts from opening the same store
+  chat-&lt;uuid&gt;/ | One durable identity
+    session.json | Settings, summary, revision, status, and summary cursor
+    turns/ | Complete ordered conversation
+      &lt;request-hash&gt;.json | User text, assistant text, request receipt, and outcome
+```
+
+`LFG_DATA` can change the storage root. This adds JSON files, rather than a new SQL database. Atomic file replacement prevents readers from seeing half-written JSON.
+
+The host retains all original turns after summarizing them. A startup index supports history pages without reading every turn for each page.
+
+## D What happens when you send
+
+1. The app sends text with a stable request ID.
+2. The host saves the user turn and marks the chat working.
+3. The host loads current instructions, memory, summary, and recent turns.
+4. The host summarizes older turns when recent context exceeds its character budget.
+5. A fresh Claude worker receives that context and the new message.
+6. The host saves partial text and emits shared message events.
+7. The host saves the outcome, clears busy status, and removes the worker.
+
+The native chat currently polls its detail endpoint for updates. The host also publishes messages into the existing journal for shared consumers.
+
+Summaries use the same text-only runner. A summary failure pauses the turn instead of silently dropping older context.
+
+## E What the backend adds
+
+| Module | Responsibility | Main operations |
+|---|---|---|
+| `src/chat-sessions.ts` | Durable store and turn coordinator | Create, settings, history, send, stop, summarize, and recover |
+| `src/chat-claude.ts` | Temporary provider worker | Launch Claude, enforce empty tools, parse text, stop, and clean up |
+| `src/chat-api.ts` | Chat endpoints | List/create, detail/history, send, settings, and interrupt |
+| `src/commands/serve.ts` | Host wiring | Open the store, mount routes, append events, and combine Session snapshots |
+
+`ChatRunner` is the provider interface. Claude is its first implementation. A future provider can use that interface without owning the durable history.
+
+The API lives under `/api/sessions`. Chat creation uses `/api/sessions/chats`; individual actions use `/api/sessions/&lt;chat-id&gt;/...`.
+
+## F How existing primitives fit
+
+| Primitive | Relationship to chat | Current boundary |
+|---|---|---|
+| Session | A chat appears as `kind: chat` in the shared Session API. | A separate chat store backs this projection; terminal sessions remain unchanged. |
+| Host | One host stores the chat and executes replies. | No cross-host transfer or cloud replication yet. |
+| Status | Chat tracks idle, working, or blocked; the UI shows Ready, Working, or Paused. | Host connectivity and each turn&#39;s outcome remain separate. |
+| Journal and notifications | Message and busy events use the existing journal and completion watcher. | Production APNs delivery was not exercised. |
+| Terminal process | A temporary provider process executes a reply. | The scanner excludes it from terminal discovery; terminal controls cannot target a chat. |
+| Space | No dependency for chat. | The separate Space prototype remains available to its existing clients. |
+| Scheduled task | No attachment to a chat yet. | Scheduling and chat ownership remain separate. |
+
+The design separates durable conversation from execution. This implementation does not introduce general-purpose Attachment or Run records across LFG.
+
+## G Reliability and scope
+
+One turn runs per chat. Different chats can run independently. Repeating an accepted request ID returns its existing receipt; different text with that ID fails.
+
+Stop ends the worker and retains partial text. After a host crash, startup marks unfinished turns interrupted. It preserves history and never automatically replays them.
+
+Settings carry a revision number. A stale settings editor must reload before it can overwrite newer changes.
+
+This version supports text-only Claude chat, private settings, summaries, and local persistence. Shared project memory, automatic memory-note editing, tools, Spaces, and cross-host ownership are later extensions.
+
+The chat worktree contains the locally verified implementation. Production hosts and releases remain unchanged.
+</textarea>
+<script>
+(() => {
+  const root = document.documentElement;
+  const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];
+  const label = (btn, value) => {
+    const map = JSON.parse(btn.dataset.labels || '{}');
+    btn.textContent = map[value] || value;
+  };
+  const bind = (name, attr, values) => {
+    const btn = document.querySelector(`[data-am="${name}"]`);
+    if (!btn) return;
+    label(btn, root.getAttribute(attr));
+    btn.addEventListener('click', () => {
+      const next = cycle(values, root.getAttribute(attr));
+      root.setAttribute(attr, next);
+      label(btn, next);
+    });
+  };
+  bind('theme', 'data-theme', ['blueprint', 'shadcn']);
+  bind('mode', 'data-mode', ['auto', 'light', 'dark']);
+
+  const copyBtn = document.querySelector('[data-am="copy"]');
+  copyBtn?.addEventListener('click', async () => {
+    const nodes = document.querySelectorAll('#am-source');
+    const text = nodes[nodes.length - 1]?.value ?? '';
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = Object.assign(document.createElement('textarea'), { value: text });
+      document.body.append(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    const original = copyBtn.textContent;
+    copyBtn.textContent = copyBtn.dataset.done;
+    setTimeout(() => { copyBtn.textContent = original; }, 1400);
+  });
+})();
+</script>
+</body>
+</html>

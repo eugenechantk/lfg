@@ -4,6 +4,19 @@ import Testing
 
 /// The Tasks list: which section a task lands in, its order, and the words on its row.
 @Suite struct TaskPresentationTests {
+    @Test func queuedChatTasksStayActiveUntilPausedAndShareCanonicalRecords() throws {
+        let json = #"{"id":"shared","action":"chat","chatId":"chat-owner","name":"Check","prompt":"Check status","enabled":false,"currentRun":{"id":"run","status":"queued"},"schedule":{"kind":"once","timezone":"UTC"}}"#
+        var task = try JSONDecoder().decode(ScheduledTaskRecord.self, from: Data(json.utf8))
+        #expect(task.isChatTask)
+        #expect(task.cwd.isEmpty)
+        #expect(task.listSection == .active)
+        #expect(task.statusLabel == "Waiting for chat")
+        #expect(TaskRowModel.make(task: task, hostName: "Host").result == "Waiting for chat")
+        task.pausedAt = 1
+        #expect(task.listSection == .paused)
+        #expect(task.statusLabel == "Paused")
+        #expect(task.canPauseOrResume)
+    }
     // Thu 2026-10-15 10:12 in Hong Kong.
     static let now = Date(timeIntervalSince1970: 1_792_030_320)
     static let hk = TimeZone(identifier: "Asia/Hong_Kong")!

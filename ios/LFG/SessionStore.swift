@@ -1916,12 +1916,26 @@ import LFGCore
                 for: sid, known: false, inFlight: unknownSessionRefresh != nil, now: Date()
             ) {
                 unknownSessionRefresh = Task { [weak self] in
-                    await self?.refresh()
+                    await self?.refreshSessionMembership()
                     self?.unknownSessionRefresh = nil
                 }
             }
         }
         apply(ev)
+    }
+
+    /// Discover new live rows without joining the slow full refresh. Terminal
+    /// archive enumeration can still be pending when a chat is created; it must
+    /// not keep the new durable session out of the shared Sessions list.
+    func refreshSessionMembership() async {
+        let policy = probePolicy
+        await fetchSessionsStreaming(settings.hosts, timeout: { [weak self] host in
+            policy.pollTimeout(for: self?.links[host.id]?.pathQuality ?? PathQuality())
+        }) { [weak self] result in
+            guard let self else { return }
+            self.applyHostFetch(result)
+            self.rebuildSessions()
+        }
     }
 
     /// Link state → per-host reachability. Bytes received by a link
@@ -2709,6 +2723,9 @@ import LFGCore
     /// healthy host to "Offline"; the cached snapshot keeps its sessions on screen.
     private func applyHostFetch(_ f: HostFetch) {
         guard transferSnapshotFence.accepts(host: f.host.id, startedAt: f.snapshotStartedAt) else { return }
+        // A membership fetch can finish before an older full refresh. Keep its
+        // newer list and health rather than letting that older request undo it.
+        if let accepted = lastSnapshotStartedAtByHost[f.host.id], f.snapshotStartedAt < accepted { return }
         if f.reach == .ok {
             let fetchedSessions = deferredSourceCloses.keepingActive(f.sessions ?? [], on: f.host.id)
             writeThrough { store in

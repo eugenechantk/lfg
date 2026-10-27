@@ -37,13 +37,32 @@ import Security
 /// A native segmented control cannot carry the badges.
 struct DesktopDestinationSwitcher: View {
     @Binding var showingTasks: Bool
+    var messages: Binding<Bool>? = nil
     let sessionsBadge: Int
     let tasksBadge: Int
+    var messagesBadge = 0
+    var compact = false
 
     var body: some View {
         HStack(spacing: 0) {
             segment("Sessions", badge: sessionsBadge, tasks: false)
             segment("Tasks", badge: tasksBadge, tasks: true)
+            if let messages {
+                Button { messages.wrappedValue = true } label: {
+                    HStack(spacing: compact ? 4 : 6) {
+                        Text("Message").font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(messages.wrappedValue ? S2Desk.switcherInk : S2Desk.switcherInkOff)
+                        if messagesBadge > 0 {
+                            Text("\(messagesBadge)").font(.system(size: 10, weight: .heavy).monospacedDigit())
+                                .foregroundStyle(Color(red: 0.10, green: 0.07, blue: 0.02)).padding(.horizontal, 4)
+                                .frame(minWidth: 16, minHeight: 16).background(TaskColors.warningFill, in: Capsule())
+                        }
+                    }.padding(.horizontal, compact ? 7 : 11).frame(height: 26)
+                        .background(messages.wrappedValue ? S2Desk.controlSelected : Color.clear, in: Capsule())
+                }.buttonStyle(.plain)
+                    .accessibilityLabel(messagesBadge > 0 ? "Message, \(messagesBadge) need you" : "Message")
+                    .accessibilityIdentifier("destination_message")
+            }
         }
         .padding(3)
         .background(S2Desk.control, in: Capsule())
@@ -53,9 +72,9 @@ struct DesktopDestinationSwitcher: View {
     }
 
     private func segment(_ title: String, badge: Int, tasks: Bool) -> some View {
-        let on = showingTasks == tasks
-        return Button { showingTasks = tasks } label: {
-            HStack(spacing: 6) {
+        let on = showingTasks == tasks && messages?.wrappedValue != true
+        return Button { messages?.wrappedValue = false; showingTasks = tasks } label: {
+            HStack(spacing: compact ? 4 : 6) {
                 // Board: both labels semibold; the pick is near-white, the other grey.
                 Text(title).font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(on ? S2Desk.switcherInk : S2Desk.switcherInkOff)
@@ -68,7 +87,7 @@ struct DesktopDestinationSwitcher: View {
                         .background(TaskColors.warningFill.opacity(on ? 1 : 0.9), in: Capsule())
                 }
             }
-            .padding(.horizontal, 11)
+            .padding(.horizontal, compact ? 7 : 11)
             .frame(height: 26)
             .background(on ? S2Desk.controlSelected : Color.clear, in: Capsule())
             .contentShape(Capsule())
@@ -84,6 +103,7 @@ struct DesktopDestinationSwitcher: View {
 // MARK: - API models (subset of lfg's Session type)
 
 struct APISession: Decodable, Identifiable, Hashable {
+    var kind: String? = nil
     let agent: String
     let pid: Int
     let cwd: String?
@@ -131,11 +151,12 @@ struct APISession: Decodable, Identifiable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case agent, pid, cwd, project, title, sessionId, busy, lastActivityAt, tmuxName, model, status, parentSessionId, lastUserText, purpose
-        case prompt, task
+        case prompt, task, kind
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try c.decodeIfPresent(String.self, forKey: .kind)
         agent = try c.decode(String.self, forKey: .agent)
         pid = try c.decode(Int.self, forKey: .pid)
         cwd = try c.decodeIfPresent(String.self, forKey: .cwd)
@@ -1073,6 +1094,7 @@ enum Config {
 @MainActor
 final class SessionStore: ObservableObject {
     @Published var showingScheduledTasks = false
+    @Published var showingMessages = false
     @Published var configuredHosts: [Config.HostEntry] = Config.loadHosts()
     /// Directories muted on THIS Mac — see `Config.loadHiddenDirs`.
     @Published var hiddenDirs: HiddenDirs = Config.loadHiddenDirs()
@@ -1506,7 +1528,7 @@ final class SessionStore: ObservableObject {
 
     var items: [SessionItem] {
         let all = hosts.flatMap { host in
-            host.sessions.map {
+            host.sessions.filter { $0.kind != "chat" }.map {
                 SessionItem(
                     session: $0,
                     hostURL: host.url,
@@ -6486,16 +6508,27 @@ struct ContentView: View {
         }
     }
 
+    private var messageNeedsInputCount: Int {
+        store.hosts.reduce(0) { count, host in
+            count + host.sessions.filter { session in
+                session.kind == "chat" && !session.closed &&
+                    (session.status == "blocked" || session.sessionId.map { host.needsInputSessionIds.contains($0) } == true)
+            }.count
+        }
+    }
+
     @ViewBuilder
     private var destinationPicker: some View {
-        if windowWidth >= 280 {
-            DesktopDestinationSwitcher(showingTasks: $store.showingScheduledTasks,
+        if windowWidth >= 400 {
+            DesktopDestinationSwitcher(showingTasks: $store.showingScheduledTasks, messages: $store.showingMessages,
                                        sessionsBadge: MenuBarSessionProjection(items: store.items).needsInputCount,
-                                       tasksBadge: taskNeedsInput)
+                                       tasksBadge: taskNeedsInput,
+                                       messagesBadge: messageNeedsInputCount,
+                                       compact: store.showingMessages && windowWidth < 500)
                 // Board dA2-sessions: centred between the window controls (ending at
                 // 74pt) and the search button (from 50pt off the right edge), so
                 // 12pt right of the window's centre.
-                .padding(.leading, store.showingScheduledTasks ? 0 : 24)
+                .padding(.leading, store.showingScheduledTasks || (store.showingMessages && windowWidth < 500) ? 0 : 24)
         } else {
             iconDestinationPicker
         }
@@ -6503,28 +6536,26 @@ struct ContentView: View {
 
     /// Below 280pt the destinations are icons in a native segmented control.
     private var iconDestinationPicker: some View {
-        Picker("View", selection: $store.showingScheduledTasks) {
-            if windowWidth < 280 {
-                Image(systemName: "text.bubble").accessibilityLabel("Sessions").help("Sessions").tag(false)
-                Image(systemName: "calendar").accessibilityLabel("Tasks").help("Tasks").tag(true)
-            } else {
-                Text("Sessions").tag(false)
-                Text("Tasks").tag(true)
-            }
+        Picker("View", selection: Binding(get: { store.showingMessages ? 2 : store.showingScheduledTasks ? 1 : 0 }, set: { value in
+            store.showingMessages = value == 2; store.showingScheduledTasks = value == 1
+        })) {
+            Image(systemName: "text.bubble").accessibilityLabel("Sessions").tag(0)
+            Image(systemName: "calendar").accessibilityLabel("Tasks").tag(1)
+            Image(systemName: "text.bubble").accessibilityLabel("Message").tag(2)
         }
-        .pickerStyle(.segmented)
-        .controlSize(windowWidth < 500 ? .small : .large)
-        .labelsHidden()
-        .fixedSize()
+        .pickerStyle(.segmented).controlSize(.small).labelsHidden().fixedSize()
         .accessibilityIdentifier("list_destination_picker")
-        // Recreate the native segments when changing label style. AppKit
-        // otherwise retains the previous image alongside the text label.
-        .id(windowWidth < 280)
     }
 
     var body: some View {
         Group {
-            if store.showingScheduledTasks {
+            if store.showingMessages {
+                ChatSessionsView(hosts: store.hosts.compactMap { host in
+                    guard let url = URL(string: host.url) else { return nil }
+                    return ScheduledTaskHost(id: host.id, name: host.label, baseURL: url,
+                        headers: DesktopAPI.request(url).allHTTPHeaderFields ?? [:])
+                })
+            } else if store.showingScheduledTasks {
                 ScheduledTasksPane(path: $taskPath, taskNeedsInput: $taskNeedsInput, onCreate: {
                     creationIsTask = true
                     showingCreation = true
@@ -6566,7 +6597,7 @@ struct ContentView: View {
         .containerBackground(S2Desk.background, for: .window)
         .toolbarBackground(S2Desk.background, for: .windowToolbar)
         .toolbar {
-            if !(store.showingScheduledTasks && !taskPath.isEmpty) {
+            if store.showingMessages || !(store.showingScheduledTasks && !taskPath.isEmpty) {
                 ToolbarItem(placement: .principal) {
                     destinationPicker
                 }
@@ -7127,7 +7158,8 @@ enum WindowFitCLI {
         let collapsed = Set((value("--collapse") ?? "").split(separator: ",").map(String.init))
         let window = makeWindow(sessions: tasksHost == nil && !live, compactSearchShown: args.contains("--search"),
                                 tasks: args.contains("--tasks") || tasksHost != nil, tasksHost: tasksHost,
-                                boardFixture: args.contains("--board"), live: live, collapsedGroups: collapsed)
+                                boardFixture: args.contains("--board"), live: live, collapsedGroups: collapsed,
+                                messages: args.contains("--messages"))
         // --live: the real hosts in the config dir (LFG_DESKTOP_CONFIG_DIR isolates it).
         // --refresh-twice <s>: refresh, wait, refresh again in this one process, so a
         // host stopped in between shows what the list does with a host that went away.
@@ -7160,8 +7192,14 @@ enum WindowFitCLI {
         if args.contains("--onscreen") {
             window.setFrameOrigin(NSPoint(x: 80, y: 80))
             // A shell-launched process cannot activate, so the window draws inactive (grey controls).
-            window.orderFrontRegardless()
-            settle(tasksHost == nil ? 1.5 : 4.5)
+            if args.contains("--background") { window.orderBack(nil) } else { window.orderFrontRegardless() }
+            if args.contains("--background"), let hold = value("--hold").flatMap(Double.init) {
+                print("{\"probePid\":\(getpid()),\"window\":\(window.windowNumber)}")
+                fflush(stdout)
+                settle(hold)
+            } else {
+                settle(tasksHost == nil ? 1.5 : 4.5)
+            }
             let capture = Process()
             capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
             capture.arguments = ["-x", "-o", "-l\(window.windowNumber)", output.path]
@@ -7221,12 +7259,13 @@ enum WindowFitCLI {
     private static func makeWindow(sessions: Bool = false, compactSearchShown: Bool = false,
                                    tasks: Bool = false, tasksHost: String? = nil,
                                    boardFixture: Bool = false, live: Bool = false,
-                                   collapsedGroups: Set<String> = []) -> NSWindow {
+                                   collapsedGroups: Set<String> = [], messages: Bool = false) -> NSWindow {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
 
         let store = SessionStore()
         store.showingScheduledTasks = tasks
+        store.showingMessages = messages
         store.configuredHosts = tasksHost.map { [Config.HostEntry(url: $0, displayName: "Pro")] } ?? [
             Config.HostEntry(url: "http://studio:8766", displayName: "Creative Studio"),
             Config.HostEntry(url: "http://air:8766", displayName: "Travel Mac"),

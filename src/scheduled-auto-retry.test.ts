@@ -57,7 +57,7 @@ test("retry now uses the original occurrence and leaves no duplicate retry", asy
   const first = (await store.claim(task.id, start))!; await incomplete(store, first.id, start + 60_000);
   const retry = (await store.claim(task.id, start + 120_000, true))!;
   expect(retry).toMatchObject({ retryOfRunId: first.id, occurrence: 1 });
-  await store.record(retry.id, { status: "succeeded" });
+  await store.record(retry.id, { status: "succeeded", finishedAt: start + 180_000 });
   expect((await read()).nextRunAt).toBe(start + 2 * step);
   expect(await store.claim(task.id, start + step, "retry")).toBeNull();
   expect((await read()).scheduledRunCount).toBe(1);
@@ -136,7 +136,7 @@ test("moving recovery earlier keeps deferred runs; moving later moves the remain
   expect(upcomingRuns(await read(), start)).toEqual([start + 4 * step, start + 5 * step]);
   expect(await store.claim(task.id, start + 3 * step)).toBeNull();
   const retry = (await store.claim(task.id, start + 3.5 * step, "retry"))!;
-  await store.record(retry.id, { status: "succeeded" });
+  await store.record(retry.id, { status: "succeeded", finishedAt: start + 3.5 * step + 60_000 });
   const next = (await store.claim(task.id, start + 4 * step))!;
   expect(next).toMatchObject({ occurrence: 2 });
 });
