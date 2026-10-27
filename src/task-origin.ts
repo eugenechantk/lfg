@@ -12,7 +12,7 @@ export type TaskOrigin = { id: string; name: string };
 export function taskOriginsBySession(runs: readonly TaskRun[]): Map<string, TaskOrigin> {
   const map = new Map<string, TaskOrigin & { startedAt: number }>();
   for (const r of runs) {
-    if (!r.sessionId) continue;
+    if (!r.sessionId || r.snapshot?.action === "chat" || r.snapshot?.action === "notify") continue;
     const prev = map.get(r.sessionId);
     if (prev && prev.startedAt > r.startedAt) continue;
     map.set(r.sessionId, { id: r.taskId, name: r.taskName, startedAt: r.startedAt });

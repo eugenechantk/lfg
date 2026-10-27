@@ -1,20 +1,25 @@
 import { Cron } from "croner";
 import { mkdir, readFile, rename, writeFile, stat } from "node:fs/promises";
 import { dirname, isAbsolute } from "node:path";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import type { TaskOutcome } from "./scheduled-task-outcome.ts";
+import type { JobDecision } from "./chat-job-result.ts";
 
 /** `at` anchors once/repeat, and optionally interval (an exact gap counted from `at`).
  * `maxRuns` (cron) and `endsAt` (cron, interval) end an otherwise open schedule. */
 export type TaskSchedule = { kind: "once" | "interval" | "repeat" | "cron"; timezone: string; at?: string; everyMinutes?: number; occurrences?: number; expression?: string; maxRuns?: number; endsAt?: string };
-export type TaskInput = { name: string; prompt: string; cwd: string; agent: "claude" | "codex"; model?: string | null; schedule: TaskSchedule; enabled?: boolean; sourceSessionId?: string };
+export type TaskAction = "session" | "chat" | "notify";
+export type TaskInput = { name: string; prompt: string; cwd?: string; agent?: "claude" | "codex"; model?: string | null; schedule: TaskSchedule; enabled?: boolean; sourceSessionId?: string; action?: TaskAction; chatId?: string; notification?: "always" | "requested"; stopOnNotify?: boolean; requestID?: string };
+export const taskAction = (task: Pick<TaskInput,"action">): TaskAction => task.action ?? "session";
 export type TaskEditSessionConfig = Pick<TaskInput, "agent" | "model">;
 /** `scheduledRunCount` counts scheduled (not manual) runs since the schedule last changed; cron `maxRuns` reads it.
  * `pausedAt` is set when the user switches a task off and cleared on resume. */
-export type ScheduledTask = TaskInput & { id: string; enabled: boolean; createdAt: number; updatedAt: number; nextRunAt: number | null; retryAt?: number; retryOfRunId?: string; retryAutomatic?: boolean; scheduleDelayMs?: number; scheduleRevision?: number; lastRunAt?: number; cancelledAt?: number; pausedAt?: number; scheduledRunCount?: number; editSessionId?: string; editSessionIds?: string[]; editSessionConfig?: TaskEditSessionConfig };
-export type TaskRun = { id: string; taskId: string; taskName: string; agent: string; trigger: "scheduled" | "manual"; scheduledFor: number; startedAt: number; finishedAt?: number; retryOfRunId?: string; retryFallbackAt?: number; retryFallbackAutomatic?: boolean; occurrence?: number; scheduleRevision?: number; status: "starting" | "running" | "needs_input" | "succeeded" | "incomplete" | "failed" | "interrupted"; sessionId?: string; tmuxName?: string; summary?: string; error?: string; needsInputAt?: number; outcome?: TaskOutcome };
-type State = { version: 1; tasks: ScheduledTask[]; runs: TaskRun[] };
-export const activeRun = (r: TaskRun) => ["starting", "running", "needs_input"].includes(r.status);
+export type ScheduledTask = TaskInput & { id: string; enabled: boolean; createdAt: number; updatedAt: number; nextRunAt: number | null; revision?: number; requestFingerprint?: string; retryAt?: number; retryOfRunId?: string; retryAutomatic?: boolean; scheduleDelayMs?: number; scheduleRevision?: number; lastRunAt?: number; cancelledAt?: number; pausedAt?: number; scheduledRunCount?: number; editSessionId?: string; editSessionIds?: string[]; editSessionConfig?: TaskEditSessionConfig };
+export type TaskRun = { id: string; taskId: string; taskName: string; agent: string; trigger: "scheduled" | "manual"; scheduledFor: number; startedAt: number; finishedAt?: number; retryOfRunId?: string; retryFallbackAt?: number; retryFallbackAutomatic?: boolean; occurrence?: number; scheduleRevision?: number; status: "queued" | "starting" | "running" | "needs_input" | "succeeded" | "incomplete" | "failed" | "interrupted" | "cancelled"; sessionId?: string; tmuxName?: string; summary?: string; error?: string; needsInputAt?: number; outcome?: TaskOutcome; snapshot?: ScheduledTask; decision?: JobDecision; chatRequestID?: string };
+export type TaskDelivery = {state:"pending"|"accepted"|"retired"|"failed";attempts:number;nextAttemptAt:number;error?:string};
+export type TaskNotification = {id:string;runId:string;taskId:string;chatId:string;title:string;body:string;createdAt:number;state:"pending"|"accepted"|"cancelled"|"failed";devices:Record<string,TaskDelivery>;error?:string};
+export type TaskState = { version: 2; tasks: ScheduledTask[]; runs: TaskRun[]; notifications:TaskNotification[]; imports?:string[] };
+export const activeRun = (r: TaskRun) => ["queued", "starting", "running", "needs_input"].includes(r.status);
 export class TaskError extends Error { constructor(message: string, readonly status = 400) { super(message); } }
 
 function cron(schedule: TaskSchedule) {
@@ -149,32 +154,52 @@ export function validateSchedule(s: TaskSchedule, now: number, allowPast = false
 
 export function validateTask(input: TaskInput, now: number, allowPastOnce = false): TaskInput {
   if (!input || typeof input !== "object") throw new TaskError("Task details are required.");
-  for (const key of ["name", "prompt", "cwd"] as const) {
+  for (const key of ["name", "prompt"] as const) {
     if (typeof input[key] !== "string" || !input[key].trim()) throw new TaskError(`${key} is required.`);
   }
   if (input.name.length > 160 || input.prompt.length > 50_000) throw new TaskError("Task name or instructions are too long.");
-  if (!isAbsolute(input.cwd)) throw new TaskError("Choose an absolute directory on this host.");
-  if (!["claude", "codex"].includes(input.agent)) throw new TaskError("Choose Claude or Codex.");
+  const action=taskAction(input);
+  if (!["session","chat","notify"].includes(action)) throw new TaskError("Choose a session, chat, or reminder action.");
+  if(input.chatId!=null&&!/^chat-[a-f0-9-]{36}$/.test(input.chatId))throw new TaskError("Choose a durable chat.");
+  if(input.requestID!=null&&(typeof input.requestID!=="string"||!input.requestID.trim()||input.requestID.length>128))throw new TaskError("Choose a valid creation request identifier.");
+  if(action!=="session"){
+    if(!input.chatId)throw new TaskError("Choose a durable chat.");
+    if(input.prompt.length>24000)throw new TaskError("Task instructions are too long.");
+    if(!input.requestID)throw new TaskError("A stable creation request identifier is required.");
+    if(input.cwd!=null||input.agent!=null||input.model!=null)throw new TaskError("Chat tasks use their owning chat's execution settings.");
+    if(input.notification!=null&&!["always","requested"].includes(input.notification))throw new TaskError("Choose a notification policy.");
+    if(input.stopOnNotify!=null&&typeof input.stopOnNotify!=="boolean")throw new TaskError("Choose a valid stop rule.");
+    if(input.enabled!=null&&typeof input.enabled!=="boolean")throw new TaskError("enabled must be true or false.");
+    return {name:input.name.trim(),prompt:input.prompt.trim(),action,chatId:input.chatId,schedule:validateSchedule(input.schedule,now,allowPastOnce),enabled:input.enabled??true,notification:action==="notify"?"always":input.notification??"requested",stopOnNotify:input.stopOnNotify??false,requestID:input.requestID.trim()};
+  }
+  if (typeof input.cwd!=="string"||!isAbsolute(input.cwd)) throw new TaskError("Choose an absolute directory on this host.");
+  if (!["claude", "codex"].includes(input.agent!)) throw new TaskError("Choose Claude or Codex.");
   if (input.model != null && (typeof input.model !== "string" || !/^[a-zA-Z0-9._:/-]{1,160}$/.test(input.model))) throw new TaskError("Invalid model name.");
   if (input.enabled != null && typeof input.enabled !== "boolean") throw new TaskError("enabled must be true or false.");
   const s = validateSchedule(input.schedule, now, allowPastOnce);
   return { name: input.name.trim(), prompt: input.prompt.trim(), cwd: input.cwd.trim(), agent: input.agent, schedule: { ...s }, enabled: input.enabled ?? true,
-    ...(input.model ? { model: input.model } : {}), ...(typeof input.sourceSessionId === "string" ? { sourceSessionId: input.sourceSessionId } : {}) };
+    ...(input.model ? { model: input.model } : {}), ...(typeof input.sourceSessionId === "string" ? { sourceSessionId: input.sourceSessionId } : {}), ...(input.action?{action}:{}),...(input.chatId?{chatId:input.chatId}:{}),...(input.requestID?{requestID:input.requestID.trim()}: {}) };
+}
+
+function creationFingerprint(t:TaskInput){
+  // Retain the v1 chat-job receipt format, including retries after migration.
+  const value=taskAction(t)==="session"?t:{chatId:t.chatId,name:t.name,instructions:t.prompt,action:t.action==="chat"?"run":"notify",schedule:t.schedule,notification:t.notification,stopOnNotify:t.stopOnNotify};
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
 /** The host owns all mutations. Serial transactions + atomic rename prevent lost claims. */
 export class TaskStore {
   private queue: Promise<unknown> = Promise.resolve();
   constructor(readonly path: string) {}
-  private async load(): Promise<State> {
+  private async load(): Promise<TaskState> {
     try {
       const value = JSON.parse(await readFile(this.path, "utf8"));
-      if (value.version !== 1 || !Array.isArray(value.tasks) || !Array.isArray(value.runs)) throw Error("Invalid scheduled task store");
-      return value;
-    } catch (e) { if ((e as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, tasks: [], runs: [] }; throw e; }
+      if (![1,2].includes(value.version) || !Array.isArray(value.tasks) || !Array.isArray(value.runs)||(value.version===2||value.notifications!=null)&&!Array.isArray(value.notifications)) throw Error("Invalid scheduled task store");
+      return {...value,version:2,notifications:value.notifications??[]};
+    } catch (e) { if ((e as NodeJS.ErrnoException).code === "ENOENT") return { version: 2, tasks: [], runs: [],notifications:[] }; throw e; }
   }
-  async read(): Promise<State> { await this.queue; return this.load(); }
-  private transaction<T>(fn: (s: State) => T | Promise<T>): Promise<T> {
+  async read(): Promise<TaskState> { await this.queue; return this.load(); }
+  transaction<T>(fn: (s: TaskState) => T | Promise<T>): Promise<T> {
     const work = this.queue.then(async () => {
       const s = await this.load(); const result = await fn(s);
       await mkdir(dirname(this.path), { recursive: true });
@@ -185,18 +210,36 @@ export class TaskStore {
     this.queue = work.catch(() => {}); return work;
   }
   async save(input: TaskInput, now = Date.now()): Promise<ScheduledTask> {
-    const clean = validateTask(input, now);
-    if (!(await stat(clean.cwd).catch(() => null))?.isDirectory()) throw new TaskError("That directory does not exist on this host.");
+    const clean = validateTask(input, now,!!input.requestID);
+    if (taskAction(clean)==="session"&&!(await stat(clean.cwd!).catch(() => null))?.isDirectory()) throw new TaskError("That directory does not exist on this host.");
     return this.transaction(s => {
+      const fingerprint=clean.requestID?creationFingerprint(clean):undefined;
+      const existing=clean.requestID?s.tasks.find(t=>t.chatId===clean.chatId&&t.requestID===clean.requestID):undefined;
+      if(existing){if(existing.requestFingerprint!==fingerprint)throw new TaskError("This request identifier belongs to a different task.",409);return existing;}
+      validateSchedule(clean.schedule,now);
       if (s.tasks.filter(t => !t.cancelledAt).length >= 1000) throw new TaskError("This host already has 1,000 tasks.");
-      const task: ScheduledTask = { ...clean, id: randomUUID(), enabled: clean.enabled!, createdAt: now, updatedAt: now, nextRunAt: nextOccurrence(clean.schedule, now), scheduledRunCount: 0, ...(clean.enabled ? {} : { pausedAt: now }) };
+      const task: ScheduledTask = { ...clean, id: randomUUID(), enabled: clean.enabled!, createdAt: now, updatedAt: now, nextRunAt: nextOccurrence(clean.schedule, now), scheduledRunCount: 0, revision:1,...(fingerprint?{requestFingerprint:fingerprint}:{}), ...(clean.enabled ? {} : { pausedAt: now }) };
       s.tasks.push(task); return task;
     });
   }
-  async update(id: string, patch: Partial<TaskInput>, now = Date.now()): Promise<ScheduledTask> {
+  async update(id: string, patch: Partial<TaskInput>&{revision?:number}, now = Date.now()): Promise<ScheduledTask> {
     return this.transaction(async s => {
       const t = s.tasks.find(t => t.id === id); if (!t) throw new TaskError("Task not found.", 404);
       if (t.cancelledAt) throw new TaskError("This task has been cancelled.", 409);
+      if(patch.revision!==undefined&&patch.revision!==(t.revision??1))throw new TaskError("The task changed. Reload before saving.",409);
+      if(patch.action!=null&&taskAction(patch)!==taskAction(t)||patch.chatId!=null&&patch.chatId!==t.chatId||patch.requestID!=null&&patch.requestID!==t.requestID)throw new TaskError("Create a new task to change its action or chat.");
+      if(taskAction(t)!=="session"){
+        if(patch.revision!==(t.revision??1))throw new TaskError("The task changed. Reload before saving.",409);
+        const clean=validateTask({...t,...patch},now,patch.schedule==null);
+        if(patch.schedule!=null){t.schedule=clean.schedule;t.scheduledRunCount=0;t.nextRunAt=nextOccurrence(clean.schedule,now);t.scheduleRevision=(t.scheduleRevision??0)+1;clearRetry(t);}
+        if(patch.enabled===true&&t.nextRunAt==null&&patch.schedule==null&&!s.runs.some(r=>r.taskId===id&&r.status==="queued"))throw new TaskError("This task finished. Choose a new schedule to run again.",409);
+        Object.assign(t,{name:clean.name,prompt:clean.prompt,notification:clean.notification,stopOnNotify:clean.stopOnNotify});
+        if(patch.enabled===false){t.enabled=false;t.pausedAt=now;}
+        if(patch.enabled===true){t.enabled=true;delete t.pausedAt;}
+        t.revision=(t.revision??1)+1;t.updatedAt=now;
+        for(const r of s.runs.filter(r=>r.taskId===id&&r.status==="queued")){if(patch.schedule!=null)r.status="cancelled";else r.snapshot=structuredClone(t);}
+        return t;
+      }
       const changesSchedule = patch.schedule != null && !sameSchedule(patch.schedule, t.schedule);
       const resuming = patch.enabled === true && !t.enabled;
       const pausing = patch.enabled === false;
@@ -209,8 +252,9 @@ export class TaskStore {
       const next = changesSchedule || (resuming && !pendingRecovery) ? nextOccurrence(changesSchedule ? clean.schedule : effectiveSchedule(t), now, done) : t.nextRunAt;
       if (clean.schedule.kind === "repeat" && clean.enabled && next == null && !pendingRecovery) throw new TaskError("This repeat schedule has finished. Choose a future first start for a new series.");
       if (finiteSchedule(clean.schedule) && clean.enabled && next == null && !pendingRecovery) throw new TaskError("This schedule has finished. Choose a later end or more runs to continue.", 409);
-      if (!(await stat(clean.cwd).catch(() => null))?.isDirectory()) throw new TaskError("That directory does not exist on this host.");
+      if (!(await stat(clean.cwd!).catch(() => null))?.isDirectory()) throw new TaskError("That directory does not exist on this host.");
       Object.assign(t, clean, { updatedAt: now });
+      t.revision=(t.revision??1)+1;
       if (clean.model == null) delete t.model;
       if (changesSchedule || resuming) t.nextRunAt = next;
       if (changesSchedule) {
@@ -245,7 +289,10 @@ export class TaskStore {
   async cancel(id: string, now = Date.now()): Promise<ScheduledTask> {
     return this.transaction(s => {
       const t = s.tasks.find(t => t.id === id); if (!t) throw new TaskError("Task not found.", 404);
-      t.cancelledAt = now; t.enabled = false; t.nextRunAt = null; clearRetry(t); t.updatedAt = now; return t;
+      t.cancelledAt = now; t.enabled = false; t.nextRunAt = null; clearRetry(t); t.updatedAt = now;t.revision=(t.revision??1)+1;
+      for(const n of s.notifications)if(n.taskId===id&&n.state==="pending")n.state="cancelled";
+      for(const r of s.runs)if(r.taskId===id&&r.status==="queued")r.status="cancelled";
+      return t;
     });
   }
   /** A durable extra run; null cancels it without changing the regular schedule. */
@@ -271,7 +318,7 @@ export class TaskStore {
       if (!manual && (!t.enabled || t.nextRunAt == null || t.nextRunAt > now)) return null;
       if (manual === "retry" && (t.retryAt == null || t.retryAt > now)) return null;
       if (manual === "retry" && t.retryAutomatic && t.pausedAt != null) return null;
-      const run: TaskRun = { id: randomUUID(), taskId: id, taskName: t.name, agent: t.agent, trigger: manual ? "manual" : "scheduled", scheduledFor: manual === "retry" ? t.retryAt! : manual ? now : t.nextRunAt!, startedAt: now, status: "starting" };
+      const run: TaskRun = { id: randomUUID(), taskId: id, taskName: t.name, agent: t.agent??"claude", trigger: manual ? "manual" : "scheduled", scheduledFor: manual === "retry" ? t.retryAt! : manual ? now : t.nextRunAt!, startedAt: now, status: taskAction(t)==="session"?"starting":"queued",...(taskAction(t)!=="session"?{snapshot:structuredClone(t)}:{}) };
       run.scheduleRevision = t.scheduleRevision ?? 0;
       if (manual && t.retryOfRunId != null) {
         run.retryOfRunId = t.retryOfRunId;
@@ -300,7 +347,15 @@ export class TaskStore {
       const wasActive = activeRun(r);
       Object.assign(r, patch, { id: r.id, taskId: r.taskId });
       const t = s.tasks.find(t => t.id === r.taskId);
-      if (!wasActive || activeRun(r) || !t || t.cancelledAt || (r.scheduleRevision ?? 0) !== (t.scheduleRevision ?? 0)) return;
+      if (!wasActive || activeRun(r) || !t || t.cancelledAt) return;
+      if(taskAction(t)!=="session"){
+        if(r.status!=="succeeded")return;
+        const saved=r.snapshot??t,notify=saved.notification==="always"||r.decision?.notify===true;
+        if(r.decision?.stop||(notify&&saved.stopOnNotify)){t.enabled=false;t.nextRunAt=null;t.revision=(t.revision??1)+1;}
+        if(notify&&!s.notifications.some(n=>n.runId===r.id))s.notifications.push({id:r.id,runId:r.id,taskId:t.id,chatId:t.chatId!,title:saved.name,body:(r.decision?.message||r.summary||saved.prompt).slice(0,1000),createdAt:r.finishedAt??Date.now(),state:"pending",devices:{}});
+        return;
+      }
+      if((r.scheduleRevision ?? 0) !== (t.scheduleRevision ?? 0))return;
       const now = r.finishedAt ?? Date.now();
       if (r.retryOfRunId && r.status === "succeeded") { deferFollowingRuns(t, now); return; }
       if (!(r.status === "incomplete" && r.trigger === "scheduled") && !(r.retryOfRunId && ["incomplete", "failed", "interrupted"].includes(r.status))) return;
@@ -320,84 +375,174 @@ export class TaskStore {
       deferFollowingRuns(t, at); t.updatedAt = now;
     });
   }
+  /** Atomic, idempotent import. Preserve source files for review and rollback. */
+  async importChatJobs(path:string):Promise<void>{
+    const key="chat-jobs-v1:"+path;
+    if((await this.read()).imports?.includes(key))return;
+    let source:any;try{source=JSON.parse(await readFile(path,"utf8"));}catch(e:any){if(e.code==="ENOENT")return;throw e;}
+    if(source.version!==1||!Array.isArray(source.jobs)||!Array.isArray(source.runs)||!Array.isArray(source.notifications))throw new TaskError("Invalid legacy chat job store.");
+    const object=(v:any)=>v!=null&&typeof v==="object"&&!Array.isArray(v);
+    const uuid=(v:any)=>typeof v==="string"&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(v);
+    const time=(v:any)=>typeof v==="number"&&Number.isFinite(v)&&v>=0;
+    const count=(v:any)=>Number.isSafeInteger(v)&&v>=0;
+    const optionalText=(v:any)=>v===undefined||typeof v==="string";
+    const receiptKey=(t:Pick<TaskInput,"chatId"|"requestID">)=>JSON.stringify([t.chatId,t.requestID]);
+    const convert=(j:any):ScheduledTask=>{
+      if(!object(j)||!uuid(j.id)||!["run","notify"].includes(j.action)||typeof j.enabled!=="boolean"||
+        !["always","requested"].includes(j.notification)||typeof j.stopOnNotify!=="boolean"||
+        !time(j.createdAt)||!time(j.updatedAt)||(j.nextRunAt!==null&&!time(j.nextRunAt))||
+        !Number.isSafeInteger(j.revision)||j.revision<1||!count(j.scheduledRunCount)||
+        typeof j.requestFingerprint!=="string"||!j.requestFingerprint.trim()||
+        j.pausedAt!==undefined&&!time(j.pausedAt)||j.cancelledAt!==undefined&&!time(j.cancelledAt))
+        throw new TaskError("Invalid legacy task lifecycle or identity.");
+      const clean=validateTask({name:j.name,prompt:j.instructions,action:j.action==="run"?"chat":"notify",chatId:j.chatId,schedule:j.schedule,enabled:j.enabled,notification:j.notification,stopOnNotify:j.stopOnNotify,requestID:j.requestID},Date.now(),true);
+      return {...clean,id:j.id,enabled:j.enabled,createdAt:j.createdAt,updatedAt:j.updatedAt,nextRunAt:j.nextRunAt,revision:j.revision,requestFingerprint:j.requestFingerprint,scheduledRunCount:j.scheduledRunCount,...(j.pausedAt!=null?{pausedAt:j.pausedAt}:{}),...(j.cancelledAt!=null?{cancelledAt:j.cancelledAt}:{})};
+    };
+    const tasks:ScheduledTask[]=source.jobs.map(convert),ids=new Set(tasks.map(t=>t.id));
+    if(ids.size!==tasks.length)throw new TaskError("Duplicate legacy task identities.");
+    if(new Set(tasks.map(receiptKey)).size!==tasks.length)throw new TaskError("Duplicate legacy task creation receipts.");
+    const statuses:Record<string,TaskRun["status"]>={queued:"queued",running:"running",completed:"succeeded",failed:"failed",interrupted:"interrupted",cancelled:"cancelled"};
+    const runs:TaskRun[]=source.runs.map((r:any)=>{
+      const task=tasks.find(t=>t.id===r?.jobId);
+      if(!object(r)||!task||!Object.hasOwn(statuses,r.state)||!object(r.snapshot)||r.snapshot.id!==r.jobId||r.chatId!==task.chatId||r.snapshot.chatId!==task.chatId||!uuid(r.id)||
+        !time(r.scheduledFor)||!time(r.createdAt)||r.finishedAt!==undefined&&!time(r.finishedAt)||!optionalText(r.summary)||!optionalText(r.error)||
+        r.decision!==undefined&&(!object(r.decision)||typeof r.decision.notify!=="boolean"||typeof r.decision.stop!=="boolean"||typeof r.decision.message!=="string"||r.decision.message.length>1000))
+        throw new TaskError("Invalid legacy task run.");
+      const snapshot=convert(r.snapshot);
+      if(snapshot.action!==task.action||snapshot.requestID!==task.requestID||snapshot.requestFingerprint!==task.requestFingerprint)throw new TaskError("Invalid legacy run ownership.");
+      return {id:r.id,taskId:r.jobId,taskName:snapshot.name,agent:"claude",trigger:"scheduled",scheduledFor:r.scheduledFor,startedAt:r.createdAt,finishedAt:r.finishedAt,status:statuses[r.state]!,snapshot,chatRequestID:"job:"+r.id,sessionId:r.state==="queued"?undefined:r.chatId,summary:r.summary,error:r.error,decision:r.decision,scheduleRevision:0};
+    });
+    if(new Set(runs.map(r=>r.id)).size!==runs.length)throw new TaskError("Duplicate legacy run identities.");
+    const notifications:TaskNotification[]=source.notifications.map((n:any)=>{
+      const run=runs.find(r=>r.id===n?.runId);
+      if(!object(n)||!uuid(n.id)||n.id!==n.runId||!run||run.taskId!==n.jobId||run.snapshot!.chatId!==n.chatId||
+        !["pending","accepted","cancelled","failed"].includes(n.state)||!object(n.devices)||!time(n.createdAt)||
+        typeof n.title!=="string"||!n.title.trim()||typeof n.body!=="string"||!optionalText(n.error))throw new TaskError("Invalid legacy notification.");
+      for(const [key,d] of Object.entries(n.devices) as [string,any][]){
+        if(!key||!object(d)||!["pending","accepted","retired","failed"].includes(d.state)||!count(d.attempts)||!time(d.nextAttemptAt)||!optionalText(d.error))throw new TaskError("Invalid legacy notification delivery receipt.");
+      }
+      return {id:n.id,runId:n.runId,taskId:n.jobId,chatId:n.chatId,title:n.title,body:n.body,createdAt:n.createdAt,state:n.state,devices:n.devices,...(n.error!==undefined?{error:n.error}:{})};
+    });
+    if(new Set(notifications.map(n=>n.id)).size!==notifications.length)throw new TaskError("Duplicate legacy notification identities.");
+    await this.transaction(s=>{
+      if(s.imports?.includes(key))return;
+      if(tasks.some(t=>s.tasks.some(x=>x.id===t.id||x.requestID!=null&&receiptKey(x)===receiptKey(t)))||runs.some(r=>s.runs.some(x=>x.id===r.id))||notifications.some(n=>s.notifications.some(x=>x.id===n.id)))
+        throw new TaskError("Legacy task identity or creation receipt collision. Import stopped without changing records.",409);
+      s.tasks.push(...tasks);s.runs.push(...runs);s.notifications.push(...notifications);s.imports=[...(s.imports??[]),key];
+    });
+  }
 }
 
-export type RunSnapshot = { state: "working" | "idle" | "needs_input" | "failed" | "missing"; summary?: string; error?: string; outcome?: TaskOutcome };
-export type TaskExecutor = { launch(task: ScheduledTask, run: TaskRun): Promise<{ sessionId: string; tmuxName?: string }>; inspect(run: TaskRun): Promise<RunSnapshot> };
+export type RunSnapshot = { state: "working" | "idle" | "needs_input" | "failed" | "missing"; summary?: string; error?: string; outcome?: TaskOutcome; decision?:JobDecision };
+export type TaskExecutor = { launch(task: ScheduledTask, run: TaskRun): Promise<{ sessionId: string; tmuxName?: string }|null>; inspect(run: TaskRun): Promise<RunSnapshot>; immediate?:boolean; recover?(run:TaskRun):Promise<void>; afterTick?():Promise<void>; validate?(task:TaskInput):Promise<void> };
 export class TaskScheduler {
   private ticking = false;
   private launching = new Set<string>();
   private idleSince = new Map<string, { since: number; fingerprint: string }>();
+  private executors=new Map<TaskAction,TaskExecutor>();
+  private claimCursor=0;
+  private chatCursor=0;
+  private timer?:ReturnType<typeof setTimeout>;
+  private stopped=false;
+  private started=false;
+  private activeTick?:Promise<void>;
+  private dispatches=new Set<Promise<void>>();
   constructor(readonly store: TaskStore, private executor: TaskExecutor, private now = () => Date.now()) {}
+  register(action:TaskAction,executor:TaskExecutor){this.executors.set(action,executor);}
+  private forTask(task:Pick<TaskInput,"action">){const action=taskAction(task),executor=this.executors.get(action);if(!executor&&action!=="session")throw new TaskError("This task action is unavailable on this host.",503);return executor??this.executor;}
+  async save(input:TaskInput){if(this.stopped)throw new TaskError("Tasks are stopping.",503);const clean=validateTask(input,this.now(),!!input.requestID);await this.forTask(clean).validate?.(clean);if(clean.chatId&&taskAction(clean)==="session")await this.executors.get("chat")?.validate?.(clean);return this.store.save(clean,this.now());}
   async recover() {
-    for (const r of (await this.store.read()).runs) if (r.status === "starting" && !r.sessionId && !this.launching.has(r.id)) {
+    const state=await this.store.read();
+    for(const r of state.runs.filter(activeRun)){
+      const task=r.snapshot??state.tasks.find(t=>t.id===r.taskId);if(!task)continue;
+      const executor=this.forTask(task);
+      if(executor.recover){await executor.recover(r);continue;}
+      if (r.status === "starting" && !r.sessionId && !this.launching.has(r.id)) {
       await this.store.record(r.id, { status: "interrupted", finishedAt: this.now(), error: "The host restarted during launch. Check sessions before running again." });
+      }
     }
   }
   async runNow(id: string): Promise<TaskRun> {
+    if(this.stopped)throw new TaskError("Tasks are stopping.",503);
     const run = await this.store.claim(id, this.now(), true);
     if (!run) throw new TaskError("This task is cancelled, missing, or already running.", 409);
-    void this.launch(run); return run;
+    this.dispatch(run); return run;
   }
+  private dispatch(run:TaskRun){const work=this.launch(run);this.dispatches.add(work);void work.then(()=>this.dispatches.delete(work),()=>this.dispatches.delete(work));return work;}
   private async launch(run: TaskRun) {
+    if(this.launching.has(run.id))return;
     this.launching.add(run.id);
     try {
       const t = (await this.store.read()).tasks.find(t => t.id === run.taskId)!;
-      const result = await this.executor.launch(t, run);
+      const executor=this.forTask(t),result = await executor.launch(t, run);
+      if(result===null)return;
       if (!result.sessionId) throw Error("The agent started without a session ID. Check sessions before retrying.");
       await this.store.record(run.id, { ...result, status: "running" });
+      if(executor.immediate)await this.inspect({...run,...result,status:"running"},executor);
     } catch (e) { await this.store.record(run.id, { status: "failed", error: String((e as Error).message ?? e), finishedAt: this.now() }); }
     finally { this.launching.delete(run.id); }
   }
   async tick() {
-    if (this.ticking) return;
+    if(this.stopped)return;
+    if(this.activeTick)return this.activeTick;
+    this.activeTick=this.work().finally(()=>{this.activeTick=undefined;});return this.activeTick;
+  }
+  private async inspect(r:TaskRun,executor:TaskExecutor){
+    let snap: RunSnapshot;
+    try { snap = await executor.inspect(r); }
+    catch (error) { this.idleSince.delete(r.id); console.warn(`[tasks] Could not inspect run ${r.id}: ${error}`); return; }
+    const now = this.now();
+    if (snap.state === "needs_input") { this.idleSince.delete(r.id); await this.store.record(r.id, { status: "needs_input", needsInputAt: r.needsInputAt ?? now }); }
+    else if (snap.state === "failed" || snap.state === "missing") {
+      this.idleSince.delete(r.id);
+      await this.store.record(r.id, { status: snap.state === "failed" ? "failed" : "interrupted", finishedAt: now, error: snap.error ?? "The session is no longer running. Open its conversation to inspect the result." });
+    } else if (snap.state === "idle") {
+      if (r.status === "needs_input") await this.store.record(r.id, { status: "running", needsInputAt: undefined });
+      const fingerprint = JSON.stringify([snap.summary, snap.outcome, snap.error]);
+      const idle = this.idleSince.get(r.id);
+      if (!executor.immediate&&(!idle || idle.fingerprint !== fingerprint)) this.idleSince.set(r.id, { since: now, fingerprint });
+      else if (executor.immediate || now - idle!.since >= (snap.summary || snap.outcome ? 5000 : 60_000)) {
+        const status = snap.outcome?.status === "completed" ? "succeeded" : snap.outcome?.status === "error" ? "failed" : "incomplete";
+        await this.store.record(r.id, { status, finishedAt: now,
+          summary: (snap.summary ?? snap.outcome?.summary)?.slice(0, 8000), outcome: snap.outcome,decision:snap.decision,
+          error: status === "succeeded" ? undefined : snap.outcome?.summary ?? snap.error ?? "The agent ended without a completion verdict. Open the session to review what remains.", needsInputAt: undefined });
+        this.idleSince.delete(r.id);
+      }
+    } else { this.idleSince.delete(r.id); if (r.status === "needs_input") await this.store.record(r.id, { status: "running", needsInputAt: undefined }); }
+  }
+  private async work(){
     this.ticking = true;
     try {
       const state = await this.store.read();
+      const chatRuns=state.runs.filter(r=>activeRun(r)&&r.snapshot&&taskAction(r.snapshot)!=="session");
+      const chatBatch=new Set([...chatRuns.slice(this.chatCursor),...chatRuns.slice(0,this.chatCursor)].slice(0,20).map(r=>r.id));
+      this.chatCursor=chatRuns.length?(this.chatCursor+20)%chatRuns.length:0;
       for (const r of state.runs.filter(activeRun)) {
-        if (!r.sessionId || this.launching.has(r.id)) continue;
-        // A transient transcript/API failure must not block other due tasks.
-        // Keep this run active and retry its inspection on the next tick.
-        let snap: RunSnapshot;
-        try { snap = await this.executor.inspect(r); }
-        catch (error) { this.idleSince.delete(r.id); console.warn(`[tasks] Could not inspect run ${r.id}: ${error}`); continue; }
-        const now = this.now();
-        if (snap.state === "needs_input") { this.idleSince.delete(r.id); await this.store.record(r.id, { status: "needs_input", needsInputAt: r.needsInputAt ?? now }); }
-        else if (snap.state === "failed" || snap.state === "missing") {
-          this.idleSince.delete(r.id);
-          await this.store.record(r.id, { status: snap.state === "failed" ? "failed" : "interrupted", finishedAt: now, error: snap.error ?? "The session is no longer running. Open its conversation to inspect the result." });
-        } else if (snap.state === "idle") {
-          if (r.status === "needs_input") await this.store.record(r.id, { status: "running", needsInputAt: undefined });
-          const fingerprint = JSON.stringify([snap.summary, snap.outcome, snap.error]);
-          const idle = this.idleSince.get(r.id);
-          if (!idle || idle.fingerprint !== fingerprint) this.idleSince.set(r.id, { since: now, fingerprint });
-          // Empty startup transcripts get longer to become visible. Neither an empty
-          // turn nor ordinary prose can ever earn success without a verdict.
-          else if (now - idle.since >= (snap.summary || snap.outcome ? 5000 : 60_000)) {
-            const status = snap.outcome?.status === "completed" ? "succeeded" : snap.outcome?.status === "error" ? "failed" : "incomplete";
-            await this.store.record(r.id, { status, finishedAt: now,
-              summary: (snap.summary ?? snap.outcome?.summary)?.slice(0, 8000), outcome: snap.outcome,
-              error: status === "succeeded" ? undefined : snap.outcome?.summary ?? snap.error ?? "The agent ended without a completion verdict. Open the session to review what remains.",
-              needsInputAt: undefined });
-            this.idleSince.delete(r.id);
-          }
-        } else { this.idleSince.delete(r.id); if (r.status === "needs_input") await this.store.record(r.id, { status: "running", needsInputAt: undefined }); }
+        if(r.snapshot&&taskAction(r.snapshot)!=="session"&&!chatBatch.has(r.id))continue;
+        if(this.launching.has(r.id))continue;
+        const task=r.snapshot??state.tasks.find(t=>t.id===r.taskId);if(!task)continue;
+        if(r.status==="queued"){await this.dispatch(r);continue;}
+        if(r.sessionId)await this.inspect(r,this.forTask(task));
       }
       // Bound launches per tick. Recurring jobs coalesce missed occurrences.
       let launched = 0;
-      for (const t of (await this.store.read()).tasks) {
+      const tasks=(await this.store.read()).tasks,ordered=[...tasks.slice(this.claimCursor),...tasks.slice(0,this.claimCursor)];
+      for (const t of ordered) {
         if (t.cancelledAt) continue;
         const retryDue = t.retryAt != null && t.retryAt <= this.now();
         if (!retryDue && (!t.enabled || t.nextRunAt == null || t.nextRunAt > this.now())) continue;
         const run = await this.store.claim(t.id, this.now(), retryDue ? "retry" : false);
-        if (run) { await this.launch(run); if (++launched >= 2) break; }
+        if (run) { await this.dispatch(run);this.claimCursor=(tasks.indexOf(t)+1)%tasks.length; if (++launched >= 2) break; }
       }
+      for(const executor of new Set([this.executor,...this.executors.values()]))await executor.afterTick?.();
     } finally { this.ticking = false; }
   }
   start(log: (message: string) => void = console.log) {
-    let stopped = false; let timer: ReturnType<typeof setTimeout>;
-    const loop = async () => { try { await this.tick(); } catch (e) { log(`[tasks] ${e}`); } if (!stopped) timer = setTimeout(loop, 60_000); };
-    void this.recover().then(() => { if (!stopped) timer = setTimeout(loop, 2000); }).catch(e => log(`[tasks] recovery failed: ${e}`));
-    return () => { stopped = true; clearTimeout(timer); };
+    if(this.started)return ()=>{this.stopped=true;clearTimeout(this.timer);};
+    this.started=true;
+    const loop = async () => { try { await this.tick(); } catch (e) { log(`[tasks] ${e}`); } if (!this.stopped)this.timer=setTimeout(loop,1000); };
+    void this.recover().then(() => { if (!this.stopped)this.timer=setTimeout(loop,2000); }).catch(e => log(`[tasks] recovery failed: ${e}`));
+    return () => {this.stopped=true;clearTimeout(this.timer);};
   }
+  async close(){this.stopped=true;clearTimeout(this.timer);await this.activeTick;await Promise.all(this.dispatches);}
 }

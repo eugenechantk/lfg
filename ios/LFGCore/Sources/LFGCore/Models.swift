@@ -6,6 +6,7 @@ import Foundation
 /// Decoding is lenient: the server may add/omit fields across versions, so every
 /// property is optional with a sensible default rather than a hard decode failure.
 public struct Session: Codable, Sendable, Identifiable, Hashable {
+    public var kind: String? = nil
     public var sessionId: String?
     public var title: String
     public var agent: String          // "claude" | "codex" (legacy AI-SDK values normalized at decode)
@@ -89,6 +90,8 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
     public var id: String { sessionId ?? tmuxName ?? title }
 
     public var isBlocked: Bool { status == "blocked" }
+    /// Push snapshots from older hosts can omit `kind`; LFG owns chat IDs.
+    public var isChat: Bool { kind == "chat" || sessionId?.hasPrefix("chat-") == true }
     public var isClaude: Bool { agent == "claude" }
     public var isExternallyOwned: Bool { control == "external" }
     public var externalOwnerName: String? {
@@ -179,6 +182,7 @@ public struct Session: Codable, Sendable, Identifiable, Hashable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try c.decodeIfPresent(String.self, forKey: .kind)
         sessionId = try c.decodeIfPresent(String.self, forKey: .sessionId)
         title = (try c.decodeIfPresent(String.self, forKey: .title)) ?? ""
         agent = Session.normalizedAgent((try c.decodeIfPresent(String.self, forKey: .agent)) ?? "claude")

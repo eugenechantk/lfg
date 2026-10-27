@@ -10,6 +10,7 @@ public struct SessionCloseTracking: Sendable {
     public init() {}
 
     public static func canEnd(_ session: Session) -> Bool {
+        guard !session.isChat else { return false }
         guard let id = session.sessionId, !id.isEmpty, !id.hasPrefix("local-") else { return false }
         return !session.closed && !session.isExternallyOwned
     }

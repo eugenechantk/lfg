@@ -18,6 +18,7 @@ export type ApnsConfig = {
 // round-trip completes. Small text fields only; APNs caps the payload at 4KB.
 export type ApnsPayloadSession = {
   id: string;
+  kind?: 'chat' | 'terminal';
   title?: string;
   project?: string | null;
   cwd?: string | null;
@@ -31,7 +32,8 @@ export type ApnsPayload = {
   title: string;
   body: string;
   sid: string; // session id, for deep-linking + thread grouping
-  kind: "needs-input" | "finished";
+  kind: "needs-input" | "finished" | "job";
+  notificationId?: string;
   session?: ApnsPayloadSession;
   hostId?: string;
   seq?: number;
@@ -79,6 +81,7 @@ export type ApnsWireRequest = {
   pushType: ApnsPushType;
   priority?: number;
   body: string;
+  collapseId?: string;
 };
 
 export type ApnsTransport = (args: {
@@ -89,6 +92,7 @@ export type ApnsTransport = (args: {
   priority?: number;
   jwt: string;
   body: string;
+  collapseId?: string;
 }) => Promise<ApnsResult>;
 
 /**
@@ -286,6 +290,7 @@ function apnsAttempt({
   priority,
   jwt,
   body,
+  collapseId,
 }: Parameters<ApnsTransport>[0]): Promise<ApnsResult> {
   return apnsHttpAttempt({
     host,
@@ -295,6 +300,7 @@ function apnsAttempt({
       "apns-topic": topic,
       "apns-push-type": pushType,
       ...(typeof priority === "number" ? { "apns-priority": priority } : {}),
+      ...(collapseId ? { "apns-collapse-id": collapseId } : {}),
     },
     jwt,
     body,
@@ -344,6 +350,7 @@ export function apnsBody(payload: ApnsPayload): string {
     },
     sid: payload.sid,
     kind: payload.kind,
+    ...(payload.notificationId ? { notificationId: payload.notificationId } : {}),
     ...(payload.hostId ? { hostId: payload.hostId } : {}),
     ...(typeof payload.seq === "number" ? { seq: payload.seq } : {}),
     // Compact session snapshot for instant-render on tap (omitted when absent).
@@ -359,7 +366,7 @@ export async function sendApns(
 ): Promise<ApnsResult> {
   return sendApnsRequest(
     device,
-    { topic: cfg.topic, pushType: "alert", body: apnsBody(payload) },
+    { topic: cfg.topic, pushType: "alert", body: apnsBody(payload), ...(payload.notificationId ? {collapseId:payload.notificationId} : {}) },
     cfg,
     transport,
   );
@@ -379,5 +386,6 @@ export async function sendApnsRequest(
     priority: request.priority,
     jwt: apnsJwt(cfg),
     body: request.body,
+    ...(request.collapseId ? {collapseId:request.collapseId} : {}),
   });
 }

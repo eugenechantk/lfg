@@ -19,7 +19,7 @@ public enum TaskListSection: String, CaseIterable, Sendable, Identifiable {
 }
 
 public extension ScheduledTaskRecord {
-    var isRunInProgress: Bool { ["starting", "running", "needs_input"].contains(currentRun?.status ?? "") }
+    var isRunInProgress: Bool { ["queued", "starting", "running", "needs_input"].contains(currentRun?.status ?? "") }
     var isWaitingForInput: Bool { currentRun?.status == "needs_input" }
     /// The newest run failed or was interrupted and nothing is running now.
     var latestRunFailed: Bool { currentRun == nil && ["failed", "interrupted", "incomplete"].contains(lastRun?.status ?? "") }
@@ -31,6 +31,7 @@ public extension ScheduledTaskRecord {
     /// a failed latest run → scheduled → finished.
     var listSection: TaskListSection {
         if cancelledAt != nil { return .closed }
+        if isChatTask, pausedAt != nil, currentRun?.status == "queued" { return .paused }
         if isWaitingForInput { return .needsInput }
         if isRunInProgress { return .active }
         if isAutomaticRetryPaused { return .paused }
@@ -131,6 +132,11 @@ public struct TaskRowModel: Sendable, Equatable {
             }
         case .active:
             if let run = task.currentRun {
+                if run.status == "queued" {
+                    row.time = "Waiting"; row.timeDetail = ""; row.glyph = .paused
+                    row.result = "Waiting for chat"; row.resultTone = .secondary
+                    break
+                }
                 let started = run.startedAt ?? now.ms
                 row.time = "Now"; row.timeDetail = f.elapsed(from: started, compact: true); row.timeTone = .success
                 row.glyph = .running; row.resultTone = .success

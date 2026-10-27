@@ -8,6 +8,7 @@ import Foundation
 public enum PushEventKind: String, Sendable, Equatable {
     case needsInput = "needs-input"
     case finished = "finished"
+    case job = "job"
 }
 
 /// Background-sync hint carried by Phase-2 pushes: which host sent this and its

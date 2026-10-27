@@ -1,5 +1,6 @@
 import { join } from "node:path";
-import { TaskError, TaskScheduler, TaskStore, activeRun, effectiveSchedule, finiteSchedule, lastOccurrence, nextOccurrences, validateSchedule, type TaskInput, type TaskRun, type RunSnapshot, type ScheduledTask, type TaskSchedule } from "./scheduled-tasks.ts";
+import { TaskError, TaskScheduler, TaskStore, taskAction, activeRun, effectiveSchedule, finiteSchedule, lastOccurrence, nextOccurrences, validateSchedule, type TaskInput, type TaskRun, type RunSnapshot, type ScheduledTask, type TaskSchedule } from "./scheduled-tasks.ts";
+import {randomUUID} from 'node:crypto';
 import { parseTaskOutcome, scheduledTaskSystemPrompt } from "./scheduled-task-outcome.ts";
 
 /** What a task will do next. Paused tasks show when they would run if resumed, so their row can
@@ -45,13 +46,14 @@ export type TaskApiCall = <T = any>(path: string, body?: unknown) => Promise<T>;
 
 /** Same-session Claude respawns must keep the scheduled run's reporting contract. */
 export async function taskRunSystemPrompt(store: TaskStore, sessionId: string): Promise<string | undefined> {
-  const run = (await store.read()).runs.find(run => run.sessionId === sessionId);
+  const run = (await store.read()).runs.find(run => run.sessionId === sessionId && (!run.snapshot || taskAction(run.snapshot)==='session'));
   return run ? scheduledTaskSystemPrompt(run.id) : undefined;
 }
 
 export function taskRuntime(store: TaskStore, call: TaskApiCall, now = () => Date.now()) {
   return new TaskScheduler(store, {
     launch: async (task, run) => {
+      if(taskAction(task)!=='session')throw new TaskError('This task action is unavailable on this host.',503);
       const repeatNote = task.schedule.kind === "repeat"
         ? (run.trigger === "manual" && !run.retryOfRunId ? "Manual run; this does not consume a scheduled occurrence."
           : `Occurrence ${run.occurrence ?? Math.floor((run.scheduledFor - Date.parse(effectiveSchedule(task).at!)) / (task.schedule.everyMinutes! * 60_000)) + 1} of ${task.schedule.occurrences}.${run.retryOfRunId ? " Retry of the same occurrence; no additional scheduled occurrence is consumed." : ""}`)
@@ -128,14 +130,16 @@ export function scheduledTaskRoutes(store: TaskStore, scheduler: TaskScheduler, 
     if (!path.startsWith(base)) return null;
     const reply = (data: unknown, status = 200) => Response.json(data, { status });
     try {
+      const body=async()=>{const raw=await req.text();if(raw.length>128000)throw new TaskError('Request too large.',413);const value=JSON.parse(raw);if(!value||typeof value!=="object"||Array.isArray(value))throw new TaskError('Expected a JSON object.');return value;};
+      const origin=req.headers.get('origin');if(req.method!=='GET'&&origin&&origin!==url.origin)throw new TaskError('Cross-origin request refused.',403);
       if (path === `${base}/chat` && req.method === "POST") {
-        const body = await req.json() as any;
-        if (typeof body?.prompt !== "string" || !body.prompt.trim()) throw new TaskError("Describe the task you want to schedule.");
-        if (body.prompt.length > 50_000) throw new TaskError("The task request is too long.");
-        const agent = body.agent === "codex" ? "codex" : "claude";
-        const cwd = body.cwd || context.defaultCwd;
-        const prompt = taskAuthoringPrompt({ prompt: body.prompt, cwd, agent, model: body.model || undefined, timezone: body.timezone || "Asia/Hong_Kong", ...context });
-        return reply(await call("/api/sessions/new", { cwd, agent, model: body.model || undefined, user: body.user || undefined, prompt }));
+        const input = await body();
+        if (typeof input?.prompt !== "string" || !input.prompt.trim()) throw new TaskError("Describe the task you want to schedule.");
+        if (input.prompt.length > 50_000) throw new TaskError("The task request is too long.");
+        const agent = input.agent === "codex" ? "codex" : "claude";
+        const cwd = input.cwd || context.defaultCwd;
+        const prompt = taskAuthoringPrompt({ prompt: input.prompt, cwd, agent, model: input.model || undefined, timezone: input.timezone || "Asia/Hong_Kong", ...context });
+        return reply(await call("/api/sessions/new", { cwd, agent, model: input.model || undefined, user: input.user || undefined, prompt }));
       }
       if (path === base) {
         if (req.method === "GET") {
@@ -158,19 +162,22 @@ export function scheduledTaskRoutes(store: TaskStore, scheduler: TaskScheduler, 
             } catch {}
           }
           const withPrompt = (r?: TaskRun) => r && prompts.has(r.id) ? { ...r, prompt: prompts.get(r.id) } : r;
-          return reply({ tasks: s.tasks.map(t => {
+          const chatId=url.searchParams.get('chatId');
+          return reply({ tasks: s.tasks.filter(t=>!chatId||t.chatId===chatId).map(t => {
             const runs = byTask.get(t.id) ?? [];
+            const notification=s.notifications.filter(n=>n.taskId===t.id).at(-1);
             return { ...t, currentRun: withPrompt(runs.find(activeRun)), lastRun: withPrompt(runs.at(-1)),
+              notificationState:notification?.state,notificationError:notification?.error,
               recentRuns: runs.slice(-3).reverse(), runCount: runs.length,
               upcomingRuns: upcomingRuns(t, now), consecutiveFailures: consecutiveFailures(runs),
               succeededCount: runs.filter(r => r.status === "succeeded").length };
           }), timezone: process.env.LFG_SCHED_TZ ?? "Asia/Hong_Kong" });
         }
-        if (req.method === "POST") return reply({ task: await store.save(await req.json() as TaskInput) }, 201);
+        if (req.method === "POST") return reply({ task: await scheduler.save(await body() as TaskInput) }, 201);
       }
       if (path === `${base}/preview` && req.method === "POST") {
-        const body = await req.json() as any;
-        try { return reply(previewSchedule(body?.schedule, Date.now())); }
+        const input = await body();
+        try { return reply(previewSchedule(input?.schedule, Date.now())); }
         catch (e) { if (e instanceof TaskError) return reply({ nextRuns: [], lastRun: null, error: e.message }); throw e; }
       }
       const match = path.match(/^\/api\/scheduled-tasks\/([0-9a-f-]{36})(?:\/(runs|run|retry|cancel|chat))?$/);
@@ -178,24 +185,28 @@ export function scheduledTaskRoutes(store: TaskStore, scheduler: TaskScheduler, 
       const [, id, action] = match;
       if (action === "run" && req.method === "POST") return reply({ run: await scheduler.runNow(id!) }, 202);
       if (action === "retry" && req.method === "POST") {
-        const body = await req.json() as any;
-        return reply({ task: await store.scheduleRetry(id!, body?.at) });
+        const input = await body();
+        return reply({ task: await store.scheduleRetry(id!, input?.at) });
       }
       if (action === "cancel" && req.method === "POST") return reply({ task: await store.cancel(id!) });
-      if (!action && req.method === "POST") return reply({ task: await store.update(id!, await req.json() as Partial<TaskInput>) });
+      if (!action && req.method === "POST") return reply({ task: await store.update(id!, await body() as Partial<TaskInput>) });
       const s = await store.read(); const task = s.tasks.find(t => t.id === id);
       if (!task) return reply({ error: "Task not found." }, 404);
       if (action === "chat" && req.method === "POST") {
         if (task.cancelledAt != null) throw new TaskError("This task has been cancelled.", 409);
-        const body = await req.json() as any;
-        if (typeof body?.prompt !== "string" || !body.prompt.trim()) throw new TaskError("Describe what you want to change.");
-        if (body.prompt.length > 50_000) throw new TaskError("The change request is too long.");
-        const request = body.prompt.trim();
+        const input = await body();
+        if (typeof input?.prompt !== "string" || !input.prompt.trim()) throw new TaskError("Describe what you want to change.");
+        if (input.prompt.length > 50_000) throw new TaskError("The change request is too long.");
+        const request = input.prompt.trim();
+        if(taskAction(task)!=='session'){
+          await call(`/api/sessions/${task.chatId}/send`,{requestID:randomUUID(),text:`Help me edit scheduled task ${task.id} using its saved task tools. Do not execute the task now. Preserve settings I did not ask to change.\n\n${request}`});
+          return reply({sessionId:task.chatId,reused:true,kind:'chat'});
+        }
         // Reuse only a chat launched with the task's current settings. Older
         // chats were always Claude; missing metadata must not preserve that.
         const config = { agent: task.agent, model: task.model ?? undefined };
         if (task.editSessionId && task.editSessionConfig?.agent === config.agent
-          && (task.editSessionConfig.model ?? undefined) === config.model) {
+          && (task.editSessionConfig?.model ?? undefined) === config.model) {
           const { sessions } = await call("/api/sessions").catch(() => ({ sessions: [] }));
           if ((sessions ?? []).some((x: any) => x.sessionId === task.editSessionId && !x.closed)) {
             await call(`/api/sessions/${task.editSessionId}/send`, { text: request });
@@ -212,7 +223,7 @@ export function scheduledTaskRoutes(store: TaskStore, scheduler: TaskScheduler, 
         const all = s.runs.filter(r => r.taskId === id).reverse();
         return reply({ runs: all.slice(offset, offset + 50), total: all.length });
       }
-      if (!action && req.method === "GET") return reply({ task });
+      if (!action && req.method === "GET") {const runs=s.runs.filter(r=>r.taskId===id),notifications=s.notifications.filter(n=>n.taskId===id).slice(-20).reverse(),last=notifications[0];return reply({ task:{...task,currentRun:runs.find(activeRun),lastRun:runs.at(-1),recentRuns:runs.slice(-3).reverse(),runCount:runs.length,upcomingRuns:upcomingRuns(task,Date.now()),notificationState:last?.state,notificationError:last?.error},notifications });}
       return reply({ error: "Method not allowed." }, 405);
     } catch (e) { return reply({ error: (e as Error).message }, e instanceof TaskError ? e.status : e instanceof SyntaxError ? 400 : 500); }
   };

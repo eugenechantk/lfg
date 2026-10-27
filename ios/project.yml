@@ -32,6 +32,7 @@ targets:
       - path: Shared
       - path: ../shared/ScheduledTasksView.swift
       # A2 task views shared with the Mac app (desktop/build.sh compiles the same folder).
+      - path: ../shared/Message
       - path: ../shared/Tasks
       # A folder reference is resolved at build time, so the ignored private
       # payload can be present locally without becoming an individual project
@@ -102,6 +103,10 @@ targets:
           - com.eugenechan.lfg.refresh
         # Launch screen: black background + centered mark (LaunchScreen.storyboard).
         UILaunchStoryboardName: LaunchScreen
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
@@ -141,6 +146,20 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+  LFGUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: LFGUITests
+    dependencies:
+      - target: LFG
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.eugenechan.lfg.uitests
+        GENERATE_INFOPLIST_FILE: true
+        TEST_TARGET_NAME: LFG
+        SWIFT_OBJC_BRIDGING_HEADER: LFGUITests/LFGUITests-Bridging-Header.h
 schemes:
   LFG:
     build:
@@ -149,5 +168,13 @@ schemes:
         LFGWidgets: all
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - LFGUITests
+      environmentVariables:
+        LFG_CUA_UI_TESTS: $(LFG_CUA_UI_TESTS)
+        LFG_CUA_BASE_URL: $(LFG_CUA_BASE_URL)
+        LFG_UI_EVIDENCE_DIR: $(LFG_UI_EVIDENCE_DIR)
     archive:
       config: Release

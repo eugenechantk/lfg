@@ -156,6 +156,10 @@ final class PushManager {
 /// presentation/taps, forwarding everything to `PushManager.shared`.
 @MainActor
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        SpaceControlOrientation.supported
+    }
+
     /// BGAppRefresh task id — must match BGTaskSchedulerPermittedIdentifiers in
     /// project.yml's Info properties.
     static let refreshTaskID = "com.eugenechan.lfg.refresh"

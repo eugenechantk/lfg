@@ -265,6 +265,7 @@ public struct ScheduledTaskRun: Codable, Identifiable, Hashable, Sendable {
     public var prompt: ScheduledTaskPrompt?
     public var statusLabel: String {
         switch status {
+        case "queued": "Waiting for chat"
         case "starting": "Starting"
         case "running": "Running"
         case "needs_input": "Needs input"
@@ -307,7 +308,15 @@ public struct ScheduledTaskRecord: Decodable, Identifiable, Hashable, Sendable {
     public var updatedAt: Double?
     /// The task's edit chat, reused while it is alive.
     public var editSessionId: String?
-    enum CodingKeys: String, CodingKey { case id, name, prompt, cwd, agent, model, schedule, enabled, nextRunAt, retryAt, retryOfRunId, retryAutomatic, scheduleDelayMs, lastRunAt, cancelledAt, currentRun, lastRun, recentRuns, runCount, upcomingRuns, consecutiveFailures, succeededCount, pausedAt, scheduledRunCount, updatedAt, editSessionId }
+    public var action: String
+    public var chatId: String?
+    public var revision: Int
+    public var notification: String
+    public var stopOnNotify: Bool
+    public var notificationState: String?
+    public var notificationError: String?
+    public var isChatTask: Bool { action == "chat" || action == "notify" }
+    enum CodingKeys: String, CodingKey { case id, name, prompt, cwd, agent, model, schedule, enabled, nextRunAt, retryAt, retryOfRunId, retryAutomatic, scheduleDelayMs, lastRunAt, cancelledAt, currentRun, lastRun, recentRuns, runCount, upcomingRuns, consecutiveFailures, succeededCount, pausedAt, scheduledRunCount, updatedAt, editSessionId, action, chatId, revision, notification, stopOnNotify, notificationState, notificationError }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
@@ -336,22 +345,41 @@ public struct ScheduledTaskRecord: Decodable, Identifiable, Hashable, Sendable {
         scheduledRunCount = try c.decodeIfPresent(Int.self, forKey: .scheduledRunCount)
         updatedAt = try c.decodeIfPresent(Double.self, forKey: .updatedAt)
         editSessionId = try c.decodeIfPresent(String.self, forKey: .editSessionId)
+        action = try c.decodeIfPresent(String.self, forKey: .action) ?? "session"
+        chatId = try c.decodeIfPresent(String.self, forKey: .chatId)
+        revision = try c.decodeIfPresent(Int.self, forKey: .revision) ?? 1
+        notification = try c.decodeIfPresent(String.self, forKey: .notification) ?? "requested"
+        stopOnNotify = try c.decodeIfPresent(Bool.self, forKey: .stopOnNotify) ?? false
+        notificationState = try c.decodeIfPresent(String.self, forKey: .notificationState)
+        notificationError = try c.decodeIfPresent(String.self, forKey: .notificationError)
     }
     public var modelLabel: String {
+        if isChatTask { return action == "notify" ? "Reminder" : "Chat instructions" }
         let chosen = model?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return chosen.isEmpty ? "\(agent == "codex" ? "Codex" : "Claude") default" : chosen
     }
     public var canResume: Bool {
+        if isChatTask { return cancelledAt == nil && (enabled || pausedAt != nil || nextRunAt != nil || (currentRun ?? lastRun)?.status == "queued") }
         if cancelledAt == nil, retryOfRunId != nil, pausedAt != nil { return true }
         return cancelledAt == nil && !(schedule.kind == "once" && lastRunAt != nil && nextRunAt == nil)
             && !(schedule.isFinite && nextRunAt == nil)
     }
     public var isScheduleActive: Bool { enabled && canResume }
     public var listGroup: ScheduledTaskGroup {
-        let running = ["starting", "running", "needs_input"].contains(currentRun?.status ?? "")
+        if isChatTask, cancelledAt != nil { return .completed }
+        let running = ["queued", "starting", "running", "needs_input"].contains(currentRun?.status ?? "")
         return running || canResume || (retryAt != nil && cancelledAt == nil) ? .pending : .completed
     }
     public var statusLabel: String {
+        if isChatTask {
+            if cancelledAt != nil { return "Cancelled" }
+            let run = currentRun ?? lastRun
+            if ["starting", "running"].contains(run?.status ?? "") { return "Running" }
+            if pausedAt != nil { return "Paused" }
+            if run?.status == "queued" { return "Waiting for chat" }
+            if ["failed", "interrupted", "incomplete"].contains(run?.status ?? "") { return "Needs attention" }
+            return enabled ? "Scheduled" : "Finished"
+        }
         if let currentRun { return currentRun.statusLabel }
         if cancelledAt != nil { return "Cancelled" }
         if retryAutomatic == true, retryAt != nil, pausedAt != nil { return "Paused" }
@@ -554,7 +582,10 @@ public struct ScheduledTasksClient: Sendable {
         }
         return try JSONDecoder().decode(T.self, from: data)
     }
-    public func list() async throws -> [ScheduledTaskRecord] { try await call("/api/scheduled-tasks", as: ScheduledTaskList.self).tasks }
+    public func list(chatId: String? = nil) async throws -> [ScheduledTaskRecord] {
+        let tasks = try await call("/api/scheduled-tasks" + (chatId.map { "?chatId=\($0)" } ?? ""), as: ScheduledTaskList.self).tasks
+        return tasks.filter { chatId == nil || $0.chatId == chatId }
+    }
     public func task(_ id: String) async throws -> ScheduledTaskRecord {
         let result: ScheduledTaskMutation = try await call("/api/scheduled-tasks/\(id)")
         guard let task = result.task else { throw ScheduledTaskClientError(message: "Task not found.") }
@@ -585,8 +616,8 @@ public struct ScheduledTasksClient: Sendable {
         catch { throw ScheduledTaskMoveError(task: created, from: host.name, reason: error.localizedDescription) }
         return created
     }
-    public func action(_ id: String, _ action: String, enabled: Bool? = nil) async throws {
-        let data = try JSONEncoder().encode(ScheduledTaskToggle(enabled: enabled))
+    public func action(_ id: String, _ action: String, enabled: Bool? = nil, revision: Int? = nil) async throws {
+        let data = try JSONEncoder().encode(ScheduledTaskToggle(enabled: enabled, revision: revision))
         let _: ScheduledTaskMutation = try await call("/api/scheduled-tasks/\(id)" + (action.isEmpty ? "" : "/\(action)"), body: data)
     }
     /// Starts a run now (Run now or Retry). The host returns the run before its session exists.
@@ -635,7 +666,7 @@ private struct ScheduledTaskAck: Decodable, Sendable {}
 public struct ScheduledTaskList: Decodable, Sendable { public let tasks: [ScheduledTaskRecord] }
 public struct ScheduledTaskRuns: Decodable, Sendable { public let runs: [ScheduledTaskRun]; public let total: Int }
 public struct ScheduledTaskMutation: Decodable, Sendable { public let task: ScheduledTaskRecord?; public let run: ScheduledTaskRun? }
-private struct ScheduledTaskToggle: Encodable { let enabled: Bool? }
+private struct ScheduledTaskToggle: Encodable { let enabled: Bool?; var revision: Int? = nil }
 private struct ScheduledTaskRetryRequest: Encodable {
     let at: String?
     enum CodingKeys: String, CodingKey { case at }

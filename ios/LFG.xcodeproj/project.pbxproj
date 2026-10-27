@@ -19,6 +19,7 @@
 		1C4DEA4B71CE025D7E79107E /* SelectableProse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C932111B6E38085D1F5EDE8 /* SelectableProse.swift */; };
 		205D0AB41E932103E44D0EB4 /* ScheduledTasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF04EDE90109D7814EB6B429 /* ScheduledTasksView.swift */; };
 		20A5B356DC3393D9F80883A9 /* SessionSendFollowFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5ED2523205ABC71E4CAFB8 /* SessionSendFollowFixture.swift */; };
+		3A6756228448ECF3EAAE9752 /* SpaceControlFullScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EB8335FB74B13D9A6151933 /* SpaceControlFullScreen.swift */; };
 		406EF855180AB2BA0E75D26A /* TerminalScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 210FE0F59E5CE42AA932EF9E /* TerminalScreen.swift */; };
 		50F6EF746AAEB80DB6229E05 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 073FCBCA797989A55F83BAE4 /* MessageComposer.swift */; };
 		53041C690C2CB5A6B7ADFAD5 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 76672CAA13A7F7B59D2B0A72 /* SwiftUI.framework */; };
@@ -26,21 +27,28 @@
 		5942295A0F639DE68C4FF451 /* BackgroundSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D1BD4A3061EFB2858AB2A4B /* BackgroundSender.swift */; };
 		5C80FE3B63D36885C3E3CA4F /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */; };
 		5E6C84F3CB9E6AA06447AFBC /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E73816164B94C119D0706DA8 /* WidgetKit.framework */; };
+		5F5B678EBC09F573C08C6EEA /* SpaceControlOrientation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64456294EFB354CCA9CEC038 /* SpaceControlOrientation.swift */; };
 		62E8EB3B75DC4806D6857766 /* NewSessionComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB0F37496A85B98C8E3D9867 /* NewSessionComposer.swift */; };
 		63029566171D863A6094B902 /* UnreadSessionFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19359E603CB585A140895D8E /* UnreadSessionFixture.swift */; };
 		63E697B25FFD5633F32DF474 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 0F494F67402A869EB8A3476E /* MarkdownUI */; };
 		677E66E5606A3B3D911193D0 /* AttachmentTray.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCD4448C18939CAC5940F467 /* AttachmentTray.swift */; };
 		67E136E854D16446666CAE7A /* TaskListViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7707A24144D592DF32C8E75F /* TaskListViews.swift */; };
 		680725D02451A3EEFF5A9F28 /* NewSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27C81E2B22DECF886C37B1A7 /* NewSessionView.swift */; };
+		682C836CAC82C74A683049F7 /* SpaceInputSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C38C1B1520CAE7A5502351 /* SpaceInputSurface.swift */; };
 		6D57951618DB68F747829455 /* LFGFleetAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */; };
 		716C0A6C825C76BF39E3F86D /* TaskEditorMacViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28C020837D79456998C5E2F3 /* TaskEditorMacViews.swift */; };
 		7254BB93C3886BB66A1304A2 /* LFGCore in Frameworks */ = {isa = PBXBuildFile; productRef = 672BDBCB9E1F5950E1DB7012 /* LFGCore */; };
+		7647830D5848A6AE05D95F5F /* MessageSpacesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ABE81C68879C59379627DFA /* MessageSpacesView.swift */; };
 		82025CF8CCB55348A7EFF3D9 /* NewSessionTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FE8624A330AAE0215211005 /* NewSessionTheme.swift */; };
 		85C03A175F9DF48F0DAF9D6E /* RichContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C22EA76E51E2B0A745EE8847 /* RichContent.swift */; };
 		8950528E1385EF07CB2814AD /* LFGApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909139FA5D9B976298B7AA3F /* LFGApp.swift */; };
+		89542047A86D4B8FB9F672F2 /* SpaceControlFullScreenUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0219BF8729A09D94221B3988 /* SpaceControlFullScreenUITests.swift */; };
+		89B5D91432AD9A7C9FD23858 /* ChatSessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF283C2BF795A3A0701D8E0 /* ChatSessionsView.swift */; };
 		8A8BAA0AADCD3A860CCA5B39 /* HostLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */; };
 		8BC8252EFE58E8BF1F51920C /* PhoneSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 700413D2AB6235CADFEDC13F /* PhoneSignInView.swift */; };
 		8D3E23D31117026A9BF00460 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 649DB6E8EC8E3C5852C813C8 /* LaunchScreen.storyboard */; };
+		974DAAB01DB21FF81CF5C4E8 /* SpaceZoomCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75E6672A0BCCB18531465D45 /* SpaceZoomCanvas.swift */; };
+		9928EA048807518FEDFA88AE /* TwoFingerPan.m in Sources */ = {isa = PBXBuildFile; fileRef = 94D536C5920FE1D1C6623C1C /* TwoFingerPan.m */; };
 		A068D90ED29EC04CEB1E3F3E /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 2250BFCD7AC2FEF4BC5D6DFA /* SwiftTerm */; };
 		A541589C33833A613D05AD8B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6461434AE6C2B0858AC679ED /* RootView.swift */; };
 		A716F8EE7E18B6F5630135D0 /* LFGFleetActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 491B12C3F1E687BB82CC93AE /* LFGFleetActivityWidget.swift */; };
@@ -48,6 +56,8 @@
 		A9CABFDC3E306F17D2F69E33 /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */; };
 		B681D6E26243704896087BB9 /* StartSessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46EB440C360EF3FD2B40C87A /* StartSessionIntent.swift */; };
 		B7E724FEC05D4CD4CE0E1F9A /* NewSessionSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB9F7C4ADF1BED07B550BD99 /* NewSessionSheets.swift */; };
+		B9086275E20B0EC5C6898A80 /* SpaceLiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD529AE3829DE71237C105F4 /* SpaceLiveView.swift */; };
+		BBCF8DAE75F91773F324121F /* ChatJobsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3421CA421626DF4622A37A4E /* ChatJobsView.swift */; };
 		BBF305EA0702E9271B1CE818 /* TaskChatViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF94590FFE83F7C546BC9B07 /* TaskChatViews.swift */; };
 		BD04341584A4B9AA76A55AC4 /* UnreadBadges.swift in Sources */ = {isa = PBXBuildFile; fileRef = B256A006CA36864233180E24 /* UnreadBadges.swift */; };
 		BF6314DDC10C441712E87E2E /* FleetActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 565F8BC62A1D403CDD690340 /* FleetActivityController.swift */; };
@@ -71,6 +81,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		25CFF2F24EC0368DF0E09EA0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B70B0B4668D37FDAA54905D6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BB8191D802584F22B9CD53A0;
+			remoteInfo = LFG;
+		};
 		5A27BECA037B504157A3A6A6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = B70B0B4668D37FDAA54905D6 /* Project object */;
@@ -95,6 +112,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0219BF8729A09D94221B3988 /* SpaceControlFullScreenUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceControlFullScreenUITests.swift; sourceTree = "<group>"; };
 		073FCBCA797989A55F83BAE4 /* MessageComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageComposer.swift; sourceTree = "<group>"; };
 		0D5CF03B9589A96341781809 /* LFG.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LFG.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0E9D14391A3FEF1D22D41A2B /* AttachmentsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentsSheet.swift; sourceTree = "<group>"; };
@@ -105,6 +123,9 @@
 		2641AAFED0A103CF2409D79C /* SessionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionListView.swift; sourceTree = "<group>"; };
 		27C81E2B22DECF886C37B1A7 /* NewSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionView.swift; sourceTree = "<group>"; };
 		28C020837D79456998C5E2F3 /* TaskEditorMacViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditorMacViews.swift; sourceTree = "<group>"; };
+		2ABE81C68879C59379627DFA /* MessageSpacesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageSpacesView.swift; sourceTree = "<group>"; };
+		2EB8335FB74B13D9A6151933 /* SpaceControlFullScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceControlFullScreen.swift; sourceTree = "<group>"; };
+		3421CA421626DF4622A37A4E /* ChatJobsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatJobsView.swift; sourceTree = "<group>"; };
 		34FFA2FCDA2FF018358CB220 /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
 		36D7D08CD0B7C101A085BC11 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		45673EB7398FB35DF6615A6F /* LFGFleetAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGFleetAttributes.swift; sourceTree = "<group>"; };
@@ -116,17 +137,23 @@
 		565F8BC62A1D403CDD690340 /* FleetActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FleetActivityController.swift; sourceTree = "<group>"; };
 		5C0AF429850CD7F98D54334E /* LFG.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LFG.entitlements; sourceTree = "<group>"; };
 		6123FFAC6545F043690EF040 /* TaskEditorViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditorViews.swift; sourceTree = "<group>"; };
+		63EB52DB2094AF5419F40533 /* LFGUITests-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "LFGUITests-Bridging-Header.h"; sourceTree = "<group>"; };
+		64456294EFB354CCA9CEC038 /* SpaceControlOrientation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceControlOrientation.swift; sourceTree = "<group>"; };
 		6461434AE6C2B0858AC679ED /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		649DB6E8EC8E3C5852C813C8 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		6FE8624A330AAE0215211005 /* NewSessionTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionTheme.swift; sourceTree = "<group>"; };
 		700413D2AB6235CADFEDC13F /* PhoneSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSignInView.swift; sourceTree = "<group>"; };
 		716A5CB7BF742B16562A7EF8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		7170516CED1761573127FE86 /* LFGUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LFGUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		75E6672A0BCCB18531465D45 /* SpaceZoomCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceZoomCanvas.swift; sourceTree = "<group>"; };
 		76672CAA13A7F7B59D2B0A72 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		7707A24144D592DF32C8E75F /* TaskListViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListViews.swift; sourceTree = "<group>"; };
 		80338C36975F1F607F2D9487 /* FleetActivityViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FleetActivityViews.swift; sourceTree = "<group>"; };
 		847BA9F87A178565C0EEC901 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		8CF283C2BF795A3A0701D8E0 /* ChatSessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSessionsView.swift; sourceTree = "<group>"; };
 		909139FA5D9B976298B7AA3F /* LFGApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGApp.swift; sourceTree = "<group>"; };
 		90C243BC659878B4353ED8C8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		94D536C5920FE1D1C6623C1C /* TwoFingerPan.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TwoFingerPan.m; sourceTree = "<group>"; };
 		9C932111B6E38085D1F5EDE8 /* SelectableProse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableProse.swift; sourceTree = "<group>"; };
 		9D1BD4A3061EFB2858AB2A4B /* BackgroundSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSender.swift; sourceTree = "<group>"; };
 		9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostLink.swift; sourceTree = "<group>"; };
@@ -134,6 +161,7 @@
 		B256A006CA36864233180E24 /* UnreadBadges.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnreadBadges.swift; sourceTree = "<group>"; };
 		B465BA01F1A3FC7DAF7ADF56 /* BrowserPreviewCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserPreviewCard.swift; sourceTree = "<group>"; };
 		BCD4448C18939CAC5940F467 /* AttachmentTray.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentTray.swift; sourceTree = "<group>"; };
+		C1C38C1B1520CAE7A5502351 /* SpaceInputSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceInputSurface.swift; sourceTree = "<group>"; };
 		C22EA76E51E2B0A745EE8847 /* RichContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichContent.swift; sourceTree = "<group>"; };
 		C5AB3889AD4A389149350563 /* HostCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostCredentialStore.swift; sourceTree = "<group>"; };
 		CB3BEB83F7B64CBD569EEF8F /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
@@ -145,6 +173,7 @@
 		D917C2EFF10855AD9776A2E4 /* TaskDetailViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDetailViews.swift; sourceTree = "<group>"; };
 		D9437477BDAC213AC221941D /* LocalCommandOutputFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCommandOutputFixture.swift; sourceTree = "<group>"; };
 		DCC29666952B14BD03881471 /* SwiftTerm */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SwiftTerm; path = Vendor/SwiftTerm; sourceTree = SOURCE_ROOT; };
+		DD529AE3829DE71237C105F4 /* SpaceLiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceLiveView.swift; sourceTree = "<group>"; };
 		DD5ED2523205ABC71E4CAFB8 /* SessionSendFollowFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSendFollowFixture.swift; sourceTree = "<group>"; };
 		E4FDFAEC4C595AA92D818A8C /* NewSessionAtoms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionAtoms.swift; sourceTree = "<group>"; };
 		E73816164B94C119D0706DA8 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
@@ -209,7 +238,9 @@
 			children = (
 				F13AC9330D0FCC5623AF2347 /* PrivateResources */,
 				1DEF3A76C8CE97E28B63A13C /* LFG */,
+				E87DE114F5EEEE4932882708 /* LFGUITests */,
 				FA8FE8245D3AF81F2B302E13 /* LFGWidgets */,
+				2D0778A72A49703F531A5958 /* Message */,
 				33994F66596F8E85A2F92388 /* Packages */,
 				4A14429DD60DEA489C97C92A /* Shared */,
 				00B0D72905AFA77EDEAC412D /* shared */,
@@ -263,6 +294,22 @@
 			path = LFG;
 			sourceTree = "<group>";
 		};
+		2D0778A72A49703F531A5958 /* Message */ = {
+			isa = PBXGroup;
+			children = (
+				3421CA421626DF4622A37A4E /* ChatJobsView.swift */,
+				8CF283C2BF795A3A0701D8E0 /* ChatSessionsView.swift */,
+				2ABE81C68879C59379627DFA /* MessageSpacesView.swift */,
+				2EB8335FB74B13D9A6151933 /* SpaceControlFullScreen.swift */,
+				64456294EFB354CCA9CEC038 /* SpaceControlOrientation.swift */,
+				C1C38C1B1520CAE7A5502351 /* SpaceInputSurface.swift */,
+				DD529AE3829DE71237C105F4 /* SpaceLiveView.swift */,
+				75E6672A0BCCB18531465D45 /* SpaceZoomCanvas.swift */,
+			);
+			name = Message;
+			path = ../shared/Message;
+			sourceTree = "<group>";
+		};
 		30150209130D62E9AF9DED42 /* Tasks */ = {
 			isa = PBXGroup;
 			children = (
@@ -306,6 +353,7 @@
 			isa = PBXGroup;
 			children = (
 				0D5CF03B9589A96341781809 /* LFG.app */,
+				7170516CED1761573127FE86 /* LFGUITests.xctest */,
 				D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */,
 			);
 			name = Products;
@@ -321,6 +369,16 @@
 				6FE8624A330AAE0215211005 /* NewSessionTheme.swift */,
 			);
 			path = NewSession;
+			sourceTree = "<group>";
+		};
+		E87DE114F5EEEE4932882708 /* LFGUITests */ = {
+			isa = PBXGroup;
+			children = (
+				63EB52DB2094AF5419F40533 /* LFGUITests-Bridging-Header.h */,
+				0219BF8729A09D94221B3988 /* SpaceControlFullScreenUITests.swift */,
+				94D536C5920FE1D1C6623C1C /* TwoFingerPan.m */,
+			);
+			path = LFGUITests;
 			sourceTree = "<group>";
 		};
 		FA8FE8245D3AF81F2B302E13 /* LFGWidgets */ = {
@@ -354,6 +412,24 @@
 			productName = LFGWidgets;
 			productReference = D8EE306BF5D800EDEF572D85 /* LFGWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
+		};
+		8CB3177401304C0B70C06584 /* LFGUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F326105F7D83F94362A14E6C /* Build configuration list for PBXNativeTarget "LFGUITests" */;
+			buildPhases = (
+				188D26E4E58B4450FC7B179B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FBCA561405CDB605838F8504 /* PBXTargetDependency */,
+			);
+			name = LFGUITests;
+			packageProductDependencies = (
+			);
+			productName = LFGUITests;
+			productReference = 7170516CED1761573127FE86 /* LFGUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 		BB8191D802584F22B9CD53A0 /* LFG */ = {
 			isa = PBXNativeTarget;
@@ -392,6 +468,9 @@
 						DevelopmentTeam = 39GJBP8V5A;
 						ProvisioningStyle = Automatic;
 					};
+					8CB3177401304C0B70C06584 = {
+						TestTargetID = BB8191D802584F22B9CD53A0;
+					};
 					BB8191D802584F22B9CD53A0 = {
 						DevelopmentTeam = 39GJBP8V5A;
 						ProvisioningStyle = Automatic;
@@ -418,6 +497,7 @@
 			projectRoot = "";
 			targets = (
 				BB8191D802584F22B9CD53A0 /* LFG */,
+				8CB3177401304C0B70C06584 /* LFGUITests */,
 				2DEBFBAD6853B0C519FB25AC /* LFGWidgets */,
 			);
 		};
@@ -446,6 +526,15 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		188D26E4E58B4450FC7B179B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				89542047A86D4B8FB9F672F2 /* SpaceControlFullScreenUITests.swift in Sources */,
+				9928EA048807518FEDFA88AE /* TwoFingerPan.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		6056354380E196AD86E4C985 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -454,6 +543,8 @@
 				FD027D56F957D150BB87EBA7 /* AttachmentsSheet.swift in Sources */,
 				5942295A0F639DE68C4FF451 /* BackgroundSender.swift in Sources */,
 				037A25ADA39F6E527D36B73D /* BrowserPreviewCard.swift in Sources */,
+				BBCF8DAE75F91773F324121F /* ChatJobsView.swift in Sources */,
+				89B5D91432AD9A7C9FD23858 /* ChatSessionsView.swift in Sources */,
 				FDC78A1C6A82751D9F56E521 /* Components.swift in Sources */,
 				02F689F65D6FDF5099FADF31 /* ConnectionLogView.swift in Sources */,
 				BF6314DDC10C441712E87E2E /* FleetActivityController.swift in Sources */,
@@ -465,6 +556,7 @@
 				A9769E2F571F58BFBE480AB0 /* LiveActivityManager.swift in Sources */,
 				CB98916E2422E0C76151160D /* LocalCommandOutputFixture.swift in Sources */,
 				50F6EF746AAEB80DB6229E05 /* MessageComposer.swift in Sources */,
+				7647830D5848A6AE05D95F5F /* MessageSpacesView.swift in Sources */,
 				042B67FEFC81B19353989F4A /* NewSessionAtoms.swift in Sources */,
 				62E8EB3B75DC4806D6857766 /* NewSessionComposer.swift in Sources */,
 				C189723845E8FF48DC379B21 /* NewSessionPresentation.swift in Sources */,
@@ -484,6 +576,11 @@
 				01D2127AA39DD150F677DC70 /* SessionSheet.swift in Sources */,
 				55469BC6D5744CDBA92DC030 /* SessionStore.swift in Sources */,
 				0B5E6EC8D0198C245E872599 /* SettingsView.swift in Sources */,
+				3A6756228448ECF3EAAE9752 /* SpaceControlFullScreen.swift in Sources */,
+				5F5B678EBC09F573C08C6EEA /* SpaceControlOrientation.swift in Sources */,
+				682C836CAC82C74A683049F7 /* SpaceInputSurface.swift in Sources */,
+				B9086275E20B0EC5C6898A80 /* SpaceLiveView.swift in Sources */,
+				974DAAB01DB21FF81CF5C4E8 /* SpaceZoomCanvas.swift in Sources */,
 				B681D6E26243704896087BB9 /* StartSessionIntent.swift in Sources */,
 				BBF305EA0702E9271B1CE818 /* TaskChatViews.swift in Sources */,
 				0453795555B38FC7117424FC /* TaskDetailViews.swift in Sources */,
@@ -514,6 +611,11 @@
 			isa = PBXTargetDependency;
 			target = 2DEBFBAD6853B0C519FB25AC /* LFGWidgets */;
 			targetProxy = 5A27BECA037B504157A3A6A6 /* PBXContainerItemProxy */;
+		};
+		FBCA561405CDB605838F8504 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BB8191D802584F22B9CD53A0 /* LFG */;
+			targetProxy = 25CFF2F24EC0368DF0E09EA0 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -629,6 +731,25 @@
 			};
 			name = Release;
 		};
+		BC4A3580911B6454BA280886 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.uitests;
+				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = "LFGUITests/LFGUITests-Bridging-Header.h";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = LFG;
+			};
+			name = Release;
+		};
 		C8B2CF81688FC2F3E146375E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -650,6 +771,25 @@
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D1823C48ACFB8C8098F40363 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.eugenechan.lfg.uitests;
+				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = "LFGUITests/LFGUITests-Bridging-Header.h";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = LFG;
 			};
 			name = Debug;
 		};
@@ -759,6 +899,15 @@
 			buildConfigurations = (
 				C8B2CF81688FC2F3E146375E /* Debug */,
 				592880214466224190223EEF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F326105F7D83F94362A14E6C /* Build configuration list for PBXNativeTarget "LFGUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D1823C48ACFB8C8098F40363 /* Debug */,
+				BC4A3580911B6454BA280886 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
