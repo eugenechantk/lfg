@@ -123,6 +123,7 @@ struct ChatSessionsView: View {
         HStack(spacing: 18) {
             chatList.frame(width: 320)
                 .clipShape(RoundedRectangle(cornerRadius: 26))
+                .padding(.top, 18).padding(.bottom, 10)
             NavigationStack {
                 Group {
                     if let selectedChat {
@@ -130,11 +131,11 @@ struct ChatSessionsView: View {
                     } else {
                         ContentUnavailableView("Choose a chat", systemImage: "bubble.left.and.bubble.right",
                             description: Text("Your conversations keep their own instructions and memory."))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity).background(ChatColors.raised)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity).background(ChatColors.canvas)
                     }
                 }
-            }.clipShape(RoundedRectangle(cornerRadius: 26))
-        }.padding(.horizontal, 10).padding(.top, 18).padding(.bottom, 10).background(ChatColors.canvas)
+            }
+        }.padding(.horizontal, 10).background(ChatColors.canvas)
     }
     #endif
     private func open(_ item: ChatLocation) {
@@ -556,7 +557,7 @@ struct ChatSessionScreen: View {
         false
         #endif
     }
-    private var paneCanvas: Color { isTablet ? ChatColors.raised : ChatColors.canvas }
+    private let paneCanvas = ChatColors.canvas
     private var record: ChatSessionRecord? {
         get { model.record }
         nonmutating set { model.record = newValue }
@@ -674,8 +675,7 @@ struct ChatSessionScreen: View {
             }.buttonStyle(.plain).foregroundStyle(.white).disabled(record == nil)
                 .accessibilityLabel("Chat settings").accessibilityIdentifier("chat_settings")
         }.padding(.leading, 14).padding(.trailing, 6).frame(height: 62)
-            .background(ChatColors.raised)
-            .overlay(alignment: .bottom) { Rectangle().fill(ChatColors.separator).frame(height: 0.5) }
+            .background(ChatColors.canvas)
     }
     #endif
     private var threadHeading: some View {
@@ -744,7 +744,7 @@ struct ChatSessionScreen: View {
             }
         }
         .padding(.leading, isDesktop ? 12 : 16).padding(.trailing, isDesktop ? 8 : 10).padding(.top, isDesktop ? 9 : 11).padding(.bottom, isDesktop ? 8 : 10).frame(minHeight: isDesktop ? 85 : isTablet ? 106 : 96)
-        .background(isDesktop ? ChatColors.hex(0x262629) : isTablet ? ChatColors.canvas : ChatColors.raised, in: RoundedRectangle(cornerRadius: isDesktop ? 16 : isTablet ? 22 : 24))
+        .background(isDesktop ? ChatColors.hex(0x262629) : ChatColors.raised, in: RoundedRectangle(cornerRadius: isDesktop ? 16 : isTablet ? 22 : 24))
         .overlay(RoundedRectangle(cornerRadius: isDesktop ? 16 : isTablet ? 22 : 24).strokeBorder(isDesktop ? .white.opacity(0.06) : ChatColors.hex(0x38383A), lineWidth: isDesktop ? 1 : 0.5))
         .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, isDesktop || isTablet ? 8 : composerFocused ? 8 : -6)
         .frame(maxWidth: .infinity).background(paneCanvas.opacity(0.95))
