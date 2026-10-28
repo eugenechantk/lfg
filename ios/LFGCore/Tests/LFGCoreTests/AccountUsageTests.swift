@@ -22,6 +22,22 @@ import Testing
         #expect(value.providers.first?.accountId == nil)
     }
 
+    @Test func rateLimitedReadingSaysWhenTheNextCheckIs() throws {
+        let raw = Data(#"{"providers":[{"provider":"claude","accountId":"a","status":"error","error":"rate_limited","retryAt":"2026-10-28T04:59:00.000Z","fetchedAt":"2026-10-28T03:00:00.000Z","windows":[{"id":"five_hour","durationMinutes":300,"usedPercent":12}]}]}"#.utf8)
+        let reading = try #require(try JSONDecoder().decode(AccountUsageResponse.self, from: raw).providers.first)
+        #expect(reading.retryAt == 1_793_163_540_000)
+        let before = Date(timeIntervalSince1970: 1_793_160_000)
+        let body = AccountUsagePresentation.failureBody(reading, now: before)
+        #expect(body.hasPrefix("Anthropic is limiting usage checks. The last reading is kept below. Next check after "))
+        // Once the hold has passed, no stale "next check" time is shown.
+        let after = AccountUsagePresentation.failureBody(reading, now: Date(timeIntervalSince1970: 1_793_170_000))
+        #expect(after == "Anthropic is limiting usage checks. The last reading is kept below.")
+        var empty = reading; empty.windows = []
+        #expect(!AccountUsagePresentation.failureBody(empty, now: before).contains("kept below"))
+        var other = reading; other.error = "read_failed"
+        #expect(AccountUsagePresentation.failureBody(other, now: before) == "The last reading is kept below. Try again when the connection is available.")
+    }
+
     @Test func onlyProvenAccountsMergeAndFreshestReadingWins() {
         let older = provider(at: now.addingTimeInterval(-60))
         let snapshots = [AccountUsageHostSnapshot(host: .init(id: "pro", label: "Pro"), providers: [older]),

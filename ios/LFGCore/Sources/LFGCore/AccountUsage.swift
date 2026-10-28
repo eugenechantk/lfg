@@ -10,7 +10,7 @@ private func usageTimestamp(_ c: KeyedDecodingContainer<UsageDateKey>, key: Usag
     formatter.formatOptions = [.withInternetDateTime]
     return formatter.date(from: text).map { $0.timeIntervalSince1970 * 1000 }
 }
-private enum UsageDateKey: String, CodingKey { case fetchedAt, resetsAt }
+private enum UsageDateKey: String, CodingKey { case fetchedAt, resetsAt, retryAt }
 
 public struct AccountQuotaWindow: Codable, Sendable, Hashable, Identifiable {
     public var id: String
@@ -43,12 +43,15 @@ public struct AccountUsageProvider: Codable, Sendable, Hashable {
     public var fetchedAt: Double?
     public var windows: [AccountQuotaWindow]
     public var error: String?
+    /// Unix milliseconds. When a rate-limited provider may be asked again.
+    public var retryAt: Double?
     public init(provider: String, accountId: String? = nil, accountLabel: String? = nil, plan: String? = nil,
-                status: String = "ok", fetchedAt: Double? = nil, windows: [AccountQuotaWindow] = [], error: String? = nil) {
+                status: String = "ok", fetchedAt: Double? = nil, windows: [AccountQuotaWindow] = [], error: String? = nil,
+                retryAt: Double? = nil) {
         self.provider = provider; self.accountId = accountId; self.accountLabel = accountLabel; self.plan = plan
-        self.status = status; self.fetchedAt = fetchedAt; self.windows = windows; self.error = error
+        self.status = status; self.fetchedAt = fetchedAt; self.windows = windows; self.error = error; self.retryAt = retryAt
     }
-    private enum CodingKeys: String, CodingKey { case provider, accountId, accountLabel, plan, status, fetchedAt, windows, error }
+    private enum CodingKeys: String, CodingKey { case provider, accountId, accountLabel, plan, status, fetchedAt, windows, error, retryAt }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         provider = (try? c.decode(String.self, forKey: .provider)) ?? "unknown"
@@ -59,6 +62,7 @@ public struct AccountUsageProvider: Codable, Sendable, Hashable {
         windows = (try? c.decode([AccountQuotaWindow].self, forKey: .windows)) ?? []
         error = try? c.decode(String.self, forKey: .error)
         fetchedAt = usageTimestamp(try decoder.container(keyedBy: UsageDateKey.self), key: .fetchedAt)
+        retryAt = usageTimestamp(try decoder.container(keyedBy: UsageDateKey.self), key: .retryAt)
     }
     public var providerName: String { provider == "claude" ? "Claude Code" : provider == "codex" ? "Codex" : provider.capitalized }
 }
@@ -188,6 +192,27 @@ public enum AccountUsagePresentation {
         return AccountUsageRow(title: title, value: "\(Int(percent.rounded()))%", percent: percent, subtitle: subtitle, tone: tone)
     }
 
+    /// Body of the notice on a card whose last read failed.
+    public static func failureBody(_ reading: AccountUsageProvider, now: Date = Date()) -> String {
+        let kept = reading.windows.isEmpty ? "" : " The last reading is kept below."
+        switch reading.error {
+        case "auth_rejected":
+            return "The provider rejected this host’s credentials. Check its sign-in and try again."
+        case "rate_limited":
+            let vendor = reading.provider == "claude" ? "Anthropic" : reading.provider == "codex" ? "OpenAI" : reading.providerName
+            var next = ""
+            if let millis = reading.retryAt, millis.isFinite, millis / 1000 > now.timeIntervalSince1970 {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .none; formatter.timeStyle = .short
+                next = " Next check after \(formatter.string(from: Date(timeIntervalSince1970: millis / 1000)))."
+            }
+            return "\(vendor) is limiting usage checks.\(kept)\(next)"
+        default:
+            return reading.windows.isEmpty ? "Usage is unavailable. Try again when the connection is available."
+                : "The last reading is kept below. Try again when the connection is available."
+        }
+    }
+
     public static func age(_ millis: Double?, now: Date) -> String {
         guard let millis, millis.isFinite else { return "No reading yet" }
         let elapsed = max(0, now.timeIntervalSince1970 - millis / 1000)
@@ -235,7 +260,7 @@ public final class AccountUsageStore {
                     providers = response.providers.map { incoming in
                         guard incoming.status == "error", incoming.windows.isEmpty, let proof = incoming.accountId,
                               let previous = old?.providers.first(where: { $0.provider == incoming.provider && $0.accountId == proof }) else { return incoming }
-                        var retained = previous; retained.status = "error"; retained.error = incoming.error
+                        var retained = previous; retained.status = "error"; retained.error = incoming.error; retained.retryAt = incoming.retryAt
                         return retained
                     }
                     if providers.isEmpty { providers = ["claude", "codex"].map { AccountUsageProvider(provider: $0, status: "unavailable") } }

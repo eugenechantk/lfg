@@ -155,9 +155,7 @@ struct AccountUsageContent: View {
 
                 if card.failed {
                     notice(title: card.offline ? "\(card.hostNames) \(card.hosts.count > 1 ? "are" : "is") offline" : "Couldn’t update limits from \(card.hostNames)",
-                           body: card.reading.error == "auth_rejected"
-                            ? "The provider rejected this host’s credentials. Check its sign-in and try again."
-                            : (card.reading.windows.isEmpty ? "Usage is unavailable. Try again when the connection is available." : "The last reading is kept below. Try again when the connection is available."),
+                           body: AccountUsagePresentation.failureBody(card.reading, now: now),
                            error: true, retry: true)
                 } else if card.reading.status == "api" {
                     notice(title: "API billing", body: "This sign-in pays per token. There is no subscription quota to show.")

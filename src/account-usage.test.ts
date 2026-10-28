@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { normalizeClaudeUsage, normalizeCodexUsage, UsageCache, usageIdentity } from "./account-usage.ts";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { claudePlan, fileUsageStore, normalizeClaudeUsage, normalizeCodexUsage, retryAt, UsageCache, usageIdentity, UsageReadError } from "./account-usage.ts";
 
 const identity = { accountId: "account-a", accountLabel: "a@example.test", plan: "Max 20×" };
 const now = "2026-10-20T08:00:00.000Z";
@@ -67,5 +70,85 @@ describe("account-scoped cache", () => {
     expect(result.fetchedAt).toBe(now);
     expect(result.windows[0]?.usedPercent).toBe(25);
     expect(JSON.stringify(result)).not.toContain("upstream failed");
+  });
+});
+
+describe("provider rate limits", () => {
+  const reading = (pct: number, accountId = "account-a") => normalizeClaudeUsage({ five_hour: { utilization: pct } }, { ...identity, accountId }, now);
+  const limited = (at: number) => async () => { throw new UsageReadError("rate_limited", at); };
+
+  test("retry-after accepts seconds and dates, and is clamped", () => {
+    expect(retryAt("120", 1_000)).toBe(121_000);
+    expect(retryAt(new Date(1_000 + 600_000).toUTCString(), 1_000)).toBe(Math.floor((1_000 + 600_000) / 1000) * 1000);
+    expect(retryAt(null, 1_000)).toBe(1_000 + 300_000);
+    expect(retryAt("5", 1_000)).toBe(1_000 + 30_000);
+    expect(retryAt("999999", 1_000)).toBe(1_000 + 7_200_000);
+  });
+
+  test("a 429 holds further reads until retry-after, without calling the provider", async () => {
+    let time = 1_000, calls = 0;
+    const cache = new UsageCache(() => time);
+    await expect(cache.read("token-1", async () => { calls++; throw new UsageReadError("rate_limited", 3_601_000); }, "account-a"))
+      .rejects.toMatchObject({ code: "rate_limited", retryAt: 3_601_000 });
+    time += 61_000;
+    await expect(cache.read("token-1", async () => { calls++; return reading(10); }, "account-a")).rejects.toMatchObject({ code: "rate_limited" });
+    // A rotated token for the same account is still held.
+    await expect(cache.read("token-2", async () => { calls++; return reading(10); }, "account-a")).rejects.toMatchObject({ code: "rate_limited" });
+    expect(calls).toBe(1);
+    time = 3_601_001;
+    expect((await cache.read("token-2", async () => { calls++; return reading(10); }, "account-a")).windows[0]?.usedPercent).toBe(10);
+    expect(calls).toBe(2);
+  });
+
+  test("the last reading survives a token rotation and is returned during a hold", async () => {
+    let time = 1_000;
+    const cache = new UsageCache(() => time);
+    await cache.read("token-1", async () => reading(25), "account-a");
+    time += 61_000;
+    const result = await cache.read("token-2", limited(time + 600_000), "account-a");
+    expect(result).toMatchObject({ status: "error", error: "rate_limited", fetchedAt: now, retryAt: new Date(time + 600_000).toISOString() });
+    expect(result.windows[0]?.usedPercent).toBe(25);
+  });
+
+  test("the last reading survives a restart through the file store", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "lfg-usage-")), "account-usage.json");
+    const first = new UsageCache(() => 1_000, fileUsageStore(path));
+    await first.read("token-1", async () => reading(40), "account-a");
+    await first.flush();
+    const second = new UsageCache(() => 2_000, fileUsageStore(path));
+    const result = await second.read("token-1", limited(900_000), "account-a");
+    expect(result).toMatchObject({ status: "error", error: "rate_limited", fetchedAt: now });
+    expect(result.windows[0]?.usedPercent).toBe(40);
+  });
+
+  test("another account never inherits a stored reading", async () => {
+    const cache = new UsageCache(() => 1_000);
+    await cache.read("token-a", async () => reading(25), "account-a");
+    await expect(cache.read("token-b", limited(900_000), "account-b")).rejects.toMatchObject({ code: "rate_limited" });
+  });
+
+  test("an unproven reading is never stored", async () => {
+    let time = 1_000;
+    const cache = new UsageCache(() => time);
+    await cache.read("token-1", async () => reading(25, null as unknown as string), "account-a");
+    time += 61_000;
+    await expect(cache.read("token-2", limited(time + 600_000), "account-a")).rejects.toMatchObject({ code: "rate_limited" });
+  });
+
+  test("readings older than eight days are not served", async () => {
+    let time = Date.parse(now);
+    const cache = new UsageCache(() => time);
+    await cache.read("token-1", async () => reading(25), "account-a");
+    time += 9 * 86_400_000;
+    await expect(cache.read("token-2", limited(time + 600_000), "account-a")).rejects.toMatchObject({ code: "rate_limited" });
+  });
+});
+
+describe("Claude plan label", () => {
+  test("the account tier in ~/.claude.json wins over a stale credentials tier", () => {
+    expect(claudePlan("default_claude_max_20x", { rateLimitTier: "default_claude_max_5x", subscriptionType: "max" })).toBe("Max 20×");
+    expect(claudePlan(null, { rateLimitTier: "default_claude_max_5x" })).toBe("Max 5×");
+    expect(claudePlan(null, { subscriptionType: "pro" })).toBe("Pro");
+    expect(claudePlan(null, {})).toBeNull();
   });
 });

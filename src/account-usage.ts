@@ -1,17 +1,22 @@
 import { createHash } from "node:crypto";
+import { rename } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { PATHS } from "./config.ts";
 import { codexBin } from "./tmux.ts";
 
 export type UsageProvider = "claude" | "codex";
 export type UsageIdentity = { accountId: string | null; accountLabel: string | null; plan: string | null };
 export type QuotaWindow = { id: string; durationMinutes: number; name: string | null; usedPercent: number | null; resetsAt: string | null };
+export type UsageError = "read_failed" | "auth_rejected" | "rate_limited";
 export type AccountUsage = UsageIdentity & {
   provider: UsageProvider;
   status: "ok" | "unavailable" | "error" | "api";
   fetchedAt: string | null;
   windows: QuotaWindow[];
-  error: "read_failed" | "auth_rejected" | null;
+  error: UsageError | null;
+  /** When a rate-limited provider may be asked again. */
+  retryAt: string | null;
 };
 
 const object = (value: unknown): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
@@ -39,7 +44,7 @@ function completeWindows(windows: QuotaWindow[]): QuotaWindow[] {
 }
 
 function reading(provider: UsageProvider, identity: UsageIdentity, fetchedAt: string, windows: QuotaWindow[]): AccountUsage {
-  return { provider, ...identity, fetchedAt, status: windows.length ? "ok" : "unavailable", windows: completeWindows(windows), error: null };
+  return { provider, ...identity, fetchedAt, status: windows.length ? "ok" : "unavailable", windows: completeWindows(windows), error: null, retryAt: null };
 }
 
 export function normalizeClaudeUsage(raw: unknown, identity: UsageIdentity, fetchedAt: string): AccountUsage {
@@ -73,31 +78,77 @@ export function normalizeCodexUsage(raw: unknown, identity: UsageIdentity, fetch
   return reading("codex", identity, fetchedAt, windows);
 }
 
-class UsageReadError extends Error {
-  constructor(readonly code: "read_failed" | "auth_rejected" = "read_failed") { super(code); }
+export class UsageReadError extends Error {
+  constructor(readonly code: UsageError = "read_failed", readonly retryAt: number | null = null) { super(code); }
 }
+
+/** Absolute time from a `retry-after` header (seconds or HTTP date), clamped to 30 s–2 h. */
+export function retryAt(header: string | null, now: number): number {
+  const value = header?.trim() ?? "";
+  const parsed = /^\d+$/.test(value) ? now + Number(value) * 1000 : Date.parse(value);
+  const at = Number.isFinite(parsed) ? parsed : now + 300_000;
+  return Math.min(now + 7_200_000, Math.max(now + 30_000, at));
+}
+
+export type UsageStore = {
+  load(): Promise<Record<string, AccountUsage>>;
+  save(readings: Record<string, AccountUsage>): Promise<void>;
+};
+
+export function fileUsageStore(path: string): UsageStore {
+  return {
+    async load() { try { return object(await Bun.file(path).json()) as Record<string, AccountUsage>; } catch { return {}; } },
+    async save(readings) { await Bun.write(`${path}.tmp`, JSON.stringify(readings)); await rename(`${path}.tmp`, path); },
+  };
+}
+
+// The longest quota window is a week; anything older says nothing current.
+const LAST_READING_MAX_AGE = 8 * 86_400_000;
 
 // Per-credential keys prevent a changed sign-in inheriting another account's
 // last reading. Keys and credentials never cross the API boundary.
+//
+// The provider usage endpoints are rate-limited per account, and Claude Code's
+// own sessions spend the same budget. So a 429 holds further reads until its
+// retry-after, and the last reading of each PROVEN account is kept on disk:
+// a token rotation or a server restart must not turn "rate limited" into
+// "no reading at all".
 export class UsageCache {
   private values = new Map<string, { expires: number; value: AccountUsage }>();
   private pending = new Map<string, Promise<AccountUsage>>();
-  constructor(private now: () => number = Date.now) {}
-  async read(key: string, load: () => Promise<AccountUsage>): Promise<AccountUsage> {
+  private holds = new Map<string, number>();
+  private known: Promise<Map<string, AccountUsage>> | null = null;
+  private saving: Promise<void> = Promise.resolve();
+  constructor(private now: () => number = Date.now, private store: UsageStore | null = null) {}
+
+  async read(key: string, load: () => Promise<AccountUsage>, account: string | null = null): Promise<AccountUsage> {
     const cached = this.values.get(key);
     if (cached && cached.expires > this.now()) return cached.value;
+    const holdKey = account ?? key;
+    const hold = this.holds.get(holdKey);
+    if (hold !== undefined && hold > this.now()) {
+      const failure = new UsageReadError("rate_limited", hold);
+      const last = cached?.value ?? await this.lastReading(account);
+      if (!last) throw failure;
+      return this.retained(last, failure);
+    }
     const existing = this.pending.get(key);
     if (existing) return existing;
     const promise = (async () => {
       try {
         const value = await load();
+        this.holds.delete(holdKey);
         this.values.set(key, { expires: this.now() + 60_000, value });
         // Bound old credential contexts in a long-lived host process.
         if (this.values.size > 20) this.values.delete(this.values.keys().next().value!);
+        if (account && value.status === "ok" && value.accountId === account) await this.remember(account, value);
         return value;
       } catch (error) {
-        if (!cached) throw error;
-        const value: AccountUsage = { ...cached.value, status: "error", error: error instanceof UsageReadError ? error.code : "read_failed" };
+        const failure = error instanceof UsageReadError ? error : new UsageReadError();
+        if (failure.code === "rate_limited" && failure.retryAt) this.holds.set(holdKey, failure.retryAt);
+        const last = cached?.value ?? await this.lastReading(account);
+        if (!last) throw error;
+        const value = this.retained(last, failure);
         this.values.set(key, { expires: this.now() + 10_000, value });
         return value;
       }
@@ -105,9 +156,40 @@ export class UsageCache {
     this.pending.set(key, promise);
     return promise;
   }
+
+  /** Resolves once every queued write of the last readings has landed. */
+  flush(): Promise<void> { return this.saving; }
+
+  private retained(last: AccountUsage, failure: UsageReadError): AccountUsage {
+    return { ...last, status: "error", error: failure.code, retryAt: failure.retryAt ? new Date(failure.retryAt).toISOString() : null };
+  }
+
+  private lastReadings(): Promise<Map<string, AccountUsage>> {
+    return this.known ??= (this.store?.load() ?? Promise.resolve({}))
+      .then(readings => new Map<string, AccountUsage>(Object.entries(readings)))
+      .catch(() => new Map<string, AccountUsage>());
+  }
+
+  private async lastReading(account: string | null): Promise<AccountUsage | undefined> {
+    if (!account) return undefined;
+    const value = (await this.lastReadings()).get(account);
+    const fetched = Date.parse(value?.fetchedAt ?? "");
+    return value?.accountId === account && Number.isFinite(fetched) && this.now() - fetched < LAST_READING_MAX_AGE ? value : undefined;
+  }
+
+  private async remember(account: string, value: AccountUsage): Promise<void> {
+    const readings = await this.lastReadings();
+    readings.delete(account);
+    readings.set(account, value);
+    while (readings.size > 20) readings.delete(readings.keys().next().value!);
+    const store = this.store;
+    if (!store) return;
+    const snapshot = Object.fromEntries(readings);
+    this.saving = this.saving.then(() => store.save(snapshot)).catch(() => {});
+  }
 }
 
-const cache = new UsageCache();
+const cache = new UsageCache(Date.now, fileUsageStore(join(PATHS.data, "account-usage.json")));
 async function jsonFile(path: string): Promise<Record<string, any>> {
   try { const file = Bun.file(path); return file.size < 1_000_000 ? object(await file.json()) : {}; } catch { return {}; }
 }
@@ -122,8 +204,19 @@ async function keychainCredentials(): Promise<Record<string, any>> {
   } catch { return {}; } finally { clearTimeout(timer); }
 }
 
-function empty(provider: UsageProvider, identity: UsageIdentity, status: AccountUsage["status"], error: AccountUsage["error"] = null): AccountUsage {
-  return { provider, ...identity, status, error, windows: [], fetchedAt: null };
+function empty(provider: UsageProvider, identity: UsageIdentity, status: AccountUsage["status"], error: AccountUsage["error"] = null, retry: number | null = null): AccountUsage {
+  return { provider, ...identity, status, error, windows: [], fetchedAt: null, retryAt: retry ? new Date(retry).toISOString() : null };
+}
+
+/**
+ * `~/.claude.json`'s account tier is refreshed by Claude Code from the profile
+ * API. The tier stored with the credentials is frozen at sign-in, and a stale
+ * synced credentials file can carry a plan the account no longer has.
+ */
+export function claudePlan(accountTier: string | null, credentials: Record<string, any> = {}): string | null {
+  const tier = accountTier ?? string(credentials.rateLimitTier);
+  return tier?.includes("20x") ? "Max 20×" : tier?.includes("5x") ? "Max 5×"
+    : credentials.subscriptionType === "max" ? "Max" : credentials.subscriptionType === "pro" ? "Pro" : null;
 }
 
 export async function claudeAccountUsage(): Promise<AccountUsage> {
@@ -144,11 +237,10 @@ export async function claudeAccountUsage(): Promise<AccountUsage> {
   const credentials = candidates[0];
   const account = object(metadata.oauthAccount);
   const accountUUID = string(account.accountUuid), organizationUUID = string(account.organizationUuid);
-  const tier = string(credentials?.rateLimitTier);
   const identity: UsageIdentity = {
     accountId: usageIdentity("claude", accountUUID && organizationUUID ? `${accountUUID}:${organizationUUID}` : null),
     accountLabel: string(account.emailAddress) ?? string(account.displayName),
-    plan: tier?.includes("20x") ? "Max 20×" : tier?.includes("5x") ? "Max 5×" : credentials?.subscriptionType === "max" ? "Max" : credentials?.subscriptionType === "pro" ? "Pro" : null,
+    plan: claudePlan(string(account.organizationRateLimitTier) ?? string(account.userRateLimitTier), credentials),
   };
   if (!credentials) return empty("claude", { accountId: null, accountLabel: null, plan: null }, "unavailable");
   try {
@@ -157,11 +249,14 @@ export async function claudeAccountUsage(): Promise<AccountUsage> {
         headers: { Authorization: `Bearer ${credentials.accessToken}`, "anthropic-beta": "oauth-2025-04-20" },
         signal: AbortSignal.timeout(8_000),
       });
+      if (response.status === 429) throw new UsageReadError("rate_limited", retryAt(response.headers.get("retry-after"), Date.now()));
       if (!response.ok) throw new UsageReadError(response.status === 401 ? "auth_rejected" : "read_failed");
       return normalizeClaudeUsage(await response.json(), identity, new Date().toISOString());
-    });
+    }, identity.accountId);
   } catch (error) {
-    return empty("claude", identity, "error", error instanceof UsageReadError ? error.code : "read_failed");
+    return error instanceof UsageReadError
+      ? empty("claude", identity, "error", error.code, error.retryAt)
+      : empty("claude", identity, "error", "read_failed");
   }
 }
 
@@ -242,7 +337,11 @@ async function codexUsage(): Promise<AccountUsage> {
     };
     // A file fingerprint cannot invalidate a Keychain or ephemeral sign-in.
     // Those contexts are read afresh and never use a stale file as identity.
-    return codexStores.has(key) && codexStores.get(key) !== "file" ? await load() : await cache.read(key, load);
+    // A stored reading is only served once this credential context has proved
+    // its file store; a stale auth.json can name an account that is no longer
+    // the active sign-in.
+    return codexStores.has(key) && codexStores.get(key) !== "file" ? await load()
+      : await cache.read(key, load, codexStores.get(key) === "file" ? identity.accountId : null);
   } catch {
     // A failed CLI read has not proved that the file is the active sign-in.
     return empty("codex", { accountId: null, accountLabel: null, plan: null }, "error", "read_failed");
