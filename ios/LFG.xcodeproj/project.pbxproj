@@ -80,6 +80,7 @@
 		BBF305EA0702E9271B1CE818 /* TaskChatViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF94590FFE83F7C546BC9B07 /* TaskChatViews.swift */; };
 		BC743EE5D7D5B62CEB49E4E9 /* LFGShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2CEFEED9612943982954C0D3 /* LFGShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		BD04341584A4B9AA76A55AC4 /* UnreadBadges.swift in Sources */ = {isa = PBXBuildFile; fileRef = B256A006CA36864233180E24 /* UnreadBadges.swift */; };
+		BF445CDDF403C7F96084A44B /* SessionStoreObservationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D7DE0D2A8FDADA4D8653AD /* SessionStoreObservationTests.swift */; };
 		BF6314DDC10C441712E87E2E /* FleetActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 565F8BC62A1D403CDD690340 /* FleetActivityController.swift */; };
 		C189723845E8FF48DC379B21 /* NewSessionPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 527BBB8AABCE2FF8891A9B59 /* NewSessionPresentation.swift */; };
 		C1B5BCFA6FA382188AFC753C /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D579D2A5B3BA44EBAE3F5543 /* SharedAssets.xcassets */; };
@@ -206,6 +207,7 @@
 		909139FA5D9B976298B7AA3F /* LFGApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LFGApp.swift; sourceTree = "<group>"; };
 		90C243BC659878B4353ED8C8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		94D536C5920FE1D1C6623C1C /* TwoFingerPan.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TwoFingerPan.m; sourceTree = "<group>"; };
+		97D7DE0D2A8FDADA4D8653AD /* SessionStoreObservationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStoreObservationTests.swift; sourceTree = "<group>"; };
 		9C932111B6E38085D1F5EDE8 /* SelectableProse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableProse.swift; sourceTree = "<group>"; };
 		9D1BD4A3061EFB2858AB2A4B /* BackgroundSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSender.swift; sourceTree = "<group>"; };
 		9E6BCEE0F220FEC0F4CC5EC8 /* HostLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostLink.swift; sourceTree = "<group>"; };
@@ -478,6 +480,7 @@
 			children = (
 				61A4024AE0887A965C96BF67 /* FilePaneSizingTests.swift */,
 				189B6BD1742D7447CBF195FF /* ProgressiveImagePreviewTests.swift */,
+				97D7DE0D2A8FDADA4D8653AD /* SessionStoreObservationTests.swift */,
 				A158CD84AE16229AE957841E /* VideoPictureInPictureTests.swift */,
 			);
 			path = LFGTests;
@@ -814,6 +817,7 @@
 			files = (
 				4F3650346C2C9E72705A2ACD /* FilePaneSizingTests.swift in Sources */,
 				0A7265B386B8C485E14CE076 /* ProgressiveImagePreviewTests.swift in Sources */,
+				BF445CDDF403C7F96084A44B /* SessionStoreObservationTests.swift in Sources */,
 				261234DFB89E80A89ECB353F /* VideoPictureInPictureTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

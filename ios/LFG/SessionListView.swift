@@ -128,11 +128,11 @@ struct SessionListView: View {
     /// sections fold persistently (below): Idle and Closed start folded, and the
     /// user's own choice survives a relaunch.
     @State private var collapsedSections: Set<String> = []
-    @AppStorage("sessionList.collapsedStatusSections") private var collapsedStatusStored = ""
     @State private var expandedAgentParents: Set<String> = []
 
     private var statusCollapse: SessionListCollapse {
-        SessionListCollapse(stored: collapsedStatusStored.isEmpty ? nil : collapsedStatusStored)
+        // Persisted in AppSettings, not `@AppStorage`: see `collapsedStatusSections`.
+        SessionListCollapse(stored: settings.collapsedStatusSections.isEmpty ? nil : settings.collapsedStatusSections)
     }
 
     /// One rendered section of the list: a header title + its sessions, plus the
@@ -342,7 +342,7 @@ struct SessionListView: View {
             if let status = section.statusSection {
                 var collapse = statusCollapse
                 collapse.toggle(status)
-                collapsedStatusStored = collapse.stored
+                settings.collapsedStatusSections = collapse.stored
             } else if collapsedSections.contains(section.id) {
                 collapsedSections.remove(section.id)
             } else {
@@ -1195,7 +1195,7 @@ struct SessionRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            SessionRowStatusDot(group: group, isOffline: isOffline)
+            SessionRowStatusDot(group: group)
                 .padding(.top, showsStateLine ? 18 : 29)
                 .frame(width: 20, alignment: .leading)
             TimelineView(SessionRowTimeline(sinceMs: clockStartMs)) { context in
@@ -1339,31 +1339,18 @@ struct SessionRow: View {
     }
 }
 
-/// Keep the pulse outside the row's clock and text updates. The solid core
-/// retains its size and position while only its halo breathes.
+/// A steady dot, deliberately not animated. Working rows used to pulse a halo
+/// with `phaseAnimator`; inside a `List` every animation frame re-ran the list
+/// coordinator and re-laid out the visible rows, so a screen of working rows
+/// held the main thread near 100% and scrolling stuttered. Speed beats the
+/// flourish (Eugene, 2026-10-28). `.claude/feature/live-session-scroll-perf.md`.
 private struct SessionRowStatusDot: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
     let group: SessionStore.Group
-    let isOffline: Bool
 
     var body: some View {
         Circle()
             .fill(Theme.statusColor(group))
             .frame(width: 8, height: 8)
-            .background {
-                if group == .working && !isOffline && !reduceMotion && scenePhase == .active {
-                    Circle()
-                        .fill(Theme.statusColor(group))
-                        .phaseAnimator([false, true]) { halo, expanded in
-                            halo
-                                .scaleEffect(expanded ? 2.2 : 1.1)
-                                .opacity(expanded ? 0.05 : 0.35)
-                        } animation: { _ in
-                            .easeInOut(duration: 1)
-                        }
-                }
-            }
             .accessibilityHidden(true)
     }
 }

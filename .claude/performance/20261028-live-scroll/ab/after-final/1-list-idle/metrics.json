@@ -1,0 +1,23 @@
+{
+  "window": "1-list-idle",
+  "elapsed": 12.1,
+  "cpu_seconds": 1.58,
+  "cpu_percent": 13.1,
+  "main_busy_percent": 1.0,
+  "swipe_seconds": [],
+  "swipe_timeouts": 0,
+  "stacks": {
+    "main_samples": 7900,
+    "main_busy": 81,
+    "main_waiting": 7819,
+    "inclusive": {
+      "list_view": 13,
+      "session_row_body": 13,
+      "attribute_graph": 23,
+      "core_animation": 12,
+      "host_link": 40,
+      "user_defaults": 24,
+      "store_apply": 10
+    }
+  }
+}

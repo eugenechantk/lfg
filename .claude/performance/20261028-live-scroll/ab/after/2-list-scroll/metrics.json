@@ -1,0 +1,36 @@
+{
+  "window": "2-list-scroll",
+  "elapsed": 30.4,
+  "cpu_seconds": 15.81,
+  "cpu_percent": 52.1,
+  "main_busy_percent": 58.4,
+  "swipe_seconds": [
+    2.63,
+    2.5,
+    2.57,
+    7.32,
+    2.99,
+    2.3,
+    2.38,
+    2.34
+  ],
+  "swipe_timeouts": 0,
+  "stacks": {
+    "main_samples": 16418,
+    "main_busy": 9588,
+    "main_waiting": 6830,
+    "inclusive": {
+      "accessibility": 2428,
+      "core_animation": 3191,
+      "attribute_graph": 5423,
+      "list_view": 887,
+      "session_row_body": 20,
+      "group_for": 193,
+      "user_defaults": 81,
+      "list_sections": 466,
+      "host_link": 59,
+      "store_apply": 6,
+      "store_rebuild": 50
+    }
+  }
+}

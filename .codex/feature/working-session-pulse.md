@@ -1,5 +1,9 @@
 # Working session indicators
 
+> **Superseded 2026-10-28:** the pulse is gone; the green dot is steady. Inside
+> the session `List`, the animation held the main thread near 100% with a screen
+> of working rows. See `.claude/feature/live-session-scroll-perf.md`.
+
 ## User story
 
 Working session rows show their status and elapsed time without extra dots. The green dot at the left pulses to show ongoing work.

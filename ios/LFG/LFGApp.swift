@@ -155,6 +155,9 @@ struct CrossProviderSwitchStatusFixture: View {
     private static let ownerKey = "lfg.defaultOwner"
     private static let groupModeKey = "lfg.groupMode"
     private static let sortModeKey = "lfg.sortMode"
+    // Pre-dates AppSettings ownership (it was an `@AppStorage` key in
+    // SessionListView), so it keeps its old name: existing fold state survives.
+    private static let collapsedStatusSectionsKey = "sessionList.collapsedStatusSections"
     private static let recentDirsKey = "lfg.recentDirs"
     private static let hiddenDirsKey = "lfg.hiddenDirs"
     private static let newSessionAgentKey = "lfg.newSessionAgent"
@@ -234,6 +237,18 @@ struct CrossProviderSwitchStatusFixture: View {
         didSet { defaults.set(sortMode.rawValue, forKey: Self.sortModeKey) }
     }
 
+    /// The session list's folded status sections, as `SessionListCollapse.stored`
+    /// ("" = never set, so Idle and Closed start folded).
+    ///
+    /// Owned here rather than by an `@AppStorage` in the list: `@AppStorage`
+    /// reports a change whenever ANY UserDefaults key is written, and the event
+    /// stream writes its cursor on every event — so the list re-filtered,
+    /// re-grouped, re-sorted and re-diffed every session ~25 times a second while
+    /// sessions were busy. This property changes only when a section is folded.
+    var collapsedStatusSections: String {
+        didSet { defaults.set(collapsedStatusSections, forKey: Self.collapsedStatusSectionsKey) }
+    }
+
     /// A stateless client for one host.
     func client(for host: Host) -> LFGClient? { credentialStore.client(forHostURL: host.url) }
 
@@ -278,6 +293,7 @@ struct CrossProviderSwitchStatusFixture: View {
         defaultOwner = defaults.string(forKey: Self.ownerKey)
         groupMode = GroupMode(rawValue: defaults.string(forKey: Self.groupModeKey) ?? "") ?? .status
         sortMode = SortMode(rawValue: defaults.string(forKey: Self.sortModeKey) ?? "") ?? .recentActivity
+        collapsedStatusSections = defaults.string(forKey: Self.collapsedStatusSectionsKey) ?? ""
         recentDirs = defaults.stringArray(forKey: Self.recentDirsKey) ?? []
         hiddenDirs = HiddenDirs(defaults.stringArray(forKey: Self.hiddenDirsKey) ?? [])
         lastNewSessionModelSelection = AgentModelSelection.restoringPersisted(

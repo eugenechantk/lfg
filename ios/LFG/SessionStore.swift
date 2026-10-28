@@ -156,7 +156,28 @@ import LFGCore
     private var liveIds: Set<String> = []
 
     // Per-session live state, keyed by sessionId.
-    private(set) var transcripts: [String: [SessionMessage]] = [:]
+    /// Kept OUT of observation on purpose; views read it through
+    /// `transcript(for:)`, which observes one session (`transcriptObservation`).
+    /// As a plain observed dictionary, a message for ANY session re-ran the open
+    /// session view and every working list row — with many sessions streaming,
+    /// several full transcript re-renders a second for messages nobody was
+    /// looking at. Every write must be followed by `bumpTranscript(id)`, which
+    /// is what tells the observers of that one session.
+    @ObservationIgnored private(set) var transcripts: [String: [SessionMessage]] = [:]
+    @ObservationIgnored private let transcriptObservation = KeyedObservation<String>()
+
+    /// One session's transcript, observing only that session.
+    func transcript(for id: String) -> [SessionMessage] {
+        transcriptObservation.access(id)
+        return transcripts[id] ?? []
+    }
+
+    /// Bumped on every change to one session's transcript, observing only that
+    /// session. See `transcriptVersion`.
+    func transcriptRevision(for id: String) -> Int {
+        transcriptObservation.access(id)
+        return transcriptVersion[id] ?? 0
+    }
     /// Sessions whose bounded backward-history walk is still in flight. The
     /// newest page is intentionally rendered before this clears, so the detail
     /// view needs this separate truth to explain that older turns are arriving.
@@ -234,11 +255,14 @@ import LFGCore
     /// `.scrollPosition(id:)` setter makes that happen once per scroll frame, so
     /// scrolling was O(transcript) per frame (Phase-1 finding 1). An Int compares
     /// in constant time and the array is now built only when something actually
-    /// changed.
-    private(set) var transcriptVersion: [String: Int] = [:]
+    /// changed. Read it through `transcriptRevision(for:)`: like `transcripts`
+    /// it is out of observation, so one session's message wakes only that
+    /// session's observers.
+    @ObservationIgnored private(set) var transcriptVersion: [String: Int] = [:]
 
     private func bumpTranscript(_ id: String) {
         transcriptVersion[id, default: 0] &+= 1
+        transcriptObservation.didChange(id)
     }
 
     private(set) var lastUserSendAt: [String: Double] = [:]
@@ -712,7 +736,7 @@ import LFGCore
     /// REST list only refreshes every 60s). Messages absorbed mid-turn
     /// (`queued:` ids) and Claude's interrupt marker don't start a turn.
     func turnStartedAt(_ session: Session) -> Double? {
-        let streamed = session.sessionId.flatMap { transcripts[$0] }?.last { m in
+        let streamed = session.sessionId.map { transcript(for: $0) }?.last { m in
             m.rendersAsUserBubble && !(m.id?.hasPrefix("queued:") ?? false)
                 && !m.text.hasPrefix("[Request interrupted by user")
         }?.ts
@@ -1955,7 +1979,8 @@ import LFGCore
     /// REST reconcile, the network path monitor — folds through here, so there is
     /// exactly one reducer and one clock rather than a set of writers that must
     /// agree with each other.
-    private func signal(_ hostId: String, _ sig: HostSignal, now: Date = Date()) {
+    /// Internal (not private) so `LFGTests` can drive it.
+    func signal(_ hostId: String, _ sig: HostSignal, now: Date = Date()) {
         let previous = hostStateByHost[hostId] ?? .unknown
         let next = HostStateMachine.reduce(previous, sig, now: now)
         // Log the transition, not just the signal: the reducer is where a
@@ -2009,8 +2034,16 @@ import LFGCore
     private func setHostState(_ hostId: String, _ state: HostState, now: Date = Date()) {
         let settled = HostStateMachine.settle(state, now: now)
         let wasLive = hostStateByHost[hostId]?.isLive == true
-        guard hostStateByHost[hostId] != settled || bannerRecheck[hostId] == nil else { return }
-        hostStateByHost[hostId] = settled
+        let changed = hostStateByHost[hostId] != settled
+        guard changed || bannerRecheck[hostId] == nil else { return }
+        // Write only a real change. `.receiving` arrives with EVERY stream
+        // element, and a dictionary subscript write notifies observers even when
+        // the value is identical (plain property sets are skipped; subscripts
+        // are not). Every list row, the headers, RootView and the open session
+        // read host health, so an unconditional write redrew the whole UI once
+        // per event — with many sessions running, a full core, and the reason
+        // scrolling stuttered. `.claude/feature/live-session-scroll-perf.md`.
+        if changed { hostStateByHost[hostId] = settled }
 
         // The degraded -> offline promotion is driven by elapsed time, not by a
         // signal, so schedule the exact moment it becomes due. The *decision*
@@ -2095,8 +2128,9 @@ import LFGCore
     }
 
     private func recomputeFleetState() {
-        fleetState = HostStateMachine.aggregate(hostIds: settings.hosts.map(\.id),
-                                                states: hostStateByHost)
+        let next = HostStateMachine.aggregate(hostIds: settings.hosts.map(\.id),
+                                              states: hostStateByHost)
+        if next != fleetState { fleetState = next }
     }
 
     /// A link changed state. The link draws no conclusion; it only flushes the
@@ -3517,7 +3551,8 @@ import LFGCore
         needsReadStateMigration = false
     }
 
-    private func apply(_ event: LiveEvent) {
+    /// Internal (not private) so `LFGTests` can drive it.
+    func apply(_ event: LiveEvent) {
         switch event {
         case .message(let sid, let m):
             var set = seen[sid] ?? []
@@ -4429,6 +4464,7 @@ import LFGCore
         ]
         transcripts[unreadID] = [stale]
         transcripts[otherID] = [other]
+        bumpTranscript(unreadID); bumpTranscript(otherID)
         seen[unreadID] = [stale.stableID]
         seen[otherID] = [other.stableID]
         lastSeenMessageID[unreadID] = stale.id
@@ -4491,6 +4527,7 @@ import LFGCore
         )
         sessions = [fixture]
         transcripts[id] = fixtureMessages
+        bumpTranscript(id)
         pendingSends[id] = []
         busy[id] = false
         if let overlayMode = ProcessInfo.processInfo.environment["LFG_SESSION_OVERLAY_FIXTURE"] {

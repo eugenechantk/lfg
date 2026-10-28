@@ -1,0 +1,6 @@
+􀟈  Test "opting out of the small first page restores one uniform budget" started.
+􁁛  Test "opting out of the small first page restores one uniform budget" passed after 0.001 seconds.
+􁁛  Suite "Cloudflare-safe transcript history paging" passed after 0.076 seconds.
+􁁛  Test framesClearOnOffAndMissingFrame() passed after 0.390 seconds.
+􁁛  Suite IPhonePreviewLifecycleTests passed after 0.393 seconds.
+􁁛  Test run with 567 tests in 87 suites passed after 0.394 seconds.

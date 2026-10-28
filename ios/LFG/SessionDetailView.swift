@@ -164,7 +164,7 @@ struct SessionDetailView: View {
     }
 
     private var sid: String { session.sessionId ?? "" }
-    private var messages: [SessionMessage] { store.transcripts[sid] ?? [] }
+    private var messages: [SessionMessage] { store.transcript(for: sid) }
     /// Identity snapshot of the transcript as of the last observed mutation.
     ///
     /// Deliberately NOT a computed property any more. It used to be
@@ -352,7 +352,7 @@ struct SessionDetailView: View {
             store.loadHistory(sid)   // store-owned: not cancelled by view churn
             await store.loadBrowserFrame(sid)
         }
-        .task(id: "inline-file-index-\(sid)-\(store.transcriptVersion[sid] ?? 0)") {
+        .task(id: "inline-file-index-\(sid)-\(store.transcriptRevision(for: sid))") {
             let snapshot = messages
             let resources = await Task.detached(priority: .utility) {
                 TranscriptResourceIndex.collect(from: snapshot)
@@ -362,7 +362,7 @@ struct SessionDetailView: View {
             transcriptPreviewFiles = resources.files.map(\.ref)
             if !snapshot.isEmpty { filePane.observe(resources) }
         }
-        .task(id: "pane-revision-\(sid)-\(store.transcriptVersion[sid] ?? 0)-\(filePane.selection?.id ?? "")") {
+        .task(id: "pane-revision-\(sid)-\(store.transcriptRevision(for: sid))-\(filePane.selection?.id ?? "")") {
             let snapshot = messages
             let path = filePane.selection?.raw ?? ""
             let revision = await Task.detached(priority: .utility) {
@@ -944,7 +944,7 @@ struct SessionDetailView: View {
                     scheduleJumpToNewest()
                 }
             })
-            .onChange(of: store.transcriptVersion[sid] ?? 0) { _, _ in
+            .onChange(of: store.transcriptRevision(for: sid)) { _, _ in
                 let old = lastMessageIDs
                 let new = messages.map(\.stableID)
                 guard old != new else { return }

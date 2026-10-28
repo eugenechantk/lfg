@@ -1,0 +1,56 @@
+[
+  {
+    "window": "1-list-idle",
+    "elapsed": 12.1,
+    "cpu_seconds": 1.58,
+    "cpu_percent": 13.1,
+    "main_busy_percent": 1.0,
+    "swipe_seconds": [],
+    "swipe_timeouts": 0
+  },
+  {
+    "window": "2-list-scroll",
+    "elapsed": 28.9,
+    "cpu_seconds": 12.71,
+    "cpu_percent": 43.9,
+    "main_busy_percent": 41.8,
+    "swipe_seconds": [
+      3.56,
+      2.18,
+      2.16,
+      2.95,
+      2.45,
+      5.48,
+      2.8,
+      2.01
+    ],
+    "swipe_timeouts": 0
+  },
+  {
+    "window": "4-detail-idle",
+    "elapsed": 11.8,
+    "cpu_seconds": 3.92,
+    "cpu_percent": 33.1,
+    "main_busy_percent": 38.8,
+    "swipe_seconds": [],
+    "swipe_timeouts": 0
+  },
+  {
+    "window": "5-detail-scroll",
+    "elapsed": 38.4,
+    "cpu_seconds": 18.79,
+    "cpu_percent": 48.9,
+    "main_busy_percent": 48.7,
+    "swipe_seconds": [
+      2.49,
+      3.22,
+      8.3,
+      3.35,
+      3.44,
+      3.08,
+      6.64,
+      2.59
+    ],
+    "swipe_timeouts": 0
+  }
+]
