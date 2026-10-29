@@ -29,6 +29,7 @@ import {
 import { text, type McpTool, type ToolContent, type ToolResult } from "./mcp-server.ts";
 import { extractPdf, type PdfExtractor } from "./pdf-extract.ts";
 import { scheduledTaskTools } from "./scheduled-task-tools.ts";
+import { NOTIFICATION_STATUSES } from "./session-notifications.ts";
 
 // ---- lfg API client ------------------------------------------------------------
 
@@ -408,6 +409,21 @@ export function lfgTools(opts: LfgToolsOptions): McpTool[] {
 
   return [
     ...scheduledTaskTools(api),
+    {
+      name: "notify_session",
+      description: "Send a custom progress, completion, needs-input, blocked, or reminder alert to every registered iPhone/iPad and connected LFG Mac. Explain the work, result, or action needed. Does not change session execution state. Use the same request_id when retrying; acceptance is not proof of physical delivery.",
+      inputSchema: { type: "object", properties: { ...sessionIdProp,
+        request_id: { type: "string", description: "Stable retry identity for this alert." },
+        status: { type: "string", enum: [...NOTIFICATION_STATUSES] },
+        message: { type: "string", minLength: 1, maxLength: 500 },
+        title: { type: "string", minLength: 1, maxLength: 80, description: "Optional title; defaults to the session name." },
+      }, required: ["session_id", "request_id", "status", "message"] },
+      annotations: { title: "Notify about session", ...acts },
+      run: async args => text(JSON.stringify(await api.post(`/api/sessions/${encodeURIComponent(stringArg(args, "session_id")!)}/notify`, {
+        requestID: stringArg(args, "request_id"), status: stringArg(args, "status"), message: stringArg(args, "message"),
+        ...(args.title !== undefined ? { title: stringArg(args, "title") } : {}),
+      }))),
+    },
     {
       name: "list_sessions",
       description:
@@ -909,6 +925,7 @@ function humanSize(n: number): string {
 export const SERVER_INSTRUCTIONS = [
   "These tools drive the Claude Code and Codex coding sessions on Eugene's Mac through lfg.",
   "Sessions work on their own for minutes; every tool returns at once except wait_for_session.",
+  "notify_session sends a descriptive result, blocker, or reminder to every LFG client. Include what happened and any action needed. Keep the same request_id for retries; APNs acceptance does not prove physical delivery.",
   "Typical flow: list_folders → start_session → wait_for_session (repeat while working) → read the latest reply → answer_question or send_message if it needs more → close_session when Eugene is done with it.",
   "A session in 'needs input' is waiting on a question: show Eugene the question and options and answer only with his choice.",
   "For a session's files, call list_session_files, then read_file (content into this conversation) or download_file (a link to save the exact file) with the same session_id; only files the session mentioned are available.",

@@ -124,6 +124,11 @@ struct APISession: Decodable, Identifiable, Hashable {
     var prompt: DesktopPrompt? = nil
     /// The scheduled task that started this session (S2 meta "from a task").
     var task: TaskOrigin? = nil
+    var notification: DesktopSessionNotice? = nil
+    var completionNotification: DesktopSessionNotice? = nil
+    var last: DesktopAssistantPreview? = nil
+    var lastUserAt: Double? = nil
+    var suppressCompletionNotification = false
 
     var id: String { sessionId ?? "pid-\(pid)" }
 
@@ -151,7 +156,7 @@ struct APISession: Decodable, Identifiable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case agent, pid, cwd, project, title, sessionId, busy, lastActivityAt, tmuxName, model, status, parentSessionId, lastUserText, purpose
-        case prompt, task, kind
+        case prompt, task, kind, notification, completionNotification, last, lastUserAt, suppressCompletionNotification
     }
 
     init(from decoder: Decoder) throws {
@@ -173,6 +178,11 @@ struct APISession: Decodable, Identifiable, Hashable {
         purpose = try? c.decodeIfPresent(String.self, forKey: .purpose)
         prompt = (try? c.decodeIfPresent(DesktopPrompt.self, forKey: .prompt)) ?? nil
         task = (try? c.decodeIfPresent(TaskOrigin.self, forKey: .task)) ?? nil
+        notification = try? c.decodeIfPresent(DesktopSessionNotice.self, forKey: .notification)
+        completionNotification = try? c.decodeIfPresent(DesktopSessionNotice.self, forKey: .completionNotification)
+        last = try? c.decodeIfPresent(DesktopAssistantPreview.self, forKey: .last)
+        lastUserAt = try? c.decodeIfPresent(Double.self, forKey: .lastUserAt)
+        suppressCompletionNotification = (try? c.decodeIfPresent(Bool.self, forKey: .suppressCompletionNotification)) ?? false
         closed = false
     }
 }

@@ -5,23 +5,30 @@ import Foundation
 enum DesktopStatusEvent: Sendable {
     case busy(String, Bool)
     case prompt(String, DesktopPrompt?)
+    case notification(String, DesktopSessionNotice)
     case resync(Int64)
 
     var sessionID: String? {
         switch self {
-        case .busy(let sid, _), .prompt(let sid, _): return sid
+        case .busy(let sid, _), .prompt(let sid, _), .notification(let sid, _): return sid
         case .resync: return nil
         }
     }
 
     static func decode(_ frame: SSEFrame) -> Self? {
-        guard !frame.isComment, ["busy", "prompt", "resync"].contains(frame.event),
+        guard !frame.isComment, ["busy", "prompt", "notification", "resync"].contains(frame.event),
               let data = frame.data.data(using: .utf8) else { return nil }
         struct Busy: Decodable { let sid: String; let busy: Bool }
         struct Prompt: Decodable { let sid: String; let prompt: DesktopPrompt? }
         struct Resync: Decodable { let head: Int64 }
+        struct Notice: Decodable { let sid: String; let notification: DesktopSessionNotice }
         let decoder = JSONDecoder()
         switch frame.event {
+        case "notification":
+            guard let value = try? decoder.decode(Notice.self, from: data), !value.sid.isEmpty,
+                  !value.notification.id.isEmpty, !value.notification.message.isEmpty,
+                  ["working", "completed", "needs-input", "blocked", "reminder"].contains(value.notification.status) else { return nil }
+            return .notification(value.sid, value.notification)
         case "busy":
             guard let value = try? decoder.decode(Busy.self, from: data), !value.sid.isEmpty else { return nil }
             return .busy(value.sid, value.busy)
@@ -45,6 +52,8 @@ struct DesktopStatusReconciliation {
     struct Delta {
         var busy: Field<Bool>?
         var prompt: Field<DesktopPrompt?>?
+        var notification: Field<DesktopSessionNotice>?
+        var completionNotification: Field<DesktopSessionNotice>?
     }
     private(set) var revision: UInt64 = 0
     private var changes: [String: [String: Delta]] = [:]
@@ -52,6 +61,11 @@ struct DesktopStatusReconciliation {
     mutating func record(_ event: DesktopStatusEvent, host: String) {
         revision += 1
         switch event {
+        case .notification(let sid, let value):
+            changes[host, default: [:]][sid, default: Delta()].notification = Field(value: value, revision: revision)
+            if value.status == "completed" {
+                changes[host, default: [:]][sid, default: Delta()].completionNotification = Field(value: value, revision: revision)
+            }
         case .busy(let sid, let value):
             changes[host, default: [:]][sid, default: Delta()].busy = Field(value: value, revision: revision)
         case .prompt(let sid, let value):
@@ -72,6 +86,12 @@ struct DesktopStatusReconciliation {
                 if field.value != nil { host.needsInputSessionIds.insert(sid) }
                 else { host.needsInputSessionIds.remove(sid) }
             }
+            if let field = delta.notification, field.revision > snapshotRevision {
+                host.sessions[index].notification = field.value
+            }
+            if let field = delta.completionNotification, field.revision > snapshotRevision {
+                host.sessions[index].completionNotification = field.value
+            }
         }
     }
 
@@ -80,7 +100,9 @@ struct DesktopStatusReconciliation {
         for sid in pending.keys {
             if let field = pending[sid]?.busy, field.revision <= snapshotRevision { pending[sid]?.busy = nil }
             if let field = pending[sid]?.prompt, field.revision <= snapshotRevision { pending[sid]?.prompt = nil }
-            if pending[sid]?.busy == nil && pending[sid]?.prompt == nil { pending[sid] = nil }
+            if let field = pending[sid]?.notification, field.revision <= snapshotRevision { pending[sid]?.notification = nil }
+            if let field = pending[sid]?.completionNotification, field.revision <= snapshotRevision { pending[sid]?.completionNotification = nil }
+            if pending[sid]?.busy == nil && pending[sid]?.prompt == nil && pending[sid]?.notification == nil && pending[sid]?.completionNotification == nil { pending[sid] = nil }
         }
         changes[host] = pending.isEmpty ? nil : pending
     }
@@ -94,6 +116,12 @@ extension APISession {
             lastUserText: lastUserText, closed: closed, purpose: purpose)
         copy.prompt = prompt
         copy.task = task
+        copy.kind = kind
+        copy.notification = notification
+        copy.completionNotification = completionNotification
+        copy.last = last
+        copy.lastUserAt = lastUserAt
+        copy.suppressCompletionNotification = suppressCompletionNotification
         return copy
     }
 }

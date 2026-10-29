@@ -3,6 +3,7 @@
 // its parent chain to the pane's top process, and `send-keys` into that pane.
 import { readFileSync, writeFileSync, existsSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
+import { withNotificationInstructions } from "./session-notification-instructions";
 import { ppidOf as procPpidOf, ttyOf, normalizeTty } from "./procinfo";
 import { spawnTmuxLaunch, tmuxLaunchArgv, type TmuxLaunch } from "./tmux-launch";
 export { tmuxLiteral } from "./tmux-launch";
@@ -686,7 +687,7 @@ export function spawnManagedSession(opts: {
   fork?: boolean;
 }): { ok: boolean; error?: string } {
   ensureFolderTrusted(opts.cwd);
-  return spawnTmuxLaunch(managedSessionLaunch(opts));
+  return spawnTmuxLaunch(managedSessionLaunch({ ...opts, systemPrompt: withNotificationInstructions(opts.systemPrompt, opts.name) }));
 }
 
 // Switch a running Claude session's model by RELAUNCHING its pane on the new
@@ -843,7 +844,7 @@ export function spawnManagedCodexSession(opts: {
   fork?: boolean;
 }): { ok: boolean; error?: string } {
   ensureCodexFolderTrusted(opts.cwd);
-  const create = spawnTmuxLaunch(managedCodexSessionLaunch(opts));
+  const create = spawnTmuxLaunch(managedCodexSessionLaunch({ ...opts, systemPrompt: withNotificationInstructions(opts.systemPrompt, opts.name) }));
   if (!create.ok) return create;
   setTimeout(() => {
     try {

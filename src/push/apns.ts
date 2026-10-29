@@ -32,7 +32,7 @@ export type ApnsPayload = {
   title: string;
   body: string;
   sid: string; // session id, for deep-linking + thread grouping
-  kind: "needs-input" | "finished" | "job";
+  kind: "needs-input" | "finished" | "job" | "status";
   notificationId?: string;
   session?: ApnsPayloadSession;
   hostId?: string;

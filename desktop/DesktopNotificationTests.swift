@@ -76,6 +76,101 @@ enum DesktopNotificationTests {
         asking.observeNotifications()
         try check(kinds == [.needsInput], "adjacent busy and prompt frames emit only needs-input")
 
+        func customItem(busy: Bool = true, userAt: Double? = 100, note: DesktopSessionNotice? = nil,
+                        preview: DesktopAssistantPreview? = nil) -> SessionItem {
+            let value = item(busy: busy)
+            var session = value.session
+            session.lastUserAt = userAt
+            session.notification = note
+            session.last = preview
+            return SessionItem(session: session, hostURL: value.hostURL, hostId: value.hostId,
+                               hostLabel: value.hostLabel, hostIsLocal: value.hostIsLocal, hostSSHTarget: value.hostSSHTarget)
+        }
+        let custom = DesktopSessionNotice(id: "receipt", status: "completed", title: "Fix notifications",
+            message: "Fixed alerts. All 12 tests pass.", createdAt: 200, turnStartedAt: 100)
+        tracker = DesktopNotificationTracker()
+        _ = tracker.observe([customItem()], now: 0)
+        let customResult = tracker.observe([customItem(note: custom)], now: 1)
+        try check(customResult.count == 1 && customResult.first?.title == "Fix notifications"
+            && customResult.first?.body == "Completed: Fixed alerts. All 12 tests pass.", "custom completion preserves authored copy")
+        try check(tracker.observe([customItem(note: custom)], now: 2).isEmpty, "replayed receipt never duplicates")
+        try check(tracker.observe([customItem(busy: false, note: custom)], now: 20).isEmpty, "custom completion suppresses generic stop for its turn")
+        _ = tracker.observe([customItem(userAt: 300, note: custom)], now: 21)
+        try check(tracker.observe([customItem(busy: false, userAt: 300, note: custom)], now: 40).count == 1, "new turn still finishes normally")
+        let preview = DesktopAssistantPreview(role: "assistant", kind: "text", text: "Fixed the alerts.", ts: 200)
+        let summaryItem = customItem(busy: false, userAt: 100, preview: preview)
+        try check(DesktopSessionNotification(item: summaryItem, kind: .finished).body == "Finished: Fixed the alerts.", "automatic finish uses current assistant prose")
+        try check(DesktopSessionNotification(item: customItem(busy: false, userAt: 300, preview: preview), kind: .finished).body == "The agent finished its turn.", "old assistant result cannot describe a new turn")
+
+        let streamed = SessionStore()
+        streamed.configuredHosts = [entry]
+        streamed.hosts = [HostState(url: entry.url, sshTarget: nil, sessions: [customItem().session])]
+        var messages: [String] = []
+        streamed.onSessionNotification = { messages.append($0.body) }
+        let eventJSON = """
+        {"sid":"one","notification":{"id":"receipt","status":"completed","title":"Fix notifications","message":"Fixed alerts. All 12 tests pass.","createdAt":200,"turnStartedAt":100}}
+        """
+        let event = DesktopStatusEvent.decode(SSEFrame(event: "notification", data: eventJSON))
+        try check(event?.sessionID == "one", "custom notification journal frame decodes")
+        streamed.receiveStatus(event!, host: entry.url)
+        streamed.receiveStatus(event!, host: entry.url)
+        try check(messages == ["Completed: Fixed alerts. All 12 tests pass."], "real feed posts custom copy once")
+        try check(streamed.hosts[0].sessions[0].busy, "notification does not invent idle state")
+        var staleHost = HostState(url: entry.url, sshTarget: nil, sessions: [customItem().session])
+        streamed.statusReconciliation.apply(to: &staleHost, after: 0)
+        try check(staleHost.sessions[0].notification?.id == custom.id, "late REST cannot erase a custom journal message")
+        try check(customItem(note: custom).session.replacingBusy(false).notification == custom, "busy edges preserve notification metadata")
+        var seeded = DesktopNotificationTracker()
+        try check(seeded.observe([customItem(note: custom)], now: 0).isEmpty, "startup does not replay historical custom alerts")
+        for staleMarker: Double? in [nil, 50] {
+            var staleTracker = DesktopNotificationTracker()
+            _ = staleTracker.observe([customItem(userAt: staleMarker)], now: 0)
+            try check(staleTracker.observe([customItem(userAt: staleMarker, note: custom)], now: 1).count == 1,
+                      "custom result arrives before REST repairs the turn marker")
+            _ = staleTracker.observe([customItem(userAt: 100, note: custom)], now: 2)
+            try check(staleTracker.observe([customItem(busy: false, userAt: staleMarker, note: custom)], now: 20).isEmpty,
+                      "stale marker cannot produce a generic duplicate")
+            _ = staleTracker.observe([customItem(userAt: staleMarker, note: custom)], now: 21)
+            try check(staleTracker.observe([customItem(busy: false, userAt: staleMarker, note: custom)], now: 40).count == 1,
+                      "a later quick busy cycle still notifies with stale REST metadata")
+        }
+        let markerless = DesktopSessionNotice(id: "markerless", status: "completed", title: "Result", message: "Verified.", createdAt: 200, turnStartedAt: nil)
+        var markerlessTracker = DesktopNotificationTracker()
+        _ = markerlessTracker.observe([customItem(userAt: nil)], now: 0)
+        _ = markerlessTracker.observe([customItem(userAt: nil, note: markerless)], now: 1)
+        try check(markerlessTracker.observe([customItem(busy: false, userAt: nil, note: markerless)], now: 20).isEmpty,
+                  "markerless sessions suppress their immediate generic completion")
+        var repairedTracker = DesktopNotificationTracker()
+        _ = repairedTracker.observe([customItem()], now: 0)
+        let reminder = DesktopSessionNotice(id: "later-reminder", status: "reminder", title: "Review", message: "Review the result.", createdAt: 201, turnStartedAt: 100)
+        streamed.receiveStatus(.notification("one", reminder), host: entry.url)
+        var afterReminder = HostState(url: entry.url, sshTarget: nil, sessions: [customItem().session])
+        streamed.statusReconciliation.apply(to: &afterReminder, after: 0)
+        try check(afterReminder.sessions[0].completionNotification?.id == custom.id
+                  && afterReminder.sessions[0].notification?.id == reminder.id,
+                  "late snapshot retains both the completion receipt and later reminder")
+        func suppressionItem(_ busy: Bool) -> SessionItem {
+            let value = customItem(busy: busy, note: reminder)
+            var session = value.session
+            session.completionNotification = custom
+            return SessionItem(session: session, hostURL: value.hostURL, hostId: value.hostId,
+                               hostLabel: value.hostLabel, hostIsLocal: value.hostIsLocal, hostSSHTarget: value.hostSSHTarget)
+        }
+        _ = repairedTracker.observe([suppressionItem(true)], now: 1)
+        try check(repairedTracker.observe([suppressionItem(false)], now: 20).isEmpty,
+                  "REST completion receipt repairs a missed completion even after a later reminder")
+        _ = repairedTracker.observe([suppressionItem(true)], now: 21)
+        try check(repairedTracker.observe([suppressionItem(false)], now: 40).count == 1,
+                  "an old REST completion receipt cannot hide a later quick busy cycle")
+        var delayedTracker = DesktopNotificationTracker()
+        _ = delayedTracker.observe([customItem()], now: 0)
+        _ = delayedTracker.observe([customItem(note: custom)], now: 1)
+        _ = delayedTracker.observe([customItem(busy: false, note: custom)], now: 20)
+        _ = delayedTracker.observe([customItem(note: custom)], now: 21)
+        _ = delayedTracker.observe([suppressionItem(true)], now: 22)
+        try check(delayedTracker.observe([suppressionItem(false)], now: 40).count == 1,
+                  "delayed REST for an old completion cannot rearm the new busy interval")
+
         try check(DesktopITerm.localTTYs("test\t/dev/ttys001\ntest-other\t/dev/ttys002\n", session: "test") == ["/dev/ttys001"], "local mapping matches exact tmux name")
         let guid = "A345C9E4-CAD6-4A63-8798-191E97702917"
         let parsed = DesktopITerm.parseRemoteDiscovery("ID\tw0t0p0:\(guid)\nARGV\ttmux attach-session -t old-name\nID\tinvalid\n")

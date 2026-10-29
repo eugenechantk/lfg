@@ -139,6 +139,8 @@ import { registerDevice, unregisterDevice, deviceCount, listDevices } from "../p
 import { upsertLiveActivityToken } from "../push/liveactivity-store.ts";
 import { ensureBroadcastChannel } from "../push/broadcast.ts";
 import { apnsConfigFromEnv, sendApns } from "../push/apns.ts";
+import { SessionNotifications, sessionNotificationRoutes } from "../session-notifications.ts";
+import { chatNotificationInstructions } from "../session-notification-instructions.ts";
 import {
   startPushWatcher,
   pushConfigured,
@@ -1340,6 +1342,7 @@ export async function cmdServe(options: {
   const chats = new ChatSessions(join(PATHS.data, "chat-sessions"), new NativeClaudeRunner(), {
     emit: (sid, type, payload) => { journal.append(sid, type, payload); },
     jobMcpURL: id=>`http://127.0.0.1:${PORT}/api/scheduled-tasks/mcp/${id}`,
+    notificationInstructions: chatNotificationInstructions,
   });
   await chats.ready;
   const chatJobs=new ChatJobs(taskStore,chats,{scheduler:scheduledTasks,migrateFrom:join(PATHS.data,'chat-jobs.json'),push:{devices:listDevices,hostId:()=>hostInfo().hostId,retire:unregisterDevice,send:async(device,payload)=>{if(!pushWatcherEnabled(PORT))return {ok:false,status:503,reason:'Push delivery is disabled for this host port.'};const cfg=apnsConfigFromEnv();return cfg?sendApns(device,payload,cfg):{ok:false,status:503,reason:'Push is not configured on this host.'};}}});
@@ -1349,7 +1352,26 @@ export async function cmdServe(options: {
   process.once("SIGTERM", stopChats);
   process.once("SIGINT", stopChats);
   const chatAPI = chatRoutes(chats);
-  const allSessions = async () => [...await listSessions(), ...await chats.sessions()];
+  const rawSessions = async () => [...await listSessions(), ...await chats.sessions()];
+  const notifications = new SessionNotifications(join(PATHS.data, "session-notifications.json"), {
+    sessions: rawSessions,
+    emit: (sid, notification) => { journal.append(sid, "notification", { sid, notification }); },
+    devices: listDevices,
+    send: async (device, payload) => {
+      if (!backgroundTasks || !pushWatcherEnabled(PORT)) return { ok: false, status: 503, reason: "Push delivery is disabled for this host port." };
+      const cfg = apnsConfigFromEnv();
+      return cfg ? sendApns(device, { ...payload, hostId: hostInfo().hostId, seq: journal.head() }, cfg)
+        : { ok: false, status: 503, reason: "Push is not configured on this host." };
+    },
+  });
+  await notifications.ready;
+  const notificationAPI = sessionNotificationRoutes(notifications);
+  const allSessions = async () => (await rawSessions()).map(session => {
+    const notification = session.sessionId ? notifications.latest(session.sessionId) : undefined;
+    return { ...session, notification,
+      completionNotification: session.sessionId ? notifications.latestCompletion(session.sessionId) : undefined,
+    };
+  });
   const browserFrames = new BrowserFrameStore();
   const browserSignIn = new BrowserSignInHub(undefined, {historyPath: options.browserSignInHistoryPath ?? join(homedir(), ".lfg", "phone-sign-in-history.json")});
   setSendqJournal(journal);
@@ -1375,6 +1397,7 @@ export async function cmdServe(options: {
       hostId: () => hostInfo().hostId,
       hostName: () => hostInfo().hostName,
       signInPrompt,
+      completionNotification: sid => notifications.latestCompletion(sid),
     });
   };
 
@@ -1487,6 +1510,9 @@ export async function cmdServe(options: {
   ): Promise<Response | undefined> {
       const url = new URL(req.url);
       const path = url.pathname;
+
+      const notificationResponse = await notificationAPI(req);
+      if (notificationResponse) return notificationResponse;
 
       const jobResponse=await jobAPI(req);
       if(jobResponse)return jobResponse;

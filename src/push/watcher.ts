@@ -64,6 +64,9 @@ export type PriorState = {
   busy: boolean;
   promptPresent: boolean;
   lastNotifiedAt: number;
+  completionNotificationId?: string;
+  completionAnnounced?: boolean;
+  completedThrough?: number;
 };
 
 export type PushKind = "needs-input" | "finished";
@@ -161,6 +164,9 @@ export type PayloadSessionInput = {
   model?: string | null;
   status?: string | null;
   lastActivityAt?: number | null;
+  lastUserAt?: number | null;
+  completionNotification?: { id: string; createdAt: number };
+  last?: { role: string; kind: string; text: string; ts?: number | null } | null;
   runningChildAgentCount?: number;
   runningChildSessionCount?: number;
   runningBackgroundProcessCount?: number;
@@ -477,7 +483,10 @@ export function buildPayload(
   }
   return {
     title: `✅ ${name}`,
-    body: "The agent finished its turn.",
+    body: session.last?.role === "assistant" && session.last.kind === "text" && session.last.text.trim()
+      && session.last.ts != null && session.lastUserAt != null && session.last.ts >= session.lastUserAt
+      ? `Finished: ${clip(session.last.text.replace(/<oai-mem-citation>[\s\S]*?<\/oai-mem-citation>/g, "").replace(/`/g, "").replace(/\*\*([^*]+)\*\*/g, "$1").replace(/^#{1,6}\s+/gm, ""), 350)}`
+      : "The agent finished its turn.",
     sid,
     kind,
     session: snap,
@@ -533,6 +542,7 @@ export async function observeSession(
 }
 
 export type TickDeps = {
+  completionNotification?: (sid: string) => { id: string; createdAt: number } | undefined;
   /// Slice mode (`LFG_FLEET_AGGREGATOR_URL`): publish this host's rows to the
   /// fleet aggregator Worker and make NO Live Activity decision locally — see
   /// `fleet-slice.ts`. When set, `liveActivities` is ignored.
@@ -875,6 +885,22 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
     }
     const observedAt = now();
     const prev = prior.get(sid);
+    // Read after observation: a custom alert may have arrived while the pane
+    // scrape was in flight. Track its identity independently of the latest
+    // progress/reminder alert so stale snapshots cannot rearm a later turn.
+    const completion = deps.completionNotification?.(sid) ?? s.completionNotification;
+    let completionAnnounced = prev?.completionAnnounced ?? false;
+    let completedThrough = prev?.completedThrough;
+    if ((prev && !prev.busy && state.busy) || (s.lastUserAt != null && completedThrough != null && s.lastUserAt > completedThrough)) {
+      completionAnnounced = false;
+      completedThrough = undefined;
+    }
+    if (completion && (!prev || completion.id !== prev.completionNotificationId)
+        && (s.lastUserAt == null || completion.createdAt >= s.lastUserAt)) {
+      completionAnnounced = true;
+      completedThrough = completion.createdAt;
+    }
+    const completionState = { completionNotificationId: completion?.id ?? prev?.completionNotificationId, completionAnnounced, completedThrough };
     if (liveActivities || deps.slice) liveActivityObservations.push({ session: s, observed: state, previous: prev });
     if (!prev) {
       // First sighting — seed without emitting. -Infinity marks "never notified"
@@ -883,13 +909,18 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
         busy: state.busy,
         promptPresent: state.promptPresent,
         lastNotifiedAt: Number.NEGATIVE_INFINITY,
+        ...completionState,
       });
       continue;
     }
     const { event, state: nextState } = reduceTransition(prev, state, observedAt);
-    prior.set(sid, nextState);
+    prior.set(sid, { ...nextState, ...completionState });
     if (!event) continue;
-    if (s.kind === "chat" && (s.turnOutcome !== "completed" || s.suppressCompletionNotification)) continue;
+    if (event === "finished" && (completionAnnounced || s.suppressCompletionNotification || (s.kind === "chat" && s.turnOutcome !== "completed"))) {
+      // A completion we did not send must not hide a subsequent real question.
+      prior.set(sid, { ...nextState, ...completionState, lastNotifiedAt: prev.lastNotifiedAt });
+      continue;
+    }
     const payload = withWakeMetadata(buildPayload(s, event, state.promptQuestion), deps);
     for (const d of devices) {
       const r = await deps.send(d, payload, deps.cfg);
@@ -934,7 +965,7 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
-type StartPushWatcherDeps = Pick<Partial<TickDeps>, "head" | "hostId" | "hostName" | "sessions"> & {
+type StartPushWatcherDeps = Pick<Partial<TickDeps>, "head" | "hostId" | "hostName" | "sessions" | "completionNotification"> & {
   signInPrompt?: SignInPromptLookup;
 };
 
@@ -1101,6 +1132,7 @@ export function startPushWatcher(
     head: injected.head,
     hostId: injected.hostId,
     hostName: injected.hostName,
+    completionNotification: injected.completionNotification,
     log,
   };
   const aggregator = liveActivitiesEnabled() ? aggregatorConfig() : null;

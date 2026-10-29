@@ -89,6 +89,13 @@ beforeEach(() => {
   downloads = new DownloadStore(null, () => clock);
 });
 
+test("notify_session forwards authored text and stable retry identity", async () => {
+  routes = [post(`/api/sessions/${A}/notify`, { mobile: { state: "accepted", accepted: 2 } })];
+  const result = await tools().notify_session!.run({ session_id: A, request_id: "release-result", status: "completed", message: "Build uploaded. Apple processing is pending." });
+  expect(txt(result)).toContain('"accepted":2');
+  expect(calls).toEqual([{ method: "POST", path: `/api/sessions/${A}/notify`, body: { requestID: "release-result", status: "completed", message: "Build uploaded. Apple processing is pending." } }]);
+});
+
 // ---- formatting --------------------------------------------------------------------
 
 test("sessionState follows the client's precedence", () => {

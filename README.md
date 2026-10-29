@@ -2,6 +2,9 @@
 
 Run and manage your AI coding agents on your own VPS.
 
+Sessions can send descriptive alerts to LFG clients with `lfg notify` or the
+`notify_session` MCP tool. See [session notifications](integrations/session-notifications.md).
+
 **Website:** [lfg.apps.omg.dev](https://lfg.apps.omg.dev)
 
 `lfg` turns a plain Linux box or macOS workstation into a control plane for

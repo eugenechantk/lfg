@@ -100,19 +100,71 @@ enum DesktopNotificationProbeCLI {
     }
 }
 
-enum DesktopNotificationKind: String { case finished, needsInput = "needs-input" }
+struct DesktopAssistantPreview: Decodable, Hashable {
+    let role: String
+    let kind: String
+    let text: String
+    let ts: Double?
+}
+
+struct DesktopSessionNotice: Decodable, Hashable, Sendable {
+    let id: String
+    let status: String
+    let title: String
+    let message: String
+    let createdAt: Double
+    let turnStartedAt: Double?
+    var label: String {
+        switch status {
+        case "completed": return "Completed"
+        case "needs-input": return "Needs input"
+        case "blocked": return "Blocked"
+        case "reminder": return "Reminder"
+        default: return "Working"
+        }
+    }
+    var kind: DesktopNotificationKind {
+        switch status {
+        case "completed": return .finished
+        case "needs-input", "blocked": return .needsInput
+        default: return .status
+        }
+    }
+    func completes(_ session: APISession) -> Bool {
+        status == "completed" && (session.lastUserAt == nil || createdAt >= session.lastUserAt!)
+    }
+}
+
+enum DesktopNotificationKind: String { case finished, needsInput = "needs-input", status }
+
+extension APISession {
+    var completionReceipt: DesktopSessionNotice? {
+        completionNotification ?? (notification?.status == "completed" ? notification : nil)
+    }
+}
 
 struct DesktopSessionNotification {
     let item: SessionItem
     let kind: DesktopNotificationKind
+    var custom: DesktopSessionNotice? = nil
     var target: DesktopNotificationTarget { DesktopNotificationTarget(item) }
     var title: String {
+        if let custom { return custom.title }
         let name = [item.session.title, item.session.tmuxName ?? "", String((item.session.sessionId ?? "").prefix(8)), "Session"]
             .first { !$0.isEmpty }!
         return (kind == .finished ? "✅ " : "🙋 ") + Self.clip(name, limit: 48)
     }
     var body: String {
-        kind == .finished ? "The agent finished its turn."
+        if let custom { return "\(custom.label): \(custom.message)" }
+        if kind == .finished, let last = item.session.last, last.role == "assistant", last.kind == "text",
+           let ts = last.ts, let userAt = item.session.lastUserAt, ts >= userAt, !last.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let text = last.text.replacingOccurrences(of: "<oai-mem-citation>[\\s\\S]*?</oai-mem-citation>", with: "", options: .regularExpression)
+                .replacingOccurrences(of: "`", with: "")
+                .replacingOccurrences(of: "\\*\\*([^*]+)\\*\\*", with: "$1", options: .regularExpression)
+                .replacingOccurrences(of: "(?m)^#{1,6}\\s+", with: "", options: .regularExpression)
+            return "Finished: \(Self.clip(text, limit: 350))"
+        }
+        return kind == .finished ? "The agent finished its turn."
             : item.session.prompt?.question.flatMap { $0.isEmpty ? nil : Self.clip($0, limit: 140) }
                 ?? "An agent is waiting for your input."
     }
@@ -126,7 +178,14 @@ struct DesktopSessionNotification {
 /// prompts suppressed by the ten-second cooldown remain pending for the next tick.
 struct DesktopNotificationTracker {
     struct Key: Hashable { let host: String; let session: String }
-    struct State { var busy: Bool; var prompt: Bool; var lastNotified: TimeInterval = -.infinity }
+    struct State {
+        var busy: Bool; var prompt: Bool; var lastNotified: TimeInterval = -.infinity
+        var notificationID: String? = nil
+        var completionID: String? = nil
+        var completionAnnounced = false
+        var completedThrough: Double? = nil
+        var lastUserAt: Double? = nil
+    }
     private var prior: [Key: State] = [:]
 
     mutating func seedMissing(_ items: [SessionItem]) {
@@ -134,7 +193,13 @@ struct DesktopNotificationTracker {
             guard let sid = item.session.sessionId, !sid.isEmpty else { continue }
             let key = Key(host: item.hostId, session: sid)
             if prior[key] == nil {
-                prior[key] = State(busy: item.session.busy, prompt: item.needsInput || item.session.prompt != nil)
+                let completion = item.session.completionReceipt
+                prior[key] = State(busy: item.session.busy, prompt: item.needsInput || item.session.prompt != nil,
+                                   notificationID: item.session.notification?.id,
+                                   completionID: completion?.id,
+                                   completionAnnounced: item.session.suppressCompletionNotification || completion?.completes(item.session) == true,
+                                   completedThrough: completion?.createdAt,
+                                   lastUserAt: item.session.lastUserAt)
             }
         }
     }
@@ -148,11 +213,37 @@ struct DesktopNotificationTracker {
             guard seen.insert(key).inserted, !item.hostOffline else { continue }
             let busy = item.session.busy
             let prompt = item.needsInput || item.session.prompt != nil
-            var next = State(busy: busy, prompt: prompt)
+            let completion = item.session.completionReceipt
+            var next = State(busy: busy, prompt: prompt, notificationID: item.session.notification?.id,
+                             completionID: completion?.id,
+                             completionAnnounced: item.session.suppressCompletionNotification || completion?.completes(item.session) == true,
+                             completedThrough: completion?.createdAt,
+                             lastUserAt: item.session.lastUserAt)
             guard let previous = prior[key] else { prior[key] = next; continue }
             next.lastNotified = previous.lastNotified
+            next.completionAnnounced = previous.completionAnnounced
+            next.completedThrough = previous.completedThrough
+            next.completionID = completion?.id ?? previous.completionID
+            // A new interval can start before REST refreshes its user timestamp.
+            // Clear the latch on that edge as well as a newer known user turn.
+            if (!previous.busy && busy) || (next.lastUserAt != nil && previous.completedThrough != nil && next.lastUserAt! > previous.completedThrough!) {
+                next.completionAnnounced = false
+                next.completedThrough = nil
+            }
+            if let completion, completion.id != previous.completionID, completion.completes(item.session) {
+                // A separate receipt repairs missed events even if the latest
+                // alert is now a reminder. Old receipts cannot rearm a new turn.
+                next.completionAnnounced = true
+                next.completedThrough = completion.createdAt
+            }
+            if let custom = item.session.notification, previous.notificationID != custom.id {
+                next.lastNotified = now
+                notifications.append(DesktopSessionNotification(item: item, kind: custom.kind, custom: custom))
+                prior[key] = next
+                continue
+            }
             let candidate: DesktopNotificationKind? = !previous.prompt && prompt ? .needsInput
-                : previous.busy && !busy && !prompt ? .finished : nil
+                : previous.busy && !busy && !prompt && !next.completionAnnounced ? .finished : nil
             if let candidate, now - previous.lastNotified >= 10 {
                 next.lastNotified = now
                 notifications.append(DesktopSessionNotification(item: item, kind: candidate))
