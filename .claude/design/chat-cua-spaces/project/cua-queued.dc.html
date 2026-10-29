@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cua · Queued and not-sent</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button,textarea,input{font:inherit;color:inherit}
+button{background:transparent;border:0}
+textarea::placeholder{color:#8E8E93}
+</style>
+</helmet><div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #000000; color: #FFFFFF; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; -webkit-font-smoothing: antialiased;">
+
+<div style="position: absolute; top: 112px; left: 0; right: 0; bottom: 228px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 14px; padding: 0 16px 8px; box-sizing: border-box;">
+    <div style="font-size: 17px; line-height: 24px; color: #F2F2F7;">Three need an answer. I’ve written one for the design review thread and left it as a draft in Gmail — nothing has been sent.</div>
+    <div style="display: flex; align-items: center; gap: 8px; padding: 2px 0; color: #A1A1A6;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"></path><path d="M13.5 6.5l4 4"></path></svg><span style="flex: 1 1 auto; font-size: 15px;">Saved a draft in Gmail</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#636366" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></div>
+  </div>
+
+  <div style="position: absolute; top: 0; left: 0; right: 0; height: 124px; background: linear-gradient(#000000 72%, rgba(0,0,0,0)); pointer-events: none;"></div>
+  <div style="position: absolute; top: 54px; left: 16px; right: 16px; height: 56px; display: flex; align-items: center; gap: 10px;">
+    <a href="cua-list.dc.html" aria-label="Back to Spaces" style="width: 44px; height: 44px; flex: 0 0 44px; border-radius: 22px; background: rgba(44,44,46,0.92); box-shadow: 0 2px 12px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+    <a href="cua-sheet.dc.html" style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;">
+      <span style="font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">Inbox triage</span>
+      <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #A1A1A6; white-space: nowrap;"><span style="width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: {{dotColor}}; box-shadow: {{dotHalo}};"></span><span style="color: {{statusColor}}; font-weight: 600;">{{statusLabel}}</span><span>{{statusTail}}</span></span>
+    </a>
+    <a href="cua-sheet.dc.html" aria-label="Space tools and options" style="width: 44px; height: 44px; flex: 0 0 44px; border-radius: 22px; background: rgba(44,44,46,0.92); box-shadow: 0 2px 12px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"></path><circle cx="15" cy="7" r="2.2"></circle><circle cx="9" cy="17" r="2.2"></circle></svg></a>
+  </div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 196px; background: linear-gradient(rgba(0,0,0,0), #000000 22%); pointer-events: none;"></div>
+
+  <sc-if value="{{isQueued}}" hint-placeholder-val="{{true}}">
+    <button onClick="{{toggleMenu}}" aria-haspopup="menu" aria-expanded="{{menuAttr}}" aria-label="Queued message options" style="position: absolute; left: 12px; right: 12px; bottom: 186px; height: 32px; border: 0; border-radius: 16px; background: {{rowBg}}; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 0 10px 0 12px; font: inherit; display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer;">
+      <svg style="flex: 0 0 13px;" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="#3A3A3C" stroke-width="3"></circle><path d="M12 3a9 9 0 0 1 9 9" stroke="#A1A1A6" stroke-width="3" stroke-linecap="round"></path></svg>
+      <span style="flex: 1 1 auto; min-width: 0; font-size: 13px; color: #A1A1A6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">also check the calendar thread before you reply</span>
+      <svg style="flex: 0 0 16px;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="8" cy="12" r="0.9" fill="#8E8E93"></circle><circle cx="12" cy="12" r="0.9" fill="#8E8E93"></circle><circle cx="16" cy="12" r="0.9" fill="#8E8E93"></circle></svg>
+    </button>
+  </sc-if>
+  <sc-if value="{{isFailed}}" hint-placeholder-val="{{false}}">
+    <button onClick="{{toggleMenu}}" aria-haspopup="menu" aria-expanded="{{menuAttr}}" aria-label="Message not sent, options" style="position: absolute; left: 12px; right: 12px; bottom: 186px; height: 32px; border: 0; border-radius: 16px; background: {{rowBg}}; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 0 10px 0 12px; font: inherit; display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer;">
+      <svg style="flex: 0 0 13px;" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF453A" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5"></path><path d="M12 16h.01"></path></svg>
+      <span style="flex: 1 1 auto; min-width: 0; font-size: 13px; color: #FF453A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Not sent · also check the calendar thread before you reply</span>
+      <svg style="flex: 0 0 16px;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="8" cy="12" r="0.9" fill="#8E8E93"></circle><circle cx="12" cy="12" r="0.9" fill="#8E8E93"></circle><circle cx="16" cy="12" r="0.9" fill="#8E8E93"></circle></svg>
+    </button>
+  </sc-if>
+
+  <a href="cua-watch.dc.html" aria-label="Watch the desktop" style="position: absolute; left: 12px; right: 12px; bottom: 134px; height: 44px; border-radius: 22px; background: #1C1C1E; border: 0.5px solid #38383A; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 5px; box-sizing: border-box;">
+    <span style="display: block; width: 56px; height: 34px; border-radius: 7px; overflow: hidden; position: relative; background: linear-gradient(150deg, #332A4A, #1A172B);"><span style="position: absolute; left: 14%; top: 22%; right: 12%; bottom: 14%; border-radius: 3px; background: #202124; border: 0.5px solid rgba(255,255,255,0.12);"></span><span style="position: absolute; left: 14%; top: 22%; right: 12%; height: 5px; background: #35363A; border-radius: 3px 3px 0 0;"></span><span style="position: absolute; left: 18%; top: 44%; width: 22%; height: 3px; border-radius: 2px; background: #8AB4F8;"></span><span style="position: absolute; left: 18%; top: 56%; width: 46%; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.22);"></span><span style="position: absolute; left: 18%; top: 68%; width: 34%; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.14);"></span></span>
+    <span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+      <span style="font-size: 14px; font-weight: 500; color: #F2F2F7;">Desktop</span>
+      <span style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: #30D158; white-space: nowrap; overflow: hidden;">
+        <span style="width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: #30D158; box-shadow: 0 0 0 3px #30D15840;"></span><span style="overflow: hidden; text-overflow: ellipsis;">Working · composing a reply</span>
+      </span>
+    </span>
+    <span style="font-size: 14px; font-weight: 600; color: #409CFF;">Watch</span>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#636366" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 15l-6-6-6 6"></path></svg>
+  </a>
+
+  <div style="position: absolute; left: 12px; right: 12px; bottom: 28px; height: 96px; border-radius: 24px; background: #1C1C1E; border: 0.5px solid #38383A; box-sizing: border-box; padding: 11px 10px 10px 16px; display: flex; flex-direction: column; justify-content: space-between;">
+    <textarea aria-label="Message" rows="1" placeholder="Message the agent…" value="{{draft}}" onInput="{{onType}}" style="border: 0; outline: none; resize: none; padding: 0; background: transparent; font: inherit; font-size: 17px; line-height: 22px; color: #FFFFFF;"></textarea>
+    <span style="display: flex; align-items: center; gap: 8px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#A1A1A6" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"></path></svg>
+      <span style="height: 28px; padding: 0 10px; border-radius: 14px; background: #2C2C2E; display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500; color: #D1D1D6;">Codex gpt-6.1 · High
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
+      <span style="flex: 1 1 auto;"></span>
+      <sc-if value="{{showStop}}" hint-placeholder-val="{{true}}">
+        <button aria-label="Stop the agent" style="width: 34px; height: 34px; border: 0; border-radius: 17px; background: #F2F2F7; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;">
+          <span style="width: 11px; height: 11px; border-radius: 3px; background: #000000;"></span>
+        </button>
+      </sc-if>
+      <sc-if value="{{showSend}}" hint-placeholder-val="{{false}}">
+        <button onClick="{{send}}" aria-label="Send" style="width: 34px; height: 34px; border: 0; border-radius: 17px; background: #0A6EE0; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg>
+        </button>
+      </sc-if>
+    </span>
+  </div>
+
+  <sc-if value="{{menuOpen}}" hint-placeholder-val="{{true}}">
+    <button aria-label="Close menu" onClick="{{toggleMenu}}" style="position: absolute; left: 0; right: 0; top: 0; bottom: 228px; border: 0; padding: 0; background: transparent; cursor: default;"></button>
+    <div role="menu" style="position: absolute; right: 12px; bottom: 226px; width: 256px; border-radius: 16px; background: rgba(44,44,46,0.97); box-shadow: 0 12px 40px rgba(0,0,0,0.6); overflow: hidden;">
+      <button role="menuitem" type="button" style="width: 100%; border: 0; border-bottom: 0.5px solid #48484A; background: transparent; font: inherit; color: #FFFFFF; display: flex; align-items: center; gap: 10px; padding: 10px 16px; text-align: left; cursor: pointer;">
+        <span style="flex: 1 1 auto; display: flex; flex-direction: column;"><span style="font-size: 17px;">{{firstLabel}}</span><span style="font-size: 13px; color: #A1A1A6;">{{firstSub}}</span></span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg>
+      </button>
+      <button role="menuitem" type="button" style="width: 100%; border: 0; border-bottom: 0.5px solid #48484A; background: transparent; font: inherit; font-size: 17px; color: #FFFFFF; display: flex; align-items: center; gap: 10px; padding: 11px 16px; text-align: left; cursor: pointer;">
+        <span style="flex: 1 1 auto;">Edit</span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"></path><path d="M13.5 6.5l4 4"></path></svg>
+      </button>
+      <button role="menuitem" type="button" style="width: 100%; border: 0; background: transparent; font: inherit; font-size: 17px; color: #FF453A; display: flex; align-items: center; gap: 10px; padding: 11px 16px; text-align: left; cursor: pointer;">
+        <span style="flex: 1 1 auto;">Remove</span>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>
+      </button>
+    </div>
+  </sc-if>
+</div></x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview": {"width": 390, "height": 844}, "state": {"editor": "enum", "options": ["queued", "failed"], "default": "queued"}}'>
+class Component extends DCLogic {
+
+  constructor(props) { super(props); this.state = { menu: true, draft: '' }; }
+  renderVals() {
+    const kind = this.props.state || 'queued';
+    const s = this.state, hasText = s.draft.trim().length > 0;
+    const live = { dotColor: '#30D158', dotHalo: '0 0 0 3px rgba(48,209,88,0.25)', statusColor: '#30D158',
+      statusLabel: 'Working \u00b7 3m 40s', statusTail: ' \u00b7 1 queued \u00b7 Pro' };
+    const dead = { dotColor: '#FF453A', dotHalo: 'none', statusColor: '#FF453A',
+      statusLabel: 'Pro offline \u00b7 2m', statusTail: ' \u00b7 1 not sent' };
+    return Object.assign({}, kind === 'queued' ? live : dead, {
+      isQueued: kind === 'queued', isFailed: kind === 'failed',
+      rowBg: s.menu ? 'rgba(118,118,128,0.40)' : 'rgba(118,118,128,0.22)',
+      menuOpen: s.menu, menuAttr: s.menu ? 'true' : 'false',
+      toggleMenu: () => this.setState({ menu: !s.menu }),
+      firstLabel: kind === 'queued' ? 'Send now' : 'Try again',
+      firstSub: kind === 'queued' ? 'Stops the current step first' : 'Pro has to be reachable',
+      draft: s.draft, onType: (e) => this.setState({ draft: e.target.value }),
+      showStop: !hasText, showSend: hasText, send: () => this.setState({ draft: '' })
+    });
+  }
+}
+</script>
+</body>
+</html>

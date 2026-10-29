@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cua · Spaces list</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button,textarea,input{font:inherit;color:inherit}
+button{background:transparent;border:0}
+textarea::placeholder{color:#8E8E93}
+</style>
+</helmet><div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #000000; color: #FFFFFF; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; -webkit-font-smoothing: antialiased;">
+
+  <div style="position: absolute; top: 112px; left: 0; right: 0; bottom: 0; overflow: hidden;">
+    <sc-for list="{{sections}}" as="sec" hint-placeholder-count="4">
+      <button onClick="{{sec.toggle}}" aria-expanded="{{sec.expanded}}" style="width: 100%; border: 0; background: transparent; font: inherit; display: flex; align-items: center; gap: 8px; padding: 14px 16px 6px 20px; font-size: 15px; color: #A1A1A6; text-align: left; cursor: pointer;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{sec.chevron}}"></path></svg>
+        <span style="font-weight: 600; color: {{sec.color}};">{{sec.label}}</span>
+        <span style="color: #8E8E93;">{{sec.count}}</span>
+        <span style="flex: 1 1 auto;"></span>
+      </button>
+      <sc-for list="{{sec.rows}}" as="r" hint-placeholder-count="2">
+        <a href="{{r.href}}" style="display: flex; align-items: flex-start; padding-left: 20px; opacity: {{r.opacity}};">
+          <span style="width: 20px; flex: 0 0 20px; padding-top: 18px;"><span style="display: block; width: 8px; height: 8px; border-radius: 50%; background: {{r.dotBg}}; border: {{r.dotBorder}}; box-sizing: border-box;"></span></span>
+          <span style="flex: 1 1 auto; min-width: 0; padding: 11px 16px 12px 0; border-bottom: 0.5px solid #2C2C2E; display: flex; flex-direction: column; gap: 2px;">
+            <span style="font-size: 17px; line-height: 22px; font-weight: {{r.weight}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.title}}</span>
+            <span style="display: flex; align-items: center; gap: 5px; font-size: 15px; line-height: 20px; color: {{r.lineColor}}; min-width: 0;">
+              <sc-if value="{{r.ask}}" hint-placeholder-val="{{false}}">
+                <svg style="flex: 0 0 14px;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF9F0A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path><path d="M10 9a2 2 0 1 1 3 1.7c-.6.4-1 .8-1 1.5"></path><circle cx="12" cy="14.2" r="0.5" fill="#FF9F0A"></circle></svg>
+              </sc-if>
+              <sc-if value="{{r.live}}" hint-placeholder-val="{{false}}">
+                <span style="width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #30D158; box-shadow: 0 0 0 3px rgba(48,209,88,0.25);"></span>
+              </sc-if>
+              <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.line}}</span>
+            </span>
+            <span style="display: flex; align-items: center; gap: 5px; font-size: 13px; line-height: 18px; color: #8E8E93; white-space: nowrap; overflow: hidden;">
+              <span style="overflow: hidden; text-overflow: ellipsis;">{{r.meta}}</span>
+              <svg style="flex: 0 0 13px;" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.5"></rect><path d="M9 20h6M12 16v4"></path></svg>
+              <span>{{r.host}}</span>
+            </span>
+          </span>
+        </a>
+      </sc-for>
+    </sc-for>
+  </div>
+
+  <div style="position: absolute; top: 54px; left: 16px; right: 16px; height: 52px; display: flex; align-items: center; gap: 10px;">
+    <div style="flex: 1 1 auto; display: flex; align-items: center; gap: 12px; font-size: 16px; font-weight: 600;"><span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: #30D158;"></span>Pro</span><span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: #30D158;"></span>Air</span></div>
+    <div style="height: 48px; border-radius: 24px; background: rgba(44,44,46,0.92); box-shadow: 0 2px 12px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; padding: 0 4px;">
+      <button type="button" aria-label="Search Spaces" style="width: 44px; height: 44px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg></button>
+      <button type="button" aria-label="More options" style="width: 44px; height: 44px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;"><svg width="20" height="20" viewBox="0 0 24 24" fill="#FFFFFF" aria-hidden="true"><circle cx="5" cy="12" r="1.9"></circle><circle cx="12" cy="12" r="1.9"></circle><circle cx="19" cy="12" r="1.9"></circle></svg></button>
+    </div>
+  </div>
+  <div style="position: absolute; top: 0; left: 0; right: 0; height: 112px; background: #000000; z-index: -1;"></div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 150px; background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.96) 55%); pointer-events: none;"></div>
+  <nav aria-label="Tabs" style="position: absolute; left: 16px; bottom: 28px; height: 56px; border-radius: 28px; background: rgba(36,36,38,0.94); box-shadow: 0 4px 24px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; padding: 4px; box-sizing: border-box;">
+    <a href="s2-list.dc.html" style="width: 84px; height: 48px; border-radius: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #FFFFFF; position: relative;"><svg width="22" height="18" viewBox="0 0 26 22" fill="currentColor" aria-hidden="true"><path d="M3 1h12a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 15 13H8.5L4 16.5V13H3A2.5 2.5 0 0 1 .5 10.5v-7A2.5 2.5 0 0 1 3 1z"></path></svg><span style="font-size: 10px; font-weight: 600;">Sessions</span></a><a href="tA2d-list.dc.html" style="width: 84px; height: 48px; border-radius: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #FFFFFF; position: relative;"><svg width="20" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="14" rx="2"></rect><path d="M2.5 9h15M6.5 2.5v4M13.5 2.5v4"></path><circle cx="18" cy="17" r="4.2" fill="#242426"></circle><path d="M18 15.3V17l1.2 1"></path></svg><span style="font-size: 10px; font-weight: 600;">Tasks</span><span style="position: absolute; top: 4px; right: 16px; min-width: 18px; height: 18px; border-radius: 9px; background: #FF9F0A; color: #1C1C1E; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 4px; box-sizing: border-box;">2</span></a><a href="cua-list.dc.html" aria-current="page" style="width: 84px; height: 48px; border-radius: 24px; background: #3A3A3C; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #409CFF; position: relative;"><svg width="21" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="3.5" width="19" height="13" rx="2.5"></rect><path d="M7 20.5h10M12 16.5v4"></path><path d="M6.5 8.5h7M6.5 11.5h4"></path></svg><span style="font-size: 10px; font-weight: 600;">Message</span><span style="position: absolute; top: 4px; right: 16px; min-width: 18px; height: 18px; border-radius: 9px; background: #FF9F0A; color: #1C1C1E; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 4px; box-sizing: border-box;">1</span></a>
+  </nav>
+  <a href="cua-new.dc.html" aria-label="New Space" style="position: absolute; right: 16px; bottom: 28px; width: 56px; height: 56px; border-radius: 28px; background: rgba(36,36,38,0.94); box-shadow: 0 4px 24px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; justify-content: center; color: #FFFFFF;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+  </a>
+</div></x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview": {"width": 390, "height": 844}}'>
+class Component extends DCLogic {
+
+  constructor(props) { super(props); this.state = { collapsed: { needs: false, working: false, ready: false, stopped: true } }; }
+  renderVals() {
+    const c = this.state.collapsed;
+    const open = 'M6 9l6 6 6-6', shut = 'M9 6l6 6-6 6';
+    const d = (col) => ({ dotBg: col, dotBorder: '0' });
+    const ring = (col) => ({ dotBg: 'transparent', dotBorder: '1.5px solid ' + col });
+    const row = (o) => Object.assign({ href: 'cua-chat.dc.html', weight: '400', lineColor: '#A1A1A6', ask: false, live: false, opacity: '1' }, o);
+    const defs = [
+      { id: 'needs', label: 'Needs input', color: '#FF9F0A', rows: [
+        row({ href: 'cua-confirm.dc.html', ...d('#FF9F0A'), weight: '600', title: 'Inbox triage',
+              ask: true, line: 'Asks: send this reply?', lineColor: '#FF9F0A',
+              meta: 'Codex gpt-6.1 \u00b7 Ubuntu 24.04 \u00b7 1m \u00b7', host: 'Pro' })
+      ]},
+      { id: 'working', label: 'Working', color: '#A1A1A6', rows: [
+        row({ href: 'cua-chat.dc.html', ...d('#30D158'), title: 'Design review replies', live: true,
+              line: 'Working \u00b7 writing a draft \u00b7 3m', lineColor: '#30D158',
+              meta: 'Codex gpt-6.1 \u00b7 Ubuntu 24.04 \u00b7', host: 'Pro' }),
+        row({ ...d('#30D158'), title: 'Expense receipts', live: true,
+              line: 'Working \u00b7 downloading PDFs \u00b7 12m', lineColor: '#30D158',
+              meta: 'Codex gpt-6.1 \u00b7 Ubuntu 24.04 \u00b7', host: 'Pro' })
+      ]},
+      { id: 'ready', label: 'Ready', color: '#A1A1A6', rows: [
+        row({ ...d('#0A84FF'), title: 'Weekly reading', line: 'Ready \u00b7 desktop is running',
+              meta: 'Codex gpt-6.1 \u00b7 Ubuntu 24.04 \u00b7 2h \u00b7', host: 'Pro' }),
+        row({ ...ring('#FF9F0A'), title: 'Travel bookings', line: 'Air is offline \u00b7 last seen 14m ago',
+              lineColor: '#FFB340', opacity: '0.5',
+              meta: 'Codex gpt-6.1 \u00b7 Ubuntu 24.04 \u00b7 4h \u00b7', host: 'Air' })
+      ]},
+      { id: 'stopped', label: 'Stopped', color: '#A1A1A6', rows: [
+        row({ href: 'cua-stopped.dc.html', ...d('#636366'), title: 'Vendor research',
+              line: 'Stopped \u00b7 send a message to start it',
+              meta: 'Codex gpt-6.1 \u00b7 1d \u00b7', host: 'Pro' })
+      ]}
+    ];
+    const counts = { needs: '1', working: '2', ready: '2', stopped: '6' };
+    return { sections: defs.map((x) => ({
+      label: x.label, color: x.color, count: counts[x.id],
+      chevron: c[x.id] ? shut : open, expanded: c[x.id] ? 'false' : 'true',
+      rows: c[x.id] ? [] : x.rows,
+      toggle: () => { const n = Object.assign({}, c); n[x.id] = !c[x.id]; this.setState({ collapsed: n }); }
+    })) };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cua · Handing control over</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button,textarea,input{font:inherit;color:inherit}
+button{background:transparent;border:0}
+textarea::placeholder{color:#8E8E93}
+</style>
+</helmet><div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #000000; color: #FFFFFF; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; -webkit-font-smoothing: antialiased;">
+
+<div style="position: absolute; top: 112px; left: 0; right: 0; bottom: 379px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 14px; padding: 0 16px 8px; box-sizing: border-box;">
+    <div style="font-size: 17px; line-height: 24px; color: #F2F2F7;">I’ve written one for the design review thread and left it as a draft in Gmail.</div>
+  </div>
+
+  <div style="position: absolute; top: 0; left: 0; right: 0; height: 124px; background: linear-gradient(#000000 72%, rgba(0,0,0,0)); pointer-events: none;"></div>
+  <div style="position: absolute; top: 54px; left: 16px; right: 16px; height: 56px; display: flex; align-items: center; gap: 10px;">
+    <a href="cua-list.dc.html" aria-label="Back to Spaces" style="width: 44px; height: 44px; flex: 0 0 44px; border-radius: 22px; background: rgba(44,44,46,0.92); box-shadow: 0 2px 12px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+    <a href="cua-sheet.dc.html" style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;">
+      <span style="font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">Inbox triage</span>
+      <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #A1A1A6; white-space: nowrap;"><span style="width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: {{dotColor}}; box-shadow: {{dotHalo}};"></span><span style="color: {{statusColor}}; font-weight: 600;">{{statusLabel}}</span><span>{{statusTail}}</span></span>
+    </a>
+    <a href="cua-sheet.dc.html" aria-label="Space tools and options" style="width: 44px; height: 44px; flex: 0 0 44px; border-radius: 22px; background: rgba(44,44,46,0.92); box-shadow: 0 2px 12px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.10); display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"></path><circle cx="15" cy="7" r="2.2"></circle><circle cx="9" cy="17" r="2.2"></circle></svg></a>
+  </div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 250px; background: linear-gradient(rgba(0,0,0,0), #000000 16%); pointer-events: none;"></div>
+
+  <div style="position: absolute; left: 12px; right: 12px; bottom: 134px; height: 229px; border-radius: 20px; overflow: hidden; border: 0.5px solid #38383A; background: #1C1C1E;">
+    <div style="position: absolute; inset: 0; border-radius: 0px; overflow: hidden; background: linear-gradient(150deg, #332A4A 0%, #241F39 55%, #1A172B 100%);">
+  <div style="position: absolute; top: 0; left: 0; right: 0; height: 13.0px; background: rgba(0,0,0,0.42); display: flex; align-items: center; padding: 0 9.0px; font-size: 8.0px; color: rgba(255,255,255,0.72);">
+    <span>Activities</span><span style="flex: 1 1 auto;"></span><span>14:32</span>
+  </div>
+  <div style="position: absolute; left: 14.0px; top: 26.0px; width: 338.0px; height: 189.0px; border-radius: 6.0px; overflow: hidden; background: #202124; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 8.0px 26.0px rgba(0,0,0,0.5);">
+    <div style="height: 22.0px; background: #35363A; display: flex; align-items: flex-end; gap: 3.0px; padding: 0 6.0px;">
+      <span style="display: flex; gap: 4.0px; align-self: center; margin-right: 4.0px;"><span style="width: 6.0px; height: 6.0px; border-radius: 50%; background: #FF5F57;"></span><span style="width: 6.0px; height: 6.0px; border-radius: 50%; background: #FEBC2E;"></span><span style="width: 6.0px; height: 6.0px; border-radius: 50%; background: #28C840;"></span></span>
+      <span style="height: 16.0px; padding: 0 9.0px; border-radius: 5.0px 5.0px 0 0; background: #202124; color: #E8EAED; font-size: 8.0px; display: flex; align-items: center;">Inbox (12)</span>
+      <span style="height: 14.0px; padding: 0 9.0px; border-radius: 5.0px 5.0px 0 0; background: rgba(255,255,255,0.05); color: #9AA0A6; font-size: 8.0px; display: flex; align-items: center;">Calendar</span>
+    </div>
+    <div style="height: 20.0px; display: flex; align-items: center; gap: 6.0px; padding: 0 8.0px; background: #202124;">
+      <span style="width: 10.0px; height: 10.0px; border-radius: 50%; border: 1.2px solid #5F6368;"></span>
+      <span style="flex: 1 1 auto; height: 13.0px; border-radius: 7.0px; background: #2F3134; display: flex; align-items: center; padding: 0 8.0px; font-size: 8.0px; color: #BDC1C6;">mail.google.com</span>
+    </div>
+    <div style="position: absolute; left: 0; right: 0; top: 42.0px; bottom: 0; display: flex;">
+      <div style="flex: 0 0 44.0px; padding: 7.0px 6.0px; display: flex; flex-direction: column; gap: 5.0px; border-right: 1px solid rgba(255,255,255,0.06);">
+        <span style="height: 16.0px; border-radius: 8.0px; background: #8AB4F8; color: #202124; font-size: 8.0px; font-weight: 600; display: flex; align-items: center; justify-content: center;">Compose</span>
+        <span style="font-size: 8.0px; color: #E8EAED;">Inbox</span>
+        <span style="font-size: 8.0px; color: #9AA0A6;">Starred</span>
+        <span style="font-size: 8.0px; color: #9AA0A6;">Drafts</span>
+      </div>
+      <div style="flex: 1 1 auto; min-width: 0; padding: 5.0px 6.0px; display: flex; flex-direction: column; gap: 2.0px; position: relative;">
+        <div style="height: 21.0px; background: rgba(255,255,255,0.07); border-radius: 3.0px; display: flex; align-items: center; gap: 7.0px; padding: 0 7.0px; box-sizing: border-box;"><span style="width: 6.0px; height: 6.0px; border-radius: 50%; background: #8AB4F8; flex: 0 0 auto;"></span><span style="flex: 0 0 62.0px; font-size: 8.5px; font-weight: 600; color: #E8EAED; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Design review — round 3</span><span style="flex: 1 1 auto; min-width: 0; font-size: 8.5px; color: #9AA0A6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Thanks — two notes on the spacing before we…</span><span style="flex: 0 0 auto; font-size: 8.0px; color: #9AA0A6;">9:12</span></div><div style="height: 21.0px; background: transparent; border-radius: 3.0px; display: flex; align-items: center; gap: 7.0px; padding: 0 7.0px; box-sizing: border-box;"><span style="width: 6.0px; height: 6.0px; border-radius: 50%; background: rgba(255,255,255,0.18); flex: 0 0 auto;"></span><span style="flex: 0 0 62.0px; font-size: 8.5px; font-weight: 400; color: #E8EAED; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Re: launch checklist</span><span style="flex: 1 1 auto; min-width: 0; font-size: 8.5px; color: #9AA0A6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">I’ve ticked everything except the store copy…</span><span style="flex: 0 0 auto; font-size: 8.0px; color: #9AA0A6;">8:47</span></div><div style="height: 21.0px; background: transparent; border-radius: 3.0px; display: flex; align-items: center; gap: 7.0px; padding: 0 7.0px; box-sizing: border-box;"><span style="width: 6.0px; height: 6.0px; border-radius: 50%; background: rgba(255,255,255,0.18); flex: 0 0 auto;"></span><span style="flex: 0 0 62.0px; font-size: 8.5px; font-weight: 400; color: #E8EAED; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Weekly digest</span><span style="flex: 1 1 auto; min-width: 0; font-size: 8.5px; color: #9AA0A6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">12 new items in your reading queue</span><span style="flex: 0 0 auto; font-size: 8.0px; color: #9AA0A6;">8:02</span></div><div style="height: 21.0px; background: transparent; border-radius: 3.0px; display: flex; align-items: center; gap: 7.0px; padding: 0 7.0px; box-sizing: border-box;"><span style="width: 6.0px; height: 6.0px; border-radius: 50%; background: rgba(255,255,255,0.18); flex: 0 0 auto;"></span><span style="flex: 0 0 62.0px; font-size: 8.5px; font-weight: 400; color: #E8EAED; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Re: contractor invoice</span><span style="flex: 1 1 auto; min-width: 0; font-size: 8.5px; color: #9AA0A6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Attaching the signed copy for your records</span><span style="flex: 0 0 auto; font-size: 8.0px; color: #9AA0A6;">7:31</span></div><div style="height: 21.0px; background: transparent; border-radius: 3.0px; display: flex; align-items: center; gap: 7.0px; padding: 0 7.0px; box-sizing: border-box;"><span style="width: 6.0px; height: 6.0px; border-radius: 50%; background: rgba(255,255,255,0.18); flex: 0 0 auto;"></span><span style="flex: 0 0 62.0px; font-size: 8.5px; font-weight: 400; color: #E8EAED; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Build 205 is ready to test</span><span style="flex: 1 1 auto; min-width: 0; font-size: 8.5px; color: #9AA0A6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">TestFlight processed your build</span><span style="flex: 0 0 auto; font-size: 8.0px; color: #9AA0A6;">6:58</span></div>
+        <div style="position: absolute; right: 8.0px; bottom: 0; width: 126.0px; height: 86.0px; background: #292A2D; border-radius: 6.0px 6.0px 0 0; box-shadow: 0 4.0px 16.0px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column;"><div style="height: 15.0px; background: #3C4043; display: flex; align-items: center; padding: 0 7.0px; font-size: 8.0px; color: #E8EAED;">New message</div><div style="padding: 5.0px 7.0px; display: flex; flex-direction: column; gap: 4.0px;"><span style="font-size: 8.0px; color: #9AA0A6; border-bottom: 1px solid rgba(255,255,255,0.10); padding-bottom: 3.0px;">To: design review thread</span><span style="font-size: 8.0px; color: #9AA0A6; border-bottom: 1px solid rgba(255,255,255,0.10); padding-bottom: 3.0px;">Re: Design review — round 3</span><span style="font-size: 8.0px; line-height: 11.0px; color: #E8EAED;">Thanks both — I’ll tighten the row spacing to 8pt and re-post…</span></div><span style="position: absolute; left: 7.0px; bottom: 5.0px; height: 13.0px; padding: 0 9.0px; border-radius: 7.0px; background: #8AB4F8; color: #202124; font-size: 8.0px; font-weight: 600; display: flex; align-items: center;">Send</span><span style="position: absolute; right: 7.0px; bottom: 6.0px; font-size: 7.5px; color: #9AA0A6;">Draft saved</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+    <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 46px; background: rgba(0,0,0,0.58); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); display: flex; align-items: center; gap: 8px; padding: 0 12px;">
+      <span style="width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: {{footDotColor}};"></span>
+      <span style="flex: 1 1 auto; min-width: 0; font-size: 13px; color: #F2F2F7;">{{footText}}</span>
+    </div>
+
+    <div style="position: absolute; inset: 0; background: {{scrim}}; display: flex; align-items: center; justify-content: center; padding: 0 20px;">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 9px; text-align: center;">
+        <sc-if value="{{isSpin}}" hint-placeholder-val="{{true}}">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.22)" stroke-width="2.6"></circle>
+            <path d="M12 3a9 9 0 0 1 9 9" stroke="#409CFF" stroke-width="2.6" stroke-linecap="round"></path></svg>
+        </sc-if>
+        <sc-if value="{{isHand}}" hint-placeholder-val="{{false}}">
+          <span style="width: 38px; height: 38px; border-radius: 19px; background: #0A84FF; display: flex; align-items: center; justify-content: center;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 11V5.2a1.7 1.7 0 0 1 3.4 0V10"></path><path d="M11.9 10V4.2a1.7 1.7 0 0 1 3.4 0V10"></path><path d="M15.3 10.4V6.6a1.6 1.6 0 0 1 3.2 0v7.6a7 7 0 0 1-7 7h-.6a6 6 0 0 1-5.3-3.2l-2-3.7a1.7 1.7 0 0 1 2.8-1.9l1.7 2.2"></path></svg></span>
+        </sc-if>
+        <sc-if value="{{isWarn}}" hint-placeholder-val="{{false}}">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#FF453A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4.5l9 15.5H3z"></path><path d="M12 10v4"></path><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"></circle></svg>
+        </sc-if>
+        <span style="font-size: 17px; font-weight: 600; color: #FFFFFF;">{{title}}</span>
+        <span style="font-size: 13px; line-height: 18px; color: #D1D1D6;">{{body}}</span>
+        <span style="display: flex; gap: 8px; margin-top: 4px;">
+          <sc-if value="{{hasPrimary}}" hint-placeholder-val="{{false}}">
+            <a href="{{primaryHref}}" style="height: 34px; padding: 0 15px; border-radius: 17px; background: #0A6EE0; color: #FFFFFF; font-size: 14px; font-weight: 600; display: flex; align-items: center;">{{primary}}</a>
+          </sc-if>
+          <sc-if value="{{hasSecondary}}" hint-placeholder-val="{{true}}">
+            <a href="cua-watch.dc.html" style="height: 34px; padding: 0 15px; border-radius: 17px; background: rgba(255,255,255,0.14); color: #F2F2F7; font-size: 14px; font-weight: 600; display: flex; align-items: center;">{{secondary}}</a>
+          </sc-if>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 12px; right: 12px; bottom: 28px; height: 96px; border-radius: 24px; background: #1C1C1E; border: 0.5px solid #38383A; box-sizing: border-box; padding: 11px 10px 10px 16px; display: flex; flex-direction: column; justify-content: space-between;">
+    <textarea aria-label="Message" rows="1" placeholder="Message the agent…" value="{{draft}}" onInput="{{onType}}" style="border: 0; outline: none; resize: none; padding: 0; background: transparent; font: inherit; font-size: 17px; line-height: 22px; color: #FFFFFF;"></textarea>
+    <span style="display: flex; align-items: center; gap: 8px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#A1A1A6" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"></path></svg>
+      <span style="height: 28px; padding: 0 10px; border-radius: 14px; background: #2C2C2E; display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500; color: #D1D1D6;">Codex gpt-6.1 · High
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
+      <span style="flex: 1 1 auto;"></span>
+      <sc-if value="{{showStop}}" hint-placeholder-val="{{true}}">
+        <button aria-label="Stop the agent" style="width: 34px; height: 34px; border: 0; border-radius: 17px; background: #F2F2F7; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;">
+          <span style="width: 11px; height: 11px; border-radius: 3px; background: #000000;"></span>
+        </button>
+      </sc-if>
+      <sc-if value="{{showSend}}" hint-placeholder-val="{{false}}">
+        <button onClick="{{send}}" aria-label="Send" style="width: 34px; height: 34px; border: 0; border-radius: 17px; background: #0A6EE0; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg>
+        </button>
+      </sc-if>
+    </span>
+  </div>
+</div></x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview": {"width": 390, "height": 844}, "state": {"editor": "enum", "options": ["pausing", "ready", "disconnected", "reconnecting", "resumed"], "default": "pausing"}}'>
+class Component extends DCLogic {
+
+  renderVals() {
+    const st = this.props.state || 'pausing';
+    const d = (this.state && this.state.draft) || '', has = d.trim().length > 0;
+    const spinner = 'spin', ok = 'hand', warn = 'warn';
+    const line = (c, label, tail) => ({ dotColor: c, dotHalo: 'none', statusColor: c, statusLabel: label, statusTail: tail });
+    const M = {
+      pausing: {
+        mark: spinner, title: 'Pausing the agent',
+        body: 'Finishing the step it is on, so it does not fight you for the mouse.',
+        primary: '', primaryHref: '#', secondary: 'Cancel', scrim: 'rgba(0,0,0,0.62)',
+        footDotColor: '#FF9F0A', footText: 'Agent pausing \u00b7 the Space keeps running',
+        status: line('#FF9F0A', 'Pausing \u00b7 2s', ' \u00b7 Pro')
+      },
+      ready: {
+        mark: ok, title: 'You have control',
+        body: 'The agent is paused. The Space and its apps keep running.',
+        primary: 'Open full screen', primaryHref: 'cua-control.dc.html', secondary: 'Not now',
+        scrim: 'rgba(0,0,0,0.55)',
+        footDotColor: '#FF9F0A', footText: 'Agent paused \u00b7 you have control',
+        status: line('#0A84FF', 'You have control', ' \u00b7 agent paused \u00b7 Pro')
+      },
+      disconnected: {
+        mark: warn, title: 'Lost the desktop picture',
+        body: 'The Space is still running on Pro and the agent is still paused. Only the live view dropped.',
+        primary: 'Try again', primaryHref: 'cua-handoff.dc.html', secondary: 'Back to chat',
+        scrim: 'rgba(0,0,0,0.74)',
+        footDotColor: '#FF453A', footText: 'No picture \u00b7 last frame 8s ago',
+        status: line('#FF453A', 'Desktop unreachable \u00b7 8s', ' \u00b7 Pro')
+      },
+      reconnecting: {
+        mark: spinner, title: 'Reconnecting\u2026',
+        body: 'Attempt 2 of 5. Nothing you did was lost.',
+        primary: '', primaryHref: '#', secondary: 'Back to chat', scrim: 'rgba(0,0,0,0.70)',
+        footDotColor: '#FF9F0A', footText: 'Reconnecting \u00b7 agent still paused',
+        status: line('#FF9F0A', 'Reconnecting \u00b7 11s', ' \u00b7 Pro')
+      },
+      resumed: {
+        mark: ok, title: 'The agent took over again',
+        body: 'Your message went through, so control went back to Codex. Take control again any time.',
+        primary: 'Take control', primaryHref: 'cua-handoff.dc.html', secondary: 'Watch',
+        scrim: 'rgba(0,0,0,0.55)',
+        footDotColor: '#30D158', footText: 'Working \u00b7 reading your message',
+        status: line('#30D158', 'Working \u00b7 1s', ' \u00b7 Pro')
+      }
+    };
+    const m = M[st];
+    return Object.assign({}, m, m.status, {
+      isSpin: m.mark === 'spin', isHand: m.mark === 'hand', isWarn: m.mark === 'warn',
+      hasPrimary: !!m.primary, hasSecondary: !!m.secondary,
+      draft: d, onType: (e) => this.setState({ draft: e.target.value }),
+      showStop: !has, showSend: has, send: () => this.setState({ draft: '' })
+    });
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cua · Mac narrow window</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button,textarea,input{font:inherit;color:inherit}
+button{background:transparent;border:0}
+textarea::placeholder{color:#8E8E93}
+</style>
+</helmet><div style="width: 400px; height: 860px; box-sizing: border-box; display: flex; flex-direction: column; background: #1B1B1E; color: #F4F4F6; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif; font-size: 13px; line-height: 1.35;">
+<sc-if value="{{isList}}" hint-placeholder-val="{{true}}">
+
+  <div style="display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 12px 0 14px; flex: none">
+    <div style="display: flex; gap: 8px; flex: none" aria-hidden="true"><span style="width: 12px; height: 12px; border-radius: 6px; background: #FF5F57"></span><span style="width: 12px; height: 12px; border-radius: 6px; background: #FEBC2E"></span><span style="width: 12px; height: 12px; border-radius: 6px; background: #28C840"></span></div>
+    <div style="flex: 1; display: flex; justify-content: center"><div role="tablist" aria-label="View" style="display: flex; padding: 3px; border-radius: 16px; background: rgba(255,255,255,0.07)"><span role="tab" aria-selected="false" style="height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 11px; border-radius: 13px; color: #C9CBD3; font-size: 12px; font-weight: 600">Sessions<span style="min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: #FF9F0A; color: #1A1206; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center">2</span></span><span role="tab" aria-selected="false" style="height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 11px; border-radius: 13px; color: #C9CBD3; font-size: 12px; font-weight: 600">Tasks<span style="min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: #FF9F0A; color: #1A1206; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center">2</span></span><span role="tab" aria-selected="true" style="height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 11px; border-radius: 13px; background: rgba(255,255,255,0.16); color: #F4F4F6; font-size: 12px; font-weight: 600">Spaces<span style="min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: #FF9F0A; color: #1A1206; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center">1</span></span></div></div>
+    <button aria-label="Search Spaces" style="flex: none; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 15px; background: rgba(255,255,255,0.07); color: #D6D7DD">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+    </button>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 8px; padding: 0 16px 8px; font-size: 12px; color: #A8A8B0; flex: none">
+    <span style="width: 7px; height: 7px; border-radius: 4px; background: #32D74B"></span><span>Pro</span>
+    <span style="width: 7px; height: 7px; border-radius: 4px; background: #32D74B; margin-left: 4px"></span><span>Air</span>
+    <span style="color: #8A8A93">· 2 desktops running</span>
+    <span style="flex: 1"></span>
+    <button style="height: 22px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border: 0; border-radius: 11px; background: rgba(255,255,255,0.06); font-size: 11px; color: #C9CBD3">By status
+      <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg>
+    </button>
+  </div>
+  <div style="flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; padding-bottom: 12px; border-top: 1px solid rgba(255,255,255,0.06)">
+    <div style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 14px 16px 6px 18px;"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#8A8A93" stroke-width="2.4" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg><span style="font-size: 13px; font-weight: 600; color: #FFB340">Needs input</span><span style="font-size: 12px; color: #8A8A93">1</span></div><a href="#" style="display: flex; align-items: stretch; padding-left: 16px; opacity: 1; "><span style="flex: 0 0 46px; padding-top: 10px; display: flex; flex-direction: column"><span style="font-size: 14px; line-height: 19px; font-weight: 650; font-variant-numeric: tabular-nums; color: #FFB340">1m</span><span style="font-size: 11px; line-height: 15px; color: #8A8A93">ago</span></span><span style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 9px 14px 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06)"><span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Inbox triage</span><span style="font-size: 12px; color: #A8A8B0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Codex gpt-6.1 · Ubuntu 24.04 · Pro</span><span style="display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 12px; color: #FFB340"><svg style="flex: none" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#FFB340" stroke-width="1.6" aria-hidden="true"><path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h7A1.5 1.5 0 0 1 13 4.5v5a1.5 1.5 0 0 1-1.5 1.5H7l-3 2.5V11A1.5 1.5 0 0 1 3 9.5z"></path></svg><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Asks: send this reply?</span></span></span></span></a><div style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 14px 16px 6px 18px;"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#8A8A93" stroke-width="2.4" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg><span style="font-size: 13px; font-weight: 600; color: #8A8A93">Working</span><span style="font-size: 12px; color: #8A8A93">2</span></div><a href="#" style="display: flex; align-items: stretch; padding-left: 16px; opacity: 1; "><span style="flex: 0 0 46px; padding-top: 10px; display: flex; flex-direction: column"><span style="font-size: 14px; line-height: 19px; font-weight: 650; font-variant-numeric: tabular-nums; color: #5BE37A">3m</span><span style="font-size: 11px; line-height: 15px; color: #8A8A93">ago</span></span><span style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 9px 14px 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06)"><span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Design review replies</span><span style="font-size: 12px; color: #A8A8B0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Codex gpt-6.1 · Ubuntu 24.04 · Pro</span><span style="display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 12px; color: #A8A8B0"><span style="flex: none; width: 7px; height: 7px; border-radius: 4px; background: #32D74B; box-shadow: 0 0 0 3px rgba(50,215,75,0.22)"></span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Working · writing a draft</span></span></span></span></a><a href="#" style="display: flex; align-items: stretch; padding-left: 16px; opacity: 1; "><span style="flex: 0 0 46px; padding-top: 10px; display: flex; flex-direction: column"><span style="font-size: 14px; line-height: 19px; font-weight: 650; font-variant-numeric: tabular-nums; color: #5BE37A">12m</span><span style="font-size: 11px; line-height: 15px; color: #8A8A93">ago</span></span><span style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 9px 14px 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06)"><span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Expense receipts</span><span style="font-size: 12px; color: #A8A8B0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Codex gpt-6.1 · Ubuntu 24.04 · Pro</span><span style="display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 12px; color: #A8A8B0"><span style="flex: none; width: 7px; height: 7px; border-radius: 4px; background: #32D74B; box-shadow: 0 0 0 3px rgba(50,215,75,0.22)"></span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Working · downloading PDFs</span></span></span></span></a><div style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 14px 16px 6px 18px;"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#8A8A93" stroke-width="2.4" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg><span style="font-size: 13px; font-weight: 600; color: #8A8A93">Ready</span><span style="font-size: 12px; color: #8A8A93">3</span></div><a href="#" style="display: flex; align-items: stretch; padding-left: 16px; opacity: 1; "><span style="flex: 0 0 46px; padding-top: 10px; display: flex; flex-direction: column"><span style="font-size: 14px; line-height: 19px; font-weight: 650; font-variant-numeric: tabular-nums; color: #F4F4F6">2h</span><span style="font-size: 11px; line-height: 15px; color: #8A8A93">ago</span></span><span style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 9px 14px 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06)"><span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Weekly reading</span><span style="font-size: 12px; color: #A8A8B0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Codex gpt-6.1 · Ubuntu 24.04 · Pro</span><span style="display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 12px; color: #A8A8B0"><span style="flex: none; width: 7px; height: 7px; border-radius: 4px; background: #0A84FF"></span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Ready · desktop is running</span></span></span></span></a><a href="#" style="display: flex; align-items: stretch; padding-left: 16px; opacity: 0.5; "><span style="flex: 0 0 46px; padding-top: 10px; display: flex; flex-direction: column"><span style="font-size: 14px; line-height: 19px; font-weight: 650; font-variant-numeric: tabular-nums; color: #8A8A93">4h</span><span style="font-size: 11px; line-height: 15px; color: #8A8A93">ago</span></span><span style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 9px 14px 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06)"><span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Travel bookings</span><span style="font-size: 12px; color: #A8A8B0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Codex gpt-6.1 · Ubuntu 24.04 · Air</span><span style="display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 12px; color: #FFB340"><span style="flex: none; width: 7px; height: 7px; border-radius: 4px; border: 1.5px solid #FF9F0A; box-sizing: border-box"></span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Air is offline</span></span></span></span></a><a href="#" style="display: flex; align-items: stretch; padding-left: 16px; opacity: 1; "><span style="flex: 0 0 46px; padding-top: 10px; display: flex; flex-direction: column"><span style="font-size: 14px; line-height: 19px; font-weight: 650; font-variant-numeric: tabular-nums; color: #8A8A93">1d</span><span style="font-size: 11px; line-height: 15px; color: #8A8A93">ago</span></span><span style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 9px 14px 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06)"><span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Vendor research</span><span style="font-size: 12px; color: #A8A8B0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Codex gpt-6.1 · Pro</span><span style="display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 12px; color: #A8A8B0"><span style="flex: none; width: 7px; height: 7px; border-radius: 4px; background: #636366"></span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Stopped · send a message to start it</span></span></span></span></a>
+  </div></sc-if><sc-if value="{{isChat}}" hint-placeholder-val="{{false}}">
+  <div style="display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 12px 0 14px; flex: none">
+    <div style="display: flex; gap: 8px; flex: none" aria-hidden="true"><span style="width: 12px; height: 12px; border-radius: 6px; background: #FF5F57"></span><span style="width: 12px; height: 12px; border-radius: 6px; background: #FEBC2E"></span><span style="width: 12px; height: 12px; border-radius: 6px; background: #28C840"></span></div>
+    <button aria-label="Back to Spaces" style="flex: none; width: 26px; height: 26px; margin-left: 4px; border: 0; border-radius: 13px; background: rgba(255,255,255,0.07); display: flex; align-items: center; justify-content: center; color: #F4F4F6; cursor: pointer;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button>
+    <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center;">
+      <span style="font-size: 13px; font-weight: 600;">Inbox triage</span>
+      <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #A8A8B0;">
+        <span style="width: 6px; height: 6px; border-radius: 3px; background: #32D74B;"></span>
+        <span style="color: #5BE37A; font-weight: 600;">Working · 2m</span><span>· Pro</span></span>
+    </span>
+    <button aria-label="Space tools" style="flex: none; width: 26px; height: 26px; border: 0; border-radius: 13px; background: rgba(255,255,255,0.07); display: flex; align-items: center; justify-content: center; color: #F4F4F6; cursor: pointer;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"></path><circle cx="15" cy="7" r="2.2"></circle><circle cx="9" cy="17" r="2.2"></circle></svg></button>
+  </div>
+
+  <div style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+    <div style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 11px; padding: 12px 14px;">
+      <div style="align-self: flex-end; max-width: 280px; background: #355C8F; color: #F2F2F7; border-radius: 15px; padding: 7px 11px; font-size: 13px; line-height: 18px;">go through this morning’s inbox and draft a reply to the design review thread</div>
+      <div style="font-size: 13px; line-height: 19px; color: #F4F4F6;">I’ll open Gmail in the Space and read what came in this morning.</div>
+      <div style="display: flex; align-items: center; gap: 7px; color: #A8A8B0;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5h18v13H3z"></path><path d="M3 6l9 7 9-7"></path></svg>
+        <span style="flex: 1; font-size: 12px;">Opened Gmail, read 12 messages</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#8A8A93" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+      </div>
+      <div style="font-size: 13px; line-height: 19px; color: #F4F4F6;">Three need an answer. I’ve written one for the design review thread and left it as a draft — nothing has been sent.</div>
+    </div>
+
+    <a href="#" style="margin: 0 12px 8px; height: 38px; border-radius: 19px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; gap: 9px; padding: 0 11px 0 4px; flex: none;">
+      <span style="display: block; width: 48px; height: 30px; border-radius: 6px; overflow: hidden; position: relative; background: linear-gradient(150deg, #332A4A, #1A172B);">
+        <span style="position: absolute; left: 14%; top: 22%; right: 12%; bottom: 14%; border-radius: 2px; background: #202124; border: 0.5px solid rgba(255,255,255,0.12);"></span>
+        <span style="position: absolute; left: 18%; top: 44%; width: 24%; height: 3px; border-radius: 2px; background: #8AB4F8;"></span>
+      </span>
+      <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+        <span style="font-size: 12px; font-weight: 600; color: #F4F4F6;">Desktop</span>
+        <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #5BE37A;">
+          <span style="width: 6px; height: 6px; border-radius: 3px; background: #32D74B;"></span>Working · composing a reply</span>
+      </span>
+      <span style="font-size: 12px; font-weight: 600; color: #8FB8FF;">Watch</span>
+    </a>
+    <div style="margin: 0 12px 12px; min-height: 66px; border-radius: 16px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); padding: 9px 8px 8px 12px; display: flex; flex-direction: column; justify-content: space-between; flex: none;">
+      <span style="font-size: 13px; color: #8A8A93;">Message the agent…</span>
+      <span style="display: flex; align-items: center; gap: 7px;">
+        <span style="height: 22px; padding: 0 8px; border-radius: 11px; background: rgba(255,255,255,0.07); display: flex; align-items: center; font-size: 11px; color: #C9CBD3;">Codex gpt-6.1 · High</span>
+        <span style="flex: 1;"></span>
+        <span style="width: 26px; height: 26px; border-radius: 13px; background: #F4F4F6; display: flex; align-items: center; justify-content: center;">
+          <span style="width: 9px; height: 9px; border-radius: 2px; background: #1B1B1E;"></span></span>
+      </span>
+    </div>
+  </div></sc-if>
+</div></x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"view": {"editor": "enum", "options": ["list", "chat"], "default": "list"}, "$preview": {"width": 400, "height": 860}}'>
+class Component extends DCLogic {
+
+  renderVals() {
+    const v = this.props.view || 'list';
+    return { isList: v === 'list', isChat: v === 'chat' };
+  }
+}
+</script>
+</body>
+</html>
