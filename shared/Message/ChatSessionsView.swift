@@ -14,7 +14,7 @@ import LFGCore
 private struct ChatLocation: Identifiable, Hashable {
     let host: ScheduledTaskHost
     let session: ChatSessionRecord
-    var id: String { host.id + session.id }
+    var id: String { session.id }
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
@@ -31,7 +31,8 @@ struct ChatSessionsView: View {
     @State private var query = ""
     @State private var showingSearch = false
     @State private var offlineHosts = Set<String>()
-    @State private var chats: [ChatLocation] = []
+    @State private var workspace = ChatWorkspace.shared
+    private var chats: [ChatLocation] { workspace.entries(hosts: hosts).map { ChatLocation(host: $0.host, session: $0.session) } }
     @State private var path: [ChatLocation] = []
     @State private var selectedChat: ChatLocation?
     #if os(macOS)
@@ -49,7 +50,6 @@ struct ChatSessionsView: View {
     }
     @State private var showCreate = false
     @State private var loading = true
-    @State private var errors: [String] = []
     @State private var polling: Task<Void, Never>?
     @State private var isVisible = false
     @Environment(\.scenePhase) private var scenePhase
@@ -65,7 +65,7 @@ struct ChatSessionsView: View {
             } else {
                 NavigationStack(path: $path) {
                     chatList.navigationDestination(for: ChatLocation.self) { item in
-                        ChatSessionScreen(host: item.host, sessionID: item.session.id, onRead: onRead)
+                        ChatSessionScreen(host: item.host, sessionID: item.session.id, hosts: hosts, onRead: onRead)
                     }
                 }
             }
@@ -79,9 +79,9 @@ struct ChatSessionsView: View {
         }
         #endif
         .sheet(isPresented: $showCreate) {
-            ChatCreateSheet(hosts: hosts) { host, record in
+            ChatCreateSheet(hosts: hosts, offlineHosts: offlineHosts) { host, record in
                 let item = ChatLocation(host: host, session: record)
-                chats.insert(item, at: 0); showCreate = false; open(item); onCreated?()
+                showCreate = false; open(item); onCreated?()
             }
         }
         .onChange(of: createTrigger) { _, _ in showCreate = true }
@@ -109,7 +109,7 @@ struct ChatSessionsView: View {
                 .overlay(alignment: .trailing) { Rectangle().fill(ChatColors.separator).frame(width: 1) }
             Group {
                 if let selectedChat {
-                    ChatSessionScreen(host: selectedChat.host, sessionID: selectedChat.session.id, onRead: onRead).id(selectedChat.id)
+                    ChatSessionScreen(host: selectedChat.host, sessionID: selectedChat.session.id, hosts: hosts, onRead: onRead).id(selectedChat.id)
                 } else {
                     ContentUnavailableView("Choose a chat", systemImage: "bubble.left.and.bubble.right",
                         description: Text("Your conversations keep their own instructions and memory."))
@@ -127,7 +127,7 @@ struct ChatSessionsView: View {
             NavigationStack {
                 Group {
                     if let selectedChat {
-                        ChatSessionScreen(host: selectedChat.host, sessionID: selectedChat.session.id, onRead: onRead).id(selectedChat.id)
+                        ChatSessionScreen(host: selectedChat.host, sessionID: selectedChat.session.id, hosts: hosts, onRead: onRead).id(selectedChat.id)
                     } else {
                         ContentUnavailableView("Choose a chat", systemImage: "bubble.left.and.bubble.right",
                             description: Text("Your conversations keep their own instructions and memory."))
@@ -155,7 +155,7 @@ struct ChatSessionsView: View {
                     ProgressView("Loading chats…").padding(40).accessibilityIdentifier("chat_loading")
                 }
                 if !loading && chats.isEmpty {
-                    if errors.isEmpty { emptyList } else { listFailure }
+                    emptyList
                 }
                 ForEach(chats.filter { ChatPresentation.matches($0.session, query: query) }) { item in
                     Button { open(item) } label: { chatRow(item) }
@@ -173,17 +173,6 @@ struct ChatSessionsView: View {
         .toolbar(.hidden, for: .navigationBar)
         #endif
     }
-    private var listFailure: some View {
-        VStack(spacing: 13) {
-            Image(systemName: "wifi.slash").font(.system(size: 32)).foregroundStyle(ChatColors.muted)
-            Text("Chats are unavailable").font(.system(size: 22, weight: .semibold))
-            ForEach(errors, id: \.self) { Text($0).font(.system(size: 15)).foregroundStyle(ChatColors.secondary) }
-            Button("Try again") { Task { await refresh() } }.buttonStyle(.bordered)
-                .accessibilityIdentifier("chat_list_retry")
-        }.multilineTextAlignment(.center).padding(32).frame(maxWidth: .infinity)
-            .containerRelativeFrame(.vertical) { height, _ in max(420, height - 100) }
-            .accessibilityElement(children: .contain).accessibilityIdentifier("chat_list_error")
-    }
     private var emptyList: some View {
         VStack(spacing: 13) {
             HStack(spacing: -8) {
@@ -198,9 +187,9 @@ struct ChatSessionsView: View {
                 Label("New chat", systemImage: "plus").font(.system(size: 17, weight: .semibold))
                     .padding(.horizontal, 22).frame(height: 50)
                     .background(ChatColors.hex(0x0A6EE0), in: Capsule()).foregroundStyle(.white)
-            }.buttonStyle(.plain).padding(.top, 6).disabled(hosts.isEmpty)
+            }.buttonStyle(.plain).padding(.top, 6)
                 .accessibilityIdentifier("chat_empty_create")
-            Text(hosts.isEmpty ? "Connect a host to start a conversation." : "Instructions and memory are private to each chat.")
+            Text("Instructions and memory are private to each chat.")
                 .font(.system(size: 13)).lineSpacing(3).foregroundStyle(ChatColors.muted)
         }.multilineTextAlignment(.center).padding(.horizontal, 32).frame(maxWidth: .infinity)
             .containerRelativeFrame(.vertical) { height, _ in max(420, height - 100) }
@@ -221,7 +210,7 @@ struct ChatSessionsView: View {
             Menu {
                 Text("Most recent activity first")
                 Divider()
-                Button("New chat") { showCreate = true }.disabled(hosts.isEmpty).keyboardShortcut("n")
+                Button("New chat") { showCreate = true }.keyboardShortcut("n")
                 Button("Mark all read") { for id in unreadIDs { onRead?(id) } }.disabled(unreadIDs.isEmpty)
                 Button("Refresh") { Task { await refresh() } }
             } label: {
@@ -251,7 +240,7 @@ struct ChatSessionsView: View {
                 Image(systemName: "magnifyingglass").font(.system(size: 21)).frame(width: 44, height: 44)
             }.accessibilityLabel("Search chats").accessibilityIdentifier("chat_search")
             Menu {
-                Button("New chat") { showCreate = true }.disabled(hosts.isEmpty)
+                Button("New chat") { showCreate = true }
                 Button("Mark all read") { for id in unreadIDs { onRead?(id) } }.disabled(unreadIDs.isEmpty)
                 Button("Refresh") { Task { await refresh() } }
             } label: {
@@ -271,7 +260,7 @@ struct ChatSessionsView: View {
                 }.accessibilityLabel("Search chats").accessibilityIdentifier("chat_search")
                 Menu {
                     Button { showCreate = true } label: { Label("New chat", systemImage: "plus") }
-                        .disabled(hosts.isEmpty).accessibilityIdentifier("chat_create_menu")
+                        .accessibilityIdentifier("chat_create_menu")
                     Button("Mark all read") { for id in unreadIDs { onRead?(id) } }
                         .disabled(unreadIDs.isEmpty).accessibilityIdentifier("chat_mark_all_read")
                     Button { Task { await refresh() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
@@ -282,7 +271,7 @@ struct ChatSessionsView: View {
             }.padding(2).modifier(ChatChrome())
             if showsCreateInToolbar {
                 Button { showCreate = true } label: { Image(systemName: "plus").frame(width: 44, height: 44) }
-                    .modifier(ChatChrome()).disabled(hosts.isEmpty).accessibilityLabel("New chat").accessibilityIdentifier("chat_create")
+                    .modifier(ChatChrome()).accessibilityLabel("New chat").accessibilityIdentifier("chat_create")
             }
         }.buttonStyle(.plain).foregroundStyle(.white)
             .frame(height: 56).padding(.horizontal, 16).padding(.bottom, 14)
@@ -355,7 +344,7 @@ struct ChatSessionsView: View {
         }.padding(.leading, leading).padding(.trailing, trailing)
             .background(selectedChat?.id == item.id && usesSplit ? ChatColors.selection : .clear, in: RoundedRectangle(cornerRadius: isTablet ? 12 : 0))
             .padding(.horizontal, isTablet ? 8 : 0)
-            .opacity(offline ? 0.5 : 1).contentShape(Rectangle())
+            .contentShape(Rectangle())
     }
     private func startPolling() {
         guard isVisible, polling == nil else { return }
@@ -367,24 +356,22 @@ struct ChatSessionsView: View {
         }
     }
     private func refresh() async {
-        var result = chats.filter { item in hosts.contains(where: { $0.id == item.host.id }) }
-        var failures: [String] = []
-        var seen = Set<String>()
-        var failed = Set<String>()
-        for host in hosts where seen.insert(host.id).inserted {
-            do {
-                let fresh = try await ChatSessionsClient(host: host).list()
-                result.removeAll { $0.host.id == host.id }
-                result += fresh.map { ChatLocation(host: host, session: $0) }
-            }
-            catch { failures.append("\(host.name): \(error.localizedDescription)"); failed.insert(host.id) }
-        }
         guard !Task.isCancelled else { return }
-        chats = result.sorted {
-            $0.session.lastActivityAt == $1.session.lastActivityAt ? $0.id < $1.id : $0.session.lastActivityAt > $1.session.lastActivityAt
+        offlineHosts.formIntersection(Set(hosts.map(\.id)))
+        for await update in ChatHostDiscovery.updates(hosts: hosts) {
+            guard !Task.isCancelled else { return }
+            if let fresh = update.sessions {
+                workspace.accept(fresh, on: update.host, configured: hosts)
+                offlineHosts.remove(update.host.id)
+            } else { offlineHosts.insert(update.host.id) }
+            loading = false
         }
-        errors = failures; offlineHosts = failed; loading = false
+        if !Task.isCancelled {
+            loading = false
+            Task { await workspace.flush(hosts: hosts) }
+        }
     }
+
 }
 
 private struct ChatListDock: ViewModifier {
@@ -404,9 +391,10 @@ private struct ChatListDock: ViewModifier {
 
 private struct ChatCreateSheet: View {
     let hosts: [ScheduledTaskHost]
+    let offlineHosts: Set<String>
     let created: (ScheduledTaskHost, ChatSessionRecord) -> Void
     @State private var hostID = ""
-    private var host: ScheduledTaskHost? { hosts.first { $0.id == hostID } ?? hosts.first }
+    private var host: ScheduledTaskHost? { hosts.first { $0.id == hostID } ?? hosts.first { !offlineHosts.contains($0.id) } ?? hosts.first }
     @State private var name = ""
     @State private var instructions = ""
     @State private var memory = ""
@@ -446,7 +434,7 @@ private struct ChatCreateSheet: View {
                                 .accessibilityIdentifier("chat_host_picker")
                         }
                     }
-                    if hosts.isEmpty { Text("Connect a host to create a chat.").font(.callout).foregroundStyle(ChatColors.amber) }
+                    Text("Saved on this device first. Messages send when a host is available.").font(.callout).foregroundStyle(ChatColors.muted)
                     if let error { Text(error).font(.callout).foregroundStyle(ChatColors.amber).accessibilityIdentifier("chat_create_error") }
                 }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 16).disabled(busy)
             }.scrollDismissesKeyboard(.interactively)
@@ -459,8 +447,8 @@ private struct ChatCreateSheet: View {
                         }.foregroundStyle(.white).frame(maxWidth: .infinity).frame(height: 50)
                             .background(ChatColors.hex(0x0A6EE0), in: Capsule())
                     }.buttonStyle(.plain)
-                        .disabled(busy || host == nil || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .opacity(!busy && host != nil && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 1 : 0.45)
+                        .disabled(busy || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .opacity(!busy && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 1 : 0.45)
                         .accessibilityIdentifier("chat_create_save")
                         .padding(.horizontal, 16).padding(.vertical, 12).background(ChatColors.raised)
                 }
@@ -479,17 +467,23 @@ private struct ChatCreateSheet: View {
         .interactiveDismissDisabled(busy)
         .presentationBackground(ChatColors.raised)
         .presentationCornerRadius(34).presentationDragIndicator(.visible)
-        .onAppear { if hostID.isEmpty { hostID = hosts.first?.id ?? "" } }
+        .onAppear { if hostID.isEmpty { hostID = host?.id ?? "" } }
+        .onChange(of: offlineHosts) { _, failed in
+            if failed.contains(hostID), let available = hosts.first(where: { !failed.contains($0.id) }) { hostID = available.id }
+        }
         #if os(macOS)
         .frame(width: 360, height: 680)
         #endif
     }
     private func create() async {
-        guard let host else { return }
+        guard !busy else { return }
         busy = true; error = nil; defer { busy = false }
-        do { created(host, try await ChatSessionsClient(host: host).create(name: name, instructions: instructions, memory: memory, model: model)) }
-        catch { self.error = error.localizedDescription }
+        do {
+            let record = try ChatWorkspace.shared.create(name: name, instructions: instructions, memory: memory, model: model, preferredHostID: host?.id)
+            created(host ?? ChatWorkspace.localHost, record)
+        } catch { self.error = "Couldn’t save this chat on your device. \(error.localizedDescription)" }
     }
+
 }
 
 // Own network work independently of transient split-view appearance callbacks.
@@ -502,13 +496,17 @@ private final class ChatSessionModel {
     var error: String?
     private var polling: Task<Void, Never>?
     private var host: ScheduledTaskHost?
+    private var hosts: [ScheduledTaskHost] = []
     private var sessionID = ""
     private var onRead: ((String) -> Void)?
 
-    func start(host: ScheduledTaskHost, sessionID: String, onRead: ((String) -> Void)?) {
+    func start(host: ScheduledTaskHost, hosts: [ScheduledTaskHost], sessionID: String, onRead: ((String) -> Void)?) {
+        self.hosts = hosts
         if self.host != host || self.sessionID != sessionID {
             stop(); self.host = host; self.sessionID = sessionID; self.onRead = onRead
         }
+        record = ChatWorkspace.shared.record(sessionID, fallback: host)
+        messages = ChatWorkspace.shared.messages(sessionID)
         guard polling == nil else { return }
         polling = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -522,24 +520,39 @@ private final class ChatSessionModel {
 
     func refresh() async {
         guard let host else { return }
+        let workspace = ChatWorkspace.shared
+        await workspace.flush(hosts: hosts, only: sessionID)
+        if workspace.isLocal(sessionID) {
+            record = workspace.record(sessionID, fallback: host)
+            messages = workspace.messages(sessionID)
+            error = workspace.creationFailure(sessionID)
+            return
+        }
+        let owner = workspace.host(for: sessionID, hosts: hosts, fallback: host)
         do {
-            let page = try await ChatSessionsClient(host: host).detail(sessionID)
+            let page = try await ChatSessionsClient(host: owner).detail(sessionID)
             guard !Task.isCancelled else { return }
             record = page.session
             let hadOlder = messages.first.map { $0.sequence < (page.messages.first?.sequence ?? 0) } ?? false
-            messages = ChatHistoryMerge.merge(messages, page.messages)
+            workspace.remember(page, on: owner)
+            messages = workspace.messages(sessionID)
             if !hadOlder { hasMore = page.hasMore }
             error = nil
             onRead?(sessionID)
-        } catch { if !Task.isCancelled { self.error = error.localizedDescription } }
+        } catch { if !Task.isCancelled { self.error = "Offline. New messages stay queued on this device." } }
     }
+
 }
 
 struct ChatSessionScreen: View {
     let host: ScheduledTaskHost
     let sessionID: String
+    var hosts: [ScheduledTaskHost] = []
     var onRead: ((String) -> Void)? = nil
     @State private var model = ChatSessionModel()
+    @State private var workspace = ChatWorkspace.shared
+    private var deliveryHosts: [ScheduledTaskHost] { hosts.isEmpty && host.id != ChatWorkspace.localHost.id ? [host] : hosts }
+    private var effectiveHost: ScheduledTaskHost { workspace.host(for: sessionID, hosts: deliveryHosts, fallback: host) }
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
@@ -559,11 +572,11 @@ struct ChatSessionScreen: View {
     }
     private let paneCanvas = ChatColors.canvas
     private var record: ChatSessionRecord? {
-        get { model.record }
+        get { model.record ?? workspace.record(sessionID, fallback: effectiveHost) }
         nonmutating set { model.record = newValue }
     }
     private var messages: [ChatMessageRecord] {
-        get { model.messages }
+        get { workspace.messages(sessionID).isEmpty ? model.messages : workspace.messages(sessionID) }
         nonmutating set { model.messages = newValue }
     }
     private var hasMore: Bool {
@@ -579,11 +592,10 @@ struct ChatSessionScreen: View {
     }
     @State private var showingSettings = false
     @State private var followsReply = true
-    @State private var pendingSend: (id: String, text: String)?
     @State private var modelCatalog = ModelCatalogResponse.fallback
     @FocusState private var composerFocused: Bool
     @Environment(\.scenePhase) private var scenePhase
-    private var client: ChatSessionsClient { ChatSessionsClient(host: host) }
+    private var client: ChatSessionsClient { ChatSessionsClient(host: effectiveHost) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -591,6 +603,10 @@ struct ChatSessionScreen: View {
                 Text(error).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 8)
                     .accessibilityIdentifier("chat_error")
+            }
+            if workspace.creationFailure(sessionID) != nil {
+                Button("Retry sync") { workspace.retry(sessionID); Task { await model.refresh() } }
+                    .accessibilityIdentifier("chat_retry_sync")
             }
             transcript
         }
@@ -623,18 +639,18 @@ struct ChatSessionScreen: View {
         .sheet(isPresented: $showingSettings) {
             if let record { ChatSettingsSheet(client: client, record: record) { self.record = $0; showingSettings = false } }
         }
-        .onAppear { model.start(host: host, sessionID: sessionID, onRead: onRead) }
-        .task(id: host) {
+        .onAppear { model.start(host: effectiveHost, hosts: deliveryHosts, sessionID: sessionID, onRead: onRead) }
+        .task(id: effectiveHost) {
             modelCatalog = .fallback
             if let catalog = try? await client.models(), !Task.isCancelled { modelCatalog = catalog }
         }
         .onChange(of: showingSettings) { _, showing in if showing { composerFocused = false } }
-        .onChange(of: host) { _, _ in model.start(host: host, sessionID: sessionID, onRead: onRead) }
+        .onChange(of: effectiveHost) { _, _ in model.start(host: effectiveHost, hosts: deliveryHosts, sessionID: sessionID, onRead: onRead) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { model.stop() }
-            else if phase == .active { model.start(host: host, sessionID: sessionID, onRead: onRead) }
+            else if phase == .active { model.start(host: effectiveHost, hosts: deliveryHosts, sessionID: sessionID, onRead: onRead) }
         }
-        .onChange(of: messages) { _, _ in reconcilePendingSend() }
+        .onChange(of: deliveryHosts) { _, _ in model.start(host: effectiveHost, hosts: deliveryHosts, sessionID: sessionID, onRead: onRead) }
     }
     #if os(macOS)
     private var macThreadHeader: some View {
@@ -653,7 +669,7 @@ struct ChatSessionScreen: View {
                             if let purpose = record?.instructions.split(separator: "\n").first, !purpose.isEmpty {
                                 Text("· \(purpose)").foregroundStyle(ChatColors.secondary).lineLimit(1)
                             }
-                        }.font(.system(size: 11)).help("Host: \(host.name)")
+                        }.font(.system(size: 11)).help("Host: \(effectiveHost.name)")
                     }
                 }
             }.buttonStyle(.plain).disabled(record == nil).accessibilityLabel("Chat details").accessibilityIdentifier("chat_details")
@@ -687,9 +703,9 @@ struct ChatSessionScreen: View {
                     HStack(spacing: 5) {
                         Circle().fill(ChatColors.status(record?.state ?? "idle")).frame(width: 7, height: 7)
                             .background(Circle().fill(record?.state == "working" ? ChatColors.green.opacity(0.25) : .clear).padding(-3))
-                        Text(record?.statusLabel ?? "Connecting…")
+                        Text(workspace.isLocal(sessionID) ? "On this device" : record?.statusLabel ?? "Ready")
                             .foregroundStyle(record?.state == "working" ? ChatColors.green : record?.state == "blocked" ? ChatColors.amber : ChatColors.secondary)
-                        Text("· \(host.name)").foregroundStyle(ChatColors.secondary)
+                        Text("· \(effectiveHost.name)").foregroundStyle(ChatColors.secondary)
                     }.font(.system(size: 12)).accessibilityIdentifier("chat_status")
                 }
             }
@@ -699,7 +715,7 @@ struct ChatSessionScreen: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: isDesktop ? 22 : isTablet ? 33 : 18) {
             TextField("Message", text: $draft, prompt: Text("Message \(record?.name ?? "chat")…").foregroundStyle(ChatColors.muted), axis: .vertical).lineLimit(1...6).textFieldStyle(.plain)
-                .font(.system(size: isDesktop ? 13 : isTablet ? 16 : 17)).frame(minHeight: isDesktop ? 18 : isTablet ? 20 : 22).disabled(pendingSend != nil)
+                .font(.system(size: isDesktop ? 13 : isTablet ? 16 : 17)).frame(minHeight: isDesktop ? 18 : isTablet ? 20 : 22)
                 .focused($composerFocused)
                 .accessibilityIdentifier("chat_composer")
             HStack(spacing: 10) {
@@ -731,16 +747,15 @@ struct ChatSessionScreen: View {
                         RoundedRectangle(cornerRadius: isDesktop ? 2 : 3).fill(ChatColors.canvas).frame(width: isDesktop ? 9 : 11, height: isDesktop ? 9 : 11)
                             .frame(width: isDesktop ? 26 : isTablet ? 32 : 34, height: isDesktop ? 26 : isTablet ? 32 : 34).background(ChatColors.ink, in: Circle())
                     }.buttonStyle(.plain).accessibilityLabel("Stop reply").accessibilityIdentifier("chat_stop")
-                } else {
-                    Button { Task { await send() } } label: {
-                        Image(systemName: pendingSend == nil ? "arrow.up" : "arrow.clockwise")
+                }
+                Button { Task { await send() } } label: {
+                        Image(systemName: "arrow.up")
                             .font(.system(size: isDesktop ? 14 : 17, weight: .bold)).foregroundStyle(.white)
                             .frame(width: isDesktop ? 26 : isTablet ? 32 : 34, height: isDesktop ? 26 : isTablet ? 32 : 34).background(ChatColors.blue, in: Circle())
                     }.buttonStyle(.plain)
-                        .disabled(sending || record == nil || (pendingSend == nil && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
-                        .opacity(record != nil && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || pendingSend != nil) ? 1 : 0.4)
-                        .accessibilityLabel(pendingSend == nil ? "Send message" : "Retry send").accessibilityIdentifier("chat_send")
-                }
+                        .disabled(sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .opacity(!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 1 : 0.4)
+                        .accessibilityLabel("Send message").accessibilityIdentifier("chat_send")
             }
         }
         .padding(.leading, isDesktop ? 12 : 16).padding(.trailing, isDesktop ? 8 : 10).padding(.top, isDesktop ? 9 : 11).padding(.bottom, isDesktop ? 8 : 10).frame(minHeight: isDesktop ? 85 : isTablet ? 106 : 96)
@@ -766,10 +781,8 @@ struct ChatSessionScreen: View {
                         if message.role == "user" {
                             HStack {
                                 Spacer(minLength: 0)
-                                Text(message.text).font(.system(size: isDesktop ? 13 : 17)).lineSpacing(isDesktop ? 1 : 2).foregroundStyle(Color(red: 0xF2 / 255, green: 0xF2 / 255, blue: 0xF7 / 255))
-                                    .textSelection(.enabled).padding(.horizontal, isDesktop ? 11 : 14).padding(.vertical, isDesktop ? 7 : 10)
-                                    .background(ChatColors.userBubble, in: RoundedRectangle(cornerRadius: isDesktop ? 15 : 20))
-                                    .frame(maxWidth: isDesktop ? 278 : 290, alignment: .trailing)
+                                userMessage(message)
+
                             }.id(message.id)
                         } else {
                             assistantText(message.text).foregroundStyle(ChatColors.ink).lineSpacing(isDesktop ? 2 : 4).frame(maxWidth: .infinity, alignment: .leading).id(message.id)
@@ -806,32 +819,40 @@ struct ChatSessionScreen: View {
     }
     private func poll() async {
         await model.refresh()
-        reconcilePendingSend()
-    }
-    private func reconcilePendingSend() {
-        if let pendingSend, messages.contains(where: { $0.requestID == pendingSend.id && $0.role == "user" }) {
-            self.pendingSend = nil; if draft == pendingSend.text { draft = "" }
-        }
     }
     private func older() async {
         guard let first = messages.first else { return }
         loadingOlder = true; followsReply = false; defer { loadingOlder = false }
-        do { let page = try await client.detail(sessionID, before: first.sequence); messages = ChatHistoryMerge.merge(messages, page.messages); hasMore = page.hasMore }
+        do { let page = try await client.detail(sessionID, before: first.sequence); workspace.remember(page, on: effectiveHost); messages = workspace.messages(sessionID); hasMore = page.hasMore }
         catch { self.error = error.localizedDescription }
     }
     private func send() async {
         guard !sending else { return }
-        let message = pendingSend ?? (id: UUID().uuidString, text: draft.trimmingCharacters(in: .whitespacesAndNewlines))
-        guard !message.text.isEmpty else { return }
-        sending = true; pendingSend = message; error = nil; followsReply = true; defer { sending = false }
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        sending = true; defer { sending = false }
         do {
-            try await client.send(sessionID, text: message.text, requestID: message.id)
-            pendingSend = nil; if draft.trimmingCharacters(in: .whitespacesAndNewlines) == message.text { draft = "" }
-        } catch {
-            self.error = error.localizedDescription
-            if let failure = error as? ChatClientError, let status = failure.status, (400..<500).contains(status) { pendingSend = nil }
-        }
-        await poll()
+            try workspace.enqueue(sessionID, text: text, on: effectiveHost)
+            draft = ""; followsReply = true; error = nil
+            Task { await model.refresh() }
+        } catch { self.error = "Couldn’t save this message on your device. \(error.localizedDescription)" }
+    }
+    private func userMessage(_ message: ChatMessageRecord) -> some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            Text(message.text).font(.system(size: isDesktop ? 13 : 17)).lineSpacing(isDesktop ? 1 : 2)
+                .foregroundStyle(ChatColors.ink).textSelection(.enabled)
+                .padding(.horizontal, isDesktop ? 11 : 14).padding(.vertical, isDesktop ? 7 : 10)
+                .background(ChatColors.userBubble, in: RoundedRectangle(cornerRadius: isDesktop ? 15 : 20))
+            if let label = workspace.deliveryLabel(message.requestID) {
+                HStack(spacing: 8) {
+                    Text(label).font(.caption).foregroundStyle(ChatColors.secondary)
+                    if label == "Retry" {
+                        Button("Retry") { workspace.retry(sessionID); Task { await model.refresh() } }
+                            .font(.caption).accessibilityIdentifier("chat_retry_" + message.requestID)
+                    }
+                }.accessibilityIdentifier("chat_delivery_" + message.requestID)
+            }
+        }.frame(maxWidth: isDesktop ? 278 : 290, alignment: .trailing)
     }
     private func stop() async {
         do { try await client.interrupt(sessionID); await poll() }

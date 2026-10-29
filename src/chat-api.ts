@@ -4,6 +4,7 @@ export function chatRoutes(chats:ChatSessions){
   return async(req:Request):Promise<Response|undefined>=>{
     const url=new URL(req.url),path=url.pathname;
     const list=path==='/api/sessions/chats';
+    if(path==='/api/sessions/chats/capabilities'&&req.method==='GET')return Response.json({clientChatIDs:true},{headers:{'Cache-Control':'no-store'}});
     const match=path.match(/^\/api\/sessions\/(chat-[^/]+)(?:\/(.*))?$/);
     if(!list&&!match)return;
     const json=(value:unknown,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});

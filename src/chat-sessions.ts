@@ -54,6 +54,7 @@ export class ChatSessions {
   private running=new Map<string,{abort:AbortController;done:Promise<void>}>();
   private turnIndex=new Map<string,Map<number,string>>();
   private closed=false;
+  private closing?:Promise<void>;
   private ownerPath?:string;
   private now:()=>number;
   constructor(private root:string,private runner:ChatRunner,private options:Options={}){
@@ -83,7 +84,25 @@ export class ChatSessions {
     catch(e:any){if(e.code==='ENOENT')throw new ChatError('Chat not found',404);throw e;}
   }
   private save(s:ChatSession){return atomic(join(this.dir(s.id),'session.json'),s);}
-  private async ids(){await mkdir(this.root,{recursive:true,mode:0o700});return (await readdir(this.root)).filter(id=>idPattern.test(id));}
+  // A crash before the first metadata rename can leave only an empty turns
+  // directory and atomic-write temporary files. Preserve it for the same ID's
+  // retry, but do not let this uncommitted creation disable healthy chats.
+  private async incompleteCreation(id:string){
+    let names:string[];
+    try{names=await readdir(this.dir(id));}catch(error:any){if(error.code==='ENOENT')return true;throw error;}
+    if(names.some(name=>name!=='turns'&&!/^session\.json\.[a-f0-9-]{36}\.tmp$/.test(name)))return false;
+    try{return (await readdir(join(this.dir(id),'turns'))).length===0;}catch(error:any){if(error.code==='ENOENT')return true;throw error;}
+  }
+  private async ids(){
+    await mkdir(this.root,{recursive:true,mode:0o700});
+    const ids:string[]=[];
+    for(const id of (await readdir(this.root)).filter(id=>idPattern.test(id))){
+      try{await this.load(id);ids.push(id);}catch(error){
+        if(!(error instanceof ChatError)||error.status!==404||!await this.incompleteCreation(id))throw error;
+      }
+    }
+    return ids;
+  }
   private async turns(id:string,page:{after?:number;before?:number;limit?:number}={}):Promise<ChatTurn[]>{
     const dir=join(this.dir(id),'turns');
     let index=this.turnIndex.get(id);
@@ -126,18 +145,26 @@ export class ChatSessions {
       }
     }
   }
-  async create(input:{name:unknown;instructions?:unknown;memory?:unknown;model?:unknown}):Promise<ChatSession>{
+  async create(input:{id?:unknown;name:unknown;instructions?:unknown;memory?:unknown;model?:unknown}):Promise<ChatSession>{
     await this.ready;if(this.closed)throw new ChatError('Chat service is stopping',503);
     const name=field(input.name,80,'a name',false).trim();
     const instructions=field(input.instructions??'',24000,'instructions'),memory=field(input.memory??'',24000,'memory');
     const model=input.model===undefined||input.model===''?undefined:field(input.model,120,'a model');
     if(model&&!/^[a-zA-Z0-9._:-]+$/.test(model))throw new ChatError('Enter a valid model');
-    const id='chat-'+randomUUID(),date=this.now();
+    const id=input.id===undefined?'chat-'+randomUUID():input.id;
+    if(typeof id!=='string'||!idPattern.test(id))throw new ChatError('Enter a valid chat identifier');
+    return this.locked(id,async()=>{
+    if(this.closed)throw new ChatError('Chat service is stopping',503);
+    // The client durably owns this create receipt before its first request.
+    // A lost response must not create a second conversation or reset edits.
+    if(input.id!==undefined){try{return await this.load(id);}catch(error){if(!(error instanceof ChatError)||error.status!==404)throw error;if(!await this.incompleteCreation(id))throw new ChatError('This chat has saved data without metadata. Restore its metadata before retrying.',503);}}
+    const date=this.now();
     const s:ChatSession={id,kind:'chat',name,agent:'claude',model,instructions,memory,summary:'',summaryThrough:0,createdAt:date,lastActivityAt:date,revision:1,nextTurn:1,state:'idle'};
     await mkdir(join(this.dir(id),'turns'),{recursive:true,mode:0o700});this.turnIndex.set(id,new Map());await this.save(s);
     // Membership discovery uses the existing session-scoped journal contract,
     // including chats that have not received a first message yet.
     this.emit(id,'busy',{sid:id,busy:false});return s;
+    });
   }
   async list():Promise<ChatSession[]>{await this.ready;if(this.closed)throw new ChatError('Chat service is stopping',503);return (await Promise.all((await this.ids()).map(id=>this.load(id)))).sort((a,b)=>b.lastActivityAt-a.lastActivityAt||a.id.localeCompare(b.id));}
   async update(id:string,input:{revision:unknown;name?:unknown;instructions?:unknown;memory?:unknown;model?:unknown}){
@@ -252,7 +279,19 @@ export class ChatSessions {
   }
   async interrupt(id:string){await this.ready;if(this.closed)throw new ChatError('Chat service is stopping',503);await this.load(id);this.running.get(id)?.abort.abort();return {ok:true};}
   async settled(id:string){await this.running.get(id)?.done;}
-  async close(){this.closed=true;await this.ready.catch(()=>{});for(const job of this.running.values())job.abort.abort();await Promise.all([...this.running.values()].map(j=>j.done));await this.runner.close?.();await this.release();}
+  close():Promise<void>{
+    if(this.closing)return this.closing;
+    this.closed=true;
+    return this.closing=(async()=>{
+      await this.ready.catch(()=>{});
+      // Mutations already inside a lock must finish before releasing ownership.
+      while(this.locks.size)await Promise.allSettled([...this.locks.values()]);
+      for(const job of this.running.values())job.abort.abort();
+      await Promise.all([...this.running.values()].map(j=>j.done));
+      while(this.locks.size)await Promise.allSettled([...this.locks.values()]);
+      await this.runner.close?.();await this.release();
+    })();
+  }
   async sessions():Promise<Session[]>{
     return (await this.list()).map(s=>({kind:'chat',turnOutcome:s.lastTurnState,suppressCompletionNotification:!!s.lastTurnSource,agent:s.agent,control:'direct',source:'lfg',pid:0,cmd:'',cwd:null,project:'Chat',title:s.name,lastUserText:s.lastUserText??null,lastUserAt:s.lastUserAt,sessionId:s.id,startedAt:s.createdAt,transcriptPath:null,lastActivityAt:s.lastActivityAt,busy:s.state==='working',last:s.lastMessage??null,tmuxTarget:null,tmuxName:null,managed:true,assignedUser:null,model:s.model??null,status:s.state==='blocked'?'blocked':'ok',statusReason:s.state==='blocked'?'unknown':null,statusDetail:s.error??null} satisfies Session));
   }

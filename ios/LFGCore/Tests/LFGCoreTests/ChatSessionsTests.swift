@@ -12,7 +12,7 @@ import FoundationNetworking
         #expect(ChatPresentation.preview(chat) == "Ready for your message")
         chat.lastMessage = ChatMessagePreview(text: "Here is your reading list", role: "assistant")
         #expect(ChatPresentation.preview(chat) == "Here is your reading list")
-        #expect(ChatPresentation.preview(chat, offline: true) == "Host offline")
+        #expect(ChatPresentation.preview(chat, offline: true) == "Here is your reading list")
         #expect(ChatPresentation.matches(chat, query: "READING"))
         #expect(!ChatPresentation.matches(chat, query: "Pip"))
         chat.state = "working"
@@ -68,6 +68,17 @@ import FoundationNetworking
         #expect(input?["instructions"] as? String == "Be concise")
         #expect(input?["memory"] as? String == "Private")
         #expect(input?["model"] as? String == "opus")
+    }
+    @Test func oldHostNeverReceivesAnUnstableOfflineCreation() async throws {
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [ChatURLProtocol.self]
+        let client = ChatSessionsClient(host: ScheduledTaskHost(id: "h", name: "Pro", baseURL: URL(string: "http://chat.test")!), session: URLSession(configuration: config))
+        ChatURLProtocol.status = 404; ChatURLProtocol.response = "{}"
+        do {
+            _ = try await client.create(name: "Offline", instructions: "", memory: "", id: "chat-11111111-1111-4111-8111-111111111111")
+            Issue.record("An older host must not receive a create POST")
+        } catch let error as ChatClientError { #expect(error.status == 426) }
+        #expect(ChatURLProtocol.url?.path == "/api/sessions/chats/capabilities")
+        #expect(ChatURLProtocol.sent.isEmpty)
     }
     @Test func modelsUseOwningHostCatalogAndAuthentication() async throws {
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [ChatURLProtocol.self]
