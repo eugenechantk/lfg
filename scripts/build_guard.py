@@ -2,6 +2,7 @@
 """Bounded macOS build supervisor. No third-party dependencies."""
 import argparse
 import ctypes
+import errno
 import fcntl
 import json
 import os
@@ -14,6 +15,7 @@ import time
 
 MIB = 1024 ** 2
 DEFAULT_LIMIT = 12 * 1024 * MIB
+DISCOVERY_GRACE = 30.0
 
 
 class RUsage(ctypes.Structure):
@@ -23,9 +25,21 @@ class RUsage(ctypes.Structure):
             'resident', 'footprint', 'birth', 'exit')]
 
 
+class BSDShortInfo(ctypes.Structure):
+    # SDK sys/proc_info.h: struct proc_bsdshortinfo (64 bytes on macOS).
+    _fields_ = [(name, ctypes.c_uint32) for name in ('pid', 'ppid', 'pgid', 'status')]
+    _fields_ += [('comm', ctypes.c_char * 16)]
+    _fields_ += [(name, ctypes.c_uint32) for name in
+                ('flags', 'uid', 'gid', 'ruid', 'rgid', 'svuid', 'svgid', 'reserved')]
+
+
 LIB = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
 LIB.proc_pid_rusage.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
 LIB.proc_pid_rusage.restype = ctypes.c_int
+LIB.proc_listallpids.argtypes = [ctypes.c_void_p, ctypes.c_int]
+LIB.proc_listallpids.restype = ctypes.c_int
+LIB.proc_pidinfo.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int]
+LIB.proc_pidinfo.restype = ctypes.c_int
 
 
 def usage(pid):
@@ -130,45 +144,108 @@ def event(state, kind, **data):
 
 
 def processes():
-    result = subprocess.run(['/bin/ps', '-axo', 'pid=,ppid=,pgid='], capture_output=True, text=True, timeout=5, check=True)
-    return {int(p): (int(parent), int(group)) for line in result.stdout.splitlines() for p, parent, group in [line.split()]}
+    # Apple libproc.c returns PID counts here, not buffer bytes. Grow on a full
+    # buffer rather than silently accepting a truncated process snapshot.
+    ctypes.set_errno(0)
+    capacity = LIB.proc_listallpids(None, 0) + 64
+    for _ in range(3):
+        if not 64 < capacity <= 1024 * 1024:
+            raise OSError(ctypes.get_errno() or errno.EIO, 'Cannot size native process list')
+        pids = (ctypes.c_int * capacity)()
+        ctypes.set_errno(0)
+        count = LIB.proc_listallpids(pids, ctypes.sizeof(pids))
+        if count <= 0:
+            raise OSError(ctypes.get_errno() or errno.EIO, 'Cannot enumerate native processes')
+        if count < capacity:
+            return {pid: info for pid in pids[:count] if pid > 0
+                    if (info := process_info(pid)) is not None}
+        capacity *= 2
+    raise RuntimeError('Native process list kept growing; snapshot is incomplete')
+
+
+def process_info(pid):
+    info = BSDShortInfo()
+    ctypes.set_errno(0)
+    size = LIB.proc_pidinfo(pid, 13, 0, ctypes.byref(info), ctypes.sizeof(info))
+    if size == ctypes.sizeof(info) and info.pid == pid:
+        return info.ppid, info.pgid
+    error = ctypes.get_errno()
+    if error in (errno.ESRCH, errno.ENOENT):
+        return None  # Normal exit between enumeration and metadata lookup.
+    raise OSError(error or errno.EIO, 'Cannot inspect native process %s' % pid)
 
 
 class Job:
     def __init__(self, process):
         self.process = process
         self.known = {}
+        self.discovery_error = None
         info = usage(process.pid)
         if info:
             self.known[process.pid] = info['birth']
 
     def sample(self):
-        table = processes()
+        try:
+            table = processes()
+            self.discovery_error = None
+        except Exception as error:
+            # Keep measuring the birth-checked owned set during bounded discovery
+            # degradation. Never replace current footprints with stale values.
+            table = {}
+            self.discovery_error = str(error)
         live = {}
         for pid, birth in self.known.items():
             info = usage(pid)
             if info and info['birth'] == birth:
                 live[pid] = info
-        candidates = set(live)
-        candidates.update(pid for pid, (_, group) in table.items() if group == self.process.pid)
-        changed = True
-        while changed:
-            new = {pid for pid, (parent, _) in table.items() if parent in candidates}
-            changed = not new.issubset(candidates)
-            candidates.update(new)
-        for pid in candidates:
-            info = usage(pid)
-            if info is None:
-                if pid in table:
-                    # A process can exit between ps and libproc; distinguish that race.
-                    try:
-                        os.kill(pid, 0)
-                    except ProcessLookupError:
-                        continue
+            elif info is None:
+                if process_info(pid) is not None:
                     raise RuntimeError('Cannot account for live job process %s' % pid)
-                continue
-            self.known[pid] = info['birth']
-            live[pid] = info
+        root = self.process.pid
+        if root not in live and (root not in self.known or not live) and self.process.poll() is None:
+            # Popen still owns this unreaped child: a PID cannot be recycled
+            # while that original child is alive. Acquire its birth only here,
+            # never from a later process table after Popen reports exit.
+            info = usage(root)
+            if (info is None or self.process.poll() is not None or
+                    (root in self.known and info['birth'] != self.known[root])):
+                raise RuntimeError('Cannot account for live job root %s' % root)
+            self.known[root] = info['birth']
+            live[root] = info
+
+        def birth_matches(pid):
+            info = usage(pid)
+            return info is not None and info['birth'] == self.known[pid]
+
+        # Expand only from validated owned nodes. A candidate rejected for
+        # changed ancestry or birth must never authorize its own descendants.
+        remaining = set(table) - set(live)
+        while remaining:
+            adopted = set()
+            for pid in sorted(remaining):
+                parent, group = table[pid]
+                anchor = parent if parent in live else root if root in live and group == root else None
+                if anchor is None or not birth_matches(anchor):
+                    continue
+                info = usage(pid)
+                if info is None:
+                    if process_info(pid) is not None:
+                        raise RuntimeError('Cannot account for live job process %s' % pid)
+                    continue
+                if pid in self.known and info['birth'] != self.known[pid]:
+                    continue
+                if process_info(pid) != table[pid]:
+                    continue
+                again = usage(pid)
+                if (again is None or again['birth'] != info['birth'] or
+                        not birth_matches(anchor)):
+                    continue
+                self.known[pid] = again['birth']
+                live[pid] = again
+                adopted.add(pid)
+            if not adopted:
+                break
+            remaining.difference_update(adopted)
         return sum(info['footprint'] for info in live.values())
 
     def signal(self, sig):
@@ -252,6 +329,7 @@ def supervise(command, limit=DEFAULT_LIMIT, interval=1.0, grace=3.0, diagnostics
                       session=os.environ.get('CLAUDE_SESSION_ID') or os.environ.get('CODEX_THREAD_ID'), peakBytes=0, status='running')
         event(state, 'start', **record)
         warned = False
+        discovery_failed_at = None
         result = 0
         while True:
             reason = None
@@ -262,10 +340,24 @@ def supervise(command, limit=DEFAULT_LIMIT, interval=1.0, grace=3.0, diagnostics
                 footprint = job.sample()
                 record['footprintBytes'] = footprint
                 record['peakBytes'] = max(record['peakBytes'], footprint)
+                if job.discovery_error is not None:
+                    if discovery_failed_at is None:
+                        discovery_failed_at = time.monotonic()
+                        event(state, 'discovery_degraded', error=job.discovery_error)
+                    record.update(discoveryHealthy=False, discoveryError=job.discovery_error,
+                                  discoveryUnhealthySeconds=time.monotonic() - discovery_failed_at)
+                else:
+                    if discovery_failed_at is not None:
+                        event(state, 'discovery_recovered', unhealthySeconds=time.monotonic() - discovery_failed_at)
+                    discovery_failed_at = None
+                    record.update(discoveryHealthy=True, discoveryUnhealthySeconds=0)
+                    record.pop('discoveryError', None)
                 if footprint >= limit:
                     reason = 'job physical footprint exceeded limit'
                 elif diagnostics == 'on-failure' and log_size() > log_limit:
                     reason = 'CoreSimulator logs exceeded diagnostics budget'
+                elif discovery_failed_at is not None and time.monotonic() - discovery_failed_at >= DISCOVERY_GRACE:
+                    reason = 'process discovery unhealthy for 30 seconds: ' + job.discovery_error
             except Exception as error:
                 reason = 'memory monitoring failed: ' + str(error)
             if reason:
