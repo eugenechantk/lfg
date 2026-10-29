@@ -1,0 +1,3437 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-10-09T15:40:00Z"
+ },
+ "title": "LFG UI Map",
+ "launch": {
+  "view": "canvas",
+  "page": "a2-plan"
+ },
+ "pages": [
+  {
+   "id": "today",
+   "name": "Today (Oct 9)"
+  },
+  {
+   "id": "tasks-redesign",
+   "name": "Tasks redesign (Oct 15)"
+  },
+  {
+   "id": "sessions-redesign",
+   "name": "Sessions redesign (Oct 15)"
+  },
+  {
+   "id": "desktop-wide",
+   "name": "Desktop wide window (Oct 15)"
+  },
+  {
+   "id": "a2-plan",
+   "name": "A2 build plan"
+  },
+  {
+   "id": "s2-plan",
+   "name": "S2 build plan (Oct 15)"
+  },
+  {
+   "id": "ipad",
+   "name": "iPad (Oct 17)"
+  },
+  {
+   "id": "retry-later",
+   "name": "Retry later (Oct 18)"
+  },
+  {
+   "id": "usage-limits",
+   "name": "Usage limits (Oct 20)"
+  },
+  {
+   "id": "cua-spaces",
+   "name": "Chat & Cua Spaces (Oct 21)"
+  },
+  {
+   "id": "ipad-files",
+   "name": "iPad file pane (Oct 23)"
+  },
+  {
+   "id": "share-sheet",
+   "name": "Share sheet (Oct 23)"
+  }
+ ],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · Sessions list",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "phone-chat.dc.html": {
+   "x": 470,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · Session (chat)",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "phone-search.dc.html": {
+   "x": 940,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · Search (scoped to tab)",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "phone-tasks.dc.html": {
+   "x": 1410,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · Scheduled Tasks",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "phone-task-detail.dc.html": {
+   "x": 1880,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · Task detail",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "phone-task-setup.dc.html": {
+   "x": 2350,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · New task (setup chat)",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "desk-sessions.dc.html": {
+   "x": 0,
+   "y": 1300,
+   "w": 1100,
+   "h": 720,
+   "title": "Desktop · Sessions window",
+   "is_interactive": true,
+   "radius": 12
+  },
+  "desk-tasks.dc.html": {
+   "x": 1180,
+   "y": 1300,
+   "w": 1100,
+   "h": 720,
+   "title": "Desktop · Scheduled Tasks",
+   "is_interactive": true,
+   "radius": 12
+  },
+  "desk-task-detail.dc.html": {
+   "x": 2360,
+   "y": 1300,
+   "w": 1100,
+   "h": 720,
+   "title": "Desktop · Task detail",
+   "is_interactive": true,
+   "radius": 12
+  },
+  "desk-task-setup.dc.html": {
+   "x": 3540,
+   "y": 1300,
+   "w": 1100,
+   "h": 720,
+   "title": "Desktop · New task sheet",
+   "is_interactive": true,
+   "radius": 12
+  },
+  "desk-iterm.dc.html": {
+   "x": 4720,
+   "y": 1300,
+   "w": 1100,
+   "h": 720,
+   "title": "Desktop · Open session → iTerm",
+   "radius": 12
+  },
+  "tA2-list.dc.html": {
+   "x": 0,
+   "y": -1300,
+   "w": 390,
+   "h": 844,
+   "title": "A2 · List (Needs input · Active · Closed)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2-detail.dc.html": {
+   "x": 470,
+   "y": -1300,
+   "w": 390,
+   "h": 844,
+   "title": "A2 · Task view",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2-edit.dc.html": {
+   "x": 940,
+   "y": -1300,
+   "w": 390,
+   "h": 844,
+   "title": "A2 · Edit in form",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2-chat.dc.html": {
+   "x": 1410,
+   "y": -1300,
+   "w": 390,
+   "h": 844,
+   "title": "A2 · Edit with chat",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2-detail-failed.dc.html": {
+   "x": 2360,
+   "y": -1300,
+   "w": 390,
+   "h": 844,
+   "title": "A2 · Task view: last run failed",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2-detail-input.dc.html": {
+   "x": 2830,
+   "y": -1300,
+   "w": 390,
+   "h": 844,
+   "title": "A2 · Task view: run needs input",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s1-list.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "S1 · Sessions list",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s1-view.dc.html": {
+   "x": 470,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "S1 · Session view (working)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s1-question.dc.html": {
+   "x": 940,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "S1 · Session view (needs input)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s1-menu.dc.html": {
+   "x": 1410,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "S1 · Session sheet (replaces ••• menu)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s1-subagents.dc.html": {
+   "x": 1880,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "S1 · Subagents sheet",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s1-files.dc.html": {
+   "x": 2350,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "S1 · Files & links sheet",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s1-signin.dc.html": {
+   "x": 2820,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "S1 · Sign in on iPhone",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s1-terminal.dc.html": {
+   "x": 3290,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "S1 · Terminal",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA-list.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "A · List (agenda)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA-detail.dc.html": {
+   "x": 470,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "A · Task view (next run + timeline)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA-edit.dc.html": {
+   "x": 940,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "A · Edit in form (sentence schedule)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA-chat.dc.html": {
+   "x": 1410,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "A · Edit with chat (change card)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tB-list.dc.html": {
+   "x": 0,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "B · List (control cards)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tB-detail.dc.html": {
+   "x": 470,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "B · Task view (hero + actions)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tB-edit.dc.html": {
+   "x": 940,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "B · Edit in form (composer + chips)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tB-chat.dc.html": {
+   "x": 1410,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "B · Edit with chat (preview in place)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tC-list.dc.html": {
+   "x": 0,
+   "y": 2600,
+   "w": 390,
+   "h": 844,
+   "title": "C · List (results inbox)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tC-detail.dc.html": {
+   "x": 470,
+   "y": 2600,
+   "w": 390,
+   "h": 844,
+   "title": "C · Task view (thread of runs)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tC-edit.dc.html": {
+   "x": 940,
+   "y": 2600,
+   "w": 390,
+   "h": 844,
+   "title": "C · Edit in form (alarm-style)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tC-chat.dc.html": {
+   "x": 1410,
+   "y": 2600,
+   "w": 390,
+   "h": 844,
+   "title": "C · Edit with chat (in the thread)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "dA2-list.dc.html": {
+   "x": 0,
+   "y": -3100,
+   "w": 400,
+   "h": 860,
+   "title": "Desktop · List (Needs input · Active · Paused · Closed)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "dA2-detail.dc.html": {
+   "x": 480,
+   "y": -3100,
+   "w": 400,
+   "h": 1000,
+   "title": "Desktop · Task view",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "dA2-edit.dc.html": {
+   "x": 960,
+   "y": -3100,
+   "w": 400,
+   "h": 960,
+   "title": "Desktop · Edit: Repeat, weekdays",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "dA2-detail-failed.dc.html": {
+   "x": 1440,
+   "y": -3100,
+   "w": 400,
+   "h": 1000,
+   "title": "Desktop · Task view: last run failed",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "dA2-detail-input.dc.html": {
+   "x": 1920,
+   "y": -3100,
+   "w": 400,
+   "h": 860,
+   "title": "Desktop · Task view: run needs input (answer in iTerm)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "dA2-sessions.dc.html": {
+   "x": 0,
+   "y": 2600,
+   "w": 400,
+   "h": 860,
+   "title": "Desktop · Sessions list (400pt window)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "dW-tasks.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "Wide · Tasks: list, detail and inspector",
+   "page": "desktop-wide",
+   "is_interactive": true,
+   "radius": 16,
+   "expand": "fill"
+  },
+  "dW-schedule.dc.html": {
+   "x": 1520,
+   "y": 0,
+   "w": 1000,
+   "h": 700,
+   "title": "Wide · Schedule editor popover",
+   "page": "desktop-wide",
+   "radius": 16
+  },
+  "dW-new-task.dc.html": {
+   "x": 2600,
+   "y": 0,
+   "w": 880,
+   "h": 720,
+   "title": "Wide · New task: describe it",
+   "page": "desktop-wide",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "dW-manual-setup.dc.html": {
+   "x": 3560,
+   "y": 0,
+   "w": 960,
+   "h": 780,
+   "title": "Wide · New task: set up manually",
+   "page": "desktop-wide",
+   "radius": 16
+  },
+  "dW-sessions.dc.html": {
+   "x": 0,
+   "y": 1320,
+   "w": 1440,
+   "h": 900,
+   "title": "Wide · Sessions",
+   "page": "desktop-wide",
+   "is_interactive": true,
+   "radius": 16,
+   "expand": "fill"
+  },
+  "s2-list.dc.html": {
+   "x": 0,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "S2 · Sessions list",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s2-view.dc.html": {
+   "x": 470,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "S2 · Session view (working: status in top bar, Stop in the send button)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s2-question.dc.html": {
+   "x": 1880,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "S2 · Needs input: question / permission / plan",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s2-signin-prompt.dc.html": {
+   "x": 2350,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "S2 · Needs input: sign-in",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s2-signin.dc.html": {
+   "x": 2820,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "S2 · Sign-in browser (slim header)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s2-menu.dc.html": {
+   "x": 3290,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "S2 · Session sheet",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s2-subagents.dc.html": {
+   "x": 3760,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "S2 · Subagents sheet",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s2-files.dc.html": {
+   "x": 4230,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "S2 · Files & links sheet",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s2-terminal.dc.html": {
+   "x": 4700,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "S2 · Terminal",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2d-list.dc.html": {
+   "x": 0,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · List",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2d-detail.dc.html": {
+   "x": 470,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Task view",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2d-edit.dc.html": {
+   "x": 940,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Edit: Repeat, weekdays",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2d-chat.dc.html": {
+   "x": 1410,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Edit with chat",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2d-detail-failed.dc.html": {
+   "x": 2360,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Task view: last run failed",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2d-detail-input.dc.html": {
+   "x": 2830,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Task view: run needs input",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s2-queued.dc.html": {
+   "x": 940,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "S2 · Message queued",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s2-queued-failed.dc.html": {
+   "x": 1410,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "S2 · Message not sent",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "plan-list.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1280,
+   "h": 1190,
+   "title": "Plan · list",
+   "page": "a2-plan",
+   "radius": 16
+  },
+  "plan-detail.dc.html": {
+   "x": 1360,
+   "y": 0,
+   "w": 1280,
+   "h": 1294,
+   "title": "Plan · detail",
+   "page": "a2-plan",
+   "radius": 16
+  },
+  "plan-failed.dc.html": {
+   "x": 2720,
+   "y": 0,
+   "w": 1280,
+   "h": 900,
+   "title": "Plan · failed",
+   "page": "a2-plan",
+   "radius": 16
+  },
+  "plan-input.dc.html": {
+   "x": 0,
+   "y": 1714,
+   "w": 1280,
+   "h": 900,
+   "title": "Plan · input",
+   "page": "a2-plan",
+   "radius": 16
+  },
+  "plan-edit.dc.html": {
+   "x": 0,
+   "y": 3096,
+   "w": 1280,
+   "h": 1220,
+   "title": "Plan · edit (Repeat)",
+   "page": "a2-plan",
+   "radius": 16
+  },
+  "plan-chat.dc.html": {
+   "x": 1360,
+   "y": 1714,
+   "w": 1280,
+   "h": 962,
+   "title": "Plan · chat",
+   "page": "a2-plan",
+   "radius": 16
+  },
+  "tA2d-edit-once.dc.html": {
+   "x": 3300,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Edit: Once",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "plan-edit-once.dc.html": {
+   "w": 1280,
+   "page": "a2-plan",
+   "radius": 16,
+   "x": 1360,
+   "y": 3096,
+   "h": 900,
+   "title": "Plan · edit-once"
+  },
+  "tA2d-edit-cron-5min.dc.html": {
+   "x": 3770,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Edit: Repeat, every 5 minutes",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2d-edit-cron-hourly.dc.html": {
+   "x": 4240,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Edit: Repeat, every hour",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2d-edit-cron-3days.dc.html": {
+   "x": 4710,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Edit: Repeat, every 3 days (exact gap)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s2plan-list.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1280,
+   "h": 1520,
+   "title": "S2 plan · Sessions list",
+   "page": "s2-plan",
+   "radius": 16
+  },
+  "s2plan-view.dc.html": {
+   "x": 1360,
+   "y": 0,
+   "w": 1280,
+   "h": 1180,
+   "title": "S2 plan · Session view, working",
+   "page": "s2-plan",
+   "radius": 16
+  },
+  "s2plan-queued.dc.html": {
+   "x": 2720,
+   "y": 0,
+   "w": 1280,
+   "h": 900,
+   "title": "S2 plan · Message queued",
+   "page": "s2-plan",
+   "radius": 16
+  },
+  "s2plan-failed.dc.html": {
+   "x": 0,
+   "y": 1940,
+   "w": 1280,
+   "h": 900,
+   "title": "S2 plan · Message not sent",
+   "page": "s2-plan",
+   "radius": 16
+  },
+  "s2plan-question.dc.html": {
+   "x": 1360,
+   "y": 1940,
+   "w": 1280,
+   "h": 900,
+   "title": "S2 plan · Needs input: question",
+   "page": "s2-plan",
+   "radius": 16
+  },
+  "s2plan-permission-plan.dc.html": {
+   "x": 2720,
+   "y": 1940,
+   "w": 1710,
+   "h": 960,
+   "title": "S2 plan · Needs input: permission and plan",
+   "page": "s2-plan",
+   "radius": 16
+  },
+  "s2plan-signin-prompt.dc.html": {
+   "x": 0,
+   "y": 3320,
+   "w": 1280,
+   "h": 900,
+   "title": "S2 plan · Needs input: sign-in",
+   "page": "s2-plan",
+   "radius": 16
+  },
+  "s2plan-signin.dc.html": {
+   "x": 1360,
+   "y": 3320,
+   "w": 1280,
+   "h": 900,
+   "title": "S2 plan · Sign-in browser",
+   "page": "s2-plan",
+   "radius": 16
+  },
+  "s2plan-sheet.dc.html": {
+   "x": 2720,
+   "y": 3320,
+   "w": 1280,
+   "h": 990,
+   "title": "S2 plan · Session sheet",
+   "page": "s2-plan",
+   "radius": 16
+  },
+  "s2plan-subagents.dc.html": {
+   "x": 0,
+   "y": 4730,
+   "w": 1280,
+   "h": 900,
+   "title": "S2 plan · Subagents sheet",
+   "page": "s2-plan",
+   "radius": 16
+  },
+  "s2plan-files.dc.html": {
+   "x": 1360,
+   "y": 4730,
+   "w": 1280,
+   "h": 900,
+   "title": "S2 plan · Files & links sheet",
+   "page": "s2-plan",
+   "radius": 16
+  },
+  "s2plan-terminal.dc.html": {
+   "x": 2720,
+   "y": 4730,
+   "w": 1280,
+   "h": 900,
+   "title": "S2 plan · Terminal",
+   "page": "s2-plan",
+   "radius": 16
+  },
+  "s2plan-desktop.dc.html": {
+   "x": 4080,
+   "y": 4730,
+   "w": 1290,
+   "h": 1380,
+   "title": "S2 plan · Desktop sessions list",
+   "page": "s2-plan",
+   "radius": 16
+  },
+  "tA2d-edit-after-n.dc.html": {
+   "x": 5180,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Edit: Repeat, ends after N runs",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s2-tools-group.dc.html": {
+   "x": 5670,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "S2 · Tool steps: a group, expanded (tap a call for its result)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "s2-tools-single.dc.html": {
+   "x": 6140,
+   "y": 1300,
+   "w": 390,
+   "h": 844,
+   "title": "S2 · Tool steps: one call, expanded",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "dA2-edit-once.dc.html": {
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16,
+   "w": 400,
+   "x": 3320,
+   "y": -3100,
+   "h": 1010,
+   "title": "Desktop · Edit: Once"
+  },
+  "dA2-edit-5min.dc.html": {
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16,
+   "w": 400,
+   "x": 3800,
+   "y": -3100,
+   "h": 960,
+   "title": "Desktop · Edit: Repeat, every 5 minutes"
+  },
+  "dA2-edit-hourly.dc.html": {
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16,
+   "w": 400,
+   "x": 4280,
+   "y": -3100,
+   "h": 960,
+   "title": "Desktop · Edit: Repeat, every hour"
+  },
+  "dA2-edit-3days.dc.html": {
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16,
+   "w": 400,
+   "x": 4760,
+   "y": -3100,
+   "h": 960,
+   "title": "Desktop · Edit: Repeat, every 3 days (exact gap)"
+  },
+  "dA2-edit-after-n.dc.html": {
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16,
+   "w": 400,
+   "x": 5240,
+   "y": -3100,
+   "h": 960,
+   "title": "Desktop · Edit: Repeat, ends after N runs"
+  },
+  "plan-edit-summary.dc.html": {
+   "page": "a2-plan",
+   "radius": 16,
+   "w": 1280,
+   "x": 2720,
+   "y": 3096,
+   "h": 1220,
+   "title": "Plan · edit flow: what to build"
+  },
+  "plan-desk-summary.dc.html": {
+   "page": "a2-plan",
+   "radius": 16,
+   "w": 1280,
+   "x": 0,
+   "y": 8982,
+   "h": 1060,
+   "title": "Plan · desktop: same screens, Mac differences"
+  },
+  "plan-desk-detail.dc.html": {
+   "page": "a2-plan",
+   "radius": 16,
+   "w": 1280,
+   "x": 1360,
+   "y": 8982,
+   "h": 1068,
+   "title": "Plan · desktop task view"
+  },
+  "plan-desk-input.dc.html": {
+   "page": "a2-plan",
+   "radius": 16,
+   "w": 1280,
+   "x": 2720,
+   "y": 8982,
+   "h": 928,
+   "title": "Plan · desktop needs input"
+  },
+  "plan-desk-edit.dc.html": {
+   "page": "a2-plan",
+   "radius": 16,
+   "w": 1280,
+   "x": 0,
+   "y": 10190,
+   "h": 1028,
+   "title": "Plan · desktop edit form"
+  },
+  "tA2d-edit-7min.dc.html": {
+   "x": 5650,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Edit: Repeat, every 7 minutes (exact gap)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2d-edit-5hours.dc.html": {
+   "x": 6120,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Edit: Repeat, every 5 hours (exact gap)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2d-edit-daily.dc.html": {
+   "x": 6590,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Edit: Repeat, every day",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2d-edit-weekly.dc.html": {
+   "x": 7060,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Edit: Repeat, weekly, Mon Wed Fri",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2d-edit-monthly.dc.html": {
+   "x": 7530,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Edit: Repeat, monthly",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2d-edit-custom.dc.html": {
+   "x": 8000,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Edit: Repeat, custom cron",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2d-edit-on-date.dc.html": {
+   "x": 8470,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Edit: Repeat, ends on a date",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "tA2d-edit-3days-after.dc.html": {
+   "x": 8940,
+   "y": -4800,
+   "w": 390,
+   "h": 844,
+   "title": "A2 dark · Edit: Repeat, every 3 days, 5 runs",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "dA2-edit-7min.dc.html": {
+   "x": 5720,
+   "y": -3100,
+   "w": 400,
+   "h": 960,
+   "title": "Desktop · Edit: Repeat, every 7 minutes (exact gap)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "dA2-edit-5hours.dc.html": {
+   "x": 6200,
+   "y": -3100,
+   "w": 400,
+   "h": 960,
+   "title": "Desktop · Edit: Repeat, every 5 hours (exact gap)",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "dA2-edit-daily.dc.html": {
+   "x": 6680,
+   "y": -3100,
+   "w": 400,
+   "h": 960,
+   "title": "Desktop · Edit: Repeat, every day",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "dA2-edit-weekly.dc.html": {
+   "x": 7160,
+   "y": -3100,
+   "w": 400,
+   "h": 960,
+   "title": "Desktop · Edit: Repeat, weekly, Mon Wed Fri",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "dA2-edit-monthly.dc.html": {
+   "x": 7640,
+   "y": -3100,
+   "w": 400,
+   "h": 960,
+   "title": "Desktop · Edit: Repeat, monthly",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "dA2-edit-custom.dc.html": {
+   "x": 8120,
+   "y": -3100,
+   "w": 400,
+   "h": 960,
+   "title": "Desktop · Edit: Repeat, custom cron",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "dA2-edit-on-date.dc.html": {
+   "x": 8600,
+   "y": -3100,
+   "w": 400,
+   "h": 960,
+   "title": "Desktop · Edit: Repeat, ends on a date",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "dA2-edit-3days-after.dc.html": {
+   "x": 9080,
+   "y": -3100,
+   "w": 400,
+   "h": 960,
+   "title": "Desktop · Edit: Repeat, every 3 days, 5 runs",
+   "page": "tasks-redesign",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "plan-edit-variants.dc.html": {
+   "x": 0,
+   "y": 4760,
+   "w": 2206,
+   "h": 3622,
+   "title": "Plan · edit form: every Repeat variant",
+   "page": "a2-plan",
+   "radius": 16
+  },
+  "tA2d-runs-link.dc.html": {
+   "x": 0,
+   "y": -7400,
+   "w": 390,
+   "h": 1000,
+   "title": "Runs · A: text link",
+   "page": "tasks-redesign",
+   "is_interactive": true
+  },
+  "tA2d-runs-rail.dc.html": {
+   "x": 470,
+   "y": -7400,
+   "w": 390,
+   "h": 1000,
+   "title": "Runs · B: row on the timeline (recommended)",
+   "page": "tasks-redesign",
+   "is_interactive": true
+  },
+  "tA2d-runs-button.dc.html": {
+   "x": 940,
+   "y": -7400,
+   "w": 390,
+   "h": 1000,
+   "title": "Runs · C: button",
+   "page": "tasks-redesign",
+   "is_interactive": true
+  },
+  "tA2d-runs-rail-open.dc.html": {
+   "x": 1410,
+   "y": -7400,
+   "w": 390,
+   "h": 1760,
+   "title": "Runs · B after one tap on each Show more",
+   "page": "tasks-redesign",
+   "is_interactive": true
+  },
+  "dA2-runs-rail.dc.html": {
+   "x": 1880,
+   "y": -7400,
+   "w": 400,
+   "h": 1000,
+   "title": "Desktop · Runs, B",
+   "page": "tasks-redesign",
+   "is_interactive": true
+  },
+  "tA2d-model-pill.dc.html": {
+   "x": 2360,
+   "y": -7400,
+   "w": 560,
+   "h": 300,
+   "title": "Model pill with the agent logos",
+   "page": "tasks-redesign"
+  },
+  "bub-compare.dc.html": {
+   "x": 0,
+   "y": 4060,
+   "w": 820,
+   "h": 844,
+   "title": "Bubble colors · every option side by side",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 16
+  },
+  "bub-today.dc.html": {
+   "x": 900,
+   "y": 4060,
+   "w": 390,
+   "h": 844,
+   "title": "Bubble · Today (for reference)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "bub-soft.dc.html": {
+   "x": 1370,
+   "y": 4060,
+   "w": 390,
+   "h": 844,
+   "title": "Bubble · Soft blue · PICKED (#355C8F / text #F2F2F7)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "bub-navy.dc.html": {
+   "x": 1840,
+   "y": 4060,
+   "w": 390,
+   "h": 844,
+   "title": "Bubble · Night navy (#264064 / #D6DFEC)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "bub-tint.dc.html": {
+   "x": 2310,
+   "y": 4060,
+   "w": 390,
+   "h": 844,
+   "title": "Bubble · Blue tint (#182941 / #C8D6E8)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "bub-steel.dc.html": {
+   "x": 2780,
+   "y": 4060,
+   "w": 390,
+   "h": 844,
+   "title": "Bubble · Steel (#374451 / #D9DFE5)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "bub-graphite.dc.html": {
+   "x": 900,
+   "y": 5504,
+   "w": 390,
+   "h": 844,
+   "title": "Bubble · Graphite (#353535 / #DBDBDB)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "bub-teal.dc.html": {
+   "x": 1370,
+   "y": 5504,
+   "w": 390,
+   "h": 844,
+   "title": "Bubble · Deep teal (#1C4B4B / #D3E6E5)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "bub-indigo.dc.html": {
+   "x": 1840,
+   "y": 5504,
+   "w": 390,
+   "h": 844,
+   "title": "Bubble · Dusk indigo (#3C3A63 / #DFE0EF)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "bub-ember.dc.html": {
+   "x": 2310,
+   "y": 5504,
+   "w": 390,
+   "h": 844,
+   "title": "Bubble · Ember (#513A27 / #EDDFCC)",
+   "page": "sessions-redesign",
+   "is_interactive": true,
+   "radius": 44
+  },
+  "ip-today-launch.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 834,
+   "h": 1210,
+   "title": "iPad today · cold launch, portrait",
+   "page": "ipad"
+  },
+  "ip-today-session-portrait.dc.html": {
+   "x": 914,
+   "y": 0,
+   "w": 834,
+   "h": 1210,
+   "title": "iPad today · session, portrait",
+   "page": "ipad"
+  },
+  "ip-today-session.dc.html": {
+   "x": 1828,
+   "y": 0,
+   "w": 1210,
+   "h": 834,
+   "title": "iPad today · session, landscape",
+   "page": "ipad"
+  },
+  "ip-today-full.dc.html": {
+   "x": 3118,
+   "y": 0,
+   "w": 1210,
+   "h": 834,
+   "title": "iPad today · session, list hidden",
+   "page": "ipad"
+  },
+  "ip-today-new.dc.html": {
+   "x": 4408,
+   "y": 0,
+   "w": 834,
+   "h": 1210,
+   "title": "iPad today · new session",
+   "page": "ipad"
+  },
+  "ip-today-tasks.dc.html": {
+   "x": 5322,
+   "y": 0,
+   "w": 1210,
+   "h": 834,
+   "title": "iPad today · task, landscape",
+   "page": "ipad"
+  },
+  "ip-launch.dc.html": {
+   "x": 0,
+   "y": 1700,
+   "w": 834,
+   "h": 1210,
+   "title": "iPad · launch, portrait",
+   "page": "ipad"
+  },
+  "ip-session-portrait.dc.html": {
+   "x": 914,
+   "y": 1700,
+   "w": 834,
+   "h": 1210,
+   "title": "iPad · session, portrait",
+   "page": "ipad"
+  },
+  "ip-session.dc.html": {
+   "x": 1828,
+   "y": 1700,
+   "w": 1210,
+   "h": 834,
+   "title": "iPad · session, landscape",
+   "page": "ipad"
+  },
+  "ip-session-full.dc.html": {
+   "x": 3118,
+   "y": 1700,
+   "w": 1210,
+   "h": 834,
+   "title": "iPad · session, list hidden",
+   "page": "ipad"
+  },
+  "ip-new.dc.html": {
+   "x": 4408,
+   "y": 1700,
+   "w": 1210,
+   "h": 834,
+   "title": "iPad · new session, landscape",
+   "page": "ipad"
+  },
+  "ip-task.dc.html": {
+   "x": 5698,
+   "y": 1700,
+   "w": 1210,
+   "h": 834,
+   "title": "iPad · task, landscape",
+   "page": "ipad"
+  },
+  "rl-phone-failed.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · failed card: Retry later is the third action",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "rl-phone-minutes.dc.html": {
+   "x": 470,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone sheet · in minutes, 45 min picked",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "rl-phone-time.dc.html": {
+   "x": 940,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone sheet · at a time",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "rl-phone-pending.dc.html": {
+   "x": 1410,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · retry scheduled",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "rl-mac-sheet.dc.html": {
+   "x": 1880,
+   "y": 0,
+   "w": 400,
+   "h": 700,
+   "title": "Mac · compact sheet",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "rl-phone-failed-light.dc.html": {
+   "x": 0,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · failed card (light)",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "rl-phone-minutes-light.dc.html": {
+   "x": 470,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Phone sheet · in minutes (light)",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "rl-phone-time-light.dc.html": {
+   "x": 940,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Phone sheet · at a time (light)",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "rl-phone-pending-light.dc.html": {
+   "x": 1410,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · retry scheduled (light)",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "rl-mac-sheet-light.dc.html": {
+   "x": 1880,
+   "y": 1264,
+   "w": 400,
+   "h": 700,
+   "title": "Mac · compact sheet (light)",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "rl-phone-custom.dc.html": {
+   "x": 0,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "Phone sheet · Custom, 90 minutes typed",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "rl-phone-invalid.dc.html": {
+   "x": 470,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "Phone sheet · invalid entry: Save disabled",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "rl-phone-saving.dc.html": {
+   "x": 940,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "Phone sheet · saving",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "rl-phone-error.dc.html": {
+   "x": 1410,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "Phone sheet · network error, choice kept",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "rl-mac-sheet-time.dc.html": {
+   "x": 1880,
+   "y": 2528,
+   "w": 400,
+   "h": 700,
+   "title": "Mac sheet · at a time",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "rl-phone-invalid-light.dc.html": {
+   "x": 2360,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "Phone sheet · invalid entry (light): idle fill stays visible",
+   "page": "retry-later",
+   "is_interactive": true
+  },
+  "usage-menu.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · session list menu with Usage limits",
+   "page": "usage-limits",
+   "is_interactive": true
+  },
+  "usage-sheet.dc.html": {
+   "x": 470,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · usage sheet, both providers normal",
+   "page": "usage-limits",
+   "is_interactive": true
+  },
+  "usage-codex-weekly.dc.html": {
+   "x": 940,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · Codex weekly only, Claude not read yet",
+   "page": "usage-limits",
+   "is_interactive": true
+  },
+  "usage-states.dc.html": {
+   "x": 1410,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · stale reading, used up, host error",
+   "page": "usage-limits",
+   "is_interactive": true
+  },
+  "usage-mac.dc.html": {
+   "x": 1880,
+   "y": 0,
+   "w": 400,
+   "h": 700,
+   "title": "Mac · 320pt popover over the narrow window",
+   "page": "usage-limits",
+   "is_interactive": true
+  },
+  "usage-menu-light.dc.html": {
+   "x": 0,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · list menu, light",
+   "page": "usage-limits",
+   "is_interactive": true
+  },
+  "usage-sheet-light.dc.html": {
+   "x": 470,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · usage sheet, light",
+   "page": "usage-limits",
+   "is_interactive": true
+  },
+  "usage-codex-weekly-light.dc.html": {
+   "x": 940,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · Codex weekly only, light",
+   "page": "usage-limits",
+   "is_interactive": true
+  },
+  "usage-states-light.dc.html": {
+   "x": 1410,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · stale, used up, error — light",
+   "page": "usage-limits",
+   "is_interactive": true
+  },
+  "usage-mac-light.dc.html": {
+   "x": 1880,
+   "y": 1264,
+   "w": 400,
+   "h": 700,
+   "title": "Mac · popover, light",
+   "page": "usage-limits",
+   "is_interactive": true
+  },
+  "usage-identity.dc.html": {
+   "x": 0,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · two Codex sign-ins, never merged on a guess",
+   "page": "usage-limits",
+   "is_interactive": true
+  },
+  "usage-billing.dc.html": {
+   "x": 470,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · API billing and an offline host",
+   "page": "usage-limits",
+   "is_interactive": true
+  },
+  "usage-refreshing.dc.html": {
+   "x": 940,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · refreshing keeps the numbers",
+   "page": "usage-limits",
+   "is_interactive": true
+  },
+  "usage-ipad.dc.html": {
+   "x": 1410,
+   "y": 2528,
+   "w": 1210,
+   "h": 834,
+   "title": "iPad · fitted form sheet over the split view",
+   "page": "usage-limits",
+   "is_interactive": true
+  },
+  "cua-list.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · agent threads, every state",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-empty.dc.html": {
+   "x": 470,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · no agents yet",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-new.dc.html": {
+   "x": 940,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · create an agent — name, instructions, access",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-sheet.dc.html": {
+   "x": 1410,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · thread sheet — private vs shared, and Open desktop when it holds none",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-chat.dc.html": {
+   "x": 0,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · the thread, agent working",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-tools.dc.html": {
+   "x": 470,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · shared project files vs the agent’s own memory",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-queued.dc.html": {
+   "x": 2350,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · queued and not-sent, soft strip",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-confirm.dc.html": {
+   "x": 1410,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · inline draft — waiting, sending, sent, expired",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-signin.dc.html": {
+   "x": 940,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · inline sign-in — waiting, handing over, signed in, expired",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-watch.dc.html": {
+   "x": 940,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · watching — the overlay names who is driving",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-handoff.dc.html": {
+   "x": 1410,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · taking over: pausing, yours, lost, reconnecting, resumed",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-stopped.dc.html": {
+   "x": 1880,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · giving a desktop back, and getting a different one later",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-control.dc.html": {
+   "x": 0,
+   "y": 3792,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · full-screen control, portrait",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-control-zoom.dc.html": {
+   "x": 470,
+   "y": 3792,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · zoomed 2.4× and panned, Fit resets",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-control-land.dc.html": {
+   "x": 940,
+   "y": 3792,
+   "w": 844,
+   "h": 390,
+   "title": "Phone · control in landscape, both orientations",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-control-keyboard.dc.html": {
+   "x": 1864,
+   "y": 3792,
+   "w": 844,
+   "h": 390,
+   "title": "Phone · landscape with the keyboard and Tab/Esc/Enter",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-mac.dc.html": {
+   "x": 0,
+   "y": 5056,
+   "w": 400,
+   "h": 860,
+   "title": "Mac · narrow window — agents, then one thread",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-mac-wide.dc.html": {
+   "x": 480,
+   "y": 5056,
+   "w": 1180,
+   "h": 760,
+   "title": "Mac · wide — agents, thread and the desktop it holds",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-ipad.dc.html": {
+   "x": 1740,
+   "y": 5056,
+   "w": 1210,
+   "h": 834,
+   "title": "iPad · agents, thread with an inline approval, desktop",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-pool.dc.html": {
+   "x": 1880,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · the desktop pool — a readout, not a destination",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-parallel.dc.html": {
+   "x": 1880,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · one step waits for you, the rest carries on",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-alloc.dc.html": {
+   "x": 0,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · opening a desktop: ask, reuse, start with stages, ready, switch",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "cua-wait.dc.html": {
+   "x": 470,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · when it has to wait: the 4 GB floor, a failed start, a host offline",
+   "page": "cua-spaces",
+   "is_interactive": true
+  },
+  "ia-patterns.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 2400,
+   "h": 1180,
+   "title": "Inspiration · eight layout patterns",
+   "page": "ipad-files"
+  },
+  "ia-proto.dc.html": {
+   "x": 0,
+   "y": 1800,
+   "w": 1210,
+   "h": 834,
+   "title": "A · prototype: tap any file (Play)",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-a-image.dc.html": {
+   "x": 1290,
+   "y": 1800,
+   "w": 1210,
+   "h": 834,
+   "title": "A · image beside the transcript (narrow pane)",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-a-video.dc.html": {
+   "x": 2580,
+   "y": 1800,
+   "w": 1210,
+   "h": 834,
+   "title": "A · video (narrow pane)",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-a-doc.dc.html": {
+   "x": 3870,
+   "y": 1800,
+   "w": 1210,
+   "h": 834,
+   "title": "A · Markdown file (wide pane)",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-a-source.dc.html": {
+   "x": 5160,
+   "y": 1800,
+   "w": 1210,
+   "h": 834,
+   "title": "A · Markdown source (Preview / Source)",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-a-web.dc.html": {
+   "x": 0,
+   "y": 2754,
+   "w": 1210,
+   "h": 834,
+   "title": "A · HTML page (wide pane)",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-a-files.dc.html": {
+   "x": 1290,
+   "y": 2754,
+   "w": 1210,
+   "h": 834,
+   "title": "A · Files & links in the pane",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-a-link.dc.html": {
+   "x": 2580,
+   "y": 2754,
+   "w": 1210,
+   "h": 834,
+   "title": "A · a link, opened in the pane",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-a-menu.dc.html": {
+   "x": 3870,
+   "y": 2754,
+   "w": 1210,
+   "h": 834,
+   "title": "A · the ••• menu",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-a-list.dc.html": {
+   "x": 5160,
+   "y": 2754,
+   "w": 1210,
+   "h": 834,
+   "title": "A · list called back over the pane",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-a-full.dc.html": {
+   "x": 0,
+   "y": 3708,
+   "w": 1210,
+   "h": 834,
+   "title": "A · full width",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-a-13in.dc.html": {
+   "x": 1290,
+   "y": 3708,
+   "w": 1376,
+   "h": 1032,
+   "title": "13-inch · the list stays (width rule)",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-a-portrait.dc.html": {
+   "x": 2746,
+   "y": 3708,
+   "w": 834,
+   "h": 1210,
+   "title": "Portrait: the same pane as a sheet",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-b-image.dc.html": {
+   "x": 0,
+   "y": 5340,
+   "w": 1210,
+   "h": 834,
+   "title": "B · list stays, image in a third column",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-b-doc.dc.html": {
+   "x": 1290,
+   "y": 5340,
+   "w": 1210,
+   "h": 834,
+   "title": "B · list stays, Markdown file in a third column",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "sh-system.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Share · 1 LFG in the app row, 2 sessions as suggestions (proposal)",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-compose.dc.html": {
+   "x": 0,
+   "y": 3792,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · compose: the guess is already in Send to",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-pick.dc.html": {
+   "x": 470,
+   "y": 3792,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · All sessions",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-new.dc.html": {
+   "x": 940,
+   "y": 3792,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · New session",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-landed.dc.html": {
+   "x": 1410,
+   "y": 3792,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · how it lands",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-quote.dc.html": {
+   "x": 0,
+   "y": 5056,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · selected text on a page",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-images.dc.html": {
+   "x": 470,
+   "y": 5056,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · screenshots from Photos",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-file.dc.html": {
+   "x": 940,
+   "y": 5056,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · a PDF from Files",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-joined.dc.html": {
+   "x": 0,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "After Send · working session",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-sent.dc.html": {
+   "x": 470,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "After Send · idle session",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-waits.dc.html": {
+   "x": 940,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "After Send · session that needs input",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-resumed.dc.html": {
+   "x": 1410,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "After Send · closed session",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-started.dc.html": {
+   "x": 1880,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "After Send · new session",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-queued.dc.html": {
+   "x": 2350,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "After Send · host offline",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-failed.dc.html": {
+   "x": 1880,
+   "y": 3792,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · not sent",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-b-list.dc.html": {
+   "x": 0,
+   "y": 6320,
+   "w": 390,
+   "h": 844,
+   "title": "Draft B · pick first",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-b-compose.dc.html": {
+   "x": 470,
+   "y": 6320,
+   "w": 390,
+   "h": 844,
+   "title": "Draft B · then compose",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-list.dc.html": {
+   "x": 470,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · nothing chosen: the list gets the screen",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-search.dc.html": {
+   "x": 940,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · search",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-selected.dc.html": {
+   "x": 1410,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · a session chosen: the panel comes up",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-typing.dc.html": {
+   "x": 1880,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · editing the text that is sent",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-new.dc.html": {
+   "x": 2350,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · New session, with its options",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-landed-waiting.dc.html": {
+   "x": 2820,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "In the session · waits in the strip while it works",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-landed.dc.html": {
+   "x": 3290,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "In the session · the turn took it",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-quote.dc.html": {
+   "x": 0,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · selected text",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-images.dc.html": {
+   "x": 470,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · screenshots",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-file.dc.html": {
+   "x": 940,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · a PDF, to a closed session",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-failed.dc.html": {
+   "x": 1410,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · not sent",
+   "page": "share-sheet",
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "phone-chat.dc.html",
+  "phone-search.dc.html",
+  "phone-tasks.dc.html",
+  "phone-task-detail.dc.html",
+  "phone-task-setup.dc.html",
+  "desk-sessions.dc.html",
+  "desk-tasks.dc.html",
+  "desk-task-detail.dc.html",
+  "desk-task-setup.dc.html",
+  "desk-iterm.dc.html",
+  "tA-list.dc.html",
+  "tA-detail.dc.html",
+  "tA-edit.dc.html",
+  "tA-chat.dc.html",
+  "tB-list.dc.html",
+  "tB-detail.dc.html",
+  "tB-edit.dc.html",
+  "tB-chat.dc.html",
+  "tC-list.dc.html",
+  "tC-detail.dc.html",
+  "tC-edit.dc.html",
+  "tC-chat.dc.html",
+  "tA2-list.dc.html",
+  "tA2-detail.dc.html",
+  "tA2-edit.dc.html",
+  "tA2-chat.dc.html",
+  "tA2-detail-failed.dc.html",
+  "tA2-detail-input.dc.html",
+  "s1-list.dc.html",
+  "s1-view.dc.html",
+  "s1-question.dc.html",
+  "s1-menu.dc.html",
+  "s1-subagents.dc.html",
+  "s1-files.dc.html",
+  "s1-signin.dc.html",
+  "s1-terminal.dc.html",
+  "dA2-list.dc.html",
+  "dA2-detail.dc.html",
+  "dA2-edit.dc.html",
+  "dA2-detail-failed.dc.html",
+  "dA2-detail-input.dc.html",
+  "dA2-sessions.dc.html",
+  "dW-tasks.dc.html",
+  "dW-schedule.dc.html",
+  "dW-new-task.dc.html",
+  "dW-manual-setup.dc.html",
+  "dW-sessions.dc.html",
+  "s2-list.dc.html",
+  "s2-view.dc.html",
+  "s2-question.dc.html",
+  "s2-signin-prompt.dc.html",
+  "s2-signin.dc.html",
+  "s2-menu.dc.html",
+  "s2-subagents.dc.html",
+  "s2-files.dc.html",
+  "s2-terminal.dc.html",
+  "tA2d-list.dc.html",
+  "tA2d-detail.dc.html",
+  "tA2d-edit.dc.html",
+  "tA2d-chat.dc.html",
+  "tA2d-detail-failed.dc.html",
+  "tA2d-detail-input.dc.html",
+  "s2-queued.dc.html",
+  "s2-queued-failed.dc.html",
+  "plan-list.dc.html",
+  "plan-detail.dc.html",
+  "plan-failed.dc.html",
+  "plan-input.dc.html",
+  "plan-edit.dc.html",
+  "plan-chat.dc.html",
+  "tA2d-edit-once.dc.html",
+  "plan-edit-once.dc.html",
+  "tA2d-edit-cron-5min.dc.html",
+  "tA2d-edit-cron-hourly.dc.html",
+  "tA2d-edit-cron-3days.dc.html",
+  "s2plan-list.dc.html",
+  "s2plan-view.dc.html",
+  "s2plan-queued.dc.html",
+  "s2plan-failed.dc.html",
+  "s2plan-question.dc.html",
+  "s2plan-permission-plan.dc.html",
+  "s2plan-signin-prompt.dc.html",
+  "s2plan-signin.dc.html",
+  "s2plan-sheet.dc.html",
+  "s2plan-subagents.dc.html",
+  "s2plan-files.dc.html",
+  "s2plan-terminal.dc.html",
+  "s2plan-desktop.dc.html",
+  "tA2d-edit-after-n.dc.html",
+  "s2-tools-group.dc.html",
+  "s2-tools-single.dc.html",
+  "dA2-edit-once.dc.html",
+  "dA2-edit-5min.dc.html",
+  "dA2-edit-hourly.dc.html",
+  "dA2-edit-3days.dc.html",
+  "dA2-edit-after-n.dc.html",
+  "plan-edit-summary.dc.html",
+  "plan-desk-summary.dc.html",
+  "plan-desk-detail.dc.html",
+  "plan-desk-input.dc.html",
+  "plan-desk-edit.dc.html",
+  "tA2d-edit-7min.dc.html",
+  "tA2d-edit-5hours.dc.html",
+  "tA2d-edit-daily.dc.html",
+  "tA2d-edit-weekly.dc.html",
+  "tA2d-edit-monthly.dc.html",
+  "tA2d-edit-custom.dc.html",
+  "tA2d-edit-on-date.dc.html",
+  "tA2d-edit-3days-after.dc.html",
+  "dA2-edit-7min.dc.html",
+  "dA2-edit-5hours.dc.html",
+  "dA2-edit-daily.dc.html",
+  "dA2-edit-weekly.dc.html",
+  "dA2-edit-monthly.dc.html",
+  "dA2-edit-custom.dc.html",
+  "dA2-edit-on-date.dc.html",
+  "dA2-edit-3days-after.dc.html",
+  "plan-edit-variants.dc.html",
+  "tA2d-runs-link.dc.html",
+  "tA2d-runs-rail.dc.html",
+  "tA2d-runs-button.dc.html",
+  "tA2d-runs-rail-open.dc.html",
+  "dA2-runs-rail.dc.html",
+  "tA2d-model-pill.dc.html",
+  "bub-compare.dc.html",
+  "bub-today.dc.html",
+  "bub-soft.dc.html",
+  "bub-navy.dc.html",
+  "bub-tint.dc.html",
+  "bub-steel.dc.html",
+  "bub-graphite.dc.html",
+  "bub-teal.dc.html",
+  "bub-indigo.dc.html",
+  "bub-ember.dc.html",
+  "ip-today-launch.dc.html",
+  "ip-today-session-portrait.dc.html",
+  "ip-today-session.dc.html",
+  "ip-today-full.dc.html",
+  "ip-today-new.dc.html",
+  "ip-today-tasks.dc.html",
+  "ip-launch.dc.html",
+  "ip-session-portrait.dc.html",
+  "ip-session.dc.html",
+  "ip-session-full.dc.html",
+  "ip-new.dc.html",
+  "ip-task.dc.html",
+  "rl-phone-failed.dc.html",
+  "rl-phone-minutes.dc.html",
+  "rl-phone-time.dc.html",
+  "rl-phone-pending.dc.html",
+  "rl-mac-sheet.dc.html",
+  "rl-phone-failed-light.dc.html",
+  "rl-phone-minutes-light.dc.html",
+  "rl-phone-time-light.dc.html",
+  "rl-phone-pending-light.dc.html",
+  "rl-mac-sheet-light.dc.html",
+  "rl-phone-custom.dc.html",
+  "rl-phone-invalid.dc.html",
+  "rl-phone-saving.dc.html",
+  "rl-phone-error.dc.html",
+  "rl-mac-sheet-time.dc.html",
+  "rl-phone-invalid-light.dc.html",
+  "usage-menu.dc.html",
+  "usage-sheet.dc.html",
+  "usage-codex-weekly.dc.html",
+  "usage-states.dc.html",
+  "usage-mac.dc.html",
+  "usage-menu-light.dc.html",
+  "usage-sheet-light.dc.html",
+  "usage-codex-weekly-light.dc.html",
+  "usage-states-light.dc.html",
+  "usage-mac-light.dc.html",
+  "usage-identity.dc.html",
+  "usage-billing.dc.html",
+  "usage-refreshing.dc.html",
+  "usage-ipad.dc.html",
+  "cua-list.dc.html",
+  "cua-empty.dc.html",
+  "cua-new.dc.html",
+  "cua-sheet.dc.html",
+  "cua-chat.dc.html",
+  "cua-tools.dc.html",
+  "cua-queued.dc.html",
+  "cua-confirm.dc.html",
+  "cua-signin.dc.html",
+  "cua-watch.dc.html",
+  "cua-handoff.dc.html",
+  "cua-stopped.dc.html",
+  "cua-control.dc.html",
+  "cua-control-zoom.dc.html",
+  "cua-control-land.dc.html",
+  "cua-control-keyboard.dc.html",
+  "cua-mac.dc.html",
+  "cua-mac-wide.dc.html",
+  "cua-ipad.dc.html",
+  "cua-pool.dc.html",
+  "cua-parallel.dc.html",
+  "cua-alloc.dc.html",
+  "cua-wait.dc.html",
+  "ia-patterns.dc.html",
+  "ia-proto.dc.html",
+  "ia-a-image.dc.html",
+  "ia-a-video.dc.html",
+  "ia-a-doc.dc.html",
+  "ia-a-source.dc.html",
+  "ia-a-web.dc.html",
+  "ia-a-files.dc.html",
+  "ia-a-link.dc.html",
+  "ia-a-menu.dc.html",
+  "ia-a-list.dc.html",
+  "ia-a-full.dc.html",
+  "ia-a-13in.dc.html",
+  "ia-a-portrait.dc.html",
+  "ia-b-image.dc.html",
+  "ia-b-doc.dc.html",
+  "sh-system.dc.html",
+  "sh-compose.dc.html",
+  "sh-pick.dc.html",
+  "sh-new.dc.html",
+  "sh-landed.dc.html",
+  "sh-quote.dc.html",
+  "sh-images.dc.html",
+  "sh-file.dc.html",
+  "sh-joined.dc.html",
+  "sh-sent.dc.html",
+  "sh-waits.dc.html",
+  "sh-resumed.dc.html",
+  "sh-started.dc.html",
+  "sh-queued.dc.html",
+  "sh-failed.dc.html",
+  "sh-b-list.dc.html",
+  "sh-b-compose.dc.html",
+  "sh2-list.dc.html",
+  "sh2-search.dc.html",
+  "sh2-selected.dc.html",
+  "sh2-typing.dc.html",
+  "sh2-new.dc.html",
+  "sh2-landed-waiting.dc.html",
+  "sh2-landed.dc.html",
+  "sh2-quote.dc.html",
+  "sh2-images.dc.html",
+  "sh2-file.dc.html",
+  "sh2-failed.dc.html"
+ ],
+ "notes": {
+  "phoneTitle": {
+   "x": 0,
+   "y": -300,
+   "text": "Phone today (iOS 26, build of Oct 9)",
+   "kind": "title1",
+   "maxW": 2740
+  },
+  "deskTitle": {
+   "x": 0,
+   "y": 1000,
+   "text": "Desktop today (macOS app)",
+   "kind": "title1",
+   "maxW": 5820
+  },
+  "modelNote": {
+   "x": 2820,
+   "y": 0,
+   "w": 380,
+   "fill": "blue",
+   "size": "m",
+   "text": "The model today\n\nHost → Session (live or closed)\nScheduled Task → Run → Session\nSession → Child sessions (subagents)\n\nComing: Agent. Where does it sit?\n- owns Tasks?\n- is a Session template?\n- is a peer of both?"
+  },
+  "seamNote": {
+   "x": 2820,
+   "y": 470,
+   "w": 380,
+   "fill": "orange",
+   "size": "m",
+   "text": "Seams to design around\n\n1. A task's run is a session, so it shows twice: in Sessions (\"Scheduled task: …\") and in Task detail.\n2. Phone: Tasks is a top-level tab. Desktop: Tasks is a page behind a toolbar icon with \"‹ Sessions\".\n3. Phone opens a session in-app. Desktop opens it in iTerm.\n4. A third tab (Agents) would crowd the phone tab bar."
+  },
+  "trClunky": {
+   "x": -500,
+   "y": 0,
+   "w": 400,
+   "fill": "orange",
+   "size": "m",
+   "page": "tasks-redesign",
+   "text": "Why it feels clunky today\n\n1. The list never says WHEN. nextRunAt, lastRunAt and runCount exist in the model but no screen shows them. Every row reads the same.\n2. Results are invisible. You must open a task, then a run, to learn if it worked.\n3. Every action hides in the ••• menu: Run now, Pause, Task settings.\n4. The form speaks cron: four schedule kinds, five cron fields, a unit picker.\n5. Edit with chat leaves the task. It starts a fresh Claude session that lands in Sessions, and you can't see what it changed."
+  },
+  "trPick": {
+   "x": -500,
+   "y": 1300,
+   "w": 400,
+   "fill": "green",
+   "size": "m",
+   "page": "tasks-redesign",
+   "text": "Recommended mix (Oct 15: Eugene picked A, list reworked as A2)\n\nList: A2 (Needs input · Active · Closed)\nTask view: A (next-run card + runs timeline, visible actions)\nForm: A (sentence schedule + 'next 3 runs' preview)\nChat: A's change card, opened from the task view\n\nThen steal from C: unread dot on new results, and changes logged in the timeline with Undo."
+  },
+  "trTitleA2": {
+   "x": 0,
+   "y": -1600,
+   "text": "A2 · Picked: A with the list grouped by state",
+   "kind": "title1",
+   "maxW": 1800,
+   "page": "tasks-redesign"
+  },
+  "trNoteA2": {
+   "x": 1880,
+   "y": -1300,
+   "w": 400,
+   "fill": "green",
+   "size": "m",
+   "page": "tasks-redesign",
+   "text": "A2 · What changed from A\n\nOnly the list. Task view, form and chat are A's, relinked.\n\nFour groups, each task appears once:\n• Needs input: a run asks a question, or the last run failed. Row action: Answer / Retry. Tab badge counts these.\n• Active: will run again, sorted by next run. Running now sits first.\n• Paused: you switched it off; it can resume. The time column shows when it was paused.\n• Closed: no runs left. One-time done, all N repeats done, or stopped. Collapsed by default.\n\nThe time column keeps A's best part: when it runs next (Active) or when it ended (Closed)."
+  },
+  "trNoteA2States": {
+   "x": 3300,
+   "y": -1300,
+   "w": 400,
+   "fill": "orange",
+   "size": "m",
+   "page": "tasks-redesign",
+   "text": "Task view states\n\nThe status card at the top swaps with the task's state:\n• Healthy: Next run + Run now / Pause\n• Failed: why it failed, Retry now / Ask to fix, and 'schedule still on'. Counts failures in a row.\n• Failed after a session started (interrupted, errored): same card, but 'Open session' replaces the reason line.\n• Needs input: the run's question and its options, answered right here. 'Open session' for anything harder.\n• Paused: 'No runs scheduled' + Resume\n\nNeeds: answer a run's question from the task view (reuse the session prompt + answer path); count consecutive failures from recentRuns."
+  },
+  "s1Title": {
+   "x": 0,
+   "y": -300,
+   "text": "S1 · Sessions in the A2 language",
+   "kind": "title1",
+   "maxW": 3680,
+   "page": "sessions-redesign"
+  },
+  "s1Why": {
+   "x": -500,
+   "y": 0,
+   "w": 400,
+   "fill": "orange",
+   "size": "m",
+   "page": "sessions-redesign",
+   "text": "Why it feels clunky today\n\n1. The ••• menu is taller than the screen. It mixes options, tools and debug ids.\n2. Tool calls show as raw monospaced rows, one per command.\n3. Questions, permissions and plan approval all use the same option list.\n4. Sign-in takes 4 steps (setup, login, review, result), even when the agent already knows the site and the host.\n5. The terminal has no esc, ctrl or arrow keys.\n6. Model and effort hide in the menu.\n7. List rows say where a session is, not what it is doing."
+  },
+  "s1What": {
+   "x": 3760,
+   "y": 0,
+   "w": 420,
+   "fill": "green",
+   "size": "m",
+   "page": "sessions-redesign",
+   "text": "What S1 changes\n\n• List: same 3-line row as A2. Line 2 says what is happening now (the question, the current step, the last reply). Needs input rows get Answer / Sign in. Paused (API error) moves into Needs input; Restarting moves into Working. 'Needs you' becomes 'Needs input' to match Tasks.\n• Session view: steps grouped into one row, a changed-files card, a Stop button on the working line, a tool strip above the composer, model + effort chip in the composer.\n• Needs input: a bottom panel with its own layout per kind (question, permission, plan). Tweak 'kind' to switch.\n• Session sheet replaces the ••• menu: 6 tool tiles, options, then Stop / End.\n• Subagents (was Child sessions): status, current step or result, push into a child.\n• Files & links: Changed (with +/−) · Shared · Links.\n• Sign in: 2 steps. Log in, then confirm which sites to send.\n• Terminal: extra keys row, Fit / Wide, keyboard toggle."
+  },
+  "s1Needs": {
+   "x": 3760,
+   "y": 640,
+   "w": 420,
+   "fill": "gray",
+   "size": "m",
+   "page": "sessions-redesign",
+   "text": "Needs from the server\n\n• List snapshot: current activity line and last-reply preview per session\n• Group consecutive tool rows into one step summary (labels like Ran / Edited / Explored already exist)\n• Changed files with +/− per session, built from Edited rows\n• Prompt kind (question, permission, plan) from the pane parser\n• Agent sign-in requests already carry site and host, so the setup step can be skipped\n• Terminal keys: ctrl and esc sequences over the existing terminal bridge"
+  },
+  "trTitleA": {
+   "x": 0,
+   "y": -300,
+   "text": "A · Agenda: time first",
+   "kind": "title1",
+   "maxW": 1800,
+   "page": "tasks-redesign"
+  },
+  "trNoteA": {
+   "x": 1880,
+   "y": 0,
+   "w": 400,
+   "fill": "blue",
+   "size": "m",
+   "page": "tasks-redesign",
+   "text": "A · Agenda\n\nIdea: a scheduler's first job is to say what runs next and whether the last run worked.\n\n• List grouped like Sessions, but by time: Needs you · Running · Today · Tomorrow · Later · Paused\n• Task view: next-run card with Run now / Pause, then a timeline of upcoming and past runs\n• Form: pick a preset, the sentence updates, and you see the next 3 run times\n• Chat: a sheet over the task; the agent proposes a change card, you Apply\n\nRefs: Afterpay schedule timeline, Tesla 'Next Schedule', Perplexity + Grok task forms, Brick weekday dots."
+  },
+  "trTitleB": {
+   "x": 0,
+   "y": 1000,
+   "text": "B · Control center: health at a glance",
+   "kind": "title1",
+   "maxW": 1800,
+   "page": "tasks-redesign"
+  },
+  "trNoteB": {
+   "x": 1880,
+   "y": 1300,
+   "w": 400,
+   "fill": "purple",
+   "size": "m",
+   "page": "tasks-redesign",
+   "text": "B · Control center\n\nIdea: tasks are switches you keep an eye on, like home automations.\n\n• List: cards with an on/off switch and a strip of the last 10 runs\n• Task view: hero + 4 action buttons, run stats, details list\n• Form: no form. Title + instructions, with property chips that open small sheets (Linear-style)\n• Chat: one-shot command. The agent's change shows inside the task view as a diff; Apply or Discard\n\nRefs: Manus scheduled tasks, Philips Hue automations, Monzo scheduled payment, Linear issue composer."
+  },
+  "trTitleC": {
+   "x": 0,
+   "y": 2300,
+   "text": "C · Thread: a task is a feed of results",
+   "kind": "title1",
+   "maxW": 1800,
+   "page": "tasks-redesign"
+  },
+  "trNoteC": {
+   "x": 1880,
+   "y": 2600,
+   "w": 400,
+   "fill": "teal",
+   "size": "m",
+   "page": "tasks-redesign",
+   "text": "C · Thread\n\nIdea: you care about what the task produced. Treat each task like a chat whose messages are its runs.\n\n• List: an inbox of latest results, with an unread dot, same row shape as Sessions\n• Task view: pinned spec card on top, runs as messages, composer at the bottom\n• Form: Apple Clock alarm editor: time wheel on top, Repeat ›, Ends ›\n• Chat: the same composer. Ask why a run failed, or ask for a change; applied changes stay in the thread as versions with Undo\n\nRefs: Wabi version cards, GitHub Copilot agent task, Apple Clock alarm."
+  },
+  "trModel": {
+   "x": 2360,
+   "y": 0,
+   "w": 400,
+   "fill": "gray",
+   "size": "m",
+   "page": "tasks-redesign",
+   "text": "Needs from the model / server\n\n• Show nextRunAt, lastRun, recentRuns, runCount (all exist; just unused)\n• Proposed change before save: the chat agent returns a patch, the app applies it. Today the agent saves directly with lfg-task-tool\n• Task-scoped edit chat that does not appear in the Sessions list\n• 'Ends after N runs' on a weekday/cron schedule (repeat kind is interval-only today)\n• Unread state per run (option C)\n• Change history per task (option C's Undo)"
+  },
+  "dTitle": {
+   "x": 0,
+   "y": -3400,
+   "text": "Desktop · A2 in a narrow Mac window",
+   "kind": "title1",
+   "maxW": 2800,
+   "page": "tasks-redesign"
+  },
+  "dFlow": {
+   "x": 2880,
+   "y": -3100,
+   "w": 360,
+   "fill": "teal",
+   "size": "s",
+   "page": "tasks-redesign",
+   "text": "Play from Desktop · List.\n\nList → task view → Edit (Once · Repeat).\nNeeds input rows open the failed and needs-input views.\niTerm buttons open the 'Open session → iTerm' board.\n\nEvery page fits a 400pt window and scrolls vertically only."
+  },
+  "dChanges": {
+   "x": 2880,
+   "y": -2560,
+   "w": 360,
+   "fill": "green",
+   "size": "s",
+   "page": "tasks-redesign",
+   "text": "Desktop vs phone A2 (Oct 15)\n\nSame as the phone:\n• List: four groups, no row buttons. Paused rows show the next run, or nothing.\n• Task view: Edit + ••• in one pill, status card, runs timeline.\n• Failure card on any failed latest run. '2nd in a row' only from the second.\n• Edit form: Once · Repeat with the phone's controls. Every Repeat variant sits right of these notes, matching the phone row.\n\nMac only (Eugene's desktop scope):\n• Needs input shows the question and one 'Answer in iTerm' button. No options in the app.\n• 'Change with chat' is a button that opens the edit chat in iTerm. No Ask bar, no change card.\n• Runs, Ask to fix and Open session open iTerm.\n• The Sessions / Tasks switcher replaces the tab bar. + sits in the title bar.\n• Dark, 400pt wide, 13pt body."
+  },
+  "dwTitle1": {
+   "x": 0,
+   "y": -300,
+   "text": "Wide window exploration: three panes, no modal forms",
+   "kind": "title1",
+   "maxW": 4520,
+   "page": "desktop-wide"
+  },
+  "dwTitle2": {
+   "x": 0,
+   "y": 1020,
+   "text": "Wide window: Sessions",
+   "kind": "title1",
+   "maxW": 1440,
+   "page": "desktop-wide"
+  },
+  "dwNote": {
+   "x": 1520,
+   "y": 1320,
+   "w": 420,
+   "fill": "orange",
+   "size": "s",
+   "page": "desktop-wide",
+   "text": "Earlier exploration (Oct 15), before the narrow-window direction.\n\nThe current desktop design is the 'Desktop · A2' row on the Tasks redesign page. These wide screens still show things since cut: the sidebar instead of the switcher, a New task composer, and inline inspectors."
+  },
+  "dwRefs": {
+   "x": 2040,
+   "y": 1320,
+   "w": 420,
+   "fill": "blue",
+   "size": "s",
+   "page": "desktop-wide",
+   "text": "Borrowed from (Mobbin)\n\nLinear project page: list beside a properties inspector.\nDatabricks job page: run-duration strip over a run table.\nHex scheduled runs: schedule, next run and timezone in one cell.\nEmergent / Gemini scheduled tasks: next-run chip and an enable switch on each row.\nLuma / Posh / Sweatpals recurrence: segmented frequency, weekday chips, plain-language summary.\nn8n executions: status-first run rows."
+  },
+  "s2Title": {
+   "x": 0,
+   "y": 1000,
+   "text": "S2 · Dark, with your fixes",
+   "kind": "title1",
+   "maxW": 3600,
+   "page": "sessions-redesign"
+  },
+  "s2What": {
+   "x": 5170,
+   "y": 1300,
+   "w": 420,
+   "fill": "green",
+   "size": "m",
+   "page": "sessions-redesign",
+   "text": "S2 · What changed from S1\n\n• Dark mode on every screen\n• No diffs: no changed-files card and no Changed tab. Edits show as one 'Edited 2 files' step you can expand\n• No subagent block in the chat. Progress lives in the pill above the input: a ring, '1 running', '3/4 done'\n• A sign-in request uses the same bottom panel as a question. It has no Dismiss, because the agent is paused on it\n• Sign-in browser: the context sits inside the address pill, so the web page gets the space\n• List rows have no buttons. Tap the row to act\n\nUpdate 2 (Oct 15)\n• Working status moved to the top bar, under the title. Every state shows there: Working, Needs input, Needs sign-in, host offline\n• Stop is the send button while the agent works. Type anything and it turns back into Send\n• Queued: stays in today's soft strip above the input bar; the transcript does not move. Tap a row and its menu opens right there: Send now, Edit, Remove\n• Not sent: a red mark and 'Not sent' in the same strip, with no reason. Tap it for Retry, Edit, Delete\n\nUpdate 3 (Oct 15)\n• Working rows and subagent rows say Working / Running. No live step text\n• Tool steps expand to each call, and a call expands to its input and result (two new boards at the end of this row)\n• Files & links: plain rows in Images, Videos, Documents. No previews\n• Terminal: a shell on the host, as today (not the session's pane)\n• Unread rows say New reply. No last-reply text in the list",
+   "maxH": 900
+  },
+  "a2dTitle": {
+   "x": 0,
+   "y": -5100,
+   "text": "A2 dark",
+   "kind": "title1",
+   "maxW": 5570,
+   "page": "tasks-redesign"
+  },
+  "a2dNote": {
+   "x": 1880,
+   "y": -4800,
+   "w": 400,
+   "fill": "green",
+   "size": "m",
+   "page": "tasks-redesign",
+   "text": "A2 dark\n\nThe A2 screens in dark mode.\n\nOne change: list rows have no Answer or Retry buttons. Tap the row; the task view has the action."
+  },
+  "planTitle": {
+   "x": 0,
+   "y": -300,
+   "text": "A2 mobile build plan: what each part of the screen needs",
+   "kind": "title1",
+   "maxW": 3920,
+   "page": "a2-plan"
+  },
+  "planTitle2": {
+   "x": 0,
+   "y": 1414,
+   "text": "Task view states and chat",
+   "kind": "title1",
+   "maxW": 3920,
+   "page": "a2-plan"
+  },
+  "planPhases": {
+   "x": -560,
+   "y": 0,
+   "w": 460,
+   "fill": "blue",
+   "size": "m",
+   "page": "a2-plan",
+   "text": "Phases (full plan: .claude/feature/tasks-a2-redesign.md)\n\n0 · Prepare: land the in-flight finite-repeat work; split ScheduledTasksView.swift into shared/Tasks; add files to the Mac build\n1 · Data: list API fields, schedule preview, TaskPresentation.swift models\n2 · Mobile list\n3 · Mobile task view (all card states, answer in place)\n4 · Mobile form: Once · Repeat, Next runs preview, cron Ends\n5 · Edit with chat: sheet, the agent saves directly, change card\n6 · Desktop: the shared views in the Mac shell; answering and the edit chat open in iTerm\n\nPins match the numbered rows in the doc's tables."
+  },
+  "planOpen": {
+   "x": -560,
+   "y": 760,
+   "w": 460,
+   "fill": "orange",
+   "size": "m",
+   "page": "a2-plan",
+   "text": "Open questions\n\n1. The finite-repeat work is uncommitted in the same files. Commit it as is before phase 0, or is another session finishing it?\n2. Ends (After N / On date) for Daily and Weekly needs a scheduler change. Build it in phase 4 (recommended) or defer?\n\nResolved Oct 15: the desktop does not answer in place. It shows the question and opens the session in iTerm."
+  },
+  "planTitle3": {
+   "x": 0,
+   "y": 2796,
+   "text": "Edit in form: Repeat · Once",
+   "kind": "title1",
+   "maxW": 3920,
+   "page": "a2-plan"
+  },
+  "s2planRow1": {
+   "x": 0,
+   "y": -300,
+   "text": "S2 phone build plan: what each part of the screen needs",
+   "kind": "title1",
+   "maxW": 4000,
+   "page": "s2-plan"
+  },
+  "s2planRow2": {
+   "x": 0,
+   "y": 1640,
+   "text": "Messages and needs input",
+   "kind": "title1",
+   "maxW": 4430,
+   "page": "s2-plan"
+  },
+  "s2planRow3": {
+   "x": 0,
+   "y": 3020,
+   "text": "Sign-in and the session sheet",
+   "kind": "title1",
+   "maxW": 4000,
+   "page": "s2-plan"
+  },
+  "s2planRow4": {
+   "x": 0,
+   "y": 4430,
+   "text": "Sheets, terminal and the desktop list",
+   "kind": "title1",
+   "maxW": 5370,
+   "page": "s2-plan"
+  },
+  "s2planHowTo": {
+   "x": -560,
+   "y": 0,
+   "w": 460,
+   "maxH": 640,
+   "size": "m",
+   "fill": "teal",
+   "page": "s2-plan",
+   "text": "How to read this page\n\nEach board shows a live S2 design (it updates when the original changes), pinned, with what every pin needs. The tags say whether the work is frontend (FE) or server (BE), and whether it is new, a change, a reuse, or already there.\n\nFull plan: .claude/feature/sessions-redesign-s2.md in the sessions-redesign-s2 worktree. The designs: Sessions redesign page, rows S2 and Desktop."
+  },
+  "s2planBackend": {
+   "x": -560,
+   "y": 720,
+   "w": 460,
+   "maxH": 1100,
+   "size": "m",
+   "fill": "blue",
+   "page": "s2-plan",
+   "text": "Server work (all additive)\n\nB3 prompt.askedAt.\nB4 prompt.kind, permission command + folder, plan text, from the pane parser.\nB5 Free-text answer: POST /answer {index, text}.\nB6 task {id, name} on rows.\nB8 Subagent result and prompt, read when the sheet opens.\nB11 tool {name, target, useId} on tool calls; toolUseId + isError on results, so the app can pair a call with its result.\nB12 total on the closed-session list.\n\nAlready there: answer, dismiss, interrupt, close, fork, rename, model, effort, queue send-now / retry / delete, sign-in complete, subagents, files, terminal bytes.\n\nDropped (your calls, Oct 15): B1, the live current-step line on working rows and subagent rows, and its journal event; B2, last-reply text in any list; B7, the failure reason on unsent messages."
+  },
+  "s2planPhases": {
+   "x": -560,
+   "y": 1900,
+   "w": 460,
+   "maxH": 760,
+   "size": "m",
+   "fill": "green",
+   "page": "s2-plan",
+   "text": "Phases (each ends green before the next)\n\nP0 The other session commits its desktop narrow-window and scheduled-task work; this worktree rebases. Add S2 dark tokens.\nP1 Server data: B3, B6, B11, B12.\nP2 Phone list (board 1).\nP3 Desktop list (board 13).\nP4 Session view, queued, not sent (boards 2–4).\nP5 Needs input and sign-in (boards 5–8) + B4, B5.\nP6 Sheets and terminal (boards 9–12) + B8.\nP7 Audit, TestFlight, desktop install, only with your go-ahead."
+  },
+  "s2planOpen": {
+   "x": -560,
+   "y": 2740,
+   "w": 460,
+   "maxH": 900,
+   "size": "m",
+   "fill": "orange",
+   "page": "s2-plan",
+   "text": "Open decisions (my recommendation)\n\n1. Decided: no live current-step line on working rows or subagent rows. They say Working / Running (the phone list adds its running time). No server work.\n\nDecided: queued messages stay in today's soft strip above the input bar, and the menu opens at the tapped row. Unsent messages show Not sent with no reason.\n\n2. The desktop keeps 3 groups (Needs input, Working, Recent). It has no read state, so Unread and Idle mean nothing there.\n\n3. Decided: the terminal stays a shell on the host, as today. It does not attach to the session's pane. No server work.\n\n4. Queued: Edit and Remove only while lfg holds the message. This is a server limit.\n\n5. Free-text answers ship last. Until then the text goes as a new message.\n\n6. Risk: another session has uncommitted edits in desktop/LFGSessions.swift (about 330 lines), tmux.ts, sessions.ts and serve.ts. P0 waits for them."
+  },
+  "planTitle4": {
+   "x": 0,
+   "y": 8682,
+   "text": "Desktop: same components, Mac differences",
+   "kind": "title1",
+   "page": "a2-plan"
+  },
+  "planTitle5": {
+   "x": 0,
+   "y": 4460,
+   "text": "Edit form: every Repeat variant in one board",
+   "kind": "title1",
+   "page": "a2-plan",
+   "maxW": 2206
+  },
+  "runsTitle": {
+   "x": 0,
+   "y": -7700,
+   "text": "Runs: Show more, and the model logos (Oct 15)",
+   "kind": "title1",
+   "maxW": 2920,
+   "page": "tasks-redesign"
+  },
+  "runsRules": {
+   "x": 3000,
+   "y": -7400,
+   "w": 440,
+   "page": "tasks-redesign",
+   "fill": "blue",
+   "text": "Runs: how Show more works\n\n• Upcoming runs sit on top, furthest first, so the next run is just above the history. The grey node marks a run as upcoming, so the “Next” label is gone.\n• Each group shows at most three rows. With more, it shows the two nearest runs and a Show more row: above the upcoming runs, below the past ones.\n• Show more on upcoming runs opens every run the host lists (up to 10). The row then reads Show less.\n• Show more on past runs adds 10 runs per tap and loads older pages when needed. With none left, the row reads Show less.\n• Unchanged: after a failure only the next run shows, and while a run is live none show.\n\nPick one style: A text link, B row on the timeline (recommended), C button. Tap the rows on each board to try them.\n\nModel pill: the agent's real logo replaces the letter square. Claude Code shows the clay starburst, Codex its app icon."
+  },
+  "bubTitle1": {
+   "x": 0,
+   "y": 3760,
+   "text": "User bubble at night: calmer blues (Oct 16)",
+   "kind": "title1",
+   "maxW": 3170,
+   "page": "sessions-redesign"
+  },
+  "bubTitle2": {
+   "x": 900,
+   "y": 5204,
+   "text": "User bubble at night: other colors",
+   "kind": "title1",
+   "maxW": 1800,
+   "page": "sessions-redesign"
+  },
+  "bubPick": {
+   "x": 3250,
+   "y": 4060,
+   "w": 420,
+   "fill": "blue",
+   "size": "m",
+   "maxH": 900,
+   "page": "sessions-redesign",
+   "text": "User bubble at night (Oct 16)\n\nPICKED: Soft blue (#355C8F) with the prose off-white text (#F2F2F7). Built in the app (dark mode only), and the S2 boards and the dark task chat now draw it.\n\nWhy it changed: today's bubble was the brightest thing on the black page, system blue (#0A6EE0) with pure white text.\n\nEvery option here:\n• dims the fill (Soft blue is 63% as bright as today; the others about a third),\n• moves the text off pure white,\n• keeps text contrast above today's 4.9:1 (Soft blue with #F2F2F7: 6.1:1).\n\nNot changed: light mode, the Send button and the blue action buttons, and queued messages (they stay in the gray strip)."
+  },
+  "ipTitle1": {
+   "x": 0,
+   "y": -300,
+   "text": "iPad today: the current build on an 11-inch iPad (Oct 17)",
+   "kind": "title1",
+   "maxW": 6908,
+   "page": "ipad"
+  },
+  "ipTitle2": {
+   "x": 0,
+   "y": 1400,
+   "text": "iPad proposal: list on launch, one reading column, one list button",
+   "kind": "title1",
+   "maxW": 6908,
+   "page": "ipad"
+  },
+  "ipAudit": {
+   "x": -560,
+   "y": 0,
+   "w": 480,
+   "page": "ipad",
+   "fill": "red",
+   "text": "What is wrong on iPad today\n(current tree, iPad Pro 11\", iOS 26.3, dark; pins on the screenshots)\n\n1  Cold launch in portrait shows an empty screen. The list starts hidden, so the first thing you see is \"No session selected\" and one small button.\n\n2  Lines are far too long in landscape: about 115 characters a line with the list, 150 without it. The task view stretches the same way; Run now and Pause become 400 to 560pt wide.\n\n3  The session top bar has two buttons for one job: show/hide the list, and a back arrow that only shows the list again.\n\n4  New session fills the screen with a composer 810 to 1190pt wide.\n\n5  The Tasks sidebar does not match Sessions: square edge-to-edge selection, row chevrons, and a lone list button instead of the pill."
+  },
+  "ipLater": {
+   "x": -560,
+   "y": 760,
+   "w": 480,
+   "page": "ipad",
+   "fill": "gray",
+   "text": "Not in this pass\n\n- Hardware keyboard: only Ctrl-Cmd-S (show/hide the list) exists. Cmd-N, Cmd-F, Cmd-1/Cmd-2 and the iPadOS menu bar would help if you use a keyboard. Say so and it is the next pass.\n\n- Hiding the list also hides the Sessions/Tasks switcher, and both tabs share the hidden state. One tap brings the list back, so it stays.\n\n- The sidebar stays 320pt wide."
+  },
+  "ipChanges": {
+   "x": -560,
+   "y": 1700,
+   "w": 480,
+   "page": "ipad",
+   "fill": "blue",
+   "text": "What the proposal changes\n\n- The list shows on launch, in both orientations (fixes 1).\n\n- One reading column, at most 720pt wide, centered in the detail area: transcript, pills, queued strip, needs-input panel and composer. The task view and New session use the same column (fixes 2, 4). Narrower areas, such as portrait with the list (504pt), keep today's full-width layout.\n\n- Inside a column 600pt or wider, a user bubble may hold up to 480pt of text. Elsewhere it stays 290pt, as on the phone.\n\n- In two columns the session top bar keeps only the list button; the phone keeps its back arrow (fixes 3).\n\n- The Tasks sidebar uses the Sessions sidebar's fill (#1C1C1E) and selection (inset, rounded, #182B3E) and drops row chevrons. Phone and Mac task lists keep theirs (fixes 5).\n\n- Found while building: in landscape with the keyboard up, New session was taller than the space left, so the composer's bottom row sat 20pt under the keyboard and the header rode up under the status bar. The hint above the composer now steps down to what fits."
+  },
+  "ipKeeps": {
+   "x": -560,
+   "y": 2620,
+   "w": 480,
+   "page": "ipad",
+   "fill": "green",
+   "text": "What stays\n\n- Two columns, the floating sidebar and the dock inside it.\n\n- The session sheet, Files & links and Settings as centered sheets.\n\n- Search at the bottom of the sidebar, and the list menu as a popover.\n\n- The phone: every change keys off the width of the detail area, so a phone screen never reaches the 720pt column."
+  },
+  "ipHowTo": {
+   "x": -1120,
+   "y": 1700,
+   "w": 480,
+   "page": "ipad",
+   "fill": "teal",
+   "text": "How to read the proposal row\n\nThese boards specify LAYOUT: where each column sits, how wide it is, which controls exist and where. Component styling (glass buttons, the dock's surface, the New-session composer, chips) follows the shipped S2 and A2 components and the S2/A2 boards; it is drawn here only approximately and is not part of this pass.\n\nVerified Oct 17 (design verifier, round 1): reading column, composer widths, user bubble width, the single list button and both cold-launch positions match within 1pt. It also found the Sessions/Tasks header dot on the card edge and the Tasks header glyphs differing from Sessions; both fixed."
+  },
+  "ipFound": {
+   "x": -1120,
+   "y": 2460,
+   "w": 480,
+   "page": "ipad",
+   "fill": "orange",
+   "text": "Found during verification, not changed (phone and iPad alike)\n\n- Unread rows show no \"New reply\" line; s2-list draws one.\n\n- Scrolled transcript text stays readable behind the title and status line.\n\n- With a hardware keyboard, the selected list row gets the system's square blue focus ring over the rounded selection.\n\n- New session: the send arrow looks enabled while the field is empty."
+  },
+  "rlTitle": {
+   "x": 0,
+   "y": -300,
+   "text": "Retry later (Oct 18): the task's own form language",
+   "kind": "title1",
+   "maxW": 2280,
+   "page": "retry-later"
+  },
+  "rlTitleLight": {
+   "x": 0,
+   "y": 964,
+   "text": "Light",
+   "kind": "title1",
+   "maxW": 2280,
+   "page": "retry-later"
+  },
+  "rlTitleStates": {
+   "x": 0,
+   "y": 2228,
+   "text": "Sheet states",
+   "kind": "title1",
+   "maxW": 2750,
+   "page": "retry-later"
+  },
+  "rlRules": {
+   "x": 2400,
+   "y": 0,
+   "w": 460,
+   "fill": "blue",
+   "page": "retry-later",
+   "text": "Retry later: how it behaves\n\n• Failed card: Retry now and Ask to fix stay the two buttons. Retry later… is the third, quieter action: accent text with a clock, under them.\n• The sheet opens fitted to its content, not a full form. Cancel top left; the one strong action is the full-width button at the bottom, which names the time (\"Retry at 1:36 PM\").\n• In minutes: 35 min, 45 min, 1 hour and Custom are chips; the picked one is filled blue. Custom shows a Minutes field (whole minutes, 1 to 525,600).\n• At a time: Date and Time pills, with the local time zone under them.\n• The big sentence is the preview: it always says the actual retry time before you confirm.\n• Invalid entry: the field and the line under the sentence turn red, and the button greys out.\n• Saving: the button reads Scheduling… and the form dims. Network error: a red line above the button; the choice stays.\n• Retry scheduled: the card turns neutral with the time as its headline; Retry now, Change time, then Cancel retry as quiet text.\n• Light mode keeps the system colours, like every Tasks screen: accent and fills are the system blue. Idle fills (unpicked chips, the disabled button, pills) use the tertiary system fill, so they show on the white card.\n• Unchanged: one extra run, the regular schedule and run counts stay; a sleeping host retries when it wakes.\n\nMac: the same sheet at 360pt, Esc cancels and Return confirms. Tap the chips and tabs to try each board."
+  },
+  "rlChanged": {
+   "x": 2400,
+   "y": 760,
+   "w": 460,
+   "fill": "gray",
+   "page": "retry-later",
+   "text": "What changed from the first version\n\n• Three equal buttons on the failed card became two buttons and one quiet action.\n• A generic grouped form became the edit form's own parts: the Once/Repeat-style tabs, the big sentence with its line under it, the frequency chips, the bordered number field and the date/time pills.\n• Presets now show which one is picked.\n• The Retry at preview moved from the bottom section into the sentence at the top.\n• Schedule retry in the toolbar became one full-width button that names the time.\n• The iPad and Mac sheets no longer leave half the sheet empty."
+  },
+  "usageTitle": {
+   "x": 0,
+   "y": -300,
+   "kind": "title1",
+   "maxW": 2280,
+   "page": "usage-limits",
+   "text": "Usage limits (Oct 20): account quotas, told honestly"
+  },
+  "usageTitleLight": {
+   "x": 0,
+   "y": 964,
+   "kind": "title1",
+   "maxW": 2280,
+   "page": "usage-limits",
+   "text": "Light"
+  },
+  "usageTitleStates": {
+   "x": 0,
+   "y": 2228,
+   "kind": "title1",
+   "maxW": 2750,
+   "page": "usage-limits",
+   "text": "Identity, billing, refresh, iPad"
+  },
+  "usageRules": {
+   "x": 2720,
+   "y": 0,
+   "w": 460,
+   "fill": "blue",
+   "page": "usage-limits",
+   "text": "Usage limits: how it behaves\n\n• Menu: a plain row in the session list ••• menu, between Terminal and Settings. Same row in the desktop host strip menu.\n\n• One card per ACCOUNT, grouped under a provider heading. Hosts are a line inside the card, never a card of their own.\n\n• A window is named by the duration the provider reported: “Current window · 5 h”, “Weekly · 7 days”. Never by the API’s key name.\n\n• Thresholds: under 75% accent, 75–89% amber, 90–99% amber plus “Little left”, 100% red plus “Used up”. The word carries the state, not the colour alone.\n\n• One refresh action, top right. Opening the sheet refreshes. A refresh never blanks the numbers already on screen.\n\n• Every card footer says when the reading was taken and which host took it."
+  },
+  "usageHonesty": {
+   "x": 2720,
+   "y": 860,
+   "w": 460,
+   "fill": "orange",
+   "page": "usage-limits",
+   "text": "Five things this design must never do\n\n1. A window the provider did not report is “Not reported” with NO bar. A zero-length bar reads as 0% used, and that is a lie. The live Codex login returns weekly only.\n\n2. A read failure never says “sign in”. It names the host in plain words: “LFG couldn’t reach Air for an update. This does not mean the account is signed out.” No status codes in the UI. Sign-in copy appears only when the provider itself says the credential was rejected.\n\n3. Two hosts merge into one card only when both identify the SAME account. An unidentified host gets its own card and a line saying it may be the same account.\n\n4. A stale reading stays legible. The footer turns amber and says how old it is; the numbers are never dimmed, because stale is still the best information there is.\n\n5. API-key billing shows no bars at all. There is no subscription window to invent."
+  },
+  "cuaTitle": {
+   "x": 0,
+   "y": -300,
+   "kind": "title1",
+   "maxW": 2740,
+   "page": "cua-spaces",
+   "text": "Chat & Cua Spaces (Oct 21): you message agents — they borrow desktops"
+  },
+  "cuaTitleChat": {
+   "x": 0,
+   "y": 964,
+   "kind": "title1",
+   "maxW": 2740,
+   "page": "cua-spaces",
+   "text": "The thread, and the cards that live in it"
+  },
+  "cuaTitleWatch": {
+   "x": 0,
+   "y": 2228,
+   "kind": "title1",
+   "maxW": 1800,
+   "page": "cua-spaces",
+   "text": "Borrowing a desktop, watching it, taking it"
+  },
+  "cuaTitleControl": {
+   "x": 0,
+   "y": 3492,
+   "kind": "title1",
+   "maxW": 2708,
+   "page": "cua-spaces",
+   "text": "Manual control"
+  },
+  "cuaTitlePlatforms": {
+   "x": 0,
+   "y": 4756,
+   "kind": "title1",
+   "maxW": 2950,
+   "page": "cua-spaces",
+   "text": "Mac and iPad"
+  },
+  "cuaFlow": {
+   "x": 3120,
+   "y": 0,
+   "w": 460,
+   "fill": "blue",
+   "page": "cua-spaces",
+   "text": "The model\n\nYou message AGENTS. Each one has a name, standing instructions, its own memory and one lasting conversation. That is the navigation and the identity.\n\nDESKTOPS ARE A POOL. An agent borrows one when it needs a screen and gives it back when it is done. You never pick one, never create one, and never see one before you have something to say.\n\nThe flow: Message → an agent → say what you want → results arrive inline. If a step needs a screen, the agent takes a desktop and says so in one line. The desktop strip appears above the composer only while the thread is holding one.\n\nWatch → Take control → full screen → Done. Taking control pauses THAT AGENT and locks the desktop to you; Done gives it back to the agent and to the pool.\n\nWhat the thread keeps: the conversation, the instructions, the memory, the connected accounts. None of it depends on which desktop it had, or on having one at all."
+  },
+  "cuaReused": {
+   "x": 3120,
+   "y": 5560,
+   "w": 460,
+   "fill": "gray",
+   "page": "cua-spaces",
+   "text": "Reused, not reinvented\n\n• Three-line row, hairline, no buttons in rows, swipe only: s2-list.\n• Host dots and the glass Search/••• capsule; the floating dock with Message as a third tab: s2-list.\n• Offline = hollow amber ring, row at 50%: dA2-sessions.\n• Top bar, centred title and status line, glass back and tools: s2-view.\n• User bubble #355C8F on #F2F2F7: bub-soft.\n• Composer, model chip, Stop that becomes Send on typing: s2-view.\n• Queued / not-sent soft strip with its row menu: s2-queued.\n• Tool steps grouped, expanded inline over a 1.5pt rule: s2-view.\n• Sheet scaffold, drag indicator, 34pt corners, Close leading: NewSessionSheets.\n• Mac titlebar, tab strip, host strip, time column: dA2-sessions.\n• iPad 320pt sidebar card and the #182B3E selected row: ip-session.\n\nTWO CHANGES FROM s2-list, both deliberate:\n1. The 20pt status-dot gutter becomes a 38pt monogram with that dot as a corner badge. A messaging list is read by who is talking first; the dot keeps the state. Monogram tints are desaturated so the status dot stays the loudest thing.\n2. NO STATUS SECTIONS — see the ordering note.\n\nHIG: sign-in is delayed until the step actually needs it, is explained in place, names the method (“Sign in on iPhone”), and never blocks the rest of the app — Managing accounts. Dark only, like every S2 and iPad board here."
+  },
+  "cuaGestures": {
+   "x": 3120,
+   "y": 4560,
+   "w": 460,
+   "fill": "teal",
+   "page": "cua-spaces",
+   "text": "Manual control: the gesture map\n\n• One finger, tap or drag — the guest cursor. Tap, drag, select.\n• Two-finger tap — right-click.\n• Two fingers, drag — pan the local viewport. Never reaches the desktop.\n• Pinch — zoom, 1× to 4×. The factor shows beside Fit once past 1×.\n• Fit — back to the whole desktop, centred, at 1×.\n\nOne finger is the guest and two fingers are your local view: that split is the whole model, and the hint strip states it in four pairs rather than an onboarding sheet. It fades a few seconds in; the boards draw it so the mapping is reviewable.\n\nChrome stays at Done, Fit and Keyboard. Portrait fits to width (390×244) and says to turn the phone; landscape fits to height (624×390). Landscape-right is landscape-left mirrored — the chrome insets on whichever side the sensor housing is.\n\nThe keyboard row carries what a Linux desktop needs and iOS will not send: esc, tab, ctrl, alt, arrows, return.\n\nThe chips name the resource and the agent: “You have Desktop 2” next to “Mail paused”, so it is never ambiguous whose work you interrupted."
+  },
+  "cuaInline": {
+   "x": 3120,
+   "y": 1080,
+   "w": 460,
+   "fill": "orange",
+   "page": "cua-spaces",
+   "text": "Sign-ins and drafts are MESSAGES\n\nThey sit in the transcript. They scroll. They never cover the conversation, never pin themselves over it, and never freeze the composer — you can tell the agent something else while one is open.\n\nOnly the step that needs you waits. Everything independent keeps running, and the board cua-parallel exists to prove it: the sign-in is parked at 4 minutes while the same agent files 38 receipts underneath it.\n\nFour states on both cards: WAITING (amber edge, live button), ANSWERED (blue edge, handing over), COMPLETED (plain edge, green mark, timestamp), EXPIRED (grey, says what did NOT happen and offers to ask again).\n\nCredentials never touch the conversation. The card opens Apple’s secure login on tap; the agent receives a signed-in session, not what you typed. The card says so.\n\nNothing sends without approval. The draft card shows the real recipient and body, the footnote reads “Nothing goes out until you tap Send it”, and the completed state timestamps what was actually sent."
+  },
+  "cuaAlloc": {
+   "x": 3120,
+   "y": 2340,
+   "w": 460,
+   "fill": "green",
+   "page": "cua-spaces",
+   "text": "Getting a desktop (cua-alloc, cua-wait)\n\nNO CONFIRMATION. There is no Create Space step, no modal and no “are you sure”. The agent needs a screen, so it reuses a free compatible desktop or starts one after the capacity and 4 GiB checks, and the thread narrates it. Creating a desktop is authorised by using the product; it does NOT authorise sending email or any other account action — those still get their own inline approval card.\n\nChat never allocates one. Opening a thread never allocates one.\n\nFOUR VISIBLE STATES, all inline in the thread that asked:\n• Finding a desktop for Scout…\n• Starting a desktop for Scout…\n• Connecting to the desktop…\n• Ready — the card goes, the live strip arrives with Watch.\n\nThe card is an INDETERMINATE spinner plus plain language and the REAL elapsed time. No percentage, no progress bar, no predicted finish. The 12s and 19s on these boards are sample elapsed times, not a benchmark — a boot takes as long as it takes.\n\nNOT IN THE BOOT UI: memory figures, reservations, VM or container internals. Capacity is only explained where it costs you time — the wait state on cua-wait, which shows the sum behind the 4 GB floor. A reused desktop shows no card at all, just one quiet line.\n\nNO FAKE THUMBNAIL. The strip does not exist while booting; there is no dimmed or shimmering picture of a desktop that is not up. Watch and Take control appear only once the stream is actually there.\n\nTHE COMPOSER STAYS LIVE, no full-screen loader, nothing disabled. Other threads keep working. The pending request belongs to the thread that asked: leaving and coming back shows the same request and its current elapsed time, and never starts a second one (board state ‘returned’).\n\nCANCEL while starting. RETRY on failure. A failed start says what happened in plain words and frees whatever it was holding.\n\nEXCLUSIVITY is unchanged: one desktop, one controller. A desktop with a human controller or parked on a sign-in is never taken from the agent holding it. CLI and file work needs no desktop, so an agent like Patch never queues."
+  },
+  "cuaScope": {
+   "x": 3120,
+   "y": 3480,
+   "w": 460,
+   "fill": "purple",
+   "page": "cua-spaces",
+   "text": "What is shared and what is not\n\nSHARED between your agents: the project files. The thread sheet says “Read and write · 4 agents use these”, and the chat says when another agent is editing them too.\n\nPRIVATE to one agent: its instructions, its memory, and its connected accounts. The sheet splits these under two headings — “Only this agent” and “Shared with your agents” — so a connected Google account never reads as available to everyone.\n\nA new agent starts with no accounts and asks in the chat when it needs one.\n\nIMPLEMENTATION NOTE, not product copy: shared files with several writers want isolated git worktrees per agent, with the conflict surfaced in the thread as plain language. The word worktree appears nowhere in the UI."
+  },
+  "cuaOrder": {
+   "x": 3120,
+   "y": 6700,
+   "w": 460,
+   "fill": "red",
+   "page": "cua-spaces",
+   "text": "One list, newest first\n\nThreads are NEVER grouped by status — no Needs you, Working, Unread or Idle sections, on phone, Mac or iPad. One continuous list.\n\nORDER is most-recent activity first, and only that. Status never reorders the list, so a thread does not jump under your thumb the moment an agent starts or finishes. The row you were about to tap is still where you saw it.\n\nTHE DOT IS ENOUGH. Each monogram carries its state as a corner badge — amber needs you, green working, blue idle, purple unread, hollow amber for an offline host — and the row’s second line says it in words. A section header would repeat what the row already says, and cost a scroll.\n\nUNREAD keeps its marker and loses its section: the name stays bold and the dot stays purple. Mark all read moves from the old group header into the list’s ••• menu.\n\nThe needs-you count survives where it does not reorder anything — the Message tab badge on phone and on Mac.\n\nThe Mac host strip’s control now reads “Most recent”, not “By status”. Desktops on cua-pool are still grouped by host: that is a resource list, not a conversation list."
+  },
+  "cuaCua": {
+   "x": 3120,
+   "y": 7900,
+   "w": 460,
+   "fill": "gray",
+   "page": "cua-spaces",
+   "text": "What Cua gives us, and what LFG has to build\n\nChecked against the current Cua docs on 2026-10-21.\n\nA HOST-SIDE AGENT CAN CHAT BEFORE ANY SPACE EXISTS. “Connect your agent” adds the cua MCP server and skills to an agent you already run, giving it create_space, list_spaces, space_bash, send_file, teleport_browser_session and so on. It answers before a Space is created. This is what makes the no-desktop-until-needed thread in these boards honest.\n\nagent_start DOES REQUIRE A SPACE. Its `space` parameter is required: it launches a coding-agent CLI INSIDE a named Space, with its own event stream (agent_events), follow-ups (agent_message) and status. Our current prototype uses that mode, so a run in that mode needs a Space. These boards do NOT promise agent_start can run without one, and opening a stream does not create a desktop.\n\nPERSISTENT AGENTS have a Space and a durable home in Cua Volume, with only selected memory files persisted. Nothing documents a live agent process migrating freely between Spaces.\n\nSO THE MODEL IN THESE BOARDS ASSUMES LFG hosts the agent runtime itself and reaches Cua through tools. The things that make the pool work — shared-pool scheduling, fair leases, the 4 GiB admission guard, the reservation lock — are LFG features to implement. They are not Cua behaviour we already get.\n\nCHAT IS NOT FREE. A thread with no desktop still runs an agent process somewhere. “No desktop needed” in the status line means no Space is allocated — not zero compute."
+  },
+  "ifT0": {
+   "x": 0,
+   "y": -300,
+   "kind": "title1",
+   "maxW": 2400,
+   "text": "Inspiration: how other apps put a file beside a conversation",
+   "page": "ipad-files"
+  },
+  "ifTA": {
+   "x": 0,
+   "y": 1500,
+   "kind": "title1",
+   "maxW": 6370,
+   "text": "Option A (recommended): the file opens beside the transcript, and the list steps aside",
+   "page": "ipad-files"
+  },
+  "ifTB": {
+   "x": 0,
+   "y": 5040,
+   "kind": "title1",
+   "maxW": 2500,
+   "text": "Option B: the list stays, and the file opens in a narrow third column",
+   "page": "ipad-files"
+  },
+  "ifHowTo": {
+   "x": -1200,
+   "y": 1800,
+   "w": 520,
+   "fill": "gray",
+   "text": "How to read this page\n\nRow 1 is the inspiration: eight patterns from about 30 apps, and which ones lfg takes.\n\nThe first board in the Option A row is a working prototype. Press Play, then tap any file card, the PR link or the Files pill. Tap the handle between the two columns to switch the pane width. Back, Preview / Source, expand, ••• and close all work.\n\nEvery other A and B board is the same prototype, opened in one state, so a change to the prototype updates them all.\n\nSample session: \"Fork session feature\", with the same six files and two links as the S2 Files & links board. The screenshots and pages inside the pane are placeholders.\n\nFrames: iPad Pro 11-inch landscape (1210 × 834), plus one 13-inch board (1376 × 1032) and one portrait board.",
+   "page": "ipad-files"
+  },
+  "ifResearch": {
+   "x": -600,
+   "y": 0,
+   "w": 520,
+   "fill": "blue",
+   "text": "What the research found\n\n- Most chat-plus-file apps now split the window and give the file the wider side: Claude web (about 50/50), Gemini (36/64), ChatGPT Codex (26/74), Swift Playgrounds.\n- The Claude iPad app is the warning. Its artifact pane is a fixed third of the screen with no expand button, so web pages get a phone layout. Users complain about this most.\n- Apple's iPad guidance: use the big screen to cut full-screen transitions, and make every layout change undo itself when it ends.\n- Apple's inspector column is built for details (225 to 400pt). Copy its behaviour (trailing, resizable, a sheet when narrow), not its width.\n- ChatGPT dropped its side canvas in May 2026 for inline blocks that open full screen. The expand button matters as much as the split.\n- No app stacks files in the pane. A new tap replaces the old file.\n\nFull notes and sources: .claude/design/ipad-artifact-split/research.md",
+   "page": "ipad-files"
+  },
+  "ifRules": {
+   "x": -600,
+   "y": 1800,
+   "w": 520,
+   "fill": "green",
+   "text": "How option A behaves\n\n- Tap a file card, a link or the Files pill. The file opens in a pane on the right. The transcript, pills and composer stay live on the left.\n- The list steps aside unless the transcript keeps 400pt and the pane gets 600pt. So it hides on the 11-inch and stays on the 13-inch.\n- Two widths, one handle. Wide (720pt) for documents, web pages and Files & links: the transcript becomes a 460pt column. Narrow (420pt) for images and videos, which are mostly portrait phone captures: the transcript keeps its full 720pt column. Drag past either end to close the pane or fill the screen. The pane remembers the last width for each kind of file.\n- The open file's card turns blue and says Open. A new tap replaces the file. The transcript never scrolls by itself.\n- Header: back to Files & links, the name with its folder and age, Preview / Source for Markdown and HTML, expand and •••, close. A web page shows its address in the header.\n- Images and videos get a strip to step through the session's media.\n- Expand fills the screen. A chip with the session's status and name brings the transcript back.\n- The list button shows the list over everything, dimmed. Tap outside to hide it. While the list is away, the button shows the needs-input count.\n- Close (or Esc) puts back the layout you had.\n- Each session remembers its open file.\n- Portrait, Slide Over, or any window under about 1000pt: the same pane opens as a sheet, as today.",
+   "page": "ipad-files"
+  },
+  "ifBuild": {
+   "x": -600,
+   "y": 2754,
+   "w": 520,
+   "fill": "orange",
+   "text": "What exists and what is new\n\nFE reuse: every viewer. The zoomable image, the video player (with Picture in Picture), PDF, Markdown and Quick Look already live in FileViewerSheet. The pane hosts the same views.\n\nFE change: one entry point. Every file tap goes through openInlineFile. On a wide window it fills the pane instead of opening the sheet.\n\nFE new: a two-pane container inside the session's detail column, the handle and its snap widths, the blue card state, the media strip, full width, and Preview / Source. Not SwiftUI .inspector: it is sized for details and has an iPadOS 26 bug that hides the sidebar button.\n\nFE new: an in-app web view for HTML files and links. Today .html falls back to Quick Look, and links leave for Safari.\n\nFE new, client only: Show in transcript needs the message id on each attachment. Today an attachment keeps only its path and time.\n\nBE: nothing. Files stream from /api/file as today, and the client builds the file list from the transcript.",
+   "page": "ipad-files"
+  },
+  "ifOpen": {
+   "x": -600,
+   "y": 3708,
+   "w": 520,
+   "fill": "purple",
+   "text": "Open questions\n\n1. Links: open in the pane, or keep Safari? A pane web view does not share Safari's sign-ins, so a private GitHub page may ask you to sign in. My pick: the pane, with Open in Safari in •••.\n\n2. When the agent writes a new file, should the pane switch to it? My pick: no. Show a count on the Files pill, and never swap a file you are reading.\n\n3. When the agent rewrites the open file, reload it in place? The client sees the edit in the transcript, so this needs no server change.\n\n4. Keyboard: Esc closes, Cmd-[ and Cmd-] step through files. This pass, or the keyboard pass from the iPad page?",
+   "page": "ipad-files"
+  },
+  "ifWhy": {
+   "x": -600,
+   "y": 5340,
+   "w": 520,
+   "fill": "gray",
+   "text": "Why A, not B\n\n- On the 11-inch, three columns leave the file 390pt. A Markdown file reads like a phone, a web page gets its phone layout, and an image is no bigger than in today's sheet. This is the Claude iPad complaint.\n- A gives the file room and keeps one column you can talk in. The list button's badge still shows when another session needs you.\n- B's one strength, the list that stays, comes back by itself on the 13-inch through A's width rule.",
+   "page": "ipad-files"
+  },
+  "shTitle": {
+   "x": 0,
+   "y": -300,
+   "kind": "title1",
+   "maxW": 3680,
+   "page": "share-sheet",
+   "text": "Share sheet (Oct 23): pick the session, then edit what you send"
+  },
+  "shTitleKinds": {
+   "x": 0,
+   "y": 964,
+   "kind": "title1",
+   "maxW": 1800,
+   "page": "share-sheet",
+   "text": "What you can share"
+  },
+  "shTitleAfter": {
+   "x": 0,
+   "y": 2228,
+   "kind": "title1",
+   "maxW": 2740,
+   "page": "share-sheet",
+   "text": "After Send: it says what happened, then closes itself"
+  },
+  "shTitleOld": {
+   "x": 0,
+   "y": 3492,
+   "kind": "title1",
+   "maxW": 2270,
+   "page": "share-sheet",
+   "text": "First draft A (superseded): compose first"
+  },
+  "shTitleOldKinds": {
+   "x": 0,
+   "y": 4756,
+   "kind": "title1",
+   "maxW": 1330,
+   "page": "share-sheet",
+   "text": "First draft A: what you can share"
+  },
+  "shTitleB": {
+   "x": 0,
+   "y": 6020,
+   "kind": "title1",
+   "maxW": 1330,
+   "page": "share-sheet",
+   "text": "First draft B (superseded): pick first"
+  },
+  "shFlow": {
+   "x": 3800,
+   "y": 0,
+   "w": 460,
+   "fill": "blue",
+   "page": "share-sheet",
+   "text": "The flow (Eugene's pick, Oct 23)\n\nAny app → Share → LFG → Send to → tap a session → the panel comes up → edit the text → Send.\n\nMost of the sheet is search and the list. Nothing is chosen when it opens, so the keyboard stays down and the list gets the screen.\n\nPinned row: New session (your New Session defaults; ••• changes host, folder and agent). Then Recent (the five sessions you messaged last) and All sessions (the rest by last activity, so closed ones sink). Search matches title and folder.\n\nChoosing a session raises the panel: the preview, the text field, who gets it and what Send will do, then Send.\n\nThe text field is exactly what is sent. It starts with the link; you type around it. Attachments are the one addition: they upload to the session's host when you send, and their paths go in after the text, as the paperclip does today.\n\nIn the session (last two boards): a working session holds it in the soft strip until its turn takes it; then it is a plain blue bubble. An idle session shows the bubble at once."
+  },
+  "shDecisions": {
+   "x": 3800,
+   "y": 720,
+   "w": 460,
+   "fill": "orange",
+   "page": "share-sheet",
+   "text": "Decisions worth arguing with\n\n1. ONE SESSION PER SHARE. The reference app lets you tick several. Sending one link to two agents is rare, and the panel's “what Send will do” line needs one recipient. Ticking another session moves the check.\n\n2. WHAT YOU SEE IS WHAT IS SENT. No hidden title or template is added to the text. The preview is only a preview.\n\n3. RECENT = THE SESSIONS YOU MESSAGED LAST (lastUserAt), not the ones that are busy. That is the reference's “frequently contacted”.\n\n4. THE CHECK IS BLUE, not the reference's green: blue is the S2 accent for send.\n\n5. NEW SESSION IS THE PINNED ROW, like the reference's “My status”. Its ••• is the one button in a row anywhere in LFG; it is there because a new session has settings and a session does not.\n\n6. AFTER SEND it shows what happened for about 2 seconds, then closes (row 3). The reference app just closes; ours says when a message will wait or was queued."
+  },
+  "shEntry": {
+   "x": 3800,
+   "y": 1440,
+   "w": 460,
+   "fill": "pink",
+   "page": "share-sheet",
+   "text": "Two ways in (first board)\n\n1. LFG in the app row. Opens Send to with nothing chosen.\n\n2. PROPOSAL: your recent sessions in the suggestions row, next to AirDrop. Tapping one opens Send to with that session already chosen and the panel up.\n\n2 needs LFG to donate an INSendMessageIntent for a session each time you send to it from the app, and the extension to read the intent's conversation id. None of that exists today, so it can ship after 1."
+  },
+  "shBuild": {
+   "x": 3800,
+   "y": 2160,
+   "w": 460,
+   "fill": "green",
+   "page": "share-sheet",
+   "text": "What it takes to build\n\n• A new target: a share extension (SwiftUI) for links, text, images, movies and files.\n• Safari: a JavaScript preprocessing file returns the URL, page title and the current selection, so a quote arrives with its page.\n• App Group (none today). Move the hosts (lfg.hosts), recent folders and New Session defaults to a shared UserDefaults suite, plus a session snapshot so the list shows at once.\n• Keychain access group (none today) for the Cloudflare Access tokens.\n• Sending reuses what exists: POST /upload per file (64 MB cap), then POST /send {text, clientId}. A closed session resumes through the same call. New session: POST /api/sessions/new.\n• Offline host: the extension writes the message into the shared outbox, so the app's existing retry sends it. That moves the GRDB store into the App Group.\n• Server: no change."
+  },
+  "shReused": {
+   "x": 3800,
+   "y": 2880,
+   "w": 460,
+   "fill": "gray",
+   "page": "share-sheet",
+   "text": "Reused, not reinvented\n\n• Layout: the reference share sheet (Send to, search pill, grouped cards, round checks, bottom panel).\n• Status dots, words and colours, the offline ring: s2-list and dA2-sessions.\n• Agent marks: the app's own agent-claude / agent-codex images.\n• Sheet scaffold, grabber, 38pt corners, the close circle: s2-menu.\n• How it lands (the soft strip while it waits, then a bubble): s2-view, s2-queued.\n• Not sent = a red mark and “Not sent”, no reason: the S2 rule.\n\nRows 4 to 6 are the first draft, kept for reference. Delete them once this is settled."
+  },
+  "shLater": {
+   "x": 3800,
+   "y": 3600,
+   "w": 460,
+   "fill": "gray",
+   "page": "share-sheet",
+   "text": "Not in this pass\n\n• Mac share extension. It could fit the desktop scope later without the New session row.\n• iPad: the same sheet as a form sheet. Check the panel and the keyboard there before building.\n• Light mode, with the rest of S2."
+  }
+ },
+ "designSystems": []
+}

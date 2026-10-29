@@ -1,0 +1,389 @@
+{
+ "canvas": "https://claude.ai/artifact/F2B1MNbv5oxuscm237M9sD",
+ "page": {
+  "id": "share-sheet",
+  "name": "Share sheet (Oct 23)"
+ },
+ "order": [
+  "sh-system.dc.html",
+  "sh2-list.dc.html",
+  "sh2-search.dc.html",
+  "sh2-selected.dc.html",
+  "sh2-typing.dc.html",
+  "sh2-new.dc.html",
+  "sh2-landed-waiting.dc.html",
+  "sh2-landed.dc.html",
+  "sh2-quote.dc.html",
+  "sh2-images.dc.html",
+  "sh2-file.dc.html",
+  "sh2-failed.dc.html",
+  "sh-joined.dc.html",
+  "sh-sent.dc.html",
+  "sh-waits.dc.html",
+  "sh-resumed.dc.html",
+  "sh-started.dc.html",
+  "sh-queued.dc.html",
+  "sh-compose.dc.html",
+  "sh-pick.dc.html",
+  "sh-new.dc.html",
+  "sh-landed.dc.html",
+  "sh-failed.dc.html",
+  "sh-quote.dc.html",
+  "sh-images.dc.html",
+  "sh-file.dc.html",
+  "sh-b-list.dc.html",
+  "sh-b-compose.dc.html"
+ ],
+ "boards": {
+  "sh-system.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Share · 1 LFG in the app row, 2 sessions as suggestions (proposal)",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-list.dc.html": {
+   "x": 470,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · nothing chosen: the list gets the screen",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-search.dc.html": {
+   "x": 940,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · search",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-selected.dc.html": {
+   "x": 1410,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · a session chosen: the panel comes up",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-typing.dc.html": {
+   "x": 1880,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · editing the text that is sent",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-new.dc.html": {
+   "x": 2350,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · New session, with its options",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-landed-waiting.dc.html": {
+   "x": 2820,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "In the session · waits in the strip while it works",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-landed.dc.html": {
+   "x": 3290,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "In the session · the turn took it",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-quote.dc.html": {
+   "x": 0,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · selected text",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-images.dc.html": {
+   "x": 470,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · screenshots",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-file.dc.html": {
+   "x": 940,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · a PDF, to a closed session",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh2-failed.dc.html": {
+   "x": 1410,
+   "y": 1264,
+   "w": 390,
+   "h": 844,
+   "title": "Send to · not sent",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-joined.dc.html": {
+   "x": 0,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "After Send · working session",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-sent.dc.html": {
+   "x": 470,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "After Send · idle session",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-waits.dc.html": {
+   "x": 940,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "After Send · session that needs input",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-resumed.dc.html": {
+   "x": 1410,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "After Send · closed session",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-started.dc.html": {
+   "x": 1880,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "After Send · new session",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-queued.dc.html": {
+   "x": 2350,
+   "y": 2528,
+   "w": 390,
+   "h": 844,
+   "title": "After Send · host offline",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-compose.dc.html": {
+   "x": 0,
+   "y": 3792,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · compose: the guess is already in Send to",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-pick.dc.html": {
+   "x": 470,
+   "y": 3792,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · All sessions",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-new.dc.html": {
+   "x": 940,
+   "y": 3792,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · New session",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-landed.dc.html": {
+   "x": 1410,
+   "y": 3792,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · how it lands",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-failed.dc.html": {
+   "x": 1880,
+   "y": 3792,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · not sent",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-quote.dc.html": {
+   "x": 0,
+   "y": 5056,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · selected text on a page",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-images.dc.html": {
+   "x": 470,
+   "y": 5056,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · screenshots from Photos",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-file.dc.html": {
+   "x": 940,
+   "y": 5056,
+   "w": 390,
+   "h": 844,
+   "title": "Draft A · a PDF from Files",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-b-list.dc.html": {
+   "x": 0,
+   "y": 6320,
+   "w": 390,
+   "h": 844,
+   "title": "Draft B · pick first",
+   "page": "share-sheet",
+   "is_interactive": true
+  },
+  "sh-b-compose.dc.html": {
+   "x": 470,
+   "y": 6320,
+   "w": 390,
+   "h": 844,
+   "title": "Draft B · then compose",
+   "page": "share-sheet",
+   "is_interactive": true
+  }
+ },
+ "notes": {
+  "shTitle": {
+   "x": 0,
+   "y": -300,
+   "kind": "title1",
+   "maxW": 3680,
+   "page": "share-sheet",
+   "text": "Share sheet (Oct 23): pick the session, then edit what you send"
+  },
+  "shTitleKinds": {
+   "x": 0,
+   "y": 964,
+   "kind": "title1",
+   "maxW": 1800,
+   "page": "share-sheet",
+   "text": "What you can share"
+  },
+  "shTitleAfter": {
+   "x": 0,
+   "y": 2228,
+   "kind": "title1",
+   "maxW": 2740,
+   "page": "share-sheet",
+   "text": "After Send: it says what happened, then closes itself"
+  },
+  "shTitleOld": {
+   "x": 0,
+   "y": 3492,
+   "kind": "title1",
+   "maxW": 2270,
+   "page": "share-sheet",
+   "text": "First draft A (superseded): compose first"
+  },
+  "shTitleOldKinds": {
+   "x": 0,
+   "y": 4756,
+   "kind": "title1",
+   "maxW": 1330,
+   "page": "share-sheet",
+   "text": "First draft A: what you can share"
+  },
+  "shTitleB": {
+   "x": 0,
+   "y": 6020,
+   "kind": "title1",
+   "maxW": 1330,
+   "page": "share-sheet",
+   "text": "First draft B (superseded): pick first"
+  },
+  "shFlow": {
+   "x": 3800,
+   "y": 0,
+   "w": 460,
+   "fill": "blue",
+   "page": "share-sheet",
+   "text": "The flow (Eugene's pick, Oct 23)\n\nAny app → Share → LFG → Send to → tap a session → the panel comes up → edit the text → Send.\n\nMost of the sheet is search and the list. Nothing is chosen when it opens, so the keyboard stays down and the list gets the screen.\n\nPinned row: New session (your New Session defaults; ••• changes host, folder and agent). Then Recent (the five sessions you messaged last) and All sessions (the rest by last activity, so closed ones sink). Search matches title and folder.\n\nChoosing a session raises the panel: the preview, the text field, who gets it and what Send will do, then Send.\n\nThe text field is exactly what is sent. It starts with the link; you type around it. Attachments are the one addition: they upload to the session's host when you send, and their paths go in after the text, as the paperclip does today.\n\nIn the session (last two boards): a working session holds it in the soft strip until its turn takes it; then it is a plain blue bubble. An idle session shows the bubble at once."
+  },
+  "shDecisions": {
+   "x": 3800,
+   "y": 720,
+   "w": 460,
+   "fill": "orange",
+   "page": "share-sheet",
+   "text": "Decisions worth arguing with\n\n1. ONE SESSION PER SHARE. The reference app lets you tick several. Sending one link to two agents is rare, and the panel's “what Send will do” line needs one recipient. Ticking another session moves the check.\n\n2. WHAT YOU SEE IS WHAT IS SENT. No hidden title or template is added to the text. The preview is only a preview.\n\n3. RECENT = THE SESSIONS YOU MESSAGED LAST (lastUserAt), not the ones that are busy. That is the reference's “frequently contacted”.\n\n4. THE CHECK IS BLUE, not the reference's green: blue is the S2 accent for send.\n\n5. NEW SESSION IS THE PINNED ROW, like the reference's “My status”. Its ••• is the one button in a row anywhere in LFG; it is there because a new session has settings and a session does not.\n\n6. AFTER SEND it shows what happened for about 2 seconds, then closes (row 3). The reference app just closes; ours says when a message will wait or was queued."
+  },
+  "shEntry": {
+   "x": 3800,
+   "y": 1440,
+   "w": 460,
+   "fill": "pink",
+   "page": "share-sheet",
+   "text": "Two ways in (first board)\n\n1. LFG in the app row. Opens Send to with nothing chosen.\n\n2. PROPOSAL: your recent sessions in the suggestions row, next to AirDrop. Tapping one opens Send to with that session already chosen and the panel up.\n\n2 needs LFG to donate an INSendMessageIntent for a session each time you send to it from the app, and the extension to read the intent's conversation id. None of that exists today, so it can ship after 1."
+  },
+  "shBuild": {
+   "x": 3800,
+   "y": 2160,
+   "w": 460,
+   "fill": "green",
+   "page": "share-sheet",
+   "text": "What it takes to build\n\n• A new target: a share extension (SwiftUI) for links, text, images, movies and files.\n• Safari: a JavaScript preprocessing file returns the URL, page title and the current selection, so a quote arrives with its page.\n• App Group (none today). Move the hosts (lfg.hosts), recent folders and New Session defaults to a shared UserDefaults suite, plus a session snapshot so the list shows at once.\n• Keychain access group (none today) for the Cloudflare Access tokens.\n• Sending reuses what exists: POST /upload per file (64 MB cap), then POST /send {text, clientId}. A closed session resumes through the same call. New session: POST /api/sessions/new.\n• Offline host: the extension writes the message into the shared outbox, so the app's existing retry sends it. That moves the GRDB store into the App Group.\n• Server: no change."
+  },
+  "shReused": {
+   "x": 3800,
+   "y": 2880,
+   "w": 460,
+   "fill": "gray",
+   "page": "share-sheet",
+   "text": "Reused, not reinvented\n\n• Layout: the reference share sheet (Send to, search pill, grouped cards, round checks, bottom panel).\n• Status dots, words and colours, the offline ring: s2-list and dA2-sessions.\n• Agent marks: the app's own agent-claude / agent-codex images.\n• Sheet scaffold, grabber, 38pt corners, the close circle: s2-menu.\n• How it lands (the soft strip while it waits, then a bubble): s2-view, s2-queued.\n• Not sent = a red mark and “Not sent”, no reason: the S2 rule.\n\nRows 4 to 6 are the first draft, kept for reference. Delete them once this is settled."
+  },
+  "shLater": {
+   "x": 3800,
+   "y": 3600,
+   "w": 460,
+   "fill": "gray",
+   "page": "share-sheet",
+   "text": "Not in this pass\n\n• Mac share extension. It could fit the desktop scope later without the New session row.\n• iPad: the same sheet as a form sheet. Check the panel and the keyboard there before building.\n• Light mode, with the rest of S2."
+  }
+ }
+}

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Share · all sessions</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button,textarea,input{font:inherit;color:inherit}
+button{background:transparent;border:0}
+textarea::placeholder{color:#8E8E93}
+</style>
+</helmet><div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #000000; color: #FFFFFF; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; -webkit-font-smoothing: antialiased;">
+
+  <div aria-hidden="true" style="position: absolute; top: 14px; left: 10px; right: 10px; height: 160px; border-radius: 18px; background: #F2F2F7; overflow: hidden; color: #1C1C1E;">
+    <div style="padding: 18px 20px 0; display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-size: 12px; color: #6E6E73;">developer.apple.com</span>
+      <span style="font-size: 26px; font-weight: 700;">Sheets</span>
+    </div>
+  </div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(0,0,0,0.62);"></div>
+  <section role="dialog" aria-label="All sessions" style="position: absolute; left: 0; right: 0; top: 58px; bottom: 0; background: #1C1C1E; border-radius: 38px 38px 0 0; overflow: hidden;">
+    <div aria-hidden="true" style="position: absolute; top: 6px; left: 50%; width: 36px; height: 5px; margin-left: -18px; border-radius: 3px; background: #48484A;"></div>
+    <div style="position: absolute; top: 14px; left: 14px; right: 14px; height: 44px; display: flex; align-items: center; gap: 10px;">
+      <a href="sh-compose.dc.html" aria-label="Back" style="width: 44px; height: 44px; flex: 0 0 44px; border-radius: 22px; background: #3A3A3C; display: flex; align-items: center; justify-content: center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D1D1D6" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+      <h1 style="flex: 1 1 auto; min-width: 0; margin: 0; text-align: center; font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">All sessions</h1>
+      <span style="width: 44px; flex: 0 0 44px;"></span>
+    </div>
+
+    <div style="position: absolute; top: 70px; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column;">
+
+      <div style="margin: 0 16px; height: 40px; border-radius: 12px; background: #2C2C2E; display: flex; align-items: center; gap: 8px; padding: 0 12px; color: #8E8E93;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg><span style="font-size: 17px;">Search sessions</span>
+      </div>
+      <div style="flex: 1 1 auto; overflow: hidden; padding-top: 4px;">
+    <sc-for list="{{sections}}" as="sec" hint-placeholder-count="4">
+      <button type="button" onClick="{{sec.toggle}}" aria-expanded="{{sec.expanded}}" style="width: 100%; border: 0; background: transparent; font: inherit; display: flex; align-items: center; gap: 8px; padding: 14px 16px 6px 20px; font-size: 15px; color: #A1A1A6; text-align: left; cursor: pointer;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{sec.chevron}}"></path></svg>
+        <span style="font-weight: 600; color: {{sec.color}};">{{sec.label}}</span>
+        <span style="color: #8E8E93;">{{sec.count}}</span>
+      </button>
+      <sc-for list="{{sec.rows}}" as="r" hint-placeholder-count="2">
+        <a href="sh-compose.dc.html" style="display: flex; align-items: flex-start; padding-left: 20px; opacity: {{r.opacity}};">
+          <span style="width: 20px; flex: 0 0 20px; padding-top: 18px;"><span style="display: block; width: 8px; height: 8px; border-radius: 50%; background: {{r.dotBg}}; border: {{r.dotBorder}}; box-sizing: border-box;"></span></span>
+          <span style="flex: 1 1 auto; min-width: 0; padding: 11px 16px 12px 0; border-bottom: 0.5px solid #38383A; display: flex; align-items: center; gap: 10px;">
+            <span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 17px; line-height: 22px; font-weight: {{r.weight}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.title}}</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 15px; line-height: 20px; color: {{r.lineColor}}; min-width: 0;">
+                <sc-if value="{{r.live}}" hint-placeholder-val="{{false}}">
+                  <span style="width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #30D158; box-shadow: 0 0 0 3px rgba(48,209,88,0.25);"></span>
+                </sc-if>
+                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.line}}</span>
+              </span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 13px; line-height: 18px; color: #8E8E93; white-space: nowrap; overflow: hidden;">
+                <span style="overflow: hidden; text-overflow: ellipsis;">{{r.meta}}</span>
+                <svg style="flex: 0 0 13px;" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.5"></rect><path d="M9 20h6M12 16v4"></path></svg>
+                <span>{{r.host}}</span>
+              </span>
+            </span>
+            <sc-if value="{{r.checked}}" hint-placeholder-val="{{false}}">
+              <svg style="flex: 0 0 20px;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#409CFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-label="Chosen" role="img"><path d="M4.5 12.5l5 5 10-11"></path></svg>
+            </sc-if>
+          </span>
+        </a>
+      </sc-for>
+    </sc-for></div>
+    </div>
+  </section>
+</div></x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview": {"width": 390, "height": 844}}'>
+class Component extends DCLogic {
+
+  constructor(props) { super(props); this.state = { collapsed: {"needs": false, "working": false, "unread": false, "idle": true, "closed": true} }; }
+  renderVals() {
+    const c = this.state.collapsed, CHECK = "fork";
+    const open = 'M6 9l6 6 6-6', shut = 'M9 6l6 6-6 6';
+    const amber = '#FF9F0A', green = '#30D158', grey = '#A1A1A6', ink = '#D1D1D6';
+    const row = (o) => Object.assign({ weight: '400', lineColor: grey, live: false, opacity: '1', dotBorder: '0' }, o, { checked: o.id === CHECK });
+    const defs = [
+      { id: 'needs', label: 'Needs input', color: amber, rows: [
+        row({ id: 'ship', dotBg: amber, weight: '600', title: 'Ship lfg 1.3.1 to TestFlight', line: 'Asks: upload build 205 now?', lineColor: amber, meta: 'lfg \u00b7 Opus 5.5 \u00b7 2m \u00b7', host: 'Pro' }),
+        row({ id: 'audit', dotBg: 'transparent', dotBorder: '1.5px solid ' + amber, opacity: '0.5', title: 'Search Console audit', line: 'Air is offline \u00b7 last seen 14m ago', lineColor: '#FFB340', meta: 'inbox \u00b7 GPT-6 Astra \u00b7 14m \u00b7', host: 'Air' })
+      ]},
+      { id: 'working', label: 'Working', color: grey, rows: [
+        row({ id: 'fork', dotBg: green, title: 'Fork session feature', live: true, line: 'Working \u00b7 3m', lineColor: green, meta: 'lfg \u00b7 Opus 5.5 \u00b7 2 subagents \u00b7', host: 'Pro' }),
+        row({ id: 'readwise-sync', dotBg: green, title: 'Readwise sync check', live: true, line: 'Working \u00b7 12m', lineColor: green, meta: 'readwise-sync \u00b7 Codex \u00b7', host: 'Pro' })
+      ]},
+      { id: 'unread', label: 'Unread', color: grey, rows: [
+        row({ id: 'glass', dotBg: '#BF5AF0', weight: '600', title: 'Liquid Glass tab bar', line: 'New reply', lineColor: ink, meta: 'lfg \u00b7 GPT-5.6 Sol \u00b7 12m \u00b7', host: 'Pro' }),
+        row({ id: 'repo', dotBg: '#BF5AF0', weight: '600', title: 'Daily repo review', line: 'New reply', lineColor: ink, meta: 'lfg \u00b7 Opus 5.5 \u00b7 9:00 AM \u00b7', host: 'Pro' })
+      ]},
+      { id: 'idle', label: 'Idle', color: grey, rows: [
+        row({ id: 'shinkai', dotBg: '#0A84FF', title: 'Shinkai room decorator', line: 'Ready for your next message', meta: 'SleepingBeauty \u00b7 Opus 5.5 \u00b7 1d \u00b7', host: 'Pro' })
+      ]},
+      { id: 'closed', label: 'Closed', color: grey, rows: [
+        row({ id: 'readwise', dotBg: '#636366', title: 'Readwise import fix', line: 'Ended yesterday \u00b7 send a message to resume', meta: 'readwise-sync \u00b7 Codex \u00b7 1d \u00b7', host: 'Pro' })
+      ]}
+    ];
+    const counts = { needs: '2', working: '2', unread: '15', idle: '17', closed: '40' };
+    return {
+      sections: defs.map((d) => ({
+        label: d.label, color: d.color, count: counts[d.id],
+        chevron: c[d.id] ? shut : open, expanded: c[d.id] ? 'false' : 'true',
+        rows: c[d.id] ? [] : d.rows,
+        toggle: () => { const n = Object.assign({}, c); n[d.id] = !c[d.id]; this.setState({ collapsed: n }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

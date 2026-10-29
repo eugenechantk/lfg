@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Share v2 · Send to, nothing chosen yet</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button,textarea,input{font:inherit;color:inherit}
+button{background:transparent;border:0}
+textarea::placeholder{color:#8E8E93}
+</style>
+</helmet><div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #000000; color: #FFFFFF; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; -webkit-font-smoothing: antialiased;">
+
+  <div aria-hidden="true" style="position: absolute; top: 14px; left: 10px; right: 10px; height: 160px; border-radius: 18px; background: #F2F2F7; overflow: hidden; color: #1C1C1E;">
+    <div style="padding: 18px 20px 0; display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-size: 12px; color: #6E6E73;">developer.apple.com</span>
+      <span style="font-size: 26px; font-weight: 700;">Sheets</span>
+    </div>
+  </div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(0,0,0,0.62);"></div>
+  <section role="dialog" aria-label="Send to" style="position: absolute; left: 0; right: 0; top: 58px; bottom: 0; background: #1C1C1E; border-radius: 38px 38px 0 0; overflow: hidden;">
+    <div aria-hidden="true" style="position: absolute; top: 6px; left: 50%; width: 36px; height: 5px; margin-left: -18px; border-radius: 3px; background: #48484A;"></div>
+    <div style="position: absolute; top: 14px; left: 14px; right: 14px; height: 44px; display: flex; align-items: center; gap: 10px;">
+      <a href="sh-system.dc.html" aria-label="Cancel" style="width: 44px; height: 44px; flex: 0 0 44px; border-radius: 22px; background: #3A3A3C; display: flex; align-items: center; justify-content: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#D1D1D6" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></a>
+      <h1 style="flex: 1 1 auto; min-width: 0; margin: 0; text-align: center; font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Send to</h1>
+      <span style="width: 44px; flex: 0 0 44px;"></span>
+    </div>
+
+    <div style="position: absolute; top: 70px; left: 16px; right: 16px; height: 44px; border-radius: 22px; background: #3A3A3C; display: flex; align-items: center; gap: 9px; padding: 0 14px; box-sizing: border-box; color: #8E8E93;">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg>
+      <input aria-label="Search sessions" placeholder="Search sessions" value="{{q}}" onInput="{{onSearch}}" style="flex: 1 1 auto; min-width: 0; border: 0; outline: none; background: transparent; padding: 0; font-size: 17px; color: #FFFFFF;">
+    </div>
+  <div style="position: absolute; top: 114px; left: 0; right: 0; bottom: 0; overflow: hidden;">
+
+    <sc-if value="{{showNew}}" hint-placeholder-val="{{true}}">
+      <div style="margin: 12px 16px 0; border-radius: 22px; background: #2C2C2E; display: flex; align-items: center; padding: 0 14px 0 14px; min-height: 66px; position: relative;">
+        <button type="button" onClick="{{pickNew}}" style="flex: 1 1 auto; min-width: 0; border: 0; background: transparent; font: inherit; color: inherit; text-align: left; display: flex; align-items: center; gap: 12px; padding: 11px 0; cursor: pointer;">
+          <span style="width: 44px; height: 44px; flex: 0 0 44px; border-radius: 22px; background: #3A3A3C; display: flex; align-items: center; justify-content: center; color: #FFFFFF;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span>
+          <span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+            <span style="font-size: 17px; line-height: 22px;">New session</span>
+            <span style="font-size: 14px; color: #8E8E93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">lfg · Claude · Opus 5.5 · Pro</span>
+          </span>
+        </button>
+        <button type="button" onClick="{{toggleMenu}}" aria-label="New session options" style="width: 44px; height: 44px; flex: 0 0 44px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;"><svg width="22" height="22" viewBox="0 0 24 24" fill="#F2F2F7" aria-hidden="true"><circle cx="5" cy="12" r="1.9"></circle><circle cx="12" cy="12" r="1.9"></circle><circle cx="19" cy="12" r="1.9"></circle></svg></button>
+        <button type="button" onClick="{{pickNew}}" aria-label="Choose New session" style="width: 34px; height: 44px; flex: 0 0 34px; border: 0; background: transparent; display: flex; align-items: center; justify-content: flex-end; padding: 0; cursor: pointer;">
+            <sc-if value="{{newOn}}" hint-placeholder-val="{{false}}">
+              <span style="width: 26px; height: 26px; flex: 0 0 26px; border-radius: 13px; background: #0A6EE0; display: flex; align-items: center; justify-content: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11"></path></svg></span>
+            </sc-if>
+            <sc-if value="{{newOff}}" hint-placeholder-val="{{true}}">
+              <span style="width: 26px; height: 26px; flex: 0 0 26px; border-radius: 13px; border: 1.5px solid #636366; box-sizing: border-box;"></span>
+            </sc-if></button>
+        <sc-if value="{{menuOpen}}" hint-placeholder-val="{{false}}">
+          <div role="menu" aria-label="New session options" style="position: absolute; right: 12px; top: 60px; width: 268px; border-radius: 16px; background: rgba(58,58,60,0.98); box-shadow: 0 12px 40px rgba(0,0,0,0.6); overflow: hidden; z-index: 4;">
+            <div style="min-height: 44px; padding: 0 14px 0 16px; display: flex; align-items: center; gap: 10px; border-bottom: 0.5px solid #48484A;"><span style="flex: 1 1 auto; font-size: 16px;">Host</span><span style="font-size: 16px; color: #A1A1A6;">Pro</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#636366" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></div><div style="min-height: 44px; padding: 0 14px 0 16px; display: flex; align-items: center; gap: 10px; border-bottom: 0.5px solid #48484A;"><span style="flex: 1 1 auto; font-size: 16px;">Folder</span><span style="font-size: 16px; color: #A1A1A6;">lfg</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#636366" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></div><div style="min-height: 44px; padding: 0 14px 0 16px; display: flex; align-items: center; gap: 10px;"><span style="flex: 1 1 auto; font-size: 16px;">Agent</span><span style="font-size: 16px; color: #A1A1A6;">Claude · Opus 5.5</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#636366" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+    <sc-for list="{{sections}}" as="sec" hint-placeholder-count="2">
+      <div style="padding: 20px 20px 8px; font-size: 15px; font-weight: 600; color: #8E8E93;">{{sec.label}}</div>
+      <div style="margin: 0 16px; border-radius: 22px; background: #2C2C2E; overflow: hidden;">
+        <sc-for list="{{sec.rows}}" as="r" hint-placeholder-count="3">
+          <button type="button" onClick="{{r.pick}}" aria-pressed="{{r.pressed}}" style="width: 100%; border: 0; background: transparent; font: inherit; color: inherit; text-align: left; display: flex; align-items: center; gap: 12px; padding: 0 0 0 14px; cursor: pointer; opacity: {{r.opacity}};">
+
+          <span style="position: relative; width: 44px; height: 44px; flex: 0 0 44px; border-radius: 22px; background: #3A3A3C; display: flex; align-items: center; justify-content: center;">
+            <sc-if value="{{r.claude}}" hint-placeholder-val="{{true}}"><svg width="24" height="24" viewBox="0 0 1200 1200" aria-hidden="true"><path fill="#d97757" d="M233.959793 800.214905 468.644287 668.536987 472.590637 657.100647 468.644287 650.738403 457.208069 650.738403 417.986633 648.322144 283.892639 644.69812 167.597321 639.865845 54.926208 633.825623 26.577238 627.785339 .000033 592.751709 2.73832 575.27533 26.577238 559.248352 60.724873 562.228149 136.187973 567.382629 249.422867 575.194763 331.570496 580.026978 453.261841 592.671082 472.590637 592.671082 475.328857 584.859009 468.724915 580.026978 463.570557 575.194763 346.389313 495.785217 219.543671 411.865906 153.100723 363.543762 117.181267 339.060425 99.060455 316.107361 91.248367 266.01355 123.865784 230.093994 167.677887 233.073853 178.872513 236.053772 223.248367 270.201477 318.040283 343.570496 441.825592 434.738342 459.946411 449.798706 467.194672 444.64447 468.080597 441.020203 459.946411 427.409485 392.617493 305.718323 320.778564 181.932983 288.80542 130.630859 280.348999 99.865845C277.369171 87.221436 275.194641 76.590698 275.194641 63.624268L312.322174 13.20813 332.8591 6.604126 382.389313 13.20813 403.248352 31.328979 434.013519 101.71814 483.865753 212.537048 561.181274 363.221497 583.812134 407.919434 595.892639 449.315491 600.40271 461.959839 608.214783 461.959839 608.214783 454.711609 614.577271 369.825623 626.335632 265.61084 637.771851 131.516846 641.718201 93.745117 660.402832 48.483276 697.530334 24.000122 726.52356 37.852417 750.362549 72 747.060486 94.067139 732.886047 186.201416 705.100708 330.52356 686.979919 427.167847 697.530334 427.167847 709.61084 415.087341 758.496704 350.174561 840.644348 247.490051 876.885925 206.738342 919.167847 161.71814 946.308838 140.29541 997.61084 140.29541 1035.38269 196.429626 1018.469849 254.416199 965.637634 321.422852 921.825562 378.201538 859.006714 462.765259 819.785278 530.41626 823.409424 535.812073 832.75177 534.92627 974.657776 504.724915 1051.328979 490.872559 1142.818848 475.167786 1184.214844 494.496582 1188.724854 514.147644 1172.456421 554.335693 1074.604126 578.496765 959.838989 601.449829 788.939636 641.879272 786.845764 643.409485 789.261841 646.389343 866.255127 653.637634 899.194702 655.409424 979.812134 655.409424 1129.932861 666.604187 1169.154419 692.537109 1192.671265 724.268677 1188.724854 748.429688 1128.322144 779.194641 1046.818848 759.865845 856.590759 714.604126 791.355774 698.335754 782.335693 698.335754 782.335693 703.731567 836.69812 756.885986 936.322205 846.845581 1061.073975 962.81897 1067.436279 991.490112 1051.409424 1014.120911 1034.496704 1011.704712 924.885986 929.234924 882.604126 892.107544 786.845764 811.48999 780.483276 811.48999 780.483276 819.946289 802.550415 852.241699 919.087341 1027.409424 925.127625 1081.127686 916.671204 1098.604126 886.469849 1109.154419 853.288696 1103.114136 785.073914 1007.355835 714.684631 899.516785 657.906067 802.872498 650.979858 806.81897 617.476624 1167.704834 601.771851 1186.147705 565.530212 1200 535.328857 1177.046997 519.302124 1139.919556 535.328857 1066.550537 554.657776 970.792053 570.362488 894.68457 584.536926 800.134277 592.993347 768.724976 592.429626 766.630859 585.503479 767.516968 514.22821 865.369263 405.825531 1011.865906 320.053711 1103.677979 299.516815 1111.812256 263.919525 1093.369263 267.221497 1060.429688 287.114136 1031.114136 405.825531 880.107361 477.422913 786.52356 523.651062 732.483276 523.328918 724.671265 520.590698 724.671265 205.288605 929.395935 149.154434 936.644409 124.993355 914.01355 127.973183 876.885986 139.409409 864.80542 234.201385 799.570435z"></path></svg>
+</sc-if>
+            <sc-if value="{{r.codex}}" hint-placeholder-val="{{false}}"><svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.503 0H4.496A4.496 4.496 0 0 0 0 4.496v15.007A4.496 4.496 0 0 0 4.496 24h15.007A4.496 4.496 0 0 0 24 19.503V4.496A4.496 4.496 0 0 0 19.503 0z" fill="#fff"></path><path d="M9.064 3.344a4.578 4.578 0 0 1 2.285-.312c1 .115 1.891.54 2.673 1.275.01.01.024.017.037.021a.09.09 0 0 0 .043 0 4.55 4.55 0 0 1 3.046.275l.047.022.116.057a4.581 4.581 0 0 1 2.188 2.399c.209.51.313 1.041.315 1.595a4.24 4.24 0 0 1-.134 1.223.123.123 0 0 0 .03.115c.594.607.988 1.33 1.183 2.17.289 1.425-.007 2.71-.887 3.854l-.136.166a4.548 4.548 0 0 1-2.201 1.388.123.123 0 0 0-.081.076c-.191.551-.383 1.023-.74 1.494-.9 1.187-2.222 1.846-3.711 1.838-1.187-.006-2.239-.44-3.157-1.302a.107.107 0 0 0-.105-.024c-.388.125-.78.143-1.204.138a4.441 4.441 0 0 1-1.945-.466 4.544 4.544 0 0 1-1.61-1.335c-.152-.202-.303-.392-.414-.617a5.81 5.81 0 0 1-.37-.961 4.582 4.582 0 0 1-.014-2.298.124.124 0 0 0 .006-.056.085.085 0 0 0-.027-.048 4.467 4.467 0 0 1-1.034-1.651 3.896 3.896 0 0 1-.251-1.192 5.189 5.189 0 0 1 .141-1.6c.337-1.112.982-1.985 1.933-2.618.212-.141.413-.251.601-.33.215-.089.43-.164.646-.227a.098.098 0 0 0 .065-.066 4.51 4.51 0 0 1 .829-1.615 4.535 4.535 0 0 1 1.837-1.388zm3.482 10.565a.637.637 0 0 0 0 1.272h3.636a.637.637 0 1 0 0-1.272zm-4.084-4.68a.637.637 0 0 0-1.106.632l1.272 2.224-1.266 2.136a.636.636 0 1 0 1.095.649l1.454-2.455a.636.636 0 0 0 .005-.64z" fill="url(#codex-gradient)"></path><defs><linearGradient id="codex-gradient" x1="12" x2="12" y1="3" y2="21" gradientUnits="userSpaceOnUse"><stop stop-color="#B1A7FF"></stop><stop offset=".5" stop-color="#7A9DFF"></stop><stop offset="1" stop-color="#3941FF"></stop></linearGradient></defs></svg>
+</sc-if>
+            <span style="position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border-radius: 50%; background: {{r.dotBg}}; border: 2.5px solid #2C2C2E; box-shadow: {{r.dotShadow}}; box-sizing: content-box;"></span>
+          </span>
+            <span style="flex: 1 1 auto; min-width: 0; min-height: 66px; padding: 10px 14px 10px 0; box-sizing: border-box; border-bottom: {{r.rule}}; display: flex; align-items: center; gap: 10px;">
+              <span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-size: 17px; line-height: 22px; font-weight: {{r.weight}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.title}}</span>
+                <span style="font-size: 14px; line-height: 19px; color: #8E8E93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="color: {{r.color}};">{{r.line}}</span> · {{r.where}}</span>
+              </span>
+
+            <sc-if value="{{r.on}}" hint-placeholder-val="{{false}}">
+              <span style="width: 26px; height: 26px; flex: 0 0 26px; border-radius: 13px; background: #0A6EE0; display: flex; align-items: center; justify-content: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11"></path></svg></span>
+            </sc-if>
+            <sc-if value="{{r.off}}" hint-placeholder-val="{{true}}">
+              <span style="width: 26px; height: 26px; flex: 0 0 26px; border-radius: 13px; border: 1.5px solid #636366; box-sizing: border-box;"></span>
+            </sc-if>
+            </span>
+          </button>
+        </sc-for>
+      </div>
+    </sc-for>
+    <sc-if value="{{noMatch}}" hint-placeholder-val="{{false}}">
+      <div style="padding: 40px 32px; text-align: center; font-size: 15px; line-height: 21px; color: #8E8E93;">No session matches “{{q}}”. Start a new one with it instead.</div>
+    </sc-if>
+    <div style="height: {{listPad}};"></div>
+  </div>
+  </section>
+  <sc-if value="{{hasSel}}" hint-placeholder-val="{{true}}">
+    <div style="position: absolute; left: 0; right: 0; bottom: {{dockBottom}}; background: #242426; border-top: 0.5px solid #3A3A3C; box-shadow: 0 -10px 30px rgba(0,0,0,0.45);">
+
+      <div style="height: 64px; display: flex; align-items: center; gap: 12px; padding-right: 16px; border-bottom: 0.5px solid #38383A;">
+        <span style="width: 64px; height: 64px; flex: 0 0 64px; background: #3A3A3C; display: flex; align-items: center; justify-content: center; color: #A1A1A6;"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"></path></svg></span>
+        <span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 15px; font-weight: 600; color: #F2F2F7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Sheets | Apple Developer Documentation</span>
+          <span style="font-size: 13px; color: #8E8E93;">developer.apple.com</span>
+        </span>
+      </div>
+
+      <div style="padding: 10px 16px 0;">
+        <textarea aria-label="Message to send" rows="{{rows}}" placeholder="Add a message…" value="{{draft}}" onInput="{{onType}}" style="display: block; width: 100%; box-sizing: border-box; border-radius: 22px; background: #1C1C1E; border: 0.5px solid #48484A; padding: 11px 16px; font: inherit; font-size: 17px; line-height: 22px; color: #FFFFFF; resize: none; outline: none;"></textarea>
+      </div>
+      <div style="min-height: 58px; padding: 4px 6px 4px 20px; box-sizing: border-box; display: flex; align-items: center; gap: 10px;">
+        <span style="width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: {{toDotBg}}; box-shadow: {{toDotShadow}};"></span>
+        <span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+          <span style="font-size: 15px; font-weight: 600; color: #F2F2F7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{toTitle}}</span>
+          <span style="font-size: 13px; color: #8E8E93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{toDoes}}</span>
+        </span>
+        <a href="{{sendHref}}" style="min-height: 44px; padding: 0 14px; display: flex; align-items: center; font-size: 17px; font-weight: 600; color: #409CFF;">Send</a>
+      </div>
+      <div style="height: {{homePad}};"></div>
+    </div>
+  </sc-if>
+</div></x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview": {"width": 390, "height": 844}}'>
+class Component extends DCLogic {
+
+  constructor(props) { super(props); this.state = { sel: null, q: "", draft: "https://developer.apple.com/design/human-interface-guidelines/sheets", menu: false }; }
+  renderVals() {
+    const ROWS = [{"id": "fork", "title": "Fork session feature", "agent": "claude", "kind": "working", "line": "Working · 3m", "where": "lfg · Pro", "recent": true}, {"id": "ship", "title": "Ship lfg 1.3.1 to TestFlight", "agent": "claude", "kind": "needs", "line": "Asks: upload build 205 now?", "where": "lfg · Pro", "recent": true}, {"id": "glass", "title": "Liquid Glass tab bar", "agent": "codex", "kind": "unread", "line": "New reply", "where": "lfg · Pro", "recent": true}, {"id": "audit", "title": "Search Console audit", "agent": "codex", "kind": "offline", "line": "Air is offline", "where": "inbox", "recent": true}, {"id": "shinkai", "title": "Shinkai room decorator", "agent": "claude", "kind": "idle", "line": "Idle · 1d", "where": "SleepingBeauty · Pro", "recent": true}, {"id": "rsync", "title": "Readwise sync check", "agent": "codex", "kind": "working", "line": "Working · 12m", "where": "readwise-sync · Pro", "recent": false}, {"id": "repo", "title": "Daily repo review", "agent": "claude", "kind": "unread", "line": "New reply", "where": "lfg · Pro", "recent": false}, {"id": "iphone", "title": "Enhance iPhone control skill", "agent": "codex", "kind": "unread", "line": "New reply", "where": "inbox · Pro", "recent": false}, {"id": "readwise", "title": "Readwise import fix", "agent": "codex", "kind": "closed", "line": "Ended yesterday", "where": "readwise-sync · Pro", "recent": false}], K = {"working": {"dot": "#30D158", "halo": true, "color": "#30D158", "weight": "400", "does": "Joins its current turn", "done": "sh-joined.dc.html"}, "needs": {"dot": "#FF9F0A", "halo": false, "color": "#FF9F0A", "weight": "600", "does": "Runs after you answer its question", "done": "sh-waits.dc.html"}, "unread": {"dot": "#BF5AF0", "halo": false, "color": "#D1D1D6", "weight": "600", "does": "Starts its next turn now", "done": "sh-sent.dc.html"}, "idle": {"dot": "#0A84FF", "halo": false, "color": "#A1A1A6", "weight": "400", "does": "Starts its next turn now", "done": "sh-sent.dc.html"}, "closed": {"dot": "#636366", "halo": false, "color": "#A1A1A6", "weight": "400", "does": "Resumes it", "done": "sh-resumed.dc.html"}, "offline": {"dot": "#FF9F0A", "halo": false, "ring": true, "color": "#FFB340", "weight": "400", "does": "LFG queues it until Air is back", "done": "sh-queued.dc.html"}}, KBD = null;
+    const s = this.state, q = s.q.trim().toLowerCase();
+    const pick = (id) => () => this.setState({ sel: s.sel === id ? null : id, menu: false });
+    const decorate = (list) => list.map((x, i) => {
+      const k = K[x.kind], on = s.sel === x.id;
+      return {
+        title: x.title, line: x.line, where: x.where, color: k.color, weight: k.weight,
+        claude: x.agent === 'claude', codex: x.agent === 'codex',
+        dotBg: k.ring ? '#2C2C2E' : k.dot,
+        dotShadow: k.ring ? 'inset 0 0 0 1.8px ' + k.dot : 'none',
+        opacity: x.kind === 'offline' ? '0.55' : '1',
+        rule: i === list.length - 1 ? '0' : '0.5px solid #3A3A3C',
+        on, off: !on, pressed: on ? 'true' : 'false', pick: pick(x.id)
+      };
+    });
+    let sections;
+    if (q) {
+      const hits = ROWS.filter((x) => (x.title + ' ' + x.where).toLowerCase().indexOf(q) >= 0);
+      sections = hits.length ? [{ label: 'Sessions', rows: decorate(hits) }] : [];
+    } else {
+      sections = [
+        { label: 'Recent', rows: decorate(ROWS.filter((x) => x.recent)) },
+        { label: 'All sessions', rows: decorate(ROWS.filter((x) => !x.recent)) }
+      ];
+    }
+    const hasSel = s.sel !== null;
+    const cur = hasSel && s.sel !== 'new' ? ROWS.find((x) => x.id === s.sel) : null;
+    const k = cur ? K[cur.kind] : null;
+    const lines = s.draft.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 36)), 0);
+    return {
+      q: s.q, onSearch: (e) => this.setState({ q: e.target.value }),
+      showNew: !q, noMatch: !!q && sections.length === 0,
+      sections,
+      pickNew: () => this.setState({ sel: s.sel === 'new' ? null : 'new', menu: false }),
+      newOn: s.sel === 'new', newOff: s.sel !== 'new',
+      menuOpen: s.menu, toggleMenu: () => this.setState({ menu: !s.menu }),
+      hasSel,
+      draft: s.draft, onType: (e) => this.setState({ draft: e.target.value }),
+      rows: String(Math.min(6, Math.max(1, lines))),
+      toTitle: cur ? cur.title : 'New session in lfg',
+      toDoes: cur ? (k.does + ' \u00b7 ' + cur.where) : 'Claude \u00b7 Opus 5.5 on Pro \u00b7 this is its first prompt',
+      toDotBg: cur ? (k.ring ? 'transparent' : k.dot) : '#30D158',
+      toDotShadow: cur ? (k.ring ? 'inset 0 0 0 1.6px ' + k.dot : k.halo ? '0 0 0 3px rgba(48,209,88,0.25)' : 'none') : 'none',
+      sendHref: cur ? k.done : 'sh-started.dc.html',
+      dockBottom: KBD === 'message' ? '336px' : '0px',
+      homePad: KBD === 'message' ? '0px' : '30px',
+      listPad: hasSel ? '260px' : '40px'
+    };
+  }
+}
+</script>
+</body>
+</html>
