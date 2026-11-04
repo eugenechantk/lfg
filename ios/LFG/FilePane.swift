@@ -49,6 +49,8 @@ struct FilePaneContainer<Content: View, Header: View>: View {
     let hostFiles: HostFiles?
     let keyboardVisible: Bool
     let onReveal: (String) -> Void
+    var resourceStatus: AnyView? = nil
+    var contextName = "session"
     @ViewBuilder var header: () -> Header
     @ViewBuilder var content: () -> Content
     @Environment(\.filePaneNavigation) private var navigation
@@ -144,8 +146,9 @@ struct FilePaneContainer<Content: View, Header: View>: View {
     private func reader(inSheet: Bool) -> some View {
         FilePaneReader(state: $state, resources: resources, messages: messages, hostFiles: hostFiles, revision: revision,
                        canDock: inSheet && UIDevice.current.userInterfaceIdiom == .pad && windowSize.width >= 600,
-                       isSheet: inSheet, isPortrait: windowSize.height > windowSize.width, onReveal: onReveal)
+                       isSheet: inSheet, isPortrait: windowSize.height > windowSize.width, onReveal: onReveal, contextName: contextName)
             .id(state.showingFiles ? "index" : state.selection?.id ?? "none")
+            .safeAreaInset(edge: .top, spacing: 0) { if let resourceStatus { resourceStatus } }
     }
 
     private func resizeHandle(side: Bool, available: CGSize) -> some View {
@@ -199,6 +202,7 @@ struct FilePaneReader: View {
     let isSheet: Bool
     let isPortrait: Bool
     let onReveal: (String) -> Void
+    var contextName = "session"
     @Environment(\.openURL) private var openURL
     @State private var showingLinks = false
     @State private var updated = false
@@ -364,7 +368,7 @@ struct FilePaneReader: View {
     }
 
     private var metadata: String {
-        guard let ref else { return "Shared in this session" }
+        guard let ref else { return "Shared in this \(contextName)" }
         if let url = currentWebURL ?? webURL, url.scheme != "lfg-file" { return url.host ?? url.absoluteString }
         let folder = (ref.raw as NSString).deletingLastPathComponent
         let attachment = resources.files.first { $0.id == ref.id }

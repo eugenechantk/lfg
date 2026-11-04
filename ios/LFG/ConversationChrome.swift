@@ -1,4 +1,5 @@
 import SwiftUI
+import LFGCore
 
 /// One native list bar. Features provide their own menu actions, never geometry.
 struct ListHeaderToolbar<Header: View, Options: View>: ToolbarContent {
@@ -78,6 +79,108 @@ struct ConversationToolbar<Heading: View>: ToolbarContent {
             .accessibilityLabel(optionsTitle)
             .accessibilityIdentifier(optionsIdentifier)
         }
+    }
+}
+
+/// Sessions and durable chats share the complete native header, including
+/// title disclosure and navigation transitions, rather than only its label.
+struct ConversationNavigationHeader: ViewModifier {
+    let title: String
+    let fullTitle: String
+    let status: SessionStatusLine.State
+    let queued: Int
+    let hostLabel: String?
+    let project: String?
+    @Binding var showingFullTitle: Bool
+    let optionsTitle: String
+    let optionsIdentifier: String
+    var optionsEnabled = true
+    var titleIdentifier = "sessionTitle"
+    var statusIdentifier = "sessionStatusLine"
+    var disclosureIdentifier = "fullTitleCard"
+    var titleHint = "Shows the full session title"
+    let onOptions: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar {
+                ConversationToolbar(optionsTitle: optionsTitle, optionsIdentifier: optionsIdentifier,
+                    optionsEnabled: optionsEnabled, onOptions: onOptions) {
+                    SessionTitleBarContent(title: title, status: status, queued: queued,
+                        hostLabel: hostLabel, project: project, titleIdentifier: titleIdentifier,
+                        statusIdentifier: statusIdentifier, titleHint: titleHint) {
+                        withAnimation(.easeOut(duration: 0.18)) { showingFullTitle.toggle() }
+                    }
+                }
+            }
+            .overlay(alignment: .top) {
+                if showingFullTitle {
+                    ConversationTitleCard(title: fullTitle) {
+                        withAnimation(.easeOut(duration: 0.18)) { showingFullTitle = false }
+                    }.accessibilityIdentifier(disclosureIdentifier)
+                }
+            }
+    }
+}
+
+private struct ConversationTitleCard: View {
+    let title: String
+    let onClose: () -> Void
+
+    var body: some View {
+        Text(title)
+            .font(.subheadline.weight(.semibold))
+            .multilineTextAlignment(.leading)
+            .lineLimit(12)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(.separator), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onClose)
+    }
+}
+
+/// The same header moves into the transcript when the iPad reader is docked.
+struct ConversationPaneHeader<Heading: View>: View {
+    let listTitle: String
+    let listIdentifier: String
+    var needsInputCount = 0
+    let optionsTitle: String
+    let optionsIdentifier: String
+    let onShowList: () -> Void
+    let onOptions: () -> Void
+    @ViewBuilder var heading: () -> Heading
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: onShowList) {
+                Image(systemName: "sidebar.leading").frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain).glassOrRaised(in: Circle(), interactive: true)
+            .overlay(alignment: .topTrailing) {
+                if needsInputCount > 0 {
+                    Text("\(needsInputCount)").font(.caption2.bold())
+                        .padding(4).background(.orange, in: Circle())
+                }
+            }
+            .accessibilityLabel(listTitle).accessibilityIdentifier(listIdentifier)
+            heading().frame(maxWidth: .infinity)
+            Button(action: onOptions) {
+                Image(uiImage: SessionOptionsGlyph.image).frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain).glassOrRaised(in: Circle(), interactive: true)
+            .accessibilityLabel(optionsTitle).accessibilityIdentifier(optionsIdentifier)
+        }.padding(.horizontal, 10)
     }
 }
 

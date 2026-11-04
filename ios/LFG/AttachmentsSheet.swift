@@ -12,6 +12,8 @@ import LFGCore
 struct AttachmentsSheet: View {
     let messages: [SessionMessage]
     var cwd: String? = nil
+    var contextName = "session"
+    var resourceStatus: AnyView? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.hostFiles) private var hostFiles
     @Environment(\.openURL) private var openURL
@@ -27,6 +29,7 @@ struct AttachmentsSheet: View {
                 .padding(.leading, 20)
                 .padding(.trailing, 16)
                 .padding(.top, 20)
+            if let resourceStatus { resourceStatus }
             if let model {
                 tabs(model)
                     .padding(.horizontal, 16)
@@ -49,9 +52,11 @@ struct AttachmentsSheet: View {
         .accessibilityIdentifier("attachmentsSheet")
         // Recompute when the session appends — a live agent adds files while
         // this is open, and a stale list is worse than a slow one.
-        .task(id: messages.count) {
+        .task(id: messages) {
             let snapshot = messages
-            resources = await Task.detached { TranscriptResourceIndex.collect(from: snapshot) }.value
+            let collected = await Task.detached { TranscriptResourceIndex.collect(from: snapshot) }.value
+            guard !Task.isCancelled else { return }
+            resources = collected
         }
         .sheet(item: $viewing) { ref in
             FileViewerSheet(
@@ -69,7 +74,7 @@ struct AttachmentsSheet: View {
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(S2.white)
                     .cssLineBox(size: 22, lineHeight: 28)
-                Text("Shared in this session")
+                Text("Shared in this \(contextName)")
                     .font(.system(size: 14))
                     .foregroundStyle(S2.secondaryInk)
                     .frame(height: 16)

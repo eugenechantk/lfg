@@ -570,7 +570,7 @@ struct RootView: View {
                         if session.isChat {
                             if let host = store.host(forSession: session.sessionId ?? selection), let client = settings.client(for: host) {
                                 ChatSessionScreen(host: ScheduledTaskHost(id: host.id, name: host.label, baseURL: client.baseURL,
-                                    headers: client.resourceRequest(for: client.baseURL).allHTTPHeaderFields ?? [:]), sessionID: session.sessionId ?? selection, onRead: { store.markRead($0) })
+                                    headers: client.resourceRequest(for: client.baseURL).allHTTPHeaderFields ?? [:]), sessionID: session.sessionId ?? selection, onRead: { store.markRead($0) }, onRemoved: { selectedSession.wrappedValue = nil })
                                     .id(session.sessionId ?? selection)
                             } else { DetailLoading() }
                         } else {

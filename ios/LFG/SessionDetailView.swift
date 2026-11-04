@@ -271,13 +271,6 @@ struct SessionDetailView: View {
                 return .handled
             })
             .environment(\.transcriptPreviewFiles, transcriptPreviewFiles)
-            // Full title, revealed by tapping the (truncated) nav-bar title. An overlay
-            // card rather than an expanded bar, because these titles are whole
-            // sentences and can need several lines (see `fullTitle` for where the
-            // untruncated text comes from).
-            .overlay(alignment: .top) {
-                if showFullTitle { fullTitleCard }
-            }
             // Failures used to be entirely silent: `store.lastError` was written
             // by every failing send / stop / close / fork / transfer and read by
             // nothing, so "Stop didn't take — the agent isn't responding" looked
@@ -311,17 +304,16 @@ struct SessionDetailView: View {
                 }
             }
             .animation(.easeOut(duration: 0.2), value: store.browserFrames[sid]?.frameId)
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
         // Resolve relative file refs in this session's transcript (e.g.
         // `improvement-log/foo.md`) against its working directory.
         .transformEnvironment(\.hostFiles) { hf in
             if let cwd = session.cwd, !cwd.isEmpty { hf?.cwd = cwd }
         }
-        // Keep native controls, but let transcript rows remain visible behind
-        // the bar. Its transition uses the same edge fade as Sessions and Tasks.
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar { toolbarMenu }
+        .modifier(ConversationNavigationHeader(title: displayTitle, fullTitle: fullTitle,
+            status: statusLineState, queued: pendingBars.filter { !$0.failed }.count,
+            hostLabel: hostLabel, project: SessionRowMeta.projectLabel(cwd: session.cwd, project: session.project),
+            showingFullTitle: $showFullTitle, optionsTitle: "Session", optionsIdentifier: "sessionOptionsMenu",
+            onOptions: { presentedSheet = .session }))
         .task(id: sid) {
             if !paneLoaded {
                 filePane = FilePaneMemory.load(paneMemoryKey)
@@ -1065,28 +1057,16 @@ struct SessionDetailView: View {
     }
 
     private var filePaneTranscriptHeader: some View {
-        HStack(spacing: 12) {
-            Button(action: paneNavigation.showList) {
-                Image(systemName: "sidebar.leading").frame(width: 44, height: 44)
-            }
-            .buttonStyle(.plain).glassOrRaised(in: Circle(), interactive: true)
-            .overlay(alignment: .topTrailing) {
-                if paneNavigation.needsInputCount > 0 {
-                    Text("\(paneNavigation.needsInputCount)").font(.caption2.bold())
-                        .padding(4).background(.orange, in: Circle())
-                }
-            }
-            .accessibilityLabel("Show sessions").accessibilityIdentifier("filePaneShowSessions")
+        ConversationPaneHeader(listTitle: "Show sessions", listIdentifier: "filePaneShowSessions",
+            needsInputCount: paneNavigation.needsInputCount, optionsTitle: "Session",
+            optionsIdentifier: "filePaneSessionOptions", onShowList: paneNavigation.showList,
+            onOptions: { presentedSheet = .session }) {
             SessionTitleBarContent(title: displayTitle, status: statusLineState,
                 queued: pendingBars.filter { !$0.failed }.count, hostLabel: hostLabel,
                 project: SessionRowMeta.projectLabel(cwd: session.cwd, project: session.project)) {
-                    showFullTitle.toggle()
-                }.frame(maxWidth: .infinity)
-            Button { presentedSheet = .session } label: {
-                Image(uiImage: SessionOptionsGlyph.image).frame(width: 44, height: 44)
-            }.buttonStyle(.plain).glassOrRaised(in: Circle(), interactive: true)
-                .accessibilityLabel("Session").accessibilityIdentifier("filePaneSessionOptions")
-        }.padding(.horizontal, 10)
+                withAnimation(.easeOut(duration: 0.18)) { showFullTitle.toggle() }
+            }
+        }
     }
 
     private var resolvedHostFiles: HostFiles? {
@@ -1302,22 +1282,6 @@ struct SessionDetailView: View {
 
     // MARK: Toolbar
 
-    @ToolbarContentBuilder
-    private var toolbarMenu: some ToolbarContent {
-        ConversationToolbar(optionsTitle: "Session", optionsIdentifier: "sessionOptionsMenu",
-            onOptions: { presentedSheet = .session }) {
-            SessionTitleBarContent(
-                title: displayTitle,
-                status: statusLineState,
-                queued: pendingBars.filter { !$0.failed }.count,
-                hostLabel: hostLabel,
-                project: SessionRowMeta.projectLabel(cwd: session.cwd, project: session.project)
-            ) {
-                withAnimation(.easeOut(duration: 0.18)) { showFullTitle.toggle() }
-            }
-        }
-    }
-
     /// Keep the row and its spacing only while subagents are running.
     private var hasPills: Bool {
         SubagentPill(agents: childAgents).isVisible
@@ -1380,40 +1344,6 @@ struct SessionDetailView: View {
         return text
     }
 
-    /// The untruncated title, shown under the nav bar until tapped away (tapping the
-    /// bar title again also closes it). Selectable so a long title can be copied.
-    ///
-    /// Sized by its text — deliberately no `frame(maxHeight:)` or ScrollView here:
-    /// a flexible frame claims the whole proposed height, which left a short title
-    /// floating in the middle of a 240pt card. `lineLimit` is the cap instead, so a
-    /// runaway first prompt can't swallow the transcript.
-    private var fullTitleCard: some View {
-        fullTitleText
-        .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14).stroke(Color(.separator), lineWidth: 0.5)
-        )
-        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
-        .transition(.move(edge: .top).combined(with: .opacity))
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.easeOut(duration: 0.18)) { showFullTitle = false }
-        }
-        .accessibilityIdentifier("fullTitleCard")
-    }
-
-    private var fullTitleText: some View {
-        Text(fullTitle)
-            .font(.subheadline.weight(.semibold))
-            .multilineTextAlignment(.leading)
-            .lineLimit(12)
-            .textSelection(.enabled)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
 
 }
 

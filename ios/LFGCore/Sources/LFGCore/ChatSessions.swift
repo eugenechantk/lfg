@@ -104,7 +104,13 @@ public enum ChatTranscriptProjection {
         return byID.values.sorted { $0.sequence < $1.sequence }
     }
 }
-private struct ChatList: Decodable, Sendable { var sessions: [ChatSessionRecord] }
+public struct ChatSessionListing: Decodable, Sendable {
+    public var sessions: [ChatSessionRecord]
+    public var deletedIDs: [String]?
+    public init(sessions: [ChatSessionRecord], deletedIDs: [String] = []) {
+        self.sessions = sessions; self.deletedIDs = deletedIDs
+    }
+}
 private struct ChatReply: Decodable, Sendable { var session: ChatSessionRecord }
 private struct ChatFailure: Decodable { var error: String }
 public struct ChatClientError: LocalizedError, Sendable {
@@ -147,7 +153,8 @@ public struct ChatSessionsClient: Sendable {
     public func models() async throws -> ModelCatalogResponse {
         try JSONDecoder().decode(ModelCatalogResponse.self, from: await resource("/api/models"))
     }
-    public func list() async throws -> [ChatSessionRecord] { try JSONDecoder().decode(ChatList.self, from: await data("/chats", timeout: 8)).sessions }
+    public func listing() async throws -> ChatSessionListing { try JSONDecoder().decode(ChatSessionListing.self, from: await data("/chats", timeout: 8)) }
+    public func list() async throws -> [ChatSessionRecord] { try await listing().sessions }
     public func requireClientChatIDs() async throws {
         struct Capability: Decodable { let clientChatIDs: Bool }
         do {
@@ -174,6 +181,10 @@ public struct ChatSessionsClient: Sendable {
         _ = try await data("/\(id)/send", body: JSONEncoder().encode(Input(text: text, requestID: requestID)))
     }
     public func interrupt(_ id: String) async throws { _ = try await data("/\(id)/interrupt", body: Data("{}".utf8)) }
+    public func delete(_ record: ChatSessionRecord) async throws {
+        struct Input: Encodable { let revision: Int }
+        _ = try await data("/\(record.id)/delete", body: JSONEncoder().encode(Input(revision: record.revision)))
+    }
     public func save(_ record: ChatSessionRecord, name: String, instructions: String, memory: String, model: String) async throws -> ChatSessionRecord {
         struct Input: Encodable { let revision: Int; let name: String; let instructions: String; let memory: String; let model: String }
         let body = try JSONEncoder().encode(Input(revision: record.revision, name: name, instructions: instructions, memory: memory, model: model))
@@ -199,6 +210,9 @@ public struct ChatListSnapshot: Codable, Sendable, Equatable {
     }
     public mutating func retain(hosts: [ScheduledTaskHost]) {
         let keys = Set(hosts.map(Self.key)); lists = lists.filter { keys.contains($0.key) }
+    }
+    public mutating func remove(_ id: String) {
+        for key in lists.keys { lists[key]?.removeAll { $0.id == id } }
     }
 }
 
@@ -229,6 +243,7 @@ public struct ChatHostListUpdate: Sendable {
     public let host: ScheduledTaskHost
     /// nil means unreachable; an empty array means a successful empty list.
     public let sessions: [ChatSessionRecord]?
+    public var deletedIDs: [String] = []
 }
 public enum ChatHostDiscovery {
     public static func availableHost(hosts: [ScheduledTaskHost], preferred: ScheduledTaskHost?, knownOffline: Set<String>,
@@ -246,14 +261,21 @@ public enum ChatHostDiscovery {
         return nil
     }
     public static func updates(hosts: [ScheduledTaskHost],
-        load: @escaping @Sendable (ScheduledTaskHost) async throws -> [ChatSessionRecord] = { try await ChatSessionsClient(host: $0).list() }
+        load: (@Sendable (ScheduledTaskHost) async throws -> [ChatSessionRecord])? = nil
     ) -> AsyncStream<ChatHostListUpdate> {
         AsyncStream { continuation in
             let task = Task {
                 await withTaskGroup(of: ChatHostListUpdate.self) { group in
                     var seen = Set<String>()
                     for host in hosts where seen.insert(host.id).inserted {
-                        group.addTask { ChatHostListUpdate(host: host, sessions: try? await load(host)) }
+                        group.addTask {
+                            do {
+                                let listing: ChatSessionListing
+                                if let load { listing = .init(sessions: try await load(host)) }
+                                else { listing = try await ChatSessionsClient(host: host).listing() }
+                                return ChatHostListUpdate(host: host, sessions: listing.sessions, deletedIDs: listing.deletedIDs ?? [])
+                            } catch { return ChatHostListUpdate(host: host, sessions: nil) }
+                        }
                     }
                     for await update in group {
                         guard !Task.isCancelled else { group.cancelAll(); break }
@@ -299,6 +321,8 @@ private struct ChatWorkspaceState: Codable, Equatable {
     var history: [String: [ChatMessageRecord]] = [:]
     var outbox: [ChatQueuedMessage] = []
     var transcript: [String: [ChatTranscriptTurn]]? = nil
+    var hiddenIDs: Set<String>? = nil
+    var deletedIDs: Set<String>? = nil
 }
 public struct ChatWorkspaceEntry: Sendable {
     public let host: ScheduledTaskHost
@@ -348,13 +372,15 @@ public struct ChatDeliveryTransport: Sendable {
 /// create request can leave the device, its owner is pinned across retries.
 @MainActor @Observable public final class ChatWorkspace {
     public static let localHost = ScheduledTaskHost(id: "chat-local", name: "This device", baseURL: URL(string: "https://local.invalid")!)
-    public static let shared = ChatWorkspace(url: ChatListCache.standard.url.deletingLastPathComponent().appendingPathComponent("workspace-v1.json"), seed: ChatListCache.standard.load())
+    public static let shared = ChatWorkspace(url: ChatListCache.standard.url.deletingLastPathComponent().appendingPathComponent("workspace-v1.json"), seed: ChatListCache.standard.load(), legacyCache: .standard)
     private var state: ChatWorkspaceState
     @ObservationIgnored private let url: URL
+    @ObservationIgnored private let legacyCache: ChatListCache?
     @ObservationIgnored private var activeChats = Set<String>()
     @ObservationIgnored private var readFailure: String?
-    public init(url: URL, seed: ChatListSnapshot = .init()) {
+    public init(url: URL, seed: ChatListSnapshot = .init(), legacyCache: ChatListCache? = nil) {
         self.url = url
+        self.legacyCache = legacyCache
         if let data = try? Data(contentsOf: url), let restored = try? JSONDecoder().decode(ChatWorkspaceState.self, from: data) { state = restored }
         else {
             state = .init(); state.snapshot = seed
@@ -374,7 +400,7 @@ public struct ChatDeliveryTransport: Sendable {
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         state = next
     }
-    public func entries(hosts: [ScheduledTaskHost]) -> [ChatWorkspaceEntry] {
+    public func entries(hosts: [ScheduledTaskHost], includeHidden: Bool = false) -> [ChatWorkspaceEntry] {
         var byID: [String: ChatWorkspaceEntry] = [:]
         for host in hosts {
             for record in state.snapshot.records(on: host) { byID[record.id] = .init(host: host, session: record) }
@@ -387,18 +413,22 @@ public struct ChatDeliveryTransport: Sendable {
             if let owner, !owner.matches(host) { continue }
             byID[pending.record.id] = .init(host: host, session: pending.record)
         }
-        return byID.values.sorted {
+        return byID.values.filter { !isDeleted($0.session.id) && (includeHidden || !isHidden($0.session.id)) }.sorted {
             $0.session.lastActivityAt == $1.session.lastActivityAt ? $0.session.id < $1.session.id : $0.session.lastActivityAt > $1.session.lastActivityAt
         }
     }
-    public func accept(_ records: [ChatSessionRecord], on host: ScheduledTaskHost, configured hosts: [ScheduledTaskHost]) {
+    public func accept(_ records: [ChatSessionRecord], on host: ScheduledTaskHost, configured hosts: [ScheduledTaskHost], deletedIDs: [String] = []) {
         try? commit { state in
+            for id in deletedIDs where state.owners[id].map({ $0.matches(host) }) ?? state.snapshot.records(on: host).contains(where: { $0.id == id }) {
+                Self.remove(id, from: &state)
+            }
             state.snapshot.retain(hosts: hosts)
-            state.snapshot.replace(records, on: host)
-            for record in records where state.owners[record.id] == nil || state.owners[record.id]?.matches(host) == true { state.owners[record.id] = .init(host) }
+            state.snapshot.replace(records.filter { state.deletedIDs?.contains($0.id) != true && (state.owners[$0.id] == nil || state.owners[$0.id]?.matches(host) == true) }, on: host)
+            for record in records where state.deletedIDs?.contains(record.id) != true && (state.owners[record.id] == nil || state.owners[record.id]?.matches(host) == true) { state.owners[record.id] = .init(host) }
             let ids = Set(records.map(\.id))
             state.creations.removeAll { $0.registered && ids.contains($0.record.id) && state.owners[$0.record.id]?.matches(host) == true }
         }
+        for id in deletedIDs where isDeleted(id) { try? removeLegacyCache(id) }
     }
     public func create(name: String, instructions: String, memory: String, model: String, preferredHostID: String?) throws -> ChatSessionRecord {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, name.count <= 80,
@@ -413,12 +443,13 @@ public struct ChatDeliveryTransport: Sendable {
         let preferred = hosts.first { $0.id == preferredHostID } ?? hosts.first
         let host = preferred.flatMap { knownOffline.contains($0.id) ? nil : $0 }
             ?? hosts.first { !knownOffline.contains($0.id) } ?? preferred ?? Self.localHost
-        let record = try create(name: ChatCreationDefaults.name(existing: entries(hosts: hosts).map { $0.session.name }),
+        let record = try create(name: ChatCreationDefaults.name(existing: entries(hosts: hosts, includeHidden: true).map { $0.session.name }),
             instructions: "", memory: "", model: "", preferredHostID: host.id == Self.localHost.id ? nil : host.id)
         return .init(host: host, session: record)
     }
     public func record(_ id: String, fallback host: ScheduledTaskHost) -> ChatSessionRecord? {
-        state.creations.first { $0.record.id == id }?.record ?? state.snapshot.records(on: host).first { $0.id == id }
+        guard !isDeleted(id) else { return nil }
+        return state.creations.first { $0.record.id == id }?.record ?? state.snapshot.records(on: host).first { $0.id == id }
     }
     public func host(for id: String, hosts: [ScheduledTaskHost], fallback: ScheduledTaskHost) -> ScheduledTaskHost {
         if let owner = state.owners[id] { return hosts.first { owner.matches($0) } ?? (owner.matches(fallback) ? fallback : Self.localHost) }
@@ -441,6 +472,8 @@ public struct ChatDeliveryTransport: Sendable {
         return messages
     }
     public func remember(_ page: ChatHistoryPage, on host: ScheduledTaskHost) {
+        guard !isDeleted(page.session.id) else { return }
+        guard state.owners[page.session.id].map({ $0.matches(host) }) ?? true else { return }
         try? commit { state in
             state.snapshot.upsert(page.session, on: host); state.owners[page.session.id] = .init(host)
             let echoed = Set(page.messages.filter { $0.role == "user" }.map(\.requestID))
@@ -467,6 +500,7 @@ public struct ChatDeliveryTransport: Sendable {
         (state.transcript?[id] ?? []).reversed().compactMap { $0.childTranscripts[childID] }.first ?? []
     }
     public func enqueue(_ id: String, text: String, on host: ScheduledTaskHost) throws {
+        guard !isDeleted(id) else { throw ChatClientError(message: "This chat was deleted.", status: 410) }
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.count <= 32000 else { throw ChatClientError(message: "Messages must contain 1–32,000 characters.") }
         let message = ChatQueuedMessage(id: UUID().uuidString, chatID: id, text: text, timestamp: Date().timeIntervalSince1970 * 1000)
         try commit { state in
@@ -482,6 +516,61 @@ public struct ChatDeliveryTransport: Sendable {
         try? commit { state in
             for i in state.outbox.indices where state.outbox[i].chatID == id { state.outbox[i].failure = nil }
             for i in state.creations.indices where state.creations[i].record.id == id { state.creations[i].failure = nil }
+        }
+    }
+    public func isHidden(_ id: String) -> Bool { state.hiddenIDs?.contains(id) == true }
+    public func isDeleted(_ id: String) -> Bool { state.deletedIDs?.contains(id) == true }
+    public func setHidden(_ id: String, _ hidden: Bool) throws {
+        try commit { state in
+            var ids = state.hiddenIDs ?? []
+            if hidden { ids.insert(id) } else { ids.remove(id) }
+            state.hiddenIDs = ids
+        }
+    }
+    private static func remove(_ id: String, from state: inout ChatWorkspaceState) {
+        state.snapshot.remove(id)
+        state.creations.removeAll { $0.record.id == id }
+        state.outbox.removeAll { $0.chatID == id }
+        state.history.removeValue(forKey: id)
+        state.transcript?.removeValue(forKey: id)
+        state.owners.removeValue(forKey: id)
+        state.hiddenIDs?.remove(id)
+        var ids = state.deletedIDs ?? []; ids.insert(id); state.deletedIDs = ids
+    }
+    private func removeLegacyCache(_ id: String) throws {
+        guard let legacyCache else { return }
+        var snapshot = legacyCache.load(); snapshot.remove(id); try legacyCache.save(snapshot)
+    }
+    public func forgetDeleted(_ id: String) throws {
+        try commit { Self.remove(id, from: &$0) }
+        try removeLegacyCache(id)
+    }
+    /// An unregistered draft with no attempted host write can be deleted locally.
+    public func canDeleteLocally(_ id: String) -> Bool {
+        isLocal(id) && state.owners[id] == nil && !activeChats.contains(id)
+    }
+    public func loadAllHistory(_ id: String, on host: ScheduledTaskHost,
+        loadPage: (@Sendable (Int?) async throws -> ChatHistoryPage)? = nil) async throws {
+        var before: Int?
+        while !isDeleted(id) {
+            try Task.checkCancellation()
+            guard state.owners[id].map({ $0.matches(host) }) ?? true else {
+                throw ChatClientError(message: "Load this chat's history from its owning host.", status: 409)
+            }
+            let page: ChatHistoryPage
+            if let loadPage { page = try await loadPage(before) }
+            else { page = try await ChatSessionsClient(host: host).detail(id, before: before) }
+            try Task.checkCancellation()
+            guard page.session.id == id else { throw ChatClientError(message: "The host returned a different chat.") }
+            guard state.owners[id].map({ $0.matches(host) }) ?? true else {
+                throw ChatClientError(message: "Load this chat's history from its owning host.", status: 409)
+            }
+            remember(page, on: host)
+            guard page.hasMore else { return }
+            guard let next = page.messages.first?.sequence, next > 0, before == nil || next < before! else {
+                throw ChatClientError(message: "Older chat history could not be loaded. Retry to include all files and links.")
+            }
+            before = next
         }
     }
     private func permanent(_ error: Error) -> String? {
@@ -516,11 +605,13 @@ public struct ChatDeliveryTransport: Sendable {
                 }
                 guard !Task.isCancelled else { return }
                 let accepted = try await transport.create(host, pending.record)
+                guard !isDeleted(id) else { return }
                 try commit { state in
                     state.snapshot.upsert(accepted, on: host)
                     if let i = state.creations.firstIndex(where: { $0.record.id == id }) { state.creations[i].registered = true; state.creations[i].record = accepted }
                 }
             } catch {
+                if (error as? ChatClientError)?.status == 410 { try? forgetDeleted(id); return }
                 if let failure = permanent(error) { try? commit { state in if let i = state.creations.firstIndex(where: { $0.record.id == id }) { state.creations[i].failure = failure } } }
             }
         }
@@ -532,6 +623,7 @@ public struct ChatDeliveryTransport: Sendable {
             guard !Task.isCancelled else { return }
             do {
                 try await transport.send(host, pending)
+                guard !isDeleted(id) else { return }
                 try commit { state in
                     let sequence = (state.history[id] ?? []).map(\.sequence).max() ?? 0
                     if !(state.history[id] ?? []).contains(where: { $0.role == "user" && $0.requestID == pending.id }) {
@@ -541,6 +633,7 @@ public struct ChatDeliveryTransport: Sendable {
                 }
             } catch {
                 blocked.insert(id)
+                if (error as? ChatClientError)?.status == 410 { try? forgetDeleted(id); return }
                 if let failure = permanent(error) { try? commit { state in if let i = state.outbox.firstIndex(where: { $0.id == pending.id }) { state.outbox[i].failure = failure } } }
             }
         }

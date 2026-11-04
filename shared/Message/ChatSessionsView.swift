@@ -33,9 +33,10 @@ struct ChatSessionsView: View {
     var unreadIDs: Set<String> = []
     @State private var query = ""
     @State private var showingSearch = false
+    @State private var showingHidden = false
     @State private var offlineHosts = Set<String>()
     @State private var workspace = ChatWorkspace.shared
-    private var chats: [ChatLocation] { workspace.entries(hosts: hosts).map { ChatLocation(host: $0.host, session: $0.session) } }
+    private var chats: [ChatLocation] { workspace.entries(hosts: hosts, includeHidden: showingHidden).map { ChatLocation(host: $0.host, session: $0.session) } }
     @State private var path: [ChatLocation] = []
     @State private var selectedChat: ChatLocation?
     #if os(macOS)
@@ -45,6 +46,7 @@ struct ChatSessionsView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var listWidth: CGFloat = 360
     @State private var internalSidebarVisibility: NavigationSplitViewVisibility = .doubleColumn
+    @State private var chatWindowSize = CGSize.zero
     private var sidebarBinding: Binding<NavigationSplitViewVisibility> { sidebarVisibility ?? $internalSidebarVisibility }
     #endif
     private var usesSplit: Bool {
@@ -71,12 +73,17 @@ struct ChatSessionsView: View {
             } else {
                 NavigationStack(path: $path) {
                     chatList.navigationDestination(for: ChatLocation.self) { item in
-                        ChatSessionScreen(host: item.host, sessionID: item.session.id, hosts: hosts, onRead: onRead)
+                        ChatSessionScreen(host: item.host, sessionID: item.session.id, hosts: hosts, onRead: onRead, onRemoved: { path = [] })
                     }
                 }
             }
         }
         .modifier(ChatAppearance())
+        #if os(iOS)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { chatWindowSize = $0 }
+        .environment(\.filePaneNavigation, FilePaneNavigation(windowSize: chatWindowSize,
+            showList: { sidebarBinding.wrappedValue = .doubleColumn }))
+        #endif
         #if os(macOS)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
         #endif
@@ -114,7 +121,7 @@ struct ChatSessionsView: View {
                 .overlay(alignment: .trailing) { Rectangle().fill(ChatColors.separator).frame(width: 1) }
             Group {
                 if let selectedChat {
-                    ChatSessionScreen(host: selectedChat.host, sessionID: selectedChat.session.id, hosts: hosts, onRead: onRead).id(selectedChat.id)
+                    ChatSessionScreen(host: selectedChat.host, sessionID: selectedChat.session.id, hosts: hosts, onRead: onRead, onRemoved: { self.selectedChat = nil }).id(selectedChat.id)
                 } else {
                     ContentUnavailableView("Choose a chat", systemImage: "bubble.left.and.bubble.right",
                         description: Text("Your conversations keep their own instructions and memory."))
@@ -133,7 +140,7 @@ struct ChatSessionsView: View {
             NavigationStack {
                 Group {
                     if let selectedChat {
-                        ChatSessionScreen(host: selectedChat.host, sessionID: selectedChat.session.id, hosts: hosts, onRead: onRead).id(selectedChat.id)
+                        ChatSessionScreen(host: selectedChat.host, sessionID: selectedChat.session.id, hosts: hosts, onRead: onRead, onRemoved: { self.selectedChat = nil }).id(selectedChat.id)
                     } else {
                         ContentUnavailableView("Choose a chat", systemImage: "bubble.left.and.bubble.right",
                             description: Text("Your conversations keep their own instructions and memory."))
@@ -244,6 +251,8 @@ struct ChatSessionsView: View {
                 Button("New chat") { createChat() }.keyboardShortcut("n")
                 Button("Mark all read") { for id in unreadIDs { onRead?(id) } }.disabled(unreadIDs.isEmpty)
                 Button("Refresh") { Task { await refresh() } }
+                Toggle("Show hidden chats", isOn: $showingHidden)
+                    .accessibilityIdentifier("chat_show_hidden")
             } label: {
                 HStack(spacing: 4) { Text("Most recent"); Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)) }
                     .font(.system(size: 11)).foregroundStyle(ChatColors.hex(0xC9CBD3))
@@ -262,6 +271,8 @@ struct ChatSessionsView: View {
     #else
     private var chatOptions: some View {
         Menu {
+            Toggle("Show hidden chats", isOn: $showingHidden)
+                .accessibilityIdentifier("chat_show_hidden")
             Button { createChat() } label: { Label("New chat", systemImage: "plus") }
                 .accessibilityIdentifier("chat_create_menu")
             Button("Mark all read") { for id in unreadIDs { onRead?(id) } }
@@ -318,6 +329,10 @@ struct ChatSessionsView: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text(chat.name).font(.system(size: title, weight: unread || chat.state == "blocked" ? (inlineStatus ? .semibold : .bold) : (inlineStatus ? .regular : .semibold)))
                             .foregroundStyle(ChatColors.ink).lineLimit(1)
+                        if workspace.isHidden(chat.id) {
+                            Image(systemName: "eye.slash").font(.caption).foregroundStyle(ChatColors.muted)
+                                .accessibilityLabel("Hidden on this device")
+                        }
                         Spacer(minLength: 8)
                         TimelineView(.periodic(from: .now, by: 60)) { context in
                             Text(ChatPresentation.activityLabel(chat.lastActivityAt, now: context.date))
@@ -360,7 +375,7 @@ struct ChatSessionsView: View {
         for await update in ChatHostDiscovery.updates(hosts: hosts) {
             guard !Task.isCancelled else { return }
             if let fresh = update.sessions {
-                workspace.accept(fresh, on: update.host, configured: hosts)
+                workspace.accept(fresh, on: update.host, configured: hosts, deletedIDs: update.deletedIDs)
                 offlineHosts.remove(update.host.id)
             } else { offlineHosts.insert(update.host.id) }
             loading = false
@@ -408,6 +423,7 @@ private final class ChatSessionModel {
     func refresh() async {
         guard let host else { return }
         let workspace = ChatWorkspace.shared
+        if workspace.isDeleted(sessionID) { record = nil; messages = []; stop(); return }
         await workspace.flush(hosts: hosts, only: sessionID)
         if workspace.isLocal(sessionID) {
             record = workspace.record(sessionID, fallback: host)
@@ -426,7 +442,11 @@ private final class ChatSessionModel {
             if !hadOlder { hasMore = page.hasMore }
             error = nil
             onRead?(sessionID)
-        } catch { if !Task.isCancelled { self.error = "Offline. New messages stay queued on this device." } }
+        } catch {
+            if (error as? ChatClientError)?.status == 410 {
+                try? workspace.forgetDeleted(sessionID); record = nil; messages = []; stop()
+            } else if !Task.isCancelled { self.error = "Offline. New messages stay queued on this device." }
+        }
     }
 
 }
@@ -436,6 +456,8 @@ struct ChatSessionScreen: View {
     let sessionID: String
     var hosts: [ScheduledTaskHost] = []
     var onRead: ((String) -> Void)? = nil
+    var onRemoved: (() -> Void)? = nil
+    @Environment(\.dismiss) private var dismiss
     @State private var model = ChatSessionModel()
     @State private var workspace = ChatWorkspace.shared
     private var deliveryHosts: [ScheduledTaskHost] { hosts.isEmpty && host.id != ChatWorkspace.localHost.id ? [host] : hosts }
@@ -478,12 +500,25 @@ struct ChatSessionScreen: View {
         nonmutating set { model.error = newValue }
     }
     @State private var showingSettings = false
+    @State private var closeAfterSettings = false
     @State private var followsReply = true
     @State private var modelCatalog = ModelCatalogResponse.fallback
     #if os(iOS)
+    @State private var showingFullTitle = false
     @State private var showingSubagents = false
     @State private var subagentsAfterSettings = false
     @State private var toolOutput: ChatToolOutput?
+    @State private var filesAfterSettings = false
+    @State private var showingAttachments = false
+    @State private var viewingChatFile: MediaRef?
+    @State private var filePane = FilePaneState()
+    @State private var paneResources = TranscriptResources()
+    @State private var paneRevision = ""
+    @State private var loadingFileHistory = false
+    @State private var fileHistoryError: String?
+    @State private var fileHistoryTask: Task<Void, Never>?
+    @State private var fileHistoryGeneration = UUID()
+    @Environment(\.filePaneNavigation) private var paneNavigation
     private struct ChatToolOutput: Identifiable {
         let id = UUID()
         let title: String
@@ -505,29 +540,23 @@ struct ChatSessionScreen: View {
     private var client: ChatSessionsClient { ChatSessionsClient(host: effectiveHost) }
 
     var body: some View {
-        conversationSurface
+        conversationWithResources
         .background(paneCanvas)
         .modifier(ChatAppearance())
         #if os(macOS)
         .safeAreaInset(edge: .top, spacing: 0) { macThreadHeader }
         #endif
+        #if os(iOS)
+        .modifier(ConversationNavigationHeader(title: record?.name ?? "Chat", fullTitle: record?.name ?? "Chat",
+            status: conversationStatus,
+            queued: workspace.queued(for: sessionID).filter { $0.failure == nil }.count,
+            hostLabel: effectiveHost.name, project: nil, showingFullTitle: $showingFullTitle,
+            optionsTitle: "Chat settings", optionsIdentifier: "chat_settings", optionsEnabled: record != nil,
+            titleIdentifier: "chat_details", statusIdentifier: "chat_status",
+            disclosureIdentifier: "chat_full_title", titleHint: "Shows the full chat title",
+            onOptions: { showingSettings = true }))
+        #else
         .navigationTitle(record?.name ?? "Chat")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        #endif
-        #if os(iOS)
-        .toolbar {
-            ConversationToolbar(optionsTitle: "Chat settings", optionsIdentifier: "chat_settings",
-                optionsEnabled: record != nil, onOptions: { showingSettings = true }) {
-                SessionTitleBarContent(title: record?.name ?? "Chat", status: conversationStatus,
-                    queued: workspace.queued(for: sessionID).filter { $0.failure == nil }.count,
-                    hostLabel: effectiveHost.name, project: nil,
-                    titleIdentifier: "chat_details", statusIdentifier: "chat_status",
-                    titleHint: "Shows chat settings") { showingSettings = true }
-            }
-        }
         #endif
         .sheet(isPresented: $showingSettings, onDismiss: settingsDismissed) {
             if let record { settingsSheet(record) }
@@ -541,6 +570,29 @@ struct ChatSessionScreen: View {
         .sheet(item: $toolOutput) { output in
             ToolOutputSheet(title: output.title, text: output.text).presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $showingAttachments) {
+            AttachmentsSheet(messages: sessionMessages, cwd: record?.workingDirectory, contextName: "chat",
+                resourceStatus: AnyView(fileHistoryStatus))
+                .environment(\.hostFiles, HostFiles(client: client.filesClient, cwd: record?.workingDirectory))
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+        }
+        .sheet(item: $viewingChatFile) { ref in
+            FileViewerSheet(ref: ref, files: paneResources.files.map(\.ref),
+                hostFiles: HostFiles(client: client.filesClient, cwd: record?.workingDirectory))
+        }
+        .task(id: sessionMessages) {
+            let snapshot = sessionMessages
+            let resources = await Task.detached(priority: .utility) { TranscriptResourceIndex.collect(from: snapshot) }.value
+            guard !Task.isCancelled else { return }
+            paneResources = resources
+            if !snapshot.isEmpty { filePane.observe(resources) }
+        }
+        .task(id: "\(filePane.selection?.id ?? "")-\(sessionMessages.hashValue)") {
+            let snapshot = sessionMessages, path = filePane.selection?.raw ?? ""
+            let revision = await Task.detached(priority: .utility) { FilePaneRevision.token(for: path, messages: snapshot) }.value
+            if !Task.isCancelled { paneRevision = revision }
+        }
+        .onDisappear { fileHistoryTask?.cancel() }
         #endif
         .onAppear { model.start(host: effectiveHost, hosts: deliveryHosts, sessionID: sessionID, onRead: onRead) }
         .task(id: effectiveHost) {
@@ -554,6 +606,27 @@ struct ChatSessionScreen: View {
             else if phase == .active { model.start(host: effectiveHost, hosts: deliveryHosts, sessionID: sessionID, onRead: onRead) }
         }
         .onChange(of: deliveryHosts) { _, _ in model.start(host: effectiveHost, hosts: deliveryHosts, sessionID: sessionID, onRead: onRead) }
+        .onChange(of: workspace.isDeleted(sessionID)) { _, deleted in
+            guard deleted else { return }
+            if showingSettings { closeAfterSettings = true; showingSettings = false }
+            else { closeConversation() }
+        }
+    }
+    @ViewBuilder private var conversationWithResources: some View {
+        #if os(iOS)
+        FilePaneContainer(state: $filePane, resources: paneResources, messages: sessionMessages,
+            revision: paneRevision, hostFiles: HostFiles(client: client.filesClient, cwd: record?.workingDirectory),
+            keyboardVisible: keyboardOcclusionHeight > 0, onReveal: revealFileSource,
+            resourceStatus: AnyView(fileHistoryStatus), contextName: "chat", header: { filePaneHeader }, content: { conversationSurface })
+            .environment(\.openURL, OpenURLAction { url in
+                guard UIDevice.current.userInterfaceIdiom == .pad,
+                      ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return .systemAction }
+                filePane.open(MediaRef(raw: url.absoluteString, kind: MediaKind.from(ext: url.pathExtension) ?? .other))
+                return .handled
+            })
+        #else
+        conversationSurface
+        #endif
     }
     @ViewBuilder private var conversationSurface: some View {
         #if os(iOS)
@@ -635,19 +708,89 @@ struct ChatSessionScreen: View {
         ChatSettingsSheet(client: client, record: record, onSubagents: childAgents.isEmpty ? nil : {
             subagentsAfterSettings = true
             showingSettings = false
-        }) { self.record = $0; showingSettings = false }
+        }, onFiles: {
+            filesAfterSettings = true; showingSettings = false
+        }, isHidden: workspace.isHidden(sessionID), onHide: { try toggleHidden() },
+            onDelete: { try await deleteChat(record) }) { self.record = $0; showingSettings = false }
         #else
-        ChatSettingsSheet(client: client, record: record) { self.record = $0; showingSettings = false }
+        ChatSettingsSheet(client: client, record: record, isHidden: workspace.isHidden(sessionID),
+            onHide: { try toggleHidden() }, onDelete: { try await deleteChat(record) }) { self.record = $0; showingSettings = false }
         #endif
     }
 
     private func settingsDismissed() {
+        if closeAfterSettings { closeAfterSettings = false; closeConversation(); return }
         #if os(iOS)
         if subagentsAfterSettings { subagentsAfterSettings = false; showingSubagents = true }
+        if filesAfterSettings { filesAfterSettings = false; openFilesIndex() }
         #endif
+    }
+    private func closeConversation() {
+        model.stop()
+        if let onRemoved { onRemoved() } else { dismiss() }
+    }
+    private func toggleHidden() throws {
+        let hiding = !workspace.isHidden(sessionID)
+        try workspace.setHidden(sessionID, hiding)
+        closeAfterSettings = hiding; showingSettings = false
+    }
+    private func deleteChat(_ record: ChatSessionRecord) async throws {
+        if !workspace.canDeleteLocally(sessionID) { try await client.delete(record) }
+        try workspace.forgetDeleted(sessionID)
+        closeAfterSettings = true; showingSettings = false
     }
 
     #if os(iOS)
+    private var fileHistoryStatus: some View {
+        Group {
+            if loadingFileHistory {
+                HStack(spacing: 8) { ProgressView(); Text("Loading older files and links…") }
+                    .accessibilityIdentifier("chat_files_loading")
+            } else if let fileHistoryError {
+                HStack(spacing: 8) {
+                    Text(fileHistoryError).fixedSize(horizontal: false, vertical: true)
+                    Button("Retry", action: loadFileHistory).accessibilityIdentifier("chat_files_retry")
+                }.accessibilityIdentifier("chat_files_error")
+            }
+        }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16)
+    }
+    private func loadFileHistory() {
+        fileHistoryTask?.cancel(); loadingFileHistory = true; fileHistoryError = nil
+        let owner = effectiveHost, generation = UUID()
+        fileHistoryGeneration = generation
+        fileHistoryTask = Task { @MainActor in
+            defer { if fileHistoryGeneration == generation { loadingFileHistory = false } }
+            do { try await workspace.loadAllHistory(sessionID, on: owner) }
+            catch is CancellationError { }
+            catch { if !Task.isCancelled { fileHistoryError = "Showing saved files and links. Older history could not be loaded." } }
+        }
+    }
+    private func openFilesIndex() {
+        if UIDevice.current.userInterfaceIdiom == .pad { filePane.showFiles() }
+        else { showingAttachments = true }
+        loadFileHistory()
+    }
+    private var filePaneHeader: some View {
+        ConversationPaneHeader(listTitle: "Show chats", listIdentifier: "chat_file_show_list",
+            optionsTitle: "Chat settings", optionsIdentifier: "chat_file_options",
+            onShowList: paneNavigation.showList, onOptions: { showingSettings = true }) {
+            SessionTitleBarContent(title: record?.name ?? "Chat", status: conversationStatus,
+                queued: workspace.queued(for: sessionID).filter { $0.failure == nil }.count,
+                hostLabel: effectiveHost.name, project: nil,
+                titleIdentifier: "chat_file_title", statusIdentifier: "chat_file_status",
+                titleHint: "Shows the full chat title") {
+                withAnimation(.easeOut(duration: 0.18)) { showingFullTitle.toggle() }
+            }
+        }
+    }
+    private func revealFileSource(_ id: String) {
+        followsReply = false; filePane.fullWidth = false
+        if !filePane.portraitDocked && paneNavigation.windowSize.height > paneNavigation.windowSize.width { filePane.close() }
+        Task { @MainActor in
+            await Task.yield()
+            chatScrollProxy?.scrollTo(id, anchor: .center)
+        }
+    }
     private func followNewest(duration: Double = 0.25) {
         guard followsReply, !userScrolling else { return }
         Task { @MainActor in
@@ -828,14 +971,18 @@ struct ChatSessionScreen: View {
                                 VStack(alignment: .trailing, spacing: 4) {
                                     TranscriptMessageView(message: message,
                                         followsUserBubble: rendered[..<index].last(where: { $0.kind != "thinking" })?.rendersAsUserBubble == true,
-                                        onFollowup: { draft = FollowupDraft.adding($0, to: draft) })
+                                        onFollowup: { draft = FollowupDraft.adding($0, to: draft) },
+                                        onOpenFile: { ref, _ in
+                                            if UIDevice.current.userInterfaceIdiom == .pad { filePane.open(ref) }
+                                            else { viewingChatFile = ref }
+                                        })
                                     if message.rendersAsUserBubble, let original = messages.first(where: { $0.id == message.id }), let label = workspace.deliveryLabel(original.requestID) {
                                         HStack(spacing: 8) {
                                             Text(label).font(.caption).foregroundStyle(.secondary)
                                             if label == "Retry" { Button("Retry") { workspace.retry(sessionID); Task { await model.refresh() } } }
                                         }.accessibilityIdentifier("chat_delivery_" + original.requestID)
                                     }
-                                }
+                                }.id(message.stableID)
                             case .steps(let group):
                                 ToolStepGroupView(group: group, cwd: record?.workingDirectory, followsStep: item.followsStep) { title, text in
                                     toolOutput = ChatToolOutput(title: title, text: text)
@@ -965,22 +1112,30 @@ struct ChatSessionScreen: View {
 }
 
 private enum ChatSettingsPage: String, Hashable {
-    case name = "Name", instructions = "Instructions", memory = "Memory", model = "Model"
+    case name = "Name", instructions = "Instructions", memory = "Memory", model = "Model", host = "Host"
 }
 private struct ChatSettingsSheet: View {
     let client: ChatSessionsClient
     let record: ChatSessionRecord
     let saved: (ChatSessionRecord) -> Void
     var onSubagents: (() -> Void)?
+    var onFiles: (() -> Void)?
+    var isHidden: Bool
+    var onHide: (() async throws -> Void)?
+    var onDelete: (() async throws -> Void)?
     @State private var name: String
     @State private var instructions: String
     @State private var memory: String
     @State private var model: String
     @State private var busy = false
     @State private var error: String?
+    @State private var confirmingDelete = false
     @Environment(\.dismiss) private var dismiss
-    init(client: ChatSessionsClient, record: ChatSessionRecord, onSubagents: (() -> Void)? = nil, saved: @escaping (ChatSessionRecord) -> Void) {
+    init(client: ChatSessionsClient, record: ChatSessionRecord, onSubagents: (() -> Void)? = nil,
+         onFiles: (() -> Void)? = nil, isHidden: Bool = false, onHide: (() async throws -> Void)? = nil,
+         onDelete: (() async throws -> Void)? = nil, saved: @escaping (ChatSessionRecord) -> Void) {
         self.client = client; self.record = record; self.saved = saved; self.onSubagents = onSubagents
+        self.onFiles = onFiles; self.isHidden = isHidden; self.onHide = onHide; self.onDelete = onDelete
         _name = State(initialValue: record.name); _instructions = State(initialValue: record.instructions)
         _memory = State(initialValue: record.memory); _model = State(initialValue: record.model ?? "")
     }
@@ -1003,7 +1158,41 @@ private struct ChatSettingsSheet: View {
                         shortcut(.instructions, icon: "pencil")
                         shortcut(.memory, icon: "doc.text")
                         shortcut(.model, icon: "cpu")
+                        if let onFiles {
+                            Button(action: onFiles) {
+                                VStack(spacing: 5) {
+                                    Image(systemName: "paperclip").font(.system(size: 20))
+                                    Text("Files & links").font(.system(size: 12)).multilineTextAlignment(.center)
+                                }.foregroundStyle(ChatColors.ink).frame(maxWidth: .infinity).frame(height: 64)
+                                    .background(ChatColors.field, in: RoundedRectangle(cornerRadius: 16))
+                            }.buttonStyle(.plain).accessibilityIdentifier("chat_settings_files")
+                        }
                     }
+                    VStack(spacing: 0) {
+                        HStack(spacing: 12) {
+                            Text(busy ? "Saving model…" : "Model")
+                                .font(.system(size: 17)).foregroundStyle(ChatColors.ink)
+                            Spacer(minLength: 4)
+                            ChatModelPicker(selection: Binding(
+                                get: { record.model ?? "" },
+                                set: { choice in Task { await saveModel(choice) } }
+                            ), host: client.host)
+                                .frame(maxWidth: 220)
+                                .disabled(busy || record.isWorking)
+                                .accessibilityIdentifier("chat_options_model")
+                        }.padding(.horizontal, 14)
+                        Divider().padding(.leading, 14)
+                        NavigationLink(value: ChatSettingsPage.host) {
+                            HStack(spacing: 12) {
+                                Text("Host").foregroundStyle(ChatColors.ink)
+                                Spacer(minLength: 4)
+                                Text(client.host.name).foregroundStyle(ChatColors.secondary).lineLimit(1)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(ChatColors.muted)
+                            }.font(.system(size: 17)).padding(.horizontal, 14).frame(minHeight: 44)
+                                .contentShape(Rectangle())
+                        }.buttonStyle(.plain).accessibilityIdentifier("chat_options_host")
+                    }.background(ChatColors.field, in: RoundedRectangle(cornerRadius: 14))
                     VStack(alignment: .leading, spacing: 6) {
                         ChatSectionHeading(title: "Only this chat")
                         VStack(spacing: 0) {
@@ -1035,6 +1224,24 @@ private struct ChatSettingsSheet: View {
                     if record.isWorking {
                         Text("Stop the current reply to change these settings.").font(.system(size: 13)).foregroundStyle(ChatColors.amber)
                     }
+                    if let error {
+                        Text(error).font(.callout).foregroundStyle(ChatColors.amber)
+                            .accessibilityIdentifier("chat_settings_error")
+                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        if onHide != nil {
+                            Button(isHidden ? "Show in chat list" : "Hide from this device", systemImage: isHidden ? "eye" : "eye.slash") {
+                                Task { await removeChat(permanently: false) }
+                            }.disabled(busy).accessibilityIdentifier("chat_settings_hide")
+                            Text("Hiding only changes this device’s list. The chat and its scheduled tasks continue.")
+                                .font(.caption).foregroundStyle(ChatColors.muted)
+                        }
+                        if onDelete != nil {
+                            Button("Delete chat…", systemImage: "trash", role: .destructive) { confirmingDelete = true }
+                                .disabled(busy || record.isWorking).accessibilityIdentifier("chat_settings_delete")
+                        }
+                    }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(ChatColors.field, in: RoundedRectangle(cornerRadius: 14))
                 }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
             }.background(ChatColors.raised).navigationTitle("Chat")
                 #if os(iOS)
@@ -1046,12 +1253,23 @@ private struct ChatSettingsSheet: View {
                     }
                 }
                 .navigationDestination(for: ChatSettingsPage.self) { page in
-                    editor(page).onAppear {
-                        name = record.name; instructions = record.instructions; memory = record.memory; model = record.model ?? ""
-                        error = nil
+                    if page == .host {
+                        hostInformation
+                    } else {
+                        editor(page).onAppear {
+                            name = record.name; instructions = record.instructions; memory = record.memory; model = record.model ?? ""
+                            error = nil
+                        }
                     }
                 }
         }.tint(ChatColors.hex(0x409CFF)).modifier(ChatAppearance())
+            .confirmationDialog("Delete \(record.name)?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                Button("Delete chat", role: .destructive) { Task { await removeChat(permanently: true) } }
+                    .accessibilityIdentifier("chat_delete_confirm")
+                Button("Cancel", role: .cancel) { }.accessibilityIdentifier("chat_delete_cancel")
+            } message: {
+                Text("Deletes this chat’s messages, instructions, memory and files in its chat storage, and cancels its scheduled tasks. Files elsewhere on your hosts remain. This cannot be undone.")
+            }
             .interactiveDismissDisabled(busy)
             .presentationBackground(ChatColors.raised)
             .presentationCornerRadius(34).presentationDragIndicator(.visible)
@@ -1079,6 +1297,20 @@ private struct ChatSettingsSheet: View {
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(ChatColors.hex(0x636366))
             }.padding(.horizontal, 14).padding(.vertical, 12).frame(minHeight: 72)
         }.buttonStyle(.plain).accessibilityIdentifier("chat_settings_\(page.rawValue.lowercased())_row")
+    }
+    private var hostInformation: some View {
+        Form {
+            Section("Current host") {
+                LabeledContent("Name", value: client.host.name)
+                    .accessibilityIdentifier("chat_host_name")
+                LabeledContent("Address", value: client.host.baseURL.absoluteString)
+                    .textSelection(.enabled).accessibilityIdentifier("chat_host_address")
+            }
+            Section {
+                Text("This conversation stays on this host. Moving an existing chat to another host is not available yet.")
+                    .foregroundStyle(ChatColors.secondary).accessibilityIdentifier("chat_host_transfer_info")
+            }
+        }.formStyle(.grouped).navigationTitle("Host")
     }
     private func editor(_ page: ChatSettingsPage) -> some View {
         ScrollView {
@@ -1108,6 +1340,8 @@ private struct ChatSettingsSheet: View {
                     ChatSectionHeading(title: "Claude Code")
                     ChatModelPicker(selection: $model, host: client.host).accessibilityIdentifier("chat_settings_model")
                     Text("This model answers your next message.").font(.system(size: 13)).foregroundStyle(ChatColors.muted)
+                case .host:
+                    EmptyView()
                 }
                 if record.isWorking { Text("Stop the current reply to change these settings.").font(.callout).foregroundStyle(ChatColors.amber) }
                 if let error { Text(error).font(.callout).foregroundStyle(ChatColors.amber).accessibilityIdentifier("chat_settings_error") }
@@ -1120,6 +1354,22 @@ private struct ChatSettingsSheet: View {
                         .accessibilityIdentifier("chat_settings_save")
                 }
             }
+    }
+    private func saveModel(_ choice: String) async {
+        guard !busy, !record.isWorking, choice != (record.model ?? "") else { return }
+        busy = true; error = nil; defer { busy = false }
+        do {
+            saved(try await client.save(record, name: record.name, instructions: record.instructions,
+                memory: record.memory, model: choice))
+        } catch { self.error = error.localizedDescription }
+    }
+    private func removeChat(permanently: Bool) async {
+        guard !busy else { return }
+        busy = true; error = nil; defer { busy = false }
+        do {
+            if permanently { try await onDelete?() }
+            else { try await onHide?() }
+        } catch { self.error = error.localizedDescription }
     }
     private func save() async {
         busy = true; error = nil; defer { busy = false }
