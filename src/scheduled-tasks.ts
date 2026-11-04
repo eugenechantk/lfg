@@ -19,7 +19,7 @@ export type ScheduledTask = TaskInput & { id: string; enabled: boolean; createdA
 export type TaskRun = { id: string; taskId: string; taskName: string; agent: string; trigger: "scheduled" | "manual"; scheduledFor: number; startedAt: number; finishedAt?: number; retryOfRunId?: string; retryFallbackAt?: number; retryFallbackAutomatic?: boolean; occurrence?: number; scheduleRevision?: number; status: "queued" | "starting" | "running" | "needs_input" | "succeeded" | "incomplete" | "failed" | "interrupted" | "cancelled"; sessionId?: string; tmuxName?: string; summary?: string; error?: string; needsInputAt?: number; outcome?: TaskOutcome; snapshot?: ScheduledTask; decision?: JobDecision; chatRequestID?: string; outcomeReviews?: TaskOutcomeReview[] };
 export type TaskDelivery = {state:"pending"|"accepted"|"retired"|"failed";attempts:number;nextAttemptAt:number;error?:string};
 export type TaskNotification = {id:string;runId:string;taskId:string;chatId:string;title:string;body:string;createdAt:number;state:"pending"|"accepted"|"cancelled"|"failed";devices:Record<string,TaskDelivery>;error?:string};
-export type TaskState = { version: 2; tasks: ScheduledTask[]; runs: TaskRun[]; notifications:TaskNotification[]; imports?:string[] };
+export type TaskState = { version: 2; tasks: ScheduledTask[]; runs: TaskRun[]; notifications:TaskNotification[]; imports?:string[]; deletedChatIDs?:string[] };
 export const activeRun = (r: TaskRun) => ["queued", "starting", "running", "needs_input"].includes(r.status);
 type RunAssessment = Pick<TaskRun, "status" | "summary" | "error" | "outcome">;
 export type TaskOutcomeReview = { at: number; reason: string; sessionId: string; source: "session_final_verdict"; previous: RunAssessment; outcome: TaskOutcome; report: string };
@@ -200,6 +200,7 @@ export class TaskStore {
     try {
       const value = JSON.parse(await readFile(this.path, "utf8"));
       if (![1,2].includes(value.version) || !Array.isArray(value.tasks) || !Array.isArray(value.runs)||(value.version===2||value.notifications!=null)&&!Array.isArray(value.notifications)) throw Error("Invalid scheduled task store");
+      if(value.deletedChatIDs!=null&&(!Array.isArray(value.deletedChatIDs)||value.deletedChatIDs.some((id:unknown)=>typeof id!=="string")))throw Error("Invalid deleted chat identifiers");
       return {...value,version:2,notifications:value.notifications??[]};
     } catch (e) { if ((e as NodeJS.ErrnoException).code === "ENOENT") return { version: 2, tasks: [], runs: [],notifications:[] }; throw e; }
   }
@@ -218,6 +219,7 @@ export class TaskStore {
     const clean = validateTask(input, now,!!input.requestID);
     if (taskAction(clean)==="session"&&!(await stat(clean.cwd!).catch(() => null))?.isDirectory()) throw new TaskError("That directory does not exist on this host.");
     return this.transaction(s => {
+      if(clean.chatId&&s.deletedChatIDs?.includes(clean.chatId))throw new TaskError("This chat was deleted.",410);
       const fingerprint=clean.requestID?creationFingerprint(clean):undefined;
       const existing=clean.requestID?s.tasks.find(t=>t.chatId===clean.chatId&&t.requestID===clean.requestID):undefined;
       if(existing){if(existing.requestFingerprint!==fingerprint)throw new TaskError("This request identifier belongs to a different task.",409);return existing;}
@@ -300,6 +302,23 @@ export class TaskStore {
       return t;
     });
   }
+  /** Cancel this conversation's future work and unsent alerts; retain Task audit history. */
+  async cancelForChat(chatId:string,now=Date.now()){
+    return this.transaction(s=>{
+      const owned=s.tasks.filter(t=>t.chatId===chatId);
+      if(s.runs.some(r=>activeRun(r)&&owned.some(t=>t.id===r.taskId&&taskAction(t)==='session')))
+        throw new TaskError('Stop this chat’s running task before deleting it.',409);
+      if(!s.deletedChatIDs?.includes(chatId))s.deletedChatIDs=[...(s.deletedChatIDs??[]),chatId];
+      const ids=new Set<string>();
+      for(const t of owned){
+        ids.add(t.id);
+        if(t.cancelledAt!=null)continue;
+        t.cancelledAt=now;t.enabled=false;t.nextRunAt=null;clearRetry(t);t.updatedAt=now;t.revision=(t.revision??1)+1;
+      }
+      for(const n of s.notifications)if(ids.has(n.taskId)&&n.state==='pending')n.state='cancelled';
+      for(const r of s.runs)if(ids.has(r.taskId)&&activeRun(r)){r.status='cancelled';r.finishedAt=now;}
+    });
+  }
   /** A durable extra run; null cancels it without changing the regular schedule. */
   async scheduleRetry(id: string, at: string | null, now = Date.now()): Promise<ScheduledTask> {
     if (at !== null && (!isoWithOffset(at) || Date.parse(at) <= now)) throw new TaskError("Choose a retry time in the future with a timezone offset.");
@@ -318,6 +337,7 @@ export class TaskStore {
   async claim(id: string, now = Date.now(), manual: boolean | "retry" = false): Promise<TaskRun | null> {
     return this.transaction(s => {
       const t = s.tasks.find(t => t.id === id);
+      if(t?.chatId&&s.deletedChatIDs?.includes(t.chatId))return null;
       if (!t || t.cancelledAt || s.runs.some(r => r.taskId === id && activeRun(r))) return null;
       if (!manual && t.retryOfRunId != null) return null;
       if (!manual && (!t.enabled || t.nextRunAt == null || t.nextRunAt > now)) return null;
@@ -368,6 +388,7 @@ export class TaskStore {
   async record(id: string, patch: Partial<TaskRun>): Promise<void> {
     await this.transaction(s => {
       const r = s.runs.find(r => r.id === id); if (!r) return;
+      if (r.status === "cancelled") return;
       const wasActive = activeRun(r);
       Object.assign(r, patch, { id: r.id, taskId: r.taskId });
       const t = s.tasks.find(t => t.id === r.taskId);

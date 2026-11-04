@@ -1,7 +1,7 @@
 import { CuaContainerRuntime, loadCuaContainers } from '../cua-container.ts';
 import type { CuaStream } from '../cua-stream.ts';
 import { CuaMCP } from "../cua-mcp.ts";
-import { ChatSessions } from "../chat-sessions.ts";
+import { ChatSessions, ChatError } from "../chat-sessions.ts";
 import { NativeClaudeRunner } from "../chat-native.ts";
 import { chatRoutes } from "../chat-api.ts";
 import {ChatJobs} from '../chat-jobs.ts';
@@ -1343,6 +1343,10 @@ export async function cmdServe(options: {
     emit: (sid, type, payload) => { journal.append(sid, type, payload); },
     jobMcpURL: id=>`http://127.0.0.1:${PORT}/api/scheduled-tasks/mcp/${id}`,
     notificationInstructions: chatNotificationInstructions,
+    beforeDelete: async id=>{
+      try{await taskStore.cancelForChat(id);}
+      catch(error){if(error instanceof TaskError)throw new ChatError(error.message,error.status);throw error;}
+    },
   });
   await chats.ready;
   const chatJobs=new ChatJobs(taskStore,chats,{scheduler:scheduledTasks,migrateFrom:join(PATHS.data,'chat-jobs.json'),push:{devices:listDevices,hostId:()=>hostInfo().hostId,retire:unregisterDevice,send:async(device,payload)=>{if(!pushWatcherEnabled(PORT))return {ok:false,status:503,reason:'Push delivery is disabled for this host port.'};const cfg=apnsConfigFromEnv();return cfg?sendApns(device,payload,cfg):{ok:false,status:503,reason:'Push is not configured on this host.'};}}});

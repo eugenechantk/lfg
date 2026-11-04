@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, rename, readdir, unlink } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename, readdir, unlink, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import type { Session, SessionMsg } from './sessions';
@@ -26,6 +26,7 @@ export interface ChatRunner {
   recover?(directory: string, providerSessionID: string): Promise<void>;
   close?(): Promise<void>;
   interrupt?(id:string): Promise<void>;
+  purge?(id:string,directory:string,providerSessionID?:string): Promise<void>;
 }
 export type ChatSession = {
   id: string; kind: 'chat'; name: string; agent: 'claude'; model?: string;
@@ -45,7 +46,8 @@ export type ChatTranscriptTurn = {requestID:string;sequence:number;messages:Sess
 export type ChatTurn = {requestID:string;sequence:number;state:'running'|'completed'|'failed'|'interrupted';user:ChatMessage;assistant:ChatMessage;error?:string;job?:{runID:string;name:string};jobDecision?:JobDecision;notice?:boolean;transcript?:ChatTranscriptTurn};
 export type ChatDetail = {session:ChatSession;messages:ChatMessage[];turns:Pick<ChatTurn,'requestID'|'sequence'|'state'|'error'>[];hasMore:boolean;transcript:ChatTranscriptTurn[]};
 export class ChatError extends Error { constructor(message:string,public status=400){super(message);} }
-type Options = {contextLimit?:number;keepRecentTurns?:number;emit?:(id:string,type:'msg'|'busy',payload:unknown)=>void;now?:()=>number;jobMcpURL?:(id:string)=>string;notificationInstructions?:(id:string)=>string};
+type Options = {contextLimit?:number;keepRecentTurns?:number;emit?:(id:string,type:'msg'|'busy',payload:unknown)=>void;now?:()=>number;jobMcpURL?:(id:string)=>string;notificationInstructions?:(id:string)=>string;beforeDelete?:(id:string)=>Promise<void>};
+type ChatDeletion = {id:string;deletedAt:number;providerSessionID?:string};
 const terminal = (t:ChatTurn) => t.state !== 'running';
 const hash = (s:string) => createHash('sha256').update(s).digest('hex');
 const idPattern = /^chat-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -63,6 +65,8 @@ export class ChatSessions {
   readonly ready:Promise<void>;
   private locks=new Map<string,Promise<unknown>>();
   private running=new Map<string,{abort:AbortController;done:Promise<void>}>();
+  private deleting=new Set<string>();
+  private removals=new Set<Promise<unknown>>();
   private turnIndex=new Map<string,Map<number,string>>();
   private closed=false;
   private closing?:Promise<void>;
@@ -90,7 +94,22 @@ export class ChatSessions {
   }
   private async release(){if(this.ownerPath){await unlink(this.ownerPath).catch((error:any)=>{if(error.code!=='ENOENT')throw error;});this.ownerPath=undefined;}}
   private dir(id:string){if(!idPattern.test(id))throw new ChatError('Chat not found',404);return join(this.root,id);}
+  private async deletion(id:string):Promise<ChatDeletion|undefined>{
+    this.dir(id);
+    try{
+      const value=JSON.parse(await readFile(join(this.root,'.deleted',id+'.json'),'utf8')) as ChatDeletion;
+      if(value.id!==id||!Number.isFinite(value.deletedAt))throw Error('Invalid chat deletion receipt. Its files were preserved.');
+      return value;
+    }
+    catch(error:any){if(error.code==='ENOENT')return;throw error;}
+  }
+  private async deletionRecords():Promise<ChatDeletion[]>{
+    let names:string[];try{names=await readdir(join(this.root,'.deleted'));}catch(error:any){if(error.code==='ENOENT')return [];throw error;}
+    return Promise.all(names.filter(n=>n.endsWith('.json')&&idPattern.test(n.slice(0,-5))).map(async n=>(await this.deletion(n.slice(0,-5)))!));
+  }
   private async load(id:string):Promise<ChatSession>{
+    if(await this.deletion(id))throw new ChatError('This chat was deleted.',410);
+    if(this.deleting.has(id))throw new ChatError('This chat is being deleted. Try again shortly.',409);
     try{return JSON.parse(await readFile(join(this.dir(id),'session.json'),'utf8'));}
     catch(e:any){if(e.code==='ENOENT')throw new ChatError('Chat not found',404);throw e;}
   }
@@ -109,6 +128,7 @@ export class ChatSessions {
     const ids:string[]=[];
     for(const id of (await readdir(this.root)).filter(id=>idPattern.test(id))){
       try{await this.load(id);ids.push(id);}catch(error){
+        if(error instanceof ChatError&&(error.status===410||error.status===409&&this.deleting.has(id)))continue;
         if(!(error instanceof ChatError)||error.status!==404||!await this.incompleteCreation(id))throw error;
       }
     }
@@ -144,6 +164,9 @@ export class ChatSessions {
   }
   private message(id:string,m:ChatMessage){this.emit(id,'msg',{sid:id,m:{id:m.id,role:m.role,kind:'text',text:m.text,ts:m.ts} satisfies SessionMsg});}
   private async recover(){
+    for(const deletion of await this.deletionRecords()){
+      try{await this.cleanupDeleted(deletion);}catch{console.warn('Deleted chat cleanup is pending; its conversation remains inaccessible.');}
+    }
     for(const id of await this.ids()){
       const s=await this.load(id);const turns=await this.turns(id);
       if(s.providerSessionID){registerChatProviderSession(s.providerSessionID);await this.runner.recover?.(join(this.dir(id),'provider'),s.providerSessionID);}
@@ -183,7 +206,44 @@ export class ChatSessions {
     this.emit(id,'busy',{sid:id,busy:false});return s;
     });
   }
-  async list():Promise<ChatSession[]>{await this.ready;if(this.closed)throw new ChatError('Chat service is stopping',503);return (await Promise.all((await this.ids()).map(id=>this.load(id)))).sort((a,b)=>b.lastActivityAt-a.lastActivityAt||a.id.localeCompare(b.id));}
+  async list():Promise<ChatSession[]>{await this.ready;if(this.closed)throw new ChatError('Chat service is stopping',503);const rows=await Promise.all((await this.ids()).map(async id=>{try{return await this.load(id);}catch(error){if(error instanceof ChatError&&(error.status===410||error.status===409&&this.deleting.has(id)))return;throw error;}}));return rows.filter((s):s is ChatSession=>!!s).sort((a,b)=>b.lastActivityAt-a.lastActivityAt||a.id.localeCompare(b.id));}
+  async deletedIDs(){await this.ready;return (await this.deletionRecords()).map(d=>d.id);}
+  private async cleanupDeleted(deletion:ChatDeletion){
+    await this.options.beforeDelete?.(deletion.id);
+    const directory=join(this.dir(deletion.id),'provider');
+    if(this.runner.purge)await this.runner.purge(deletion.id,directory,deletion.providerSessionID);
+    else await this.runner.interrupt?.(deletion.id);
+    await rm(this.dir(deletion.id),{recursive:true,force:true});
+    this.turnIndex.delete(deletion.id);
+  }
+  async remove(id:string,revision:unknown){
+    await this.ready;if(this.closed)throw new ChatError('Chat service is stopping',503);
+    const operation=this.removeNow(id,revision);this.removals.add(operation);
+    try{return await operation;}finally{this.removals.delete(operation);}
+  }
+  private async removeNow(id:string,revision:unknown){
+    const existing=await this.deletion(id);
+    if(existing){await this.cleanupDeleted(existing);return {ok:true,deletedID:id};}
+    const saved=await this.locked(id,async()=>{
+      const s=await this.load(id);
+      if(s.revision!==revision)throw new ChatError('Settings changed. Reload before deleting this chat.',409);
+      if(s.state==='working'||s.backgroundWorking||s.childAgents?.some(a=>a.status==='running'))throw new ChatError('Stop this chat’s active work before deleting it.',409);
+      this.deleting.add(id);
+      return s;
+    });
+    try{
+      // Stop a warm worker outside the chat lock: its final callbacks acquire it.
+      await this.runner.interrupt?.(id);
+      await this.locked(id,async()=>{
+        await this.options.beforeDelete?.(id);
+        await mkdir(join(this.root,'.deleted'),{recursive:true,mode:0o700});
+        await atomic(join(this.root,'.deleted',id+'.json'),{id,deletedAt:this.now(),providerSessionID:saved.providerSessionID} satisfies ChatDeletion);
+      });
+      await this.cleanupDeleted({id,deletedAt:this.now(),providerSessionID:saved.providerSessionID});
+      this.emit(id,'busy',{sid:id,busy:false});
+      return {ok:true,deletedID:id};
+    }finally{this.deleting.delete(id);}
+  }
   async update(id:string,input:{revision:unknown;name?:unknown;instructions?:unknown;memory?:unknown;model?:unknown}){
     return this.updateSettings(id,input,false);
   }
@@ -346,6 +406,7 @@ export class ChatSessions {
     this.closed=true;
     return this.closing=(async()=>{
       await this.ready.catch(()=>{});
+      await Promise.allSettled([...this.removals]);
       // Mutations already inside a lock must finish before releasing ownership.
       while(this.locks.size)await Promise.allSettled([...this.locks.values()]);
       for(const job of this.running.values())job.abort.abort();

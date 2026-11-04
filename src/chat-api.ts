@@ -18,7 +18,7 @@ export function chatRoutes(chats:ChatSessions){
         catch{throw new ChatError('Expected a JSON object');}
       }
       if(list){
-        if(req.method==='GET')return json({sessions:await chats.list()});
+        if(req.method==='GET')return json({sessions:await chats.list(),deletedIDs:await chats.deletedIDs()});
         if(req.method==='POST'){
           const input=await body();if(input.agent!==undefined&&input.agent!=='claude')throw new ChatError('This chat runner supports Claude.');
           return json({session:await chats.create(input)},201);
@@ -34,6 +34,7 @@ export function chatRoutes(chats:ChatSessions){
       if(req.method==='POST'&&action==='send')return json(await chats.send(id!,await body()),202);
       if(req.method==='POST'&&action==='settings')return json({session:await chats.update(id!,await body())});
       if(req.method==='POST'&&action==='interrupt')return json(await chats.interrupt(id!));
+      if(req.method==='POST'&&action==='delete')return json(await chats.remove(id!,(await body()).revision));
       // A durable chat must never fall through to a terminal kill/resume path.
       return json({error:'This action is not available for a chat session.'},409);
     }catch(error){return json({error:error instanceof ChatError?error.message:'Chat is temporarily unavailable. Your saved conversation has not been removed.'},error instanceof ChatError?error.status:503);}

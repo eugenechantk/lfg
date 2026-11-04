@@ -1,5 +1,6 @@
-import {mkdir,readFile,writeFile,rename,unlink} from 'node:fs/promises';
+import {mkdir,readFile,writeFile,rename,unlink,rm} from 'node:fs/promises';
 import {join} from 'node:path';
+import {homedir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import type {ChatRunner,ChatRunInput,NativeChatContext} from './chat-sessions';
 import {ChatClaudeOutput,registerChatRuntimePid,unregisterChatRuntimePid} from './chat-claude';
@@ -24,6 +25,15 @@ function killWorker(pid:number){
  // Workers own a process group, including ordinary shell and MCP children.
  // Only call this for a worker launched here, or a verified recovery lease.
  try{process.kill(-pid,'SIGKILL');}catch(error:any){if(error.code!=='ESRCH')throw error;}
+}
+/** Remove only this provider identity, never a whole shared Claude project. */
+export async function purgeChatProviderHistory(directory:string,providerID:string,
+ projects=process.env.LFG_CLAUDE_PROJECTS_DIR??join(process.env.CLAUDE_CONFIG_DIR??join(process.env.HOME??homedir(),'.claude'),'projects')){
+ if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(providerID))throw Error('Invalid provider conversation identity; provider files were preserved.');
+ for(const encoded of new Set([directory.replace(/\//g,'-'),directory.replace(/[/.]/g,'-')])){
+  await rm(join(projects,encoded,providerID+'.jsonl'),{force:true});
+  await rm(join(projects,encoded,providerID),{recursive:true,force:true});
+ }
 }
 function liveWorkerGroup(pid:number){
  try{process.kill(-pid,0);}catch(error:any){if(error.code==='ESRCH')return false;if(error.code!=='EPERM')throw error;}
@@ -200,4 +210,8 @@ export class NativeClaudeRunner implements ChatRunner {
  }
  async close(){await Promise.all([...this.workers.values()].map(w=>w.shutdown()));this.workers.clear();}
  async interrupt(id:string){const worker=this.workers.get(id);if(worker){await worker.shutdown();this.workers.delete(id);}}
+ async purge(id:string,directory:string,providerSessionID?:string){
+  await this.interrupt(id);
+  if(providerSessionID){await this.recover(directory,providerSessionID);await purgeChatProviderHistory(directory,providerSessionID);}
+ }
 }
