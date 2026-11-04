@@ -117,6 +117,20 @@ final class LFGClientLiveActivityTests: XCTestCase {
         XCTAssertEqual(cleared["hiddenDirs"] as? [String], [])
     }
 
+    // 2026-11-04: the phone registered at 11:15 with a host still on the old
+    // build, which answered 200 and dropped the list; the host restarted on the
+    // new build at 11:17 and kept alerting for hidden autopilot sessions,
+    // because nothing re-sent. The echo is how the app tells the two apart.
+    func testRegisterPushReportsWhetherTheHostStoredTheHiddenSet() async throws {
+        let current = makeClient(body: #"{"ok":true,"env":"production","hiddenDirs":2}"#)
+        let stored = try await current.registerPush(token: "00ab", env: "production", owner: nil, hiddenDirs: ["/a", "*/b-*"])
+        XCTAssertTrue(stored)
+
+        let older = makeClient(body: #"{"ok":true,"env":"production"}"#)
+        let dropped = try await older.registerPush(token: "00ab", env: "production", owner: nil, hiddenDirs: ["/a"])
+        XCTAssertFalse(dropped)
+    }
+
     private func requestObject(_ request: URLRequest) throws -> [String: Any] {
         let data = try XCTUnwrap(request.httpBody ?? requestBodyStreamData(request))
         return try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])

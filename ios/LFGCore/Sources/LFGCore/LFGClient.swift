@@ -862,10 +862,17 @@ public struct LFGClient: Sendable {
     /// `hiddenDirs` is this device's hidden-directory set: the host sends no
     /// alert for a session there. Always sent, `[]` included — a host keeps the
     /// stored set only when the field is missing (builds that predate it).
-    public func registerPush(token: String, env: String, owner: String?, hiddenDirs: [String]) async throws {
-        _ = try await send("POST", "api/push/register", json: [
+    ///
+    /// Returns whether the host stored the set: it echoes a `hiddenDirs` count.
+    /// A host on an older build answers 200 too but drops the field, so the
+    /// caller must send again once that host is updated.
+    @discardableResult
+    public func registerPush(token: String, env: String, owner: String?, hiddenDirs: [String]) async throws -> Bool {
+        let data = try await send("POST", "api/push/register", json: [
             "token": token, "env": env, "owner": owner, "hiddenDirs": hiddenDirs,
         ])
+        let reply = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        return reply?["hiddenDirs"] is NSNumber
     }
 
     /// Register the ActivityKit push-to-start token. `env` uses the same

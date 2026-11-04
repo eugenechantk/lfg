@@ -458,6 +458,33 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
     expect(sent.sort()).toEqual(["ipad:s1", "ipad:s2", "phone:s2"]);
   });
 
+  test("a hidden pattern mutes every run of a per-run directory (autopilot's real cwd)", async () => {
+    // 2026-11-04: autopilot retitle runs, hidden in the phone's list, still
+    // alerted it. No special case: the device's own hidden pattern decides.
+    const sent: string[] = [];
+    const prior = new Map<string, PriorState>();
+    let state = obs(true, false);
+    const deps: TickDeps = {
+      sessions: async () => [
+        { sessionId: "run-a", title: "You are maintaining the session list", cwd: "/private/var/folders/cd/_rd32xx17dv8ltmf4ctm5wn40000gn/T/lfg-autopilot-claude-cwd-79988" },
+        { sessionId: "run-b", title: "You are maintaining the session list", cwd: "/private/var/folders/cd/_rd32xx17dv8ltmf4ctm5wn40000gn/T/lfg-autopilot-claude-cwd-92606" },
+        { sessionId: "work", title: "Real work", cwd: "/Users/e/dev/lfg", tmuxTarget: "t" },
+      ],
+      observe: async () => state,
+      devices: async () => [
+        { token: "phone", env: "production", hiddenDirs: ["*/lfg-autopilot-claude-cwd-*"] },
+        { token: "ipad", env: "production" },
+      ],
+      cfg,
+      send: async (d, p) => { sent.push(`${d.token}:${p.sid}`); return { ok: true, status: 200 }; },
+      now: () => 1000,
+    };
+    await runPushTick(prior, deps);
+    state = obs(false, false);
+    await runPushTick(prior, deps);
+    expect(sent.sort()).toEqual(["ipad:run-a", "ipad:run-b", "ipad:work", "phone:work"]);
+  });
+
   test("an active child keeps an idle parent busy until the child finishes", async () => {
     const sent: ApnsPayload[] = [];
     const prior = new Map<string, PriorState>();

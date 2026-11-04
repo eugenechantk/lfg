@@ -94,6 +94,44 @@ which this work does not touch and which are unmodified in the tree, so they alr
 - Phone: needs a new build; the shipped build never sends `hiddenDirs`, so hosts mute nothing for it.
 - Mac app: needs a rebuild and reinstall of `/Applications/lfg.app`.
 
+## Bug 1 (2026-11-04): hidden autopilot sessions still alerted the phone
+
+**Report:** autopilot sessions are hidden from the phone's list, but their "done" alerts still arrive.
+
+**Ground truth (Pro):**
+- Live server: release `20261104-1115-main-e1ead2e` (contains the mute), started 11:17.
+- The alerting sessions are lfg's own autopilot `retitle-sessions` step: a headless `claude --print`
+  in `$TMPDIR/lfg-autopilot-claude-cwd-<server pid>` every ~10 min, alive 13–42 s, titled "You are
+  maintaining the session list of a coding-agent dashboard…". `/api/sessions` lists it while it runs,
+  so the watcher pushed `✅ …` on its busy→idle.
+- `~/.lfg/push-devices.json`, production tokens: `d4f9b955…` holds `["*/gbrain-claude-*"]` (13:31;
+  does not match `lfg-autopilot-*`); `34274305…` holds no list, last registered **11:15** — while the
+  pre-deploy server (Oct 29 code) was still answering. That server returned 200 and dropped the field.
+- The app re-sent only on launch, on a list change, or after a *failed* registration, so it never
+  re-sent after the 11:17 restart.
+
+**Root cause:** a registration answered by a host build that predates `hiddenDirs` looked like a
+success (HTTP 200), so the phone's list never reached the host after the host was updated.
+
+**Fix (general, no special cases):** `registerPush` returns whether the host echoed `hiddenDirs`. A host
+that did not echo it stays in `unregisteredHosts`, and the existing foreground hook re-sends to it, so a
+host updated after the phone registered catches up on the next app open. Every hidden directory or
+pattern — autopilot's included — is then muted by the one mechanism.
+
+**Rejected:** a server and Mac "plumbing" skip that silenced lfg's autopilot runs for everyone. Eugene:
+the mute must come from the device's filter, whatever the session is, so it generalizes. Reverted
+2026-11-04; the autopilot case is now a watcher test of the general mechanism, using the real cwd.
+
+**Verified:**
+- `bun test src/hidden-dirs.test.ts src/push/ src/mcp-lfg-tools.test.ts src/session-notifications.test.ts`: 193 pass; "a hidden pattern mutes every run of a per-run directory (autopilot's real cwd)" sends to the iPad for both runs and to the phone only for real work.
+- LFGCore `swift test`: 652 XCTest + 594 Swift Testing pass (new: register echo true for `{"hiddenDirs":2}`, false for an older reply).
+- `lfg --desktop-feature-test`: `{"ok":true,"tests":287}`. iOS app builds.
+- Live probe on real sessions (`live-autopilot-probe-20261104.log`): an autopilot run goes busy→idle while listed (14:17:31), so the watcher does push for it unless the device's list mutes it — the list reaching the host is what matters.
+- Not yet verified live: Eugene's token storing his list. Check `~/.lfg/push-devices.json` after he reopens the app.
+
+**Not checked:** the Air. `ssh air` fails ("websocket: bad handshake") and its Access gate answers 403
+to the bundled service token, so its build and device list are unknown.
+
 ## Bugs
 
 _None yet._

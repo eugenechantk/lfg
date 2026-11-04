@@ -25,9 +25,10 @@ final class PushManager {
     private weak var store: SessionStore?
 
     private var latestToken: String?
-    /// Hosts (by `Host.id`) whose last registration failed. A host that was
-    /// down when a directory was hidden would otherwise keep alerting for it
-    /// until the next launch; `retryFailedRegistrations` runs on foreground.
+    /// Hosts (by `Host.id`) that do not hold this device's hidden set: the last
+    /// registration failed, or the host answered from a build that drops the
+    /// field (no `hiddenDirs` echo). Either way it keeps alerting for hidden
+    /// sessions, so `retryFailedRegistrations` re-sends on every foreground.
     private var unregisteredHosts: Set<String> = []
     /// The registration in flight. Sends run one at a time, in order, and each
     /// reads the hidden set when it runs — so the last request a host receives
@@ -141,10 +142,12 @@ final class PushManager {
         for host in settings.hosts where only?.contains(host.id) ?? true {
             guard let client = settings.client(for: host) else { continue }
             do {
-                try await client.registerPush(token: token, env: apnsEnv, owner: settings.defaultOwner,
-                                              hiddenDirs: settings.hiddenDirs.paths)
+                let stored = try await client.registerPush(token: token, env: apnsEnv, owner: settings.defaultOwner,
+                                                           hiddenDirs: settings.hiddenDirs.paths)
                 anyOK = true
-                unregisteredHosts.remove(host.id)
+                // An older host build said 200 and dropped the list; once it is
+                // updated, the next foreground delivers it.
+                if stored { unregisteredHosts.remove(host.id) } else { unregisteredHosts.insert(host.id) }
             } catch {
                 lastErr = error.localizedDescription
                 unregisteredHosts.insert(host.id)
