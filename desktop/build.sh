@@ -46,6 +46,7 @@ swiftc "${LFG_DESKTOP_OPTIMIZATION:--O}" -parse-as-library \
   ../ios/LFGCore/Sources/LFGCore/SessionEffort.swift \
   ../ios/LFGCore/Sources/LFGCore/SessionSearchOrder.swift \
   ../ios/LFGCore/Sources/LFGCore/HiddenDirs.swift \
+  ../ios/LFGCore/Sources/LFGCore/AlertStatus.swift \
   ../ios/LFGCore/Sources/LFGCore/SessionListRow.swift \
   ../ios/LFGCore/Sources/LFGCore/DesktopSessionList.swift \
   ../ios/LFGCore/Sources/LFGCore/SSEFrameParser.swift \

@@ -91,9 +91,13 @@ enum DesktopNotificationTests {
         tracker = DesktopNotificationTracker()
         _ = tracker.observe([customItem()], now: 0)
         let customResult = tracker.observe([customItem(note: custom)], now: 1)
-        try check(customResult.count == 1 && customResult.first?.title == "Fix notifications"
+        try check(customResult.count == 1 && customResult.first?.title == "✅ Fix notifications"
             && customResult.first?.body == "Completed: Fixed alerts. All 12 tests pass.", "custom completion preserves authored copy")
         try check(tracker.observe([customItem(note: custom)], now: 2).isEmpty, "replayed receipt never duplicates")
+        let nudge = DesktopSessionNotice(id: "nudge", status: "reminder", title: "✅ Review",
+            message: "Look at the PR.", createdAt: 210, turnStartedAt: 100)
+        try check(DesktopSessionNotification(item: customItem(note: nudge), kind: .status, custom: nudge).title == "🔔 Review",
+                  "custom alerts carry their own status emoji, replacing one the agent typed")
         try check(tracker.observe([customItem(busy: false, note: custom)], now: 20).isEmpty, "custom completion suppresses generic stop for its turn")
         _ = tracker.observe([customItem(userAt: 300, note: custom)], now: 21)
         try check(tracker.observe([customItem(busy: false, userAt: 300, note: custom)], now: 40).count == 1, "new turn still finishes normally")

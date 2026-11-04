@@ -100,7 +100,7 @@ struct StartSessionIntent: AppIntent {
         logger.notice("started \(sid, privacy: .public) in \(directory.path, privacy: .public) on \(target.logLabel, privacy: .public)")
 
         let note = StartSessionPlanner.notification(prompt: text, plan: plan)
-        if notify { await Self.notify(title: note.title, body: note.body, sid: sid) }
+        if notify { await Self.notify(title: AlertStatus.started.title(note.title), body: note.body, sid: sid) }
         var result = StartedSession()
         result.title = note.title
         result.message = note.body

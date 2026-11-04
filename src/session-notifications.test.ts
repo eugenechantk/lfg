@@ -27,8 +27,8 @@ test("fans custom result out independently and records acceptance without claimi
   const r = await f.service.send(sid, { requestID: "result-1", status: "completed", message: "Fixed alerts. All 12 tests pass." });
   expect(f.events).toHaveLength(1);
   expect(f.sent.map(s => s.device.token)).toEqual(["phone", "ipad"]);
-  expect(f.sent[0].payload).toMatchObject({ sid, kind: "finished", body: "Completed: Fixed alerts. All 12 tests pass." });
-  expect(r.notification).toMatchObject({ status: "completed", message: "Fixed alerts. All 12 tests pass.", turnStartedAt: 100 });
+  expect(f.sent[0].payload).toMatchObject({ sid, kind: "finished", title: "✅ Fix notifications", body: "Completed: Fixed alerts. All 12 tests pass." });
+  expect(r.notification).toMatchObject({ status: "completed", title: "Fix notifications", message: "Fixed alerts. All 12 tests pass.", turnStartedAt: 100 });
   expect(r.mobile).toEqual({ state: "partial", attempted: 2, accepted: 1, failed: 1 });
   expect(f.service.latest(sid)?.id).toBe(r.notification.id);
   expect(f.service.completedTurn(sid, { lastUserAt: 100 })).toBe(true);

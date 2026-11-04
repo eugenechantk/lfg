@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { ApnsPayload, ApnsResult } from "./push/apns";
+import { alertTitle } from "./alert-title";
 
 export const NOTIFICATION_STATUSES = ["working", "completed", "needs-input", "blocked", "reminder"] as const;
 export type NotificationStatus = typeof NOTIFICATION_STATUSES[number];
@@ -95,7 +96,9 @@ export class SessionNotifications {
       this.options.emit(sid, notification);
       const devices = await this.options.devices();
       const payload: ApnsPayload = {
-        title: notification.title, body: `${notificationLabels[status]}: ${message}`, sid,
+        // The emoji lives on the alert only; the stored receipt keeps the
+        // agent's title, which idempotent retries compare against.
+        title: alertTitle(status, notification.title), body: `${notificationLabels[status]}: ${message}`, sid,
         kind: status === "completed" ? "finished" : status === "needs-input" || status === "blocked" ? "needs-input" : "status",
         notificationId: notification.id, session: { id: sid, title: sessionTitle(session.title) },
       };

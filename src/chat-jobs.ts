@@ -3,6 +3,7 @@ import {ChatSessions,ChatError} from './chat-sessions';
 import {TaskStore,TaskScheduler,TaskError,activeRun,taskAction,type ScheduledTask,type TaskRun,type TaskInput,type TaskExecutor,type RunSnapshot,type TaskNotification} from './scheduled-tasks';
 import type {ApnsPayload,ApnsResult} from './push/apns';
 import type {JobDecision} from './chat-job-result';
+import {alertTitle} from './alert-title';
 
 type Device={token:string;env:'sandbox'|'production';owner?:string|null};
 export type JobPush={devices:()=>Promise<Device[]>;send:(device:Device,payload:ApnsPayload)=>Promise<ApnsResult>;hostId:()=>string;retire?:(token:string)=>Promise<void>};
@@ -68,7 +69,7 @@ class ChatTaskExecutor implements TaskExecutor {
     const key=tokenKey(d.token),current=(await this.store.read()).notifications.find(x=>x.id===n.id)!;
     if(current.state!=='pending')break;
     const prior=current.devices[key];if(prior&&prior.state!=='pending'||prior&&prior.nextAttemptAt>this.now())continue;
-    const payload:ApnsPayload={title:pushText(n.title,160),body:pushText(n.body,2000),sid:n.chatId,kind:'job',notificationId:n.id,hostId:push.hostId(),session:{id:n.chatId,title:pushText((await this.chats.detail(n.chatId)).session.name,160),kind:'chat'}};
+    const payload:ApnsPayload={title:alertTitle('job',pushText(n.title,160)),body:pushText(n.body,2000),sid:n.chatId,kind:'job',notificationId:n.id,hostId:push.hostId(),session:{id:n.chatId,title:pushText((await this.chats.detail(n.chatId)).session.name,160),kind:'chat'}};
     // Resolve asynchronous payload work first, then recheck immediately before
     // transport so a completed cancellation cannot be followed by a stale send.
     const permitted=await this.store.transaction(s=>s.notifications.find(x=>x.id===n.id)?.state==='pending'&&!s.tasks.find(j=>j.id===n.taskId)?.cancelledAt);

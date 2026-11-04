@@ -148,11 +148,12 @@ struct DesktopSessionNotification {
     let kind: DesktopNotificationKind
     var custom: DesktopSessionNotice? = nil
     var target: DesktopNotificationTarget { DesktopNotificationTarget(item) }
+    /// Status emoji first, same table as the phone's pushes (`AlertStatus`).
     var title: String {
-        if let custom { return custom.title }
+        if let custom { return (AlertStatus(rawValue: custom.status) ?? .working).title(custom.title) }
         let name = [item.session.title, item.session.tmuxName ?? "", String((item.session.sessionId ?? "").prefix(8)), "Session"]
             .first { !$0.isEmpty }!
-        return (kind == .finished ? "✅ " : "🙋 ") + Self.clip(name, limit: 48)
+        return (kind == .finished ? AlertStatus.completed : .needsInput).title(Self.clip(name, limit: 48))
     }
     var body: String {
         if let custom { return "\(custom.label): \(custom.message)" }

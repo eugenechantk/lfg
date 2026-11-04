@@ -51,6 +51,7 @@ import { basename, join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { PATHS } from "../config.ts";
 import { panePromptSuppressed } from "../pane-drive.ts";
+import { alertTitle } from "../alert-title.ts";
 
 // One observation of a session at a single tick.
 export type SessionState = {
@@ -474,7 +475,7 @@ export function buildPayload(
   const snap = snapshot(session);
   if (kind === "needs-input") {
     return {
-      title: `🙋 ${name}`,
+      title: alertTitle("needs-input", name),
       body: question ? clip(question, 140) : "An agent is waiting for your input.",
       sid,
       kind,
@@ -482,7 +483,7 @@ export function buildPayload(
     };
   }
   return {
-    title: `✅ ${name}`,
+    title: alertTitle("completed", name),
     body: session.last?.role === "assistant" && session.last.kind === "text" && session.last.text.trim()
       && session.last.ts != null && session.lastUserAt != null && session.last.ts >= session.lastUserAt
       ? `Finished: ${clip(session.last.text.replace(/<oai-mem-citation>[\s\S]*?<\/oai-mem-citation>/g, "").replace(/`/g, "").replace(/\*\*([^*]+)\*\*/g, "$1").replace(/^#{1,6}\s+/gm, ""), 350)}`

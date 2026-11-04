@@ -21,7 +21,7 @@ async function finish(f:Awaited<ReturnType<typeof fixture>>){await f.jobs.tick()
 test('one-off reminder persists, notifies without a model call and never repeats after restart',async()=>{
  const f=await fixture();try{
   const input=f.input(),j=await f.jobs.create(input);expect((await f.jobs.create(input)).id).toBe(j.id);
-  f.setTime(1000);await finish(f);expect(f.calls).toHaveLength(0);expect(f.sent).toHaveLength(1);expect(f.sent[0].sid).toBe(f.chat.id);
+  f.setTime(1000);await finish(f);expect(f.calls).toHaveLength(0);expect(f.sent).toHaveLength(1);expect(f.sent[0].sid).toBe(f.chat.id);expect(f.sent[0].title.startsWith('📅 ')).toBe(true);
   expect((await f.chats.detail(f.chat.id)).messages.at(-1)!.text).toContain(input.instructions);
   f.reload();await finish(f);expect(f.sent).toHaveLength(1);expect((await f.jobs.list(f.chat.id))[0]!.enabled).toBe(false);
  }finally{await f.close();}
