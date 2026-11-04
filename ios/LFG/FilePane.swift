@@ -12,17 +12,10 @@ struct FilePaneNavigation: Sendable {
 private struct FilePaneNavigationKey: EnvironmentKey {
     static let defaultValue = FilePaneNavigation()
 }
-private struct OpenFilePaneKey: EnvironmentKey {
-    static let defaultValue: String? = nil
-}
 extension EnvironmentValues {
     var filePaneNavigation: FilePaneNavigation {
         get { self[FilePaneNavigationKey.self] }
         set { self[FilePaneNavigationKey.self] = newValue }
-    }
-    var openFilePaneID: String? {
-        get { self[OpenFilePaneKey.self] }
-        set { self[OpenFilePaneKey.self] = newValue }
     }
 }
 
@@ -53,8 +46,6 @@ struct FilePaneContainer<Content: View, Header: View>: View {
     let resources: TranscriptResources
     let messages: [SessionMessage]
     let revision: String
-    let sessionTitle: String
-    let sessionIsBusy: Bool
     let hostFiles: HostFiles?
     let keyboardVisible: Bool
     let onReveal: (String) -> Void
@@ -114,7 +105,6 @@ struct FilePaneContainer<Content: View, Header: View>: View {
         .padding(.leading, inline && (state.fullWidth || presentation == .top) ? 10 : 0)
         .padding(.trailing, inline ? 10 : 0)
         .padding(.bottom, inline ? -10 : 0)
-        .environment(\.openFilePaneID, state.isOpen && !state.showingFiles ? state.selection?.id : nil)
         .toolbar(inline ? .hidden : .automatic, for: .navigationBar)
         .onChange(of: state.isOpen, initial: true) { _, _ in synchronize() }
         .onChange(of: presentation) { _, _ in synchronize() }
@@ -144,8 +134,7 @@ struct FilePaneContainer<Content: View, Header: View>: View {
 
     private func reader(canDock: Bool) -> some View {
         FilePaneReader(state: $state, resources: resources, messages: messages, hostFiles: hostFiles,
-                       revision: revision, sessionTitle: sessionTitle, sessionIsBusy: sessionIsBusy,
-                       canDock: canDock, isSheet: presentation == .sheet, isPortrait: windowSize.height > windowSize.width, onReveal: onReveal)
+                       revision: revision, canDock: canDock, isSheet: presentation == .sheet, isPortrait: windowSize.height > windowSize.width, onReveal: onReveal)
             .id(state.showingFiles ? "index" : state.selection?.id ?? "none")
     }
 
@@ -196,8 +185,6 @@ struct FilePaneReader: View {
     let messages: [SessionMessage]
     let hostFiles: HostFiles?
     let revision: String
-    let sessionTitle: String
-    let sessionIsBusy: Bool
     let canDock: Bool
     let isSheet: Bool
     let isPortrait: Bool
@@ -281,15 +268,7 @@ struct FilePaneReader: View {
     private var header: some View {
         HStack(spacing: 8) {
             if state.fullWidth && !isSheet {
-                Button { state.fullWidth = false } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: "chevron.left")
-                        Circle().fill(sessionIsBusy ? .green : .gray).frame(width: 8, height: 8)
-                        Text(sessionTitle).font(.system(size: 14, weight: .semibold)).lineLimit(1)
-                    }.padding(.horizontal, 12).frame(height: 44).frame(maxWidth: 240)
-                        .background(S2.chip, in: Capsule())
-                }.buttonStyle(.plain).accessibilityLabel("Return to transcript, \(sessionTitle)")
-                    .accessibilityIdentifier("filePaneReturnToTranscript")
+                circle("Return to transcript", icon: "chevron.left", id: "filePaneReturnToTranscript") { state.fullWidth = false }
             } else if !state.showingFiles {
                 circle("All files and links", icon: "chevron.left", id: "filePaneAllFiles") { state.showFiles() }
             }

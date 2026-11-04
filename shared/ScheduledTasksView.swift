@@ -713,6 +713,8 @@ struct ScheduledTasksView: View {
                                     taskRow(item)
                                         .accessibilityIdentifier("task_row_\(item.task.id)")
                                         #if os(iOS)
+                                        // The sidebar's wash is the selected state; no keyboard focus ring on top of it.
+                                        .hidesCellFocusRing()
                                         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                                         // The board's hairline runs to the screen edge.
                                         .alignmentGuide(.listRowSeparatorTrailing) { $0[.trailing] + 16 }

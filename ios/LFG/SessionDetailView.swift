@@ -261,7 +261,6 @@ struct SessionDetailView: View {
     var body: some View {
         FilePaneContainer(state: $filePane, resources: paneResources, messages: messages,
                           revision: paneRevisionPath == filePane.selection?.id ? paneRevision : "",
-                          sessionTitle: displayTitle, sessionIsBusy: isBusy,
                           hostFiles: resolvedHostFiles, keyboardVisible: keyboardOcclusionHeight > 0,
                           onReveal: revealFileSource, header: { filePaneTranscriptHeader }, content: { sessionSurface })
             .environment(\.openURL, OpenURLAction { url in

@@ -502,6 +502,10 @@ struct SessionListView: View {
                 .padding(.leading, row.indent + 40)
         }
         .contentShape(Rectangle())
+        // The selection pill is the selected state. With a hardware keyboard
+        // iPadOS also draws its square focus ring around the focused cell,
+        // which read as a stray border on top of the pill.
+        .hidesCellFocusRing()
         // Tagged by NAV id, not session id: a session created in this run keeps
         // the placeholder tag its detail was pushed under, so the create remap
         // doesn't yank the tag out from under a live selection (which made the
@@ -1610,5 +1614,39 @@ struct EmptyListState: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
+    }
+}
+
+extension View {
+    /// Clears the iPadOS keyboard focus ring (`UIFocusHaloEffect`) on the List
+    /// cell that hosts this row. `.focusEffectDisabled()` does not reach a
+    /// List's cells: on 2026-11-03 the square ring still drew around the
+    /// focused session with it on the List and on the row. The cell stays
+    /// focusable, so the arrow keys still move the selection; only the ring goes.
+    func hidesCellFocusRing() -> some View { background(CellFocusRingRemover()) }
+}
+
+private struct CellFocusRingRemover: UIViewRepresentable {
+    func makeUIView(context: Context) -> Probe { Probe() }
+    func updateUIView(_ probe: Probe, context: Context) { probe.clearCellFocusEffect() }
+
+    final class Probe: UIView {
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+            isAccessibilityElement = false
+        }
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            clearCellFocusEffect()
+        }
+
+        func clearCellFocusEffect() {
+            var view = superview
+            while let current = view, !(current is UICollectionViewCell) { view = current.superview }
+            (view as? UICollectionViewCell)?.focusEffect = nil
+        }
     }
 }

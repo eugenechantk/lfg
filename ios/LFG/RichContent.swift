@@ -413,8 +413,6 @@ struct MediaAttachmentsView: View {
     var onOpen: ((MediaRef, [MediaRef]) -> Void)? = nil
     @Environment(\.hostFiles) private var hostFiles
     @Environment(\.transcriptPreviewFiles) private var transcriptPreviewFiles
-    @Environment(\.openFilePaneID) private var openFilePaneID
-    @Environment(\.colorScheme) private var colorScheme
     @State private var viewing: MediaRef?
 
     var body: some View {
@@ -448,20 +446,11 @@ struct MediaAttachmentsView: View {
                 Image(systemName: icon(ref.kind)).font(.title3).foregroundStyle(.secondary)
                 Text(ref.filename).font(.subheadline).lineLimit(1)
                 Spacer(minLength: 0)
-                if openFilePaneID == ref.id {
-                    Text("Open").font(.system(size: 13, weight: .semibold)).foregroundStyle(.blue)
-                }
-                Image(systemName: "chevron.right").font(.caption)
-                    .foregroundStyle(openFilePaneID == ref.id ? Color.blue : Color(.tertiaryLabel))
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color(.tertiaryLabel))
             }
-            .padding(.horizontal, 10).padding(.vertical, openFilePaneID == ref.id ? 8 : 10)
+            .padding(.horizontal, 10).padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(openFilePaneID == ref.id ? (colorScheme == .dark ? Color(red: 24 / 255, green: 43 / 255, blue: 62 / 255) : Color.blue.opacity(0.12)) : Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
-            .overlay {
-                if openFilePaneID == ref.id {
-                    RoundedRectangle(cornerRadius: 10).stroke(Color.blue, lineWidth: 1)
-                }
-            }
+            .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("inlineFileCard_\(ref.filename)")
