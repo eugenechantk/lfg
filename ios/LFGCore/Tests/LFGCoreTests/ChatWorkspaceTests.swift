@@ -7,6 +7,78 @@ import Testing
         ScheduledTaskHost(id: id, name: id, baseURL: URL(string: "https://\(id).test")!, headers: ["Secret": "never-persist-this"])
     }
     private func temporary() -> URL { FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("workspace.json") }
+    @Test func quickCreationUsesEmptyDefaultsAndPersistsWithoutHosts() throws {
+        let url = temporary(); defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let workspace = ChatWorkspace(url: url)
+        let first = try workspace.createDefault(hosts: []), second = try workspace.createDefault(hosts: [])
+        #expect(ChatCreationDefaults.names.contains(first.session.name))
+        #expect(first.session.name != second.session.name)
+        #expect(first.session.model == nil)
+        #expect(first.session.instructions.isEmpty && first.session.memory.isEmpty)
+        #expect(first.host.id == ChatWorkspace.localHost.id)
+        let restored = ChatWorkspace(url: url)
+        #expect(restored.entries(hosts: []).count == 2)
+        #expect(restored.record(first.session.id, fallback: first.host)?.name == first.session.name)
+    }
+    @Test func automaticNamesAvoidExistingNamesAndSurviveExhaustion() {
+        let remaining = ChatCreationDefaults.names[0]
+        #expect(ChatCreationDefaults.name(existing: Array(ChatCreationDefaults.names.dropFirst())) == remaining)
+        let existing = ChatCreationDefaults.names.map { $0.uppercased() }
+        #expect(!existing.contains(ChatCreationDefaults.name(existing: existing).uppercased()))
+    }
+    @Test func quickCreationPrefersConfiguredDefaultThenAnOnlineAlternative() throws {
+        let url = temporary(); defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let workspace = ChatWorkspace(url: url), pro = host("pro"), air = host("air")
+        #expect(try workspace.createDefault(hosts: [air, pro], preferredHostID: pro.id).host.id == pro.id)
+        #expect(try workspace.createDefault(hosts: [pro, air], preferredHostID: pro.id, knownOffline: [pro.id]).host.id == air.id)
+        #expect(try workspace.createDefault(hosts: [air, pro], preferredHostID: pro.id, knownOffline: [air.id, pro.id]).host.id == pro.id)
+    }
+    @Test func richTranscriptSnapshotsReplacePartialRowsAndSurviveOfflineRestart() throws {
+        let url = temporary(); defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let workspace = ChatWorkspace(url: url), pro = host("pro")
+        let record = try workspace.create(name: "Rich", instructions: "", memory: "Private", model: "", preferredHostID: nil)
+        let legacy = [ChatMessageRecord(id: "user", sequence: 1, role: "user", text: "Check", ts: 1, requestID: "request"),
+                      ChatMessageRecord(id: "assistant", sequence: 2, role: "assistant", text: "Concatenated old prose", ts: 2, requestID: "request")]
+        var page = ChatHistoryPage(session: record, messages: legacy, hasMore: false)
+        page.transcript = [.init(requestID: "request", sequence: 1, messages: [.init(id: "stream", text: "Checking")])]
+        workspace.remember(page, on: pro)
+        page.transcript = [.init(requestID: "request", sequence: 1, messages: [
+            .init(id: "stream", text: "Checking files."),
+            .init(id: "call", kind: "tool_use", text: "Read", toolUseId: "t", tool: .init(name: "Read", target: "/tmp/a")),
+            .init(id: "result", role: "user", kind: "tool_result", text: "Found it", toolUseId: "t"),
+            .init(id: "final", text: "Complete")], agents: [.init(id: "child", description: "Find callers", status: .running)],
+            childTranscripts: ["child": [.init(id: "child-message", text: "Child progress")]])]
+        workspace.remember(page, on: pro)
+        try workspace.enqueue(record.id, text: "Queued follow-up", on: pro)
+        let restored = ChatWorkspace(url: url), rows = restored.transcript(record.id)
+        #expect(rows.map(\.text) == ["Check", "Checking files.", "Read", "Found it", "Complete", "Queued follow-up"])
+        #expect(rows.filter { $0.id == "stream" }.count == 1)
+        #expect(restored.childAgents(record.id).first?.status == .running)
+        #expect(restored.childMessages(record.id, childID: "child").first?.text == "Child progress")
+        #expect(restored.queued(for: record.id).count == 1)
+    }
+    @Test func preTranscriptCacheStillLoadsAndProjectsOrdinaryMessages() throws {
+        let url = temporary(); defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let workspace = ChatWorkspace(url: url)
+        let record = try workspace.create(name: "Old cache", instructions: "", memory: "", model: "", preferredHostID: nil)
+        try workspace.enqueue(record.id, text: "Keep this", on: ChatWorkspace.localHost)
+        var json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+        json.removeValue(forKey: "transcript")
+        try JSONSerialization.data(withJSONObject: json).write(to: url)
+        let restored = ChatWorkspace(url: url)
+        #expect(restored.transcript(record.id).map(\.text) == ["Keep this"])
+        #expect(restored.childAgents(record.id).isEmpty)
+        try restored.enqueue(record.id, text: "Still works", on: ChatWorkspace.localHost)
+        #expect(restored.queued(for: record.id).count == 2)
+    }
+    @Test func replacingLiveTurnPreservesOlderPagesAndRetiresRemovedPartialRows() {
+        let old = ChatTranscriptTurn(requestID: "old", sequence: 1, messages: [.init(id: "old-row", text: "Older")])
+        let partial = ChatTranscriptTurn(requestID: "new", sequence: 2, messages: [.init(id: "temporary", text: "Partial")])
+        let complete = ChatTranscriptTurn(requestID: "new", sequence: 2, messages: [.init(id: "final", text: "Final")])
+        let merged = ChatTranscriptProjection.merge([partial], [old, complete])
+        #expect(merged.map(\.sequence) == [1, 2])
+        #expect(merged.flatMap(\.messages).map(\.text) == ["Older", "Final"])
+    }
     @Test func offlineCreationAndSeveralMessagesSurviveRestartWithoutAnyHost() throws {
         let url = temporary(); defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let workspace = ChatWorkspace(url: url)

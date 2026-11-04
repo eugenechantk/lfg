@@ -21,12 +21,15 @@ private struct ChatLocation: Identifiable, Hashable {
 
 struct ChatSessionsView: View {
     let hosts: [ScheduledTaskHost]
+    var preferredHostID: String? = nil
     var onDetailChange: ((Bool) -> Void)? = nil
     var onRead: ((String) -> Void)? = nil
     var onCreated: (() -> Void)? = nil
     var createTrigger = 0
     var showsCreateInToolbar = true
     var listFooter: AnyView? = nil
+    var connectionHeader: ((CGFloat) -> AnyView)? = nil
+    var sidebarVisibility: Binding<NavigationSplitViewVisibility>? = nil
     var unreadIDs: Set<String> = []
     @State private var query = ""
     @State private var showingSearch = false
@@ -40,6 +43,9 @@ struct ChatSessionsView: View {
     #endif
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var listWidth: CGFloat = 360
+    @State private var internalSidebarVisibility: NavigationSplitViewVisibility = .doubleColumn
+    private var sidebarBinding: Binding<NavigationSplitViewVisibility> { sidebarVisibility ?? $internalSidebarVisibility }
     #endif
     private var usesSplit: Bool {
         #if os(macOS)
@@ -48,7 +54,7 @@ struct ChatSessionsView: View {
         horizontalSizeClass == .regular
         #endif
     }
-    @State private var showCreate = false
+    @State private var createError: String?
     @State private var loading = true
     @State private var polling: Task<Void, Never>?
     @State private var isVisible = false
@@ -70,21 +76,20 @@ struct ChatSessionsView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        .modifier(ChatAppearance())
         #if os(macOS)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
+        #endif
         .onChange(of: usesSplit) { _, split in
             if split, let current = path.last { selectedChat = current; path = [] }
             else if !split, let selectedChat, path.isEmpty { path = [selectedChat] }
         }
-        #endif
-        .sheet(isPresented: $showCreate) {
-            ChatCreateSheet(hosts: hosts, offlineHosts: offlineHosts) { host, record in
-                let item = ChatLocation(host: host, session: record)
-                showCreate = false; open(item); onCreated?()
-            }
+        .alert("Couldn’t create chat", isPresented: Binding(get: { createError != nil }, set: { if !$0 { createError = nil } })) {
+            Button("OK", role: .cancel) { createError = nil }
+        } message: {
+            Text(createError ?? "")
         }
-        .onChange(of: createTrigger) { _, _ in showCreate = true }
+        .onChange(of: createTrigger) { _, _ in createChat() }
         .onChange(of: path.count) { _, count in onDetailChange?(!usesSplit && count > 0) }
         .onAppear { isVisible = true; onDetailChange?(!usesSplit && !path.isEmpty); startPolling() }
         .onDisappear { isVisible = false; polling?.cancel(); polling = nil }
@@ -101,7 +106,7 @@ struct ChatSessionsView: View {
         false
         #endif
     }
-    private var listCanvas: Color { isTablet ? ChatColors.raised : ChatColors.canvas }
+    private var listCanvas: Color { ChatColors.canvas }
     #if os(macOS)
     private var desktopLayout: some View {
         HStack(spacing: 0) {
@@ -120,10 +125,11 @@ struct ChatSessionsView: View {
     #endif
     #if os(iOS)
     private var tabletLayout: some View {
-        HStack(spacing: 18) {
-            chatList.frame(width: 320)
-                .clipShape(RoundedRectangle(cornerRadius: 26))
-                .padding(.top, 18).padding(.bottom, 10)
+        NavigationSplitView(columnVisibility: sidebarBinding) {
+            chatList
+                .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 460)
+                .toolbar(removing: .sidebarToggle)
+        } detail: {
             NavigationStack {
                 Group {
                     if let selectedChat {
@@ -134,12 +140,24 @@ struct ChatSessionsView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity).background(ChatColors.canvas)
                     }
                 }
+                .toolbar {
+                    SidebarToggleToolbar(visibility: sidebarBinding, title: "chats", identifier: "toggleChatSidebar")
+                }
             }
-        }.padding(.horizontal, 10).background(ChatColors.canvas)
+        }
+        .navigationSplitViewStyle(.balanced)
     }
     #endif
     private func open(_ item: ChatLocation) {
         if usesSplit { selectedChat = item } else { path.append(item) }
+    }
+    private func createChat() {
+        do {
+            let entry = try workspace.createDefault(hosts: hosts, preferredHostID: preferredHostID, knownOffline: offlineHosts)
+            open(ChatLocation(host: entry.host, session: entry.session))
+            onCreated?()
+            Task { await workspace.flush(hosts: hosts, only: entry.session.id) }
+        } catch { createError = "Couldn’t save this chat on your device. \(error.localizedDescription)" }
     }
     private var chatList: some View {
         ScrollView {
@@ -167,10 +185,30 @@ struct ChatSessionsView: View {
             }
         }
         .background(listCanvas)
-        .safeAreaInset(edge: .top, spacing: 0) { listHeader }
-        .modifier(ChatListDock(footer: listFooter))
         #if os(iOS)
-        .toolbar(.hidden, for: .navigationBar)
+        .listScrollChrome(footer: listFooter)
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
+        .toolbar {
+            ListHeaderToolbar(searchLabel: "Search chats", searchIdentifier: "chat_search", onSearch: {
+                showingSearch.toggle(); if !showingSearch { query = "" }
+            }) {
+                if let connectionHeader { connectionHeader(listWidth) }
+                else { hostStrip }
+            } options: {
+                chatOptions
+            }
+            if showsCreateInToolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    ListCreateButton(title: "New chat", identifier: "chat_create") { createChat() }
+                }
+            }
+        }
+        #else
+        .safeAreaInset(edge: .top, spacing: 0) { macHeader }
+        .safeAreaInset(edge: .bottom, spacing: 0) { listFooter }
         #endif
     }
     private var emptyList: some View {
@@ -181,9 +219,9 @@ struct ChatSessionsView: View {
                 ChatAvatar(name: "Patch", size: 54).rotationEffect(.degrees(8))
             }.padding(.bottom, 8)
             Text("No chats yet").font(.system(size: 22, weight: .semibold))
-            Text("Give a chat a name and standing instructions. It keeps one lasting conversation and what it learns from then on.")
-                .font(.system(size: 16)).lineSpacing(3).foregroundStyle(ChatColors.hex(0xD1D1D6))
-            Button { showCreate = true } label: {
+            Text("Start a conversation. It keeps your history, and you can shape it as you chat.")
+                .font(.system(size: 16)).lineSpacing(3).foregroundStyle(ChatColors.secondary)
+            Button { createChat() } label: {
                 Label("New chat", systemImage: "plus").font(.system(size: 17, weight: .semibold))
                     .padding(.horizontal, 22).frame(height: 50)
                     .background(ChatColors.hex(0x0A6EE0), in: Capsule()).foregroundStyle(.white)
@@ -195,13 +233,6 @@ struct ChatSessionsView: View {
             .containerRelativeFrame(.vertical) { height, _ in max(420, height - 100) }
             .accessibilityElement(children: .contain).accessibilityIdentifier("chat_empty")
     }
-    @ViewBuilder private var listHeader: some View {
-        #if os(macOS)
-        macHeader
-        #else
-        if isTablet { tabletHeader } else { phoneHeader }
-        #endif
-    }
     #if os(macOS)
     private var macHeader: some View {
         HStack(spacing: 8) {
@@ -210,7 +241,7 @@ struct ChatSessionsView: View {
             Menu {
                 Text("Most recent activity first")
                 Divider()
-                Button("New chat") { showCreate = true }.keyboardShortcut("n")
+                Button("New chat") { createChat() }.keyboardShortcut("n")
                 Button("Mark all read") { for id in unreadIDs { onRead?(id) } }.disabled(unreadIDs.isEmpty)
                 Button("Refresh") { Task { await refresh() } }
             } label: {
@@ -229,54 +260,22 @@ struct ChatSessionsView: View {
             }
     }
     #else
-    private var tabletHeader: some View {
-        HStack(spacing: 0) {
-            HStack(spacing: 7) {
-                Circle().fill(offlineHosts.isEmpty ? ChatColors.green : ChatColors.amber).frame(width: 8, height: 8)
-                Text("\(hosts.count) \(hosts.count == 1 ? "host" : "hosts")").font(.system(size: 16, weight: .semibold))
-            }.accessibilityIdentifier("chat_hosts")
-            Spacer(minLength: 0)
-            Button { showingSearch.toggle(); if !showingSearch { query = "" } } label: {
-                Image(systemName: "magnifyingglass").font(.system(size: 21)).frame(width: 44, height: 44)
-            }.accessibilityLabel("Search chats").accessibilityIdentifier("chat_search")
-            Menu {
-                Button("New chat") { showCreate = true }
-                Button("Mark all read") { for id in unreadIDs { onRead?(id) } }.disabled(unreadIDs.isEmpty)
-                Button("Refresh") { Task { await refresh() } }
-            } label: {
-                Image(systemName: "plus").font(.system(size: 21)).frame(width: 44, height: 44)
-            }.accessibilityLabel("Chat options").accessibilityIdentifier("chat_options")
-        }.buttonStyle(.plain).foregroundStyle(.white)
-            .padding(.leading, 16).padding(.trailing, 4).frame(height: 56).padding(.bottom, 10).background(listCanvas)
+    private var chatOptions: some View {
+        Menu {
+            Button { createChat() } label: { Label("New chat", systemImage: "plus") }
+                .accessibilityIdentifier("chat_create_menu")
+            Button("Mark all read") { for id in unreadIDs { onRead?(id) } }
+                .disabled(unreadIDs.isEmpty).accessibilityIdentifier("chat_mark_all_read")
+            Button { Task { await refresh() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                .accessibilityIdentifier("chat_refresh")
+        } label: {
+            ListOptionsLabel(title: "More chat options")
+        }
+        .tint(Color(.label))
+        .accessibilityLabel("More chat options")
+        .accessibilityIdentifier("chat_options")
     }
     #endif
-    private var phoneHeader: some View {
-        HStack(spacing: 12) {
-            hostStrip
-            Spacer(minLength: 4)
-            HStack(spacing: 0) {
-                Button { showingSearch.toggle(); if !showingSearch { query = "" } } label: {
-                    Image(systemName: "magnifyingglass").font(.system(size: 21)).frame(width: 44, height: 44)
-                }.accessibilityLabel("Search chats").accessibilityIdentifier("chat_search")
-                Menu {
-                    Button { showCreate = true } label: { Label("New chat", systemImage: "plus") }
-                        .accessibilityIdentifier("chat_create_menu")
-                    Button("Mark all read") { for id in unreadIDs { onRead?(id) } }
-                        .disabled(unreadIDs.isEmpty).accessibilityIdentifier("chat_mark_all_read")
-                    Button { Task { await refresh() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
-                        .accessibilityIdentifier("chat_refresh")
-                } label: {
-                    Image(systemName: "ellipsis").font(.system(size: 20, weight: .semibold)).frame(width: 44, height: 44)
-                }.menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Chat options").accessibilityIdentifier("chat_options")
-            }.padding(2).modifier(ChatChrome())
-            if showsCreateInToolbar {
-                Button { showCreate = true } label: { Image(systemName: "plus").frame(width: 44, height: 44) }
-                    .modifier(ChatChrome()).accessibilityLabel("New chat").accessibilityIdentifier("chat_create")
-            }
-        }.buttonStyle(.plain).foregroundStyle(.white)
-            .frame(height: 56).padding(.horizontal, 16).padding(.bottom, 14)
-            .background(ChatColors.canvas)
-    }
     private var hostLabelSize: CGFloat {
         #if os(macOS)
         12
@@ -312,13 +311,13 @@ struct ChatSessionsView: View {
         let inlineStatus = true
         #endif
         return HStack(alignment: .top, spacing: gap) {
-            ChatAvatar(name: chat.name, size: avatar, state: chat.state, unread: unread, offline: offline, badgeSize: badge, ringWidth: ring, backdrop: listCanvas, halo: inlineStatus)
+            ChatAvatar(name: chat.name, size: avatar, state: chat.isWorking ? "working" : chat.state, unread: unread, offline: offline, badgeSize: badge, ringWidth: ring, backdrop: listCanvas, halo: inlineStatus)
                 .padding(.top, avatarTop)
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(alignment: .firstTextBaseline) {
                         Text(chat.name).font(.system(size: title, weight: unread || chat.state == "blocked" ? (inlineStatus ? .semibold : .bold) : (inlineStatus ? .regular : .semibold)))
-                            .foregroundStyle(.white).lineLimit(1)
+                            .foregroundStyle(ChatColors.ink).lineLimit(1)
                         Spacer(minLength: 8)
                         TimelineView(.periodic(from: .now, by: 60)) { context in
                             Text(ChatPresentation.activityLabel(chat.lastActivityAt, now: context.date))
@@ -326,14 +325,14 @@ struct ChatSessionsView: View {
                         }
                     }.frame(minHeight: firstHeight)
                     HStack(spacing: 5) {
-                        if chat.state == "working" && !offline && inlineStatus {
+                        if chat.isWorking && !offline && inlineStatus {
                             Circle().fill(ChatColors.green).frame(width: 7, height: 7)
                                 .background(Circle().fill(ChatColors.green.opacity(0.25)).padding(-3))
                         } else if chat.state == "blocked" && !offline && inlineStatus {
                             Image(systemName: "questionmark.bubble").font(.system(size: 13)).foregroundStyle(ChatColors.amber)
                         }
                         Text(ChatPresentation.preview(chat, offline: offline)).font(.system(size: status)).lineLimit(1)
-                            .foregroundStyle(chat.state == "working" ? (inlineStatus ? ChatColors.green : ChatColors.secondary) : chat.state == "blocked" ? (inlineStatus ? ChatColors.amber : ChatColors.hex(0xFFB340)) : ChatColors.secondary)
+                            .foregroundStyle(chat.isWorking ? (inlineStatus ? ChatColors.green : ChatColors.secondary) : chat.state == "blocked" ? (inlineStatus ? ChatColors.amber : ChatColors.hex(0xFFB340)) : ChatColors.secondary)
                     }.frame(minHeight: secondHeight, alignment: .leading)
                     Text(chat.instructions.isEmpty ? "\(ChatPresentation.modelLabel(chat.model)) · \(item.host.name)" : chat.instructions)
                         .font(.system(size: purpose)).foregroundStyle(ChatColors.muted).lineLimit(1)
@@ -370,118 +369,6 @@ struct ChatSessionsView: View {
             loading = false
             Task { await workspace.flush(hosts: hosts) }
         }
-    }
-
-}
-
-private struct ChatListDock: ViewModifier {
-    let footer: AnyView?
-    @ViewBuilder func body(content: Content) -> some View {
-        #if os(iOS)
-        if #available(iOS 26.0, *) {
-            content.safeAreaBar(edge: .bottom, spacing: 0) { footer }
-        } else {
-            content.safeAreaInset(edge: .bottom, spacing: 0) { footer }
-        }
-        #else
-        content.safeAreaInset(edge: .bottom, spacing: 0) { footer }
-        #endif
-    }
-}
-
-private struct ChatCreateSheet: View {
-    let hosts: [ScheduledTaskHost]
-    let offlineHosts: Set<String>
-    let created: (ScheduledTaskHost, ChatSessionRecord) -> Void
-    @State private var hostID = ""
-    private var host: ScheduledTaskHost? { hosts.first { $0.id == hostID } ?? hosts.first { !offlineHosts.contains($0.id) } ?? hosts.first }
-    @State private var name = ""
-    @State private var instructions = ""
-    @State private var memory = ""
-    @State private var model = ""
-    @State private var busy = false
-    @State private var error: String?
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(spacing: 12) {
-                        ChatAvatar(name: name.isEmpty ? "Chat" : name, size: 52)
-                        TextField("Name your chat", text: $name).textFieldStyle(.plain)
-                            .font(.system(size: 20, weight: .semibold)).padding(.horizontal, 14).frame(height: 48)
-                            .background(ChatColors.field, in: RoundedRectangle(cornerRadius: 14))
-                            .accessibilityLabel("Chat name").accessibilityIdentifier("chat_name")
-                    }.padding(.horizontal, 2)
-                    ChatPrivateEditor(title: "Instructions", text: $instructions, identifier: "chat_instructions",
-                        hint: "How should this chat respond?", helper: "This is the chat’s personality. It stays with this thread and is not shared with your other chats.")
-                    VStack(alignment: .leading, spacing: 8) {
-                        ChatSectionHeading(title: "Model")
-                        ChatModelPicker(selection: $model, host: host, preservesCurrentSelection: false)
-                            .accessibilityIdentifier("chat_create_model")
-                        Text("Claude Code replies on \(host?.name ?? "your host").")
-                            .font(.system(size: 13)).foregroundStyle(ChatColors.muted).padding(.horizontal, 2)
-                    }
-                    ChatPrivateEditor(title: "Memory", text: $memory, identifier: "chat_memory",
-                        hint: "Facts and preferences to remember", helper: "Private to this chat. You can read and change it at any time.", height: 94)
-                    if hosts.count > 1 {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ChatSectionHeading(title: "Host")
-                            Picker("Replies run on", selection: $hostID) {
-                                ForEach(hosts) { Text($0.name).tag($0.id) }
-                            }.padding(12).background(ChatColors.field, in: RoundedRectangle(cornerRadius: 14))
-                                .accessibilityIdentifier("chat_host_picker")
-                        }
-                    }
-                    Text("Saved on this device first. Messages send when a host is available.").font(.callout).foregroundStyle(ChatColors.muted)
-                    if let error { Text(error).font(.callout).foregroundStyle(ChatColors.amber).accessibilityIdentifier("chat_create_error") }
-                }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 16).disabled(busy)
-            }.scrollDismissesKeyboard(.interactively)
-                .background(ChatColors.raised)
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    Button { Task { await create() } } label: {
-                        HStack(spacing: 8) {
-                            if busy { ProgressView().tint(.white) }
-                            Text(busy ? "Creating chat…" : "Create chat").font(.system(size: 17, weight: .semibold))
-                        }.foregroundStyle(.white).frame(maxWidth: .infinity).frame(height: 50)
-                            .background(ChatColors.hex(0x0A6EE0), in: Capsule())
-                    }.buttonStyle(.plain)
-                        .disabled(busy || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .opacity(!busy && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 1 : 0.45)
-                        .accessibilityIdentifier("chat_create_save")
-                        .padding(.horizontal, 16).padding(.vertical, 12).background(ChatColors.raised)
-                }
-                .navigationTitle("New chat")
-                #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Close", systemImage: "xmark") { dismiss() }
-                            .labelStyle(.iconOnly).disabled(busy).accessibilityIdentifier("chat_create_cancel")
-                    }
-                }
-        }
-        .tint(ChatColors.hex(0x409CFF)).preferredColorScheme(.dark)
-        .interactiveDismissDisabled(busy)
-        .presentationBackground(ChatColors.raised)
-        .presentationCornerRadius(34).presentationDragIndicator(.visible)
-        .onAppear { if hostID.isEmpty { hostID = host?.id ?? "" } }
-        .onChange(of: offlineHosts) { _, failed in
-            if failed.contains(hostID), let available = hosts.first(where: { !failed.contains($0.id) }) { hostID = available.id }
-        }
-        #if os(macOS)
-        .frame(width: 360, height: 680)
-        #endif
-    }
-    private func create() async {
-        guard !busy else { return }
-        busy = true; error = nil; defer { busy = false }
-        do {
-            let record = try ChatWorkspace.shared.create(name: name, instructions: instructions, memory: memory, model: model, preferredHostID: host?.id)
-            created(host ?? ChatWorkspace.localHost, record)
-        } catch { self.error = "Couldn’t save this chat on your device. \(error.localizedDescription)" }
     }
 
 }
@@ -593,58 +480,74 @@ struct ChatSessionScreen: View {
     @State private var showingSettings = false
     @State private var followsReply = true
     @State private var modelCatalog = ModelCatalogResponse.fallback
+    #if os(iOS)
+    @State private var showingSubagents = false
+    @State private var subagentsAfterSettings = false
+    @State private var toolOutput: ChatToolOutput?
+    private struct ChatToolOutput: Identifiable {
+        let id = UUID()
+        let title: String
+        let text: String
+    }
+    private var sessionMessages: [SessionMessage] {
+        let cached = workspace.transcript(sessionID)
+        return cached.isEmpty ? ChatTranscriptProjection.messages(messages, turns: []) : cached
+    }
+    private var childAgents: [ChildAgentSession] { workspace.childAgents(sessionID) }
+    @State private var composerFocused = false
+    @State private var chatScrollProxy: ScrollViewProxy?
+    @State private var userScrolling = false
+    @State private var keyboardOcclusionHeight: CGFloat = 0
+    #else
     @FocusState private var composerFocused: Bool
+    #endif
     @Environment(\.scenePhase) private var scenePhase
     private var client: ChatSessionsClient { ChatSessionsClient(host: effectiveHost) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if let error = error ?? record?.error {
-                Text(error).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 8)
-                    .accessibilityIdentifier("chat_error")
-            }
-            if workspace.creationFailure(sessionID) != nil {
-                Button("Retry sync") { workspace.retry(sessionID); Task { await model.refresh() } }
-                    .accessibilityIdentifier("chat_retry_sync")
-            }
-            transcript
-        }
+        conversationSurface
         .background(paneCanvas)
-        .preferredColorScheme(.dark)
-        .safeAreaInset(edge: .bottom, spacing: 0) { composer }
+        .modifier(ChatAppearance())
         #if os(macOS)
         .safeAreaInset(edge: .top, spacing: 0) { macThreadHeader }
-        #else
-        .safeAreaInset(edge: .top, spacing: 0) { if isTablet { tabletThreadHeader } }
         #endif
         .navigationTitle(record?.name ?? "Chat")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(isTablet ? .hidden : .visible, for: .navigationBar)
+        .toolbar(.visible, for: .navigationBar)
+        .toolbarBackground(.hidden, for: .navigationBar)
         #endif
         #if os(iOS)
         .toolbar {
-            if !isTablet {
-                ToolbarItem(placement: .principal) { threadHeading }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showingSettings = true } label: {
-                        Image(uiImage: SessionOptionsGlyph.image).frame(width: 44, height: 44).contentShape(Rectangle())
-                    }.frame(width: 44, height: 44).accessibilityLabel("Chat settings")
-                        .disabled(record == nil).accessibilityIdentifier("chat_settings")
-                }
+            ConversationToolbar(optionsTitle: "Chat settings", optionsIdentifier: "chat_settings",
+                optionsEnabled: record != nil, onOptions: { showingSettings = true }) {
+                SessionTitleBarContent(title: record?.name ?? "Chat", status: conversationStatus,
+                    queued: workspace.queued(for: sessionID).filter { $0.failure == nil }.count,
+                    hostLabel: effectiveHost.name, project: nil,
+                    titleIdentifier: "chat_details", statusIdentifier: "chat_status",
+                    titleHint: "Shows chat settings") { showingSettings = true }
             }
         }
         #endif
-        .sheet(isPresented: $showingSettings) {
-            if let record { ChatSettingsSheet(client: client, record: record) { self.record = $0; showingSettings = false } }
+        .sheet(isPresented: $showingSettings, onDismiss: settingsDismissed) {
+            if let record { settingsSheet(record) }
         }
+        #if os(iOS)
+        .environment(\.hostFiles, HostFiles(client: client.filesClient, cwd: record?.workingDirectory))
+        .sheet(isPresented: $showingSubagents) {
+            ChildAgentSessionsSheet(parentSessionID: sessionID, initialChildID: nil, chatClient: client)
+                .presentationDetents([.medium, .large])
+        }
+        .sheet(item: $toolOutput) { output in
+            ToolOutputSheet(title: output.title, text: output.text).presentationDetents([.medium, .large])
+        }
+        #endif
         .onAppear { model.start(host: effectiveHost, hosts: deliveryHosts, sessionID: sessionID, onRead: onRead) }
         .task(id: effectiveHost) {
             modelCatalog = .fallback
             if let catalog = try? await client.models(), !Task.isCancelled { modelCatalog = catalog }
         }
-        .onChange(of: showingSettings) { _, showing in if showing { composerFocused = false } }
+        .onChange(of: showingSettings) { _, showing in if showing { dismissComposer() } }
         .onChange(of: effectiveHost) { _, _ in model.start(host: effectiveHost, hosts: deliveryHosts, sessionID: sessionID, onRead: onRead) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { model.stop() }
@@ -652,6 +555,116 @@ struct ChatSessionScreen: View {
         }
         .onChange(of: deliveryHosts) { _, _ in model.start(host: effectiveHost, hosts: deliveryHosts, sessionID: sessionID, onRead: onRead) }
     }
+    @ViewBuilder private var conversationSurface: some View {
+        #if os(iOS)
+        GeometryReader { safeArea in
+            // Keep the ScrollView inside its real viewport. Expanding its safe
+            // area changes bottom alignment even when the composer is separate.
+            VStack(spacing: 0) {
+                transcriptContent(topInset: 0, width: safeArea.size.width)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("chat_transcript_region")
+                    .overlay(alignment: .top) { ConversationHeaderFade(height: max(safeArea.frame(in: .global).minY, 0)) }
+                VStack(spacing: 8) {
+                    if SubagentPill(agents: childAgents).isVisible {
+                        ComposerPillRow(agents: childAgents, onSubagents: { showingSubagents = true })
+                    }
+                    composer
+                }
+                    .safeAreaPadding(.bottom, keyboardOcclusionHeight > 0 ? nil : 0)
+                    .background { ConversationComposerFade(bottomSafeAreaInset: windowBottomSafeAreaInset) }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("chat_composer_region")
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+            guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+                  let window = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
+                    .flatMap(\.windows).first(where: \.isKeyWindow) else { return }
+            let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
+            withAnimation(.easeOut(duration: duration)) {
+                keyboardOcclusionHeight = frame.isEmpty ? 0 : max(window.bounds.maxY - window.convert(frame, from: nil).minY, 0)
+            }
+            followNewest(duration: duration)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+            followNewest(duration: 0.2)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
+            followNewest(duration: 0.2)
+        }
+        #else
+        transcriptContent(topInset: 0).safeAreaInset(edge: .bottom, spacing: 0) { composer }
+        #endif
+    }
+
+    private var hasTranscriptNotice: Bool {
+        error != nil || record?.error != nil || workspace.creationFailure(sessionID) != nil
+    }
+
+    private func transcriptContent(topInset: CGFloat, width: CGFloat = 402) -> some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                if let error = error ?? record?.error {
+                    Text(error).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 8)
+                        .accessibilityIdentifier("chat_error")
+                }
+                if workspace.creationFailure(sessionID) != nil {
+                    Button("Retry sync") { workspace.retry(sessionID); Task { await model.refresh() } }
+                        .accessibilityIdentifier("chat_retry_sync")
+                }
+            }
+            .padding(.top, hasTranscriptNotice ? topInset : 0)
+            transcript(topInset: hasTranscriptNotice ? 0 : topInset, width: width)
+        }
+        .contentShape(Rectangle())
+        .simultaneousGesture(TapGesture().onEnded { dismissComposer() })
+    }
+
+    private func dismissComposer() {
+        #if os(iOS)
+        dismissKeyboard()
+        #else
+        composerFocused = false
+        #endif
+    }
+
+    @ViewBuilder private func settingsSheet(_ record: ChatSessionRecord) -> some View {
+        #if os(iOS)
+        ChatSettingsSheet(client: client, record: record, onSubagents: childAgents.isEmpty ? nil : {
+            subagentsAfterSettings = true
+            showingSettings = false
+        }) { self.record = $0; showingSettings = false }
+        #else
+        ChatSettingsSheet(client: client, record: record) { self.record = $0; showingSettings = false }
+        #endif
+    }
+
+    private func settingsDismissed() {
+        #if os(iOS)
+        if subagentsAfterSettings { subagentsAfterSettings = false; showingSubagents = true }
+        #endif
+    }
+
+    #if os(iOS)
+    private func followNewest(duration: Double = 0.25) {
+        guard followsReply, !userScrolling else { return }
+        Task { @MainActor in
+            await Task.yield()
+            guard followsReply, !userScrolling, let chatScrollProxy else { return }
+            withAnimation(.easeOut(duration: duration)) {
+                chatScrollProxy.scrollTo("chat_end", anchor: .bottom)
+            }
+        }
+    }
+
+    private var windowBottomSafeAreaInset: CGFloat {
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows).first(where: \.isKeyWindow)?.safeAreaInsets.bottom ?? 0
+    }
+    #endif
+
     #if os(macOS)
     private var macThreadHeader: some View {
         HStack(spacing: 9) {
@@ -664,8 +677,8 @@ struct ChatSessionScreen: View {
                             Circle().fill(ChatColors.status(record?.state ?? "idle")).frame(width: 6, height: 6)
                             TimelineView(.periodic(from: .now, by: 30)) { context in
                                 Text(record.map { "\($0.statusLabel) · \(ChatPresentation.activityLabel($0.lastActivityAt, now: context.date))" } ?? "Connecting…")
-                            }.fontWeight(record?.state == "working" ? .semibold : .regular)
-                                .foregroundStyle(record?.state == "working" ? ChatColors.green : ChatColors.secondary)
+                            }.fontWeight(record?.isWorking == true ? .semibold : .regular)
+                                .foregroundStyle(record?.isWorking == true ? ChatColors.green : ChatColors.secondary)
                             if let purpose = record?.instructions.split(separator: "\n").first, !purpose.isEmpty {
                                 Text("· \(purpose)").foregroundStyle(ChatColors.secondary).lineLimit(1)
                             }
@@ -682,37 +695,60 @@ struct ChatSessionScreen: View {
     }
     #endif
     #if os(iOS)
-    private var tabletThreadHeader: some View {
-        HStack(spacing: 11) {
-            threadHeading
-            Spacer(minLength: 8)
-            Button { showingSettings = true } label: {
-                Image(uiImage: SessionOptionsGlyph.image).frame(width: 44, height: 44)
-            }.buttonStyle(.plain).foregroundStyle(.white).disabled(record == nil)
-                .accessibilityLabel("Chat settings").accessibilityIdentifier("chat_settings")
-        }.padding(.leading, 14).padding(.trailing, 6).frame(height: 62)
-            .background(ChatColors.canvas)
+    private var conversationStatus: SessionStatusLine.State {
+        if workspace.isLocal(sessionID) { return .activity("On this device") }
+        if error?.hasPrefix("Offline.") == true { return .hostOffline(sinceMs: nil) }
+        guard let record else { return .activity("Connecting…") }
+        if record.isWorking { return .working(sinceMs: nil) }
+        switch record.state {
+        case "working": return .working(sinceMs: nil)
+        case "blocked": return .needsInput(sinceMs: nil)
+        default: return .idle
+        }
     }
     #endif
-    private var threadHeading: some View {
-        Button { showingSettings = true } label: {
-            HStack(spacing: 11) {
-                if isTablet { ChatAvatar(name: record?.name ?? "Chat", size: 36, state: record?.state) }
-                VStack(alignment: isTablet ? .leading : .center, spacing: 3) {
-                    Text(record?.name ?? "Chat").font(.system(size: 17, weight: .semibold)).lineLimit(1)
-                    HStack(spacing: 5) {
-                        Circle().fill(ChatColors.status(record?.state ?? "idle")).frame(width: 7, height: 7)
-                            .background(Circle().fill(record?.state == "working" ? ChatColors.green.opacity(0.25) : .clear).padding(-3))
-                        Text(workspace.isLocal(sessionID) ? "On this device" : record?.statusLabel ?? "Ready")
-                            .foregroundStyle(record?.state == "working" ? ChatColors.green : record?.state == "blocked" ? ChatColors.amber : ChatColors.secondary)
-                        Text("· \(effectiveHost.name)").foregroundStyle(ChatColors.secondary)
-                    }.font(.system(size: 12)).accessibilityIdentifier("chat_status")
-                }
+    @ViewBuilder private var composer: some View {
+        #if os(iOS)
+        MessageComposer(text: $draft, placeholder: "Message \(record?.name ?? "chat")…",
+            sending: sending, allowsAttachments: false,
+            messageIdentifier: "chat_composer", sendIdentifier: "chat_send", stopIdentifier: "chat_stop",
+            s2: true, accessory: AnyView(chatModelMenu),
+            onStop: record?.isWorking == true ? { Task { await stop() } } : nil,
+            bottomPadding: composerFocused ? 8 : -6,
+            onFocusChange: { focused in
+                composerFocused = focused
+                if focused { followNewest() }
+            }) { text, _ in
+                Task { await send(text) }
             }
-        }.buttonStyle(.plain).foregroundStyle(.white).disabled(record == nil)
-            .accessibilityLabel("Chat details").accessibilityIdentifier("chat_details")
+            .frame(maxWidth: ReadableColumn.maxWidth)
+            .frame(maxWidth: .infinity)
+        #else
+        macComposer
+        #endif
     }
-    private var composer: some View {
+
+    #if os(iOS)
+    private var chatModelMenu: some View {
+        Menu {
+            Button("Default") { Task { await changeModel("") } }.accessibilityIdentifier("chat_model_default")
+            ForEach(modelCatalog.models(for: .claude), id: \.self) { choice in
+                Button(ModelChipLabel.model(choice)) { Task { await changeModel(choice) } }
+                    .accessibilityIdentifier("chat_model_\(choice)")
+            }
+            Button("Chat settings…") { showingSettings = true }.accessibilityIdentifier("chat_model_settings")
+        } label: {
+            ComposerModelLabel(text: record?.model.flatMap { $0.isEmpty ? nil : ModelChipLabel.model($0) } ?? "Claude · Default")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .disabled(record == nil || record?.isWorking == true)
+        .accessibilityLabel("Chat model").accessibilityIdentifier("chat_model")
+    }
+    #endif
+
+    #if os(macOS)
+    private var macComposer: some View {
         VStack(alignment: .leading, spacing: isDesktop ? 22 : isTablet ? 33 : 18) {
             TextField("Message", text: $draft, prompt: Text("Message \(record?.name ?? "chat")…").foregroundStyle(ChatColors.muted), axis: .vertical).lineLimit(1...6).textFieldStyle(.plain)
                 .font(.system(size: isDesktop ? 13 : isTablet ? 16 : 17)).frame(minHeight: isDesktop ? 18 : isTablet ? 20 : 22)
@@ -729,7 +765,7 @@ struct ChatSessionScreen: View {
                     HStack(spacing: 6) {
                         Text(ChatPresentation.modelLabel(record?.model))
                         Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
-                    }.font(.system(size: isDesktop ? 11 : isTablet ? 12 : 13, weight: .medium)).foregroundStyle(ChatColors.hex(0xD1D1D6))
+                    }.font(.system(size: isDesktop ? 11 : isTablet ? 12 : 13, weight: .medium)).foregroundStyle(ChatColors.secondary)
                         .padding(.horizontal, isDesktop ? 8 : 10).frame(height: isDesktop ? 22 : isTablet ? 26 : 28)
                         .background(ChatColors.field, in: Capsule())
                 }
@@ -739,10 +775,10 @@ struct ChatSessionScreen: View {
                 .menuStyle(.borderlessButton)
                 #endif
                 .fixedSize()
-                    .disabled(record == nil || record?.state == "working")
+                    .disabled(record == nil || record?.isWorking == true)
                     .accessibilityLabel("Chat model").accessibilityIdentifier("chat_model")
                 Spacer()
-                if record?.state == "working" {
+                if record?.isWorking == true {
                     Button { Task { await stop() } } label: {
                         RoundedRectangle(cornerRadius: isDesktop ? 2 : 3).fill(ChatColors.canvas).frame(width: isDesktop ? 9 : 11, height: isDesktop ? 9 : 11)
                             .frame(width: isDesktop ? 26 : isTablet ? 32 : 34, height: isDesktop ? 26 : isTablet ? 32 : 34).background(ChatColors.ink, in: Circle())
@@ -764,45 +800,109 @@ struct ChatSessionScreen: View {
         .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, isDesktop || isTablet ? 8 : composerFocused ? 8 : -6)
         .frame(maxWidth: .infinity).background(paneCanvas.opacity(0.95))
     }
-    private var transcript: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: isDesktop ? 11 : 14) {
-                    if hasMore {
-                        Button(loadingOlder ? "Loading…" : "Earlier messages") { Task { await older() } }
-                            .disabled(loadingOlder).accessibilityIdentifier("chat_older")
-                            .frame(maxWidth: .infinity)
-                    }
-                    if messages.isEmpty {
-                        ContentUnavailableView("What’s on your mind?", systemImage: "bubble.left.and.bubble.right",
-                            description: Text("Your instructions and memory stay with this chat."))
-                    }
-                    ForEach(messages) { message in
-                        if message.role == "user" {
-                            HStack {
-                                Spacer(minLength: 0)
-                                userMessage(message)
+    #endif
+    private var emptyChatState: some View {
+        ContentUnavailableView("What’s on your mind?", systemImage: "bubble.left.and.bubble.right",
+            description: Text("Just start chatting. Ask me to remember something or set a standing instruction whenever you need."))
+            .accessibilityIdentifier("chat_empty_state")
+    }
 
-                            }.id(message.id)
-                        } else {
-                            assistantText(message.text).foregroundStyle(ChatColors.ink).lineSpacing(isDesktop ? 2 : 4).frame(maxWidth: .infinity, alignment: .leading).id(message.id)
+    @ViewBuilder private func transcript(topInset: CGFloat, width: CGFloat = 402) -> some View {
+        if messages.isEmpty && record?.isWorking != true {
+            emptyChatState.frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: isDesktop ? 11 : 14) {
+                        if hasMore {
+                            Button(loadingOlder ? "Loading…" : "Earlier messages") { Task { await older() } }
+                                .disabled(loadingOlder).accessibilityIdentifier("chat_older")
+                                .frame(maxWidth: .infinity)
                         }
+                        #if os(iOS)
+                        let rendered = sessionMessages
+                        ForEach(TranscriptDisplayItem.items(for: rendered)) { item in
+                            switch item.item {
+                            case .message(let index):
+                                let message = rendered[index]
+                                VStack(alignment: .trailing, spacing: 4) {
+                                    TranscriptMessageView(message: message,
+                                        followsUserBubble: rendered[..<index].last(where: { $0.kind != "thinking" })?.rendersAsUserBubble == true,
+                                        onFollowup: { draft = FollowupDraft.adding($0, to: draft) })
+                                    if message.rendersAsUserBubble, let original = messages.first(where: { $0.id == message.id }), let label = workspace.deliveryLabel(original.requestID) {
+                                        HStack(spacing: 8) {
+                                            Text(label).font(.caption).foregroundStyle(.secondary)
+                                            if label == "Retry" { Button("Retry") { workspace.retry(sessionID); Task { await model.refresh() } } }
+                                        }.accessibilityIdentifier("chat_delivery_" + original.requestID)
+                                    }
+                                }
+                            case .steps(let group):
+                                ToolStepGroupView(group: group, cwd: record?.workingDirectory, followsStep: item.followsStep) { title, text in
+                                    toolOutput = ChatToolOutput(title: title, text: text)
+                                }
+                            }
+                        }
+                        #else
+                        ForEach(messages) { message in
+                            if message.role == "user" {
+                                HStack {
+                                    Spacer(minLength: 0)
+                                    userMessage(message)
+                                }.id(message.id)
+                            } else {
+                                assistantText(message.text).foregroundStyle(ChatColors.ink).lineSpacing(isDesktop ? 2 : 4)
+                                    .frame(maxWidth: .infinity, alignment: .leading).id(message.id)
+                            }
+                        }
+                        #endif
+                        if record?.isWorking == true && messages.last?.role != "assistant" {
+                            HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Thinking…").font(.callout).foregroundStyle(.secondary) }
+                                .accessibilityIdentifier("chat_thinking")
+                        }
+                        Color.clear.frame(height: 1).id("chat_end")
                     }
-                    if record?.state == "working" && messages.last?.role != "assistant" {
-                        HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Thinking…").font(.callout).foregroundStyle(.secondary) }
-                            .accessibilityIdentifier("chat_thinking")
-                    }
-                    Color.clear.frame(height: 1).id("chat_end")
-                }.padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 8)
+                    .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 8)
+                    #if os(iOS)
+                    .frame(maxWidth: ReadableColumn.maxWidth)
+                    .environment(\.transcriptColumnWidth, ReadableColumn.width(in: width))
+                    #endif
                     .frame(maxWidth: .infinity)
+                }
+                #if os(iOS)
+                .onAppear {
+                    chatScrollProxy = proxy
+                    followNewest()
+                }
+                .onDisappear { chatScrollProxy = nil }
+                .onScrollPhaseChange { _, phase in
+                    userScrolling = phase == .interacting || phase == .decelerating
+                }
+                #endif
+                .contentMargins(.top, topInset, for: .scrollContent)
+                .defaultScrollAnchor(.bottom)
+                .scrollDismissesKeyboard(.interactively)
+                .accessibilityIdentifier("chat_transcript")
+                .onScrollGeometryChange(for: Bool.self) { geometry in
+                    geometry.contentOffset.y + geometry.containerSize.height >= geometry.contentSize.height - 80
+                } action: { _, nearBottom in
+                    #if os(iOS)
+                    if userScrolling && !loadingOlder { followsReply = nearBottom }
+                    #else
+                    if !loadingOlder { followsReply = nearBottom }
+                    #endif
+                }
+                .onChange(of: messages.last?.text) { _, _ in
+                    guard followsReply else { return }
+                    #if os(iOS)
+                    followNewest()
+                    #else
+                    proxy.scrollTo("chat_end", anchor: .bottom)
+                    #endif
+                }
+                #if os(iOS)
+                .onChange(of: sessionMessages) { _, _ in if followsReply { followNewest() } }
+                #endif
             }
-            .defaultScrollAnchor(.bottom)
-            .scrollDismissesKeyboard(.interactively)
-            .accessibilityIdentifier("chat_transcript")
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y + geometry.containerSize.height >= geometry.contentSize.height - 80
-            } action: { _, nearBottom in if !loadingOlder { followsReply = nearBottom } }
-            .onChange(of: messages.last?.text) { _, _ in if followsReply { proxy.scrollTo("chat_end", anchor: .bottom) } }
         }
     }
     @ViewBuilder private func assistantText(_ text: String) -> some View {
@@ -826,21 +926,25 @@ struct ChatSessionScreen: View {
         do { let page = try await client.detail(sessionID, before: first.sequence); workspace.remember(page, on: effectiveHost); messages = workspace.messages(sessionID); hasMore = page.hasMore }
         catch { self.error = error.localizedDescription }
     }
-    private func send() async {
+    private func send(_ submittedText: String? = nil) async {
         guard !sending else { return }
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = (submittedText ?? draft).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         sending = true; defer { sending = false }
         do {
             try workspace.enqueue(sessionID, text: text, on: effectiveHost)
-            draft = ""; followsReply = true; error = nil
+            if submittedText == nil { draft = "" }
+            followsReply = true; error = nil
             Task { await model.refresh() }
-        } catch { self.error = "Couldn’t save this message on your device. \(error.localizedDescription)" }
+        } catch {
+            if draft.isEmpty { draft = text }
+            self.error = "Couldn’t save this message on your device. \(error.localizedDescription)"
+        }
     }
     private func userMessage(_ message: ChatMessageRecord) -> some View {
         VStack(alignment: .trailing, spacing: 4) {
             Text(message.text).font(.system(size: isDesktop ? 13 : 17)).lineSpacing(isDesktop ? 1 : 2)
-                .foregroundStyle(ChatColors.ink).textSelection(.enabled)
+                .foregroundStyle(ChatColors.hex(0xF2F2F7)).textSelection(.enabled)
                 .padding(.horizontal, isDesktop ? 11 : 14).padding(.vertical, isDesktop ? 7 : 10)
                 .background(ChatColors.userBubble, in: RoundedRectangle(cornerRadius: isDesktop ? 15 : 20))
             if let label = workspace.deliveryLabel(message.requestID) {
@@ -867,6 +971,7 @@ private struct ChatSettingsSheet: View {
     let client: ChatSessionsClient
     let record: ChatSessionRecord
     let saved: (ChatSessionRecord) -> Void
+    var onSubagents: (() -> Void)?
     @State private var name: String
     @State private var instructions: String
     @State private var memory: String
@@ -874,8 +979,8 @@ private struct ChatSettingsSheet: View {
     @State private var busy = false
     @State private var error: String?
     @Environment(\.dismiss) private var dismiss
-    init(client: ChatSessionsClient, record: ChatSessionRecord, saved: @escaping (ChatSessionRecord) -> Void) {
-        self.client = client; self.record = record; self.saved = saved
+    init(client: ChatSessionsClient, record: ChatSessionRecord, onSubagents: (() -> Void)? = nil, saved: @escaping (ChatSessionRecord) -> Void) {
+        self.client = client; self.record = record; self.saved = saved; self.onSubagents = onSubagents
         _name = State(initialValue: record.name); _instructions = State(initialValue: record.instructions)
         _memory = State(initialValue: record.memory); _model = State(initialValue: record.model ?? "")
     }
@@ -887,7 +992,7 @@ private struct ChatSettingsSheet: View {
                         HStack(spacing: 12) {
                             ChatAvatar(name: name, size: 42, state: record.state)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(name).font(.system(size: 20, weight: .semibold)).foregroundStyle(.white)
+                                Text(name).font(.system(size: 20, weight: .semibold)).foregroundStyle(ChatColors.ink)
                                 Text(ChatPresentation.modelLabel(model)).font(.system(size: 13)).foregroundStyle(ChatColors.muted)
                             }
                             Spacer(minLength: 4)
@@ -907,13 +1012,27 @@ private struct ChatSettingsSheet: View {
                             settingsRow(.memory, title: "What it remembers", subtitle: memory.isEmpty ? "Private facts and preferences" : memory, icon: "doc.text")
                             Divider().overlay(ChatColors.hex(0x3A3A3C)).padding(.leading, 41)
                             NavigationLink { ChatJobsView(host: client.host, chatId: record.id) } label: {
-                                HStack(spacing: 12) { Image(systemName: "clock").frame(width: 20); VStack(alignment: .leading, spacing: 3) { Text("Tasks").foregroundStyle(.white); Text("Reminders and instructions for this chat").font(.system(size: 12)).foregroundStyle(ChatColors.muted) }; Spacer(); Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(ChatColors.muted) }.padding(14).contentShape(Rectangle())
+                                HStack(spacing: 12) { Image(systemName: "clock").frame(width: 20); VStack(alignment: .leading, spacing: 3) { Text("Tasks").foregroundStyle(ChatColors.ink); Text("Reminders and instructions for this chat").font(.system(size: 12)).foregroundStyle(ChatColors.muted) }; Spacer(); Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(ChatColors.muted) }.padding(14).contentShape(Rectangle())
                             }.buttonStyle(.plain).accessibilityIdentifier("chat_settings_jobs")
+                            if let onSubagents {
+                                Divider().overlay(ChatColors.hex(0x3A3A3C)).padding(.leading, 41)
+                                Button(action: onSubagents) {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "person.2").frame(width: 20)
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text("Subagents").foregroundStyle(ChatColors.ink)
+                                            Text("Live activity and completed work").font(.system(size: 12)).foregroundStyle(ChatColors.muted)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(ChatColors.muted)
+                                    }.padding(14).contentShape(Rectangle())
+                                }.buttonStyle(.plain).accessibilityIdentifier("chat_settings_subagents")
+                            }
                         }.background(ChatColors.field, in: RoundedRectangle(cornerRadius: 14))
                     }
                     Text("Instructions and memory stay with this conversation. Changes apply to your next message.")
                         .font(.system(size: 13)).foregroundStyle(ChatColors.muted).lineSpacing(3).padding(.horizontal, 2)
-                    if record.state == "working" {
+                    if record.isWorking {
                         Text("Stop the current reply to change these settings.").font(.system(size: 13)).foregroundStyle(ChatColors.amber)
                     }
                 }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
@@ -932,7 +1051,7 @@ private struct ChatSettingsSheet: View {
                         error = nil
                     }
                 }
-        }.tint(ChatColors.hex(0x409CFF)).preferredColorScheme(.dark)
+        }.tint(ChatColors.hex(0x409CFF)).modifier(ChatAppearance())
             .interactiveDismissDisabled(busy)
             .presentationBackground(ChatColors.raised)
             .presentationCornerRadius(34).presentationDragIndicator(.visible)
@@ -954,7 +1073,7 @@ private struct ChatSettingsSheet: View {
             HStack(spacing: 10) {
                 Image(systemName: icon).font(.system(size: 17)).foregroundStyle(ChatColors.secondary).frame(width: 17)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(.system(size: 16)).foregroundStyle(.white)
+                    Text(title).font(.system(size: 16)).foregroundStyle(ChatColors.ink)
                     Text(subtitle).font(.system(size: 13)).foregroundStyle(ChatColors.muted).lineLimit(1)
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(ChatColors.hex(0x636366))
@@ -990,14 +1109,14 @@ private struct ChatSettingsSheet: View {
                     ChatModelPicker(selection: $model, host: client.host).accessibilityIdentifier("chat_settings_model")
                     Text("This model answers your next message.").font(.system(size: 13)).foregroundStyle(ChatColors.muted)
                 }
-                if record.state == "working" { Text("Stop the current reply to change these settings.").font(.callout).foregroundStyle(ChatColors.amber) }
+                if record.isWorking { Text("Stop the current reply to change these settings.").font(.callout).foregroundStyle(ChatColors.amber) }
                 if let error { Text(error).font(.callout).foregroundStyle(ChatColors.amber).accessibilityIdentifier("chat_settings_error") }
-            }.disabled(busy || record.state == "working").padding(16)
+            }.disabled(busy || record.isWorking).padding(16)
         }.scrollDismissesKeyboard(.interactively).background(ChatColors.raised).navigationTitle(page.rawValue)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(busy ? "Saving…" : "Save") { Task { await save() } }
-                        .disabled(busy || record.state == "working" || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(busy || record.isWorking || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .accessibilityIdentifier("chat_settings_save")
                 }
             }
@@ -1083,7 +1202,7 @@ private struct ChatAvatar: View {
     var halo = true
     var body: some View {
         Text(String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased())
-            .font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(ChatColors.ink)
+            .font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(ChatColors.hex(0xF2F2F7))
             .frame(width: size, height: size)
             .background(ChatColors.avatar(name), in: RoundedRectangle(cornerRadius: size * 0.29))
             .overlay(alignment: .bottomTrailing) {
@@ -1098,52 +1217,76 @@ private struct ChatAvatar: View {
             }.accessibilityHidden(true)
     }
 }
-private struct ChatChrome: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, macOS 26.0, *) {
-            GlassEffectContainer(spacing: 12) {
-                content.glassEffect(.regular.interactive(), in: Capsule())
-            }
-        } else {
-            content.background(ChatColors.field.opacity(0.94), in: Capsule())
-                .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 0.5))
-        }
+
+/// Native iOS chrome follows the app's appearance. The Mac keeps its design theme.
+private struct ChatAppearance: ViewModifier {
+    @ViewBuilder func body(content: Content) -> some View {
+        #if os(macOS)
+        content.preferredColorScheme(.dark)
+        #else
+        content
+        #endif
     }
 }
+
 private enum ChatColors {
     static func hex(_ value: UInt) -> Color { Color(red: Double((value >> 16) & 255) / 255, green: Double((value >> 8) & 255) / 255, blue: Double(value & 255) / 255) }
     static var canvas: Color {
         #if os(macOS)
         hex(0x1B1B1E)
         #else
-        .black
+        Color(.systemBackground)
         #endif
     }
-    static let raised = hex(0x1C1C1E)
-    static let field = hex(0x2C2C2E)
+    static var raised: Color {
+        #if os(macOS)
+        hex(0x1C1C1E)
+        #else
+        Color(.secondarySystemBackground)
+        #endif
+    }
+    static var field: Color {
+        #if os(macOS)
+        hex(0x2C2C2E)
+        #else
+        Color(.tertiarySystemBackground)
+        #endif
+    }
     static var separator: Color {
         #if os(macOS)
         .white.opacity(0.06)
         #else
-        hex(0x2C2C2E)
+        Color(.separator)
         #endif
     }
     static var secondary: Color {
         #if os(macOS)
         hex(0xA8A8B0)
         #else
-        hex(0xA1A1A6)
+        Color(.secondaryLabel)
         #endif
     }
     static var muted: Color {
         #if os(macOS)
         hex(0x8A8A93)
         #else
-        hex(0x8E8E93)
+        Color(.tertiaryLabel)
         #endif
     }
-    static let ink = hex(0xF2F2F7)
-    static let selection = hex(0x182B3E)
+    static var ink: Color {
+        #if os(macOS)
+        hex(0xF2F2F7)
+        #else
+        Color(.label)
+        #endif
+    }
+    static var selection: Color {
+        #if os(macOS)
+        hex(0x182B3E)
+        #else
+        S2.listSelection
+        #endif
+    }
     static let green = hex(0x30D158)
     static let amber = hex(0xFF9F0A)
     static let blue = hex(0x0A84FF)

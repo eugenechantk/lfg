@@ -83,24 +83,24 @@ extension SessionMessage {
 /// The derivation is pure but not cheap (a media scan plus an `NSRegularExpression`
 /// compiled per ref), and it used to run inside `TextBubble.body` — i.e. for
 /// every visible row on every SwiftUI update, which Phase-1 finding 1 showed is
-/// once per scroll frame. Rows are immutable once delivered (the client never
-/// rewrites a message's text), so a plain id-keyed memo is safe.
+/// once per scroll frame. Durable chat streams replacements for stable rows,
+/// so a cached derivation must also match the row's current source text.
 @MainActor
 private enum TranscriptRowTextCache {
-    private static var entries: [String: TranscriptRowText] = [:]
+    private static var entries: [String: (source: String, text: TranscriptRowText)] = [:]
     /// Bounded so a 5,000-message transcript cannot pin unbounded strings; the
     /// working set is the render window, far below this.
     private static let capacity = 1_200
 
     static func text(for message: SessionMessage) -> TranscriptRowText {
         let key = message.stableID
-        if let hit = entries[key] { return hit }
+        if let hit = entries[key], hit.source == message.text { return hit.text }
         let derived = TranscriptRowText.derive(
             from: message.text,
             extractFollowups: message.role != "user"
         )
         if entries.count >= capacity { entries.removeAll(keepingCapacity: true) }
-        entries[key] = derived
+        entries[key] = (message.text, derived)
         return derived
     }
 }

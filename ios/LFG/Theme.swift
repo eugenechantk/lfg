@@ -338,6 +338,9 @@ struct SheetCloseButton: View {
 /// S2 session-view palette (canvas boards `s2-view`, `s2-queued`, `s2-tools-*`).
 /// Dark values are the boards' hexes; light values are their counterparts.
 enum S2 {
+    /// Selection wash shared by native session and chat sidebars.
+    static let listSelection = Color.accentColor.opacity(0.14)
+
     static func color(dark: UInt32, light: UInt32) -> Color {
         func ui(_ hex: UInt32) -> UIColor {
             UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255,

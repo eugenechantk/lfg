@@ -1,5 +1,6 @@
 import {ChatJobs} from './chat-jobs';
-import {ChatError} from './chat-sessions';
+import {ChatError,type ChatSessions} from './chat-sessions';
+import {chatProfileTools} from './chat-profile-tools';
 import {TaskError} from './scheduled-tasks';
 import {createMcpHandler,text,type McpTool} from './mcp-server';
 import {scheduledTaskTools} from './scheduled-task-tools';
@@ -19,7 +20,7 @@ export function chatJobTools(jobs:ChatJobs,chatId:string):McpTool[]{
  {name:'job_history',description:'Read recent runs, errors and per-device notification delivery state.',inputSchema:{type:'object',properties:{jobId},required:['jobId']},annotations:{readOnlyHint:true},run:async a=>result(await jobs.detail(await scoped(a.jobId)))},
  ];
 }
-export function chatJobRoutes(jobs:ChatJobs,canonical?: (req:Request)=>Promise<Response|null>){
+export function chatJobRoutes(jobs:ChatJobs,canonical?: (req:Request)=>Promise<Response|null>,chats?:ChatSessions){
  return async(req:Request):Promise<Response|undefined>=>{
   const u=new URL(req.url),base='/api/chat-jobs';if(!u.pathname.startsWith(base)&&!u.pathname.startsWith('/api/scheduled-tasks/mcp/'))return;
   const json=(v:unknown,status=200)=>Response.json(v,{status,headers:{'Cache-Control':'no-store'}});
@@ -27,7 +28,7 @@ export function chatJobRoutes(jobs:ChatJobs,canonical?: (req:Request)=>Promise<R
    const origin=req.headers.get('origin');if(req.method!=='GET'&&origin&&origin!==u.origin)throw new ChatError('Cross-origin request refused.',403);
    const mcp=u.pathname.match(/^\/api\/(?:chat-jobs|scheduled-tasks)\/mcp\/(chat-[a-f0-9-]{36})$/);
    if(mcp){
-    const chatId=mcp[1]!;await jobs.list(chatId);
+    const chatId=mcp[1]!;await jobs.list(chatId);if(chats)await chats.detail(chatId);
     let tools=chatJobTools(jobs,chatId);
     if(u.pathname.startsWith('/api/scheduled-tasks/')){
      if(!canonical)throw new TaskError('Scheduled task tools are unavailable on this host.',503);
@@ -42,7 +43,8 @@ export function chatJobRoutes(jobs:ChatJobs,canonical?: (req:Request)=>Promise<R
      tools=scheduledTaskTools({get:path=>relay(path),post:(path,body)=>relay(path,body)});
      for(const tool of tools){if(tool.name==='create_scheduled_task'){const {chatId:_owner,...properties}=tool.inputSchema.properties??{};tool.inputSchema={...tool.inputSchema,properties};tool.description+=' The owning chat is supplied by this server.';}}
     }
-    return createMcpHandler({name:'lfg-durable-jobs',version:'2.0.0',instructions:'These are the host scheduled Tasks, scoped to this durable chat. For chat or notify actions use a stable requestID and omit cwd/agent/model. Never use OS cron or provider-native loops.',tools})(req);
+    if(chats)tools.push(...chatProfileTools(chats,chatId));
+    return createMcpHandler({name:'lfg-durable-jobs',version:'2.1.0',instructions:'Tools are scoped to this durable chat. Profile changes require an explicit user request and apply to subsequent turns. For scheduled chat or notify actions use a stable requestID and omit cwd/agent/model. Never use OS cron or provider-native loops.',tools})(req);
    }
    const body=async()=>{const s=await req.text();if(s.length>50000)throw new ChatError('Request too large.',413);try{const b=JSON.parse(s);if(!b||typeof b!=='object'||Array.isArray(b))throw Error();return b;}catch{throw new ChatError('Expected a JSON object.');}};
    if(u.pathname===base){if(req.method==='GET')return json({jobs:await jobs.list(u.searchParams.get('chatId')??undefined)});if(req.method==='POST')return json({job:await jobs.create(await body())},201);}

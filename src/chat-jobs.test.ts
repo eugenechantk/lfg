@@ -76,3 +76,44 @@ test('busy chats defer queued reminders and resume them after a pause without lo
  await jobs.update(j.id,{revision:paused.revision,enabled:true});await jobs.tick();expect((await jobs.detail(j.id)).runs[0]!.state).toBe('completed');
  }finally{await jobs.close();await chats.close();await rm(root,{recursive:true,force:true});}
 });
+
+test('scheduled native runs expose intermediate tools and prose without leaking decision blocks',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'lfg-job-transcript-'));
+ let release!:()=>void,ready!:()=>void;
+ const gate=new Promise<void>(resolve=>{release=resolve;});
+ const started=new Promise<void>(resolve=>{ready=resolve;});
+ const chats=new ChatSessions(join(root,'chats'),{nativeConversations:true,run:async input=>{
+  await input.native!.onReady();
+  await input.onEvent!({type:'assistant',message:{id:'check',content:[{type:'text',text:'Checking the submission.'},{type:'tool_use',id:'read-status',name:'Read',input:{file_path:'/tmp/status'}}]}});
+  await input.onEvent!({type:'user',message:{content:[{type:'tool_result',tool_use_id:'read-status',content:'Approved'}]}});
+  await input.onEvent!({type:'assistant',message:{id:'report',content:[{type:'text',text:'Checked the saved condition.\n<lfg_job_res'}]}});
+  await input.onText('PRIVATE STREAM CONTROL');
+  ready();await gate;
+  const result=answer('scheduled-run',true,true);
+  const control=result.slice(result.indexOf('<lfg_job_result>'));
+  await input.onEvent!({type:'assistant',message:{id:'delegate',content:[{type:'tool_use',id:'child',name:'Agent',input:{description:'Check approval'}}]}});
+  await input.onEvent!({type:'assistant',parent_tool_use_id:'child',message:{id:'child-report',content:[{type:'text',text:control}]}});
+  await input.onEvent!({type:'result',parent_tool_use_id:'child',subtype:'success',result:control});
+  await input.onEvent!({type:'assistant',message:{id:'report',content:[{type:'text',text:result}]}});
+  await input.onEvent!({type:'result',subtype:'success',result});
+  return result;
+ }});
+ try{
+  const chat=await chats.create({name:'Scheduled transcript'});
+  await chats.send(chat.id,{requestID:'job-transcript',text:'Check the submission'},{runID:'scheduled-run',name:'Review check'});
+  await started;
+  const live=await chats.detail(chat.id),rows=live.transcript![0]!.messages;
+  expect(rows.map(row=>row.kind)).toEqual(['text','tool_use','tool_result','text']);
+  expect(rows.at(-1)!.text).toBe('Checked the saved condition.');
+  expect(JSON.stringify(live)).not.toContain('lfg_job_res');
+  expect(JSON.stringify(live)).not.toContain('PRIVATE STREAM CONTROL');
+  release();await chats.settled(chat.id);
+  const done=await chats.detail(chat.id),receipt=await chats.send(chat.id,{requestID:'job-transcript',text:'Check the submission'},{runID:'scheduled-run',name:'Review check'});
+  expect(done.messages.at(-1)!.text).toBe('Checked the saved condition.');
+  expect(done.transcript![0]!.messages.find(row=>row.kind==='tool_result')!.text).toBe('Approved');
+  expect(JSON.stringify(done)).not.toContain('lfg_job_result');
+  expect(JSON.stringify(await chats.childMessages(chat.id,'child'))).not.toContain('lfg_job_result');
+  expect(JSON.stringify(await chats.sessions())).not.toContain('lfg_job_result');
+  expect(receipt.turn.jobDecision).toMatchObject({notify:true,stop:true,message:'Your submission was approved.'});
+ }finally{release();await chats.close();await rm(root,{recursive:true,force:true});}
+});

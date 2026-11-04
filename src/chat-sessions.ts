@@ -4,6 +4,9 @@ import { randomUUID, createHash } from 'node:crypto';
 import type { Session, SessionMsg } from './sessions';
 import { registerChatProviderSession } from './chat-claude';
 import {jobResultInstructions,parseJobResult,type JobDecision} from './chat-job-result';
+import {ChatTranscript,publicJobText,publicJobTranscript} from './chat-transcript';
+import type {SubagentSession} from './subagents';
+import {legacyChatTranscripts} from './chat-transcript-history';
 
 export type NativeChatContext = {
   id: string; providerSessionID: string; directory: string; resume: boolean;
@@ -13,12 +16,16 @@ export type NativeChatContext = {
 export type ChatRunInput = {
   purpose: 'reply' | 'summary'; system: string; prompt: string; model?: string;
   signal: AbortSignal; onText: (text: string) => Promise<void>; native?: NativeChatContext;
+  onEvent?: (event:unknown) => Promise<void>;
+  onWorkerStopped?: () => Promise<void>;
+  hasRunningChildren?: () => boolean;
 };
 export interface ChatRunner {
   nativeConversations?: boolean;
   run(input: ChatRunInput): Promise<string>;
   recover?(directory: string, providerSessionID: string): Promise<void>;
   close?(): Promise<void>;
+  interrupt?(id:string): Promise<void>;
 }
 export type ChatSession = {
   id: string; kind: 'chat'; name: string; agent: 'claude'; model?: string;
@@ -29,10 +36,14 @@ export type ChatSession = {
   lastTurnState?: 'completed'|'failed'|'interrupted';
   providerSessionID?: string; providerStarted?: boolean; providerRevision?: number;
   lastTurnSource?:'job'|'reminder';
+  childAgents?:SubagentSession[];
+  workingDirectory?:string;
+  backgroundWorking?:boolean;
 };
 export type ChatMessage = {id:string;sequence:number;role:'user'|'assistant';text:string;ts:number;requestID:string};
-export type ChatTurn = {requestID:string;sequence:number;state:'running'|'completed'|'failed'|'interrupted';user:ChatMessage;assistant:ChatMessage;error?:string;job?:{runID:string;name:string};jobDecision?:JobDecision;notice?:boolean};
-export type ChatDetail = {session:ChatSession;messages:ChatMessage[];turns:Pick<ChatTurn,'requestID'|'sequence'|'state'|'error'>[];hasMore:boolean};
+export type ChatTranscriptTurn = {requestID:string;sequence:number;messages:SessionMsg[];agents:SubagentSession[];childTranscripts:Record<string,SessionMsg[]>};
+export type ChatTurn = {requestID:string;sequence:number;state:'running'|'completed'|'failed'|'interrupted';user:ChatMessage;assistant:ChatMessage;error?:string;job?:{runID:string;name:string};jobDecision?:JobDecision;notice?:boolean;transcript?:ChatTranscriptTurn};
+export type ChatDetail = {session:ChatSession;messages:ChatMessage[];turns:Pick<ChatTurn,'requestID'|'sequence'|'state'|'error'>[];hasMore:boolean;transcript:ChatTranscriptTurn[]};
 export class ChatError extends Error { constructor(message:string,public status=400){super(message);} }
 type Options = {contextLimit?:number;keepRecentTurns?:number;emit?:(id:string,type:'msg'|'busy',payload:unknown)=>void;now?:()=>number;jobMcpURL?:(id:string)=>string;notificationInstructions?:(id:string)=>string};
 const terminal = (t:ChatTurn) => t.state !== 'running';
@@ -137,7 +148,13 @@ export class ChatSessions {
       const s=await this.load(id);const turns=await this.turns(id);
       if(s.providerSessionID){registerChatProviderSession(s.providerSessionID);await this.runner.recover?.(join(this.dir(id),'provider'),s.providerSessionID);}
       let recovered=false;
-      for(const t of turns)if(!terminal(t)){t.state='interrupted';t.error='The host stopped during this turn. Send a new message to continue.';await this.saveTurn(id,t);recovered=true;}
+      for(const t of turns){
+        let changed=false;
+        if(!terminal(t)){t.state='interrupted';t.error='The host stopped during this turn. Send a new message to continue.';changed=true;recovered=true;}
+        for(const agent of t.transcript?.agents??[])if(agent.status==='running'){agent.status='stopped';agent.finishedAt=this.now();changed=true;}
+        if(changed)await this.saveTurn(id,t);
+      }
+      if(s.backgroundWorking||s.childAgents?.some(a=>a.status==='running')){s.backgroundWorking=false;s.childAgents=s.childAgents?.map(a=>a.status==='running'?{...a,status:'stopped',finishedAt:this.now()}:a);await this.save(s);}
       s.nextTurn=Math.max(s.nextTurn,...turns.map(t=>t.sequence+1),1);
       if(s.state==='working'||s.activeRequestID||recovered){
         s.state='idle';s.lastTurnState='interrupted';delete s.activeRequestID;s.error='The host stopped during this turn. Your conversation is saved.';await this.save(s);
@@ -168,10 +185,19 @@ export class ChatSessions {
   }
   async list():Promise<ChatSession[]>{await this.ready;if(this.closed)throw new ChatError('Chat service is stopping',503);return (await Promise.all((await this.ids()).map(id=>this.load(id)))).sort((a,b)=>b.lastActivityAt-a.lastActivityAt||a.id.localeCompare(b.id));}
   async update(id:string,input:{revision:unknown;name?:unknown;instructions?:unknown;memory?:unknown;model?:unknown}){
+    return this.updateSettings(id,input,false);
+  }
+  async updateFromConversation(id:string,input:{revision:unknown;name?:unknown;instructions?:unknown;memory?:unknown;model?:unknown}){
+    return this.updateSettings(id,input,true);
+  }
+  private async updateSettings(id:string,input:{revision:unknown;name?:unknown;instructions?:unknown;memory?:unknown;model?:unknown},fromConversation:boolean){
     await this.ready;return this.locked(id,async()=>{
       if(this.closed)throw new ChatError('Chat service is stopping',503);
       const s=await this.load(id);if(input.revision!==s.revision)throw new ChatError('Settings changed. Reload before saving your edits.',409);
-      if(s.state==='working')throw new ChatError('Stop the current turn before editing its instructions or memory.',409);
+      if(fromConversation){
+        const turn=s.activeRequestID?await this.receipt(id,s.activeRequestID):undefined;
+        if(!turn||turn.state!=='running'||turn.job)throw new ChatError('Profile changes require an active user conversation.',409);
+      }else if(s.state==='working'||s.backgroundWorking||s.childAgents?.some(a=>a.status==='running'))throw new ChatError('Stop the current turn before editing its instructions or memory.',409);
       if(input.name!==undefined)s.name=field(input.name,80,'a name',false).trim();
       if(input.instructions!==undefined)s.instructions=field(input.instructions,24000,'instructions');
       if(input.memory!==undefined)s.memory=field(input.memory,24000,'memory');
@@ -190,14 +216,26 @@ export class ChatSessions {
     const all=turns.flatMap(t=>[t.user,...(t.assistant.text?[t.assistant]:[])]).filter(m=>m.sequence<before);
     const messages=all.slice(-limit),first=messages[0]?.sequence??Infinity;
     const earliest=Math.min(...(this.turnIndex.get(id)?.keys()??[]))*2-1;
-    return {session:s,messages,hasMore:messages.length>0&&first>earliest,turns:turns.filter(t=>t.assistant.sequence>=first&&t.user.sequence<before).map(({requestID,sequence,state,error})=>({requestID,sequence,state,error}))};
+    const selected=turns.filter(t=>t.assistant.sequence>=first&&t.user.sequence<before);
+    const directory=join(this.dir(id),'provider');
+    const imported=s.providerSessionID?await legacyChatTranscripts(directory,s.providerSessionID,selected):[];
+    return {session:{...s,workingDirectory:directory},messages,hasMore:messages.length>0&&first>earliest,turns:selected.map(({requestID,sequence,state,error})=>({requestID,sequence,state,error})),transcript:[...selected.flatMap(t=>t.transcript?[t.transcript]:[]),...imported].sort((a,b)=>a.sequence-b.sequence)};
+  }
+  async childMessages(id:string,childID:string){
+    await this.ready;await this.load(id);
+    for(const turn of (await this.turns(id)).reverse()){
+      const messages=turn.transcript?.childTranscripts[childID];if(messages)return {id:childID,messages};
+    }
+    const s=await this.load(id);
+    if(s.providerSessionID){for(const turn of await legacyChatTranscripts(join(this.dir(id),'provider'),s.providerSessionID,await this.turns(id))){if(turn.childTranscripts[childID])return {id:childID,messages:turn.childTranscripts[childID]};}}
+    throw new ChatError('Child agent transcript not found',404);
   }
   async jobReceipt(id:string,requestID:string){await this.ready;await this.load(id);return this.receipt(id,requestID);}
   async appendReminder(id:string,input:{requestID:string;name:string;text:string}){
     await this.ready;return this.locked(id,async()=>{
       if(this.closed)throw new ChatError('Chat service is stopping',503);
       const s=await this.load(id),existing=await this.receipt(id,input.requestID);if(existing)return existing;
-      if(s.state==='working'||this.running.has(id))throw new ChatError('A turn is already running.',409);
+      if(s.state==='working'||s.backgroundWorking||this.running.has(id))throw new ChatError('A turn is already running.',409);
       const seq=s.nextTurn++,ts=this.now();
       const t:ChatTurn={requestID:input.requestID,sequence:seq,state:'completed',notice:true,user:{id:randomUUID(),sequence:seq*2-1,role:'user',text:`Reminder · ${input.name}`,ts,requestID:input.requestID},assistant:{id:randomUUID(),sequence:seq*2,role:'assistant',text:input.text,ts,requestID:input.requestID}};
       await this.saveTurn(id,t);s.lastTurnSource='reminder';s.lastActivityAt=ts;s.lastTurnState='completed';s.lastMessage={id:t.assistant.id,role:'assistant',kind:'text',text:input.text,ts};await this.save(s);this.message(id,t.user);this.message(id,t.assistant);return t;
@@ -211,7 +249,7 @@ export class ChatSessions {
       if(this.closed)throw new ChatError('Chat service is stopping',503);
       const s=await this.load(id),existing=await this.receipt(id,requestID);
       if(existing){if(existing.user.text!==displayText)throw new ChatError('This message identifier belongs to different text.',409);return {session:s,turn:existing,duplicate:true};}
-      if(s.state==='working'||this.running.has(id))throw new ChatError('A turn is already running. Stop it before sending another.',409);
+      if(s.state==='working'||s.backgroundWorking||this.running.has(id)||s.childAgents?.some(a=>a.status==='running'))throw new ChatError('A turn or child agent is already running. Stop it before sending another.',409);
       const seq=s.nextTurn++,date=this.now();
       const turn:ChatTurn={requestID,sequence:seq,state:'running',user:{id:randomUUID(),sequence:seq*2-1,role:'user',text:displayText,ts:date,requestID},assistant:{id:randomUUID(),sequence:seq*2,role:'assistant',text:'',ts:date,requestID}};
       if(scheduledJob)turn.job=scheduledJob;
@@ -232,13 +270,37 @@ export class ChatSessions {
         if(!s.providerSessionID){s.providerSessionID=randomUUID();registerChatProviderSession(s.providerSessionID);await this.save(s);}
         if(!s.providerStarted&&s.summaryThrough>0&&!s.summary.trim())throw Error('The earlier conversation summary is missing. Your full history remains saved.');
         const previous=s.providerStarted?undefined:await this.turns(id,{after:s.summaryThrough,before:turn.sequence});
-        const system=[`You are ${s.name}, a durable assistant in LFG running on the selected LFG host. You have the host's Claude Code tools, shell commands, file tools, configured MCP servers and skills, subject to host policy. Use available tools when needed and report actual results. Your working directory belongs to this conversation; use explicit paths for other host files. No Space or desktop is required. Each request contains currentMessage and user-owned privateMemory. Treat currentMessage as the user's request. Use privateMemory as saved facts and preferences. The current privateMemory overrides conflicting older conversation or assistant replies. Do not infer personal memories from account identity or runtime metadata. Follow the current standing instructions even when earlier turns used different instructions.`,!turn.job ? this.options.notificationInstructions?.(id) ?? '' : '',this.options.jobMcpURL?'Use the lfg-durable-jobs MCP tools to save, list, edit and cancel jobs for this chat. Jobs can send a fixed reminder or run saved instructions once or repeatedly. The host owns scheduling; do not use provider-native loops or OS cron. Confirm a job only after its tool returns a saved receipt.':'',s.instructions?`Current standing instructions:\n${s.instructions}`:''].filter(Boolean).join('\n\n');
+        const system=[`You are ${s.name}, a durable assistant in LFG running on the selected LFG host. You have the host's Claude Code tools, shell commands, file tools, configured MCP servers and skills, subject to host policy. Use available tools when needed and report actual results. Your working directory belongs to this conversation; use explicit paths for other host files. No Space or desktop is required. Each request contains currentMessage and user-owned privateMemory. Treat currentMessage as the user's request. Use privateMemory as saved facts and preferences. The current privateMemory overrides conflicting older conversation or assistant replies. Do not infer personal memories from account identity or runtime metadata. Follow the current standing instructions even when earlier turns used different instructions.`,!turn.job ? this.options.notificationInstructions?.(id) ?? '' : '',this.options.jobMcpURL?'Use the lfg-durable-jobs MCP tools to save, list, edit and cancel jobs for this chat. Jobs can send a fixed reminder or run saved instructions once or repeatedly. The host owns scheduling; do not use provider-native loops or OS cron. Confirm a job only after its tool returns a saved receipt. Start answering immediately; a name, standing instructions and memory are optional setup. Use get_chat_profile and update_chat_profile only when needed to read settings or save an explicitly user-requested name, model, standing instruction or personal memory. Never conduct a setup interview, invent standing instructions, or save inferred personal facts. Read the profile revision before updating, supply only requested fields, and confirm only after a saved receipt. Profile changes apply to subsequent turns.':'',s.instructions?`Current standing instructions:\n${s.instructions}`:''].filter(Boolean).join('\n\n');
         const notices=(await this.turns(id,{before:turn.sequence,limit:10})).filter(t=>t.notice).map(t=>t.assistant.text);
         const prompt=JSON.stringify({privateMemory:s.memory,...(notices.length?{recentReminders:notices}:{}),...(!s.providerStarted&&s.summary?{importedSummary:s.summary}:{}),...(previous?.length?{importedHistory:previous.map(t=>({user:t.user.text,assistant:t.assistant.text,state:t.state}))}:{}),...(turn.job?{scheduledJob:turn.job}:{}),currentMessage:turn.job?`${turn.user.text}\n\n${jobResultInstructions(turn.job.runID)}`:turn.user.text});
         if(prompt.length>320000)throw Error('This earlier conversation is too large to import automatically. Start a new chat; your full earlier history remains saved.');
+        const transcript=new ChatTranscript(turn.requestID,this.now);
+        const saveTranscript=async(backgroundWorking?:boolean)=>{
+          const agents=turn.job?transcript.agents.map(agent=>({...agent,description:publicJobText(agent.description)||'Child agent',result:agent.result?publicJobText(agent.result)||null:null})):transcript.agents;
+          turn.transcript={requestID:turn.requestID,sequence:turn.sequence,messages:turn.job?publicJobTranscript(transcript.messages):transcript.messages,agents,
+            childTranscripts:turn.job?Object.fromEntries(Object.entries(transcript.childTranscripts).map(([id,rows])=>[id,publicJobTranscript(rows)])):transcript.childTranscripts};
+          await this.locked(id,async()=>{
+            await this.saveTurn(id,turn);
+            const latest=await this.load(id),ids=new Set(agents.map(a=>a.id));
+            const wasBusy=latest.state==='working'||latest.backgroundWorking===true||latest.childAgents?.some(a=>a.status==='running')===true;
+            latest.childAgents=[...(latest.childAgents??[]).filter(a=>!ids.has(a.id)),...agents];
+            if(backgroundWorking!==undefined)latest.backgroundWorking=backgroundWorking;
+            await this.save(latest);
+            const busy=latest.state==='working'||latest.backgroundWorking===true||latest.childAgents.some(a=>a.status==='running');
+            if(wasBusy!==busy)this.emit(id,'busy',{sid:id,busy});
+          });
+        };
         const result=await this.runner.run({purpose:'reply',system,prompt,model:s.model,signal:abort.signal,
           native:{id:s.id,providerSessionID:s.providerSessionID,directory:join(this.dir(id),'provider'),resume:s.providerStarted===true,revision:s.revision,requestID:turn.requestID,jobMcpURL:this.options.jobMcpURL?.(id),
             onReady:async()=>{await this.locked(id,async()=>{const latest=await this.load(id);latest.providerStarted=true;latest.providerRevision=s.revision;await this.save(latest);});}},
+          hasRunningChildren:()=>transcript.agents.some(a=>a.status==='running'),
+          onEvent:async event=>{
+            transcript.accept(event);
+            const e=event as any;
+            const background=turn.state!=='running'&&!e.parent_tool_use_id&&(e.type==='assistant'||e.type==='stream_event'||e.type==='result'||(e.type==='system'&&e.subtype==='task_notification'&&e.ambient!==true));
+            await saveTranscript(background?e.type!=='result':undefined);
+          },
+          onWorkerStopped:async()=>{transcript.stop();await saveTranscript(false);},
           onText:async text=>{if(abort.signal.aborted||turn.job)return;turn.assistant.text+=text;turn.assistant.ts=this.now();await this.saveTurn(id,turn);this.message(id,turn.assistant);}});
         if(abort.signal.aborted)throw Error('Stopped');
         if(!result.trim())throw Error('The provider returned no reply. Send a new message to try again.');
@@ -273,11 +335,11 @@ export class ChatSessions {
         await this.saveTurn(id,turn);const latest=await this.load(id);delete latest.activeRequestID;
         latest.state=turn.state==='failed'?'blocked':'idle';latest.error=turn.error;latest.lastActivityAt=this.now();latest.lastTurnState=turn.state as 'completed'|'failed'|'interrupted';
         if(turn.assistant.text)latest.lastMessage={id:turn.assistant.id,role:'assistant',kind:'text',text:turn.assistant.text,ts:turn.assistant.ts};await this.save(latest);
-        if(turn.assistant.text)this.message(id,turn.assistant);this.emit(id,'busy',{sid:id,busy:false});
+        if(turn.assistant.text)this.message(id,turn.assistant);this.emit(id,'busy',{sid:id,busy:latest.backgroundWorking===true||latest.childAgents?.some(a=>a.status==='running')===true});
       });
     }
   }
-  async interrupt(id:string){await this.ready;if(this.closed)throw new ChatError('Chat service is stopping',503);await this.load(id);this.running.get(id)?.abort.abort();return {ok:true};}
+  async interrupt(id:string){await this.ready;if(this.closed)throw new ChatError('Chat service is stopping',503);await this.load(id);this.running.get(id)?.abort.abort();await this.runner.interrupt?.(id);return {ok:true};}
   async settled(id:string){await this.running.get(id)?.done;}
   close():Promise<void>{
     if(this.closing)return this.closing;
@@ -293,6 +355,6 @@ export class ChatSessions {
     })();
   }
   async sessions():Promise<Session[]>{
-    return (await this.list()).map(s=>({kind:'chat',turnOutcome:s.lastTurnState,suppressCompletionNotification:!!s.lastTurnSource,agent:s.agent,control:'direct',source:'lfg',pid:0,cmd:'',cwd:null,project:'Chat',title:s.name,lastUserText:s.lastUserText??null,lastUserAt:s.lastUserAt,sessionId:s.id,startedAt:s.createdAt,transcriptPath:null,lastActivityAt:s.lastActivityAt,busy:s.state==='working',last:s.lastMessage??null,tmuxTarget:null,tmuxName:null,managed:true,assignedUser:null,model:s.model??null,status:s.state==='blocked'?'blocked':'ok',statusReason:s.state==='blocked'?'unknown':null,statusDetail:s.error??null} satisfies Session));
+    return (await this.list()).map(s=>({kind:'chat',turnOutcome:s.lastTurnState,suppressCompletionNotification:!!s.lastTurnSource,agent:s.agent,control:'direct',source:'lfg',pid:0,cmd:'',cwd:null,project:'Chat',title:s.name,lastUserText:s.lastUserText??null,lastUserAt:s.lastUserAt,sessionId:s.id,startedAt:s.createdAt,transcriptPath:null,lastActivityAt:s.lastActivityAt,busy:s.state==='working'||s.backgroundWorking||s.childAgents?.some(a=>a.status==='running')===true,childAgents:s.childAgents,runningChildAgentCount:s.childAgents?.filter(a=>a.status==='running').length??0,last:s.lastMessage??null,tmuxTarget:null,tmuxName:null,managed:true,assignedUser:null,model:s.model??null,status:s.state==='blocked'?'blocked':'ok',statusReason:s.state==='blocked'?'unknown':null,statusDetail:s.error??null} satisfies Session));
   }
 }

@@ -523,8 +523,7 @@ struct SessionDetailView: View {
                         // without enabling that automatic effect.
                         .scrollEdgeEffectHidden(true, for: [.top, .bottom])
                         .overlay(alignment: .top) {
-                            ChromeFade(edge: .top, barHeight: topChromeHeight)
-                                .offset(y: -topChromeHeight)
+                            ConversationHeaderFade(height: topChromeHeight)
                         }
 
                     // An open strip menu closes on a tap anywhere outside it.
@@ -561,8 +560,7 @@ struct SessionDetailView: View {
                 transcript
                     .ignoresSafeArea(.container, edges: .top)
                     .overlay(alignment: .top) {
-                        ChromeFade(edge: .top, barHeight: topChromeHeight)
-                            .offset(y: -topChromeHeight)
+                        ConversationHeaderFade(height: topChromeHeight)
                     }
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         bottomChrome
@@ -764,12 +762,7 @@ struct SessionDetailView: View {
     }
 
     private var bottomChromeFade: some View {
-        GeometryReader { proxy in
-            ChromeFade(edge: .bottom, barHeight: proxy.size.height + windowBottomSafeAreaInset)
-                .offset(y: -ChromeFade.tail(.bottom))
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        ConversationComposerFade(bottomSafeAreaInset: windowBottomSafeAreaInset)
     }
 
     private var windowBottomSafeAreaInset: CGFloat {
@@ -1314,39 +1307,17 @@ struct SessionDetailView: View {
 
     @ToolbarContentBuilder
     private var toolbarMenu: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
+        ConversationToolbar(optionsTitle: "Session", optionsIdentifier: "sessionOptionsMenu",
+            onOptions: { presentedSheet = .session }) {
             SessionTitleBarContent(
                 title: displayTitle,
                 status: statusLineState,
-                // An unsent message is "Not sent", not queued.
                 queued: pendingBars.filter { !$0.failed }.count,
                 hostLabel: hostLabel,
                 project: SessionRowMeta.projectLabel(cwd: session.cwd, project: session.project)
             ) {
                 withAnimation(.easeOut(duration: 0.18)) { showFullTitle.toggle() }
             }
-        }
-
-        sessionOptionsToolbarItem
-    }
-
-    @ToolbarContentBuilder
-    private var sessionOptionsToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            // The system toolbar owns the button's material, placement, menu
-            // transition and accessibility. Keep one visible native source;
-            // layering app-owned glass above it caused sheet/menu lifecycle
-            // glitches and an opaque double background.
-            Button { presentedSheet = .session } label: {
-                Image(uiImage: SessionOptionsGlyph.image)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-                // Keep the same native 44-point toolbar footprint as Back while
-                // letting the system provide the actual material and shape.
-                .frame(width: 44, height: 44)
-                .accessibilityLabel("Session")
-                .accessibilityIdentifier("sessionOptionsMenu")
         }
     }
 
@@ -1459,6 +1430,9 @@ struct SessionTitleBarContent: View {
     let queued: Int
     let hostLabel: String?
     let project: String?
+    var titleIdentifier = "sessionTitle"
+    var statusIdentifier = "sessionStatusLine"
+    var titleHint = "Shows the full session title"
     let onTitleTapped: () -> Void
 
     private static let live = Color(UIColor { $0.userInterfaceStyle == .dark
@@ -1482,8 +1456,8 @@ struct SessionTitleBarContent: View {
                 .truncationMode(.tail)
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onTitleTapped)
-                .accessibilityIdentifier("sessionTitle")
-                .accessibilityHint("Shows the full session title")
+                .accessibilityIdentifier(titleIdentifier)
+                .accessibilityHint(titleHint)
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let line = SessionStatusLine.resolve(status, queued: queued, host: hostLabel, project: project,
                                                      nowMs: context.date.timeIntervalSince1970 * 1_000)
@@ -1522,7 +1496,7 @@ struct SessionTitleBarContent: View {
         }
         .lineLimit(1)
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("sessionStatusLine")
+        .accessibilityIdentifier(statusIdentifier)
     }
 }
 
@@ -1896,7 +1870,7 @@ struct ExternalSessionComposerNotice: View {
 }
 
 /// Active subagents float above the transcript in their own glass capsule.
-private struct ComposerPillRow: View {
+struct ComposerPillRow: View {
     let agents: [ChildAgentSession]
     let onSubagents: () -> Void
     var fileCount = 0
@@ -2048,35 +2022,27 @@ private struct ComposerModelChip: View {
                 }
             }
         } label: {
-            HStack(spacing: 5) {
-                Text(switching ? "Switching…" : ModelChipLabel.text(model: session?.model, effort: session?.effort))
-                    .lineLimit(1)
-                BoardGlyph(kind: .chevronDown, lineWidth: 3).frame(width: 9, height: 9)
-            }
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(S2.chipInk)
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .background(S2.chip, in: Capsule())
-            .contentShape(Capsule())
+            ComposerModelLabel(text: switching ? "Switching…" : ModelChipLabel.text(model: session?.model, effort: session?.effort))
         }
         .accessibilityIdentifier("composer.modelChip")
     }
 }
 
-private struct ChildAgentSessionsSheet: View {
+struct ChildAgentSessionsSheet: View {
     let parentSessionID: String
+    var chatClient: ChatSessionsClient? = nil
     @Environment(SessionStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var path: [String]
 
-    init(parentSessionID: String, initialChildID: String?) {
+    init(parentSessionID: String, initialChildID: String?, chatClient: ChatSessionsClient? = nil) {
         self.parentSessionID = parentSessionID
+        self.chatClient = chatClient
         _path = State(initialValue: initialChildID.map { [$0] } ?? [])
     }
 
     private var agents: [ChildAgentSession] {
-        store.childAgentsBySession[parentSessionID] ?? []
+        chatClient != nil ? ChatWorkspace.shared.childAgents(parentSessionID) : store.childAgentsBySession[parentSessionID] ?? []
     }
 
     var body: some View {
@@ -2114,13 +2080,13 @@ private struct ChildAgentSessionsSheet: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: String.self) { childID in
                 if let child = agents.first(where: { $0.id == childID }) {
-                    ChildAgentTranscriptView(parentSessionID: parentSessionID, child: child)
+                    ChildAgentTranscriptView(parentSessionID: parentSessionID, child: child, chatClient: chatClient)
                 } else {
                     ContentUnavailableView("Child session unavailable", systemImage: "person.crop.circle.badge.xmark")
                 }
             }
         }
-        .task { await store.refreshChildAgents(parentSessionID) }
+        .task { if chatClient == nil { await store.refreshChildAgents(parentSessionID) } }
     }
 
     private var header: some View {
@@ -2248,7 +2214,7 @@ private struct SubagentMarkGlyph: Shape {
 
 /// Shared identified projection for main and child transcripts. Message indices
 /// refer to the full snapshot, even when the main view renders only its tail.
-private struct TranscriptDisplayItem: Identifiable {
+struct TranscriptDisplayItem: Identifiable {
     let id: String
     let item: TranscriptItem
     var followsStep = false
@@ -2272,6 +2238,7 @@ private struct TranscriptDisplayItem: Identifiable {
 private struct ChildAgentTranscriptView: View {
     let parentSessionID: String
     let child: ChildAgentSession
+    var chatClient: ChatSessionsClient? = nil
     @Environment(SessionStore.self) private var store
     @State private var messages: [SessionMessage] = []
     @State private var loading = true
@@ -2338,12 +2305,11 @@ private struct ChildAgentTranscriptView: View {
     }
 
     private func loadTranscriptUntilTerminal() async {
+        if chatClient != nil { messages = ChatWorkspace.shared.childMessages(parentSessionID, childID: child.id) }
         while !Task.isCancelled {
             do {
-                messages = try await store.childAgentMessages(
-                    parentID: parentSessionID,
-                    childID: child.id
-                )
+                if let chatClient { messages = try await chatClient.childMessages(parentSessionID, childID: child.id) }
+                else { messages = try await store.childAgentMessages(parentID: parentSessionID, childID: child.id) }
                 errorMessage = nil
             } catch is CancellationError {
                 return
@@ -2351,9 +2317,9 @@ private struct ChildAgentTranscriptView: View {
                 errorMessage = (error as? LFGError)?.userMessage ?? error.localizedDescription
             }
             loading = false
-            await store.refreshChildAgents(parentSessionID)
-            let isActive = store.childAgentsBySession[parentSessionID]?
-                .first(where: { $0.id == child.id })?.status.isActive == true
+            if chatClient == nil { await store.refreshChildAgents(parentSessionID) }
+            let agents = chatClient != nil ? ChatWorkspace.shared.childAgents(parentSessionID) : store.childAgentsBySession[parentSessionID] ?? []
+            let isActive = agents.first(where: { $0.id == child.id })?.status.isActive == true
             guard isActive else { return }
             try? await Task.sleep(for: .seconds(2))
         }

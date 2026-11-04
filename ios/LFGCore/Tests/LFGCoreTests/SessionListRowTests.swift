@@ -166,3 +166,34 @@ struct TaskOriginDecodingTests {
         #expect(bad.task == nil)
     }
 }
+
+@Suite("Sessions list: chat ownership")
+struct SessionListMembershipTests {
+    @Test("durable sessions and older chat IDs belong only to Chats")
+    func durableChats() {
+        #expect(!SessionListMembership.includes(kind: "chat", sessionID: "uuid"))
+        #expect(!SessionListMembership.includes(sessionID: "chat-123"))
+        #expect(!SessionListMembership.includes(sessionID: "worker", parentSessionID: "chat-123"))
+    }
+
+    @Test("provider sessions stay hidden even if an older host returns them")
+    func providers() {
+        let chat = "chat-01234567-89ab-4cde-8fab-0123456789ab"
+        #expect(!SessionListMembership.includes(sessionID: "provider-uuid", cwd: "/Users/test/.lfg/chat-sessions/\(chat)/provider"))
+        #expect(!SessionListMembership.includes(sessionID: "provider-uuid", cwd: "-Users-test--lfg-chat-sessions-\(chat)-provider"))
+    }
+
+    @Test("ordinary coding sessions are not identified by title or generic directories")
+    func ordinarySessions() {
+        #expect(SessionListMembership.includes(sessionID: "ordinary", cwd: "/dev/chat"))
+        #expect(SessionListMembership.includes(sessionID: "ordinary", parentSessionID: "ordinary-parent", cwd: "/dev/chat-sessions/provider"))
+        #expect(SessionListMembership.includes(sessionID: "ordinary", cwd: "/dev/chat-sessions/chat-project/provider"))
+        #expect(SessionListMembership.includes())
+    }
+
+    @Test("task editing stays hidden while ordinary task runs stay visible")
+    func tasks() {
+        #expect(!SessionListMembership.includes(sessionID: "edit", purpose: "task-edit"))
+        #expect(SessionListMembership.includes(sessionID: "task-run"))
+    }
+}

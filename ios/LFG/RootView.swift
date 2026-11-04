@@ -345,7 +345,9 @@ struct RootView: View {
                 .padding(4)
                 .glassOrRaised(in: Capsule(), interactive: true)
                 Spacer(minLength: usesSidebarDock ? 0 : 12)
-                Button {
+                ListCreateButton(
+                    title: selectedTab == .message ? "New chat" : selectedTab == .scheduledTasks ? "New scheduled task" : "New session",
+                    identifier: selectedTab == .message ? "chat_create" : "list_create") {
                     if selectedTab == .message {
                         messageCreateTrigger += 1
                     } else if selectedTab == .scheduledTasks {
@@ -354,27 +356,16 @@ struct RootView: View {
                         focusNewSessionComposer = true
                         showNewSession = true
                     }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 18, weight: .medium))
-                        .frame(width: 56, height: 56)
-                        .contentShape(Circle())
                 }
-                .buttonStyle(.plain)
-                // Glass wraps the button, as on the tab pill. Inside the list's
-                // `safeAreaBar`, interactive glass on the label itself took
-                // the touch and the button's action never ran.
-                .glassOrRaised(in: Circle(), interactive: true)
-                .accessibilityLabel(selectedTab == .message ? "New chat" : selectedTab == .scheduledTasks ? "New scheduled task" : "New session")
-                .accessibilityIdentifier(selectedTab == .message ? "chat_create" : "list_create")
             }
         }
         // S2 board `s2-list`: the dock and plus sit 20 pt from the sides and
         // 28 pt from the bottom edge of the screen.
-        .padding(.horizontal, usesSidebarDock ? 12 : selectedTab == .message ? 16 : 20)
+        .padding(.horizontal, usesSidebarDock ? 12 : 20)
         .padding(.top, 8)
         .padding(.bottom, 10)
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("list_dock")
     }
 
@@ -382,7 +373,7 @@ struct RootView: View {
     /// input, paused ones included. The Tasks badge is the task list's own count of
     /// tasks that need input or failed (`taskNeedsInputCount`).
     private var needsInputCount: Int {
-        store.filteredSessions.filter {
+        store.sessionListSessions.filter {
             !$0.closed && SessionListSection(store.group(for: $0).rowGroup) == .needsInput
         }.count
     }
@@ -403,7 +394,7 @@ struct RootView: View {
                 if tab == .scheduledTasks {
                     TasksTabGlyph().frame(width: 22, height: 20)
                 } else if tab == .sessions {
-                    SessionsTabGlyph(ink: selectedTab == .sessions ? Self.selectedTabInk : selectedTab == .message ? .white : .primary).frame(width: 24, height: 20)
+                    SessionsTabGlyph(ink: selectedTab == .sessions ? Self.selectedTabInk : .primary).frame(width: 24, height: 20)
                 } else {
                     Image(systemName: icon).font(.system(size: 20))
                 }
@@ -412,7 +403,7 @@ struct RootView: View {
             // The board's selected blue (#409CFF), the same ink as "Mark all
             // read". accentColor resolves to iOS 26's #0091FF, a second blue.
             .foregroundStyle(selectedTab == tab ? Self.selectedTabInk : .primary)
-            .frame(width: selectedTab == .message && !usesSidebarDock ? 84 : 70, height: 48)
+            .frame(width: 70, height: 48)
             // The board's solid selected fill (#3A3A3C), not a tint on the glass.
             .background(selectedTab == tab ? S2.color(dark: 0x3A3A3C, light: 0xE5E5EA) : .clear, in: Capsule())
             .overlay(alignment: .topTrailing) {
@@ -441,9 +432,13 @@ struct RootView: View {
             guard let client = settings.client(for: host) else { return nil }
             return ScheduledTaskHost(id: host.id, name: host.label, baseURL: client.baseURL,
                 headers: client.resourceRequest(for: client.baseURL).allHTTPHeaderFields ?? [:])
-        }, onDetailChange: { messageDetailVisible = $0 }, onRead: { store.markRead($0) },
+        }, preferredHostID: settings.defaultHost?.id, onDetailChange: { messageDetailVisible = $0 }, onRead: { store.markRead($0) },
            onCreated: { Task { await store.refreshSessionMembership() } }, createTrigger: messageCreateTrigger, showsCreateInToolbar: false,
-           listFooter: positionedListDock, unreadIDs: Set(store.sessions.filter { $0.isChat && store.group(for: $0) == .unread }.compactMap(\.sessionId)))
+           listFooter: positionedListDock,
+           connectionHeader: { width in AnyView(HostConnectionHeader(listWidth: width)
+               .padding(.leading, usesSidebarDock ? 12 : -4).accessibilityIdentifier("chat_hosts")) },
+           sidebarVisibility: $columnVisibility,
+           unreadIDs: Set(store.sessions.filter { $0.isChat && store.group(for: $0) == .unread }.compactMap(\.sessionId)))
     }
 
     private func tasksContent() -> some View {
@@ -660,19 +655,7 @@ struct RootView: View {
     @ToolbarContentBuilder
     private var sidebarToggle: some ToolbarContent {
         if isSideBySide {
-            ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.22)) {
-                        columnVisibility = sidebarHidden ? .doubleColumn : .detailOnly
-                    }
-                } label: {
-                    Image(systemName: "sidebar.leading")
-                }
-                .keyboardShortcut("s", modifiers: [.command, .control])
-                .accessibilityIdentifier("toggleSidebar")
-                .accessibilityLabel(sidebarHidden ? "Show sessions" : "Hide sessions")
-                .help(sidebarHidden ? "Show sessions" : "Hide sessions")
-            }
+            SidebarToggleToolbar(visibility: $columnVisibility, title: "sessions", identifier: "toggleSidebar")
         }
     }
 }

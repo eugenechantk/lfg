@@ -204,3 +204,20 @@ public struct TaskOrigin: Codable, Sendable, Hashable {
         return "\(hostID):\(id)"
     }
 }
+
+/// Presentation membership only. Keep the source population for chat routing,
+/// notifications and deep links, including closed results returned by older hosts.
+public enum SessionListMembership {
+    public static func includes(kind: String? = nil, sessionID: String? = nil,
+                                parentSessionID: String? = nil, purpose: String? = nil,
+                                cwd: String? = nil) -> Bool {
+        guard purpose != "task-edit", kind != "chat",
+              sessionID?.hasPrefix("chat-") != true,
+              parentSessionID?.hasPrefix("chat-") != true else { return false }
+        // The server normally suppresses provider workers. Match only its exact
+        // durable-chat directory shape; ordinary projects named chat stay visible.
+        if let cwd, cwd.range(of: #"[/-]chat-sessions[/-]chat-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}[/-]provider(?:$|[/-])"#,
+                              options: [.regularExpression, .caseInsensitive]) != nil { return false }
+        return true
+    }
+}

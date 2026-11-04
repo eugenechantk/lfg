@@ -33,6 +33,21 @@ if(p.currentMessage==='tool-wait'){
  emit({type:'stream_event',event:{type:'content_block_delta',delta:{type:'text_delta',text:'Tool running'}}});continue;
 }
 if(p.currentMessage==='partial'){emit({type:'stream_event',event:{type:'content_block_delta',delta:{type:'text_delta',text:'Partial reply'}}});continue;}
+if(p.currentMessage.startsWith('agent-wait')){
+ emit({type:'assistant',message:{id:'launch-agent',content:[{type:'text',text:'Delegating the check.'},{type:'tool_use',id:'delegated-agent',name:'Agent',input:{description:'Check callers',subagent_type:'explorer'}}]}});
+ emit({type:'user',message:{content:[{type:'tool_result',tool_use_id:'delegated-agent',content:'Async agent launched successfully. internal metadata'}]}});
+ emit({type:'stream_event',parent_tool_use_id:'delegated-agent',event:{type:'content_block_delta',delta:{type:'text_delta',text:'Reading callers'}}});
+ emit({type:'result',subtype:'success',result:'The check is delegated.'});
+ if(p.currentMessage!=='agent-wait-forever')setTimeout(()=>{
+  emit({type:'result',parent_tool_use_id:'delegated-agent',subtype:'success',result:'Found three callers'});
+  if(p.currentMessage==='agent-wait-followup'){
+   emit({type:'system',subtype:'task_notification',task_id:'task-one',tool_use_id:'delegated-agent',status:'completed',summary:'Found three callers'});
+   emit({type:'assistant',message:{id:'background-report',content:[{type:'text',text:'The child review is complete.'}]}});
+   emit({type:'result',subtype:'success',result:'The child review is complete.'});
+  }
+ },200);
+ continue;
+}
 let state={};try{state=JSON.parse(readFileSync('native-state.json','utf8'));}catch{}
 if(p.currentMessage.startsWith('Remember'))state.fact=p.currentMessage;
 writeFileSync('native-state.json',JSON.stringify(state));
@@ -70,6 +85,54 @@ test('idle shutdown preserves native identity and the next message resumes saved
  }finally{await f.close();}
 });
 
+test('background child activity persists beyond the parent reply and completes without completing another turn',async()=>{
+ const f=await fixture();try{
+  const s=await f.chats.create({name:'Scout'});const d=await send(f.chats,s.id,'agent-wait');
+  expect(d.session.state).toBe('idle');expect(d.transcript[0]!.agents[0]!.status).toBe('running');
+  expect((await f.chats.sessions())[0]!.busy).toBe(true);
+  await expect(f.chats.send(s.id,{text:'Another',requestID:'next'})).rejects.toThrow('child agent');
+  for(let n=0;n<100&&(await f.chats.detail(s.id)).transcript[0]!.agents[0]!.status==='running';n++)await Bun.sleep(10);
+  const complete=await f.chats.detail(s.id);
+  expect(complete.transcript[0]!.agents[0]!.status).toBe('completed');expect((await f.chats.sessions())[0]!.busy).toBe(false);
+  expect((await f.chats.childMessages(s.id,'delegated-agent')).messages.at(-1)!.text).toBe('Found three callers');
+  expect(complete.messages.at(-1)!.text).toBe('The check is delegated.');
+  await f.chats.close();
+  const reopened=new ChatSessions(join(f.root,'store'),new NativeClaudeRunner(f.executable));
+  try{expect((await reopened.detail(s.id)).transcript[0]!.agents[0]!.status).toBe('completed');}
+  finally{await reopened.close();}
+ }finally{await f.close();}
+});
+
+test('stop also retires a background child after its parent turn ended',async()=>{
+ const f=await fixture();try{
+  const s=await f.chats.create({name:'Scout'});await send(f.chats,s.id,'agent-wait-forever');
+  await f.chats.interrupt(s.id);
+  expect((await f.chats.detail(s.id)).transcript[0]!.agents[0]!.status).toBe('stopped');
+  expect((await f.chats.sessions())[0]!.busy).toBe(false);
+ }finally{await f.close();}
+});
+
+test('background follow-up retains the warm worker and finishes busy only after the follow-up',async()=>{
+ const f=await fixture();try{
+  const s=await f.chats.create({name:'Scout'});await send(f.chats,s.id,'agent-wait-followup');
+  await Bun.sleep(300);
+  const d=await f.chats.detail(s.id);expect(d.transcript[0]!.messages.at(-1)!.text).toBe('The child review is complete.');
+  expect(d.session.backgroundWorking).toBe(false);expect((await f.chats.sessions())[0]!.busy).toBe(false);
+  await send(f.chats,s.id,'Next');
+  expect((await readFile(join(f.root,'store',s.id,'provider','launches.jsonl'),'utf8')).trim().split('\n')).toHaveLength(1);
+ }finally{await f.close();}
+});
+
+test('idle timeout leaves a running child alive until it finishes',async()=>{
+ const f=await fixture(20);try{
+  const s=await f.chats.create({name:'Scout'});await send(f.chats,s.id,'agent-wait');
+  await Bun.sleep(60);
+  const lease=JSON.parse(await readFile(join(f.root,'store',s.id,'provider','worker.json'),'utf8'));
+  expect(()=>process.kill(lease.pid,0)).not.toThrow();
+  expect((await f.chats.detail(s.id)).transcript[0]!.agents[0]!.status).toBe('running');
+ }finally{await f.close();}
+});
+
 test('stop keeps partial text, rejects duplicate replay, and resumes on a new request',async()=>{
  const f=await fixture();try{
   const s=await f.chats.create({name:'Scout'});await f.chats.send(s.id,{requestID:'one',text:'partial'});
@@ -85,6 +148,11 @@ test('tool, MCP and skill cycles complete without leaking payloads or replaying 
  const f=await fixture();try{
   const s=await f.chats.create({name:'Scout'});const d=await send(f.chats,s.id,'tool');
   expect(d.session.state).toBe('idle');expect(d.messages.map(m=>m.text)).toEqual(['tool','Tools completed']);
+  expect(d.transcript[0]!.messages.filter(m=>m.kind==='tool_use')).toHaveLength(4);
+  expect(d.transcript[0]!.messages.filter(m=>m.kind==='tool_result')).toHaveLength(4);
+  expect(d.transcript[0]!.messages.at(-1)!.text).toBe('Tools completed');
+  expect(d.transcript[0]!.agents[0]!.status).toBe('completed');
+  expect((await f.chats.childMessages(s.id,'agent')).messages.at(-1)!.text).toBe('SUBAGENT_RESULT');
   await f.chats.send(s.id,{text:'tool',requestID:'tool'});await f.chats.settled(s.id);
   const directory=join(f.root,'store',s.id,'provider');
   expect(await readFile(join(directory,'actions.txt'),'utf8')).toBe('one action\n');

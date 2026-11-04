@@ -26,6 +26,10 @@ struct MessageComposer: View {
     var placeholder: String = "Message"
     var sending: Bool = false
     var autofocus = false
+    var allowsAttachments = true
+    var messageIdentifier = "composer.message"
+    var sendIdentifier = "composer.send"
+    var stopIdentifier = "composer.stop"
     /// Increment to focus the input after an external action fills its binding.
     var focusRequest = 0
     /// The S2 session-view layout (board `s2-view`): a solid surface, a chip
@@ -81,31 +85,33 @@ struct MessageComposer: View {
             .focused($focused)
             .font(.system(size: 17))
             .foregroundStyle(S2.ink)
-            .accessibilityIdentifier("composer.message")
+            .accessibilityIdentifier(messageIdentifier)
             .onChange(of: focused) { _, isFocused in
                 onFocusChange(isFocused)
             }
 
             HStack(spacing: 8) {
-                Menu {
-                    AttachmentMenuItems(tray: tray)
-                } label: {
-                    Group {
-                        if tray.isLoading {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            PaperclipGlyph()
-                                .frame(width: 22, height: 22)
-                                .foregroundStyle(S2.secondaryInk)
+                if allowsAttachments {
+                    Menu {
+                        AttachmentMenuItems(tray: tray)
+                    } label: {
+                        Group {
+                            if tray.isLoading {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                PaperclipGlyph()
+                                    .frame(width: 22, height: 22)
+                                    .foregroundStyle(S2.secondaryInk)
+                            }
                         }
+                        .frame(width: 22, height: 34)
+                        // A finger-sized target around a 22pt glyph.
+                        .contentShape(Rectangle().inset(by: -8))
                     }
-                    .frame(width: 22, height: 34)
-                    // A finger-sized target around a 22pt glyph.
-                    .contentShape(Rectangle().inset(by: -8))
+                    .accessibilityLabel("Attach")
+                    .accessibilityIdentifier("composer.attach")
+                    .disabled(tray.isLoading)
                 }
-                .accessibilityLabel("Attach")
-                .accessibilityIdentifier("composer.attach")
-                .disabled(tray.isLoading)
 
                 if let accessory { accessory }
 
@@ -121,7 +127,7 @@ struct MessageComposer: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Stop the current turn")
-                    .accessibilityIdentifier("composer.stop")
+                    .accessibilityIdentifier(stopIdentifier)
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
                 } else {
                     Button(action: submit) {
@@ -142,7 +148,7 @@ struct MessageComposer: View {
                     .allowsHitTesting(canSend && !sending)
                     .accessibilityAddTraits(canSend && !sending ? [] : .isStaticText)
                     .accessibilityLabel("Send")
-                    .accessibilityIdentifier("composer.send")
+                    .accessibilityIdentifier(sendIdentifier)
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
                 }
             }
@@ -170,7 +176,7 @@ struct MessageComposer: View {
                 .lineLimit(1...8)
                 .focused($focused)
                 .font(.body)
-                .accessibilityIdentifier("composer.message")
+                .accessibilityIdentifier(messageIdentifier)
                 .onChange(of: focused) { _, isFocused in
                     onFocusChange(isFocused)
                 }
@@ -215,7 +221,7 @@ struct MessageComposer: View {
                     }
                 }
                 .disabled(!canSend || sending)
-                .accessibilityIdentifier("composer.send")
+                .accessibilityIdentifier(sendIdentifier)
             }
         }
         .padding(12)

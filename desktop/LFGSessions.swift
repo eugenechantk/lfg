@@ -1577,7 +1577,11 @@ final class SessionStore: ObservableObject {
     /// Pure so the feature test can exercise it without a live store or network.
     static func visible(_ items: [SessionItem], hiddenDirs: HiddenDirs) -> [SessionItem] {
         // A task's edit chat opens from that task's Change with chat button; Sessions leaves it out (as on the phone).
-        let items = items.filter { $0.session.purpose != "task-edit" }
+        let items = items.filter {
+            let s = $0.session
+            return SessionListMembership.includes(kind: s.kind, sessionID: s.sessionId,
+                parentSessionID: s.parentSessionId, purpose: s.purpose, cwd: s.cwd)
+        }
         guard !hiddenDirs.isEmpty else { return items }
         return items.filter { !hiddenDirs.hides(cwd: $0.session.cwd) }
     }
@@ -3087,6 +3091,13 @@ enum DesktopFeatureTestCLI {
                                  hostIsLocal: editChat.hostIsLocal, hostSSHTarget: nil, hostRemoteTransport: editChat.hostRemoteTransport)
         try expect(SessionStore.visible(mixed + [tagged], hiddenDirs: HiddenDirs()).map(\.session.id) == mixed.map(\.session.id),
                    "task edit chats stay out of Sessions and the menu bar")
+        let durable = try JSONDecoder().decode(APISession.self, from: Data(
+            #"{"agent":"claude","pid":0,"project":"Chats","kind":"chat","sessionId":"chat-owned","title":"Durable chat","busy":true}"#.utf8))
+        let durableItem = SessionItem(session: durable, hostURL: editChat.hostURL,
+            hostId: editChat.hostId, hostLabel: editChat.hostLabel, hostIsLocal: editChat.hostIsLocal,
+            hostSSHTarget: nil, hostRemoteTransport: editChat.hostRemoteTransport)
+        try expect(SessionStore.visible(mixed + [durableItem], hiddenDirs: HiddenDirs()).map(\.session.id) == mixed.map(\.session.id),
+                   "durable chats stay out of Sessions and menu bar while ordinary work remains")
         let closedChat = try JSONDecoder().decode(ResumableAPISession.self, from: Data(
             #"{"sessionId":"closed-chat","title":"Change task","agent":"claude","purpose":"task-edit"}"#.utf8))
         try expect(SessionStore.closedSession(from: closedChat).purpose == "task-edit",

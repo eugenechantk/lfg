@@ -42,7 +42,7 @@ private enum Tokens {
     /// system's selection highlight, so this is what "selected" looks like —
     /// accent at a low alpha, which reads as a state behind the row rather than
     /// as a filled control competing with the row's own text.
-    static let selection = Color.accentColor.opacity(0.14)
+    static let selection = S2.listSelection
     /// A plain white/black wash, NOT `Color(.separator)` — the system separator
     /// is blue-tinted `(84,84,88,0.65)` and read back `(42,42,44)` against the
     /// design's `(18,18,18)`.
@@ -167,7 +167,7 @@ struct SessionListView: View {
     /// searched the ~60 closed sessions per host the user had already paged in.
     private var matchingSessions: [Session] {
         let terms = SessionSearch.terms(searchText)
-        let local = store.filteredSessions.filter { s in
+        let local = store.sessionListSessions.filter { s in
             if !terms.isEmpty && s.closed { return false }
             // Host filter (multi-host): keep the selected host's live sessions;
             // closed sessions are host-agnostic, so they always pass.
@@ -190,7 +190,7 @@ struct SessionListView: View {
         // search PAGE arrives, this one when the MUTE LIST changes — toggling a
         // directory while a search is on screen otherwise leaves stale rows up.
         for s in store.searchResults
-        where !seen.contains(s.id) && !store.sessionCloses.isEnded(s.id) && !settings.hiddenDirs.hides(cwd: s.cwd) {
+        where SessionStore.belongsInSessionList(s) && !seen.contains(s.id) && !store.sessionCloses.isEnded(s.id) && !settings.hiddenDirs.hides(cwd: s.cwd) {
             seen.insert(s.id)
             out.append(s)
         }
@@ -802,18 +802,9 @@ struct SessionListView: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
         .toolbar {
             if !isSearchPresentation {
-                statusToolbar
-                if let onSearch {
-                    ToolbarItem(placement: .primaryAction) {
-                        // The board's glyph (21pt box), not the larger SF symbol.
-                        Button(action: onSearch) {
-                            BoardGlyph(kind: .search, lineWidth: 2).frame(width: 21, height: 21)
-                        }
-                        .accessibilityLabel("Search sessions")
-                        .accessibilityIdentifier("sessions_search")
-                    }
-                }
-                ToolbarItem(placement: .primaryAction) {
+                ListHeaderToolbar(searchLabel: "Search sessions", searchIdentifier: "sessions_search", onSearch: onSearch) {
+                    headerStatus
+                } options: {
                     moreMenu(groupMode: $settings.groupMode, sortMode: $settings.sortMode)
                 }
             }
@@ -852,16 +843,6 @@ struct SessionListView: View {
     private func openNewSession(focusComposer: Bool) {
         focusNewSessionComposer = focusComposer
         showNewSession = true
-    }
-
-    @ToolbarContentBuilder
-    private var statusToolbar: some ToolbarContent {
-        if #available(iOS 26.0, *) {
-            ToolbarItem(placement: .topBarLeading) { headerStatus }
-                .sharedBackgroundVisibility(.hidden)
-        } else {
-            ToolbarItem(placement: .topBarLeading) { headerStatus }
-        }
     }
 
     private var headerStatus: some View {
@@ -922,11 +903,10 @@ struct SessionListView: View {
                 }
             }
         } label: {
-            BoardGlyph(kind: .more).frame(width: 20, height: 20)
-                .foregroundStyle(Tokens.label)
-                .accessibilityLabel("More session options")
+            ListOptionsLabel(title: "More session options")
         }
         .tint(Tokens.label)
+        .accessibilityLabel("More session options")
         .accessibilityIdentifier("sessions_more")
     }
 

@@ -26,6 +26,8 @@ export function chatRoutes(chats:ChatSessions){
         return json({error:'Method not allowed'},405);
       }
       const [,id,action]=match!;
+      const child=action?.match(/^subagents\/([A-Za-z0-9_-]{1,128})\/messages$/);
+      if(req.method==='GET'&&child)return json(await chats.childMessages(id!,child[1]!));
       if(req.method==='GET'&&(!action||action==='messages')){
         return json(await chats.detail(id!,{...(url.searchParams.has('before')?{before:Number(url.searchParams.get('before'))}:{}),...(url.searchParams.has('limit')?{limit:Number(url.searchParams.get('limit'))}:{})}));
       }

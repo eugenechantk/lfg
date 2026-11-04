@@ -20,8 +20,12 @@ public struct ChatSessionRecord: Codable, Identifiable, Sendable, Hashable {
     public var state: String
     public var error: String?
     public var lastMessage: ChatMessagePreview?
-    public var canSend: Bool { state != "working" }
-    public var statusLabel: String { state == "working" ? "Working" : state == "blocked" ? "Paused" : "Ready" }
+    public var workingDirectory: String? = nil
+    public var childAgents: [ChildAgentSession]? = nil
+    public var backgroundWorking: Bool? = nil
+    public var isWorking: Bool { state == "working" || backgroundWorking == true || childAgents?.contains(where: { $0.status.isActive }) == true }
+    public var canSend: Bool { !isWorking }
+    public var statusLabel: String { isWorking ? "Working" : state == "blocked" ? "Paused" : "Ready" }
 }
 public struct ChatMessagePreview: Codable, Sendable, Hashable {
     public var text: String
@@ -37,7 +41,7 @@ public enum ChatPresentation {
         return "Claude · \(model)"
     }
     public static func preview(_ chat: ChatSessionRecord, offline: Bool = false) -> String {
-        if !offline, chat.state == "working" { return "Working…" }
+        if !offline, chat.isWorking { return "Working…" }
         if !offline, chat.state == "blocked" { return chat.error ?? "Paused" }
         let text = chat.lastMessage?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return text.isEmpty ? "Ready for your message" : String(text.prefix(180))
@@ -69,6 +73,36 @@ public struct ChatHistoryPage: Decodable, Sendable {
     public var session: ChatSessionRecord
     public var messages: [ChatMessageRecord]
     public var hasMore: Bool
+    public var transcript: [ChatTranscriptTurn]? = nil
+}
+public struct ChatTranscriptTurn: Codable, Sendable, Equatable {
+    public var requestID: String
+    public var sequence: Int
+    public var messages: [SessionMessage]
+    public var agents: [ChildAgentSession]
+    public var childTranscripts: [String: [SessionMessage]]
+    public init(requestID: String, sequence: Int, messages: [SessionMessage], agents: [ChildAgentSession] = [], childTranscripts: [String: [SessionMessage]] = [:]) {
+        self.requestID = requestID; self.sequence = sequence; self.messages = messages
+        self.agents = agents; self.childTranscripts = childTranscripts
+    }
+}
+public enum ChatTranscriptProjection {
+    public static func messages(_ legacy: [ChatMessageRecord], turns: [ChatTranscriptTurn]) -> [SessionMessage] {
+        let rich = Dictionary(turns.filter { !$0.messages.isEmpty }.map { ($0.requestID, $0.messages) }, uniquingKeysWith: { _, new in new })
+        var rendered = Set<String>(), result: [SessionMessage] = []
+        for message in legacy {
+            if message.role == "user" || rich[message.requestID] == nil {
+                result.append(SessionMessage(id: message.id, role: message.role, text: message.text, ts: message.ts))
+            }
+            if rendered.insert(message.requestID).inserted, let rows = rich[message.requestID] { result.append(contentsOf: rows) }
+        }
+        return result
+    }
+    public static func merge(_ existing: [ChatTranscriptTurn], _ incoming: [ChatTranscriptTurn]) -> [ChatTranscriptTurn] {
+        var byID = Dictionary(existing.map { ($0.requestID, $0) }, uniquingKeysWith: { _, new in new })
+        for turn in incoming { byID[turn.requestID] = turn }
+        return byID.values.sorted { $0.sequence < $1.sequence }
+    }
 }
 private struct ChatList: Decodable, Sendable { var sessions: [ChatSessionRecord] }
 private struct ChatReply: Decodable, Sendable { var session: ChatSessionRecord }
@@ -89,6 +123,16 @@ public struct ChatSessionsClient: Sendable {
     public let host: ScheduledTaskHost
     private let session: URLSession
     public init(host: ScheduledTaskHost, session: URLSession = .shared) { self.host = host; self.session = session }
+    #if os(iOS)
+    public var filesClient: LFGClient {
+        let request = host.request("/")
+        let credential: CloudflareAccessCredential?
+        if let id = request.value(forHTTPHeaderField: "CF-Access-Client-Id"), let secret = request.value(forHTTPHeaderField: "CF-Access-Client-Secret") {
+            credential = CloudflareAccessCredential(clientID: id, clientSecret: secret)
+        } else { credential = nil }
+        return LFGClient(baseURL: host.baseURL, session: session, accessCredential: credential)
+    }
+    #endif
     private func data(_ path: String, body: Data? = nil, timeout: TimeInterval = 30) async throws -> Data {
         try await resource("/api/sessions" + path, body: body, timeout: timeout)
     }
@@ -120,6 +164,10 @@ public struct ChatSessionsClient: Sendable {
     }
     public func detail(_ id: String, before: Int? = nil) async throws -> ChatHistoryPage {
         try JSONDecoder().decode(ChatHistoryPage.self, from: await data("/\(id)?limit=50" + (before.map { "&before=\($0)" } ?? "")))
+    }
+    public func childMessages(_ id: String, childID: String) async throws -> [SessionMessage] {
+        guard childID.range(of: "^[A-Za-z0-9_-]{1,128}$", options: .regularExpression) != nil else { throw ChatClientError(message: "Invalid child session.") }
+        return try JSONDecoder().decode(MessagesResponse.self, from: await data("/\(id)/subagents/\(childID)/messages")).messages
     }
     public func send(_ id: String, text: String, requestID: String) async throws {
         struct Input: Encodable { let text: String; let requestID: String }
@@ -250,10 +298,25 @@ private struct ChatWorkspaceState: Codable, Equatable {
     var owners: [String: ChatQueueOwner] = [:]
     var history: [String: [ChatMessageRecord]] = [:]
     var outbox: [ChatQueuedMessage] = []
+    var transcript: [String: [ChatTranscriptTurn]]? = nil
 }
 public struct ChatWorkspaceEntry: Sendable {
     public let host: ScheduledTaskHost
     public let session: ChatSessionRecord
+}
+public enum ChatCreationDefaults {
+    public static let names = ["Atlas", "Scout", "Willow", "Clover", "Robin", "Sage", "Juniper", "Maple",
+        "River", "Aspen", "Hazel", "Fern", "Cedar", "Wren", "Linden", "Rowan", "Iris", "Olive",
+        "Piper", "Finch", "Laurel", "Indigo", "Marlow", "Ember", "Echo", "Nova", "Orion", "Sunny",
+        "Reed", "Briar", "Flint", "Arlo"]
+    public static func name(existing: [String]) -> String {
+        let used = Set(existing.map { $0.lowercased() })
+        if let available = names.filter({ !used.contains($0.lowercased()) }).randomElement() { return available }
+        let base = names.randomElement()!
+        var suffix = 2
+        while used.contains("\(base) \(suffix)".lowercased()) { suffix += 1 }
+        return "\(base) \(suffix)"
+    }
 }
 public struct ChatDeliveryTransport: Sendable {
     public var available: @Sendable ([ScheduledTaskHost], String?) async -> ScheduledTaskHost?
@@ -346,6 +409,14 @@ public struct ChatDeliveryTransport: Sendable {
         try commit { $0.creations.append(.init(record: record, preferredHostID: preferredHostID)) }
         return record
     }
+    public func createDefault(hosts: [ScheduledTaskHost], preferredHostID: String? = nil, knownOffline: Set<String> = []) throws -> ChatWorkspaceEntry {
+        let preferred = hosts.first { $0.id == preferredHostID } ?? hosts.first
+        let host = preferred.flatMap { knownOffline.contains($0.id) ? nil : $0 }
+            ?? hosts.first { !knownOffline.contains($0.id) } ?? preferred ?? Self.localHost
+        let record = try create(name: ChatCreationDefaults.name(existing: entries(hosts: hosts).map { $0.session.name }),
+            instructions: "", memory: "", model: "", preferredHostID: host.id == Self.localHost.id ? nil : host.id)
+        return .init(host: host, session: record)
+    }
     public func record(_ id: String, fallback host: ScheduledTaskHost) -> ChatSessionRecord? {
         state.creations.first { $0.record.id == id }?.record ?? state.snapshot.records(on: host).first { $0.id == id }
     }
@@ -375,9 +446,25 @@ public struct ChatDeliveryTransport: Sendable {
             let echoed = Set(page.messages.filter { $0.role == "user" }.map(\.requestID))
             let old = (state.history[page.session.id] ?? []).filter { !$0.id.hasPrefix("local-") || !echoed.contains($0.requestID) }
             state.history[page.session.id] = ChatHistoryMerge.merge(old, page.messages)
+            if let transcript = page.transcript {
+                var cached = state.transcript ?? [:]
+                cached[page.session.id] = ChatTranscriptProjection.merge(cached[page.session.id] ?? [], transcript)
+                state.transcript = cached
+            }
             state.outbox.removeAll { $0.chatID == page.session.id && echoed.contains($0.id) }
             if let index = state.creations.firstIndex(where: { $0.record.id == page.session.id }) { state.creations[index].record = page.session }
         }
+    }
+    public func transcript(_ id: String) -> [SessionMessage] {
+        ChatTranscriptProjection.messages(messages(id), turns: state.transcript?[id] ?? [])
+    }
+    public func childAgents(_ id: String) -> [ChildAgentSession] {
+        var agents: [String: ChildAgentSession] = [:]
+        for turn in state.transcript?[id] ?? [] { for agent in turn.agents { agents[agent.id] = agent } }
+        return agents.values.sorted { ($0.startedAt ?? 0) < ($1.startedAt ?? 0) }
+    }
+    public func childMessages(_ id: String, childID: String) -> [SessionMessage] {
+        (state.transcript?[id] ?? []).reversed().compactMap { $0.childTranscripts[childID] }.first ?? []
     }
     public func enqueue(_ id: String, text: String, on host: ScheduledTaskHost) throws {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.count <= 32000 else { throw ChatClientError(message: "Messages must contain 1–32,000 characters.") }

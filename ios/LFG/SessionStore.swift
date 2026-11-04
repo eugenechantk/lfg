@@ -3676,6 +3676,17 @@ import LFGCore
         sessions.filter { !sessionCloses.isEnded($0.id) && settings.userFilter.matches($0) && !settings.hiddenDirs.hides(cwd: $0.cwd) && $0.purpose != "task-edit" }
     }
 
+    /// Sessions-tab population. Chat state remains in filteredSessions for its
+    /// own badges, notification handling and direct navigation.
+    var sessionListSessions: [Session] {
+        filteredSessions.filter { Self.belongsInSessionList($0) }
+    }
+
+    static func belongsInSessionList(_ session: Session) -> Bool {
+        SessionListMembership.includes(kind: session.kind, sessionID: session.sessionId,
+            parentSessionID: session.parentSessionId, purpose: session.purpose, cwd: session.cwd)
+    }
+
     /// How many LIVE sessions the directory mute list is holding back — the same
     /// population "N running" describes.
     ///
@@ -3686,7 +3697,7 @@ import LFGCore
     var hiddenLiveSessionCount: Int {
         guard !settings.hiddenDirs.isEmpty else { return 0 }
         return sessions.filter {
-            !$0.closed && settings.userFilter.matches($0) && settings.hiddenDirs.hides(cwd: $0.cwd)
+            !$0.closed && Self.belongsInSessionList($0) && settings.userFilter.matches($0) && settings.hiddenDirs.hides(cwd: $0.cwd)
         }.count
     }
 
@@ -3711,7 +3722,7 @@ import LFGCore
     /// list. (It used to read `sessions`, which also made it disagree with
     /// `unreadCount` whenever a user filter was set.)
     var runningCount: Int {
-        filteredSessions.filter { group(for: $0) == .working }.count
+        sessionListSessions.filter { group(for: $0) == .working }.count
     }
 
     /// Matches the user filter and status grouping. Host filtering is owned by
@@ -3721,7 +3732,7 @@ import LFGCore
     }
 
     func grouped() -> [(Group, [Session])] {
-        let visible = filteredSessions
+        let visible = sessionListSessions
         return Group.allCases.compactMap { g in
             let items = visible.filter { group(for: $0) == g }
                 .sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }

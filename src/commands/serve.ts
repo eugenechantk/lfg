@@ -1347,7 +1347,7 @@ export async function cmdServe(options: {
   await chats.ready;
   const chatJobs=new ChatJobs(taskStore,chats,{scheduler:scheduledTasks,migrateFrom:join(PATHS.data,'chat-jobs.json'),push:{devices:listDevices,hostId:()=>hostInfo().hostId,retire:unregisterDevice,send:async(device,payload)=>{if(!pushWatcherEnabled(PORT))return {ok:false,status:503,reason:'Push delivery is disabled for this host port.'};const cfg=apnsConfigFromEnv();return cfg?sendApns(device,payload,cfg):{ok:false,status:503,reason:'Push is not configured on this host.'};}}});
   await chatJobs.ready;
-  const jobAPI=chatJobRoutes(chatJobs,taskRoutes);
+  const jobAPI=chatJobRoutes(chatJobs,taskRoutes,chats);
   const stopChats = () => { void scheduledTasks.close().then(()=>chats.close()).finally(() => process.exit(0)); };
   process.once("SIGTERM", stopChats);
   process.once("SIGINT", stopChats);
