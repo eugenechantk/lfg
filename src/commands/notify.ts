@@ -3,7 +3,7 @@ const help = `Usage:
   lfg notify --session <session-id> --status <working|completed|needs-input|blocked|reminder> --message <text> [--title <text>] [--request-id <id>]
 
 Sends custom text to every registered iPhone/iPad and every connected LFG Mac.
-Use a concrete result, blocker, or reminder. Keep the same request ID when retrying.
+Start with what was built or fixed, not the steps; then any blocker, decision, or reminder. Keep the same request ID when retrying.
 The receipt reports APNs acceptance, not physical delivery. LFG_NOTIFY_URL overrides the local host.`;
 
 export async function cmdNotify(args: string[]) {
