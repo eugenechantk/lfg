@@ -55,6 +55,8 @@ struct FilePaneContainer<Content: View, Header: View>: View {
     @State private var localSize = CGSize.zero
     @State private var drag: CGFloat = 0
     @State private var sheetPresented = false
+    /// The layout, not the user, took the sheet away (rotation, full screen, docking).
+    @State private var sheetMovedInline = false
 
     private var windowSize: CGSize {
         navigation.windowSize == .zero ? localSize : navigation.windowSize
@@ -63,7 +65,9 @@ struct FilePaneContainer<Content: View, Header: View>: View {
         FilePaneLayout.presentation(width: windowSize.width, height: windowSize.height,
             isPad: UIDevice.current.userInterfaceIdiom == .pad, portraitDocked: state.portraitDocked)
     }
-    private var inline: Bool { state.isOpen && presentation != .sheet }
+    private var inline: Bool {
+        FilePaneLayout.isInline(isOpen: state.isOpen, presentation: presentation, fullWidth: state.fullWidth)
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -88,7 +92,7 @@ struct FilePaneContainer<Content: View, Header: View>: View {
                 .accessibilityHidden(full)
 
                 if inline {
-                    reader(canDock: false)
+                    reader(inSheet: false)
                         .frame(width: full ? geometry.size.width : (side ? width : geometry.size.width),
                                height: full || side ? geometry.size.height : paneHeight)
                         .offset(x: !full && side ? geometry.size.width - width : 0)
@@ -111,9 +115,12 @@ struct FilePaneContainer<Content: View, Header: View>: View {
         .onChange(of: state.fullWidth) { _, _ in synchronize() }
         .onChange(of: windowSize) { _, _ in synchronize() }
         .sheet(isPresented: $sheetPresented, onDismiss: {
-            if presentation == .sheet { state.close() }
+            // Only a swipe down closes the file. The closure is kept from when the sheet appeared,
+            // so the layout it would compute here is stale; read the @State flag instead.
+            if sheetMovedInline { sheetMovedInline = false } else { state.close() }
         }) {
-            reader(canDock: UIDevice.current.userInterfaceIdiom == .pad && windowSize.width >= 600)
+            reader(inSheet: true)
+                .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(S2.surface)
@@ -128,13 +135,16 @@ struct FilePaneContainer<Content: View, Header: View>: View {
     }
 
     private func synchronize() {
-        sheetPresented = state.isOpen && presentation == .sheet
+        let wanted = state.isOpen && !inline
+        if sheetPresented && !wanted && state.isOpen { sheetMovedInline = true }
+        sheetPresented = wanted
         navigation.update(inline, state.fullWidth)
     }
 
-    private func reader(canDock: Bool) -> some View {
-        FilePaneReader(state: $state, resources: resources, messages: messages, hostFiles: hostFiles,
-                       revision: revision, canDock: canDock, isSheet: presentation == .sheet, isPortrait: windowSize.height > windowSize.width, onReveal: onReveal)
+    private func reader(inSheet: Bool) -> some View {
+        FilePaneReader(state: $state, resources: resources, messages: messages, hostFiles: hostFiles, revision: revision,
+                       canDock: inSheet && UIDevice.current.userInterfaceIdiom == .pad && windowSize.width >= 600,
+                       isSheet: inSheet, isPortrait: windowSize.height > windowSize.width, onReveal: onReveal)
             .id(state.showingFiles ? "index" : state.selection?.id ?? "none")
     }
 
@@ -239,7 +249,8 @@ struct FilePaneReader: View {
                     } else {
                         FileViewerPage(ref: ref, url: versioned(hostFiles?.viewerURL(for: ref) ?? URL(string: ref.raw)),
                             originalURL: versioned(hostFiles?.shareURL(for: ref) ?? URL(string: ref.raw)),
-                            client: hostFiles?.client, onImageZoomChanged: { _ in }, allowsPictureInPicture: true)
+                            client: hostFiles?.client, onImageZoomChanged: { _ in }, allowsPictureInPicture: true,
+                            fitsWholeImage: true)
                             .id(ref.id)
                             .padding(.bottom, ref.kind == .image || ref.kind == .video ? 84 : 0)
                     }
@@ -291,18 +302,9 @@ struct FilePaneReader: View {
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: 0) {
-                if canDock {
-                    Button { state.portraitDocked = true; state.fullWidth = false } label: {
-                        actionLabel("rectangle.topthird.inset.filled")
-                    }.accessibilityLabel("Dock above transcript").accessibilityIdentifier("filePaneDock")
-                } else if !isSheet {
-                    Button {
-                        if isPortrait { state.portraitDocked = false; state.fullWidth = false }
-                        else { state.fullWidth.toggle() }
-                    } label: {
-                        actionLabel(isPortrait ? "rectangle.bottomthird.inset.filled" : state.fullWidth ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                    }.accessibilityLabel(isPortrait ? "Show file as sheet" : state.fullWidth ? "Return to split view" : "Use the full width")
-                        .accessibilityIdentifier("filePaneExpand")
+                ForEach(FilePaneLayout.headerControls(inSheet: isSheet, fullWidth: state.fullWidth,
+                                                      isPortrait: isPortrait, canDock: canDock), id: \.self) { control in
+                    layoutButton(control)
                 }
                 if let ref {
                     Menu {
@@ -327,6 +329,27 @@ struct FilePaneReader: View {
                 }
             }.buttonStyle(.plain).foregroundStyle(.primary).background(S2.chip, in: Capsule())
             circle("Close file pane", icon: "xmark", id: "filePaneClose") { state.close() }
+        }
+    }
+
+    @ViewBuilder private func layoutButton(_ control: FilePaneLayout.HeaderControl) -> some View {
+        switch control {
+        case .dock:
+            Button { state.portraitDocked = true; state.fullWidth = false } label: {
+                actionLabel("rectangle.topthird.inset.filled")
+            }.accessibilityLabel("Dock above transcript").accessibilityIdentifier("filePaneDock")
+        case .sheet:
+            Button { state.portraitDocked = false; state.fullWidth = false } label: {
+                actionLabel("rectangle.bottomthird.inset.filled")
+            }.accessibilityLabel("Show file as sheet").accessibilityIdentifier("filePaneSheet")
+        case .expand:
+            Button { state.fullWidth = true } label: { actionLabel("arrow.up.left.and.arrow.down.right") }
+                .accessibilityLabel(isPortrait ? "Full screen" : "Use the full width")
+                .accessibilityIdentifier("filePaneExpand")
+        case .collapse:
+            Button { state.fullWidth = false } label: { actionLabel("arrow.down.right.and.arrow.up.left") }
+                .accessibilityLabel(isPortrait ? "Exit full screen" : "Return to split view")
+                .accessibilityIdentifier("filePaneExpand")
         }
     }
 

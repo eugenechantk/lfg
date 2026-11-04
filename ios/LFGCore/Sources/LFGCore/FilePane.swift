@@ -27,6 +27,29 @@ public enum FilePaneLayout {
         if fraction > 0.86 { return .sheet }
         return .fraction([0.4, 0.55, 0.7].min(by: { abs($0 - fraction) < abs($1 - fraction) }) ?? 0.55)
     }
+
+    /// The reader sits in the window, not in a sheet. Full screen always fills the window.
+    public static func isInline(isOpen: Bool, presentation: Presentation, fullWidth: Bool) -> Bool {
+        isOpen && (presentation != .sheet || fullWidth)
+    }
+
+    public enum HeaderControl: Equatable, Sendable { case dock, sheet, expand, collapse }
+
+    /// The layout buttons before •••. Every layout can go full screen; landscape calls it full width.
+    public static func headerControls(inSheet: Bool, fullWidth: Bool, isPortrait: Bool, canDock: Bool) -> [HeaderControl] {
+        if inSheet { return (canDock ? [.dock] : []) + [.expand] }
+        if fullWidth { return [.collapse] }
+        return (isPortrait ? [.sheet] : []) + [.expand]
+    }
+}
+
+/// The zoom an image shows before any pinch.
+public enum ImageFit {
+    public static func restingScale(boundsWidth: Double, boundsHeight: Double,
+                                    imageWidth: Double, imageHeight: Double, fitsWhole: Bool) -> Double {
+        let width = boundsWidth / imageWidth
+        return fitsWhole ? min(width, boundsHeight / imageHeight) : width
+    }
 }
 
 /// A session's remembered reader choice. New arrivals only affect the index.

@@ -17,6 +17,39 @@ struct FilePaneTests {
         #expect(FilePaneLayout.presentation(width: 599, height: 450, isPad: true, portraitDocked: true) == .sheet)
         #expect(FilePaneLayout.presentation(width: 430, height: 932, isPad: false, portraitDocked: true) == .sheet)
     }
+    @Test func fullScreenIsInlineFromEveryPresentation() {
+        #expect(!FilePaneLayout.isInline(isOpen: true, presentation: .sheet, fullWidth: false))
+        #expect(FilePaneLayout.isInline(isOpen: true, presentation: .sheet, fullWidth: true))
+        #expect(FilePaneLayout.isInline(isOpen: true, presentation: .top, fullWidth: false))
+        #expect(FilePaneLayout.isInline(isOpen: true, presentation: .side, fullWidth: true))
+        #expect(!FilePaneLayout.isInline(isOpen: false, presentation: .side, fullWidth: true))
+    }
+    @Test func headerOffersFullScreenBesideTheSplit() {
+        #expect(FilePaneLayout.headerControls(inSheet: true, fullWidth: false, isPortrait: true, canDock: true) == [.dock, .expand])
+        #expect(FilePaneLayout.headerControls(inSheet: true, fullWidth: false, isPortrait: true, canDock: false) == [.expand])
+        #expect(FilePaneLayout.headerControls(inSheet: false, fullWidth: false, isPortrait: true, canDock: false) == [.sheet, .expand])
+        #expect(FilePaneLayout.headerControls(inSheet: false, fullWidth: false, isPortrait: false, canDock: false) == [.expand])
+        #expect(FilePaneLayout.headerControls(inSheet: false, fullWidth: true, isPortrait: true, canDock: false) == [.collapse])
+        #expect(FilePaneLayout.headerControls(inSheet: false, fullWidth: true, isPortrait: false, canDock: false) == [.collapse])
+    }
+    @Test func imagesRestAtTheirWholeSize() {
+        // A 1206×2622 phone screenshot in a 720×740 pane: whole image, not its width.
+        let whole = ImageFit.restingScale(boundsWidth: 720, boundsHeight: 740, imageWidth: 1206, imageHeight: 2622, fitsWhole: true)
+        #expect(abs(whole * 2622 - 740) < 0.001)
+        #expect(whole * 1206 < 720)
+        let width = ImageFit.restingScale(boundsWidth: 720, boundsHeight: 740, imageWidth: 1206, imageHeight: 2622, fitsWhole: false)
+        #expect(abs(width * 1206 - 720) < 0.001)
+        // A wide image fits its width either way.
+        let wide = ImageFit.restingScale(boundsWidth: 720, boundsHeight: 740, imageWidth: 2000, imageHeight: 1000, fitsWhole: true)
+        #expect(abs(wide * 2000 - 720) < 0.001)
+    }
+    @Test func closingLeavesFullScreen() {
+        var state = FilePaneState()
+        state.open(MediaRef(raw: "/tmp/a.png", kind: .image))
+        state.fullWidth = true
+        state.close()
+        #expect(!state.fullWidth)
+    }
     @Test func sidebarCapacity() {
         #expect(!FilePaneLayout.keepsSidebar(windowWidth: 1194, sidebarWidth: 360))
         #expect(FilePaneLayout.keepsSidebar(windowWidth: 1376, sidebarWidth: 360))

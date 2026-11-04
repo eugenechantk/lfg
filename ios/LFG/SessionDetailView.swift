@@ -589,11 +589,7 @@ struct SessionDetailView: View {
             if (prompt == nil || session.isExternallyOwned) && hasPills {
             ComposerPillRow(
                 agents: childAgents,
-                onSubagents: { presentedSheet = .childSessions(selectedID: nil) },
-                fileCount: UIDevice.current.userInterfaceIdiom == .pad ? paneResources.files.count : 0,
-                showsFiles: UIDevice.current.userInterfaceIdiom == .pad && !paneResources.isEmpty,
-                hasNewFiles: !filePane.unseen.isEmpty,
-                onFiles: openFilesIndex
+                onSubagents: { presentedSheet = .childSessions(selectedID: nil) }
             )
             .padding(.bottom, 10)
             }
@@ -1062,9 +1058,10 @@ struct SessionDetailView: View {
     }
 
     private var filePaneInline: Bool {
-        filePane.isOpen && FilePaneLayout.presentation(width: paneNavigation.windowSize.width,
-            height: paneNavigation.windowSize.height, isPad: UIDevice.current.userInterfaceIdiom == .pad,
-            portraitDocked: filePane.portraitDocked) != .sheet
+        FilePaneLayout.isInline(isOpen: filePane.isOpen, presentation: FilePaneLayout.presentation(
+            width: paneNavigation.windowSize.width, height: paneNavigation.windowSize.height,
+            isPad: UIDevice.current.userInterfaceIdiom == .pad, portraitDocked: filePane.portraitDocked),
+            fullWidth: filePane.fullWidth)
     }
 
     private var filePaneTranscriptHeader: some View {
@@ -1323,7 +1320,7 @@ struct SessionDetailView: View {
 
     /// Keep the row and its spacing only while subagents are running.
     private var hasPills: Bool {
-        SubagentPill(agents: childAgents).isVisible || (UIDevice.current.userInterfaceIdiom == .pad && !paneResources.isEmpty)
+        SubagentPill(agents: childAgents).isVisible
     }
 
     /// S2 boards: "Add to this turn…" while working (`s2-view`), and "Message ·
@@ -1873,25 +1870,10 @@ struct ExternalSessionComposerNotice: View {
 struct ComposerPillRow: View {
     let agents: [ChildAgentSession]
     let onSubagents: () -> Void
-    var fileCount = 0
-    var showsFiles = false
-    var hasNewFiles = false
-    var onFiles: () -> Void = {}
 
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
-                if showsFiles {
-                    Button(action: onFiles) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "doc")
-                            Text("Files")
-                            Text("\(fileCount)").foregroundStyle(hasNewFiles ? Color.blue : S2.metaInk)
-                            if hasNewFiles { Circle().fill(.blue).frame(width: 5, height: 5) }
-                        }.padding(.horizontal, 12).modifier(ComposerPillChrome())
-                    }.buttonStyle(.plain).accessibilityIdentifier("composerPill.files")
-                        .accessibilityLabel("Files, \(fileCount)\(hasNewFiles ? ", new files" : "")")
-                }
                 let pill = SubagentPill(agents: agents)
                 if pill.isVisible {
                     Button(action: onSubagents) {

@@ -26,8 +26,13 @@ final class FilePaneUITests: XCTestCase {
         session.tap()
         let source = app.buttons["inlineFileCard_source.md"]
         XCTAssertFalse(source.exists, "The original attachment starts outside the rendered window.")
-        let files = app.buttons["composerPill.files"]
-        XCTAssertTrue(files.waitForExistence(timeout: 10))
+        // iPad opens Files & links from the session sheet, as iPhone does.
+        let options = app.buttons["sessionOptionsMenu"]
+        XCTAssertTrue(options.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["composerPill.files"].exists)
+        options.tap()
+        let files = app.buttons["sessionSheetTile-files"]
+        XCTAssertTrue(files.waitForExistence(timeout: 5))
         files.tap()
         let row = app.buttons["filePaneRow_source.md"]
         XCTAssertTrue(row.waitForExistence(timeout: 5))
@@ -104,6 +109,121 @@ final class FilePaneUITests: XCTestCase {
         XCTAssertEqual(composer.value as? String, "Draft stays live")
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "Split preview closed with draft preserved"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    func testPortraitReaderGoesFullScreenFromSheetAndSplit() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment = [
+            "LFG_SESSION_UI_FIXTURE": "1",
+            "LFG_SESSION_UI_FIXTURE_PRO_URL": "http://127.0.0.1:18983",
+            "LFG_SESSION_UI_FIXTURE_AIR_URL": "http://127.0.0.1:18984"
+        ]
+        XCUIDevice.shared.orientation = .portrait
+        app.launch()
+        let image = app.buttons.matching(identifier: "inlineFileCard_after.png").firstMatch
+        if !image.waitForExistence(timeout: 3) {
+            let session = app.staticTexts["sessionRow-pane-primary"]
+            if !session.waitForExistence(timeout: 3) {
+                let idle = app.buttons["sessionGroupHeader-status-idle"]
+                XCTAssertTrue(idle.waitForExistence(timeout: 10))
+                idle.tap()
+            }
+            XCTAssertTrue(session.waitForExistence(timeout: 5))
+            session.tap()
+        }
+        let close = app.buttons["filePaneClose"]
+        if close.waitForExistence(timeout: 2) { close.tap() }
+        XCTAssertTrue(image.waitForExistence(timeout: 10))
+        image.tap()
+
+        // Sheet: split and full screen sit side by side.
+        let dock = app.buttons["filePaneDock"]
+        let expand = app.buttons["filePaneExpand"]
+        let back = app.buttons["filePaneReturnToTranscript"]
+        let reader = app.otherElements["filePaneReader"]
+        // The split choice is remembered; start from the default sheet.
+        let sheetButton = app.buttons["filePaneSheet"]
+        if sheetButton.waitForExistence(timeout: 2) { sheetButton.tap() }
+        XCTAssertTrue(dock.waitForExistence(timeout: 5))
+        XCTAssertTrue(expand.exists)
+        XCTAssertEqual(expand.label, "Full screen")
+        let sheetFrame = reader.frame
+        XCTAssertGreaterThan(sheetFrame.width, app.frame.width * 0.8, "The sheet uses most of the window's width.")
+
+        expand.tap()
+        XCTAssertTrue(back.waitForExistence(timeout: 5))
+        XCTAssertFalse(dock.exists)
+        XCTAssertEqual(expand.label, "Exit full screen")
+        XCTAssertGreaterThan(reader.frame.height, sheetFrame.height)
+        XCTAssertGreaterThan(reader.frame.width, app.frame.width - 40)
+        attach(app, "Portrait full screen from the sheet")
+
+        expand.tap()
+        XCTAssertTrue(dock.waitForExistence(timeout: 5), "Leaving full screen returns to the sheet.")
+        dock.tap()
+        XCTAssertTrue(sheetButton.waitForExistence(timeout: 5))
+        XCTAssertEqual(expand.label, "Full screen")
+        expand.tap()
+        XCTAssertTrue(back.waitForExistence(timeout: 5))
+        back.tap()
+        XCTAssertTrue(sheetButton.waitForExistence(timeout: 5), "Leaving full screen returns to the split.")
+        sheetButton.tap()
+        XCTAssertTrue(dock.waitForExistence(timeout: 5))
+        close.tap()
+        XCTAssertFalse(reader.waitForExistence(timeout: 2))
+    }
+
+    func testRotationKeepsTheOpenFile() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment = [
+            "LFG_SESSION_UI_FIXTURE": "1",
+            "LFG_SESSION_UI_FIXTURE_PRO_URL": "http://127.0.0.1:18983",
+            "LFG_SESSION_UI_FIXTURE_AIR_URL": "http://127.0.0.1:18984"
+        ]
+        XCUIDevice.shared.orientation = .portrait
+        app.launch()
+        let image = app.buttons.matching(identifier: "inlineFileCard_after.png").firstMatch
+        if !image.waitForExistence(timeout: 3) {
+            let session = app.staticTexts["sessionRow-pane-primary"]
+            if !session.waitForExistence(timeout: 3) {
+                let idle = app.buttons["sessionGroupHeader-status-idle"]
+                XCTAssertTrue(idle.waitForExistence(timeout: 10))
+                idle.tap()
+            }
+            XCTAssertTrue(session.waitForExistence(timeout: 5))
+            session.tap()
+        }
+        let close = app.buttons["filePaneClose"]
+        if close.waitForExistence(timeout: 2) { close.tap() }
+        XCTAssertTrue(image.waitForExistence(timeout: 10))
+        image.tap()
+        let sheetButton = app.buttons["filePaneSheet"]
+        if sheetButton.waitForExistence(timeout: 2) { sheetButton.tap() }
+        XCTAssertTrue(app.buttons["filePaneDock"].waitForExistence(timeout: 5), "Starts in the portrait sheet.")
+
+        // Sheet -> landscape: the file moves into the side pane.
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let handle = app.buttons["filePaneResizeHandle"]
+        XCTAssertTrue(handle.waitForExistence(timeout: 10), "Rotating keeps the file open, beside the transcript.")
+        XCTAssertTrue(app.otherElements["filePaneReader"].exists)
+        attach(app, "Rotated from the portrait sheet")
+
+        // Side pane -> portrait: the file returns to the sheet.
+        XCUIDevice.shared.orientation = .portrait
+        XCTAssertTrue(app.buttons["filePaneDock"].waitForExistence(timeout: 10), "Rotating back shows the file in the sheet.")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(handle.waitForExistence(timeout: 10))
+        XCUIDevice.shared.orientation = .portrait
+        XCTAssertTrue(app.buttons["filePaneDock"].waitForExistence(timeout: 10))
+        app.buttons["filePaneClose"].tap()
+        XCTAssertFalse(app.otherElements["filePaneReader"].waitForExistence(timeout: 2))
+    }
+
+    private func attach(_ app: XCUIApplication, _ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
     }

@@ -997,6 +997,8 @@ struct FileViewerPage: View {
     let client: LFGClient?
     let onImageZoomChanged: (Bool) -> Void
     var allowsPictureInPicture = false
+    /// The iPad pane shows the whole image first; the phone viewer fits its width.
+    var fitsWholeImage = false
 
     enum Phase: Equatable { case loading, failed(String), data(Data), video(URL) }
     @State private var phase: Phase = .loading
@@ -1039,7 +1041,7 @@ struct FileViewerPage: View {
 
     @ViewBuilder private var imageBody: some View {
         if let image = imagePreview.image {
-            ZoomableImageView(image: image, isOriginal: imagePreview.isOriginal,
+            ZoomableImageView(image: image, isOriginal: imagePreview.isOriginal, fitsWhole: fitsWholeImage,
                               onZoomChanged: onImageZoomChanged)
                 .ignoresSafeArea(edges: .bottom)
                 .overlay(alignment: .topTrailing) {
@@ -1067,7 +1069,7 @@ struct FileViewerPage: View {
         switch ref.kind {
         case .image:
             if let img = UIImage(data: data) {
-                ZoomableImageView(image: img, onZoomChanged: onImageZoomChanged)
+                ZoomableImageView(image: img, fitsWhole: fitsWholeImage, onZoomChanged: onImageZoomChanged)
                     .ignoresSafeArea(edges: .bottom)
             } else {
                 ContentUnavailableView("Not an image", systemImage: "photo")
@@ -1121,12 +1123,14 @@ struct PDFDataView: UIViewRepresentable {
     final class Coordinator { var data: Data? }
 }
 
-/// Pinch-to-zoom image viewer backed by `UIScrollView`. Opens fit-to-width,
-/// pinches in for detail, and zooms out to fit the whole image. Double-tap
-/// toggles between fit-to-width and a 2.5x detail zoom centered on the tap.
+/// Pinch-to-zoom image viewer backed by `UIScrollView`. Opens at its resting
+/// zoom (fit-to-width, or the whole image when `fitsWhole`), pinches in for
+/// detail, and zooms out to fit the whole image. Double-tap toggles between the
+/// resting zoom and a 2.5x detail zoom centered on the tap.
 struct ZoomableImageView: UIViewRepresentable {
     let image: UIImage
     var isOriginal = true
+    var fitsWhole = false
     var onZoomChanged: (Bool) -> Void = { _ in }
 
     func makeUIView(context: Context) -> ZoomableScrollView {
@@ -1137,6 +1141,7 @@ struct ZoomableImageView: UIViewRepresentable {
         scrollView.bouncesZoom = true
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.backgroundColor = .clear
+        scrollView.fitsWhole = fitsWhole
 
         let imageView = UIImageView(image: image)
         imageView.contentMode = .scaleAspectFit
@@ -1175,7 +1180,7 @@ struct ZoomableImageView: UIViewRepresentable {
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
             guard let scrollView = scrollView as? ZoomableScrollView else { return }
             scrollView.centerImage()
-            let zoomed = scrollView.zoomScale > scrollView.fitWidthScale * 1.01
+            let zoomed = scrollView.zoomScale > scrollView.restingScale * 1.01
             guard zoomed != reportedZoomed else { return }
             reportedZoomed = zoomed
             DispatchQueue.main.async { [onZoomChanged] in onZoomChanged(zoomed) }
@@ -1183,10 +1188,10 @@ struct ZoomableImageView: UIViewRepresentable {
 
         @objc func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
             guard let scrollView, let imageView = scrollView.imageView else { return }
-            if scrollView.zoomScale > scrollView.fitWidthScale * 1.01 {
-                scrollView.setZoomScale(scrollView.fitWidthScale, animated: true)
+            if scrollView.zoomScale > scrollView.restingScale * 1.01 {
+                scrollView.setZoomScale(scrollView.restingScale, animated: true)
             } else {
-                let target = min(scrollView.maximumZoomScale, scrollView.fitWidthScale * 2.5)
+                let target = min(scrollView.maximumZoomScale, scrollView.restingScale * 2.5)
                 let point = gesture.location(in: imageView)
                 let size = CGSize(width: scrollView.bounds.width / target,
                                   height: scrollView.bounds.height / target)
@@ -1199,14 +1204,17 @@ struct ZoomableImageView: UIViewRepresentable {
     }
 }
 
-/// `UIScrollView` subclass laying out a single image: fit-to-width as the
-/// initial zoom, fit-whole as the minimum (so tall images can be zoomed out to
-/// see entirely), and keeps the image centered while zoomed.
+/// `UIScrollView` subclass laying out a single image: fit-to-width (or the
+/// whole image, with `fitsWhole`) as the resting zoom, fit-whole as the minimum
+/// (so tall images can be zoomed out to see entirely), and keeps the image
+/// centered while zoomed. A resize refits an image the user has not zoomed.
 final class ZoomableScrollView: UIScrollView {
     var imageView: UIImageView?
-    private(set) var fitWidthScale: CGFloat = 1
+    var fitsWhole = false
+    private(set) var restingScale: CGFloat = 1
     private var hasConfigured = false
     private var logicalImageSize: CGSize = .zero
+    private var fittedSize: CGSize = .zero
 
     /// Retain the first image's coordinate system. Replacing only its pixels
     /// leaves an in-progress pinch, zoom scale and scroll position untouched.
@@ -1226,12 +1234,13 @@ final class ZoomableScrollView: UIScrollView {
         guard logicalImageSize.width > 0, let image = imageView?.image else { return }
         let pixelWidth = CGFloat(image.cgImage?.width ?? Int(image.size.width * image.scale))
         // Permit at least one source pixel per point, including huge canvases.
-        maximumZoomScale = max(fitWidthScale * 4, pixelWidth / logicalImageSize.width)
+        maximumZoomScale = max(restingScale * 4, pixelWidth / logicalImageSize.width)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         configureIfNeeded()
+        refitIfResized()
         centerImage()
     }
 
@@ -1241,7 +1250,7 @@ final class ZoomableScrollView: UIScrollView {
     /// the image keeps the drag so the user can inspect details normally.
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer === panGestureRecognizer,
-           zoomScale <= fitWidthScale * 1.01 {
+           zoomScale <= restingScale * 1.01 {
             let velocity = panGestureRecognizer.velocity(in: self)
             if abs(velocity.x) > abs(velocity.y) {
                 return false
@@ -1259,15 +1268,25 @@ final class ZoomableScrollView: UIScrollView {
         logicalImageSize = image.size
         imageView.frame = CGRect(origin: .zero, size: logicalImageSize)
         contentSize = logicalImageSize
+        fit(resettingZoom: true)
+    }
 
-        let widthScale = bounds.width / image.size.width
-        let heightScale = bounds.height / image.size.height
-        let fitWhole = min(widthScale, heightScale)
+    /// The pane changed size (resize handle, full screen, rotation). An image at
+    /// rest stays fitted; a zoomed one keeps its zoom with the new range.
+    private func refitIfResized() {
+        guard hasConfigured, bounds.width > 0, bounds.height > 0, bounds.size != fittedSize else { return }
+        fit(resettingZoom: zoomScale <= restingScale * 1.01)
+    }
 
-        fitWidthScale = widthScale
-        minimumZoomScale = min(fitWhole, widthScale)   // zoom out to whole image
+    private func fit(resettingZoom: Bool) {
+        fittedSize = bounds.size
+        restingScale = CGFloat(ImageFit.restingScale(
+            boundsWidth: bounds.width, boundsHeight: bounds.height,
+            imageWidth: logicalImageSize.width, imageHeight: logicalImageSize.height, fitsWhole: fitsWhole))
+        minimumZoomScale = min(bounds.width / logicalImageSize.width,    // zoom out to whole image
+                               bounds.height / logicalImageSize.height)
         updateMaximumZoom()
-        zoomScale = widthScale                          // open fit-to-width
+        if resettingZoom { zoomScale = restingScale }
     }
 
     func centerImage() {
