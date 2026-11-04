@@ -62,3 +62,17 @@ All decided Oct 24:
 - **The open file reloads in place** when the transcript shows the agent rewrote it; the meta line says
   "updated just now". No server change. Board `ia-a-updated`.
 - **Keyboard:** Esc closes the pane in this pass; Cmd-[ / Cmd-] wait for the keyboard pass.
+
+## Changes after reviewing the built app (Nov 3)
+
+Eugene reviewed the shipped build's screenshots (`built-shots/`) and cut three pieces of chrome.
+Built in worktree `claude/ipad-pane-polish`; record `.claude/feature/ipad-pane-polish.md` there.
+
+- Full width: the way back is a plain circle chevron, like the other header buttons. No session name or
+  status dot (this replaces "a chip with the session's status and name" above).
+- The open file's transcript card has no selected state: no blue fill, border or "Open" (this replaces
+  "the open file's card turns blue with Open" above).
+- A selected row in the Sessions and Tasks sidebars is its fill only. The border was the iPadOS keyboard
+  focus ring.
+- The canvas boards (`ia-*`) still draw the old chip and the Open card; update them when the canvas is
+  reachable again.
