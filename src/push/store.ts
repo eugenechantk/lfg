@@ -5,6 +5,7 @@
 import { join, dirname } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { PATHS } from "../config.ts";
+import { hidesCwd, normalizeExcludes } from "../hidden-dirs.ts";
 
 export type PushDevice = {
   token: string; // APNs device token (hex)
@@ -16,6 +17,11 @@ export type PushDevice = {
   // Optional owner (an LFG_USERS email). Stored for a future per-user filter; the
   // v1 watcher fans out to all devices regardless.
   owner: string | null;
+  // Directories the device hides from its session list (its own copy of the
+  // app's hidden set). Sessions there send this device no alerts — iOS cannot
+  // drop a visible push once it lands, so the filter has to run here. Absent on
+  // devices registered by builds that predate the field: nothing is muted.
+  hiddenDirs?: string[];
   createdAt: number;
   lastSeenAt: number;
 };
@@ -42,6 +48,8 @@ export async function registerDevice(input: {
   token: string;
   env: "sandbox" | "production";
   owner?: string | null;
+  /// Omitted (an older app build) keeps the stored set rather than unmuting.
+  hiddenDirs?: string[] | null;
 }): Promise<PushDevice> {
   const list = await listDevices();
   const now = Date.now();
@@ -51,6 +59,7 @@ export async function registerDevice(input: {
     platform: "ios",
     env: input.env,
     owner: input.owner ?? existing?.owner ?? null,
+    hiddenDirs: input.hiddenDirs == null ? existing?.hiddenDirs : normalizeExcludes(input.hiddenDirs),
     createdAt: existing?.createdAt ?? now,
     lastSeenAt: now,
   };
@@ -59,6 +68,11 @@ export async function registerDevice(input: {
     : [...list, device];
   await writeDevices(next);
   return device;
+}
+
+/** Whether `device` hid the directory a session runs in, so it must not be alerted. */
+export function deviceMutesSession(device: { hiddenDirs?: string[] }, cwd: string | null | undefined): boolean {
+  return !!device.hiddenDirs?.length && hidesCwd(cwd, device.hiddenDirs);
 }
 
 /** Remove a device (explicit unregister, or APNs told us the token is dead). */

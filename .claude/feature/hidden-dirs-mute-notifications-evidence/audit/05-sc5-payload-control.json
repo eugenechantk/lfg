@@ -1,0 +1,6 @@
+{
+  "aps": { "alert": { "title": "AUDIT SHOWN", "body": "visible cwd /Users/eugenechan/dev/personal/lfg" }, "sound": "default" },
+  "sid": "audit-shown-0001",
+  "kind": "finished",
+  "session": { "id": "audit-shown-0001", "title": "AUDIT SHOWN", "cwd": "/Users/eugenechan/dev/personal/lfg" }
+}

@@ -859,9 +859,12 @@ public struct LFGClient: Sendable {
     /// Register this device's APNs token so the server can notify it when a
     /// session finishes a turn or needs input. `env` is "sandbox" for a Debug
     /// build run from Xcode, "production" for TestFlight/App Store.
-    public func registerPush(token: String, env: String, owner: String?) async throws {
+    /// `hiddenDirs` is this device's hidden-directory set: the host sends no
+    /// alert for a session there. Always sent, `[]` included — a host keeps the
+    /// stored set only when the field is missing (builds that predate it).
+    public func registerPush(token: String, env: String, owner: String?, hiddenDirs: [String]) async throws {
         _ = try await send("POST", "api/push/register", json: [
-            "token": token, "env": env, "owner": owner,
+            "token": token, "env": env, "owner": owner, "hiddenDirs": hiddenDirs,
         ])
     }
 

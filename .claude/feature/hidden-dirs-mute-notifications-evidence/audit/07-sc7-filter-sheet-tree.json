@@ -1,0 +1,296 @@
+{
+  "accessibility" : {
+    "element_count" : 15,
+    "frame_space" : "points",
+    "orientation" : "portrait",
+    "screen_hash" : "30fd9198eccd3f3",
+    "tree" : [
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 437
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 874,
+          "width" : 402,
+          "x" : 0,
+          "y" : 0
+        },
+        "label" : "lfg",
+        "ref" : "e0",
+        "role" : "Application",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 422
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 24,
+          "width" : 72,
+          "x" : 164,
+          "y" : 410
+        },
+        "label" : "Sheet Grabber",
+        "ref" : "e1",
+        "role" : "Button",
+        "value" : "Half screen",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 437
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 2622,
+          "width" : 1206,
+          "x" : -402,
+          "y" : -874
+        },
+        "id" : "PopoverDismissRegion",
+        "label" : "dismiss popup",
+        "ref" : "e2",
+        "role" : "Group",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 437
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 2622,
+          "width" : 1206,
+          "x" : -402,
+          "y" : -874
+        },
+        "id" : "PopoverDismissRegion",
+        "label" : "dismiss popup",
+        "ref" : "e3",
+        "role" : "Group",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 452
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 125,
+          "x" : 138,
+          "y" : 441
+        },
+        "label" : "Filter directories",
+        "ref" : "e4",
+        "role" : "Heading",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 343,
+          "y" : 452
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 34,
+          "width" : 63,
+          "x" : 311,
+          "y" : 434
+        },
+        "label" : "Done",
+        "ref" : "e5",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 641
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 450,
+          "width" : 386,
+          "x" : 8,
+          "y" : 415
+        },
+        "ref" : "e6",
+        "role" : "Group",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 502
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 38,
+          "width" : 355,
+          "x" : 23,
+          "y" : 482
+        },
+        "label" : "Hidden",
+        "ref" : "e7",
+        "role" : "Heading",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 58,
+          "y" : 545
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 19,
+          "width" : 39,
+          "x" : 38,
+          "y" : 535
+        },
+        "id" : "hiddenDir-\/Users\/eugenechan\/dev\/inbox",
+        "label" : "inbox",
+        "ref" : "e8",
+        "role" : "StaticText",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 135,
+          "y" : 564
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 13,
+          "width" : 192,
+          "x" : 38,
+          "y" : 556
+        },
+        "id" : "hiddenDir-\/Users\/eugenechan\/dev\/inbox",
+        "label" : "\/Users\/eugenechan\/dev\/inbox",
+        "ref" : "e9",
+        "role" : "StaticText",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 622
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 74,
+          "width" : 355,
+          "x" : 23,
+          "y" : 584
+        },
+        "label" : "Sessions in a hidden directory (and its subdirectories) stay out of the list, the counts and search on this device, and send it no notifications. They keep running. Swipe a directory to show it again.",
+        "ref" : "e10",
+        "role" : "StaticText",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 679
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 38,
+          "width" : 355,
+          "x" : 23,
+          "y" : 659
+        },
+        "label" : "Directories in use",
+        "ref" : "e11",
+        "role" : "Heading",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 730
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 64,
+          "width" : 355,
+          "x" : 23,
+          "y" : 698
+        },
+        "id" : "hideCandidate-\/Users\/eugenechan\/dev\/personal\/dump",
+        "label" : "dump, \/Users\/eugenechan\/dev\/personal\/dump",
+        "ref" : "e12",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 794
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 64,
+          "width" : 355,
+          "x" : 23,
+          "y" : 762
+        },
+        "id" : "hideCandidate-\/Users\/eugenechan\/dev\/personal\/fiftyworkout",
+        "label" : "fiftyworkout, \/Users\/eugenechan\/dev\/personal\/fiftyworkout",
+        "ref" : "e13",
+        "role" : "Button",
+        "visible" : true
+      },
+      {
+        "center" : {
+          "x" : 201,
+          "y" : 858
+        },
+        "enabled" : true,
+        "frame" : {
+          "height" : 64,
+          "width" : 355,
+          "x" : 23,
+          "y" : 826
+        },
+        "id" : "hideCandidate-\/Users\/eugenechan\/dev\/personal\/lfg",
+        "label" : "lfg, \/Users\/eugenechan\/dev\/personal\/lfg",
+        "ref" : "e14",
+        "role" : "Button",
+        "visible" : true
+      }
+    ],
+    "tree_mode" : "full"
+  },
+  "schema" : "flowdeck.ui",
+  "schemaVersion" : "1.0.0",
+  "screenshot" : {
+    "captured" : true,
+    "height" : 874,
+    "optimized" : false,
+    "path" : "\/var\/folders\/cd\/_rd32xx17dv8ltmf4ctm5wn40000gn\/T\/flowdeck-snapshot-A8125EAE-F419-4648-B4DD-5702FA5FD101.png",
+    "pixel_height" : 874,
+    "pixel_width" : 402,
+    "point_height" : 874,
+    "point_width" : 402,
+    "size_bytes" : 181246,
+    "unit" : "points",
+    "width" : 402
+  },
+  "simulator" : {
+    "name" : "Simulator",
+    "runtime" : "iOS",
+    "udid" : "5EC98829-9EAD-4367-9DFF-263DCF79192E"
+  },
+  "success" : true,
+  "timestamp" : "2026-11-03T02:37:06Z",
+  "type" : "ui_snapshot"
+}

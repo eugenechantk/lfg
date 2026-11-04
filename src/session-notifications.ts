@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { ApnsPayload, ApnsResult } from "./push/apns";
+import { deviceMutesSession } from "./push/store";
 import { alertTitle } from "./alert-title";
 
 export const NOTIFICATION_STATUSES = ["working", "completed", "needs-input", "blocked", "reminder"] as const;
@@ -12,14 +13,16 @@ export type SessionNotification = {
   id: string; sessionId: string; requestID: string; status: NotificationStatus;
   title: string; message: string; createdAt: number; turnStartedAt: number | null;
 };
-type MobileReceipt = { state: "pending" | "accepted" | "partial" | "failed" | "unavailable"; attempted: number; accepted: number; failed: number };
+// `muted` counts devices that hide the session's directory; present only when nonzero.
+type MobileReceipt = { state: "pending" | "accepted" | "partial" | "failed" | "unavailable" | "muted"; attempted: number; accepted: number; failed: number; muted?: number };
 type Receipt = { notification: SessionNotification; mobile: MobileReceipt };
-type NotificationSession = { sessionId?: string | null; title?: string | null; lastUserAt?: number | null };
+type NotificationSession = { sessionId?: string | null; title?: string | null; lastUserAt?: number | null; cwd?: string | null };
+type Device = { token: string; env: "sandbox" | "production"; hiddenDirs?: string[] };
 type Options = {
   sessions: () => Promise<NotificationSession[]>;
   emit: (sid: string, notification: SessionNotification) => void;
-  devices: () => Promise<{ token: string; env: "sandbox" | "production" }[]>;
-  send: (device: { token: string; env: "sandbox" | "production" }, payload: ApnsPayload) => Promise<ApnsResult>;
+  devices: () => Promise<Device[]>;
+  send: (device: Device, payload: ApnsPayload) => Promise<ApnsResult>;
   now?: () => number;
 };
 class NotificationError extends Error {
@@ -100,9 +103,10 @@ export class SessionNotifications {
         // agent's title, which idempotent retries compare against.
         title: alertTitle(status, notification.title), body: `${notificationLabels[status]}: ${message}`, sid,
         kind: status === "completed" ? "finished" : status === "needs-input" || status === "blocked" ? "needs-input" : "status",
-        notificationId: notification.id, session: { id: sid, title: sessionTitle(session.title) },
+        notificationId: notification.id, session: { id: sid, title: sessionTitle(session.title), cwd: session.cwd ?? null },
       };
       for (const device of devices) {
+        if (deviceMutesSession(device, session.cwd)) { receipt.mobile.muted = (receipt.mobile.muted ?? 0) + 1; continue; }
         receipt.mobile.attempted++;
         try {
           const result = await this.options.send(device, payload);
@@ -110,7 +114,7 @@ export class SessionNotifications {
         } catch { receipt.mobile.failed++; }
       }
       const { attempted, accepted, failed } = receipt.mobile;
-      receipt.mobile.state = !attempted ? "unavailable" : !failed ? "accepted" : accepted ? "partial" : "failed";
+      receipt.mobile.state = !attempted ? (receipt.mobile.muted ? "muted" : "unavailable") : !failed ? "accepted" : accepted ? "partial" : "failed";
       await this.save();
       return { ...receipt, duplicate: false };
     });

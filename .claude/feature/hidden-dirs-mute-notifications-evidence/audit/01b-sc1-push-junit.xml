@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="bun test" tests="137" assertions="303" failures="0" skipped="0" time="0.089317">
+  <testsuite name="src/push/channel-store.test.ts" file="src/push/channel-store.test.ts" tests="7" assertions="17" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+    <testsuite name="Live Activity channel store" file="src/push/channel-store.test.ts" line="22" tests="7" assertions="17" failures="0" skipped="0" time="0.001" hostname="Eugenes-MacBook-Pro">
+      <testcase name="empty store has no channel for either env" classname="Live Activity channel store" time="0.001736" file="src/push/channel-store.test.ts" line="23" assertions="3" />
+      <testcase name="saving a channel round-trips it" classname="Live Activity channel store" time="0.000803" file="src/push/channel-store.test.ts" line="30" assertions="3" />
+      <testcase name="sandbox and production channels coexist independently" classname="Live Activity channel store" time="0.000683" file="src/push/channel-store.test.ts" line="41" assertions="3" />
+      <testcase name="re-saving an env replaces its channel instead of appending" classname="Live Activity channel store" time="0.000454" file="src/push/channel-store.test.ts" line="53" assertions="2" />
+      <testcase name="removing an env leaves the other alone" classname="Live Activity channel store" time="0.000643" file="src/push/channel-store.test.ts" line="62" assertions="2" />
+      <testcase name="a corrupt store reads as empty rather than throwing" classname="Live Activity channel store" time="0.000374" file="src/push/channel-store.test.ts" line="74" assertions="2" />
+      <testcase name="rows without a usable channel id are ignored" classname="Live Activity channel store" time="0.00032" file="src/push/channel-store.test.ts" line="83" assertions="2" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="src/push/store.test.ts" file="src/push/store.test.ts" tests="5" assertions="10" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+    <testsuite name="device store (SC4)" file="src/push/store.test.ts" line="21" tests="5" assertions="10" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="empty store lists nothing" classname="device store (SC4)" time="0.000669" file="src/push/store.test.ts" line="22" assertions="2" />
+      <testcase name="register persists a device and dedupes by token" classname="device store (SC4)" time="0.000672" file="src/push/store.test.ts" line="28" assertions="3" />
+      <testcase name="registration survives a fresh read (restart)" classname="device store (SC4)" time="0.000399" file="src/push/store.test.ts" line="38" assertions="1" />
+      <testcase name="register stores a normalized hidden set and an omitted one keeps it" classname="device store (SC4)" time="0.000776" file="src/push/store.test.ts" line="46" assertions="3" />
+      <testcase name="unregister removes a device" classname="device store (SC4)" time="0.000553" file="src/push/store.test.ts" line="58" assertions="1" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="src/push/fleet-active-store.test.ts" file="src/push/fleet-active-store.test.ts" tests="2" assertions="4" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+    <testsuite name="fleet activity active-state persistence" file="src/push/fleet-active-store.test.ts" line="24" tests="2" assertions="4" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="round-trips the active fleet state across a simulated restart" classname="fleet activity active-state persistence" time="0.000475" file="src/push/fleet-active-store.test.ts" line="25" assertions="1" />
+      <testcase name="missing, removed, or corrupt state loads as empty" classname="fleet activity active-state persistence" time="0.000447" file="src/push/fleet-active-store.test.ts" line="50" assertions="3" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="src/push/fleet-slice.test.ts" file="src/push/fleet-slice.test.ts" tests="9" assertions="20" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+    <testsuite name="aggregatorConfig" file="src/push/fleet-slice.test.ts" line="20" tests="1" assertions="3" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="needs both url and secret; trims a trailing slash" classname="aggregatorConfig" time="0.000071" file="src/push/fleet-slice.test.ts" line="21" assertions="3" />
+    </testsuite>
+    <testsuite name="FleetSlicePublisher" file="src/push/fleet-slice.test.ts" line="28" tests="5" assertions="11" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="publishes this host&apos;s rows, authenticated, to its own slice" classname="FleetSlicePublisher" time="0.000285" file="src/push/fleet-slice.test.ts" line="29" assertions="2" />
+      <testcase name="an unchanged slice is not resent until the heartbeat is due" classname="FleetSlicePublisher" time="0.000063" file="src/push/fleet-slice.test.ts" line="41" assertions="3" />
+      <testcase name="an EMPTY slice is published too — that is how a host says &apos;nothing here&apos;" classname="FleetSlicePublisher" time="0.000039" file="src/push/fleet-slice.test.ts" line="50" assertions="2" />
+      <testcase name="any visible change republishes at once; row order alone does not" classname="FleetSlicePublisher" time="0.000057" file="src/push/fleet-slice.test.ts" line="58" assertions="2" />
+      <testcase name="a failed publish is retried on the next tick, not after a heartbeat" classname="FleetSlicePublisher" time="0.000037" file="src/push/fleet-slice.test.ts" line="66" assertions="2" />
+    </testsuite>
+    <testsuite name="collectFleetRows" file="src/push/fleet-slice.test.ts" line="75" tests="2" assertions="3" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="returns EVERY active row (no three-row cap) and keeps each clock across calls" classname="collectFleetRows" time="0.000119" file="src/push/fleet-slice.test.ts" line="78" assertions="2" />
+      <testcase name="a state change restarts that row&apos;s clock" classname="collectFleetRows" time="0.000024" file="src/push/fleet-slice.test.ts" line="85" assertions="1" />
+    </testsuite>
+    <testsuite name="runPushTick in slice mode" file="src/push/fleet-slice.test.ts" line="92" tests="1" assertions="3" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="publishes the slice and makes NO local Live Activity decision or send" classname="runPushTick in slice mode" time="0.000493" file="src/push/fleet-slice.test.ts" line="93" assertions="3" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="src/push/watcher.test.ts" file="src/push/watcher.test.ts" tests="63" assertions="138" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+    <testsuite name="reduceTransition (SC3)" file="src/push/watcher.test.ts" line="43" tests="7" assertions="9" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="busy → idle with no prompt emits &apos;finished&apos;" classname="reduceTransition (SC3)" time="0.00006" file="src/push/watcher.test.ts" line="44" assertions="1" />
+      <testcase name="busy → idle with a pending prompt emits &apos;needs-input&apos;" classname="reduceTransition (SC3)" time="0.000025" file="src/push/watcher.test.ts" line="49" assertions="1" />
+      <testcase name="still working emits nothing" classname="reduceTransition (SC3)" time="0.000009" file="src/push/watcher.test.ts" line="54" assertions="1" />
+      <testcase name="staying idle (no new prompt) emits nothing on the next tick" classname="reduceTransition (SC3)" time="0.000011" file="src/push/watcher.test.ts" line="58" assertions="2" />
+      <testcase name="a prompt appearing while already idle emits &apos;needs-input&apos;" classname="reduceTransition (SC3)" time="0.000008" file="src/push/watcher.test.ts" line="66" assertions="1" />
+      <testcase name="&apos;finished&apos; then a late prompt within the dedupe window does NOT double-fire" classname="reduceTransition (SC3)" time="0.00001" file="src/push/watcher.test.ts" line="71" assertions="2" />
+      <testcase name="a prompt appearing well after the dedupe window does fire" classname="reduceTransition (SC3)" time="0.000013" file="src/push/watcher.test.ts" line="78" assertions="1" />
+    </testsuite>
+    <testsuite name="buildPayload" file="src/push/watcher.test.ts" line="85" tests="3" assertions="7" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="needs-input uses the question text" classname="buildPayload" time="0.000088" file="src/push/watcher.test.ts" line="86" assertions="4" />
+      <testcase name="finished has a generic body" classname="buildPayload" time="0.000012" file="src/push/watcher.test.ts" line="94" assertions="2" />
+      <testcase name="falls back to a session-id stub when there&apos;s no title" classname="buildPayload" time="0.000036" file="src/push/watcher.test.ts" line="100" assertions="1" />
+    </testsuite>
+    <testsuite name="reduceFleetLiveActivity" file="src/push/watcher.test.ts" line="106" tests="16" assertions="38" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="starts one activity when the first session becomes active" classname="reduceFleetLiveActivity" time="0.000204" file="src/push/watcher.test.ts" line="107" assertions="3" />
+      <testcase name="does nothing when nothing is active and nothing is live" classname="reduceFleetLiveActivity" time="0.000021" file="src/push/watcher.test.ts" line="129" assertions="2" />
+      <testcase name="a paused (status=blocked) session is not on the card even while busy" classname="reduceFleetLiveActivity" time="0.000014" file="src/push/watcher.test.ts" line="139" assertions="2" />
+      <testcase name="a paused session that is asking something still counts as needs-input" classname="reduceFleetLiveActivity" time="0.000027" file="src/push/watcher.test.ts" line="152" assertions="1" />
+      <testcase name="a pending prompt outranks busy, matching the client&apos;s grouping" classname="reduceFleetLiveActivity" time="0.00002" file="src/push/watcher.test.ts" line="168" assertions="1" />
+      <testcase name="updates and preserves since while a session holds its state" classname="reduceFleetLiveActivity" time="0.000081" file="src/push/watcher.test.ts" line="181" assertions="2" />
+      <testcase name="a state change restarts that session&apos;s timer" classname="reduceFleetLiveActivity" time="0.000025" file="src/push/watcher.test.ts" line="208" assertions="1" />
+      <testcase name="sends nothing when only updatedAt would change" classname="reduceFleetLiveActivity" time="0.000024" file="src/push/watcher.test.ts" line="223" assertions="2" />
+      <testsuite name="ending the activity when the fleet empties (with an explicit hold)" file="src/push/watcher.test.ts" line="248" tests="5" assertions="14" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+        <testcase name="first empty tick sends a zeroed update and starts the hold, not an end" classname="ending the activity when the fleet empties (with an explicit hold) &amp;gt; reduceFleetLiveActivity" time="0.000034" file="src/push/watcher.test.ts" line="264" assertions="3" />
+        <testcase name="staying empty within the hold sends nothing and keeps the hold&apos;s start" classname="ending the activity when the fleet empties (with an explicit hold) &amp;gt; reduceFleetLiveActivity" time="0.000025" file="src/push/watcher.test.ts" line="273" assertions="2" />
+        <testcase name="ends once the fleet has been empty for the full debounce window" classname="ending the activity when the fleet empties (with an explicit hold) &amp;gt; reduceFleetLiveActivity" time="0.000037" file="src/push/watcher.test.ts" line="284" assertions="3" />
+        <testcase name="activity reappearing within the hold cancels the end with no start churn" classname="ending the activity when the fleet empties (with an explicit hold) &amp;gt; reduceFleetLiveActivity" time="0.00003" file="src/push/watcher.test.ts" line="293" assertions="4" />
+        <testcase name="an adopted card (no contentState) with an empty fleet is zero-updated then held" classname="ending the activity when the fleet empties (with an explicit hold) &amp;gt; reduceFleetLiveActivity" time="0.000014" file="src/push/watcher.test.ts" line="312" assertions="2" />
+      </testsuite>
+      <testsuite name="ending the activity when the fleet empties (default: immediately)" file="src/push/watcher.test.ts" line="324" tests="2" assertions="4" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+        <testcase name="the default hold is zero" classname="ending the activity when the fleet empties (default: immediately) &amp;gt; reduceFleetLiveActivity" time="0.000005" file="src/push/watcher.test.ts" line="336" assertions="1" />
+        <testcase name="the first empty tick ends the card at once — no zeroed update, dismissed now" classname="ending the activity when the fleet empties (default: immediately) &amp;gt; reduceFleetLiveActivity" time="0.00002" file="src/push/watcher.test.ts" line="340" assertions="3" />
+      </testsuite>
+      <testcase name="orders needs-input first, then oldest, and folds the rest into more" classname="reduceFleetLiveActivity" time="0.000298" file="src/push/watcher.test.ts" line="348" assertions="6" />
+    </testsuite>
+    <testsuite name="liveActivitiesEnabled" file="src/push/watcher.test.ts" line="379" tests="1" assertions="3" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="is enabled only by LFG_LIVE_ACTIVITIES=1" classname="liveActivitiesEnabled" time="0.000017" file="src/push/watcher.test.ts" line="380" assertions="3" />
+    </testsuite>
+    <testsuite name="runPushTick (SC1/SC2 server-side)" file="src/push/watcher.test.ts" line="389" tests="13" assertions="30" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="first sighting seeds without sending" classname="runPushTick (SC1/SC2 server-side)" time="0.00012" file="src/push/watcher.test.ts" line="390" assertions="2" />
+      <testcase name="busy → idle on the second tick pushes &apos;finished&apos; to each device" classname="runPushTick (SC1/SC2 server-side)" time="0.000215" file="src/push/watcher.test.ts" line="409" assertions="2" />
+      <testcase name="a device that hides the session&apos;s directory gets no push; others still do" classname="runPushTick (SC1/SC2 server-side)" time="0.000181" file="src/push/watcher.test.ts" line="434" assertions="1" />
+      <testcase name="an active child keeps an idle parent busy until the child finishes" classname="runPushTick (SC1/SC2 server-side)" time="0.000129" file="src/push/watcher.test.ts" line="461" assertions="3" />
+      <testcase name="a background process never makes an idle parent busy (bug 010)" classname="runPushTick (SC1/SC2 server-side)" time="0.000077" file="src/push/watcher.test.ts" line="492" assertions="2" />
+      <testcase name="busy → idle with a prompt pushes &apos;needs-input&apos; carrying the question" classname="runPushTick (SC1/SC2 server-side)" time="0.00009" file="src/push/watcher.test.ts" line="524" assertions="3" />
+      <testcase name="transition payload carries background wake metadata when deps provide it" classname="runPushTick (SC1/SC2 server-side)" time="0.000143" file="src/push/watcher.test.ts" line="547" assertions="3" />
+      <testcase name="transition payload omits journal wake keys when deps do not provide them" classname="runPushTick (SC1/SC2 server-side)" time="0.000115" file="src/push/watcher.test.ts" line="573" assertions="3" />
+      <testcase name="a 410/BadDeviceToken response prunes the device" classname="runPushTick (SC1/SC2 server-side)" time="0.00008" file="src/push/watcher.test.ts" line="597" assertions="1" />
+      <testcase name="no devices → nothing observed, nothing sent (SC7)" classname="runPushTick (SC1/SC2 server-side)" time="0.000041" file="src/push/watcher.test.ts" line="618" assertions="1" />
+      <testcase name="Live Activity deps can start even when regular APNs devices are absent" classname="runPushTick (SC1/SC2 server-side)" time="0.000332" file="src/push/watcher.test.ts" line="635" assertions="3" />
+      <testcase name="Live Activity updates publish once per broadcast channel" classname="runPushTick (SC1/SC2 server-side)" time="0.000227" file="src/push/watcher.test.ts" line="666" assertions="2" />
+      <testcase name="many active sessions still produce exactly one activity" classname="runPushTick (SC1/SC2 server-side)" time="0.000134" file="src/push/watcher.test.ts" line="712" assertions="4" />
+    </testsuite>
+    <testsuite name="partial Live Activity delivery does not advance state" file="src/push/watcher.test.ts" line="763" tests="4" assertions="12" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="an update with one transport failure keeps the old baseline and re-sends next tick" classname="partial Live Activity delivery does not advance state" time="0.000199" file="src/push/watcher.test.ts" line="818" assertions="4" />
+      <testcase name="an end with one transport failure keeps the card live and retries until all accept" classname="partial Live Activity delivery does not advance state" time="0.00009" file="src/push/watcher.test.ts" line="832" assertions="4" />
+      <testcase name="a permanently rejected channel is pruned instead of livelocking" classname="partial Live Activity delivery does not advance state" time="0.000066" file="src/push/watcher.test.ts" line="848" assertions="2" />
+      <testcase name="a start still advances on any acceptance (re-blasting risks duplicate cards)" classname="partial Live Activity delivery does not advance state" time="0.000123" file="src/push/watcher.test.ts" line="871" assertions="2" />
+    </testsuite>
+    <testsuite name="client-reported card end (SC4)" file="src/push/watcher.test.ts" line="911" tests="3" assertions="6" failures="0" skipped="0" time="0.001" hostname="Eugenes-MacBook-Pro">
+      <testcase name="while the server still believes a card is live it only ever sends update" classname="client-reported card end (SC4)" time="0.000117" file="src/push/watcher.test.ts" line="954" assertions="2" />
+      <testcase name="once the card is reported ended the next tick sends push-to-start" classname="client-reported card end (SC4)" time="0.000054" file="src/push/watcher.test.ts" line="962" assertions="2" />
+      <testcase name="noteFleetActivityEnded clears the persisted state" classname="client-reported card end (SC4)" time="0.001038" file="src/push/watcher.test.ts" line="970" assertions="2" />
+    </testsuite>
+    <testsuite name="client-reported card start" file="src/push/watcher.test.ts" line="994" tests="3" assertions="5" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="adopting a card stops the next tick from push-to-starting a duplicate" classname="client-reported card start" time="0.000499" file="src/push/watcher.test.ts" line="1008" assertions="2" />
+      <testcase name="an adopted card carries no content, so the first tick pushes the truth" classname="client-reported card start" time="0.000273" file="src/push/watcher.test.ts" line="1041" assertions="2" />
+      <testcase name="adopting twice keeps the first card&apos;s baselines" classname="client-reported card start" time="0.000211" file="src/push/watcher.test.ts" line="1051" assertions="1" />
+    </testsuite>
+    <testsuite name="pushWatcherEnabled (SC5)" file="src/push/watcher.test.ts" line="1065" tests="4" assertions="7" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="the canonical port pushes; a scratch port does not" classname="pushWatcherEnabled (SC5)" time="0.000036" file="src/push/watcher.test.ts" line="1068" assertions="3" />
+      <testcase name="LFG_PUSH_WATCHER=1 opts a deliberately-relocated primary back in" classname="pushWatcherEnabled (SC5)" time="0.000008" file="src/push/watcher.test.ts" line="1074" assertions="1" />
+      <testcase name="LFG_PUSH_WATCHER=0 silences even the canonical port" classname="pushWatcherEnabled (SC5)" time="0.000007" file="src/push/watcher.test.ts" line="1078" assertions="1" />
+      <testcase name="only the exact strings count — anything else falls through to the port" classname="pushWatcherEnabled (SC5)" time="0.00001" file="src/push/watcher.test.ts" line="1082" assertions="2" />
+    </testsuite>
+    <testsuite name="duplicate sessionId in one tick (phantom-notification storm)" file="src/push/watcher.test.ts" line="1096" tests="3" assertions="6" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="never sends, however many ticks run" classname="duplicate sessionId in one tick (phantom-notification storm)" time="0.000163" file="src/push/watcher.test.ts" line="1115" assertions="1" />
+      <testcase name="the first row wins the tick, so the survivor&apos;s own transitions still fire" classname="duplicate sessionId in one tick (phantom-notification storm)" time="0.000082" file="src/push/watcher.test.ts" line="1123" assertions="2" />
+      <testcase name="the fleet card renders one row, not two conflicting ones" classname="duplicate sessionId in one tick (phantom-notification storm)" time="0.000035" file="src/push/watcher.test.ts" line="1138" assertions="3" />
+    </testsuite>
+    <testsuite name="reduceTransition — prompt while busy" file="src/push/watcher.test.ts" line="1159" tests="5" assertions="11" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="a prompt appearing while busy emits &apos;needs-input&apos; at once" classname="reduceTransition — prompt while busy" time="0.000015" file="src/push/watcher.test.ts" line="1160" assertions="2" />
+      <testcase name="busy → idle with a prompt that was already announced stays silent" classname="reduceTransition — prompt while busy" time="0.000015" file="src/push/watcher.test.ts" line="1166" assertions="2" />
+      <testcase name="a prompt still present while busy does not re-fire on later ticks" classname="reduceTransition — prompt while busy" time="0.000015" file="src/push/watcher.test.ts" line="1173" assertions="1" />
+      <testcase name="the prompt retracting while busy (sign-in done / cancelled) emits nothing" classname="reduceTransition — prompt while busy" time="0.00001" file="src/push/watcher.test.ts" line="1179" assertions="2" />
+      <testcase name="busy prompt push is deduped against a push moments earlier, then retried" classname="reduceTransition — prompt while busy" time="0.000017" file="src/push/watcher.test.ts" line="1186" assertions="4" />
+    </testsuite>
+    <testsuite name="runPushTick — phone sign-in request" file="src/push/watcher.test.ts" line="1200" tests="1" assertions="4" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="a sign-in prompt appearing mid-turn pushes &apos;needs-input&apos; carrying its question" classname="runPushTick — phone sign-in request" time="0.000113" file="src/push/watcher.test.ts" line="1201" assertions="4" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="src/push/watcher-fleet-veto.test.ts" file="src/push/watcher-fleet-veto.test.ts" tests="8" assertions="20" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+    <testsuite name="reduceFleetLiveActivity — client-ended veto" file="src/push/watcher-fleet-veto.test.ts" line="14" tests="8" assertions="20" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="reports the active population on every decision" classname="reduceFleetLiveActivity — client-ended veto" time="0.000061" file="src/push/watcher-fleet-veto.test.ts" line="15" assertions="2" />
+      <testcase name="SC2: no start while every active sid is inside the veto population" classname="reduceFleetLiveActivity — client-ended veto" time="0.000033" file="src/push/watcher-fleet-veto.test.ts" line="25" assertions="4" />
+      <testcase name="SC2: a subset of the vetoed population is still vetoed" classname="reduceFleetLiveActivity — client-ended veto" time="0.00002" file="src/push/watcher-fleet-veto.test.ts" line="38" assertions="2" />
+      <testcase name="SC3: a session outside the veto population lifts it and starts" classname="reduceFleetLiveActivity — client-ended veto" time="0.000024" file="src/push/watcher-fleet-veto.test.ts" line="49" assertions="3" />
+      <testcase name="SC4: an empty veto population blocks nothing" classname="reduceFleetLiveActivity — client-ended veto" time="0.000021" file="src/push/watcher-fleet-veto.test.ts" line="61" assertions="2" />
+      <testcase name="SC4: no veto at all behaves exactly as before" classname="reduceFleetLiveActivity — client-ended veto" time="0.000014" file="src/push/watcher-fleet-veto.test.ts" line="72" assertions="2" />
+      <testcase name="the veto is irrelevant while a card is already tracked" classname="reduceFleetLiveActivity — client-ended veto" time="0.000028" file="src/push/watcher-fleet-veto.test.ts" line="82" assertions="2" />
+      <testcase name="an empty fleet under a veto is still &apos;nothing to do&apos;, not vetoed" classname="reduceFleetLiveActivity — client-ended veto" time="0.000021" file="src/push/watcher-fleet-veto.test.ts" line="94" assertions="3" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="src/push/apns.test.ts" file="src/push/apns.test.ts" tests="12" assertions="25" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+    <testsuite name="apnsConfigFromEnv" file="src/push/apns.test.ts" line="23" tests="2" assertions="3" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="returns null when unconfigured (SC7)" classname="apnsConfigFromEnv" time="0.00005" file="src/push/apns.test.ts" line="24" assertions="1" />
+      <testcase name="reads inline PEM + ids" classname="apnsConfigFromEnv" time="0.000018" file="src/push/apns.test.ts" line="28" assertions="2" />
+    </testsuite>
+    <testsuite name="apnsJwt" file="src/push/apns.test.ts" line="39" tests="2" assertions="5" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="produces a verifiable ES256 JWT with the right header/claims" classname="apnsJwt" time="0.000326" file="src/push/apns.test.ts" line="40" assertions="3" />
+      <testcase name="caches within the TTL and re-mints after it" classname="apnsJwt" time="0.000076" file="src/push/apns.test.ts" line="57" assertions="2" />
+    </testsuite>
+    <testsuite name="sendApns" file="src/push/apns.test.ts" line="67" tests="8" assertions="17" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="hits the sandbox host for a sandbox device and forwards the body" classname="sendApns" time="0.000152" file="src/push/apns.test.ts" line="68" assertions="3" />
+      <testcase name="uses the production host for a production device" classname="sendApns" time="0.000072" file="src/push/apns.test.ts" line="85" assertions="1" />
+      <testcase name="apnsBody carries thread-id + routing fields" classname="sendApns" time="0.000016" file="src/push/apns.test.ts" line="96" assertions="4" />
+      <testsuite name="sendWithTransientRetry" file="src/push/apns.test.ts" line="111" tests="4" assertions="7" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+        <testcase name="a status-0 failure is retried and the retry&apos;s success wins" classname="sendWithTransientRetry &amp;gt; sendApns" time="0.000105" file="src/push/apns.test.ts" line="121" assertions="2" />
+        <testcase name="a real HTTP status is authoritative — no retry on 410" classname="sendWithTransientRetry &amp;gt; sendApns" time="0.000031" file="src/push/apns.test.ts" line="128" assertions="2" />
+        <testcase name="success on the first attempt makes exactly one call" classname="sendWithTransientRetry &amp;gt; sendApns" time="0.000023" file="src/push/apns.test.ts" line="135" assertions="1" />
+        <testcase name="exhausting attempts returns the last transient failure" classname="sendWithTransientRetry &amp;gt; sendApns" time="0.000026" file="src/push/apns.test.ts" line="141" assertions="2" />
+      </testsuite>
+      <testcase name="apnsBody carries optional journal wake keys" classname="sendApns" time="0.000015" file="src/push/apns.test.ts" line="149" assertions="2" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="src/push/liveactivity.test.ts" file="src/push/liveactivity.test.ts" tests="7" assertions="13" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+    <testsuite name="Live Activity payload builders" file="src/push/liveactivity.test.ts" line="19" tests="4" assertions="4" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="buildStart produces the pinned liveactivity header/body shape" classname="Live Activity payload builders" time="0.000044" file="src/push/liveactivity.test.ts" line="31" assertions="1" />
+      <testcase name="content-state is normalised to exactly the wire shape" classname="Live Activity payload builders" time="0.000023" file="src/push/liveactivity.test.ts" line="53" assertions="1" />
+      <testcase name="buildUpdate produces the pinned update shape" classname="Live Activity payload builders" time="0.000014" file="src/push/liveactivity.test.ts" line="70" assertions="1" />
+      <testcase name="buildEnd produces the pinned end shape with optional dismissal date" classname="Live Activity payload builders" time="0.000018" file="src/push/liveactivity.test.ts" line="88" assertions="1" />
+    </testsuite>
+    <testsuite name="sendLiveActivity" file="src/push/liveactivity.test.ts" line="108" tests="1" assertions="6" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="uses the shared APNs transport with liveactivity topic, push type, and priority" classname="sendLiveActivity" time="0.000142" file="src/push/liveactivity.test.ts" line="109" assertions="6" />
+    </testsuite>
+    <testsuite name="broadcast channel on start" file="src/push/liveactivity.test.ts" line="133" tests="2" assertions="3" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="a start carries input-push-channel when a channel exists" classname="broadcast channel on start" time="0.000011" file="src/push/liveactivity.test.ts" line="142" assertions="1" />
+      <testcase name="a start omits the key entirely when there is no channel" classname="broadcast channel on start" time="0.000019" file="src/push/liveactivity.test.ts" line="150" assertions="2" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="src/push/broadcast.test.ts" file="src/push/broadcast.test.ts" tests="14" assertions="39" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+    <testsuite name="channel management endpoints" file="src/push/broadcast.test.ts" line="42" tests="6" assertions="18" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="management host and port differ by environment" classname="channel management endpoints" time="0.00003" file="src/push/broadcast.test.ts" line="45" assertions="4" />
+      <testcase name="createBroadcastChannel posts the documented body and returns the id header" classname="channel management endpoints" time="0.0002" file="src/push/broadcast.test.ts" line="52" assertions="6" />
+      <testcase name="createBroadcastChannel fails loudly when APNs rejects" classname="channel management endpoints" time="0.000083" file="src/push/broadcast.test.ts" line="73" assertions="1" />
+      <testcase name="createBroadcastChannel rejects a success with no channel id" classname="channel management endpoints" time="0.000055" file="src/push/broadcast.test.ts" line="80" assertions="1" />
+      <testcase name="listBroadcastChannels reads the all-channels path" classname="channel management endpoints" time="0.000115" file="src/push/broadcast.test.ts" line="85" assertions="3" />
+      <testcase name="deleteBroadcastChannel sends the id as a header, not in the path" classname="channel management endpoints" time="0.0001" file="src/push/broadcast.test.ts" line="92" assertions="3" />
+    </testsuite>
+    <testsuite name="broadcast publishing" file="src/push/broadcast.test.ts" line="101" tests="5" assertions="15" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="an update publishes to /4/broadcasts with the channel header and no apns-topic" classname="broadcast publishing" time="0.000143" file="src/push/broadcast.test.ts" line="102" assertions="6" />
+      <testcase name="every broadcast carries a nonzero apns-expiration" classname="broadcast publishing" time="0.000069" file="src/push/broadcast.test.ts" line="122" assertions="2" />
+      <testcase name="an end is given the long expiry so a returning phone still dismisses" classname="broadcast publishing" time="0.000068" file="src/push/broadcast.test.ts" line="138" assertions="2" />
+      <testcase name="priority spends budget only when it matters" classname="broadcast publishing" time="0.000015" file="src/push/broadcast.test.ts" line="155" assertions="3" />
+      <testcase name="a rejected broadcast reports the APNs reason" classname="broadcast publishing" time="0.000055" file="src/push/broadcast.test.ts" line="161" assertions="2" />
+    </testsuite>
+    <testsuite name="ensureBroadcastChannel" file="src/push/broadcast.test.ts" line="174" tests="3" assertions="6" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+      <testcase name="reuses a stored channel without calling APNs" classname="ensureBroadcastChannel" time="0.000112" file="src/push/broadcast.test.ts" line="175" assertions="2" />
+      <testcase name="creates and persists on first use" classname="ensureBroadcastChannel" time="0.00005" file="src/push/broadcast.test.ts" line="189" assertions="2" />
+      <testcase name="a failing create returns null rather than throwing" classname="ensureBroadcastChannel" time="0.000084" file="src/push/broadcast.test.ts" line="205" assertions="2" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="src/push/liveactivity-store.test.ts" file="src/push/liveactivity-store.test.ts" tests="10" assertions="17" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+    <testsuite name="Live Activity token store" file="src/push/liveactivity-store.test.ts" line="20" tests="10" assertions="17" failures="0" skipped="0" time="0.003" hostname="Eugenes-MacBook-Pro">
+      <testcase name="empty store lists nothing" classname="Live Activity token store" time="0.000342" file="src/push/liveactivity-store.test.ts" line="21" assertions="1" />
+      <testcase name="upsert persists by token and refreshes the record" classname="Live Activity token store" time="0.003367" file="src/push/liveactivity-store.test.ts" line="26" assertions="5" />
+      <testcase name="lists only push-to-start tokens" classname="Live Activity token store" time="0.000375" file="src/push/liveactivity-store.test.ts" line="40" assertions="1" />
+      <testsuite name="legacy activityUpdate rows" file="src/push/liveactivity-store.test.ts" line="58" tests="2" assertions="3" failures="0" skipped="0" time="0" hostname="Eugenes-MacBook-Pro">
+        <testcase name="are pruned on read, not merely on the next write" classname="legacy activityUpdate rows &amp;gt; Live Activity token store" time="0.000404" file="src/push/liveactivity-store.test.ts" line="59" assertions="2" />
+        <testcase name="do not consume push-to-start cap slots" classname="legacy activityUpdate rows &amp;gt; Live Activity token store" time="0.000616" file="src/push/liveactivity-store.test.ts" line="73" assertions="1" />
+      </testsuite>
+      <testsuite name="pushToStart tokens are capped to the newest 3 per env" file="src/push/liveactivity-store.test.ts" line="102" tests="4" assertions="5" failures="0" skipped="0" time="0.03" hostname="Eugenes-MacBook-Pro">
+        <testcase name="registering a 4th sandbox token evicts the oldest sandbox token only" classname="pushToStart tokens are capped to the newest 3 per env &amp;gt; Live Activity token store" time="0.011008" file="src/push/liveactivity-store.test.ts" line="103" assertions="1" />
+        <testcase name="the two envs have independent caps" classname="pushToStart tokens are capped to the newest 3 per env &amp;gt; Live Activity token store" time="0.011241" file="src/push/liveactivity-store.test.ts" line="116" assertions="2" />
+        <testcase name="re-registering an existing token refreshes it instead of burning a slot" classname="pushToStart tokens are capped to the newest 3 per env &amp;gt; Live Activity token store" time="0.008652" file="src/push/liveactivity-store.test.ts" line="128" assertions="1" />
+        <testcase name="an oversized store on disk is capped at read time, before any new registration" classname="pushToStart tokens are capped to the newest 3 per env &amp;gt; Live Activity token store" time="0.000484" file="src/push/liveactivity-store.test.ts" line="143" assertions="1" />
+      </testsuite>
+      <testcase name="lookup and remove operate by token" classname="Live Activity token store" time="0.00063" file="src/push/liveactivity-store.test.ts" line="160" assertions="2" />
+    </testsuite>
+  </testsuite>
+</testsuites>

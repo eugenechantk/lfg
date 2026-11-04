@@ -39,6 +39,33 @@ test("fans custom result out independently and records acceptance without claimi
   expect((await new SessionNotifications(f.file, f.options).ready).completedTurn(sid, { lastUserAt: 100 })).toBe(true);
 });
 
+test("devices that hide the session's directory are skipped and reported as muted", async () => {
+  const f = fixture();
+  f.options.sessions = async () => [{ sessionId: sid, title: "Autopilot", lastUserAt: 100, cwd: "/Users/e/.gbrain/run-1" }];
+  f.options.devices = async () => [
+    { token: "phone", env: "production" as const, hiddenDirs: ["*/.gbrain"] },
+    { token: "mac", env: "production" as const },
+  ] as any;
+  const service = new SessionNotifications(f.file, f.options);
+  const r = await service.send(sid, { requestID: "muted-1", status: "completed", message: "Done." });
+  expect(f.sent.map(s => s.device.token)).toEqual(["mac"]);
+  expect(f.sent[0].payload.session.cwd).toBe("/Users/e/.gbrain/run-1");
+  expect(r.mobile).toEqual({ state: "accepted", attempted: 1, accepted: 1, failed: 0, muted: 1 });
+  f.options.devices = async () => [{ token: "phone", env: "production" as const, hiddenDirs: ["/Users/e/.gbrain"] }] as any;
+  const all = await new SessionNotifications(f.file, f.options).send(sid, { requestID: "muted-2", status: "completed", message: "Done." });
+  expect(f.sent).toHaveLength(1);
+  expect(all.mobile).toEqual({ state: "muted", attempted: 0, accepted: 0, failed: 0, muted: 1 });
+  expect(f.events).toHaveLength(2); // the in-app event still lands
+});
+
+test("a maximum-length cwd in the snapshot still fits the APNs payload limit", async () => {
+  const f = fixture();
+  f.options.sessions = async () => [{ sessionId: sid, title: "🧪".repeat(80), lastUserAt: 100, cwd: "/" + "a".repeat(1023) }];
+  await new SessionNotifications(f.file, f.options).send(sid, { requestID: "long-cwd", status: "working", title: "🧪".repeat(80), message: "🧪".repeat(500) });
+  // hostId is a 36-char uuid (hostinfo.ts); 1024 is macOS PATH_MAX.
+  expect(Buffer.byteLength(apnsBody({ ...f.sent[0].payload, hostId: crypto.randomUUID(), seq: Number.MAX_SAFE_INTEGER }))).toBeLessThan(4096);
+});
+
 test("maximum Unicode copy remains within the APNs alert payload limit", async () => {
   const f = fixture();
   await f.service.send(sid, { requestID: "unicode", status: "working", title: "🧪".repeat(80), message: "🧪".repeat(500) });

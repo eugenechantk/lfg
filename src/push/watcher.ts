@@ -17,7 +17,7 @@ import {
 } from "../sessions.ts";
 import { capturePaneAsync, isBusy, parsePrompt, type PanePrompt } from "../tmux.ts";
 import { codexDelegationSessionIds } from "../activity.ts";
-import { listDevices } from "./store.ts";
+import { deviceMutesSession, listDevices } from "./store.ts";
 import { listPushToStartTokens, removeLiveActivityToken } from "./liveactivity-store.ts";
 import {
   ensureBroadcastChannel,
@@ -556,7 +556,7 @@ export type TickDeps = {
     >
   >;
   observe: (s: PayloadSessionInput & { tmuxTarget?: string | null; transcriptPath?: string | null }) => Promise<SessionState>;
-  devices: () => Promise<Array<{ token: string; env: "sandbox" | "production" }>>;
+  devices: () => Promise<Array<{ token: string; env: "sandbox" | "production"; hiddenDirs?: string[] }>>;
   cfg: ApnsConfig;
   send: (
     device: { token: string; env: "sandbox" | "production" },
@@ -924,6 +924,8 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
     }
     const payload = withWakeMetadata(buildPayload(s, event, state.promptQuestion), deps);
     for (const d of devices) {
+      // The device hid this directory from its list; it gets no alert either.
+      if (deviceMutesSession(d, s.cwd)) continue;
       const r = await deps.send(d, payload, deps.cfg);
       if (!r.ok && (r.status === 410 || r.reason === "BadDeviceToken" || r.reason === "Unregistered")) {
         await deps.onDeadToken?.(d.token);

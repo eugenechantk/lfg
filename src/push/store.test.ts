@@ -43,6 +43,18 @@ describe("device store (SC4)", () => {
     expect(again.map((d) => d.token)).toContain("tok2");
   });
 
+  test("register stores a normalized hidden set and an omitted one keeps it", async () => {
+    const s = await store();
+    await s.registerDevice({ token: "h", env: "sandbox", hiddenDirs: ["/Users/e/.gbrain/", "relative", "*/gbrain-cli-*"] });
+    expect((await s.listDevices())[0].hiddenDirs).toEqual(["/Users/e/.gbrain", "*/gbrain-cli-*"]);
+    // An old app build re-registers without the field: it must not unmute.
+    await s.registerDevice({ token: "h", env: "sandbox" });
+    expect((await s.listDevices())[0].hiddenDirs).toEqual(["/Users/e/.gbrain", "*/gbrain-cli-*"]);
+    // An explicit empty list is a real "show everything".
+    await s.registerDevice({ token: "h", env: "sandbox", hiddenDirs: [] });
+    expect((await s.listDevices())[0].hiddenDirs).toEqual([]);
+  });
+
   test("unregister removes a device", async () => {
     const s = await store();
     await s.registerDevice({ token: "a", env: "sandbox" });

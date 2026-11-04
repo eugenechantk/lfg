@@ -25,6 +25,14 @@ final class PushManager {
     private weak var store: SessionStore?
 
     private var latestToken: String?
+    /// Hosts (by `Host.id`) whose last registration failed. A host that was
+    /// down when a directory was hidden would otherwise keep alerting for it
+    /// until the next launch; `retryFailedRegistrations` runs on foreground.
+    private var unregisteredHosts: Set<String> = []
+    /// The registration in flight. Sends run one at a time, in order, and each
+    /// reads the hidden set when it runs — so the last request a host receives
+    /// always carries the newest set, even after a quick hide/unhide.
+    private var registration: Task<Void, Never>?
     private let log = Logger(subsystem: "dev.omg.lfg", category: "push")
 
     private init() {}
@@ -90,7 +98,7 @@ final class PushManager {
         let hex = apnsTokenHex(deviceToken)
         latestToken = hex
         apply(.gotToken(hex))
-        Task { await sendToServer(hex) }
+        enqueueRegistration(hex, only: nil)
     }
 
     func didFailToRegister(error: Error) {
@@ -102,10 +110,26 @@ final class PushManager {
     /// a freshly-connected box learns about this device.
     func reregisterIfPossible() {
         guard let token = latestToken else { return }
-        Task { await sendToServer(token) }
+        enqueueRegistration(token, only: nil)
     }
 
-    private func sendToServer(_ token: String) async {
+    /// Re-send to the hosts that missed the last registration. Cheap no-op
+    /// when every host is current, so it is safe on every foreground.
+    func retryFailedRegistrations() {
+        guard let token = latestToken, !unregisteredHosts.isEmpty else { return }
+        enqueueRegistration(token, only: unregisteredHosts)
+    }
+
+    private func enqueueRegistration(_ token: String, only: Set<String>?) {
+        let previous = registration
+        registration = Task {
+            await previous?.value
+            await sendToServer(token, only: only)
+        }
+    }
+
+    /// `only` limits the send to those hosts (a retry); nil means every host.
+    private func sendToServer(_ token: String, only: Set<String>?) async {
         // Register the token with EVERY host so any machine can push to this
         // device (multi-host). Accepted if at least one host takes it.
         guard let settings, !settings.hosts.isEmpty else {
@@ -114,18 +138,24 @@ final class PushManager {
         }
         var anyOK = false
         var lastErr: String?
-        for host in settings.hosts {
+        for host in settings.hosts where only?.contains(host.id) ?? true {
             guard let client = settings.client(for: host) else { continue }
             do {
-                try await client.registerPush(token: token, env: apnsEnv, owner: settings.defaultOwner)
+                try await client.registerPush(token: token, env: apnsEnv, owner: settings.defaultOwner,
+                                              hiddenDirs: settings.hiddenDirs.paths)
                 anyOK = true
+                unregisteredHosts.remove(host.id)
             } catch {
                 lastErr = error.localizedDescription
+                unregisteredHosts.insert(host.id)
                 log.error("push register on \(host.label) failed: \(error.localizedDescription)")
             }
         }
+        // Hosts removed from settings must not be retried forever.
+        unregisteredHosts.formIntersection(settings.hosts.map(\.id))
         if anyOK { apply(.serverAccepted(token: token)) }
-        else { apply(.serverFailed(reason: lastErr ?? "no reachable host")) }
+        // A failed retry says nothing new: the full send already reported it.
+        else if only == nil { apply(.serverFailed(reason: lastErr ?? "no reachable host")) }
     }
 
     // MARK: Tap routing
@@ -135,6 +165,12 @@ final class PushManager {
     /// extract it off the main actor before hopping here.
     func handleTap(_ note: PushNotification) {
         store?.openFromNotification(note.sid, snapshot: note.session)
+    }
+
+    /// A push about a session in a directory this device hides. Hosts skip
+    /// such devices; this catches one still running an older server build.
+    func isMuted(_ note: PushNotification) -> Bool {
+        settings.map { note.isMuted(by: $0.hiddenDirs) } ?? false
     }
 
     // MARK: Background wake (Phase 2)
@@ -280,6 +316,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             Task { @MainActor in
                 _ = await PushManager.shared.handleBackgroundSync(hint)
             }
+        }
+        if let note = PushNotification(userInfo: notification.request.content.userInfo),
+           await PushManager.shared.isMuted(note) {
+            return []
         }
         return [.banner, .sound]
     }

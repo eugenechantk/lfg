@@ -209,11 +209,16 @@ struct CrossProviderSwitchStatusFixture: View {
     /// of them is kept out of the list, the counts, search and the Live Activity.
     ///
     /// Persisted, unlike `userFilter` — a mute list you have to re-apply every
-    /// launch isn't a mute list. Hiding is a viewing preference only: the session
-    /// keeps running, the desktop app still shows it, and a notification
-    /// deep-link into it still opens (see `SessionStore.session(_:)`).
+    /// launch isn't a mute list. The session keeps running and the desktop app
+    /// still shows it. Hosts send this device no alerts for it — the set rides
+    /// along with the push token, so a change re-registers with every host. A
+    /// notification that predates the change still opens it
+    /// (see `SessionStore.session(_:)`).
     var hiddenDirs: HiddenDirs {
-        didSet { defaults.set(hiddenDirs.paths, forKey: Self.hiddenDirsKey) }
+        didSet {
+            defaults.set(hiddenDirs.paths, forKey: Self.hiddenDirsKey)
+            if hiddenDirs != oldValue { PushManager.shared.reregisterIfPossible() }
+        }
     }
 
     func hideDirectory(_ path: String) { hiddenDirs = hiddenDirs.adding(path) }

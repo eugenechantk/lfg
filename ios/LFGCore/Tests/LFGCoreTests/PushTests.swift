@@ -16,6 +16,23 @@ final class PushTests: XCTestCase {
         XCTAssertEqual(note?.kind, .needsInput)
     }
 
+    // Foreground backstop for a host that still runs a build without the
+    // server-side filter: a push about a hidden directory shows no banner.
+    func testNotificationForAHiddenDirectoryIsMuted() {
+        let hidden = HiddenDirs(["/Users/e/.gbrain"])
+        let inside = PushNotification(userInfo: [
+            "sid": "s1", "session": ["id": "s1", "cwd": "/Users/e/.gbrain/run-7"],
+        ])
+        let outside = PushNotification(userInfo: [
+            "sid": "s2", "session": ["id": "s2", "cwd": "/Users/e/dev/lfg"],
+        ])
+        let noSnapshot = PushNotification(userInfo: ["sid": "s3"])
+        XCTAssertEqual(inside?.isMuted(by: hidden), true)
+        XCTAssertEqual(outside?.isMuted(by: hidden), false)
+        XCTAssertEqual(noSnapshot?.isMuted(by: hidden), false, "no cwd is never hidden")
+        XCTAssertEqual(inside?.isMuted(by: HiddenDirs()), false)
+    }
+
     func testParseNotificationToleratesUnknownKind() {
         let note = PushNotification(userInfo: ["sid": "s1", "kind": "weird"])
         XCTAssertEqual(note?.sid, "s1")

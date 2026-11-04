@@ -281,7 +281,7 @@ struct HiddenDirectoriesView: View {
                     }
                 }
             } header: { Text("Hidden") } footer: {
-                Text("Sessions in a hidden directory (and its subdirectories) stay out of the list, the counts and search on this device. They keep running, and a notification still opens them. Swipe a directory to show it again.")
+                Text("Sessions in a hidden directory (and its subdirectories) stay out of the list, the counts and search on this device, and send it no notifications. They keep running. Swipe a directory to show it again.")
             }
 
             if !addable.isEmpty {

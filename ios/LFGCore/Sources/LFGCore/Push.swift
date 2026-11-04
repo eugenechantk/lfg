@@ -84,6 +84,14 @@ public struct PushNotification: Sendable, Equatable {
     }
 }
 
+extension PushNotification {
+    /// Whether this device hid the directory the session runs in. Hosts already
+    /// skip such devices; this covers a host still running an older build.
+    public func isMuted(by hidden: HiddenDirs) -> Bool {
+        hidden.hides(cwd: session?.cwd)
+    }
+}
+
 /// Format a raw APNs device token (`Data`) as the lowercase hex string the
 /// server stores and uses in the `/3/device/<token>` path.
 public func apnsTokenHex(_ token: Data) -> String {

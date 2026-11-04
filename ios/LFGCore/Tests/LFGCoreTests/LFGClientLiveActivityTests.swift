@@ -97,6 +97,31 @@ final class LFGClientLiveActivityTests: XCTestCase {
         XCTAssertEqual(try requestBody(request), [:])
     }
 
+    // The phone's hidden directories ride along with its token so each host can
+    // skip alerts for sessions the phone has hidden. An empty set is sent as []
+    // (unmute everything), never omitted — omission means "old build, keep it".
+    func testRegisterPushSendsTheHiddenDirectories() async throws {
+        let client = makeClient()
+
+        try await client.registerPush(token: "00ab", env: "production", owner: nil,
+                                      hiddenDirs: ["/Users/e/.gbrain", "*/scratch-*"])
+
+        let request = try XCTUnwrap(RequestCapturingURLProtocol.capturedRequest)
+        XCTAssertEqual(request.url?.path, "/api/push/register")
+        let object = try requestObject(request)
+        XCTAssertEqual(object["token"] as? String, "00ab")
+        XCTAssertEqual(object["hiddenDirs"] as? [String], ["/Users/e/.gbrain", "*/scratch-*"])
+
+        try await client.registerPush(token: "00ab", env: "production", owner: nil, hiddenDirs: [])
+        let cleared = try requestObject(try XCTUnwrap(RequestCapturingURLProtocol.capturedRequest))
+        XCTAssertEqual(cleared["hiddenDirs"] as? [String], [])
+    }
+
+    private func requestObject(_ request: URLRequest) throws -> [String: Any] {
+        let data = try XCTUnwrap(request.httpBody ?? requestBodyStreamData(request))
+        return try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
     /// `body` is the JSON the stub server answers with; the default (nil) keeps
     /// the original empty 204 used by the fire-and-forget registration calls.
     private func makeClient(body: String? = nil) -> LFGClient {

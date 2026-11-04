@@ -2298,15 +2298,21 @@ export async function cmdServe(options: {
           token?: string;
           env?: string;
           owner?: string | null;
+          hiddenDirs?: unknown;
         } | null;
         const token = body?.token?.trim();
         if (!token || !/^[0-9a-fA-F]{8,}$/.test(token)) return err(400, "invalid token");
         const env = body?.env === "production" ? "production" : "sandbox";
-        const device = await registerDevice({ token, env, owner: body?.owner ?? null });
+        // The device's hidden directories: sessions there send it no alerts.
+        // Absent (an older app build) keeps what is stored.
+        const hiddenDirs = Array.isArray(body?.hiddenDirs)
+          ? body.hiddenDirs.filter((d): d is string => typeof d === "string")
+          : undefined;
+        const device = await registerDevice({ token, env, owner: body?.owner ?? null, hiddenDirs });
         // A device just arrived — make sure the watcher is running (it self-skips
         // when push isn't configured, so this is a no-op without APNs creds).
         ensurePushWatcher();
-        return json({ ok: true, env: device.env });
+        return json({ ok: true, env: device.env, hiddenDirs: device.hiddenDirs?.length ?? 0 });
       }
       if (path === "/api/push/live-activity/start-token" && req.method === "POST") {
         const body = (await req.json().catch(() => null)) as {

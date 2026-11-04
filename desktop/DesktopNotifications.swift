@@ -331,9 +331,12 @@ final class DesktopNotificationController: NSObject, ObservableObject, UNUserNot
 }
 
 extension SessionStore {
+    /// Sessions that may raise a native alert. A directory hidden on this Mac
+    /// mutes its alerts as well as its rows; the tracker forgets a hidden
+    /// session, so unhiding re-seeds it rather than replaying what it missed.
     var notificationItems: [SessionItem] {
         hosts.flatMap { host in
-            host.sessions.filter { !$0.closed }.map { session in
+            host.sessions.filter { !$0.closed && !hiddenDirs.hides(cwd: $0.cwd) }.map { session in
                 SessionItem(session: session, hostURL: host.url, hostId: host.info?.hostId ?? host.url,
                             hostLabel: host.label, hostIsLocal: host.isLocal, hostSSHTarget: host.sshTarget,
                             hostRemoteTransport: host.remoteTransport,

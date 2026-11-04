@@ -1,0 +1,6 @@
+{
+  "aps": { "alert": { "title": "AUDIT MUTED 2", "body": "hidden cwd /Users/eugenechan/dev/inbox/audit-sub" }, "sound": "default" },
+  "sid": "audit-muted-0002",
+  "kind": "finished",
+  "session": { "id": "audit-muted-0002", "title": "AUDIT MUTED 2", "cwd": "/Users/eugenechan/dev/inbox/audit-sub" }
+}

@@ -76,6 +76,30 @@ enum DesktopNotificationTests {
         asking.observeNotifications()
         try check(kinds == [.needsInput], "adjacent busy and prompt frames emit only needs-input")
 
+        // A directory hidden on this Mac mutes its alerts too; unhiding re-seeds
+        // instead of replaying what happened while it was hidden.
+        let muted = SessionStore()
+        muted.configuredHosts = [entry]
+        muted.hiddenDirs = HiddenDirs(["/tmp"])
+        muted.hosts = [HostState(url: entry.url, sshTarget: nil, sessions: [item(busy: true).session])]
+        var mutedKinds: [DesktopNotificationKind] = []
+        muted.onSessionNotification = { mutedKinds.append($0.kind) }
+        muted.observeNotifications()
+        muted.receiveStatus(.busy("one", false), host: entry.url)
+        muted.notificationSettleTask?.cancel()
+        muted.notificationSettleTask = nil
+        muted.observeNotifications()
+        try check(mutedKinds.isEmpty, "sessions in a hidden directory post no native notification")
+        muted.hiddenDirs = HiddenDirs()
+        muted.observeNotifications()
+        try check(mutedKinds.isEmpty, "unhiding seeds the session instead of announcing what it missed")
+        muted.receiveStatus(.busy("one", true), host: entry.url)
+        muted.receiveStatus(.busy("one", false), host: entry.url)
+        muted.notificationSettleTask?.cancel()
+        muted.notificationSettleTask = nil
+        muted.observeNotifications()
+        try check(mutedKinds == [.finished], "an unhidden session notifies again on its next transition")
+
         func customItem(busy: Bool = true, userAt: Double? = 100, note: DesktopSessionNotice? = nil,
                         preview: DesktopAssistantPreview? = nil) -> SessionItem {
             let value = item(busy: busy)

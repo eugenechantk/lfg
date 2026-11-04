@@ -231,6 +231,7 @@ struct RootView: View {
                 shareBridge.resume(settings: settings, store: store)
                 store.enterForeground()
                 FleetActivityController.shared.syncNow()
+                PushManager.shared.retryFailedRegistrations()
             case .background:
                 store.enterBackground()
                 AppDelegate.scheduleAppRefresh()   // keep a periodic delta sync queued

@@ -431,6 +431,33 @@ describe("runPushTick (SC1/SC2 server-side)", () => {
     expect(sent[0].p.kind).toBe("finished");
   });
 
+  test("a device that hides the session's directory gets no push; others still do", async () => {
+    const sent: string[] = [];
+    const prior = new Map<string, PriorState>();
+    let state = obs(true, false);
+    const deps: TickDeps = {
+      sessions: async () => [
+        { sessionId: "s1", title: "Autopilot", cwd: "/Users/e/.gbrain/run-1", tmuxTarget: "t" },
+        { sessionId: "s2", title: "Real work", cwd: "/Users/e/dev/lfg", tmuxTarget: "u" },
+      ],
+      observe: async () => state,
+      devices: async () => [
+        { token: "phone", env: "production", hiddenDirs: ["/users/e/.gbrain"] },
+        { token: "ipad", env: "production" },
+      ],
+      cfg,
+      send: async (d, p) => {
+        sent.push(`${d.token}:${p.sid}`);
+        return { ok: true, status: 200 };
+      },
+      now: () => 1000,
+    };
+    await runPushTick(prior, deps);
+    state = obs(false, false);
+    await runPushTick(prior, deps);
+    expect(sent.sort()).toEqual(["ipad:s1", "ipad:s2", "phone:s2"]);
+  });
+
   test("an active child keeps an idle parent busy until the child finishes", async () => {
     const sent: ApnsPayload[] = [];
     const prior = new Map<string, PriorState>();

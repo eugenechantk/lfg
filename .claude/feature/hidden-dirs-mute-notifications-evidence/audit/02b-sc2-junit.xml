@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="bun test" tests="12" assertions="61" failures="0" skipped="0" time="0.074215">
+  <testsuite name="src/session-notifications.test.ts" file="src/session-notifications.test.ts" tests="12" assertions="61" failures="0" skipped="0" time="0.041" hostname="Eugenes-MacBook-Pro">
+    <testcase name="fans custom result out independently and records acceptance without claiming delivery" classname="" time="0.002946" file="src/session-notifications.test.ts" line="25" assertions="11" />
+    <testcase name="devices that hide the session&apos;s directory are skipped and reported as muted" classname="" time="0.001261" file="src/session-notifications.test.ts" line="42" assertions="6" />
+    <testcase name="maximum Unicode copy remains within the APNs alert payload limit" classname="" time="0.000707" file="src/session-notifications.test.ts" line="61" assertions="2" />
+    <testcase name="long source titles cannot overflow alerts and malformed Unicode never reaches a client" classname="" time="0.000915" file="src/session-notifications.test.ts" line="68" assertions="7" />
+    <testcase name="concurrent and restarted retries do not emit or resend; conflicting reuse fails" classname="" time="0.000541" file="src/session-notifications.test.ts" line="81" assertions="5" />
+    <testcase name="one thrown transport cannot prevent other devices receiving text" classname="" time="0.000556" file="src/session-notifications.test.ts" line="91" assertions="2" />
+    <testcase name="rejects invalid data and unknown sessions before emitting" classname="" time="0.000119" file="src/session-notifications.test.ts" line="99" assertions="8" />
+    <testcase name="HTTP enforces the contract and leaves unrelated routes untouched" classname="" time="0.000793" file="src/session-notifications.test.ts" line="108" assertions="5" />
+    <testcase name="automatic completion uses only the current assistant result" classname="" time="0.000132" file="src/session-notifications.test.ts" line="118" assertions="4" />
+    <testcase name="custom completion suppresses terminal generic stop but real questions still notify" classname="" time="0.000566" file="src/session-notifications.test.ts" line="126" assertions="2" />
+    <testcase name="markerless completion suppresses once; the same receipt never rearms a later busy interval" classname="" time="0.001096" file="src/session-notifications.test.ts" line="141" assertions="3" />
+    <testcase name="CLI posts the shared contract to the real HTTP route and retries safely" classname="" time="0.037773" file="src/session-notifications.test.ts" line="161" assertions="6" />
+  </testsuite>
+</testsuites>
