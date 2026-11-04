@@ -3679,12 +3679,13 @@ import LFGCore
     /// Sessions-tab population. Chat state remains in filteredSessions for its
     /// own badges, notification handling and direct navigation.
     var sessionListSessions: [Session] {
-        filteredSessions.filter { Self.belongsInSessionList($0) }
+        filteredSessions.filter { belongsInSessionList($0) }
     }
 
-    static func belongsInSessionList(_ session: Session) -> Bool {
+    func belongsInSessionList(_ session: Session) -> Bool {
         SessionListMembership.includes(kind: session.kind, sessionID: session.sessionId,
-            parentSessionID: session.parentSessionId, purpose: session.purpose, cwd: session.cwd)
+            parentSessionID: session.parentSessionId, purpose: session.purpose, cwd: session.cwd,
+            hideChatSessions: settings.hideChatSessions)
     }
 
     /// How many LIVE sessions the directory mute list is holding back — the same
@@ -3697,7 +3698,7 @@ import LFGCore
     var hiddenLiveSessionCount: Int {
         guard !settings.hiddenDirs.isEmpty else { return 0 }
         return sessions.filter {
-            !$0.closed && Self.belongsInSessionList($0) && settings.userFilter.matches($0) && settings.hiddenDirs.hides(cwd: $0.cwd)
+            !$0.closed && belongsInSessionList($0) && settings.userFilter.matches($0) && settings.hiddenDirs.hides(cwd: $0.cwd)
         }.count
     }
 

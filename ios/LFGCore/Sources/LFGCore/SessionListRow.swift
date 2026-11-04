@@ -210,8 +210,10 @@ public struct TaskOrigin: Codable, Sendable, Hashable {
 public enum SessionListMembership {
     public static func includes(kind: String? = nil, sessionID: String? = nil,
                                 parentSessionID: String? = nil, purpose: String? = nil,
-                                cwd: String? = nil) -> Bool {
-        guard purpose != "task-edit", kind != "chat",
+                                cwd: String? = nil, hideChatSessions: Bool = true) -> Bool {
+        guard purpose != "task-edit" else { return false }
+        guard hideChatSessions else { return true }
+        guard kind != "chat",
               sessionID?.hasPrefix("chat-") != true,
               parentSessionID?.hasPrefix("chat-") != true else { return false }
         // The server normally suppresses provider workers. Match only its exact

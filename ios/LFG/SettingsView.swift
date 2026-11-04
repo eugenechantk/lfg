@@ -166,6 +166,8 @@ struct SettingsView: View {
                 }
 
                 Section("Sessions") {
+                    Toggle("Hide chat sessions", isOn: $settings.hideChatSessions)
+                        .accessibilityIdentifier("settings_hide_chat_sessions_toggle")
                     Picker("Show", selection: $settings.userFilter) {
                         Text("All").tag(UserFilter.all)
                         Text("Unassigned").tag(UserFilter.unassigned)

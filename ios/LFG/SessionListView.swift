@@ -190,7 +190,7 @@ struct SessionListView: View {
         // search PAGE arrives, this one when the MUTE LIST changes — toggling a
         // directory while a search is on screen otherwise leaves stale rows up.
         for s in store.searchResults
-        where SessionStore.belongsInSessionList(s) && !seen.contains(s.id) && !store.sessionCloses.isEnded(s.id) && !settings.hiddenDirs.hides(cwd: s.cwd) {
+        where store.belongsInSessionList(s) && !seen.contains(s.id) && !store.sessionCloses.isEnded(s.id) && !settings.hiddenDirs.hides(cwd: s.cwd) {
             seen.insert(s.id)
             out.append(s)
         }

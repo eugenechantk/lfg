@@ -160,6 +160,7 @@ struct CrossProviderSwitchStatusFixture: View {
     private static let collapsedStatusSectionsKey = "sessionList.collapsedStatusSections"
     private static let recentDirsKey = "lfg.recentDirs"
     private static let hiddenDirsKey = "lfg.hiddenDirs"
+    private static let hideChatSessionsKey = "lfg.hideChatSessions"
     private static let newSessionAgentKey = "lfg.newSessionAgent"
     private static let newSessionModelKey = "lfg.newSessionModel"
 
@@ -223,6 +224,11 @@ struct CrossProviderSwitchStatusFixture: View {
 
     func hideDirectory(_ path: String) { hiddenDirs = hiddenDirs.adding(path) }
     func unhideDirectory(_ path: String) { hiddenDirs = hiddenDirs.removing(path) }
+
+    /// A list preference only; Chats and notification routing keep their source data.
+    var hideChatSessions: Bool {
+        didSet { defaults.set(hideChatSessions, forKey: Self.hideChatSessionsKey) }
+    }
 
     /// Live user filter (not persisted — session-local).
     var userFilter: UserFilter = .all
@@ -301,6 +307,7 @@ struct CrossProviderSwitchStatusFixture: View {
         collapsedStatusSections = defaults.string(forKey: Self.collapsedStatusSectionsKey) ?? ""
         recentDirs = defaults.stringArray(forKey: Self.recentDirsKey) ?? []
         hiddenDirs = HiddenDirs(defaults.stringArray(forKey: Self.hiddenDirsKey) ?? [])
+        hideChatSessions = defaults.object(forKey: Self.hideChatSessionsKey) as? Bool ?? true
         lastNewSessionModelSelection = AgentModelSelection.restoringPersisted(
             agentRawValue: defaults.string(forKey: Self.newSessionAgentKey),
             model: defaults.string(forKey: Self.newSessionModelKey)
