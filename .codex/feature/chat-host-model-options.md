@@ -28,3 +28,7 @@ Inline model changes save only the model against the saved profile, so they cann
 - Independent native audit PASS: `.codex/evidence/chat-host-model-options/evidence.md`. The recording proves the host catalog, model save/reopen, preservation of saved instructions and memory, isolation of unsaved drafts, current Host details and offline access, and failed offline saves preserving the last model with no alternate-host writes.
 - Restored the original FlowDeck LFG Debug / iPhone 17 Pro selection after the temporary Mac compile.
 - The final shared source hash matches the audited build. No commit, deployment or TestFlight release was made.
+
+## Release
+
+Committed and pushed in `7dccd94` and `76e525d`. Both host servers are updated. TestFlight 1.4.1 (202611041803) passed canonical verification and is available to internal testers. See `.codex/releases/202611041803.md`.

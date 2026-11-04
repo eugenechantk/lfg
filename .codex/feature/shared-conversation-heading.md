@@ -33,3 +33,7 @@ Phone evidence confirms matched native header placement, title disclosure and se
 Independent phone comparison: PASS. Back and More frames match exactly. Status baseline and height match. Both title cards measure x0/y116/w402/h74. Chat title selection and More routing work. An AX capture session became stale during a status probe; reboot and relaunch recovered the owned simulator. No product defect was found.
 
 Final state: owned fixture servers, UI sessions, apps and recordings stopped. Original FlowDeck configuration preserved. No commit or deployment.
+
+## Release
+
+Committed and pushed in `7dccd94` and `76e525d`. Both host servers are updated. TestFlight 1.4.1 (202611041803) passed canonical verification and is available to internal testers. See `.codex/releases/202611041803.md`.

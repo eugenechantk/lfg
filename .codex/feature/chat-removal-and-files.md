@@ -41,3 +41,7 @@ A minimal host tombstone prevents old clients from recreating a deleted identifi
 Hiding does not stop tasks. Permanent deletion cancels owned tasks and pending notification records. Past notifications and completed external actions cannot be recalled. Cancelled Task audit records remain available under the existing Task primitive. Files outside the chat storage remain untouched.
 
 Owned fixture servers, app receipts, UI sessions and recordings are stopped. Original FlowDeck configuration is preserved. Final source hashes are recorded in `chat-removal-files/source-hashes.json`.
+
+## Release
+
+Committed and pushed in `7dccd94` and `76e525d`. Both host servers are updated. TestFlight 1.4.1 (202611041803) passed canonical verification and is available to internal testers. See `.codex/releases/202611041803.md`.
