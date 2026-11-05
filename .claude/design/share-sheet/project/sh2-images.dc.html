@@ -24,20 +24,20 @@ textarea::placeholder{color:#8E8E93}
     </div>
   </div>
   <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(0,0,0,0.62);"></div>
-  <section role="dialog" aria-label="Send to" style="position: absolute; left: 0; right: 0; top: 58px; bottom: 0; background: #1C1C1E; border-radius: 38px 38px 0 0; overflow: hidden;">
+  <section role="dialog" aria-label="Send to" style="position: absolute; left: 0; right: 0; top: 58px; bottom: 0; background: #111113; border-radius: 38px 38px 0 0; overflow: hidden;">
     <div aria-hidden="true" style="position: absolute; top: 6px; left: 50%; width: 36px; height: 5px; margin-left: -18px; border-radius: 3px; background: #48484A;"></div>
     <div style="position: absolute; top: 14px; left: 14px; right: 14px; height: 44px; display: flex; align-items: center; gap: 10px;">
       <a href="sh-system.dc.html" aria-label="Cancel" style="width: 44px; height: 44px; flex: 0 0 44px; border-radius: 22px; background: #3A3A3C; display: flex; align-items: center; justify-content: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#D1D1D6" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></a>
       <h1 style="flex: 1 1 auto; min-width: 0; margin: 0; text-align: center; font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Send to</h1>
       <span style="width: 44px; flex: 0 0 44px;"></span>
     </div>
-
+    
     <div style="position: absolute; top: 70px; left: 16px; right: 16px; height: 44px; border-radius: 22px; background: #3A3A3C; display: flex; align-items: center; gap: 9px; padding: 0 14px; box-sizing: border-box; color: #8E8E93;">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg>
-      <input aria-label="Search sessions" placeholder="Search sessions" value="{{q}}" onInput="{{onSearch}}" style="flex: 1 1 auto; min-width: 0; border: 0; outline: none; background: transparent; padding: 0; font-size: 17px; color: #FFFFFF;">
+      <input aria-label="Search sessions and chats" placeholder="Search sessions and chats" value="{{q}}" onInput="{{onSearch}}" style="flex: 1 1 auto; min-width: 0; border: 0; outline: none; background: transparent; padding: 0; font-size: 17px; color: #FFFFFF;">
     </div>
   <div style="position: absolute; top: 114px; left: 0; right: 0; bottom: 0; overflow: hidden;">
-
+    
     <sc-if value="{{showNew}}" hint-placeholder-val="{{true}}">
       <div style="margin: 12px 16px 0; border-radius: 22px; background: #2C2C2E; display: flex; align-items: center; padding: 0 14px 0 14px; min-height: 66px; position: relative;">
         <button type="button" onClick="{{pickNew}}" style="flex: 1 1 auto; min-width: 0; border: 0; background: transparent; font: inherit; color: inherit; text-align: left; display: flex; align-items: center; gap: 12px; padding: 11px 0; cursor: pointer;">
@@ -67,7 +67,7 @@ textarea::placeholder{color:#8E8E93}
       <div style="margin: 0 16px; border-radius: 22px; background: #2C2C2E; overflow: hidden;">
         <sc-for list="{{sec.rows}}" as="r" hint-placeholder-count="3">
           <button type="button" onClick="{{r.pick}}" aria-pressed="{{r.pressed}}" style="width: 100%; border: 0; background: transparent; font: inherit; color: inherit; text-align: left; display: flex; align-items: center; gap: 12px; padding: 0 0 0 14px; cursor: pointer; opacity: {{r.opacity}};">
-
+            
           <span style="position: relative; width: 44px; height: 44px; flex: 0 0 44px; border-radius: 22px; background: #3A3A3C; display: flex; align-items: center; justify-content: center;">
             <sc-if value="{{r.claude}}" hint-placeholder-val="{{true}}"><svg width="24" height="24" viewBox="0 0 1200 1200" aria-hidden="true"><path fill="#d97757" d="M233.959793 800.214905 468.644287 668.536987 472.590637 657.100647 468.644287 650.738403 457.208069 650.738403 417.986633 648.322144 283.892639 644.69812 167.597321 639.865845 54.926208 633.825623 26.577238 627.785339 .000033 592.751709 2.73832 575.27533 26.577238 559.248352 60.724873 562.228149 136.187973 567.382629 249.422867 575.194763 331.570496 580.026978 453.261841 592.671082 472.590637 592.671082 475.328857 584.859009 468.724915 580.026978 463.570557 575.194763 346.389313 495.785217 219.543671 411.865906 153.100723 363.543762 117.181267 339.060425 99.060455 316.107361 91.248367 266.01355 123.865784 230.093994 167.677887 233.073853 178.872513 236.053772 223.248367 270.201477 318.040283 343.570496 441.825592 434.738342 459.946411 449.798706 467.194672 444.64447 468.080597 441.020203 459.946411 427.409485 392.617493 305.718323 320.778564 181.932983 288.80542 130.630859 280.348999 99.865845C277.369171 87.221436 275.194641 76.590698 275.194641 63.624268L312.322174 13.20813 332.8591 6.604126 382.389313 13.20813 403.248352 31.328979 434.013519 101.71814 483.865753 212.537048 561.181274 363.221497 583.812134 407.919434 595.892639 449.315491 600.40271 461.959839 608.214783 461.959839 608.214783 454.711609 614.577271 369.825623 626.335632 265.61084 637.771851 131.516846 641.718201 93.745117 660.402832 48.483276 697.530334 24.000122 726.52356 37.852417 750.362549 72 747.060486 94.067139 732.886047 186.201416 705.100708 330.52356 686.979919 427.167847 697.530334 427.167847 709.61084 415.087341 758.496704 350.174561 840.644348 247.490051 876.885925 206.738342 919.167847 161.71814 946.308838 140.29541 997.61084 140.29541 1035.38269 196.429626 1018.469849 254.416199 965.637634 321.422852 921.825562 378.201538 859.006714 462.765259 819.785278 530.41626 823.409424 535.812073 832.75177 534.92627 974.657776 504.724915 1051.328979 490.872559 1142.818848 475.167786 1184.214844 494.496582 1188.724854 514.147644 1172.456421 554.335693 1074.604126 578.496765 959.838989 601.449829 788.939636 641.879272 786.845764 643.409485 789.261841 646.389343 866.255127 653.637634 899.194702 655.409424 979.812134 655.409424 1129.932861 666.604187 1169.154419 692.537109 1192.671265 724.268677 1188.724854 748.429688 1128.322144 779.194641 1046.818848 759.865845 856.590759 714.604126 791.355774 698.335754 782.335693 698.335754 782.335693 703.731567 836.69812 756.885986 936.322205 846.845581 1061.073975 962.81897 1067.436279 991.490112 1051.409424 1014.120911 1034.496704 1011.704712 924.885986 929.234924 882.604126 892.107544 786.845764 811.48999 780.483276 811.48999 780.483276 819.946289 802.550415 852.241699 919.087341 1027.409424 925.127625 1081.127686 916.671204 1098.604126 886.469849 1109.154419 853.288696 1103.114136 785.073914 1007.355835 714.684631 899.516785 657.906067 802.872498 650.979858 806.81897 617.476624 1167.704834 601.771851 1186.147705 565.530212 1200 535.328857 1177.046997 519.302124 1139.919556 535.328857 1066.550537 554.657776 970.792053 570.362488 894.68457 584.536926 800.134277 592.993347 768.724976 592.429626 766.630859 585.503479 767.516968 514.22821 865.369263 405.825531 1011.865906 320.053711 1103.677979 299.516815 1111.812256 263.919525 1093.369263 267.221497 1060.429688 287.114136 1031.114136 405.825531 880.107361 477.422913 786.52356 523.651062 732.483276 523.328918 724.671265 520.590698 724.671265 205.288605 929.395935 149.154434 936.644409 124.993355 914.01355 127.973183 876.885986 139.409409 864.80542 234.201385 799.570435z"></path></svg>
 </sc-if>
@@ -80,7 +80,7 @@ textarea::placeholder{color:#8E8E93}
                 <span style="font-size: 17px; line-height: 22px; font-weight: {{r.weight}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.title}}</span>
                 <span style="font-size: 14px; line-height: 19px; color: #8E8E93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="color: {{r.color}};">{{r.line}}</span> · {{r.where}}</span>
               </span>
-
+              
             <sc-if value="{{r.on}}" hint-placeholder-val="{{false}}">
               <span style="width: 26px; height: 26px; flex: 0 0 26px; border-radius: 13px; background: #0A6EE0; display: flex; align-items: center; justify-content: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11"></path></svg></span>
             </sc-if>
@@ -93,15 +93,15 @@ textarea::placeholder{color:#8E8E93}
       </div>
     </sc-for>
     <sc-if value="{{noMatch}}" hint-placeholder-val="{{false}}">
-      <div style="padding: 40px 32px; text-align: center; font-size: 15px; line-height: 21px; color: #8E8E93;">No session matches “{{q}}”. Start a new one with it instead.</div>
+      <div style="padding: 40px 32px; text-align: center; font-size: 15px; line-height: 21px; color: #8E8E93;">No session or chat matches “{{q}}”. Start a new one with it instead.</div>
     </sc-if>
     <div style="height: {{listPad}};"></div>
   </div>
   </section>
   <sc-if value="{{hasSel}}" hint-placeholder-val="{{true}}">
-    <div style="position: absolute; left: 0; right: 0; bottom: {{dockBottom}}; background: #242426; border-top: 0.5px solid #3A3A3C; box-shadow: 0 -10px 30px rgba(0,0,0,0.45);">
-
-      <div style="height: 76px; display: flex; align-items: center; gap: 8px; padding: 0 4px 0 12px; border-bottom: 0.5px solid #38383A;">
+    <div style="position: absolute; left: 0; right: 0; bottom: {{dockBottom}}; background: #48484A; border-top: 0.5px solid #636366; box-shadow: 0 -10px 30px rgba(0,0,0,0.45);">
+      
+      <div style="height: 76px; display: flex; align-items: center; gap: 8px; padding: 0 4px 0 12px; border-bottom: 0.5px solid #636366;">
         <span style="position: relative; width: 34px; height: 60px; flex: 0 0 34px; border-radius: 10px; background: #000000; border: 0.5px solid #48484A; overflow: hidden; display: flex; flex-direction: column; gap: 2px; padding: 7px 8px 0; box-sizing: border-box;"><span style="align-self: flex-end; width: 56%; height: 4px; border-radius: 6px; background: #355C8F;"></span><span style="width: 84%; height: 2px; border-radius: 3px; background: #48484A;"></span><span style="width: 70%; height: 2px; border-radius: 3px; background: #48484A;"></span><span style="width: 92%; height: 2px; border-radius: 3px; background: #48484A;"></span><span style="position: absolute; left: 6%; right: 6%; bottom: 5px; height: 5px; border-radius: 2px; background: #2C2C2E;"></span><span style="position: absolute; left: 8%; right: 8%; bottom: 3px; height: 5px; border-radius: 3px; background: rgba(60,60,64,0.95); border: 1px solid #FF9F0A;"></span></span><span style="position: relative; width: 34px; height: 60px; flex: 0 0 34px; border-radius: 10px; background: #000000; border: 0.5px solid #48484A; overflow: hidden; display: flex; flex-direction: column; gap: 2px; padding: 7px 8px 0; box-sizing: border-box;"><span style="align-self: flex-end; width: 56%; height: 4px; border-radius: 6px; background: #355C8F;"></span><span style="width: 76%; height: 2px; border-radius: 3px; background: #48484A;"></span><span style="width: 88%; height: 2px; border-radius: 3px; background: #48484A;"></span><span style="width: 60%; height: 2px; border-radius: 3px; background: #48484A;"></span><span style="position: absolute; left: 6%; right: 6%; bottom: 5px; height: 5px; border-radius: 2px; background: #2C2C2E;"></span><span style="position: absolute; left: 8%; right: 8%; bottom: 3px; height: 5px; border-radius: 3px; background: rgba(60,60,64,0.95); border: 1px solid #FF9F0A;"></span></span>
         <span style="flex: 1 1 auto; min-width: 0; padding-left: 4px; display: flex; flex-direction: column; gap: 2px;">
           <span style="font-size: 15px; font-weight: 600; color: #F2F2F7;">2 screenshots</span>
@@ -109,9 +109,9 @@ textarea::placeholder{color:#8E8E93}
         </span>
         <button type="button" aria-label="Remove the screenshots" style="width: 44px; height: 44px; flex: 0 0 44px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;"><span style="width: 26px; height: 26px; border-radius: 13px; border: 1.5px solid #D1D1D6; box-sizing: border-box; display: flex; align-items: center; justify-content: center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#D1D1D6" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></span></button>
       </div>
-
+      
       <div style="padding: 10px 16px 0;">
-        <textarea aria-label="Message to send" rows="{{rows}}" placeholder="Add a message…" value="{{draft}}" onInput="{{onType}}" style="display: block; width: 100%; box-sizing: border-box; border-radius: 22px; background: #1C1C1E; border: 0.5px solid #48484A; padding: 11px 16px; font: inherit; font-size: 17px; line-height: 22px; color: #FFFFFF; resize: none; outline: none;"></textarea>
+        <textarea aria-label="Message to send" rows="{{rows}}" placeholder="Add a message…" value="{{draft}}" onInput="{{onType}}" style="display: block; width: 100%; box-sizing: border-box; border-radius: 22px; background: #1C1C1E; border: 1px solid #636366; padding: 11px 16px; font: inherit; font-size: 17px; line-height: 22px; color: #FFFFFF; resize: none; outline: none;"></textarea>
       </div>
       <div style="min-height: 58px; padding: 4px 6px 4px 20px; box-sizing: border-box; display: flex; align-items: center; gap: 10px;">
         <span style="width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: {{toDotBg}}; box-shadow: {{toDotShadow}};"></span>
@@ -119,7 +119,7 @@ textarea::placeholder{color:#8E8E93}
           <span style="font-size: 15px; font-weight: 600; color: #F2F2F7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{toTitle}}</span>
           <span style="font-size: 13px; color: #8E8E93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{toDoes}}</span>
         </span>
-        <a href="{{sendHref}}" style="min-height: 44px; padding: 0 14px; display: flex; align-items: center; font-size: 17px; font-weight: 600; color: #409CFF;">Send</a>
+        <a href="{{sendHref}}" style="min-height: 44px; min-width: 88px; padding: 0 20px; box-sizing: border-box; border-radius: 22px; background: #0A6EE0; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 600; color: #FFFFFF;">Send</a>
       </div>
       <div style="height: {{homePad}};"></div>
     </div>
@@ -130,7 +130,7 @@ class Component extends DCLogic {
 
   constructor(props) { super(props); this.state = { sel: "glass", q: "", draft: "the tab bar overlaps the composer on iPad, see both", menu: false }; }
   renderVals() {
-    const ROWS = [{"id": "fork", "title": "Fork session feature", "agent": "claude", "kind": "working", "line": "Working · 3m", "where": "lfg · Pro", "recent": true}, {"id": "ship", "title": "Ship lfg 1.3.1 to TestFlight", "agent": "claude", "kind": "needs", "line": "Asks: upload build 205 now?", "where": "lfg · Pro", "recent": true}, {"id": "glass", "title": "Liquid Glass tab bar", "agent": "codex", "kind": "unread", "line": "New reply", "where": "lfg · Pro", "recent": true}, {"id": "audit", "title": "Search Console audit", "agent": "codex", "kind": "offline", "line": "Air is offline", "where": "inbox", "recent": true}, {"id": "shinkai", "title": "Shinkai room decorator", "agent": "claude", "kind": "idle", "line": "Idle · 1d", "where": "SleepingBeauty · Pro", "recent": true}, {"id": "rsync", "title": "Readwise sync check", "agent": "codex", "kind": "working", "line": "Working · 12m", "where": "readwise-sync · Pro", "recent": false}, {"id": "repo", "title": "Daily repo review", "agent": "claude", "kind": "unread", "line": "New reply", "where": "lfg · Pro", "recent": false}, {"id": "iphone", "title": "Enhance iPhone control skill", "agent": "codex", "kind": "unread", "line": "New reply", "where": "inbox · Pro", "recent": false}, {"id": "readwise", "title": "Readwise import fix", "agent": "codex", "kind": "closed", "line": "Ended yesterday", "where": "readwise-sync · Pro", "recent": false}], K = {"working": {"dot": "#30D158", "halo": true, "color": "#30D158", "weight": "400", "does": "Joins its current turn", "done": "sh-joined.dc.html"}, "needs": {"dot": "#FF9F0A", "halo": false, "color": "#FF9F0A", "weight": "600", "does": "Runs after you answer its question", "done": "sh-waits.dc.html"}, "unread": {"dot": "#BF5AF0", "halo": false, "color": "#D1D1D6", "weight": "600", "does": "Starts its next turn now", "done": "sh-sent.dc.html"}, "idle": {"dot": "#0A84FF", "halo": false, "color": "#A1A1A6", "weight": "400", "does": "Starts its next turn now", "done": "sh-sent.dc.html"}, "closed": {"dot": "#636366", "halo": false, "color": "#A1A1A6", "weight": "400", "does": "Resumes it", "done": "sh-resumed.dc.html"}, "offline": {"dot": "#FF9F0A", "halo": false, "ring": true, "color": "#FFB340", "weight": "400", "does": "LFG queues it until Air is back", "done": "sh-queued.dc.html"}}, KBD = null;
+    const ROWS = [{"id": "fork", "title": "Fork session feature", "agent": "claude", "kind": "working", "line": "Working · 3m", "where": "lfg · Pro", "recent": true}, {"id": "ship", "title": "Ship lfg 1.3.1 to TestFlight", "agent": "claude", "kind": "needs", "line": "Asks: upload build 205 now?", "where": "lfg · Pro", "recent": true}, {"id": "glass", "title": "Liquid Glass tab bar", "agent": "codex", "kind": "unread", "line": "New reply", "where": "lfg · Pro", "recent": true}, {"id": "audit", "title": "Search Console audit", "agent": "codex", "kind": "offline", "line": "Air is offline", "where": "inbox", "recent": true}, {"id": "shinkai", "title": "Shinkai room decorator", "agent": "claude", "kind": "idle", "line": "Idle · 1d", "where": "SleepingBeauty · Pro", "recent": true}, {"id": "rsync", "title": "Readwise sync check", "agent": "codex", "kind": "working", "line": "Working · 12m", "where": "readwise-sync · Pro", "recent": false}, {"id": "repo", "title": "Daily repo review", "agent": "claude", "kind": "unread", "line": "New reply", "where": "lfg · Pro", "recent": false}, {"id": "iphone", "title": "Enhance iPhone control skill", "agent": "codex", "kind": "unread", "line": "New reply", "where": "inbox · Pro", "recent": false}, {"id": "readwise", "title": "Readwise import fix", "agent": "codex", "kind": "closed", "line": "Ended yesterday", "where": "readwise-sync · Pro", "recent": false}, {"id": "ipadpane", "title": "Made-for-iPad file pane", "agent": "claude", "kind": "idle", "line": "Idle · 2d", "where": "lfg · Pro", "recent": false}, {"id": "madmen", "title": "Mad Men", "agent": "claude", "kind": "idle", "chat": true, "line": "Idle", "where": "Chat · Pro", "recent": false}, {"id": "atlas", "title": "Atlas", "agent": "claude", "kind": "idle", "chat": true, "line": "Idle", "where": "Chat · Pro", "recent": false}], K = {"working": {"dot": "#30D158", "halo": true, "color": "#30D158", "weight": "400", "does": "Joins its current turn", "done": "sh-joined.dc.html"}, "needs": {"dot": "#FF9F0A", "halo": false, "color": "#FF9F0A", "weight": "600", "does": "Runs after you answer its question", "done": "sh-waits.dc.html"}, "unread": {"dot": "#BF5AF0", "halo": false, "color": "#D1D1D6", "weight": "600", "does": "Starts its next turn now", "done": "sh-sent.dc.html"}, "idle": {"dot": "#0A84FF", "halo": false, "color": "#A1A1A6", "weight": "400", "does": "Starts its next turn now", "done": "sh-sent.dc.html"}, "closed": {"dot": "#636366", "halo": false, "color": "#A1A1A6", "weight": "400", "does": "Resumes it", "done": "sh-resumed.dc.html"}, "offline": {"dot": "#FF9F0A", "halo": false, "ring": true, "color": "#FFB340", "weight": "400", "does": "LFG queues it until Air is back", "done": "sh-queued.dc.html"}}, KBD = null;
     const s = this.state, q = s.q.trim().toLowerCase();
     const pick = (id) => () => this.setState({ sel: s.sel === id ? null : id, menu: false });
     const decorate = (list) => list.map((x, i) => {
@@ -148,12 +148,17 @@ class Component extends DCLogic {
     let sections;
     if (q) {
       const hits = ROWS.filter((x) => (x.title + ' ' + x.where).toLowerCase().indexOf(q) >= 0);
-      sections = hits.length ? [{ label: 'Sessions', rows: decorate(hits) }] : [];
+      // Sessions first; chats keep their own section after them.
+      sections = [
+        { label: 'Sessions', rows: decorate(hits.filter((x) => !x.chat)) },
+        { label: 'Chats', rows: decorate(hits.filter((x) => x.chat)) }
+      ].filter((x) => x.rows.length);
     } else {
       sections = [
         { label: 'Recent', rows: decorate(ROWS.filter((x) => x.recent)) },
-        { label: 'All sessions', rows: decorate(ROWS.filter((x) => !x.recent)) }
-      ];
+        { label: 'All sessions', rows: decorate(ROWS.filter((x) => !x.recent && !x.chat)) },
+        { label: 'Chats', rows: decorate(ROWS.filter((x) => !x.recent && x.chat)) }
+      ].filter((x) => x.rows.length);
     }
     const hasSel = s.sel !== null;
     const cur = hasSel && s.sel !== 'new' ? ROWS.find((x) => x.id === s.sel) : null;

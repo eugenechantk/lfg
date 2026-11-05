@@ -29,7 +29,7 @@ PAGE_URL = "https://developer.apple.com/design/human-interface-guidelines/sheets
 QUOTE = "A sheet should hold one scoped task that stays close to what people were doing."
 MESSAGE = "use this sheet pattern for the fork confirmation"
 CARD_BG = "#2C2C2E"
-DOCK_BG = "#242426"
+DOCK_BG = "#48484A"   # 2026-11-05: three levels like the reference (list, cards, lighter panel)
 
 
 def agent_svg(name, size):
@@ -65,6 +65,12 @@ ROWS = [
      "line": "New reply", "where": "inbox · Pro", "recent": False},
     {"id": "readwise", "title": "Readwise import fix", "agent": "codex", "kind": "closed",
      "line": "Ended yesterday", "where": "readwise-sync · Pro", "recent": False},
+    {"id": "ipadpane", "title": "Made-for-iPad file pane", "agent": "claude", "kind": "idle",
+     "line": "Idle · 2d", "where": "lfg · Pro", "recent": False},
+    {"id": "madmen", "title": "Mad Men", "agent": "claude", "kind": "idle", "chat": True,
+     "line": "Idle", "where": "Chat · Pro", "recent": False},
+    {"id": "atlas", "title": "Atlas", "agent": "claude", "kind": "idle", "chat": True,
+     "line": "Idle", "where": "Chat · Pro", "recent": False},
 ]
 
 # Dot, line colour, what Send will do, and the After Send board it leads to.
@@ -110,7 +116,7 @@ def search_pill():
     return T("""
     <div style="position: absolute; top: 70px; left: 16px; right: 16px; height: 44px; border-radius: 22px; background: #3A3A3C; display: flex; align-items: center; gap: 9px; padding: 0 14px; box-sizing: border-box; color: #8E8E93;">
       [[ICON]]
-      <input aria-label="Search sessions" placeholder="Search sessions" value="{{q}}" onInput="{{onSearch}}" style="flex: 1 1 auto; min-width: 0; border: 0; outline: none; background: transparent; padding: 0; font-size: 17px; color: #FFFFFF;">
+      <input aria-label="Search sessions and chats" placeholder="Search sessions and chats" value="{{q}}" onInput="{{onSearch}}" style="flex: 1 1 auto; min-width: 0; border: 0; outline: none; background: transparent; padding: 0; font-size: 17px; color: #FFFFFF;">
     </div>""", ICON=svg("search", 19, "currentColor", 2.1))
 
 
@@ -169,7 +175,7 @@ def session_list(top=114):
       </div>
     </sc-for>
     <sc-if value="{{noMatch}}" hint-placeholder-val="{{false}}">
-      <div style="padding: 40px 32px; text-align: center; font-size: 15px; line-height: 21px; color: #8E8E93;">No session matches “{{q}}”. Start a new one with it instead.</div>
+      <div style="padding: 40px 32px; text-align: center; font-size: 15px; line-height: 21px; color: #8E8E93;">No session or chat matches “{{q}}”. Start a new one with it instead.</div>
     </sc-if>
     <div style="height: {{listPad}};"></div>
   </div>""", TOP=top, NEW=new_row(), AVATAR=avatar_markup("r"), RADIO=radio("r.on", "r.off"))
@@ -179,7 +185,7 @@ def session_list(top=114):
 
 def prev_link():
     return T("""
-      <div style="height: 64px; display: flex; align-items: center; gap: 12px; padding-right: 16px; border-bottom: 0.5px solid #38383A;">
+      <div style="height: 64px; display: flex; align-items: center; gap: 12px; padding-right: 16px; border-bottom: 0.5px solid #636366;">
         <span style="width: 64px; height: 64px; flex: 0 0 64px; background: #3A3A3C; display: flex; align-items: center; justify-content: center; color: #A1A1A6;">[[G]]</span>
         <span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
           <span style="font-size: 15px; font-weight: 600; color: #F2F2F7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">[[TITLE]]</span>
@@ -197,7 +203,7 @@ def remove_x(label):
 
 def prev_quote():
     return T("""
-      <div style="height: 64px; display: flex; align-items: center; gap: 12px; padding-right: 16px; border-bottom: 0.5px solid #38383A;">
+      <div style="height: 64px; display: flex; align-items: center; gap: 12px; padding-right: 16px; border-bottom: 0.5px solid #636366;">
         <span style="width: 64px; height: 64px; flex: 0 0 64px; background: #3A3A3C; display: flex; align-items: center; justify-content: center; color: #A1A1A6;">[[Q]]</span>
         <span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
           <span style="font-size: 15px; font-weight: 600; color: #F2F2F7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Selected text · [[TITLE]]</span>
@@ -208,7 +214,7 @@ def prev_quote():
 
 def prev_images():
     return T("""
-      <div style="height: 76px; display: flex; align-items: center; gap: 8px; padding: 0 4px 0 12px; border-bottom: 0.5px solid #38383A;">
+      <div style="height: 76px; display: flex; align-items: center; gap: 8px; padding: 0 4px 0 12px; border-bottom: 0.5px solid #636366;">
         [[A]][[B]]
         <span style="flex: 1 1 auto; min-width: 0; padding-left: 4px; display: flex; flex-direction: column; gap: 2px;">
           <span style="font-size: 15px; font-weight: 600; color: #F2F2F7;">2 screenshots</span>
@@ -220,7 +226,7 @@ def prev_images():
 
 def prev_file():
     return T("""
-      <div style="height: 68px; display: flex; align-items: center; gap: 12px; padding: 0 4px 0 14px; border-bottom: 0.5px solid #38383A;">
+      <div style="height: 68px; display: flex; align-items: center; gap: 12px; padding: 0 4px 0 14px; border-bottom: 0.5px solid #636366;">
         <span style="width: 38px; height: 48px; flex: 0 0 38px; border-radius: 5px; background: #F2F2F7; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px; box-sizing: border-box;"><span style="font-size: 9px; font-weight: 800; color: #FF453A;">PDF</span></span>
         <span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
           <span style="font-size: 15px; font-weight: 600; color: #F2F2F7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">readwise-export-format.pdf</span>
@@ -234,11 +240,11 @@ def dock(preview_html, banner=""):
     """Appears once a session is chosen: preview, the text that is sent, who gets it, Send."""
     return T("""
   <sc-if value="{{hasSel}}" hint-placeholder-val="{{true}}">
-    <div style="position: absolute; left: 0; right: 0; bottom: {{dockBottom}}; background: [[BG]]; border-top: 0.5px solid #3A3A3C; box-shadow: 0 -10px 30px rgba(0,0,0,0.45);">
+    <div style="position: absolute; left: 0; right: 0; bottom: {{dockBottom}}; background: [[BG]]; border-top: 0.5px solid #636366; box-shadow: 0 -10px 30px rgba(0,0,0,0.45);">
       [[PREVIEW]]
       [[BANNER]]
       <div style="padding: 10px 16px 0;">
-        <textarea aria-label="Message to send" rows="{{rows}}" placeholder="Add a message…" value="{{draft}}" onInput="{{onType}}" style="display: block; width: 100%; box-sizing: border-box; border-radius: 22px; background: #1C1C1E; border: 0.5px solid #48484A; padding: 11px 16px; font: inherit; font-size: 17px; line-height: 22px; color: #FFFFFF; resize: none; outline: none;"></textarea>
+        <textarea aria-label="Message to send" rows="{{rows}}" placeholder="Add a message…" value="{{draft}}" onInput="{{onType}}" style="display: block; width: 100%; box-sizing: border-box; border-radius: 22px; background: #1C1C1E; border: 1px solid #636366; padding: 11px 16px; font: inherit; font-size: 17px; line-height: 22px; color: #FFFFFF; resize: none; outline: none;"></textarea>
       </div>
       <div style="min-height: 58px; padding: 4px 6px 4px 20px; box-sizing: border-box; display: flex; align-items: center; gap: 10px;">
         <span style="width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: {{toDotBg}}; box-shadow: {{toDotShadow}};"></span>
@@ -246,7 +252,7 @@ def dock(preview_html, banner=""):
           <span style="font-size: 15px; font-weight: 600; color: #F2F2F7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{toTitle}}</span>
           <span style="font-size: 13px; color: #8E8E93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{toDoes}}</span>
         </span>
-        <a href="{{sendHref}}" style="min-height: 44px; padding: 0 14px; display: flex; align-items: center; font-size: 17px; font-weight: 600; color: #409CFF;">Send</a>
+        <a href="{{sendHref}}" style="min-height: 44px; min-width: 88px; padding: 0 20px; box-sizing: border-box; border-radius: 22px; background: #0A6EE0; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 600; color: #FFFFFF;">Send</a>
       </div>
       <div style="height: {{homePad}};"></div>
     </div>
@@ -280,12 +286,17 @@ def logic(sel=None, q="", kbd=None, draft=None, menu=False):
     let sections;
     if (q) {
       const hits = ROWS.filter((x) => (x.title + ' ' + x.where).toLowerCase().indexOf(q) >= 0);
-      sections = hits.length ? [{ label: 'Sessions', rows: decorate(hits) }] : [];
+      // Sessions first; chats keep their own section after them.
+      sections = [
+        { label: 'Sessions', rows: decorate(hits.filter((x) => !x.chat)) },
+        { label: 'Chats', rows: decorate(hits.filter((x) => x.chat)) }
+      ].filter((x) => x.rows.length);
     } else {
       sections = [
         { label: 'Recent', rows: decorate(ROWS.filter((x) => x.recent)) },
-        { label: 'All sessions', rows: decorate(ROWS.filter((x) => !x.recent)) }
-      ];
+        { label: 'All sessions', rows: decorate(ROWS.filter((x) => !x.recent && !x.chat)) },
+        { label: 'Chats', rows: decorate(ROWS.filter((x) => !x.recent && x.chat)) }
+      ].filter((x) => x.rows.length);
     }
     const hasSel = s.sel !== null;
     const cur = hasSel && s.sel !== 'new' ? ROWS.find((x) => x.id === s.sel) : null;
@@ -317,7 +328,7 @@ def logic(sel=None, q="", kbd=None, draft=None, menu=False):
 def v2_board(title, sel=None, q="", kbd=None, draft=None, menu=False, preview=None, banner="",
              bg=("Sheets", PAGE_DOMAIN), kbd_words=("the", "fork", "sheet")):
     body = (backdrop(*bg) +
-            sheet("Send to", search_pill() + session_list(), lead="close", lead_href="sh-system.dc.html") +
+            sheet("Send to", search_pill() + session_list(), lead="close", lead_href="sh-system.dc.html", bg="#111113") +
             dock(preview if preview is not None else prev_link(), banner) +
             (keyboard(kbd_words) if kbd else ""))
     return head(title) + phone(body) + script(PV, logic(sel, q, kbd, draft, menu))
@@ -330,7 +341,7 @@ def board_list():
 
 
 def board_search():
-    return v2_board("Share v2 · searching", q="glass", kbd="search", kbd_words=("glass", "Glass", "glasses"))
+    return v2_board("Share v2 · searching sessions and chats", q="mad", kbd="search", kbd_words=("mad", "made", "Mad"))
 
 
 def board_selected():
@@ -451,7 +462,7 @@ def board_landed():
 
 BOARDS2 = {
     "sh2-list.dc.html": (board_list, "Send to · nothing chosen: the list gets the screen"),
-    "sh2-search.dc.html": (board_search, "Send to · search"),
+    "sh2-search.dc.html": (board_search, "Send to · search finds sessions and chats, in their own sections"),
     "sh2-selected.dc.html": (board_selected, "Send to · a session chosen: the panel comes up"),
     "sh2-typing.dc.html": (board_typing, "Send to · editing the text that is sent"),
     "sh2-new.dc.html": (board_new, "Send to · New session, with its options"),

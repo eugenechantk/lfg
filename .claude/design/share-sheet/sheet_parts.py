@@ -144,7 +144,7 @@ def send_btn(href="{{sendHref}}", bg="{{sendBg}}", ink="{{sendInk}}", label="Sen
             f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{I["send"]}</svg></a>')
 
 
-def sheet(title, inner, lead="close", lead_href="sh-system.dc.html", action="", top=58, radius=38):
+def sheet(title, inner, lead="close", lead_href="sh-system.dc.html", action="", top=58, radius=38, bg="#1C1C1E"):
     if lead == "close":
         lead_html = circle_btn(svg("x", 15, SECOND, 2.8), "Cancel", lead_href)
     elif lead == "back":
@@ -153,7 +153,7 @@ def sheet(title, inner, lead="close", lead_href="sh-system.dc.html", action="", 
         lead_html = '<span style="width: 44px; flex: 0 0 44px;"></span>'
     action = action or '<span style="width: 44px; flex: 0 0 44px;"></span>'
     return T("""
-  <section role="dialog" aria-label="[[TITLE]]" style="position: absolute; left: 0; right: 0; top: [[TOP]]px; bottom: 0; background: #1C1C1E; border-radius: [[R]]px [[R]]px 0 0; overflow: hidden;">
+  <section role="dialog" aria-label="[[TITLE]]" style="position: absolute; left: 0; right: 0; top: [[TOP]]px; bottom: 0; background: [[BG]]; border-radius: [[R]]px [[R]]px 0 0; overflow: hidden;">
     <div aria-hidden="true" style="position: absolute; top: 6px; left: 50%; width: 36px; height: 5px; margin-left: -18px; border-radius: 3px; background: #48484A;"></div>
     <div style="position: absolute; top: 14px; left: 14px; right: 14px; height: 44px; display: flex; align-items: center; gap: 10px;">
       [[LEAD]]
@@ -161,7 +161,7 @@ def sheet(title, inner, lead="close", lead_href="sh-system.dc.html", action="", 
       [[ACTION]]
     </div>
     [[INNER]]
-  </section>""", TITLE=title, TOP=top, R=radius, LEAD=lead_html, ACTION=action, INNER=inner)
+  </section>""", TITLE=title, TOP=top, R=radius, LEAD=lead_html, ACTION=action, INNER=inner, BG=bg)
 
 
 def eyebrow(text, color=META):

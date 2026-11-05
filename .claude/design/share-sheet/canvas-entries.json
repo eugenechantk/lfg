@@ -58,7 +58,7 @@
    "y": 0,
    "w": 390,
    "h": 844,
-   "title": "Send to · search",
+   "title": "Send to · search finds sessions and chats, in their own sections",
    "page": "share-sheet",
    "is_interactive": true
   },
@@ -343,7 +343,7 @@
    "w": 460,
    "fill": "blue",
    "page": "share-sheet",
-   "text": "The flow (Eugene's pick, Oct 23)\n\nAny app → Share → LFG → Send to → tap a session → the panel comes up → edit the text → Send.\n\nMost of the sheet is search and the list. Nothing is chosen when it opens, so the keyboard stays down and the list gets the screen.\n\nPinned row: New session (your New Session defaults; ••• changes host, folder and agent). Then Recent (the five sessions you messaged last) and All sessions (the rest by last activity, so closed ones sink). Search matches title and folder.\n\nChoosing a session raises the panel: the preview, the text field, who gets it and what Send will do, then Send.\n\nThe text field is exactly what is sent. It starts with the link; you type around it. Attachments are the one addition: they upload to the session's host when you send, and their paths go in after the text, as the paperclip does today.\n\nIn the session (last two boards): a working session holds it in the soft strip until its turn takes it; then it is a plain blue bubble. An idle session shows the bubble at once."
+   "text": "The flow (Eugene's pick, Oct 23)\n\nAny app → Share → LFG → Send to → tap a session → the panel comes up → edit the text → Send.\n\nMost of the sheet is search and the list. Nothing is chosen when it opens, so the keyboard stays down and the list gets the screen.\n\nPinned row: New session (your New Session defaults; ••• changes host, folder and agent). Then Recent (the five sessions you messaged last), All sessions (the rest by last activity, so closed ones sink), then Chats. Search finds sessions and chats and keeps them in separate sections, sessions first.\n\nChoosing a session raises the panel: the preview, the text field, who gets it and what Send will do, then Send. The panel is its own lighter surface (#48484A over #2C2C2E cards on the #1C1C1E list), and the text field drops back to the list colour with a visible border, as in the reference (Nov 5).\n\nThe text field is exactly what is sent. It starts with the link; you type around it. Attachments are the one addition: they upload to the session's host when you send, and their paths go in after the text, as the paperclip does today.\n\nIn the session (last two boards): a working session holds it in the soft strip until its turn takes it; then it is a plain blue bubble. An idle session shows the bubble at once."
   },
   "shDecisions": {
    "x": 3800,

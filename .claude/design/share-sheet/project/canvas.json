@@ -1982,15 +1982,6 @@
    "page": "ipad-files",
    "is_interactive": true
   },
-  "ia-a-source.dc.html": {
-   "x": 5160,
-   "y": 1800,
-   "w": 1210,
-   "h": 834,
-   "title": "A · Markdown source (Preview / Source)",
-   "page": "ipad-files",
-   "is_interactive": true
-  },
   "ia-a-web.dc.html": {
    "x": 0,
    "y": 2754,
@@ -2055,17 +2046,17 @@
    "is_interactive": true
   },
   "ia-a-portrait.dc.html": {
-   "x": 2746,
-   "y": 3708,
+   "x": 0,
+   "y": 5160,
    "w": 834,
    "h": 1210,
-   "title": "Portrait: the same pane as a sheet",
+   "title": "Portrait · sheet (the default)",
    "page": "ipad-files",
    "is_interactive": true
   },
   "ia-b-image.dc.html": {
    "x": 0,
-   "y": 5340,
+   "y": 6790,
    "w": 1210,
    "h": 834,
    "title": "B · list stays, image in a third column",
@@ -2074,7 +2065,7 @@
   },
   "ia-b-doc.dc.html": {
    "x": 1290,
-   "y": 5340,
+   "y": 6790,
    "w": 1210,
    "h": 834,
    "title": "B · list stays, Markdown file in a third column",
@@ -2248,7 +2239,7 @@
    "y": 0,
    "w": 390,
    "h": 844,
-   "title": "Send to · search",
+   "title": "Send to · search finds sessions and chats, in their own sections",
    "page": "share-sheet",
    "is_interactive": true
   },
@@ -2331,6 +2322,51 @@
    "h": 844,
    "title": "Send to · not sent",
    "page": "share-sheet",
+   "is_interactive": true
+  },
+  "ia-p-split-image.dc.html": {
+   "x": 914,
+   "y": 5160,
+   "w": 834,
+   "h": 1210,
+   "title": "Portrait · split, file 55%",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-p-split-doc.dc.html": {
+   "x": 1828,
+   "y": 5160,
+   "w": 834,
+   "h": 1210,
+   "title": "Portrait · split, file 40%",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-p-split-web.dc.html": {
+   "x": 2742,
+   "y": 5160,
+   "w": 834,
+   "h": 1210,
+   "title": "Portrait · split, file 70%",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-a-newfile.dc.html": {
+   "x": 2746,
+   "y": 3708,
+   "w": 1210,
+   "h": 834,
+   "title": "A · a new file arrives while you read",
+   "page": "ipad-files",
+   "is_interactive": true
+  },
+  "ia-a-updated.dc.html": {
+   "x": 4036,
+   "y": 3708,
+   "w": 1210,
+   "h": 834,
+   "title": "A · the open file was rewritten",
+   "page": "ipad-files",
    "is_interactive": true
   }
  },
@@ -2540,7 +2576,6 @@
   "ia-a-image.dc.html",
   "ia-a-video.dc.html",
   "ia-a-doc.dc.html",
-  "ia-a-source.dc.html",
   "ia-a-web.dc.html",
   "ia-a-files.dc.html",
   "ia-a-link.dc.html",
@@ -2578,7 +2613,12 @@
   "sh2-quote.dc.html",
   "sh2-images.dc.html",
   "sh2-file.dc.html",
-  "sh2-failed.dc.html"
+  "sh2-failed.dc.html",
+  "ia-p-split-image.dc.html",
+  "ia-p-split-doc.dc.html",
+  "ia-p-split-web.dc.html",
+  "ia-a-newfile.dc.html",
+  "ia-a-updated.dc.html"
  ],
  "notes": {
   "phoneTitle": {
@@ -3282,7 +3322,7 @@
   },
   "ifTB": {
    "x": 0,
-   "y": 5040,
+   "y": 6490,
    "kind": "title1",
    "maxW": 2500,
    "text": "Option B: the list stays, and the file opens in a narrow third column",
@@ -3293,7 +3333,7 @@
    "y": 1800,
    "w": 520,
    "fill": "gray",
-   "text": "How to read this page\n\nRow 1 is the inspiration: eight patterns from about 30 apps, and which ones lfg takes.\n\nThe first board in the Option A row is a working prototype. Press Play, then tap any file card, the PR link or the Files pill. Tap the handle between the two columns to switch the pane width. Back, Preview / Source, expand, ••• and close all work.\n\nEvery other A and B board is the same prototype, opened in one state, so a change to the prototype updates them all.\n\nSample session: \"Fork session feature\", with the same six files and two links as the S2 Files & links board. The screenshots and pages inside the pane are placeholders.\n\nFrames: iPad Pro 11-inch landscape (1210 × 834), plus one 13-inch board (1376 × 1032) and one portrait board.",
+   "text": "How to read this page\n\nRow 1 is the inspiration: eight patterns from about 30 apps, and which ones lfg takes.\n\nThe first board in the Option A row is a working prototype. Press Play, then tap any file card, the PR link or the Files pill. Tap the handle between the two columns to switch the pane width. Back, expand, ••• and close all work. In the portrait row, the split button and the handle work too.\n\nEvery other A and B board is the same prototype, opened in one state, so a change to the prototype updates them all.\n\nSample session: \"Fork session feature\", with the same six files and two links as the S2 Files & links board. The screenshots and pages inside the pane are placeholders.\n\nFrames: iPad Pro 11-inch landscape (1210 × 834) and portrait (834 × 1210), plus one 13-inch board (1376 × 1032).",
    "page": "ipad-files"
   },
   "ifResearch": {
@@ -3309,7 +3349,7 @@
    "y": 1800,
    "w": 520,
    "fill": "green",
-   "text": "How option A behaves\n\n- Tap a file card, a link or the Files pill. The file opens in a pane on the right. The transcript, pills and composer stay live on the left.\n- The list steps aside unless the transcript keeps 400pt and the pane gets 600pt. So it hides on the 11-inch and stays on the 13-inch.\n- Two widths, one handle. Wide (720pt) for documents, web pages and Files & links: the transcript becomes a 460pt column. Narrow (420pt) for images and videos, which are mostly portrait phone captures: the transcript keeps its full 720pt column. Drag past either end to close the pane or fill the screen. The pane remembers the last width for each kind of file.\n- The open file's card turns blue and says Open. A new tap replaces the file. The transcript never scrolls by itself.\n- Header: back to Files & links, the name with its folder and age, Preview / Source for Markdown and HTML, expand and •••, close. A web page shows its address in the header.\n- Images and videos get a strip to step through the session's media.\n- Expand fills the screen. A chip with the session's status and name brings the transcript back.\n- The list button shows the list over everything, dimmed. Tap outside to hide it. While the list is away, the button shows the needs-input count.\n- Close (or Esc) puts back the layout you had.\n- Each session remembers its open file.\n- Portrait, Slide Over, or any window under about 1000pt: the same pane opens as a sheet, as today.",
+   "text": "How option A behaves\n\n- Tap a file card, a link or the Files pill. The file opens in a pane on the right. Links open in the pane too, and ••• has Open in Safari (decided Oct 24). The transcript, pills and composer stay live on the left.\n- The list steps aside unless the transcript keeps 400pt and the pane gets 600pt. So it hides on the 11-inch and stays on the 13-inch.\n- Two widths, one handle. Wide (720pt) for documents, web pages and Files & links: the transcript becomes a 460pt column. Narrow (420pt) for images and videos, which are mostly portrait phone captures: the transcript keeps its full 720pt column. Drag past either end to close the pane or fill the screen. The pane remembers the last width for each kind of file.\n- The open file's card turns blue and says Open. A new tap replaces the file. The transcript never scrolls by itself.\n- Header: back to Files & links, the name with its folder and age, expand and •••, close. ••• holds Show in transcript and Copy path (a link adds Open in Safari). A web page shows its address in the header.\n- Images and videos get a strip to step through the session's media.\n- Expand fills the screen. A chip with the session's status and name brings the transcript back.\n- The list button shows the list over everything, dimmed. Tap outside to hide it. While the list is away, the button shows the needs-input count.\n- Close (or Esc) puts back the layout you had.\n- A new file from the agent never replaces what you are reading. Its card appears in the transcript, the Files pill turns its count blue with a dot, and Files & links marks the file New. Opening the file or the list clears the dot.\n- When the agent rewrites the open file, the pane reloads it in place and its meta line says \"updated just now\". The client sees the edit in the transcript, so this needs no server change.\n- Each session remembers its open file.\n- Portrait: see the portrait row. A sheet by default, or a top and bottom split.",
    "page": "ipad-files"
   },
   "ifBuild": {
@@ -3317,7 +3357,7 @@
    "y": 2754,
    "w": 520,
    "fill": "orange",
-   "text": "What exists and what is new\n\nFE reuse: every viewer. The zoomable image, the video player (with Picture in Picture), PDF, Markdown and Quick Look already live in FileViewerSheet. The pane hosts the same views.\n\nFE change: one entry point. Every file tap goes through openInlineFile. On a wide window it fills the pane instead of opening the sheet.\n\nFE new: a two-pane container inside the session's detail column, the handle and its snap widths, the blue card state, the media strip, full width, and Preview / Source. Not SwiftUI .inspector: it is sized for details and has an iPadOS 26 bug that hides the sidebar button.\n\nFE new: an in-app web view for HTML files and links. Today .html falls back to Quick Look, and links leave for Safari.\n\nFE new, client only: Show in transcript needs the message id on each attachment. Today an attachment keeps only its path and time.\n\nBE: nothing. Files stream from /api/file as today, and the client builds the file list from the transcript.",
+   "text": "What exists and what is new\n\nFE reuse: every viewer. The zoomable image, the video player (with Picture in Picture), PDF, Markdown and Quick Look already live in FileViewerSheet. The pane hosts the same views.\n\nFE change: one entry point. Every file tap goes through openInlineFile. On a wide window it fills the pane instead of opening the sheet.\n\nFE new: a two-pane container inside the session's detail column, the handle and its snap widths, the blue card state, the media strip, full width, and the portrait split with its handle. Not SwiftUI .inspector: it is sized for details and has an iPadOS 26 bug that hides the sidebar button.\n\nFE new: an in-app web view for HTML files and links. Today .html falls back to Quick Look, and links leave for Safari. It does not share Safari's sign-ins: the first private page (a GitHub PR) asks you to sign in once, and the app's own web data store keeps that sign-in.\n\nFE new, client only: Show in transcript needs the message id on each attachment. Today an attachment keeps only its path and time.\n\nBE: nothing. Files stream from /api/file as today, and the client builds the file list from the transcript.",
    "page": "ipad-files"
   },
   "ifOpen": {
@@ -3325,12 +3365,12 @@
    "y": 3708,
    "w": 520,
    "fill": "purple",
-   "text": "Open questions\n\n1. Links: open in the pane, or keep Safari? A pane web view does not share Safari's sign-ins, so a private GitHub page may ask you to sign in. My pick: the pane, with Open in Safari in •••.\n\n2. When the agent writes a new file, should the pane switch to it? My pick: no. Show a count on the Files pill, and never swap a file you are reading.\n\n3. When the agent rewrites the open file, reload it in place? The client sees the edit in the transcript, so this needs no server change.\n\n4. Keyboard: Esc closes, Cmd-[ and Cmd-] step through files. This pass, or the keyboard pass from the iPad page?",
+   "text": "Decisions (Oct 23-24)\n\n- Links open in the pane, with Open in Safari in •••.\n- A new file never takes over the pane. The Files pill shows it with a blue dot (board \"a new file arrives while you read\").\n- The open file reloads in place when the agent rewrites it (board \"the open file was rewritten\").\n- Keyboard: Esc closes the pane in this pass. Cmd-[ and Cmd-] to step through files wait for the keyboard pass.\n- No Share, no Open in new window, no source view.\n- The pane stays a card with room at the top. Its buttons do not need to line up with the transcript bar.",
    "page": "ipad-files"
   },
   "ifWhy": {
    "x": -600,
-   "y": 5340,
+   "y": 6790,
    "w": 520,
    "fill": "gray",
    "text": "Why A, not B\n\n- On the 11-inch, three columns leave the file 390pt. A Markdown file reads like a phone, a web page gets its phone layout, and an image is no bigger than in today's sheet. This is the Claude iPad complaint.\n- A gives the file room and keeps one column you can talk in. The list button's badge still shows when another session needs you.\n- B's one strength, the list that stays, comes back by itself on the 13-inch through A's width rule.",
@@ -3390,7 +3430,7 @@
    "w": 460,
    "fill": "blue",
    "page": "share-sheet",
-   "text": "The flow (Eugene's pick, Oct 23)\n\nAny app → Share → LFG → Send to → tap a session → the panel comes up → edit the text → Send.\n\nMost of the sheet is search and the list. Nothing is chosen when it opens, so the keyboard stays down and the list gets the screen.\n\nPinned row: New session (your New Session defaults; ••• changes host, folder and agent). Then Recent (the five sessions you messaged last) and All sessions (the rest by last activity, so closed ones sink). Search matches title and folder.\n\nChoosing a session raises the panel: the preview, the text field, who gets it and what Send will do, then Send.\n\nThe text field is exactly what is sent. It starts with the link; you type around it. Attachments are the one addition: they upload to the session's host when you send, and their paths go in after the text, as the paperclip does today.\n\nIn the session (last two boards): a working session holds it in the soft strip until its turn takes it; then it is a plain blue bubble. An idle session shows the bubble at once."
+   "text": "The flow (Eugene's pick, Oct 23)\n\nAny app → Share → LFG → Send to → tap a session → the panel comes up → edit the text → Send.\n\nMost of the sheet is search and the list. Nothing is chosen when it opens, so the keyboard stays down and the list gets the screen.\n\nPinned row: New session (your New Session defaults; ••• changes host, folder and agent). Then Recent (the five sessions you messaged last), All sessions (the rest by last activity, so closed ones sink), then Chats. Search finds sessions and chats and keeps them in separate sections, sessions first.\n\nChoosing a session raises the panel: the preview, the text field, who gets it and what Send will do, then Send. The panel is its own lighter surface (#48484A over #2C2C2E cards on the #1C1C1E list), and the text field drops back to the list colour with a visible border, as in the reference (Nov 5).\n\nThe text field is exactly what is sent. It starts with the link; you type around it. Attachments are the one addition: they upload to the session's host when you send, and their paths go in after the text, as the paperclip does today.\n\nIn the session (last two boards): a working session holds it in the soft strip until its turn takes it; then it is a plain blue bubble. An idle session shows the bubble at once."
   },
   "shDecisions": {
    "x": 3800,
@@ -3431,6 +3471,22 @@
    "fill": "gray",
    "page": "share-sheet",
    "text": "Not in this pass\n\n• Mac share extension. It could fit the desktop scope later without the New session row.\n• iPad: the same sheet as a form sheet. Check the panel and the keyboard there before building.\n• Light mode, with the rest of S2."
+  },
+  "ifTP": {
+   "x": 0,
+   "y": 4860,
+   "kind": "title1",
+   "maxW": 3576,
+   "text": "Portrait: a sheet by default, or a top and bottom split",
+   "page": "ipad-files"
+  },
+  "ifPortrait": {
+   "x": -600,
+   "y": 5160,
+   "w": 520,
+   "fill": "green",
+   "text": "How portrait works\n\n- A tap opens the file as a sheet over the transcript, as today. The sheet has the same header as the landscape pane.\n- The split button in the header (a square cut in half) docks the file at the top. The transcript, pills and composer stay live below it, under the session's title and status.\n- Drag the handle between them. It snaps with the file at 40%, 55% or 70% of the height; tap it to step through the sizes. Drag it to the top edge to close the file, or to the bottom edge to go back to the sheet.\n- The split button again turns the split back into a sheet. Close ends it.\n- lfg remembers the choice: after you split once, the next file in portrait opens split too.\n- When the keyboard comes up, the file drops to 40% so the composer and the newest lines stay in view.\n- Slide Over and windows narrower than about 600pt always use the sheet.",
+   "page": "ipad-files"
   }
  },
  "designSystems": []
