@@ -1,13 +1,25 @@
 import Foundation
 
+/// What a durable chat's send route returns: the accepted turn's request id.
+public struct ChatSendAck: Decodable, Sendable, Equatable {
+    public struct Turn: Decodable, Sendable, Equatable { public var requestID: String }
+    public var turn: Turn
+    public var duplicate: Bool?
+    public init(requestID: String, duplicate: Bool? = nil) { turn = .init(requestID: requestID); self.duplicate = duplicate }
+}
+
 public struct ShareTransport: Sendable {
     public var upload: @Sendable (Host, String, URL, String, String) async throws -> String
     public var send: @Sendable (Host, String, String, String) async throws -> SendResponse
     public var create: @Sendable (Host, NewSessionRequest) async throws -> NewSessionResponse
+    /// (host, chat id, text, request id). Chats use their own body and reply.
+    public var sendChat: @Sendable (Host, String, String, String) async throws -> ChatSendAck
     public init(upload: @escaping @Sendable (Host, String, URL, String, String) async throws -> String,
                 send: @escaping @Sendable (Host, String, String, String) async throws -> SendResponse,
-                create: @escaping @Sendable (Host, NewSessionRequest) async throws -> NewSessionResponse) {
-        self.upload = upload; self.send = send; self.create = create
+                create: @escaping @Sendable (Host, NewSessionRequest) async throws -> NewSessionResponse,
+                sendChat: @escaping @Sendable (Host, String, String, String) async throws -> ChatSendAck = { _, _, _, _ in
+                    throw ShareCaptureError.unacknowledged }) {
+        self.upload = upload; self.send = send; self.create = create; self.sendChat = sendChat
     }
     public static func live(client: @escaping @Sendable (Host) -> LFGClient?) -> ShareTransport {
         .init(upload: { host, id, file, type, name in
@@ -23,6 +35,10 @@ public struct ShareTransport: Sendable {
             guard let c = client(host) else { throw LFGError.badURL }
             let data = try await requestData(c.newSessionRequest(request))
             return try JSONDecoder().decode(NewSessionResponse.self, from: data)
+        }, sendChat: { host, id, text, requestID in
+            guard let c = client(host) else { throw LFGError.badURL }
+            let data = try await requestData(c.chatSendRequest(id, text: text, requestID: requestID))
+            return try JSONDecoder().decode(ChatSendAck.self, from: data)
         })
     }
     private static func requestData(_ request: URLRequest) async throws -> Data {
@@ -53,6 +69,8 @@ public struct ShareDelivery: Sendable {
         guard job.status != .sent, job.status != .uncertain else { return job }
         // The old process died after persisting the POST boundary. Creation has
         // no host idempotency key; a replay could start a second agent session.
+        // A chat send is keyed by its request id, so the host dedupes a replay.
+        if job.isChat && job.status == .sending { job.status = .queued }
         if job.status == .creating || job.status == .sending {
             job.status = .uncertain; job.error = ShareCaptureError.unacknowledged.localizedDescription
             try spool.save(job); return job
@@ -71,7 +89,9 @@ public struct ShareDelivery: Sendable {
                 guard size == file.byteCount, file.byteCount < ShareSpool.maximumFileBytes else { throw ShareCaptureError.invalidFile }
                 // Upload is only a file write; it never submits an agent turn.
                 // The existing endpoint accepts a UUID before session creation.
-                let path = try await transport.upload(job.host, job.sessionID ?? job.id, fileURL, file.contentType, file.filename)
+                // A chat id is not a session UUID; the share id stands in, as it
+                // does before a new session exists.
+                let path = try await transport.upload(job.host, job.isChat ? job.id : (job.sessionID ?? job.id), fileURL, file.contentType, file.filename)
                 guard path.hasPrefix("/"), !path.contains("\n"), !path.contains("\r") else { throw ShareCaptureError.invalidFile }
                 job.files[index].uploadedPath = path; try spool.save(job)
             }
@@ -82,6 +102,17 @@ public struct ShareDelivery: Sendable {
                 let response = try await transport.create(job.host, request)
                 guard response.ok == true, let sessionID = response.sessionId, !sessionID.isEmpty else { throw ShareCaptureError.unacknowledged }
                 job.sessionID = sessionID
+            } else if job.isChat, let chatID = job.sessionID {
+                job.status = .sending; try spool.save(job)
+                do {
+                    let ack = try await transport.sendChat(job.host, chatID, job.message, job.id)
+                    guard ack.turn.requestID == job.id else { throw ShareCaptureError.unacknowledged }
+                    job.waitsForTurn = nil
+                } catch LFGError.http(status: 409, _) {
+                    // The chat is mid-turn. Nothing was submitted; hold it.
+                    job.status = .queued; job.waitsForTurn = true; job.error = nil
+                    try spool.save(job); return job
+                }
             } else if let sessionID = job.sessionID {
                 job.status = .sending; try spool.save(job)
                 let response = try await transport.send(job.host, sessionID, job.message, job.id)
@@ -103,7 +134,16 @@ public struct ShareDelivery: Sendable {
                                      URLError.cannotConnectToHost.rawValue, URLError.dnsLookupFailed.rawValue].contains(code ?? 0)
             default: definitelyOffline = false
             }
-            if definitelyOffline { job.status = .queued }
+            // A chat replay reuses its request id, so a lost answer is retryable.
+            var chatRetryable = false
+            if job.isChat, atSubmission, !(error is ShareCaptureError), !(error is DecodingError) {
+                switch evidence {
+                case .transportFailed: chatRetryable = true
+                case .serverAnswered(let status): chatRetryable = status >= 500
+                default: break
+                }
+            }
+            if definitelyOffline || chatRetryable { job.status = .queued }
             else if atSubmission, case .transportFailed = evidence { job.status = .uncertain }
             else if atSubmission, case .serverAnswered(let status) = evidence, status >= 500 { job.status = .uncertain }
             else if atSubmission, error is ShareCaptureError || error is DecodingError { job.status = .uncertain }

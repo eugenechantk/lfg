@@ -458,6 +458,7 @@ public struct ChatDeliveryTransport: Sendable {
     public func isLocal(_ id: String) -> Bool { state.creations.contains { $0.record.id == id && !$0.registered } }
     public func creationFailure(_ id: String) -> String? { state.creations.first { $0.record.id == id }?.failure }
     public func queued(for id: String) -> [ChatQueuedMessage] { state.outbox.filter { $0.chatID == id } }
+    public var hasQueuedMessages: Bool { !state.outbox.isEmpty }
     public func deliveryLabel(_ requestID: String) -> String? {
         state.outbox.first { $0.id == requestID }.map { $0.failure == nil ? "Queued" : "Retry" }
     }
@@ -499,10 +500,13 @@ public struct ChatDeliveryTransport: Sendable {
     public func childMessages(_ id: String, childID: String) -> [SessionMessage] {
         (state.transcript?[id] ?? []).reversed().compactMap { $0.childTranscripts[childID] }.first ?? []
     }
-    public func enqueue(_ id: String, text: String, on host: ScheduledTaskHost) throws {
+    /// `requestID` lets a caller that already tried the host (a share) keep
+    /// its idempotency key; enqueueing the same id twice is a no-op.
+    public func enqueue(_ id: String, text: String, on host: ScheduledTaskHost, requestID: String = UUID().uuidString) throws {
         guard !isDeleted(id) else { throw ChatClientError(message: "This chat was deleted.", status: 410) }
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.count <= 32000 else { throw ChatClientError(message: "Messages must contain 1–32,000 characters.") }
-        let message = ChatQueuedMessage(id: UUID().uuidString, chatID: id, text: text, timestamp: Date().timeIntervalSince1970 * 1000)
+        guard !state.outbox.contains(where: { $0.id == requestID }) else { return }
+        let message = ChatQueuedMessage(id: requestID, chatID: id, text: text, timestamp: Date().timeIntervalSince1970 * 1000)
         try commit { state in
             if !state.creations.contains(where: { $0.record.id == id }), state.owners[id] == nil { state.owners[id] = .init(host) }
             state.outbox.append(message)

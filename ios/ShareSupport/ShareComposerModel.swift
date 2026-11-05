@@ -50,6 +50,7 @@ final class ShareComposerModel {
     var confirmation: String {
         if isNew { return "Session started" }
         guard let selected else { return "Sent" }
+        if selected.isChat { return "Sent" }
         if selected.session.closed { return "Session resumed" }
         if selected.session.prompt != nil { return "Saved. Runs after you answer its question." }
         return selected.session.busy == true ? "Added to its current turn" : "Sent"

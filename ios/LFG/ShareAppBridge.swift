@@ -8,6 +8,7 @@ final class ShareAppBridge {
     static let shared = ShareAppBridge()
     private(set) var pending: [ShareJob] = []
     private var worker: Task<Void, Never>?
+    private var chatFlush: Task<Void, Never>?
 
     func publish(settings: AppSettings, store: SessionStore) {
         guard let spool = ShareEnvironment.spool else { return }
@@ -23,6 +24,13 @@ final class ShareAppBridge {
     }
 
     func resume(settings: AppSettings, store: SessionStore) {
+        // A chat's queue otherwise flushes only while Chats is on screen. Retry
+        // it on every refresh so a share (or a message typed into a busy chat)
+        // sends once the turn ends.
+        if chatFlush == nil, ChatWorkspace.shared.hasQueuedMessages {
+            let hosts = chatHosts(settings)
+            chatFlush = Task { await ChatWorkspace.shared.flush(hosts: hosts); chatFlush = nil }
+        }
         guard worker == nil, let spool = ShareEnvironment.spool else { return }
         pending = spool.jobs().filter { $0.status != .sent }
         let hosts = settings.hosts
@@ -35,10 +43,34 @@ final class ShareAppBridge {
                 if assertion != .invalid { UIApplication.shared.endBackgroundTask(assertion) }
             }
             let service = ShareDelivery(spool: spool, transport: ShareEnvironment.transport)
+            var handedOff = false
             for job in spool.jobs() where job.status != .sent {
                 guard hosts.contains(where: { $0.id == job.host.id }) else { continue }
-                _ = try? await service.deliver(job.id)
+                if handOffToChat(job, spool: spool, settings: settings) { handedOff = true; continue }
+                if let result = try? await service.deliver(job.id), handOffToChat(result, spool: spool, settings: settings) { handedOff = true }
             }
+            if handedOff { await ChatWorkspace.shared.flush(hosts: chatHosts(settings)) }
+        }
+    }
+
+    /// A chat that was busy or offline when shared gets the share through its
+    /// own queue (same request id), so it shows as a queued bubble in the chat
+    /// and sends after the current turn, as a message typed in LFG would.
+    private func handOffToChat(_ job: ShareJob, spool: ShareSpool, settings: AppSettings) -> Bool {
+        guard job.isChat, job.status == .queued, job.filesUploaded, !job.message.isEmpty, let chatID = job.sessionID,
+              let host = chatHosts(settings).first(where: { $0.id == job.host.id }) else { return false }
+        do {
+            try ChatWorkspace.shared.enqueue(chatID, text: job.message, on: host, requestID: job.id)
+            try spool.discard(job.id)
+            return true
+        } catch { return false }
+    }
+
+    private func chatHosts(_ settings: AppSettings) -> [ScheduledTaskHost] {
+        settings.hosts.compactMap { host in
+            guard let client = settings.client(for: host) else { return nil }
+            return ScheduledTaskHost(id: host.id, name: host.label, baseURL: client.baseURL,
+                headers: client.resourceRequest(for: client.baseURL).allHTTPHeaderFields ?? [:])
         }
     }
 

@@ -233,3 +233,15 @@ private actor DeliveryGate {
     func send(_ message: ChatQueuedMessage) { sent.append(message.id) }
     func release() { continuation?.resume(); continuation = nil }
 }
+
+extension ChatWorkspaceTests {
+    @Test func enqueueKeepsACallersRequestIDOnce() throws {
+        let url = temporary(); defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let workspace = ChatWorkspace(url: url), pro = host("pro")
+        let id = "chat-0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b"
+        try workspace.enqueue(id, text: "shared link", on: pro, requestID: "share-1")
+        try workspace.enqueue(id, text: "shared link", on: pro, requestID: "share-1")
+        #expect(workspace.queued(for: id).map(\.id) == ["share-1"])
+        #expect(workspace.deliveryLabel("share-1") == "Queued")
+    }
+}

@@ -739,6 +739,17 @@ public struct LFGClient: Sendable {
         return authenticated(req)
     }
 
+    /// A durable chat takes `requestID` (its idempotency key) instead of
+    /// `clientId`, on the same path; the chat route owns `chat-` ids.
+    public func chatSendRequest(_ id: String, text: String, requestID: String) throws -> URLRequest {
+        var req = URLRequest(url: url("api/sessions/\(id)/send"))
+        req.httpMethod = "POST"
+        req.timeoutInterval = 60
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["text": text, "requestID": requestID])
+        return authenticated(req)
+    }
+
     private func sendMessageBody(text: String, clientId: String?) -> [String: Any?] {
         var body: [String: Any?] = ["text": text]
         if let clientId { body["clientId"] = clientId }

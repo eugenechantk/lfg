@@ -12,8 +12,12 @@ public struct ShareRecipient: Codable, Sendable, Hashable, Identifiable {
         self.host = host; self.session = session; self.isReachable = isReachable
     }
 
+    public var isChat: Bool { session.isChat }
+
     public var sendEffect: String {
         if !isReachable { return "Queues until \(host.label) is back" }
+        // A chat never folds input into a running turn; LFG holds the message.
+        if isChat { return session.busy == true ? "Waits for its current turn" : "Starts its next turn now" }
         if session.closed { return "Resumes it" }
         if session.prompt != nil { return "Runs after you answer its question" }
         if session.busy == true { return "Joins its current turn" }
@@ -44,23 +48,33 @@ public enum ShareRecipients {
         }
     }
 
-    public static func sections(_ recipients: [ShareRecipient], query: String) -> (recent: [ShareRecipient], all: [ShareRecipient]) {
+    /// Recent (no query), then sessions, then chats. Chats keep their own
+    /// section so a search for both never mixes them or puts chats first.
+    public static func sections(_ recipients: [ShareRecipient], query: String) -> ShareSections {
         let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
         let matches = reconciled(recipients).filter { recipient in
             let haystack = [recipient.session.title, recipient.session.cwd ?? "", recipient.host.label,
-                            recipient.session.agent].joined(separator: " ")
+                            recipient.session.agent, recipient.isChat ? "chat" : "session"].joined(separator: " ")
             return words.allSatisfy { haystack.localizedCaseInsensitiveContains($0) }
         }
         let recent = words.isEmpty ? Array(matches.filter { ($0.session.lastUserAt ?? 0) > 0 }
             .sorted { ($0.session.lastUserAt ?? 0) > ($1.session.lastUserAt ?? 0) }.prefix(5)) : []
         let ids = Set(recent.map(\.id))
-        let all = matches.filter { !ids.contains($0.id) }.sorted {
+        let rest = matches.filter { !ids.contains($0.id) }.sorted {
             if $0.session.closed != $1.session.closed { return !$0.session.closed }
             let a = $0.session.lastActivityAt ?? 0, b = $1.session.lastActivityAt ?? 0
             return a == b ? $0.id < $1.id : a > b
         }
-        return (recent, all)
+        return ShareSections(recent: recent, sessions: rest.filter { !$0.isChat }, chats: rest.filter(\.isChat))
     }
+}
+
+public struct ShareSections: Sendable {
+    public var recent: [ShareRecipient]
+    public var sessions: [ShareRecipient]
+    public var chats: [ShareRecipient]
+    public var all: [ShareRecipient] { sessions + chats }
+    public var isEmpty: Bool { recent.isEmpty && sessions.isEmpty && chats.isEmpty }
 }
 
 public struct ShareConfiguration: Codable, Sendable {
@@ -103,6 +117,9 @@ public struct ShareJob: Codable, Sendable, Identifiable {
     public var status: Status = .queued
     public var error: String?
     public var createdAt: Date = Date()
+    /// A busy chat refused the turn (409). The app hands the share to that
+    /// chat's own queue, which sends it after the turn.
+    public var waitsForTurn: Bool?
     public init(id: String = UUID().uuidString, host: Host, sessionID: String? = nil,
                 recipientTitle: String, newSession: NewSessionRequest? = nil, text: String, files: [ShareFile] = []) {
         self.id = id; self.host = host; self.sessionID = sessionID; self.recipientTitle = recipientTitle
@@ -113,6 +130,9 @@ public struct ShareJob: Codable, Sendable, Identifiable {
             .filter { !$0.isEmpty }.joined(separator: "\n")
     }
     public var canAutomaticallyDeliver: Bool { status == .queued || status == .uploading }
+    /// Chat ids are minted as `chat-<uuid>`; the chat route owns them.
+    public var isChat: Bool { sessionID?.hasPrefix("chat-") == true && newSession == nil }
+    public var filesUploaded: Bool { files.allSatisfy { $0.uploadedPath != nil } }
 }
 
 public enum ShareCaptureError: LocalizedError, Sendable {
