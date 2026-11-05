@@ -68,21 +68,30 @@ export class SessionNotifications {
     await writeFile(tmp, JSON.stringify({ version: 1, receipts: this.receipts }), { mode: 0o600 });
     await rename(tmp, this.file);
   }
-  async send(sid: string, input: unknown): Promise<Receipt & { duplicate: boolean }> {
+  async send(sid: string, input: unknown): Promise<Receipt & { duplicate: boolean; reclassified?: string }> {
     const run = this.chain.catch(() => {}).then(async () => {
       await this.ready;
       if (!input || typeof input !== "object" || Array.isArray(input)) throw new NotificationError("Expected a JSON object.");
       const value = input as Record<string, unknown>;
       const requestID = cleanText(value.requestID, "requestID", 160);
       const message = cleanText(value.message, "message", 500);
-      if (!NOTIFICATION_STATUSES.includes(value.status as NotificationStatus)) throw new NotificationError("Choose working, completed, needs-input, blocked, or reminder.");
-      const status = value.status as NotificationStatus;
+      if (!NOTIFICATION_STATUSES.includes(value.status as NotificationStatus)) throw new NotificationError("Choose completed, blocked, reminder, or working.");
+      // "Needs input" means a question is OPEN in the session, and the push
+      // watcher announces that itself the moment the prompt appears, with the
+      // question. An agent that sends needs-input has written its question into a
+      // reply and is ending its turn: all 7 such alerts on record (2026-11-02 to
+      // 11-05) were followed by the turn ending about a minute later with no
+      // prompt. So the alert goes out as what it is — a completed turn — and
+      // "needs input" only ever means a question is waiting.
+      const requested = value.status as NotificationStatus;
+      const status: NotificationStatus = requested === "needs-input" ? "completed" : requested;
+      const reclassified = requested !== status ? { reclassified: `${requested} → ${status}: lfg alerts open questions itself` } : {};
       const title = value.title === undefined ? undefined : cleanText(value.title, "title", 80);
       const previous = this.receipts.find(r => r.notification.sessionId === sid && r.notification.requestID === requestID);
       if (previous) {
         if (previous.notification.message !== message || previous.notification.status !== status || (title !== undefined && previous.notification.title !== title))
           throw new NotificationError("requestID already belongs to a different notification.", 409);
-        return { ...previous, duplicate: true };
+        return { ...previous, duplicate: true, ...reclassified };
       }
       const session = (await this.options.sessions()).find(s => s.sessionId === sid);
       if (!session) throw new NotificationError("Session is not running on this host.", 404);
@@ -102,7 +111,7 @@ export class SessionNotifications {
         // The emoji lives on the alert only; the stored receipt keeps the
         // agent's title, which idempotent retries compare against.
         title: alertTitle(status, notification.title), body: `${notificationLabels[status]}: ${message}`, sid,
-        kind: status === "completed" ? "finished" : status === "needs-input" || status === "blocked" ? "needs-input" : "status",
+        kind: status === "completed" ? "finished" : status === "blocked" ? "needs-input" : "status",
         notificationId: notification.id, session: { id: sid, title: sessionTitle(session.title), cwd: session.cwd ?? null },
       };
       for (const device of devices) {
@@ -116,7 +125,7 @@ export class SessionNotifications {
       const { attempted, accepted, failed } = receipt.mobile;
       receipt.mobile.state = !attempted ? (receipt.mobile.muted ? "muted" : "unavailable") : !failed ? "accepted" : accepted ? "partial" : "failed";
       await this.save();
-      return { ...receipt, duplicate: false };
+      return { ...receipt, duplicate: false, ...reclassified };
     });
     this.chain = run;
     return run;

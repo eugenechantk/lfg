@@ -66,6 +66,27 @@ test("a maximum-length cwd in the snapshot still fits the APNs payload limit", a
   expect(Buffer.byteLength(apnsBody({ ...f.sent[0].payload, hostId: crypto.randomUUID(), seq: Number.MAX_SAFE_INTEGER }))).toBeLessThan(4096);
 });
 
+test("an agent's needs-input goes out as completed: lfg alerts open questions itself", async () => {
+  // 2026-11-05: 7 of 7 agent needs-input alerts were a question written into a
+  // reply, with the turn ending a minute later and no prompt open.
+  const f = fixture();
+  const r = await f.service.send(sid, { requestID: "ask-1", status: "needs-input", message: "Deploy the fix?" });
+  expect(r.notification.status).toBe("completed");
+  expect(r.reclassified).toBe("needs-input → completed: lfg alerts open questions itself");
+  expect(f.sent[0].payload).toMatchObject({ kind: "finished", title: "✅ Fix notifications", body: "Completed: Deploy the fix?" });
+  expect(f.events[0].note.status).toBe("completed");
+  // It counts as this turn's completion, so the watcher sends no second alert.
+  expect(f.service.latestCompletion(sid)?.requestID).toBe("ask-1");
+  // A retry with the same request is the same alert, not a conflict.
+  const again = await f.service.send(sid, { requestID: "ask-1", status: "needs-input", message: "Deploy the fix?" });
+  expect(again.duplicate).toBe(true);
+  expect(f.sent).toHaveLength(2); // one push per device, sent once
+  // blocked is unchanged: something outside the session needs the user.
+  const blocked = await f.service.send(sid, { requestID: "b-1", status: "blocked", message: "The Air is offline." });
+  expect(blocked.notification.status).toBe("blocked");
+  expect(blocked.reclassified).toBeUndefined();
+});
+
 test("maximum Unicode copy remains within the APNs alert payload limit", async () => {
   const f = fixture();
   await f.service.send(sid, { requestID: "unicode", status: "working", title: "🧪".repeat(80), message: "🧪".repeat(500) });

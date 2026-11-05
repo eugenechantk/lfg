@@ -12,4 +12,12 @@ test("agents are told to lead alerts with what was built or fixed", () => {
   expect(managed).toContain("Describe the work done only when it built or fixed nothing.");
   expect(managed).toContain('"lfg-abc123"');
   expect(chatNotificationInstructions("chat-1")).toContain("Start with what was built or which problem was solved");
+
+  // Agents labelled a question in their reply "needs-input"; only a real open
+  // question is that, and lfg announces those itself.
+  expect(managed).toContain("--status <completed|blocked|reminder|working>");
+  expect(managed).toContain("Use completed when your turn ends, also when your reply asks the user something");
+  expect(managed).not.toContain("needs-input");
+  expect(chatNotificationInstructions("chat-1")).not.toContain("needs-input");
+  expect(chatNotificationInstructions("chat-1")).toContain("A question in your reply is still completed.");
 });
