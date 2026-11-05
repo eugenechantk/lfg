@@ -296,7 +296,7 @@ extension SessionStore {
         }
         hosts[index].error = nil
         statusReconciliation.apply(to: &hosts[index], after: 0)
-        if case .busy(_, false) = event { settleNotifications() }
+        if case .busy(_, false) = event { settleNotifications(host: url) }
         else { observeNotifications() }
     }
 }

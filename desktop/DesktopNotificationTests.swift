@@ -129,6 +129,23 @@ enum DesktopNotificationTests {
         let summaryItem = customItem(busy: false, userAt: 100, preview: preview)
         try check(DesktopSessionNotification(item: summaryItem, kind: .finished).body == "Finished: Fixed the alerts.", "automatic finish uses current assistant prose")
         try check(DesktopSessionNotification(item: customItem(busy: false, userAt: 300, preview: preview), kind: .finished).body == "The agent finished its turn.", "old assistant result cannot describe a new turn")
+        // The held row is from the poll before the turn's reply; the settle
+        // path's fetch carries the reply, and it must win.
+        let replying = SessionStore()
+        replying.configuredHosts = [entry]
+        var stale = customItem(busy: true, userAt: 100).session
+        stale.last = DesktopAssistantPreview(role: "assistant", kind: "tool_use", text: "Bash", ts: 150)
+        replying.hosts = [HostState(url: entry.url, sshTarget: nil, sessions: [stale])]
+        var replyBodies: [String] = []
+        replying.onSessionNotification = { replyBodies.append($0.body) }
+        replying.observeNotifications()
+        replying.receiveStatus(.busy("one", false), host: entry.url)
+        replying.notificationSettleTask?.cancel()
+        replying.notificationSettleTask = nil
+        var fetched = stale.replacingBusy(false)
+        fetched.last = DesktopAssistantPreview(role: "assistant", kind: "text", text: "Saved links can now be deleted.", ts: 200)
+        replying.observeNotifications(replies: [SessionStore.replyKey(entry.url, "one"): fetched])
+        try check(replyBodies == ["Finished: Saved links can now be deleted."], "a finished alert quotes the reply fetched after the turn, not the stale poll")
 
         let streamed = SessionStore()
         streamed.configuredHosts = [entry]

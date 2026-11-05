@@ -70,6 +70,21 @@ enum DesktopNotificationProbeCLI {
             if args[2] == "status" {
                 let settings = await UNUserNotificationCenter.current().notificationSettings()
                 print("notification authorization: \(settings.authorizationStatus.rawValue)")
+            } else if args[2] == "watch" {
+                // The real live feed and settle path, headless. Prints each alert
+                // instead of posting it, beside what the held rows alone would say.
+                let store = SessionStore()
+                await store.refresh()
+                store.onSessionNotification = { [weak store] note in
+                    let held = store?.notificationItems.first {
+                        $0.session.sessionId == note.item.session.sessionId && $0.hostURL == note.item.hostURL
+                    }.map { DesktopSessionNotification(item: $0, kind: note.kind, custom: note.custom).body } ?? "?"
+                    print("\(Date().formatted(date: .omitted, time: .standard)) \(note.title)\n  sent: \(note.body.prefix(140))\n  held: \(held.prefix(140))")
+                    fflush(stdout)
+                }
+                store.startStatusSync()
+                try? await Task.sleep(for: .seconds(Double(args.dropFirst(3).first ?? "600") ?? 600))
+                store.stopStatusSync()
             } else {
                 let store = SessionStore()
                 await store.refresh()
@@ -81,6 +96,15 @@ enum DesktopNotificationProbeCLI {
                         if let error = found.error { payload["error"] = error }
                         if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
                            let json = String(data: data, encoding: .utf8) { print(json) }
+                    } else if args.dropFirst(3).first == "body" {
+                        // The finished alert's text from the held rows, then from
+                        // the fetch the settle path makes. Posts nothing.
+                        let held = DesktopSessionNotification(item: item, kind: .finished)
+                        let replies = await store.latestReplies(host: item.hostURL)
+                        let fresh = store.notificationItems(replies: replies).first { $0.session.sessionId == args[2] && $0.hostURL == item.hostURL }
+                        print("held:  \(held.title) | \(held.body)")
+                        if let fresh { let note = DesktopSessionNotification(item: fresh, kind: .finished); print("fresh: \(note.title) | \(note.body)") }
+                        print("fetched rows: \(replies.count)")
                     } else if args.dropFirst(3).first == "open" {
                         print(await store.openNotification(DesktopNotificationTarget(item)) ?? "opened")
                     } else {
@@ -334,10 +358,19 @@ extension SessionStore {
     /// Sessions that may raise a native alert. A directory hidden on this Mac
     /// mutes its alerts as well as its rows; the tracker forgets a hidden
     /// session, so unhiding re-seeds it rather than replaying what it missed.
-    var notificationItems: [SessionItem] {
+    var notificationItems: [SessionItem] { notificationItems(replies: [:]) }
+
+    /// `replies` holds fresher rows, keyed by `replyKey`, whose last message and
+    /// user-turn time replace the ones held here — see `latestReplies`.
+    func notificationItems(replies: [String: APISession]) -> [SessionItem] {
         hosts.flatMap { host in
-            host.sessions.filter { !$0.closed && !hiddenDirs.hides(cwd: $0.cwd) }.map { session in
-                SessionItem(session: session, hostURL: host.url, hostId: host.info?.hostId ?? host.url,
+            host.sessions.filter { !$0.closed && !hiddenDirs.hides(cwd: $0.cwd) }.map { held in
+                var session = held
+                if let sid = held.sessionId, let fresh = replies[Self.replyKey(host.url, sid)] {
+                    session.last = fresh.last
+                    session.lastUserAt = fresh.lastUserAt
+                }
+                return SessionItem(session: session, hostURL: host.url, hostId: host.info?.hostId ?? host.url,
                             hostLabel: host.label, hostIsLocal: host.isLocal, hostSSHTarget: host.sshTarget,
                             hostRemoteTransport: host.remoteTransport,
                             needsInput: host.needsInputSessionIds.contains(session.sessionId ?? ""), hostOffline: host.error != nil)
@@ -345,21 +378,41 @@ extension SessionStore {
         }
     }
 
-    func observeNotifications(now: TimeInterval = Date().timeIntervalSince1970) {
+    func observeNotifications(now: TimeInterval = Date().timeIntervalSince1970, replies: [String: APISession] = [:]) {
         guard notificationSettleTask == nil else { return }
-        for note in notificationTracker.observe(notificationItems, now: now) { onSessionNotification?(note) }
+        for note in notificationTracker.observe(notificationItems(replies: replies), now: now) { onSessionNotification?(note) }
     }
 
-    func settleNotifications() {
+    func settleNotifications(host url: String? = nil) {
         guard notificationSettleTask == nil else { return }
         // busy and prompt are adjacent journal frames. Observe the complete
         // state so a question doesn't first announce a misleading completion.
         notificationSettleTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled, let self else { return }
+            let replies = await self.latestReplies(host: url)
+            guard !Task.isCancelled else { return }
             self.notificationSettleTask = nil
-            self.observeNotifications()
+            self.observeNotifications(replies: replies)
         }
+    }
+
+    static func replyKey(_ hostURL: String, _ sessionID: String) -> String { hostURL + "\u{1F}" + sessionID }
+
+    /// The host's current rows, for the replies that just ended their turns.
+    ///
+    /// The live feed carries busy and prompt, not messages, so a session's
+    /// `last` here is from the previous 10 s poll — before the reply that ended
+    /// the turn. On 2026-11-04 every one of 13 "The agent finished its turn."
+    /// alerts fired within 1 s of a real reply. One fetch gets the reply the
+    /// phone's push quotes; an unreachable host keeps the held rows.
+    func latestReplies(host url: String?) async -> [String: APISession] {
+        guard let url, let entry = configuredHosts.first(where: { $0.url == url }) else { return [:] }
+        let state = await Self.fetchHost(entry: entry)
+        guard state.error == nil else { return [:] }
+        var replies: [String: APISession] = [:]
+        for session in state.sessions { if let sid = session.sessionId { replies[Self.replyKey(url, sid)] = session } }
+        return replies
     }
 
     func openNotification(_ target: DesktopNotificationTarget) async -> String? {
