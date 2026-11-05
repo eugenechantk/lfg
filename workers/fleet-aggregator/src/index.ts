@@ -1,5 +1,6 @@
 import { sendToChannel, sendToToken, type ApnsEnv, type ApnsResult, type ApnsSecrets } from "./apns";
-import { broadcastFor, decide, endBody, startBody, unionRows, updateBody, type Card, type ContentState, type Row, type Slice, type Veto } from "./reduce";
+import { broadcastFor, decide, endBody, startBody, unionRows, updateBody, visibleTo, type Card, type ContentState, type Row, type Slice, type Veto } from "./reduce";
+import { normalizeExcludes } from "../../../src/hidden-dirs";
 
 type Env = ApnsSecrets & {
   AGG_SECRET: string;
@@ -9,7 +10,8 @@ type Env = ApnsSecrets & {
   FLEET: DurableObjectNamespace;
 };
 
-type StartToken = { token: string; env: ApnsEnv; deviceId?: string; updatedAt: number };
+/** `hiddenDirs`: the device's hidden directories. Absent on builds that predate it. */
+type StartToken = { token: string; env: ApnsEnv; deviceId?: string; updatedAt: number; hiddenDirs?: string[] };
 type TraceEvent = { t: string; event: string } & Record<string, unknown>;
 
 const ENVS: ApnsEnv[] = ["production", "sandbox"];
@@ -72,10 +74,18 @@ export class FleetAggregator {
     await this.armAlarm(slices.length > 0 || anyCard);
   }
 
-  private async evaluateEnv(env: ApnsEnv, slices: Slice[], now: number): Promise<boolean> {
+  /** Each of the environment's devices' hidden directories (see `visibleTo`). */
+  private async hiddenFor(env: ApnsEnv): Promise<string[][]> {
+    const tokens = (await this.state.storage.get<StartToken[]>("tokens")) ?? [];
+    return tokens.filter((t) => t.env === env).map((t) => t.hiddenDirs ?? []);
+  }
+
+  private async evaluateEnv(env: ApnsEnv, allSlices: Slice[], now: number): Promise<boolean> {
     const k = (name: string) => `${name}:${env}`;
     const card = (await this.state.storage.get<Card | null>(k("card"))) ?? null;
     const veto = (await this.state.storage.get<Veto>(k("veto"))) ?? null;
+    // Sessions in directories the phone hides never start or join its card.
+    const slices = visibleTo(allSlices, await this.hiddenFor(env));
     const d = decide({ slices, card, clientEnded: veto, now });
 
     if (d.vetoed) {
@@ -179,6 +189,7 @@ export class FleetAggregator {
         title: String(r.title ?? "").slice(0, 80),
         state: r.state === "needsInput" ? "needsInput" : r.state === "working" ? "working" : ("idle" as never),
         since: Number(r.since) || now,
+        cwd: typeof r.cwd === "string" ? r.cwd : null,
       }));
       const slices = (await this.state.storage.get<Record<string, Slice>>("slices")) ?? {};
       slices[hostId] = { hostId, hostName: typeof body.hostName === "string" ? body.hostName : undefined, rows, receivedAt: now };
@@ -193,16 +204,23 @@ export class FleetAggregator {
       const env: ApnsEnv = body.env === "production" ? "production" : "sandbox";
       const deviceId = typeof body.deviceId === "string" && body.deviceId ? body.deviceId : undefined;
       let tokens = (await this.state.storage.get<StartToken[]>("tokens")) ?? [];
+      const same = (t: StartToken) => t.token === token || (!!deviceId && t.deviceId === deviceId && t.env === env);
+      // A build that predates the field sends none: keep what the device sent before.
+      const hiddenDirs = Array.isArray(body.hiddenDirs)
+        ? normalizeExcludes(body.hiddenDirs.filter((d): d is string => typeof d === "string"))
+        : tokens.find(same)?.hiddenDirs;
       // One current token per device: a rotation REPLACES the old one. Without a
       // device id every rotation added a token, and one start went to three tokens
       // that were all the same phone.
-      tokens = tokens.filter((t) => t.token !== token && !(deviceId && t.deviceId === deviceId && t.env === env));
-      tokens.push({ token, env, deviceId, updatedAt: Date.now() });
+      tokens = tokens.filter((t) => !same(t));
+      tokens.push({ token, env, deviceId, updatedAt: Date.now(), ...(hiddenDirs ? { hiddenDirs } : {}) });
       const keep = ENVS.flatMap((e) => tokens.filter((t) => t.env === e).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_TOKENS_PER_ENV));
       await this.state.storage.put("tokens", keep);
-      await this.trace("start-token", { token: token.slice(0, 8), env, device: deviceId?.slice(0, 8) });
+      await this.trace("start-token", { token: token.slice(0, 8), env, device: deviceId?.slice(0, 8), hidden: hiddenDirs?.length ?? null });
       await this.evaluate();
-      return json({ ok: true });
+      // The echo tells the app its list is stored; an older Worker omits it, and
+      // the app re-sends on the next foreground.
+      return json({ ok: true, hiddenDirs: hiddenDirs?.length ?? 0 });
     }
 
     if (path === "/v1/channel" && req.method === "GET") {
@@ -227,7 +245,7 @@ export class FleetAggregator {
 
     if (path === "/v1/ended" && req.method === "POST") {
       const slices = Object.values((await this.state.storage.get<Record<string, Slice>>("slices")) ?? {});
-      const population = unionRows(slices, now).map((r) => r.sid);
+      const population = unionRows(visibleTo(slices, await this.hiddenFor(reportEnv)), now).map((r) => r.sid);
       await this.state.storage.put(`card:${reportEnv}`, null);
       await this.state.storage.put(`veto:${reportEnv}`, { population });
       await this.trace("client-ended", { env: reportEnv, population: population.map((s) => s.slice(0, 8)) });
@@ -241,7 +259,7 @@ export class FleetAggregator {
         slices: Object.values(slices).map((s) => ({ hostId: s.hostId, hostName: s.hostName, ageS: now - s.receivedAt, rows: s.rows.map((r) => `${r.sid.slice(0, 8)}:${r.state}`) })),
         cards: Object.fromEntries(await Promise.all(ENVS.map(async (e) => [e, (await this.state.storage.get(`card:${e}`)) ?? null]))),
         vetoes: Object.fromEntries(await Promise.all(ENVS.map(async (e) => [e, (await this.state.storage.get(`veto:${e}`)) ?? null]))),
-        tokens: ((await this.state.storage.get<StartToken[]>("tokens")) ?? []).map((t) => ({ token: t.token.slice(0, 8), env: t.env, device: t.deviceId?.slice(0, 8), updatedAt: new Date(t.updatedAt).toISOString() })),
+        tokens: ((await this.state.storage.get<StartToken[]>("tokens")) ?? []).map((t) => ({ token: t.token.slice(0, 8), env: t.env, device: t.deviceId?.slice(0, 8), hidden: t.hiddenDirs ?? null, updatedAt: new Date(t.updatedAt).toISOString() })),
         channels: Object.fromEntries(ENVS.map((e) => [e, this.channel(e)?.slice(0, 8) ?? null])),
         trace: ((await this.state.storage.get<TraceEvent[]>("trace")) ?? []).slice(-Number(url.searchParams.get("n") ?? 40)),
       });

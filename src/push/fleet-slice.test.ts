@@ -117,3 +117,15 @@ describe("runPushTick in slice mode", () => {
     expect(r.calls[0]!.body).toMatchObject({ rows: [{ sid: "s1", state: "working", since: 50 }] });
   });
 });
+
+test("a row's folder is published so the Worker can apply device hidden lists", async () => {
+  const calls: any[] = [];
+  const fetchImpl = async (_url: string, init: { method: string; headers: Record<string, string>; body?: string }) => {
+    calls.push(JSON.parse(init.body!));
+    return { ok: true, status: 200, json: async () => ({ ok: true }) };
+  };
+  const p = new FleetSlicePublisher({ url: "https://agg.test", secret: "s" }, { id: () => "pro", name: () => "Pro" }, fetchImpl);
+  await p.publish([{ sid: "a", title: "A", state: "working", since: 1, cwd: "/tmp/lfg-autopilot-claude-cwd-1" }], 1_000);
+  expect(calls[0].rows[0].cwd).toBe("/tmp/lfg-autopilot-claude-cwd-1");
+});
+

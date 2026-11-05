@@ -10,7 +10,9 @@
 //
 // Pure of lfg state: no imports from the watcher, so both it and serve.ts can use it.
 
-export type SliceRow = { sid: string; title: string; state: "working" | "needsInput"; since: number };
+/** `cwd` lets the Worker leave out rows every device hides (their hidden
+ *  directories); it is used for that filter only and never reaches the card. */
+export type SliceRow = { sid: string; title: string; state: "working" | "needsInput"; since: number; cwd?: string | null };
 export type AggregatorConfig = { url: string; secret: string };
 
 /** Republish an unchanged slice this often. The Worker drops a host that has been
@@ -47,7 +49,7 @@ export async function aggregatorRequest(
 }
 
 const fingerprint = (rows: SliceRow[]): string =>
-  JSON.stringify([...rows].sort((a, b) => (a.sid < b.sid ? -1 : 1)).map((r) => [r.sid, r.title, r.state, r.since]));
+  JSON.stringify([...rows].sort((a, b) => (a.sid < b.sid ? -1 : 1)).map((r) => [r.sid, r.title, r.state, r.since, r.cwd ?? null]));
 
 export class FleetSlicePublisher {
   /// Per-session state clock, carried between ticks so a row keeps its start time

@@ -44,6 +44,10 @@ final class LiveActivityManager {
     private(set) var aggregator = FleetAggregatorConfig.decode(
         UserDefaults.standard.data(forKey: aggregatorDefaultsKey))
     private var lastStartToken: String?
+    /// Whether the Worker holds this device's hidden directories (it echoes the
+    /// count). Until it does, a session the phone hides can still start the card,
+    /// so the token is re-sent when the list changes and on every foreground.
+    private var hiddenDirsStored = false
 
     private var aggregatorClient: FleetAggregatorClient? {
         aggregator.map { FleetAggregatorClient(config: $0) }
@@ -195,14 +199,27 @@ final class LiveActivityManager {
         }
     }
 
+    /// The hidden list changed: tell the Worker, or its sessions keep starting the card.
+    func resendStartToken() {
+        guard let token = lastStartToken else { return }
+        Task { await sendStartToken(token) }
+    }
+
+    func resendStartTokenIfUnconfirmed() {
+        guard !hiddenDirsStored else { return }
+        resendStartToken()
+    }
+
     // Register with ONLY the default host, not every host. Registering with all
     // hosts made each host's server push-to-start its own fleet activity → two cards.
     private func sendStartToken(_ token: String) async {
         lastStartToken = token
+        hiddenDirsStored = false
         if aggregator == nil { await refreshAggregator() }
         if let agg = aggregatorClient {
             do {
-                try await agg.registerStartToken(token, env: liveActivityEnv, deviceId: deviceId)
+                hiddenDirsStored = try await agg.registerStartToken(
+                    token, env: liveActivityEnv, deviceId: deviceId, hiddenDirs: settings?.hiddenDirs.paths ?? [])
                 return
             } catch {
                 log.error("start-token register on the aggregator failed: \(error.localizedDescription)")

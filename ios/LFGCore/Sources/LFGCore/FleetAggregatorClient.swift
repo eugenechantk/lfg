@@ -64,8 +64,11 @@ public struct FleetAggregatorClient: Sendable {
 
     /// `deviceId` lets the Worker keep ONE current token per device: a rotation
     /// replaces the old token instead of adding a second, so one start is one card.
-    public func startTokenRequest(_ hex: String, env: String, deviceId: String?) -> URLRequest {
-        var body: [String: Any] = ["token": hex, "env": env]
+    /// `hiddenDirs` is the device's hidden-directory list: sessions there never
+    /// start or join its card. Always sent, `[]` included — the Worker keeps the
+    /// stored list only when the field is missing (builds that predate it).
+    public func startTokenRequest(_ hex: String, env: String, deviceId: String?, hiddenDirs: [String]) -> URLRequest {
+        var body: [String: Any] = ["token": hex, "env": env, "hiddenDirs": hiddenDirs]
         if let deviceId, !deviceId.isEmpty { body["deviceId"] = deviceId }
         return request("POST", "v1/start-token", json: body)
     }
@@ -98,8 +101,17 @@ public struct FleetAggregatorClient: Sendable {
         }
     }
 
-    public func registerStartToken(_ hex: String, env: String, deviceId: String?) async throws {
-        try await perform(startTokenRequest(hex, env: env, deviceId: deviceId))
+    /// Returns whether the Worker stored the hidden list; see `confirmsHiddenDirs`.
+    @discardableResult
+    public func registerStartToken(_ hex: String, env: String, deviceId: String?, hiddenDirs: [String]) async throws -> Bool {
+        Self.confirmsHiddenDirs(try await perform(startTokenRequest(hex, env: env, deviceId: deviceId, hiddenDirs: hiddenDirs)))
+    }
+
+    /// The Worker echoes a `hiddenDirs` count once it stores the list. An older
+    /// Worker answers 200 without it and drops the list, so the app must send
+    /// again after that Worker is updated.
+    public static func confirmsHiddenDirs(_ reply: Data) -> Bool {
+        ((try? JSONSerialization.jsonObject(with: reply)) as? [String: Any])?["hiddenDirs"] is NSNumber
     }
 
     /// `nil` is a normal answer: no channel configured for this APNs environment.

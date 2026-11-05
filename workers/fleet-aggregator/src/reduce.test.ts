@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildStart, buildUpdate } from "../../../src/push/liveactivity";
-import { SLICE_TTL_S, broadcastFor, contentFor, decide, endBody, startBody, unionRows, updateBody, type Row, type Slice } from "./reduce";
+import { SLICE_TTL_S, broadcastFor, contentFor, decide, endBody, startBody, unionRows, updateBody, visibleTo, type Row, type Slice } from "./reduce";
 
 const row = (sid: string, state: Row["state"] = "working", since = 1_000): Row => ({ sid, title: sid, state, since });
 const slice = (hostId: string, rows: Row[], receivedAt = 2_000): Slice => ({ hostId, rows, receivedAt });
@@ -145,3 +145,37 @@ describe("wire payloads match the lfg server's builders", () => {
     expect(endBody(content, 5_050).aps).toMatchObject({ event: "end", "dismissal-date": 5_050 });
   });
 });
+
+describe("visibleTo — the phone's hidden directories keep rows off the card", () => {
+  // 2026-11-05: autopilot runs (hidden in the phone's list) flashed the card for
+  // ~20 s: the Worker push-to-started, the app saw nothing visible and ended it.
+  const auto = (sid: string): Row => ({ ...row(sid), cwd: "/private/var/folders/cd/x/T/lfg-autopilot-claude-cwd-93203" });
+  const work: Row = { ...row("work"), cwd: "/Users/e/dev/lfg" };
+  const slice = (rows: Row[]): Slice => ({ hostId: "pro", rows, receivedAt: 1_000 });
+
+  test("a hidden-only population never starts a card", () => {
+    const slices = visibleTo([slice([auto("a1")])], [["*/lfg-autopilot-claude-cwd-*"]]);
+    const d = decide({ slices, card: null, now: 1_000 });
+    expect(d.action).toBeNull();
+    expect(d.population).toEqual([]);
+  });
+
+  test("hidden rows stay off a card that visible work started", () => {
+    const slices = visibleTo([slice([auto("a1"), work])], [["*/lfg-autopilot-claude-cwd-*"]]);
+    const d = decide({ slices, card: null, now: 1_000 });
+    expect(d.action?.event).toBe("start");
+    expect(d.content.rows.map((r) => r.sid)).toEqual(["work"]);
+    expect(d.content.working).toBe(1);
+    expect(JSON.stringify(startBody(d.content, "LFGFleetAttributes", "ch"))).not.toContain("cwd");
+  });
+
+  test("a row is kept while any device of the environment shows it", () => {
+    const both = [slice([auto("a1")])];
+    expect(visibleTo(both, [["*/lfg-autopilot-*"], []])[0]!.rows).toHaveLength(1);
+    expect(visibleTo(both, [["*/lfg-autopilot-*"], ["*/other-*"]])[0]!.rows).toHaveLength(1);
+    expect(visibleTo(both, [["*/lfg-autopilot-*"], ["/private/var/folders"]])[0]!.rows).toHaveLength(0);
+    expect(visibleTo(both, [])[0]!.rows).toHaveLength(1);
+    expect(visibleTo([slice([row("no-cwd")])], [["*"]])[0]!.rows).toHaveLength(1);
+  });
+});
+

@@ -117,6 +117,8 @@ final class PushManager {
     /// Re-send to the hosts that missed the last registration. Cheap no-op
     /// when every host is current, so it is safe on every foreground.
     func retryFailedRegistrations() {
+        // The Live Activity's card token carries the same hidden list to the Worker.
+        LiveActivityManager.shared.resendStartTokenIfUnconfirmed()
         guard let token = latestToken, !unregisteredHosts.isEmpty else { return }
         enqueueRegistration(token, only: unregisteredHosts)
     }

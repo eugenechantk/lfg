@@ -6,8 +6,11 @@
 // Worker. The rules mirror `reduceFleetLiveActivity` in src/push/watcher.ts, applied
 // to the union of slices instead of one host's sessions.
 
+import { hidesCwd } from "../../../src/hidden-dirs";
+
 export type RowState = "working" | "needsInput";
-export type Row = { sid: string; title: string; state: RowState; since: number };
+/** `cwd` is for `visibleTo` only; `contentFor` never copies it onto the card. */
+export type Row = { sid: string; title: string; state: RowState; since: number; cwd?: string | null };
 export type Slice = { hostId: string; hostName?: string; rows: Row[]; receivedAt: number };
 export type ContentState = { working: number; needsInput: number; rows: Row[]; more: number; updatedAt: number };
 export type Card = { startedAt: number; contentState?: ContentState };
@@ -39,6 +42,18 @@ export function unionRows(slices: Slice[], now: number): Row[] {
     }
   }
   return [...bySid.values()].map((v) => v.row);
+}
+
+/**
+ * The slices as an environment's devices may see them: a row whose folder EVERY
+ * registered device hides (its hidden directories, sent with its start token) is
+ * left out, so it can neither start the card nor sit on it. A device that sent
+ * no list hides nothing, and a row without a folder is never hidden — the same
+ * rules as the hosts' per-device alert mute.
+ */
+export function visibleTo(slices: Slice[], hidden: string[][]): Slice[] {
+  if (!hidden.length || hidden.some((h) => !h.length)) return slices;
+  return slices.map((s) => ({ ...s, rows: s.rows.filter((r) => !hidden.every((h) => hidesCwd(r.cwd, h))) }));
 }
 
 /** Needs-input first so the actionable sessions survive truncation, then oldest

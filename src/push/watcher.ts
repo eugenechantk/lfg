@@ -939,7 +939,9 @@ export async function runPushTick(prior: Map<string, PriorState>, deps: TickDeps
   if (deps.slice) {
     const collected = collectFleetRows(liveActivityObservations, deps.slice.since, Math.floor(now() / 1000));
     deps.slice.since = collected.since;
-    await deps.slice.publish(collected.rows, now());
+    // The folder rides along so the Worker can leave out rows the phone hides.
+    const cwdBySid = new Map(liveActivityObservations.map((o) => [o.session.sessionId, o.session.cwd ?? null]));
+    await deps.slice.publish(collected.rows.map((r) => ({ ...r, cwd: cwdBySid.get(r.sid) ?? null })), now());
   }
   if (liveActivities) {
     const decision = reduceFleetLiveActivity({

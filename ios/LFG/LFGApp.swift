@@ -218,7 +218,10 @@ struct CrossProviderSwitchStatusFixture: View {
     var hiddenDirs: HiddenDirs {
         didSet {
             defaults.set(hiddenDirs.paths, forKey: Self.hiddenDirsKey)
-            if hiddenDirs != oldValue { PushManager.shared.reregisterIfPossible() }
+            if hiddenDirs != oldValue {
+                PushManager.shared.reregisterIfPossible()
+                LiveActivityManager.shared.resendStartToken()
+            }
         }
     }
 
