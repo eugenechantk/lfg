@@ -89,3 +89,51 @@ already put the result first.
 
 - [x] SC5: managed and chat sessions get the new rule — **Verify by:** `bun test src/session-notification-instructions.test.ts` (1 pass)
 - [ ] SC6: a new session's alert leads with the feature — **Verify by:** read the next agent alerts in `~/.lfg/session-notifications.json` after deploy. Not verifiable before: running sessions keep the prompt they started with, and the live server runs an Oct 29 release copy.
+
+## Part 3: Mac alerts quote the reply, not "The agent finished its turn."
+
+**Report (2026-11-04):** Mac notifications are still generic, not specific to each session.
+
+**Ground truth:** macOS's delivered-notification database (`~/Library/Group Containers/group.com.apple.usernoted/db2/db`,
+app `com.eugenechan.lfg-desktop`), last 25 alerts: 13 read "The agent finished its turn." Matching each
+alert's second against its transcript: all 13 fired 0–1 s after the turn's final assistant text, so a real
+reply existed every time (the "turn had no text" theory is disproved).
+
+**Cause:** the Mac app's live feed decodes only `busy`, `prompt` and `notification` events — message
+events are dropped on purpose — so a session's `last` is whatever the 10 s poll last fetched. On
+`busy:false` the 200 ms settle read that stale row (a tool call, or the previous reply) and fell back to
+the generic body. Phone pushes are built on the host from the transcript at tick time, so they quote it.
+
+**Fix:** `settleNotifications(host:)` fetches that host's rows once (`latestReplies`) and builds the
+alert from their `last` / `lastUserAt`; an unreachable host keeps the held rows. Nothing else changes.
+
+- [x] SC7: a finished alert quotes the fetched reply over a stale held row — **Verify by:** `lfg --desktop-feature-test` (288 pass; the new check fails on the old path, which gave the generic body for a held tool-call row)
+- [x] SC8: the fetch returns the reply on a real host — **Verify by:** `lfg --notification-probe 34546475-… body` → `fresh: ✅ iPad layout redesign | Finished: TestFlight build 202611041524 is ready…`
+- [x] SC9: real turn ends, live feed — **Verify by:** `lfg --notification-probe watch 480` prints `sent:` (new) beside `held:` (old) for each alert. 17:41:51 "Meta ads benchmarking": sent "Finished: I've updated the table on the same link…" (the reply that ended the turn); held "Finished: 1: desktop, scrolled sideways…" (the PREVIOUS turn's reply — the old path could quote the wrong turn, not only fall back to generic). Log: `alert-status-emoji-evidence/mac-watch-probe-20261104.log`.
+- Not live until `/Applications/lfg.app` is rebuilt and reinstalled.
+
+## Part 4: "needs input" only when a question is open
+
+**Report (2026-11-05):** sessions send "needs input" alerts with no needs-input event — this session had
+just done it.
+
+**Ground truth:** `~/.lfg/session-notifications.json`: 45 agent alerts, 7 `needs-input`. For all 7 the
+transcript shows no AskUserQuestion/ExitPlanMode within 10 min and the turn ending 46–75 s later — a
+question written into the reply. 5 of the 7 were this session. The Mac's history of 🙋 alerts: the one
+detector-sent alert (a phone sign-in request) was real; every false one was agent-sent.
+
+**Cause:** the instruction said "at completion or when user input is required" and offered `needs-input`,
+so agents (me included) used it for "Needs you:"-style questions in a finished reply.
+
+**Fix:**
+- Host (`SessionNotifications.send`): an agent's `needs-input` is recorded and delivered as `completed`
+  (✅, "Completed: …", APNs kind `finished`), and the receipt says `reclassified`. It also counts as the
+  turn's completion, so the watcher's generic "finished" no longer doubles it. Retries stay idempotent.
+  `blocked` is unchanged.
+- Instructions and `lfg notify --help` no longer offer `needs-input`: "Use completed when your turn ends,
+  also when your reply asks the user something … lfg alerts an open question by itself."
+- "Needs input" alerts now come only from the watcher, when a prompt actually opens.
+
+- [x] SC10 — `bun test src/session-notifications.test.ts src/session-notification-instructions.test.ts src/push/ src/chat-jobs.test.ts src/chat-sessions.test.ts`: 173 pass.
+- [x] SC11 — real CLI → scratch host route: `--status needs-input` → `{"status":"completed","reclassified":"needs-input → completed: lfg alerts open questions itself"}`.
+- Not live until the host restarts; running sessions keep their launch prompt, but the host rule covers them.

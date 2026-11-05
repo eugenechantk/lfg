@@ -132,6 +132,40 @@ the mute must come from the device's filter, whatever the session is, so it gene
 **Not checked:** the Air. `ssh air` fails ("websocket: bad handshake") and its Access gate answers 403
 to the bundled service token, so its build and device list are unknown.
 
+## Bug 2 (2026-11-05): hidden sessions flash the Live Activity
+
+**Report:** a filtered (hidden) session starts the Live Activity for a second, then it dismisses itself.
+
+**Ground truth:** the live hosts run in slice mode (`LFG_FLEET_AGGREGATOR_URL=https://lfg-fleet.eugenechantk.me`).
+`~/.lfg/liveactivity.log`: `00:35:05 slice rows ["48604fe6:working"]` → `00:35:25 rows []`; `48604fe6` is an
+autopilot run (`…/T/lfg-autopilot-claude-cwd-93203`). The Worker push-to-started a card for it; the app,
+which hides that folder, counted nothing visible and ended the card.
+
+**Cause:** the Worker decides start/update/end from host rows that carry no folder, and it never had the
+phone's hidden list, so a hidden session could start the card.
+
+**Fix (same general rule as alerts):**
+- Hosts publish each row's `cwd` in the slice (`fleet-slice.ts`, `watcher.ts`); used for filtering only.
+- The phone sends `hiddenDirs` with its push-to-start token; the Worker stores it per token, keeps it when a
+  build omits the field, and echoes the count.
+- `visibleTo` (Worker reducer) drops a row whose folder every registered device of that APNs environment
+  hides — before `decide`, so it can neither start the card nor appear on it; also for the `/v1/ended` veto
+  population. Matching uses the hosts' own `hidesCwd` (imported from `src/hidden-dirs.ts`).
+- The app re-sends the token when the list changes and on foreground until the Worker echoes.
+
+**Verified:**
+- `bun test workers/fleet-aggregator/src/ src/push/`: 164 pass (new: hidden-only population never starts;
+  hidden rows stay off a card that real work started; a row stays while any device shows it; `cwd` is not in
+  the APNs body; the slice carries `cwd`).
+- LFGCore `swift test`: 654 XCTest + 616 Swift Testing pass (new: start-token body carries the list, `[]`
+  included; only an echoed count confirms). iOS app builds. `wrangler deploy --dry-run` bundles (20.6 KiB).
+- Real Worker code under `wrangler dev --local` (test secret, no APNs keys): token with
+  `["*/lfg-autopilot-claude-cwd-*"]` → `{"ok":true,"hiddenDirs":1}`; a field-less re-register kept it; a
+  slice with only an autopilot row → no decision, no card; autopilot + real work → `decide start` with only
+  `c48b6a68:working` (the 500 after it is the missing APNs key, local only).
+- Not verified live: needs the Worker deploy, a host restart and a phone build. Any order converges (old
+  hosts send no folder → nothing hidden; old phones send no list → nothing hidden; the echo retry catches up).
+
 ## Bugs
 
 _None yet._
